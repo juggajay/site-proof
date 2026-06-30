@@ -494,6 +494,7 @@ model Lot {
   @@index([projectId])
   @@index([projectId, status])
   @@index([projectId, conformedAt])
+  @@index([createdById, createdAt], map: "lots_created_by_created_at_idx")
   @@map("lots")
 }
 
@@ -589,6 +590,7 @@ model ITPCompletion {
   @@unique([itpInstanceId, checklistItemId])
   @@index([itpInstanceId])
   @@index([verificationStatus])
+  @@index([completedById, completedAt], map: "itp_completions_completed_by_completed_at_idx")
   @@map("itp_completions")
 }
 
@@ -720,6 +722,7 @@ model TestResult {
   @@index([projectId, status])
   @@index([lotId])
   @@index([projectId, passFail])
+  @@index([enteredById, createdAt], map: "test_results_entered_by_created_at_idx")
   @@map("test_results")
 }
 
@@ -807,6 +810,8 @@ model NCR {
   @@index([projectId, dueDate])
   @@index([projectId, category, status])
   @@index([linkedTestResultId])
+  @@index([raisedById, raisedAt], map: "ncrs_raised_by_raised_at_idx")
+  @@index([responsibleUserId, raisedAt], map: "ncrs_responsible_user_raised_at_idx")
   @@map("ncrs")
 }
 
@@ -873,6 +878,7 @@ model DailyDiary {
 
   @@unique([projectId, date])
   @@index([projectId, date])
+  @@index([submittedById, createdAt], map: "daily_diaries_submitted_by_created_at_idx")
   @@map("daily_diaries")
 }
 
@@ -1638,6 +1644,7 @@ model Comment {
   attachments CommentAttachment[]
 
   @@index([entityType, entityId])
+  @@index([authorId, createdAt], map: "comments_author_created_at_idx")
   @@map("comments")
 }
 

@@ -3659,17 +3659,51 @@ describe('GET /api/auth/export-data', () => {
           status: 'pending',
         },
       });
+      const oversizedSyncSecret = 'oversized-secret-sync-token-should-not-export';
+      const oversizedSyncBody = 'X'.repeat(25_000);
+      const oversizedSyncPayload = JSON.stringify({
+        notes: oversizedSyncSecret,
+        body: oversizedSyncBody,
+      });
+      await prisma.syncQueue.create({
+        data: {
+          userId: createdUserId,
+          deviceId: 'export-device-large',
+          entityType: 'Lot',
+          entityId: 'export-lot-large-payload',
+          action: 'update',
+          payload: oversizedSyncPayload,
+          status: 'pending',
+        },
+      });
 
       const res = await request(app)
         .get('/api/auth/export-data')
         .set('Authorization', `Bearer ${regRes.body.token}`);
 
       expect(res.status).toBe(200);
+      expect(res.headers['cache-control']).toBe('private, no-store, max-age=0');
+      expect(res.headers.pragma).toBe('no-cache');
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
       expect(res.body.user).toMatchObject({
         id: createdUserId,
         email,
         hasAvatar: true,
         twoFactorEnabled: false,
+      });
+      expect(res.body.exportVersion).toBe('1.2');
+      expect(res.body.exportLimits).toMatchObject({
+        operationalRecordLimit: 1000,
+        syncPayloadMaxChars: 20000,
+        truncatedCollections: {
+          activityLog: false,
+          notifications: false,
+          notificationDigestItems: false,
+          notificationAlerts: false,
+          documentSignedUrlTokens: false,
+          syncQueueItems: false,
+        },
       });
       expect(res.body.user).not.toHaveProperty('avatarUrl');
       expect(res.body.projectMemberships).toEqual(
@@ -3801,6 +3835,19 @@ describe('GET /api/auth/export-data', () => {
           }),
         ]),
       );
+      expect(res.body.syncQueueItems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            deviceId: 'export-device-large',
+            payload: {
+              truncated: true,
+              originalLength: oversizedSyncPayload.length,
+              maxExportedChars: 20000,
+            },
+            status: 'pending',
+          }),
+        ]),
+      );
 
       const exportedJson = JSON.stringify(res.body);
       expect(exportedJson).not.toContain('secret-avatar-token');
@@ -3812,6 +3859,8 @@ describe('GET /api/auth/export-data', () => {
       expect(exportedJson).not.toContain('secret-tenant');
       expect(exportedJson).not.toContain('secret-sync-token');
       expect(exportedJson).not.toContain('secret-sync-auth');
+      expect(exportedJson).not.toContain(oversizedSyncSecret);
+      expect(exportedJson).not.toContain(oversizedSyncBody);
       expect(exportedJson).not.toContain('secret-api-key-hash-should-not-export');
       expect(exportedJson).not.toContain('secret-p256dh-should-not-export');
       expect(exportedJson).not.toContain('secret-push-auth-should-not-export');
@@ -3858,6 +3907,55 @@ describe('GET /api/auth/export-data', () => {
       if (companyId) {
         await prisma.webhookConfig.deleteMany({ where: { companyId } });
         await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
+      }
+    }
+  });
+
+  it('caps operational export collections and reports truncation metadata', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email = `export-data-scale-${suffix}@example.com`;
+    const password = 'SecureP@ssword123!';
+    let userId: string | undefined;
+
+    try {
+      const regRes = await request(app).post('/api/auth/register').send({
+        email,
+        password,
+        fullName: 'Export Data Scale User',
+        tosAccepted: true,
+      });
+
+      expect(regRes.status).toBe(201);
+      userId = regRes.body.user.id as string;
+
+      await prisma.notification.createMany({
+        data: Array.from({ length: 1001 }, (_, index) => ({
+          userId: userId!,
+          type: 'mention',
+          title: `Bulk export notification ${index}`,
+          message: `Bulk export notification message ${index}`,
+          isRead: false,
+        })),
+      });
+
+      const res = await request(app)
+        .get('/api/auth/export-data')
+        .set('Authorization', `Bearer ${regRes.body.token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.notifications).toHaveLength(1000);
+      expect(res.body.exportLimits).toMatchObject({
+        operationalRecordLimit: 1000,
+        truncatedCollections: expect.objectContaining({
+          notifications: true,
+        }),
+      });
+    } finally {
+      if (userId) {
+        await prisma.notification.deleteMany({ where: { userId } });
+        await prisma.auditLog.deleteMany({ where: { userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
       }
     }
   });

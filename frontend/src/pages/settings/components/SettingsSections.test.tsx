@@ -69,7 +69,7 @@ describe('PrivacyDataSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export My Data' }));
     expect(onExportData).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Data exported successfully');
+    expect(screen.getByRole('status')).toHaveTextContent('Your data export download has started');
     expect(screen.getByRole('alert')).toHaveTextContent('Export failed');
     expect(screen.getByText(/Project records that must be retained/i)).toBeInTheDocument();
 

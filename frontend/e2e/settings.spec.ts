@@ -433,7 +433,7 @@ test.describe('Settings seeded account contract', () => {
     expect(exportedText).not.toContain('secret');
     expect(api.getExportRequested()).toBe(true);
     await expect(
-      page.getByRole('status').filter({ hasText: 'Data exported successfully' }),
+      page.getByRole('status').filter({ hasText: 'Your data export download has started' }),
     ).toBeVisible();
     await download.delete();
   });

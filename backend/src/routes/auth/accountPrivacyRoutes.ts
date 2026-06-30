@@ -18,6 +18,8 @@ type CreateAccountPrivacyRouterDependencies = {
 };
 
 const DATA_EXPORT_FILENAME_MAX_LENGTH = 180;
+const DATA_EXPORT_OPERATIONAL_RECORD_LIMIT = 1000;
+const DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS = 20_000;
 const SENSITIVE_EXPORT_KEY_PATTERNS = [
   /password/i,
   /token/i,
@@ -102,12 +104,29 @@ function sanitizeDataExportValue(key: string, value: unknown): unknown {
 }
 
 function sanitizeStoredPayload(payload: string): unknown {
+  if (payload.length > DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS) {
+    return {
+      truncated: true,
+      originalLength: payload.length,
+      maxExportedChars: DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS,
+    };
+  }
+
   try {
     const parsed = JSON.parse(payload) as unknown;
     return sanitizeDataExportValue('payload', parsed);
   } catch {
     return sanitizeLogText(payload);
   }
+}
+
+function limitOperationalRecords<T>(records: T[]) {
+  const truncated = records.length > DATA_EXPORT_OPERATIONAL_RECORD_LIMIT;
+
+  return {
+    records: truncated ? records.slice(0, DATA_EXPORT_OPERATIONAL_RECORD_LIMIT) : records,
+    truncated,
+  };
 }
 
 function buildCommentAttachmentDownloadUrl(attachmentId: string): string {
@@ -330,7 +349,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
-          take: 1000,
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.comment.findMany({
           where: { authorId: userId },
@@ -398,6 +417,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.notificationEmailPreference.findUnique({
           where: { userId },
@@ -436,6 +456,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.notificationAlert.findMany({
           where: { assignedToId: userId },
@@ -455,6 +476,7 @@ export function createAccountPrivacyRouter({
             escalatedTo: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.consentRecord.findMany({
           where: { userId },
@@ -535,6 +557,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.syncQueue.findMany({
           where: { userId },
@@ -551,13 +574,33 @@ export function createAccountPrivacyRouter({
             conflictResolution: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
       ]);
+
+      const limitedAuditLogs = limitOperationalRecords(auditLogs);
+      const limitedNotifications = limitOperationalRecords(notifications);
+      const limitedNotificationDigestItems = limitOperationalRecords(notificationDigestItems);
+      const limitedNotificationAlerts = limitOperationalRecords(notificationAlerts);
+      const limitedDocumentSignedUrlTokens = limitOperationalRecords(documentSignedUrlTokens);
+      const limitedSyncQueueItems = limitOperationalRecords(syncQueueItems);
 
       // Build the export data structure
       const exportData = {
         exportedAt: new Date().toISOString(),
-        exportVersion: '1.1',
+        exportVersion: '1.2',
+        exportLimits: {
+          operationalRecordLimit: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT,
+          syncPayloadMaxChars: DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS,
+          truncatedCollections: {
+            activityLog: limitedAuditLogs.truncated,
+            notifications: limitedNotifications.truncated,
+            notificationDigestItems: limitedNotificationDigestItems.truncated,
+            notificationAlerts: limitedNotificationAlerts.truncated,
+            documentSignedUrlTokens: limitedDocumentSignedUrlTokens.truncated,
+            syncQueueItems: limitedSyncQueueItems.truncated,
+          },
+        },
         user: {
           id: user.id,
           email: user.email,
@@ -617,10 +660,10 @@ export function createAccountPrivacyRouter({
         uploadedDocuments: uploadedDocuments.map((document) =>
           buildDocumentExport(document as JsonRecord),
         ),
-        notifications: notifications,
+        notifications: limitedNotifications.records,
         notificationEmailPreference: notificationEmailPreference,
-        notificationDigestItems: notificationDigestItems,
-        notificationAlerts: notificationAlerts,
+        notificationDigestItems: limitedNotificationDigestItems.records,
+        notificationAlerts: limitedNotificationAlerts.records,
         consentRecords: consentRecords,
         apiKeys: apiKeys,
         pushSubscriptions: pushSubscriptions.map(({ endpoint, ...subscription }) => ({
@@ -635,16 +678,20 @@ export function createAccountPrivacyRouter({
           ...webhookConfig,
           url: sanitizeUrlValueForLog(webhookConfig.url),
         })),
-        documentSignedUrlTokens: documentSignedUrlTokens,
-        syncQueueItems: syncQueueItems.map(({ payload, ...item }) => ({
+        documentSignedUrlTokens: limitedDocumentSignedUrlTokens.records,
+        syncQueueItems: limitedSyncQueueItems.records.map(({ payload, ...item }) => ({
           ...item,
           payload: sanitizeStoredPayload(payload),
         })),
-        activityLog: auditLogs,
+        activityLog: limitedAuditLogs.records,
       };
 
       // Set headers for file download
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="${getSafeDataExportFilename(user.email)}"`,
