@@ -238,3 +238,40 @@ Continue filling the highest-value browser gaps from the scout map:
     the retry test.
   - Browserslist/PostCSS warnings remain tooling cleanup items, not new product
     failures.
+
+## Stage 106 - Diary Copy And Timeline CRUD Coverage
+
+- Branch: `qa/diary-copy-reopen-entry-coverage`.
+- Product fix:
+  - Desktop `PersonnelTab` now reuses the shared `useCopyFromYesterday`
+    personnel path, matching mobile behavior.
+  - This preserves Decimal-string hour coercion and skips current-day duplicate
+    personnel names before posting copied rows.
+- Coverage added:
+  - Unit regression for desktop personnel copy skipping existing current-day
+    personnel while still copying new rows.
+  - Handler-level tests for mobile diary timeline edit `PUT`, delete endpoint
+    routing, and unknown delete type no-op.
+  - Browser regression in `frontend/e2e/diary.spec.ts` proving "Copy from
+    Previous Day" skips a duplicate `E2E Foreman` and posts only `E2E Surveyor`.
+  - Diary E2E mocks now cover timeline and docket-summary reads to avoid
+    unrelated unhandled-route console noise.
+- Verification:
+  `npm run test:unit -- src/pages/diary/components/PersonnelTab.test.tsx src/pages/diary/hooks/useCopyFromYesterday.test.ts src/pages/diary/hooks/useDiaryMobileHandlers.test.tsx`
+  passed 36/36.
+- Browser verification:
+  `npx playwright test e2e/diary.spec.ts --project=chromium --reporter=list`
+  passed 8/8.
+- Additional local checks:
+  - `npm run type-check` passed.
+  - `npm run lint` passed with the existing `theme.tsx` fast-refresh warning.
+  - `npx prettier --check ...` passed for touched files.
+  - `git diff --check` passed.
+  - `fallow audit --base origin/master --format json --quiet` returned `warn`:
+    no dead code, one inherited diary E2E mock complexity finding, and duplicate
+    test/mock patterns consistent with existing E2E scaffolding.
+- Notes:
+  - Diary reopen has a backend route
+    `POST /api/diary/:diaryId/reopen`, but no visible diary-page UI action was
+    found. Treat reopen as a product/UI decision before adding browser coverage.
+  - The diary spec still intentionally emits the retry-test 500 console errors.

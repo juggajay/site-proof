@@ -1,11 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
-import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage } from '@/lib/errorHandling';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { calculateHours } from '../constants';
 import { parseOptionalDiaryHoursInput } from '../diaryNumericInput';
+import { useCopyFromYesterday } from '../hooks/useCopyFromYesterday';
 import type { DailyDiary, Personnel, PersonnelFormState } from '../types';
 
 interface PersonnelTabProps {
@@ -15,17 +14,6 @@ interface PersonnelTabProps {
   saving: boolean;
   setSaving: (saving: boolean) => void;
   onDiaryUpdate: (diary: DailyDiary) => void;
-}
-
-interface PreviousPersonnel {
-  name: string;
-  company?: string | null;
-  role?: string | null;
-  startTime?: string | null;
-  finishTime?: string | null;
-  // The backend serializes Prisma Decimal hours as a JSON string (e.g. "8.5"),
-  // so this is a string at runtime even though it models a number.
-  hours?: number | string | null;
 }
 
 function toHoursNumber(value: number | string | null | undefined): number {
@@ -100,6 +88,13 @@ export const PersonnelTab = React.memo(function PersonnelTab({
     }, 0);
   }, [diary.personnel]);
 
+  const { copyPersonnelFromYesterday, copyingPersonnel } = useCopyFromYesterday({
+    projectId,
+    selectedDate,
+    diary,
+    onDiaryUpdate,
+  });
+
   const addPersonnel = async () => {
     const name = personnelForm.name.trim();
     if (!name || saving) return;
@@ -151,81 +146,14 @@ export const PersonnelTab = React.memo(function PersonnelTab({
     }
   };
 
-  const copyPersonnelFromPreviousDay = async () => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      const data = await apiFetch<{ personnel: PreviousPersonnel[] }>(
-        `/api/diary/${encodeURIComponent(projectId)}/${encodeURIComponent(selectedDate)}/previous-personnel`,
-      );
-
-      if (data.personnel && data.personnel.length > 0) {
-        let addedCount = 0;
-        let updatedDiary = diary;
-        for (const person of data.personnel) {
-          const cleanPerson: Record<string, unknown> = { name: person.name };
-          if (person.company) cleanPerson.company = person.company;
-          if (person.role) cleanPerson.role = person.role;
-          if (person.startTime) cleanPerson.startTime = person.startTime;
-          if (person.finishTime) cleanPerson.finishTime = person.finishTime;
-          // hours arrives as a Prisma-Decimal JSON string (e.g. "8.5"); the POST
-          // schema requires a number, so coerce it the same way manual add does.
-          // Omit invalid/non-positive values to match the optional hours contract.
-          if (person.hours !== null && person.hours !== undefined) {
-            const hours = parseOptionalDiaryHoursInput(String(person.hours));
-            if (typeof hours === 'number') cleanPerson.hours = hours;
-          }
-
-          try {
-            const newPerson = await apiFetch<Personnel>(
-              `/api/diary/${encodeURIComponent(diary.id)}/personnel`,
-              {
-                method: 'POST',
-                body: JSON.stringify(cleanPerson),
-              },
-            );
-            updatedDiary = { ...updatedDiary, personnel: [...updatedDiary.personnel, newPerson] };
-            addedCount++;
-          } catch {
-            // skip individual failures
-          }
-        }
-        onDiaryUpdate(updatedDiary);
-        toast({
-          title: addedCount > 0 ? 'Personnel copied' : 'No personnel copied',
-          description:
-            addedCount > 0
-              ? `${addedCount} personnel copied from the previous day.`
-              : 'Previous personnel records could not be added.',
-          variant: addedCount > 0 ? 'success' : 'warning',
-        });
-      } else {
-        toast({
-          title: 'No personnel found',
-          description: 'There were no personnel records on the previous day.',
-          variant: 'warning',
-        });
-      }
-    } catch (err) {
-      logError('Error copying personnel:', err);
-      toast({
-        title: 'Error copying personnel',
-        description: extractErrorMessage(err, 'Please try again.'),
-        variant: 'error',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="rounded-lg border bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold">Personnel on Site</h3>
         {diary.status !== 'submitted' && (
           <button
-            onClick={copyPersonnelFromPreviousDay}
-            disabled={saving}
+            onClick={() => void copyPersonnelFromYesterday()}
+            disabled={saving || copyingPersonnel}
             className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

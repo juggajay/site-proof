@@ -36,7 +36,21 @@ const apiFetchMock = vi.mocked(apiFetch) as unknown as MockInstance<
   (path: string, options?: RequestInit) => Promise<unknown>
 >;
 
-function makeDiary(): DailyDiary {
+function makePersonnel(overrides: Partial<Personnel> = {}): Personnel {
+  return {
+    id: 'person-existing',
+    name: 'Existing Person',
+    company: 'Existing Co',
+    role: 'Worker',
+    startTime: '07:00',
+    finishTime: '15:00',
+    hours: 8,
+    createdAt: '2026-06-07T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeDiary(overrides: Partial<DailyDiary> = {}): DailyDiary {
   return {
     id: 'diary-today',
     projectId: 'project-1',
@@ -50,18 +64,19 @@ function makeDiary(): DailyDiary {
     events: [],
     createdAt: '2026-06-07T00:00:00.000Z',
     updatedAt: '2026-06-07T00:00:00.000Z',
+    ...overrides,
   };
 }
 
-function renderTab() {
+function renderTab(diary: DailyDiary = makeDiary(), onDiaryUpdate = vi.fn()) {
   return renderWithProviders(
     <PersonnelTab
-      diary={makeDiary()}
+      diary={diary}
       projectId="project-1"
       selectedDate="2026-06-07"
       saving={false}
       setSaving={() => {}}
-      onDiaryUpdate={() => {}}
+      onDiaryUpdate={onDiaryUpdate}
     />,
   );
 }
@@ -69,6 +84,19 @@ function renderTab() {
 /** Parses the JSON body of an apiFetch POST call. */
 function parsePostBody(call: [string, RequestInit?]): Record<string, unknown> {
   return JSON.parse(String(call[1]?.body));
+}
+
+function personnelPosts(): [string, RequestInit][] {
+  return apiFetchMock.mock.calls.filter(([, options]) => options?.method === 'POST') as [
+    string,
+    RequestInit,
+  ][];
+}
+
+async function waitForPersonnelPostCount(count: number) {
+  await waitFor(() => {
+    expect(personnelPosts()).toHaveLength(count);
+  });
 }
 
 describe('PersonnelTab copy from previous day', () => {
@@ -103,25 +131,67 @@ describe('PersonnelTab copy from previous day', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy from previous day/i }));
 
     // Both people should be posted (not just the hour-less one).
-    await waitFor(() => {
-      const posts = apiFetchMock.mock.calls.filter(([, options]) => options?.method === 'POST');
-      expect(posts).toHaveLength(2);
-    });
+    await waitForPersonnelPostCount(2);
 
-    const posts = apiFetchMock.mock.calls.filter(([, options]) => options?.method === 'POST') as [
-      string,
-      RequestInit,
-    ][];
-
-    const alice = posts.map(parsePostBody).find((b) => b.name === 'Alice');
+    const alice = personnelPosts()
+      .map(parsePostBody)
+      .find((b) => b.name === 'Alice');
     expect(alice).toBeDefined();
     // The bug: "8.5" forwarded verbatim 400s the request. Hours must be numeric.
     expect(alice?.hours).toBe(8.5);
     expect(typeof alice?.hours).toBe('number');
 
-    const bob = posts.map(parsePostBody).find((b) => b.name === 'Bob');
+    const bob = personnelPosts()
+      .map(parsePostBody)
+      .find((b) => b.name === 'Bob');
     expect(bob).toBeDefined();
     // Null hours stay omitted (optional field), not sent as null/0.
     expect('hours' in (bob ?? {})).toBe(false);
+  });
+
+  it('does not duplicate personnel already copied onto the current diary', async () => {
+    const onDiaryUpdate = vi.fn();
+    let createdId = 0;
+    apiFetchMock.mockImplementation(async (_path: string, options?: RequestInit) => {
+      if (!options) {
+        return {
+          personnel: [
+            { name: ' Alice ', company: 'Acme', role: 'Carpenter', hours: '8' },
+            { name: 'Bob', company: 'Acme', role: 'Labourer', hours: '7.5' },
+          ],
+        };
+      }
+
+      createdId += 1;
+      const body = JSON.parse(String(options.body)) as Partial<Personnel>;
+      return makePersonnel({
+        id: `person-${createdId}`,
+        name: body.name ?? '',
+        company: body.company,
+        role: body.role,
+        hours: body.hours,
+      });
+    });
+
+    renderTab(
+      makeDiary({
+        personnel: [makePersonnel({ id: 'person-alice', name: 'alice', company: 'Acme' })],
+      }),
+      onDiaryUpdate,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy from previous day/i }));
+
+    await waitForPersonnelPostCount(1);
+
+    expect(parsePostBody(personnelPosts()[0])).toMatchObject({ name: 'Bob', hours: 7.5 });
+    expect(onDiaryUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personnel: [
+          expect.objectContaining({ name: 'alice' }),
+          expect.objectContaining({ name: 'Bob' }),
+        ],
+      }),
+    );
   });
 });

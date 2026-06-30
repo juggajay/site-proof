@@ -45,6 +45,7 @@ import {
   queueDiaryPlantOffline,
   queueDiaryWeatherOffline,
 } from '@/lib/offlineDb';
+import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import type { DailyDiary } from '../types';
 import { useDiaryMobileHandlers } from './useDiaryMobileHandlers';
 
@@ -114,6 +115,68 @@ describe('quick-add success path (unchanged)', () => {
     expect(params.fetchDiaryForDate).toHaveBeenCalledWith('2026-06-09');
     expect(queueDiaryActivityOffline).not.toHaveBeenCalled();
     expect(toastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('existing timeline entry edit/delete path', () => {
+  it('PUTs edits for an existing activity and refreshes the diary', async () => {
+    apiFetchMock.mockResolvedValue({});
+    const { result, params } = renderHandlers();
+    const entry: TimelineEntry = {
+      id: 'activity-1',
+      type: 'activity',
+      createdAt: '2026-06-09T01:00:00.000Z',
+      description: 'Original activity',
+      lot: null,
+      data: { quantity: 10, unit: 'm3' },
+    };
+
+    act(() => {
+      result.current.handleEditEntry(entry);
+    });
+
+    await result.current.addActivityFromSheet({
+      description: 'Edited activity',
+      quantity: 12,
+      unit: 'm3',
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/diary/d-1/activities/activity-1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          description: 'Edited activity',
+          quantity: 12,
+          unit: 'm3',
+          lotId: undefined,
+        }),
+      }),
+    );
+    expect(params.fetchTimeline).toHaveBeenCalledWith('d-1');
+    expect(params.fetchDiaryForDate).toHaveBeenCalledWith('2026-06-09');
+    expect(queueDiaryActivityOffline).not.toHaveBeenCalled();
+  });
+
+  it('DELETEs the endpoint that matches the timeline entry type', async () => {
+    apiFetchMock.mockResolvedValue({});
+    const { result, params } = renderHandlers();
+
+    await result.current.handleDeleteEntry({ id: 'personnel-1', type: 'personnel' });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/diary/d-1/personnel/personnel-1', {
+      method: 'DELETE',
+    });
+    expect(params.fetchTimeline).toHaveBeenCalledWith('d-1');
+    expect(params.fetchDiaryForDate).toHaveBeenCalledWith('2026-06-09');
+  });
+
+  it('ignores delete requests for unknown timeline entry types', async () => {
+    const { result } = renderHandlers();
+
+    await result.current.handleDeleteEntry({ id: 'unknown-1', type: 'unknown' });
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
   });
 });
 
