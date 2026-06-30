@@ -155,13 +155,23 @@ export function createAccountDeletionRouter({
           where: { userId },
         });
 
-        // 5. Delete the audit log for this user (anonymize - the account_deletion audit remains)
+        // 5. Disable user-owned scheduled reports so deleted accounts cannot keep sending mail.
+        await tx.scheduledReport.updateMany({
+          where: { createdById: userId },
+          data: {
+            isActive: false,
+            recipients: '',
+            createdById: null,
+          },
+        });
+
+        // 6. Delete the audit log for this user (anonymize - the account_deletion audit remains)
         await tx.auditLog.updateMany({
           where: { userId },
           data: { userId: null },
         });
 
-        // 6. Finally, delete the user record
+        // 7. Finally, delete the user record
         await tx.user.delete({
           where: { id: userId },
         });

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { ADMIN_EMAIL, E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 const settingsUser = {
@@ -41,7 +42,10 @@ type MockSettingsApiOptions = {
   exportContentType?: string;
   exportFilename?: string;
   exportBody?: string;
+  exportStatus?: number;
   deleteDelayMs?: number;
+  deleteStatus?: number;
+  deleteBody?: unknown;
 };
 
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -196,7 +200,7 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
       exportRequestCount += 1;
       const exportBody = options.exportBody ?? JSON.stringify({ user: settingsUser, projects: [] });
       await route.fulfill({
-        status: 200,
+        status: options.exportStatus ?? 200,
         headers: {
           'Content-Type': options.exportContentType ?? 'application/json',
           'Content-Disposition': `attachment; filename="${options.exportFilename ?? 'siteproof-export-e2e.json'}"`,
@@ -214,7 +218,10 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
 
       deleteRequest = route.request().postDataJSON();
       deleteRequests.push(deleteRequest);
-      await json({ message: 'Account deleted successfully' });
+      await json(
+        options.deleteBody ?? { message: 'Account deleted successfully' },
+        options.deleteStatus,
+      );
       return;
     }
 
@@ -412,10 +419,23 @@ test.describe('Settings seeded account contract', () => {
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toBe('siteproof-export-e2e.json');
+    const downloadPath = await download.path();
+    expect(downloadPath).toBeTruthy();
+    const exportedJson = JSON.parse(await readFile(downloadPath!, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(exportedJson.user).toMatchObject({ email: ADMIN_EMAIL });
+    const exportedText = JSON.stringify(exportedJson);
+    expect(exportedText).not.toContain('keyHash');
+    expect(exportedText).not.toContain('tokenHash');
+    expect(exportedText).not.toContain('p256dh');
+    expect(exportedText).not.toContain('secret');
     expect(api.getExportRequested()).toBe(true);
     await expect(
       page.getByRole('status').filter({ hasText: 'Data exported successfully' }),
     ).toBeVisible();
+    await download.delete();
   });
 
   test('sanitizes exported account data filenames', async ({ page }) => {
@@ -473,6 +493,26 @@ test.describe('Settings seeded account contract', () => {
 
     await expect(
       page.getByRole('alert').filter({ hasText: 'Export returned an unexpected file type' }),
+    ).toBeVisible();
+    expect(api.getExportRequestCount()).toBe(1);
+    expect(downloads).toHaveLength(0);
+  });
+
+  test('surfaces account export API failures without downloading a file', async ({ page }) => {
+    const downloads: string[] = [];
+    page.on('download', (download) => downloads.push(download.suggestedFilename()));
+
+    const api = await mockSettingsApi(page, {
+      exportStatus: 500,
+      exportBody: JSON.stringify({ error: { message: 'Export service unavailable' } }),
+    });
+
+    await page.goto('/settings');
+
+    await page.getByRole('button', { name: 'Export My Data' }).click();
+
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Export service unavailable' }),
     ).toBeVisible();
     expect(api.getExportRequestCount()).toBe(1);
     expect(downloads).toHaveLength(0);
@@ -606,5 +646,36 @@ test.describe('Settings seeded account contract', () => {
         password: 'CorrectHorse123!',
       });
     await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('keeps account deletion modal open and retryable when the API rejects deletion', async ({
+    page,
+  }) => {
+    const api = await mockSettingsApi(page, {
+      deleteStatus: 500,
+      deleteBody: { error: { message: 'Delete service unavailable' } },
+      deleteDelayMs: 250,
+    });
+
+    await page.goto('/settings');
+
+    await page.getByRole('button', { name: 'Delete My Account' }).click();
+    const deleteDialog = page.getByRole('alertdialog').filter({ hasText: 'Delete Account' });
+    await deleteDialog.getByLabel(/Type your email to confirm/).fill(ADMIN_EMAIL);
+    await deleteDialog.getByLabel('Enter your password').fill('CorrectHorse123!');
+
+    const deleteButton = deleteDialog.getByRole('button', { name: 'Permanently Delete' });
+    await deleteButton.evaluate((button: HTMLElement) => {
+      button.click();
+      button.click();
+    });
+
+    await expect(
+      deleteDialog.getByRole('alert').filter({ hasText: 'Delete service unavailable' }),
+    ).toBeVisible();
+    await expect(deleteDialog).toBeVisible();
+    await expect(deleteButton).toBeEnabled();
+    await expect(page).not.toHaveURL(/\/login/);
+    expect(api.getDeleteRequests()).toHaveLength(1);
   });
 });
