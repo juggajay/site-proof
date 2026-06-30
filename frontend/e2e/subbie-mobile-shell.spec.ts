@@ -531,4 +531,39 @@ test.describe('Subbie mobile shell direct routes', () => {
       }
     }
   });
+
+  test('desktop classic portal deep links stay classic when shell is off', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await mockSubbieShellApi(page, { dockets: [docket] });
+    const projectQuery = `?projectId=${encodeURIComponent(
+      PROJECT_ID,
+    )}&subcontractorCompanyId=${encodeURIComponent(SUBCONTRACTOR_COMPANY_ID)}&shell=off`;
+
+    const classicRoutes = [
+      {
+        path: `/subcontractor-portal/tests${projectQuery}`,
+        heading: 'Test Results',
+        text: 'Compaction',
+      },
+      {
+        path: `/subcontractor-portal/ncrs${projectQuery}`,
+        heading: 'NCRs',
+        text: 'NCR-SUB-001',
+      },
+      {
+        path: `/subcontractor-portal/documents${projectQuery}`,
+        heading: 'Documents',
+        text: 'SWMS-drainage.pdf',
+      },
+    ];
+
+    for (const route of classicRoutes) {
+      await page.goto(route.path);
+      const url = new URL(page.url());
+      expect(url.pathname).toBe(new URL(route.path, 'http://x').pathname);
+      expect(url.pathname.startsWith('/p/')).toBe(false);
+      await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      await expect(page.getByText(route.text).first()).toBeVisible();
+    }
+  });
 });
