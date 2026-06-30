@@ -98,14 +98,18 @@ export function useSubbieShellData(): SubbieShellData {
 
   const company = companyQuery.data ?? null;
   const availableProjects = company?.availableProjects ?? [];
+  const hasCompleteRequestedScope = !!requestedProjectId && !!requestedSubcontractorCompanyId;
+  const hasResolvedCompanyScope = hasCompleteRequestedScope || !!company;
 
   // Selected project: ?projectId= wins, else the server-resolved company's
   // projectId (the backend defaults to the first available project when no
   // projectId is passed), else the first available option.
-  const projectId =
-    requestedProjectId ?? company?.projectId ?? availableProjects[0]?.projectId ?? null;
-  const subcontractorCompanyId =
-    requestedSubcontractorCompanyId ?? company?.id ?? availableProjects[0]?.id ?? null;
+  const projectId = hasResolvedCompanyScope
+    ? (requestedProjectId ?? company?.projectId ?? availableProjects[0]?.projectId ?? null)
+    : null;
+  const subcontractorCompanyId = hasResolvedCompanyScope
+    ? (requestedSubcontractorCompanyId ?? company?.id ?? availableProjects[0]?.id ?? null)
+    : null;
 
   const loading = companyQuery.isLoading && !companyQuery.data;
   const loadError =

@@ -24,6 +24,19 @@ import {
 
 export const ncrListRouter = Router();
 
+function buildNcrListOrderBy(
+  validatedSortBy: keyof Prisma.NCROrderByWithRelationInput | undefined,
+  sortOrder: 'asc' | 'desc',
+): Prisma.NCROrderByWithRelationInput[] {
+  const primarySortBy = validatedSortBy ?? 'createdAt';
+  const primarySortOrder = validatedSortBy ? sortOrder : 'desc';
+
+  return [
+    { [primarySortBy]: primarySortOrder } as Prisma.NCROrderByWithRelationInput,
+    { id: primarySortOrder },
+  ];
+}
+
 // GET /api/ncrs - List all NCRs for user's projects
 ncrListRouter.get(
   '/',
@@ -42,6 +55,7 @@ ncrListRouter.get(
     const { page, limit, sortBy, sortOrder } = parsePagination(req.query);
     const validatedSortBy = parseNcrSortBy(sortBy);
     const { skip, take } = getPrismaSkipTake(page, limit);
+    const orderBy = buildNcrListOrderBy(validatedSortBy, sortOrder);
 
     // Get user details to check role
     const userDetails = await prisma.user.findUnique({
@@ -296,7 +310,7 @@ ncrListRouter.get(
           },
           qmApprovedBy: { select: { id: true, fullName: true, email: true } },
         },
-        orderBy: validatedSortBy ? { [validatedSortBy]: sortOrder } : { createdAt: 'desc' },
+        orderBy,
       }),
       prisma.nCR.count({ where: finalWhere }),
     ]);
