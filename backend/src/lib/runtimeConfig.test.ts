@@ -16,6 +16,12 @@ const VALID_JWT_SECRET = 'prod-jwt-secret-32-plus-chars-2026';
 const VALID_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const VALID_RESEND_API_KEY = 're_prod_valid_api_key_123456789';
 const VALID_SUPABASE_SERVICE_ROLE_KEY = 'prod-supabase-service-role-key-32-plus-chars';
+const FIRST_PARTY_PRODUCTION_CORS_ORIGINS = [
+  'https://site-proof.vercel.app',
+  'https://site-proof-juggajays-projects.vercel.app',
+  'https://www.civos.com.au',
+  'https://civos.com.au',
+];
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
@@ -455,6 +461,20 @@ describe('runtimeConfig', () => {
     expect(isCorsOriginAllowed(undefined)).toBe(false);
   });
 
+  it('allows known first-party production frontend aliases without extra env', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://site-proof.vercel.app/';
+    process.env.BACKEND_URL = 'https://site-proof-production.up.railway.app';
+    delete process.env.CORS_ALLOWED_ORIGINS;
+
+    expect(getAllowedCorsOrigins()).toEqual(FIRST_PARTY_PRODUCTION_CORS_ORIGINS);
+    FIRST_PARTY_PRODUCTION_CORS_ORIGINS.forEach((origin) => {
+      expect(isCorsOriginAllowed(origin)).toBe(true);
+    });
+    expect(isCorsOriginAllowed('https://attacker.example')).toBe(false);
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
   it('allows explicit production CORS aliases for deployed frontend domains', () => {
     configureProductionBase();
     process.env.FRONTEND_URL = 'https://site-proof.vercel.app/';
@@ -464,17 +484,14 @@ describe('runtimeConfig', () => {
       'https://civos.com.au/',
       'https://site-proof-juggajays-projects.vercel.app',
       'https://site-proof.vercel.app',
+      'https://portal.siteproof.example',
     ].join(',');
 
     expect(getAllowedCorsOrigins()).toEqual([
-      'https://site-proof.vercel.app',
-      'https://www.civos.com.au',
-      'https://civos.com.au',
-      'https://site-proof-juggajays-projects.vercel.app',
+      ...FIRST_PARTY_PRODUCTION_CORS_ORIGINS,
+      'https://portal.siteproof.example',
     ]);
-    expect(isCorsOriginAllowed('https://www.civos.com.au')).toBe(true);
-    expect(isCorsOriginAllowed('https://civos.com.au')).toBe(true);
-    expect(isCorsOriginAllowed('https://site-proof-juggajays-projects.vercel.app')).toBe(true);
+    expect(isCorsOriginAllowed('https://portal.siteproof.example')).toBe(true);
     expect(isCorsOriginAllowed('https://attacker.example')).toBe(false);
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
