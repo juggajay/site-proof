@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TeamTab } from './TeamTab';
 
@@ -23,9 +24,29 @@ beforeEach(() => {
 });
 
 describe('TeamTab', () => {
+  function renderTeamTab(canGrantProjectAdmin = false) {
+    render(
+      <MemoryRouter>
+        <TeamTab projectId="project-1" canGrantProjectAdmin={canGrantProjectAdmin} />
+      </MemoryRouter>,
+    );
+  }
+
+  it('links to full project team management for role changes and removals', async () => {
+    renderTeamTab();
+
+    const manageLink = await screen.findByRole('link', { name: 'Manage project team' });
+    expect(manageLink).toHaveAttribute('href', '/projects/project-1/users');
+    expect(
+      screen.getByText(
+        'Review this project team. Use Project Users for role changes and removals.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('does not offer protected project management roles when the actor cannot grant them', async () => {
     const user = userEvent.setup();
-    render(<TeamTab projectId="project-1" canGrantProjectAdmin={false} />);
+    renderTeamTab(false);
 
     await user.click(await screen.findByRole('button', { name: /invite team member/i }));
 
@@ -40,7 +61,7 @@ describe('TeamTab', () => {
 
   it('offers Project Admin when the actor can grant it', async () => {
     const user = userEvent.setup();
-    render(<TeamTab projectId="project-1" canGrantProjectAdmin />);
+    renderTeamTab(true);
 
     await user.click(await screen.findByRole('button', { name: /invite team member/i }));
 

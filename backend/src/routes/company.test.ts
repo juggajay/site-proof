@@ -1282,6 +1282,19 @@ describe('Company API', () => {
       expect(member.roleInCompany).toBe('admin');
     });
 
+    it('rejects API-key-authenticated company member lists', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'read');
+
+      try {
+        const res = await request(app).get('/api/company/members').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('requires an authenticated browser session');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should sort members by full name', async () => {
       const res = await request(app)
         .get('/api/company/members')
@@ -2565,6 +2578,65 @@ describe('Company API', () => {
         });
       } finally {
         setupSpy.mockRestore();
+        notifySpy.mockRestore();
+      }
+    });
+
+    it('revokes pre-existing API keys when attaching a credentialed no-company user', async () => {
+      const existingUser = await registerTestUser(app, {
+        emailPrefix: 'company-invite-existing-key',
+        fullName: 'Existing Key User',
+      });
+      invitedUserIds.push(existingUser.userId);
+
+      const keyRes = await request(app)
+        .post('/api/api-keys')
+        .set('Authorization', `Bearer ${existingUser.token}`)
+        .send({ name: 'Pre-attach key', scopes: 'read' });
+      expect(keyRes.status).toBe(201);
+
+      const notifySpy = vi
+        .spyOn(emailService, 'sendNotificationEmail')
+        .mockResolvedValue({ success: true } as never);
+
+      try {
+        const inviteRes = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ email: existingUser.email, roleInCompany: 'site_engineer' });
+
+        expect(inviteRes.status).toBe(201);
+        expect(inviteRes.body.member).toMatchObject({
+          id: existingUser.userId,
+          roleInCompany: 'site_engineer',
+          status: 'active',
+        });
+
+        await expect(
+          prisma.apiKey.findUnique({
+            where: { id: keyRes.body.apiKey.id },
+            select: { isActive: true },
+          }),
+        ).resolves.toMatchObject({ isActive: false });
+
+        const companyRes = await request(app)
+          .get('/api/company')
+          .set('x-api-key', keyRes.body.apiKey.key);
+        expect(companyRes.status).toBe(401);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityType: 'user',
+            entityId: existingUser.userId,
+            action: AuditAction.USER_INVITED,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(parseAuditLogChanges(auditLog?.changes ?? null)).toMatchObject({
+          invitedUserId: existingUser.userId,
+          revokedKeyCount: 1,
+        });
+      } finally {
         notifySpy.mockRestore();
       }
     });

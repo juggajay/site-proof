@@ -191,6 +191,7 @@ companyMemberRoutes.get(
   '/members',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    requireBrowserSession(req, 'Company member list');
 
     if (!user.companyId) {
       throw AppError.notFound('Company');
@@ -251,6 +252,7 @@ companyMemberRoutes.post(
       previousActiveSetupTokenIds,
       notifyAttachedMember,
       roleChangeAuditedInTransaction,
+      revokedKeyCount,
     } = await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: { id: user.userId },
@@ -387,7 +389,16 @@ companyMemberRoutes.post(
       } satisfies Parameters<typeof tx.user.findUnique>[0]['select'];
 
       let member;
+      let revokedKeyCount = 0;
       if (existingUser) {
+        if (existingUser.companyId !== companyId) {
+          const revokedKeys = await tx.apiKey.updateMany({
+            where: { userId: existingUser.id, isActive: true },
+            data: { isActive: false },
+          });
+          revokedKeyCount = revokedKeys.count;
+        }
+
         const mayUpdateExistingFullName = !invitedMemberHasCredentials(existingUser);
         const updated = await tx.user.updateMany({
           where: {
@@ -485,6 +496,7 @@ companyMemberRoutes.post(
         previousActiveSetupTokenIds,
         notifyAttachedMember: shouldNotifyAttachedCompanyMember(existingUser, companyId),
         roleChangeAuditedInTransaction: roleChangedExistingCompanyMember,
+        revokedKeyCount,
       };
     });
 
@@ -578,6 +590,7 @@ companyMemberRoutes.post(
               roleInCompany,
               companyId,
               status: setupRequired ? 'pending' : 'active',
+              ...(revokedKeyCount > 0 ? { revokedKeyCount } : {}),
             },
         req,
       });
