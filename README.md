@@ -104,10 +104,10 @@ read-only checks against configured Resend, Supabase Storage, Google OAuth, and
 VAPID push settings.
 
 `FRONTEND_URL` is the canonical public app URL used for generated links and is
-always allowed by backend CORS. If the same frontend is served from extra
-domains or Vercel aliases, list those origins in comma-separated
-`CORS_ALLOWED_ORIGINS` in the backend runtime environment and GitHub production
-environment.
+always allowed by backend CORS. The current first-party Vercel/custom-domain
+aliases are allowed automatically. If the same frontend is served from any
+extra domains, list those origins in comma-separated `CORS_ALLOWED_ORIGINS` in
+the backend runtime environment and GitHub production environment.
 
 The current production-readiness checklist and remaining live-verification
 blockers are tracked in [docs/production-readiness-audit.md](./docs/production-readiness-audit.md).

@@ -8,6 +8,12 @@ const SECRET_PLACEHOLDER_MARKERS = [
   'dev-secret',
   'mock-',
 ];
+const FIRST_PARTY_PRODUCTION_FRONTEND_ORIGINS = [
+  'https://site-proof.vercel.app',
+  'https://site-proof-juggajays-projects.vercel.app',
+  'https://www.civos.com.au',
+  'https://civos.com.au',
+];
 
 function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -344,6 +350,14 @@ function getConfiguredCorsOrigins(): string[] {
     .map((origin) => normalizePublicOrigin('CORS_ALLOWED_ORIGINS', origin));
 }
 
+function getFirstPartyCorsOrigins(frontendOrigin: string): string[] {
+  if (!FIRST_PARTY_PRODUCTION_FRONTEND_ORIGINS.includes(frontendOrigin)) {
+    return [];
+  }
+
+  return FIRST_PARTY_PRODUCTION_FRONTEND_ORIGINS;
+}
+
 export function getFrontendUrl(): string {
   return envUrl('FRONTEND_URL', DEFAULT_FRONTEND_URL);
 }
@@ -353,9 +367,12 @@ export function getAllowedCorsOrigins(): string[] {
     return [];
   }
 
+  const frontendOrigin = normalizePublicOrigin('FRONTEND_URL', getFrontendUrl());
+
   return Array.from(
     new Set([
-      normalizePublicOrigin('FRONTEND_URL', getFrontendUrl()),
+      frontendOrigin,
+      ...getFirstPartyCorsOrigins(frontendOrigin),
       ...getConfiguredCorsOrigins(),
     ]),
   );
