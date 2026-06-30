@@ -14,18 +14,7 @@ vi.mock('@/lib/logger', async (importOriginal) => {
   return { ...actual, logError: logErrorMock, reportClientError: reportClientErrorMock };
 });
 
-import {
-  HOLD_POINTS_MAX_PAGES,
-  HOLD_POINTS_PAGE_LIMIT,
-  fetchAllProjectHoldPoints,
-} from './holdPointsApi';
-
-function buildPage(page: number, totalPages: number) {
-  return {
-    holdPoints: [{ id: `hp-page-${page}` }],
-    pagination: { page, totalPages, hasNextPage: page < totalPages },
-  };
-}
+import { HOLD_POINTS_REGISTER_LIMIT, fetchAllProjectHoldPoints } from './holdPointsApi';
 
 beforeEach(() => {
   apiFetchMock.mockReset();
@@ -34,42 +23,36 @@ beforeEach(() => {
 });
 
 describe('fetchAllProjectHoldPoints', () => {
-  it('aggregates every page until the backend reports no next page', async () => {
-    apiFetchMock.mockImplementation((path: string) => {
-      const page = Number(new URLSearchParams(path.split('?')[1]).get('page'));
-      return Promise.resolve(buildPage(page, 3));
+  it('fetches the full bounded register in one backend call', async () => {
+    apiFetchMock.mockResolvedValue({
+      holdPoints: [{ id: 'hp-1' }, { id: 'hp-2' }, { id: 'hp-3' }],
+      pagination: { page: 1, totalPages: 1, hasNextPage: false },
     });
 
     const holdPoints = await fetchAllProjectHoldPoints('project-1');
 
-    expect(holdPoints.map((hp) => hp.id)).toEqual(['hp-page-1', 'hp-page-2', 'hp-page-3']);
-    expect(apiFetchMock).toHaveBeenCalledTimes(3);
-    expect(apiFetchMock).toHaveBeenNthCalledWith(
-      1,
-      `/api/holdpoints/project/project-1?page=1&limit=${HOLD_POINTS_PAGE_LIMIT}`,
-    );
-    expect(apiFetchMock).toHaveBeenNthCalledWith(
-      3,
-      `/api/holdpoints/project/project-1?page=3&limit=${HOLD_POINTS_PAGE_LIMIT}`,
-    );
+    expect(holdPoints.map((hp) => hp.id)).toEqual(['hp-1', 'hp-2', 'hp-3']);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/holdpoints/project/project-1?all=true');
     expect(logErrorMock).not.toHaveBeenCalled();
   });
 
-  it('stops at the hard page cap, logs telemetry, and still returns the partial register', async () => {
-    // A pagination payload that always claims another page — the exact shape
-    // that would have spun the previous unbounded while(true) loop forever.
-    apiFetchMock.mockImplementation((path: string) => {
-      const page = Number(new URLSearchParams(path.split('?')[1]).get('page'));
-      return Promise.resolve(buildPage(page, Number.MAX_SAFE_INTEGER));
+  it('logs telemetry when the backend says the bounded register was capped', async () => {
+    apiFetchMock.mockResolvedValue({
+      holdPoints: [{ id: 'hp-1' }],
+      pagination: { page: 1, totalPages: 2, hasNextPage: true },
     });
 
     const holdPoints = await fetchAllProjectHoldPoints('project-1');
 
-    expect(apiFetchMock).toHaveBeenCalledTimes(HOLD_POINTS_MAX_PAGES);
-    expect(holdPoints).toHaveLength(HOLD_POINTS_MAX_PAGES);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(holdPoints).toHaveLength(1);
     expect(logErrorMock).toHaveBeenCalledWith(
-      'Hold point register page cap reached:',
+      'Hold point register item cap reached:',
       expect.any(Error),
+    );
+    expect(logErrorMock.mock.calls[0][1].message).toContain(
+      `${HOLD_POINTS_REGISTER_LIMIT}-item cap`,
     );
     expect(reportClientErrorMock).toHaveBeenCalledTimes(1);
   });

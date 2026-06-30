@@ -172,6 +172,21 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoints).toBeDefined();
       expect(Array.isArray(res.body.holdPoints)).toBe(true);
     });
+
+    it('returns the bounded full register in one response when all=true', async () => {
+      const res = await request(app)
+        .get(`/api/holdpoints/project/${projectId}?all=true`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoints).toBeDefined();
+      expect(Array.isArray(res.body.holdPoints)).toBe(true);
+      expect(res.body.pagination).toMatchObject({
+        page: 1,
+        limit: 5000,
+        hasNextPage: false,
+      });
+    });
   });
 
   describe('GET /api/holdpoints/lot/:lotId/item/:itemId', () => {

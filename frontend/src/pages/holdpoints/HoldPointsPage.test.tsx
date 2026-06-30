@@ -88,15 +88,12 @@ function mockHoldPointsApi(register: HoldPoint[]) {
   apiFetchMock.mockImplementation((path: string) => {
     const url = new URL(path, 'http://localhost');
     if (url.pathname === '/api/holdpoints/project/p1') {
-      const page = Number(url.searchParams.get('page') || '1');
-      const limit = Number(url.searchParams.get('limit') || '100');
-      const start = (page - 1) * limit;
       return Promise.resolve({
-        holdPoints: register.slice(start, start + limit),
+        holdPoints: register,
         pagination: {
-          page,
-          totalPages: Math.max(1, Math.ceil(register.length / limit)),
-          hasNextPage: page * limit < register.length,
+          page: 1,
+          totalPages: 1,
+          hasNextPage: false,
         },
       });
     }
@@ -126,7 +123,7 @@ beforeEach(() => {
 });
 
 describe('HoldPointsPage register data layer', () => {
-  it('aggregates every backend page through the cached query', async () => {
+  it('loads the full backend register through the cached query', async () => {
     const bigRegister = Array.from({ length: 150 }, (_, index) =>
       makeHoldPoint({
         id: `hp-${index + 1}`,
@@ -139,9 +136,8 @@ describe('HoldPointsPage register data layer', () => {
 
     expect(await screen.findByText('LOT-001')).toBeInTheDocument();
     expect(screen.getByText('LOT-150')).toBeInTheDocument();
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/holdpoints/project/p1?page=1&limit=100');
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/holdpoints/project/p1?page=2&limit=100');
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/holdpoints/project/p1?all=true');
   });
 
   it('applies a status filter arriving via the URL', async () => {

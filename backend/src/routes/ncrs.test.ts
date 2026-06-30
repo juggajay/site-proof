@@ -756,6 +756,50 @@ describe('NCR API', () => {
       expect(res.body.ncrs.length).toBeGreaterThan(0);
     });
 
+    it('keeps paginated NCR registers stable when rows share the same timestamp', async () => {
+      const token = `stable-pagination-${Date.now()}`;
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      const records = [
+        { id: `stage97-ncr-page-a-${token}`, ncrNumber: `NCR-STABLE-A-${token}` },
+        { id: `stage97-ncr-page-b-${token}`, ncrNumber: `NCR-STABLE-B-${token}` },
+        { id: `stage97-ncr-page-c-${token}`, ncrNumber: `NCR-STABLE-C-${token}` },
+      ];
+
+      await prisma.nCR.createMany({
+        data: records.map((record) => ({
+          id: record.id,
+          projectId,
+          ncrNumber: record.ncrNumber,
+          description: `Stable pagination ${token}`,
+          category: 'Workmanship',
+          severity: 'minor',
+          raisedById: userId,
+          raisedAt: createdAt,
+          createdAt,
+        })),
+      });
+
+      try {
+        const query = `projectId=${projectId}&search=${encodeURIComponent(token)}&limit=2`;
+        const pageOne = await request(app)
+          .get(`/api/ncrs?${query}&page=1`)
+          .set('Authorization', `Bearer ${authToken}`);
+        const pageTwo = await request(app)
+          .get(`/api/ncrs?${query}&page=2`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(pageOne.status).toBe(200);
+        expect(pageTwo.status).toBe(200);
+        expect(pageOne.body.ncrs.map((ncr: { id: string }) => ncr.id)).toEqual([
+          records[2].id,
+          records[1].id,
+        ]);
+        expect(pageTwo.body.ncrs.map((ncr: { id: string }) => ncr.id)).toEqual([records[0].id]);
+      } finally {
+        await prisma.nCR.deleteMany({ where: { id: { in: records.map((record) => record.id) } } });
+      }
+    });
+
     it('should search NCRs server-side without bypassing project filters', async () => {
       const searchToken = `ncr-search-${Date.now()}`;
       const matchingNcr = await prisma.nCR.create({
