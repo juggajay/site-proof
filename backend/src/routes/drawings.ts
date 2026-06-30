@@ -368,6 +368,11 @@ router.post(
       throw error;
     }
 
+    if (oldDrawing.supersededById) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.badRequest('Only the current drawing revision can be superseded');
+    }
+
     const existingRevision = await prisma.drawing.findFirst({
       where: {
         projectId: oldDrawing.projectId,

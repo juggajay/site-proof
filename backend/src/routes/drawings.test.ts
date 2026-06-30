@@ -1417,6 +1417,90 @@ describe('Drawings API', () => {
       expect(res.body.error.message).toContain('already exists');
     });
 
+    it('should reject superseding an already superseded drawing without creating a file or document', async () => {
+      const oldDoc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'drawing',
+          filename: 'already-superseded-old.pdf',
+          fileUrl: '/uploads/drawings/already-superseded-old.pdf',
+          fileSize: 1024,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const latestDoc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'drawing',
+          filename: 'already-superseded-latest.pdf',
+          fileUrl: '/uploads/drawings/already-superseded-latest.pdf',
+          fileSize: 1024,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const oldDrawing = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: oldDoc.id,
+          drawingNumber: `DRW-OLD-${Date.now()}`,
+          title: 'Already Superseded Drawing',
+          revision: 'A',
+          status: 'for_construction',
+        },
+      });
+      const latestDrawing = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: latestDoc.id,
+          drawingNumber: oldDrawing.drawingNumber,
+          title: 'Latest Drawing',
+          revision: 'B',
+          status: 'for_construction',
+        },
+      });
+      await prisma.drawing.update({
+        where: { id: oldDrawing.id },
+        data: { supersededById: latestDrawing.id },
+      });
+
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+      const attemptedFilename = `already-superseded-${Date.now()}.pdf`;
+
+      try {
+        const res = await request(app)
+          .post(`/api/drawings/${oldDrawing.id}/supersede`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .field('revision', 'C')
+          .attach('file', validPdfBytes, {
+            filename: attemptedFilename,
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('current drawing revision');
+
+        const unchangedOldDrawing = await prisma.drawing.findUnique({
+          where: { id: oldDrawing.id },
+          select: { supersededById: true },
+        });
+        expect(unchangedOldDrawing?.supersededById).toBe(latestDrawing.id);
+
+        const leakedDocuments = await prisma.document.count({
+          where: { projectId, filename: attemptedFilename },
+        });
+        expect(leakedDocuments).toBe(0);
+        const leakedFiles = fs.readdirSync(uploadDir).filter((file) => !beforeFiles.has(file));
+        expect(leakedFiles).toHaveLength(0);
+      } finally {
+        await prisma.drawing.deleteMany({
+          where: { id: { in: [oldDrawing.id, latestDrawing.id] } },
+        });
+        await prisma.document.deleteMany({ where: { id: { in: [oldDoc.id, latestDoc.id] } } });
+      }
+    });
+
     it('should return 404 for non-existent drawing', async () => {
       const res = await request(app)
         .post('/api/drawings/non-existent-id/supersede')

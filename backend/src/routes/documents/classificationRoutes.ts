@@ -190,6 +190,7 @@ export function createDocumentClassificationRouter({
       if (!hasAccess) {
         throw AppError.forbidden('Access denied');
       }
+      await requireDocumentMutationAccess(req.user!, document);
 
       // Only classify images
       const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

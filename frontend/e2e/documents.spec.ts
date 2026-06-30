@@ -11,7 +11,7 @@ type SeededDocument = {
   documentType: string;
   category: string | null;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   fileSize: number | null;
   mimeType: string | null;
   uploadedAt: string;
@@ -30,7 +30,6 @@ function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): Seed
       documentType: 'photo',
       category: 'quality',
       filename: 'e2e-proof-photo.jpg',
-      fileUrl: '/uploads/e2e-proof-photo.jpg',
       fileSize: 2048,
       mimeType: 'image/jpeg',
       uploadedAt: '2026-05-01T01:00:00.000Z',
@@ -44,7 +43,6 @@ function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): Seed
       documentType: 'drawing',
       category: 'design',
       filename: 'e2e-drawing.pdf',
-      fileUrl: '/uploads/e2e-drawing.pdf',
       fileSize: 1048576,
       mimeType: 'application/pdf',
       uploadedAt: '2026-05-02T01:00:00.000Z',
@@ -61,7 +59,6 @@ function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): Seed
       documentType: 'drawing',
       category: 'quality',
       filename: 'e2e-upload.pdf',
-      fileUrl: '/uploads/e2e-upload.pdf',
       fileSize: 32,
       mimeType: 'application/pdf',
       uploadedAt: '2026-05-09T01:00:00.000Z',
