@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 describe('TeamTab', () => {
-  it('does not offer Project Admin when the actor cannot grant it', async () => {
+  it('does not offer protected project management roles when the actor cannot grant them', async () => {
     const user = userEvent.setup();
     render(<TeamTab projectId="project-1" canGrantProjectAdmin={false} />);
 
@@ -31,7 +31,7 @@ describe('TeamTab', () => {
 
     const roleSelect = screen.getByLabelText('Role');
     expect(within(roleSelect).queryByRole('option', { name: 'Admin' })).toBeNull();
-    expect(within(roleSelect).getByRole('option', { name: 'Project Manager' })).toBeInTheDocument();
+    expect(within(roleSelect).queryByRole('option', { name: 'Project Manager' })).toBeNull();
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/projects/project-1/users');

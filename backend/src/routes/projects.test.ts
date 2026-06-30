@@ -3086,10 +3086,56 @@ describe('Project Team Management', () => {
         });
 
       expect(inviteAdminRes.status).toBe(403);
-      expect(inviteAdminRes.body.error.message).toContain('grant the project admin role');
+      expect(inviteAdminRes.body.error.message).toContain(
+        'grant project administrator and project manager roles',
+      );
       await expect(
         prisma.projectUser.findFirst({ where: { projectId, userId: inviteeId } }),
       ).resolves.toBeNull();
+
+      const inviteProjectManagerRes = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          email: inviteeEmail,
+          role: 'project_manager',
+        });
+
+      expect(inviteProjectManagerRes.status).toBe(403);
+      expect(inviteProjectManagerRes.body.error.message).toContain(
+        'grant project administrator and project manager roles',
+      );
+      await expect(
+        prisma.projectUser.findFirst({ where: { projectId, userId: inviteeId } }),
+      ).resolves.toBeNull();
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: inviteeId,
+          role: 'viewer',
+          status: 'active',
+          acceptedAt: new Date(),
+        },
+      });
+
+      const promoteProjectManagerRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${inviteeId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          role: 'project_manager',
+        });
+
+      expect(promoteProjectManagerRes.status).toBe(403);
+      expect(promoteProjectManagerRes.body.error.message).toContain(
+        'grant project administrator and project manager roles',
+      );
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId: inviteeId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'viewer', status: 'active' });
 
       const demoteAdminRes = await request(app)
         .patch(`/api/projects/${projectId}/users/${userId}`)
@@ -3099,14 +3145,18 @@ describe('Project Team Management', () => {
         });
 
       expect(demoteAdminRes.status).toBe(403);
-      expect(demoteAdminRes.body.error.message).toContain('manage project administrators');
+      expect(demoteAdminRes.body.error.message).toContain(
+        'manage project administrators and project managers',
+      );
 
       const removeAdminRes = await request(app)
         .delete(`/api/projects/${projectId}/users/${userId}`)
         .set('Authorization', `Bearer ${managerToken}`);
 
       expect(removeAdminRes.status).toBe(403);
-      expect(removeAdminRes.body.error.message).toContain('manage project administrators');
+      expect(removeAdminRes.body.error.message).toContain(
+        'manage project administrators and project managers',
+      );
       await expect(
         prisma.projectUser.findFirst({
           where: { projectId, userId },

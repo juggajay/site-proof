@@ -29,7 +29,11 @@ import {
   ProjectAdminResourceGate,
   ProjectAdminStatusBanners,
 } from './ProjectAdminPageState';
-import { canGrantProjectAdminRole, useProjectAdminResource } from './projectPageAccess';
+import {
+  canGrantProjectAdminRole,
+  isProtectedProjectManagementRole,
+  useProjectAdminResource,
+} from './projectPageAccess';
 
 interface ProjectUser {
   id: string;
@@ -105,7 +109,7 @@ function ProjectUsersTable({
   saving,
   removingUserId,
   readOnly,
-  canManageProjectAdministrators,
+  canManageProtectedProjectRoles,
   onEditRoleChange,
   onStartEditing,
   onSaveRole,
@@ -119,7 +123,7 @@ function ProjectUsersTable({
   saving: boolean;
   removingUserId: string | null;
   readOnly: boolean;
-  canManageProjectAdministrators: boolean;
+  canManageProtectedProjectRoles: boolean;
   onEditRoleChange: (role: string) => void;
   onStartEditing: (user: ProjectUser) => void;
   onSaveRole: () => void;
@@ -145,11 +149,12 @@ function ProjectUsersTable({
         <tbody className="divide-y">
           {users.map((user) => {
             const lastActiveTeamLead = isLastActiveProjectTeamLead(user, users);
-            const canManageThisUser = canManageProjectAdministrators || user.role !== 'admin';
+            const canManageThisUser =
+              canManageProtectedProjectRoles || !isProtectedProjectManagementRole(user.role);
             const roleOptions = ROLES.filter(
               (role) =>
                 canAssignProjectRole(user, role.value, users) &&
-                (canManageProjectAdministrators || role.value !== 'admin'),
+                (canManageProtectedProjectRoles || !isProtectedProjectManagementRole(role.value)),
             );
             const canRemove = canRemoveProjectUser(user, users);
             const teamLeadGuardCopy =
@@ -286,6 +291,7 @@ export function ProjectUsersPage() {
   const [saving, setSaving] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [userPendingRemove, setUserPendingRemove] = useState<ProjectUser | null>(null);
+  const [removeError, setRemoveError] = useState('');
   const invitingRef = useRef(false);
   const savingRolesRef = useRef(new Set<string>());
   const removingUsersRef = useRef(new Set<string>());
@@ -311,12 +317,12 @@ export function ProjectUsersPage() {
     resourceLabel: 'project team',
     loadItems: loadProjectUsers,
   });
-  const canManageProjectAdministrators = canGrantProjectAdminRole(
+  const canManageProtectedProjectRoles = canGrantProjectAdminRole(
     currentUser?.roleInCompany || currentUser?.role,
     project?.currentUserRole,
   );
   const assignableRoleOptions = ROLES.filter(
-    (role) => canManageProjectAdministrators || role.value !== 'admin',
+    (role) => canManageProtectedProjectRoles || !isProtectedProjectManagementRole(role.value),
   );
 
   const openInviteModal = () => {
@@ -329,7 +335,7 @@ export function ProjectUsersPage() {
     const email = normalizeInviteEmail(inviteEmail);
     if (readOnly) return;
     if (!projectId || !email || invitingRef.current) return;
-    if (inviteRole === 'admin' && !canManageProjectAdministrators) return;
+    if (!canManageProtectedProjectRoles && isProtectedProjectManagementRole(inviteRole)) return;
 
     invitingRef.current = true;
     setInviting(true);
@@ -376,7 +382,11 @@ export function ProjectUsersPage() {
   const handleUpdateRole = async () => {
     if (readOnly) return;
     if (!editingUser || !editRole || !projectId) return;
-    if (!canManageProjectAdministrators && (editingUser.role === 'admin' || editRole === 'admin')) {
+    if (
+      !canManageProtectedProjectRoles &&
+      (isProtectedProjectManagementRole(editingUser.role) ||
+        isProtectedProjectManagementRole(editRole))
+    ) {
       return;
     }
 
@@ -421,6 +431,7 @@ export function ProjectUsersPage() {
 
     removingUsersRef.current.add(user.id);
     setRemovingUserId(user.id);
+    setRemoveError('');
 
     try {
       await apiFetch(
@@ -434,18 +445,27 @@ export function ProjectUsersPage() {
         description: `${user.fullName || user.email} has been removed from the project.`,
       });
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      setUserPendingRemove(null);
+      setRemoveError('');
     } catch (error) {
+      const message = extractErrorMessage(error, 'Please try again.');
       logError('Failed to remove project user:', error);
+      setRemoveError(message);
       toast({
         title: 'Failed to remove user',
-        description: extractErrorMessage(error, 'Please try again.'),
+        description: message,
         variant: 'error',
       });
     } finally {
       removingUsersRef.current.delete(user.id);
       setRemovingUserId(null);
-      setUserPendingRemove(null);
     }
+  };
+
+  const requestRemoveUser = (user: ProjectUser) => {
+    if (readOnly) return;
+    setRemoveError('');
+    setUserPendingRemove(user);
   };
 
   const startEditing = (user: ProjectUser) => {
@@ -496,12 +516,12 @@ export function ProjectUsersPage() {
             saving={saving}
             removingUserId={removingUserId}
             readOnly={readOnly}
-            canManageProjectAdministrators={canManageProjectAdministrators}
+            canManageProtectedProjectRoles={canManageProtectedProjectRoles}
             onEditRoleChange={setEditRole}
             onStartEditing={startEditing}
             onSaveRole={handleUpdateRole}
             onCancelEditing={cancelEditing}
-            onRequestRemove={setUserPendingRemove}
+            onRequestRemove={requestRemoveUser}
           />
         )}
       </ProjectAdminResourceGate>
@@ -586,13 +606,24 @@ export function ProjectUsersPage() {
               this project?
             </p>
             <p>They will lose access to this project immediately.</p>
+            {removeError && (
+              <div
+                role="alert"
+                className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                {removeError}
+              </div>
+            )}
           </>
         }
         confirmLabel={removingUserId === userPendingRemove?.id ? 'Removing...' : 'Remove'}
         variant="destructive"
         confirmDisabled={removingUserId === userPendingRemove?.id}
         cancelDisabled={removingUserId === userPendingRemove?.id}
-        onCancel={() => setUserPendingRemove(null)}
+        onCancel={() => {
+          setRemoveError('');
+          setUserPendingRemove(null);
+        }}
         onConfirm={() => {
           if (userPendingRemove) void handleRemoveUser(userPendingRemove);
         }}

@@ -45,8 +45,14 @@ type ProjectTeamRouterDependencies = {
   parseProjectTeamRole: (value: unknown) => string;
 };
 
+const PROTECTED_PROJECT_MEMBER_ROLES = new Set(['admin', 'project_manager']);
+
 function isProjectUserUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+function isProtectedProjectMemberRole(role: string | null | undefined): boolean {
+  return typeof role === 'string' && PROTECTED_PROJECT_MEMBER_ROLES.has(role);
 }
 
 function assertActorMayManageProjectMemberRole(params: {
@@ -59,12 +65,16 @@ function assertActorMayManageProjectMemberRole(params: {
     return;
   }
 
-  if (params.targetCurrentRole === 'admin') {
-    throw AppError.forbidden('Only project admins can manage project administrators');
+  if (isProtectedProjectMemberRole(params.targetCurrentRole)) {
+    throw AppError.forbidden(
+      'Only project admins can manage project administrators and project managers',
+    );
   }
 
-  if (params.targetNewRole === 'admin') {
-    throw AppError.forbidden('Only project admins can grant the project admin role');
+  if (isProtectedProjectMemberRole(params.targetNewRole)) {
+    throw AppError.forbidden(
+      'Only project admins can grant project administrator and project manager roles',
+    );
   }
 }
 

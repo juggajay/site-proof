@@ -66,9 +66,11 @@ export function HoldPointRecipientsSection({
                 size="sm"
                 className="text-destructive hover:text-destructive/80 text-xs h-auto p-1"
                 onClick={() => onRemoveRecipient(index)}
-                disabled={readOnly || savingSetting === `removeRecipient-${index}`}
+                disabled={readOnly || savingRecipients || savingSetting !== null}
               >
-                Remove {recipient.role}
+                {savingSetting === `removeRecipient-${index}`
+                  ? `Removing ${recipient.role}...`
+                  : `Remove ${recipient.role}`}
               </Button>
             </div>
           ))

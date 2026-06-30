@@ -45,17 +45,35 @@ describe('NotificationsTabSections', () => {
           { role: 'Quality Manager', email: 'qa@example.com' },
         ]}
         savingRecipients={false}
-        savingSetting="removeRecipient-1"
+        savingSetting={null}
         onAddRecipient={vi.fn()}
         onRemoveRecipient={onRemoveRecipient}
       />,
     );
 
     expect(screen.getByText('super@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove Quality Manager' })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Remove Superintendent' }));
     expect(onRemoveRecipient).toHaveBeenCalledWith(0);
+  });
+
+  it('disables recipient writes while a recipient save is in flight', () => {
+    render(
+      <HoldPointRecipientsSection
+        hpRecipients={[
+          { role: 'Superintendent', email: 'super@example.com' },
+          { role: 'Quality Manager', email: 'qa@example.com' },
+        ]}
+        savingRecipients
+        savingSetting="removeRecipient-1"
+        onAddRecipient={vi.fn()}
+        onRemoveRecipient={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Remove Superintendent' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Removing Quality Manager...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add Recipient' })).toBeDisabled();
   });
 
   it('renders subcontractor verification status and delegates toggles', async () => {

@@ -351,6 +351,25 @@ test.describe('Project settings seeded admin contract', () => {
     await diaryReminderToggle.uncheck();
     await expect(page.getByText('Notification preference saved.')).toBeVisible();
 
+    await page.getByRole('tab', { name: /Modules/ }).click();
+    await expect(page.getByRole('checkbox', { name: /Cost Tracking/ })).not.toBeChecked();
+    const docketApprovalsToggle = page.getByRole('checkbox', { name: /Docket Approvals/ });
+    await expect(docketApprovalsToggle).toBeChecked();
+    await docketApprovalsToggle.uncheck();
+
+    await expect
+      .poll(() => api.getPatchRequests())
+      .toContainEqual(
+        expect.objectContaining({
+          settings: expect.objectContaining({
+            enabledModules: expect.objectContaining({ costTracking: false, dockets: false }),
+          }),
+        }),
+      );
+
+    await page.getByRole('tab', { name: /Notifications/ }).click();
+    await expect(page.getByRole('checkbox', { name: /Daily Diary Reminders/ })).not.toBeChecked();
+
     await page.getByLabel('Release Authorization').selectOption('any');
     await expect(page.getByText('Hold point approval requirement saved.')).toBeVisible();
 

@@ -126,6 +126,8 @@ type ProjectSettingsState = {
   hpMinimumNoticeDays: number;
 };
 
+type ProjectSettingsPatch = Record<string, unknown>;
+
 function getProjectSettingsState(project: Project | null): ProjectSettingsState {
   const state: ProjectSettingsState = {
     hpRecipients: [],
@@ -249,9 +251,7 @@ export function ProjectSettingsPage() {
     setSearchParams({ tab });
   };
 
-  const applyProjectState = useCallback((nextProject: Project | null) => {
-    const nextSettings = getProjectSettingsState(nextProject);
-    setProject(nextProject);
+  const applySettingsState = useCallback((nextSettings: ProjectSettingsState) => {
     setHpRecipients(nextSettings.hpRecipients);
     setHpApprovalRequirement(nextSettings.hpApprovalRequirement);
     setRequireSubcontractorVerification(nextSettings.requireSubcontractorVerification);
@@ -260,6 +260,32 @@ export function ProjectSettingsPage() {
     setWitnessPointNotifications(nextSettings.witnessPointNotifications);
     setHpMinimumNoticeDays(nextSettings.hpMinimumNoticeDays);
   }, []);
+
+  const applyProjectState = useCallback(
+    (nextProject: Project | null) => {
+      setProject(nextProject);
+      applySettingsState(getProjectSettingsState(nextProject));
+    },
+    [applySettingsState],
+  );
+
+  const applyProjectSettingsPatch = useCallback(
+    (settingsPatch: ProjectSettingsPatch) => {
+      setProject((currentProject) => {
+        if (!currentProject) return currentProject;
+
+        const currentSettings = parseProjectSettings(currentProject.settings) ?? {};
+        const nextProject = {
+          ...currentProject,
+          settings: { ...currentSettings, ...settingsPatch },
+        };
+        applySettingsState(getProjectSettingsState(nextProject));
+
+        return nextProject;
+      });
+    },
+    [applySettingsState],
+  );
 
   // Fetch project data
   const fetchProject = useCallback(async () => {
@@ -413,6 +439,7 @@ export function ProjectSettingsPage() {
                 initialWitnessPointNotifications={witnessPointNotifications}
                 initialHpMinimumNoticeDays={hpMinimumNoticeDays}
                 readOnly={readOnly}
+                onSettingsSaved={applyProjectSettingsPatch}
               />
             )}
 
@@ -421,6 +448,7 @@ export function ProjectSettingsPage() {
                 projectId={projectId}
                 initialEnabledModules={enabledModules}
                 readOnly={readOnly}
+                onSettingsSaved={applyProjectSettingsPatch}
               />
             )}
           </Suspense>
