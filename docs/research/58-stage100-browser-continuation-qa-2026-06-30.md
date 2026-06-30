@@ -141,8 +141,20 @@ Documents and ITP:
 - Document version upload/list routes exist, but no current UI route/component
   was found. Treat this like a UI decision before adding Playwright coverage.
 - ITP browser coverage handles templates and lot checklist completion/attachment
-  POST, but not pending verification verify/reject, completion PATCH, positive
-  attachment GET/DELETE, or template archive/restore/propagate.
+  POST.
+- Follow-up coverage added in PR branch
+  `qa/itp-verification-browser-coverage`:
+  - head-contractor reviewer verifies a pending ITP completion
+  - head-contractor reviewer rejects a pending ITP completion with a required
+    reason
+  - pending verification disables the ordinary checklist checkbox and removes
+    review buttons after terminal review
+- Verification:
+  `npx playwright test e2e/lot-detail.spec.ts --project=chromium --reporter=list`
+  passed 14/14 on rerun. A first full-spec run had a transient empty-app-shell
+  first-load miss before the new tests; rerun was clean.
+- Missing user-facing browser coverage remains for ITP completion PATCH,
+  positive attachment GET/DELETE, and template archive/restore/propagate.
 - Template archive/restore/propagate also does not appear UI-reachable today.
 
 ## Observations
@@ -162,12 +174,12 @@ Documents and ITP:
 
 Continue filling the highest-value browser gaps from the scout map:
 
-1. NCR desktop lifecycle through QM review, rectification/evidence, submit for
-   verification, reject rectification, resubmit, notify client, and close.
-2. ITP pending verification reviewer flow: verify and reject from
-   `/projects/:projectId/itp`.
-3. Document classification save from the lot photo/ITP evidence flow.
-4. Diary copy/reopen/entry CRUD.
+1. NCR desktop lifecycle through request-revision, rectification/evidence,
+   submit for verification, reject rectification, resubmit, and concession close.
+2. Document classification save from the lot photo/ITP evidence flow.
+3. Diary copy/reopen/entry CRUD.
+4. ITP completion PATCH and positive attachment GET/DELETE if those flows are
+   visible to users.
 5. Decide whether document versions and ITP template archive/restore/propagate
    are intended user-facing features. If yes, wire UI before browser coverage;
    if no, keep them API-only and add backend success coverage where thin.

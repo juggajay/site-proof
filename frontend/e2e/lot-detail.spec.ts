@@ -9,6 +9,12 @@ const E2E_PHOTO_COMPLETION_ID = 'e2e-photo-completion';
 const E2E_PHOTO_ATTACHMENT_ID = 'e2e-photo-attachment';
 const E2E_PHOTO_DOCUMENT_ID = 'e2e-photo-document';
 const E2E_TARGET_COMPLETION_ID = 'e2e-target-completion';
+const E2E_PENDING_VERIFICATION_COMPLETION_ID = 'e2e-pending-verification-completion';
+const E2E_SUBBIE_USER = {
+  id: 'e2e-subbie-user',
+  fullName: 'E2E Subcontractor',
+  email: 'subbie@example.com',
+};
 
 const E2E_LOT = {
   id: E2E_LOT_ID,
@@ -127,6 +133,7 @@ interface MockLotDetailOptions {
   failItpLoadsUntil?: number;
   noItpAssigned?: boolean;
   withPhotoEvidence?: boolean;
+  withPendingVerification?: boolean;
   availableTemplates?: Array<{
     id: string;
     name: string;
@@ -146,7 +153,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
   let forceConformed = false;
   let templatesRequestIncludesGlobal = false;
   let assignedTemplateRequest: unknown;
-  let completion = null as null | {
+  type MockItpCompletion = {
     id: string;
     checklistItemId: string;
     isCompleted: boolean;
@@ -155,10 +162,43 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
     notes: string | null;
     completedAt: string | null;
     completedBy: { id: string; fullName: string; email: string } | null;
+    isPendingVerification?: boolean;
+    isRejected?: boolean;
+    verificationStatus?: string;
+    verificationNotes?: string | null;
     isVerified: boolean;
     verifiedAt: string | null;
-    verifiedBy: null;
+    verifiedBy: { id: string; fullName: string; email: string } | null;
     attachments: [];
+  };
+  let completion: MockItpCompletion | null = null;
+  let pendingVerificationCompletion: MockItpCompletion | null = options.withPendingVerification
+    ? {
+        id: E2E_PENDING_VERIFICATION_COMPLETION_ID,
+        checklistItemId: E2E_CHECKLIST_ITEM_ID,
+        isCompleted: true,
+        isNotApplicable: false,
+        isFailed: false,
+        notes: 'Completed by subcontractor for head-contractor review',
+        completedAt: '2026-01-15T01:00:00.000Z',
+        completedBy: E2E_SUBBIE_USER,
+        isPendingVerification: true,
+        isRejected: false,
+        verificationStatus: 'pending_verification',
+        verificationNotes: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      }
+    : null;
+  let verifyRequestCount = 0;
+  let rejectRequest: unknown;
+  let rejectRequestCount = 0;
+
+  const currentItpCompletions = () => {
+    if (pendingVerificationCompletion) return [pendingVerificationCompletion];
+    return completion ? [completion] : [];
   };
 
   await page.route('**/api/**', async (route) => {
@@ -235,7 +275,14 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
         prerequisites: {
           itpAssigned: true,
           itpCompleted: false,
-          itpCompletedCount: completion?.isCompleted ? 1 : 0,
+          itpCompletedCount: currentItpCompletions().filter(
+            (entry) =>
+              entry.isCompleted &&
+              !entry.isPendingVerification &&
+              !entry.isRejected &&
+              entry.verificationStatus !== 'pending_verification' &&
+              entry.verificationStatus !== 'rejected',
+          ).length,
           itpTotalCount: 1,
           hasPassingTest: false,
           noOpenNcrs: true,
@@ -472,7 +519,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       await json({
         instance: {
           ...E2E_ITP_INSTANCE,
-          completions: completion ? [completion] : [],
+          completions: currentItpCompletions(),
         },
       });
       return;
@@ -551,6 +598,54 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
     }
 
     if (
+      url.pathname === `/api/itp/completions/${E2E_PENDING_VERIFICATION_COMPLETION_ID}/verify` &&
+      route.request().method() === 'POST'
+    ) {
+      verifyRequestCount += 1;
+      if (pendingVerificationCompletion) {
+        pendingVerificationCompletion = {
+          ...pendingVerificationCompletion,
+          isPendingVerification: false,
+          isRejected: false,
+          verificationStatus: 'verified',
+          verificationNotes: null,
+          isVerified: true,
+          verifiedAt: '2026-01-15T02:00:00.000Z',
+          verifiedBy: {
+            id: E2E_ADMIN_USER.id,
+            fullName: E2E_ADMIN_USER.fullName,
+            email: E2E_ADMIN_USER.email,
+          },
+        };
+      }
+      await json({ completion: pendingVerificationCompletion });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/itp/completions/${E2E_PENDING_VERIFICATION_COMPLETION_ID}/reject` &&
+      route.request().method() === 'POST'
+    ) {
+      rejectRequestCount += 1;
+      rejectRequest = route.request().postDataJSON();
+      const reason = (rejectRequest as { reason?: string }).reason ?? null;
+      if (pendingVerificationCompletion) {
+        pendingVerificationCompletion = {
+          ...pendingVerificationCompletion,
+          isPendingVerification: false,
+          isRejected: true,
+          verificationStatus: 'rejected',
+          verificationNotes: reason,
+          isVerified: false,
+          verifiedAt: null,
+          verifiedBy: null,
+        };
+      }
+      await json({ completion: pendingVerificationCompletion });
+      return;
+    }
+
+    if (
       url.pathname === `/api/itp/completions/${E2E_TARGET_COMPLETION_ID}/attachments` &&
       route.request().method() === 'POST'
     ) {
@@ -579,6 +674,9 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
     getLotLoadAttempts: () => lotLoadAttempts,
     getTemplatesRequestIncludesGlobal: () => templatesRequestIncludesGlobal,
     getAssignedTemplateRequest: () => assignedTemplateRequest,
+    getVerifyRequestCount: () => verifyRequestCount,
+    getRejectRequest: () => rejectRequest,
+    getRejectRequestCount: () => rejectRequestCount,
   };
 }
 
@@ -752,6 +850,60 @@ test.describe('Lot detail ITP workflow', () => {
 
     await expect(page.getByText('Completed by E2E Admin')).toBeVisible();
     expect(api.getCompletionRequestCount()).toBe(1);
+  });
+
+  test('lets a head-contractor reviewer verify a pending ITP item', async ({ page }) => {
+    const api = await mockLotDetailApi(page, { withPendingVerification: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    await expect(page.getByText('Pending verification')).toBeVisible();
+    await expect(page.getByText('Completed by E2E Subcontractor')).toBeVisible();
+    await expect(
+      page.getByRole('button', {
+        name: 'Awaiting verification for "Inspect subgrade before fill"',
+      }),
+    ).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Verify', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reject', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+
+    await expect.poll(() => api.getVerifyRequestCount()).toBe(1);
+    await expect(page.getByText('Item verified')).toBeVisible();
+    await expect(page.getByText('Verified', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Verify', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Reject', exact: true })).toHaveCount(0);
+  });
+
+  test('requires a reason when rejecting a pending ITP item', async ({ page }) => {
+    const api = await mockLotDetailApi(page, { withPendingVerification: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Reject', exact: true }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Reject ITP item' });
+    await expect(dialog).toContainText('Inspect subgrade before fill');
+    await expect(dialog.getByRole('button', { name: 'Reject item' })).toBeDisabled();
+
+    await dialog
+      .getByLabel('Reason for rejection *')
+      .fill('Photo does not show the prepared subgrade clearly.');
+    await dialog.getByRole('button', { name: 'Reject item' }).click();
+
+    await expect.poll(() => api.getRejectRequestCount()).toBe(1);
+    expect(api.getRejectRequest()).toEqual({
+      reason: 'Photo does not show the prepared subgrade clearly.',
+    });
+    await expect(page.getByText('Item rejected')).toBeVisible();
+    await expect(page.getByText('Rejected', { exact: true })).toBeVisible();
+    await expect(page.getByText('Rejected by head contractor:')).toBeVisible();
+    await expect(
+      page.getByText('Photo does not show the prepared subgrade clearly.'),
+    ).toBeVisible();
   });
 
   test('links existing photo documents when adding photos to evidence', async ({ page }) => {
