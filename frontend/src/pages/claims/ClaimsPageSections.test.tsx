@@ -653,7 +653,11 @@ describe('ClaimsPage TanStack Query register', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'View certificate' }));
 
-    await waitFor(() => expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('doc-1'));
+    await waitFor(() =>
+      expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('doc-1', null, {
+        disposition: 'inline',
+      }),
+    );
     expect(toastMock).not.toHaveBeenCalled();
   });
 });

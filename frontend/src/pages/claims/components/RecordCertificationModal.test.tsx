@@ -112,4 +112,28 @@ describe('RecordCertificationModal', () => {
       }),
     );
   });
+
+  it('keeps cancel disabled while certification is recording', async () => {
+    const onClose = vi.fn();
+    const onCertify = vi.fn(
+      () =>
+        new Promise<void>(() => {
+          // Keep the mutation in flight.
+        }),
+    );
+
+    renderWithProviders(
+      <RecordCertificationModal
+        claim={CLAIM}
+        projectId="project-1"
+        onClose={onClose}
+        onCertify={onCertify}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record Payment Schedule' }));
+
+    await waitFor(() => expect(onCertify).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
 });

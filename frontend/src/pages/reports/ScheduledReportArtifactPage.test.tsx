@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,6 +31,21 @@ function renderPage(path = '/reports/scheduled-runs/run-1/artifact') {
   );
 }
 
+function renderPageInStrictMode(path = '/reports/scheduled-runs/run-1/artifact') {
+  render(
+    <StrictMode>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route
+            path="/reports/scheduled-runs/:runId/artifact"
+            element={<ScheduledReportArtifactPage />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </StrictMode>,
+  );
+}
+
 describe('ScheduledReportArtifactPage', () => {
   beforeEach(() => {
     authFetchMock.mockReset();
@@ -58,6 +74,23 @@ describe('ScheduledReportArtifactPage', () => {
     expect(filename).toBe('Lot_Status_Report.pdf');
     expect(fallback).toBe('scheduled-report.pdf');
     expect(screen.getByText('Your report download has started.')).toBeInTheDocument();
+  });
+
+  it('does not auto-download twice under StrictMode', async () => {
+    authFetchMock.mockResolvedValue(
+      new Response('pdf bytes', {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'content-disposition': 'attachment; filename="Lot_Status_Report.pdf"',
+        },
+      }),
+    );
+
+    renderPageInStrictMode();
+
+    await waitFor(() => expect(downloadBlobMock).toHaveBeenCalledTimes(1));
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces a missing artifact error', async () => {

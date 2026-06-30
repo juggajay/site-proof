@@ -2925,6 +2925,168 @@ describe('Progress Claims API', () => {
       }
     });
 
+    it('uses the assigned ITP snapshot and counts N/A completions as accepted evidence', async () => {
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Evidence snapshot template ${Date.now()}`,
+          activityType: 'Earthworks',
+        },
+      });
+      const assignedItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Live description changed after assignment',
+          pointType: 'standard',
+          responsibleParty: 'contractor',
+          evidenceRequired: 'none',
+        },
+      });
+      const addedLaterItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 2,
+          description: 'Added after assignment',
+          pointType: 'standard',
+          responsibleParty: 'contractor',
+          evidenceRequired: 'none',
+        },
+      });
+      const instance = await prisma.iTPInstance.create({
+        data: {
+          lotId: evidenceLotId,
+          templateId: template.id,
+          status: 'in_progress',
+          templateSnapshot: JSON.stringify({
+            id: template.id,
+            name: template.name,
+            checklistItems: [
+              {
+                id: assignedItem.id,
+                sequenceNumber: 1,
+                description: 'Assigned snapshot description',
+                pointType: 'standard',
+                responsibleParty: 'contractor',
+                evidenceRequired: 'none',
+              },
+            ],
+          }),
+        },
+      });
+      const completion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: instance.id,
+          checklistItemId: assignedItem.id,
+          status: 'not_applicable',
+          completedById: userId,
+          completedAt: new Date('2025-02-22T09:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.lots[0].itp.checklistItems).toEqual([
+          expect.objectContaining({
+            id: assignedItem.id,
+            description: 'Assigned snapshot description',
+          }),
+        ]);
+        expect(res.body.lots[0].itp.checklistItems).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ id: addedLaterItem.id })]),
+        );
+        expect(res.body.lots[0].itp.completions).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              checklistItemId: assignedItem.id,
+              isCompleted: false,
+              isNotApplicable: true,
+            }),
+          ]),
+        );
+        expect(res.body.lots[0].summary.itpCompletionPercentage).toBe(100);
+      } finally {
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+        await prisma.iTPInstance.delete({ where: { id: instance.id } }).catch(() => {});
+        await prisma.iTPChecklistItem.deleteMany({
+          where: { id: { in: [assignedItem.id, addedLaterItem.id] } },
+        });
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    });
+
+    it('counts only verified passing tests as passed claim evidence', async () => {
+      const verifiedPass = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Verified Compaction',
+          resultValue: 98.5,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-23T09:00:00.000Z'),
+          verifiedById: userId,
+          verifiedAt: new Date('2025-02-23T10:00:00.000Z'),
+          sampleDate: new Date('2025-02-23T08:00:00.000Z'),
+        },
+      });
+      const unverifiedPass = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Unverified Compaction',
+          resultValue: 97,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'entered',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-24T09:00:00.000Z'),
+          sampleDate: new Date('2025-02-24T08:00:00.000Z'),
+        },
+      });
+      const failedTest = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Failed Compaction',
+          resultValue: 91,
+          resultUnit: '%',
+          passFail: 'fail',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-25T09:00:00.000Z'),
+          verifiedById: userId,
+          verifiedAt: new Date('2025-02-25T10:00:00.000Z'),
+          sampleDate: new Date('2025-02-25T08:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.lots[0].summary.testResultCount).toBeGreaterThanOrEqual(3);
+        expect(res.body.lots[0].summary.passedTestCount).toBe(1);
+        expect(res.body.lots[0].summary.failedTestCount).toBe(1);
+        expect(res.body.lots[0].summary.pendingTestCount).toBe(1);
+        expect(res.body.summary.totalPassedTests).toBe(1);
+        expect(res.body.summary.totalFailedTests).toBe(1);
+        expect(res.body.summary.totalPendingTests).toBe(1);
+      } finally {
+        await prisma.testResult.deleteMany({
+          where: { id: { in: [verifiedPass.id, unverifiedPass.id, failedTest.id] } },
+        });
+      }
+    });
+
     it('should get claim evidence review data with readiness-shaped buckets', async () => {
       const res = await request(app)
         .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/completeness-check`)

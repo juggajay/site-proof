@@ -40,7 +40,11 @@ const PACKAGE_SECTIONS: { key: keyof ClaimPackageOptions; label: string; descrip
     description: 'NCR status and resolution details',
   },
   { key: 'includeHoldPoints', label: 'Hold Points', description: 'Hold point release information' },
-  { key: 'includePhotos', label: 'Photo Evidence', description: 'Photo counts and references' },
+  {
+    key: 'includePhotos',
+    label: 'Photos & Document Manifest',
+    description: 'Photo counts and supporting document references',
+  },
   {
     key: 'includeDeclaration',
     label: 'Declaration Page',

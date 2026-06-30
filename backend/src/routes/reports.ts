@@ -23,6 +23,7 @@ const SCHEDULED_REPORT_MANAGER_ROLES = CLAIM_REPORT_ROLES;
 const SCHEDULED_REPORT_TIERS = new Set(['professional', 'enterprise', 'unlimited']);
 const DEFAULT_REPORT_PAGE_SIZE = 100;
 const MAX_REPORT_PAGE_SIZE = 500;
+const MAX_REPORT_SKIP = 50_000;
 const MAX_REPORT_ID_LENGTH = 128;
 const MAX_REPORT_QUERY_LENGTH = 2000;
 const MAX_REPORT_DATE_QUERY_LENGTH = 64;
@@ -148,7 +149,7 @@ function parseReportPagination(
   const limitNum = Math.min(requestedLimit, MAX_REPORT_PAGE_SIZE);
   const skip = (pageNum - 1) * limitNum;
 
-  if (!Number.isSafeInteger(skip)) {
+  if (!Number.isSafeInteger(skip) || skip > MAX_REPORT_SKIP) {
     throw AppError.badRequest('page is too large');
   }
 

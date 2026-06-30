@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { escapeCsvFormulaValue } from '../../lib/csvSafe.js';
+import { roundClaimAmountToCents } from '../claims/workflowValidation.js';
 
 const CLAIM_REPORT_STATUSES = [
   'draft',
@@ -97,11 +98,11 @@ function hasReportAmount(value: unknown): boolean {
 }
 
 function reportAmountOrZero(value: unknown): number {
-  return hasReportAmount(value) ? Number(value) : 0;
+  return hasReportAmount(value) ? roundClaimAmountToCents(Number(value)) : 0;
 }
 
 function reportAmountOrNull(value: unknown): number | null {
-  return hasReportAmount(value) ? Number(value) : null;
+  return hasReportAmount(value) ? roundClaimAmountToCents(Number(value)) : null;
 }
 
 export function buildClaimReportAmounts({
@@ -119,10 +120,12 @@ export function buildClaimReportAmounts({
     paidAmount: reportedPaidAmount,
     variance:
       hasReportAmount(totalClaimedAmount) && hasReportAmount(certifiedAmount)
-        ? Number(totalClaimedAmount) - Number(certifiedAmount)
+        ? roundClaimAmountToCents(Number(totalClaimedAmount) - Number(certifiedAmount))
         : null,
     outstanding:
-      reportedCertifiedAmount === null ? null : reportedCertifiedAmount - (reportedPaidAmount ?? 0),
+      reportedCertifiedAmount === null
+        ? null
+        : roundClaimAmountToCents(reportedCertifiedAmount - (reportedPaidAmount ?? 0)),
   };
 }
 
@@ -136,17 +139,23 @@ export function buildClaimReportFinancialSummary(
   let totalLots = 0;
 
   for (const claim of claims) {
-    totalClaimed += reportAmountOrZero(claim.totalClaimedAmount);
-    totalPaid += reportAmountOrZero(claim.paidAmount);
+    totalClaimed = roundClaimAmountToCents(
+      totalClaimed + reportAmountOrZero(claim.totalClaimedAmount),
+    );
+    totalPaid = roundClaimAmountToCents(totalPaid + reportAmountOrZero(claim.paidAmount));
     totalLots += claim.lotCount;
 
     if (claim.status !== 'disputed') {
-      totalCertified += reportAmountOrZero(claim.certifiedAmount);
-      totalNonDisputedPaid += reportAmountOrZero(claim.paidAmount);
+      totalCertified = roundClaimAmountToCents(
+        totalCertified + reportAmountOrZero(claim.certifiedAmount),
+      );
+      totalNonDisputedPaid = roundClaimAmountToCents(
+        totalNonDisputedPaid + reportAmountOrZero(claim.paidAmount),
+      );
     }
   }
 
-  const outstanding = Math.max(0, totalCertified - totalNonDisputedPaid);
+  const outstanding = Math.max(0, roundClaimAmountToCents(totalCertified - totalNonDisputedPaid));
 
   return {
     totalClaimed,
@@ -250,9 +259,15 @@ export function createClaimReportRouter({
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = { claimed: 0, certified: 0, paid: 0, count: 0 };
         }
-        monthlyData[monthKey].claimed += reportAmountOrZero(claim.totalClaimedAmount);
-        monthlyData[monthKey].certified += reportAmountOrZero(claim.certifiedAmount);
-        monthlyData[monthKey].paid += reportAmountOrZero(claim.paidAmount);
+        monthlyData[monthKey].claimed = roundClaimAmountToCents(
+          monthlyData[monthKey].claimed + reportAmountOrZero(claim.totalClaimedAmount),
+        );
+        monthlyData[monthKey].certified = roundClaimAmountToCents(
+          monthlyData[monthKey].certified + reportAmountOrZero(claim.certifiedAmount),
+        );
+        monthlyData[monthKey].paid = roundClaimAmountToCents(
+          monthlyData[monthKey].paid + reportAmountOrZero(claim.paidAmount),
+        );
         monthlyData[monthKey].count++;
       }
 
@@ -262,7 +277,7 @@ export function createClaimReportRouter({
         .map(([month, data]) => ({
           month,
           ...data,
-          variance: data.claimed - data.certified,
+          variance: roundClaimAmountToCents(data.claimed - data.certified),
         }));
 
       // Transform claims for export

@@ -751,10 +751,17 @@ describe('Reports API - Lot Status Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
       .query({ projectId, limit: 0 });
 
+    const oversizedPageRes = await request(app)
+      .get('/api/reports/lot-status')
+      .set('Authorization', `Bearer ${authToken}`)
+      .query({ projectId, page: 100_000, limit: 500 });
+
     expect(negativePageRes.status).toBe(400);
     expect(negativePageRes.body.error.message).toContain('page');
     expect(zeroLimitRes.status).toBe(400);
     expect(zeroLimitRes.body.error.message).toContain('limit');
+    expect(oversizedPageRes.status).toBe(400);
+    expect(oversizedPageRes.body.error.message).toContain('page is too large');
   });
 });
 

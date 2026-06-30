@@ -33,6 +33,10 @@ function formatCurrency(value: number | null | undefined): string {
   return currencyFormatter.format(value ?? 0);
 }
 
+function formatNullableCurrency(value: number | null | undefined): string {
+  return value === null || value === undefined ? '-' : formatCurrency(value);
+}
+
 export const ClaimsReportTab = React.memo(function ClaimsReportTab({
   report,
   loading,
@@ -286,10 +290,10 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                         {formatCurrency(claim.totalClaimedAmount)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
-                        {formatCurrency(claim.certifiedAmount)}
+                        {formatNullableCurrency(claim.certifiedAmount)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
-                        {formatCurrency(claim.outstanding)}
+                        {formatNullableCurrency(claim.outstanding)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
                         {claim.lotCount}
