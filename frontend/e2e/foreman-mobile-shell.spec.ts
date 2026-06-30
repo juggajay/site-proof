@@ -679,4 +679,68 @@ test.describe('Foreman mobile shell', () => {
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
   });
+
+  test('direct nested mobile routes load the intended screens', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await mockForemanShellApi(page);
+    const projectQuery = `?projectId=${encodeURIComponent(PROJECT_ID)}`;
+
+    const directRoutes: Array<{ path: string; heading?: string; text?: string | RegExp }> = [
+      { path: `/m/diary/weather${projectQuery}`, heading: 'Weather' },
+      { path: `/m/diary/crew${projectQuery}`, heading: 'Crew & Plant' },
+      { path: `/m/diary/work${projectQuery}`, heading: "Today's Work" },
+      { path: `/m/diary/work/activity${projectQuery}`, heading: 'Add Activity' },
+      { path: `/m/diary/work/delay${projectQuery}`, heading: 'Add Delay' },
+      { path: `/m/diary/work/delivery${projectQuery}`, heading: 'Add Delivery' },
+      { path: `/m/diary/work/event${projectQuery}`, heading: 'Add Event' },
+      { path: `/m/diary/review${projectQuery}`, heading: 'Review & Submit' },
+      {
+        path: `/m/diary/done?queued=1&projectId=${encodeURIComponent(PROJECT_ID)}`,
+        text: 'Diary saved',
+      },
+      { path: `/m/lots/${encodeURIComponent(lot.id)}${projectQuery}`, heading: 'LOT-001' },
+      { path: `/m/lots/${encodeURIComponent(lot.id)}/details${projectQuery}`, heading: 'Details' },
+      { path: `/m/lots/${encodeURIComponent(lot.id)}/itp${projectQuery}`, heading: 'Inspection' },
+      {
+        path: `/m/dockets/${encodeURIComponent(dockets[0].id)}${projectQuery}`,
+        heading: 'DKT-001',
+      },
+      {
+        path: `/m/dockets/${encodeURIComponent(dockets[0].id)}/adjust${projectQuery}`,
+        heading: 'Adjust Hours',
+      },
+      {
+        path: `/m/dockets/${encodeURIComponent(dockets[0].id)}/query${projectQuery}`,
+        heading: 'Query Docket',
+      },
+      {
+        path: `/m/dockets/${encodeURIComponent(dockets[0].id)}/reject${projectQuery}`,
+        heading: 'Reject Docket',
+      },
+      { path: `/m/issues/${encodeURIComponent(ncrs[0].id)}${projectQuery}`, heading: 'NCR-001' },
+      { path: `/m/photos/${encodeURIComponent(documents[0].id)}${projectQuery}`, heading: 'Photo' },
+    ];
+
+    for (const route of directRoutes) {
+      await page.goto(route.path);
+      expect(new URL(page.url()).searchParams.get('projectId')).toBe(PROJECT_ID);
+      if (route.heading) {
+        await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      }
+      if (route.text) {
+        await expect(page.getByText(route.text).first()).toBeVisible();
+      }
+    }
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
 });
