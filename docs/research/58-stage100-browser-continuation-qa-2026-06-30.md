@@ -190,12 +190,10 @@ Documents and ITP:
 
 Continue filling the highest-value browser gaps from the scout map:
 
-1. NCR desktop lifecycle through request-revision, rectification/evidence,
-   submit for verification, reject rectification, resubmit, and concession close.
-2. Diary copy/reopen/entry CRUD.
-3. ITP completion PATCH and positive attachment GET/DELETE if those flows are
+1. Diary copy/reopen/entry CRUD.
+2. ITP completion PATCH and positive attachment GET/DELETE if those flows are
    visible to users.
-4. Decide whether document versions and ITP template archive/restore/propagate
+3. Decide whether document versions and ITP template archive/restore/propagate
    are intended user-facing features. If yes, wire UI before browser coverage;
    if no, keep them API-only and add backend success coverage where thin.
 
@@ -215,3 +213,28 @@ Continue filling the highest-value browser gaps from the scout map:
   - `npm run lint` passed with the existing `theme.tsx` fast-refresh warning.
   - `npx prettier --check ...` passed for touched files.
   - `git diff --check` passed.
+
+## Stage 105 - NCR Desktop Lifecycle Gap Coverage
+
+- Branch: `qa/ncr-lifecycle-gap-coverage`.
+- Coverage added to `frontend/e2e/ncr.spec.ts`:
+  - QM requests response revision, responsible party resubmits, QM accepts the
+    revised response.
+  - Rectification modal uploads evidence, links it to the NCR, submits for
+    verification, receives rejection, and resubmits using existing evidence.
+  - Major NCR concession close captures justification, risk assessment, client
+    approval reference, and verification notes.
+- Verification:
+  `npx playwright test e2e/ncr.spec.ts --project=chromium --reporter=list`
+  passed 8/8.
+- Additional local checks:
+  - `npm run type-check` passed.
+  - `npm run lint` passed with the existing `theme.tsx` fast-refresh warning.
+  - `npx prettier --check e2e/ncr.spec.ts` passed.
+  - `git diff --check` passed.
+  - `fallow audit --base origin/master --format json --quiet` passed.
+- Notes:
+  - The spec still intentionally emits the existing mocked 503 console error in
+    the retry test.
+  - Browserslist/PostCSS warnings remain tooling cleanup items, not new product
+    failures.
