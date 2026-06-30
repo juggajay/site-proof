@@ -52,6 +52,8 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
   let testEmailRequestCount = 0;
   let mfaSetupRequestCount = 0;
   const mfaVerifyRequests: unknown[] = [];
+  let mfaEnabled = options.mfaEnabled ?? false;
+  const mfaDisableRequests: unknown[] = [];
   let exportRequestCount = 0;
   let deleteRequest: unknown = null;
   const deleteRequests: unknown[] = [];
@@ -132,7 +134,7 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
         return;
       }
 
-      await json({ mfaEnabled: options.mfaEnabled ?? false });
+      await json({ mfaEnabled });
       return;
     }
 
@@ -156,11 +158,19 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
       }
 
       mfaVerifyRequests.push(route.request().postDataJSON());
+      mfaEnabled = true;
       await json({
         success: true,
         message: 'Two-factor authentication has been enabled successfully.',
         backupCodes: ['SP-0001', 'SP-0002', 'SP-0003', 'SP-0004'],
       });
+      return;
+    }
+
+    if (url.pathname === '/api/mfa/disable') {
+      mfaDisableRequests.push(route.request().postDataJSON());
+      mfaEnabled = false;
+      await json({ message: 'Two-factor authentication disabled' });
       return;
     }
 
@@ -227,6 +237,7 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
     getMfaSetupRequestCount: () => mfaSetupRequestCount,
     getMfaVerifyRequest: () => mfaVerifyRequests.at(-1) ?? null,
     getMfaVerifyRequests: () => mfaVerifyRequests,
+    getMfaDisableRequest: () => mfaDisableRequests.at(-1) ?? null,
     getExportRequested: () => exportRequestCount > 0,
     getExportRequestCount: () => exportRequestCount,
     getDeleteRequest: () => deleteRequest,
@@ -419,6 +430,31 @@ test.describe('Settings seeded account contract', () => {
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toBe('unsafe-export-.json');
+  });
+
+  test('disables MFA with an authenticator code', async ({ page }) => {
+    const api = await mockSettingsApi(page, { mfaEnabled: true });
+
+    await page.goto('/settings');
+
+    await expect(
+      page.getByText('Two-Factor Authentication Enabled', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Disable 2FA' }).click();
+
+    const disableDialog = page
+      .getByRole('alertdialog')
+      .filter({ hasText: 'Disable Two-Factor Authentication' });
+    await disableDialog.getByLabel('Password or 2FA code').fill('654321');
+    await disableDialog.getByRole('button', { name: 'Disable 2FA' }).click();
+
+    await expect.poll(() => api.getMfaDisableRequest()).toMatchObject({ code: '654321' });
+    await expect(
+      page.getByText('Two-factor authentication disabled', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Enable Two-Factor Authentication' }),
+    ).toBeVisible();
   });
 
   test('rejects unexpected exported account data content types', async ({ page }) => {

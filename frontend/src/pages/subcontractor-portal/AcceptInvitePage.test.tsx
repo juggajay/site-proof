@@ -12,6 +12,7 @@ const apiFetchMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const refreshUserMock = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
 const setTokenMock = vi.hoisted(() => vi.fn<() => Promise<unknown>>());
+const signOutMock = vi.hoisted(() => vi.fn<() => Promise<void>>());
 
 const ACCEPTED_SUBBIE_USER = {
   id: 'subbie-user-1',
@@ -28,6 +29,7 @@ vi.mock('@/lib/auth', () => ({
     loading: false,
     refreshUser: refreshUserMock,
     setToken: setTokenMock,
+    signOut: signOutMock,
   }),
 }));
 
@@ -79,6 +81,8 @@ beforeEach(() => {
   refreshUserMock.mockResolvedValue(ACCEPTED_SUBBIE_USER);
   setTokenMock.mockReset();
   setTokenMock.mockResolvedValue(ACCEPTED_SUBBIE_USER);
+  signOutMock.mockReset();
+  signOutMock.mockResolvedValue(undefined);
   authState.user = { email: 'bob@gmail.com' };
 });
 
@@ -184,5 +188,27 @@ describe('AcceptInvitePage email-mismatch reconciliation', () => {
       await screen.findByText(/invitation accepted, but your session could not be refreshed/i),
     ).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('signs out before sending a signed-in user to login as a different account', async () => {
+    const user = userEvent.setup();
+
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url === '/api/subcontractors/invitation/invite-1') {
+        return Promise.resolve({ invitation: INVITATION });
+      }
+      return Promise.reject(new Error(`unexpected url: ${url}`));
+    });
+
+    renderWithProviders(<AcceptInvitePage />);
+
+    await screen.findByRole('button', { name: 'Accept Invitation' });
+    await user.click(screen.getByRole('button', { name: 'Log in with a different account' }));
+
+    await waitFor(() => expect(signOutMock).toHaveBeenCalledTimes(1));
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/login?redirect=%2Fsubcontractor-portal%2Faccept-invite%3Fid%3Dinvite-1',
+      { replace: true },
+    );
   });
 });

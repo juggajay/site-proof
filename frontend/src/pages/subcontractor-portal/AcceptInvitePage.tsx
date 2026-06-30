@@ -50,7 +50,7 @@ export function AcceptInvitePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const explicitInvitationId = searchParams.get('id')?.trim() || null;
-  const { user, loading: authLoading, refreshUser, setToken } = useAuth();
+  const { user, loading: authLoading, refreshUser, setToken, signOut } = useAuth();
 
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [discoveredInvitationId, setDiscoveredInvitationId] = useState<string | null>(null);
@@ -229,6 +229,24 @@ export function AcceptInvitePage() {
     }
   };
 
+  const handleSwitchAccount = async () => {
+    const redirectPath = invitationId
+      ? `/subcontractor-portal/accept-invite?id=${encodeURIComponent(invitationId)}`
+      : '/subcontractor-portal/accept-invite';
+
+    setAccepting(true);
+    setFormError(null);
+
+    try {
+      await signOut();
+      navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`, { replace: true });
+    } catch (err) {
+      logError('Error switching invitation account:', err);
+      setFormError(extractErrorMessage(err, 'Failed to switch accounts. Please try again.'));
+      setAccepting(false);
+    }
+  };
+
   // Handle registration and accepting invitation
   const onRegisterSubmit = async (data: AcceptInviteFormData) => {
     setFormError(null);
@@ -321,9 +339,14 @@ export function AcceptInvitePage() {
                 </Button>
                 <p className="text-center text-sm text-muted-foreground mt-4">
                   Wrong account?{' '}
-                  <Link to="/login" className="text-primary hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => void handleSwitchAccount()}
+                    disabled={accepting}
+                    className="text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  >
                     Log in with a different account
-                  </Link>
+                  </button>
                 </p>
               </div>
             ) : (
@@ -349,9 +372,14 @@ export function AcceptInvitePage() {
                 </Button>
                 <p className="text-center text-sm text-muted-foreground mt-4">
                   Not you?{' '}
-                  <Link to="/login" className="text-primary hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => void handleSwitchAccount()}
+                    disabled={accepting}
+                    className="text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  >
                     Log in with a different account
-                  </Link>
+                  </button>
                 </p>
               </div>
             )

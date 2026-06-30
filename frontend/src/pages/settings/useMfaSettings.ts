@@ -39,7 +39,7 @@ export interface UseMfaSettingsResult {
   backupCodes: string[];
   showBackupCodes: boolean;
   showDisableMfa: boolean;
-  disableMfaPassword: string;
+  disableMfaCredential: string;
   showSecret: boolean;
   copiedSecret: boolean;
   loadMfaStatus: () => Promise<void>;
@@ -54,7 +54,17 @@ export interface UseMfaSettingsResult {
   openDisableMfa: () => void;
   toggleShowSecret: () => void;
   setMfaVerifyCode: (code: string) => void;
-  setDisableMfaPassword: (password: string) => void;
+  setDisableMfaCredential: (credential: string) => void;
+}
+
+function buildDisableMfaPayload(credential: string) {
+  const trimmedCredential = credential.trim();
+
+  if (/^(?:\d{6}|[A-Za-z0-9]{10})$/.test(trimmedCredential)) {
+    return { code: trimmedCredential };
+  }
+
+  return { password: credential };
 }
 
 export function useMfaSettings(): UseMfaSettingsResult {
@@ -70,7 +80,7 @@ export function useMfaSettings(): UseMfaSettingsResult {
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [showBackupCodes, setShowBackupCodes] = useState(false);
   const [showDisableMfa, setShowDisableMfa] = useState(false);
-  const [disableMfaPassword, setDisableMfaPassword] = useState('');
+  const [disableMfaCredential, setDisableMfaCredential] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const mfaActionRef = useRef(false);
@@ -172,6 +182,14 @@ export function useMfaSettings(): UseMfaSettingsResult {
   const handleMfaDisable = async () => {
     if (mfaActionRef.current) return;
 
+    if (!disableMfaCredential.trim()) {
+      setMfaMessage({
+        type: 'error',
+        text: 'Enter your password, authenticator code, or backup code',
+      });
+      return;
+    }
+
     mfaActionRef.current = true;
     setIsMfaLoading(true);
     setMfaMessage(null);
@@ -179,11 +197,11 @@ export function useMfaSettings(): UseMfaSettingsResult {
     try {
       await apiFetch('/api/mfa/disable', {
         method: 'POST',
-        body: JSON.stringify({ password: disableMfaPassword }),
+        body: JSON.stringify(buildDisableMfaPayload(disableMfaCredential)),
       });
       setMfaEnabled(false);
       setShowDisableMfa(false);
-      setDisableMfaPassword('');
+      setDisableMfaCredential('');
       setMfaMessage({ type: 'success', text: 'Two-factor authentication disabled' });
     } catch (error) {
       setMfaMessage({ type: 'error', text: extractErrorMessage(error, 'Failed to disable MFA') });
@@ -237,7 +255,7 @@ export function useMfaSettings(): UseMfaSettingsResult {
   const closeDisableMfa = useCallback(() => {
     if (!isMfaLoading) {
       setShowDisableMfa(false);
-      setDisableMfaPassword('');
+      setDisableMfaCredential('');
       setMfaMessage(null);
     }
   }, [isMfaLoading]);
@@ -258,7 +276,7 @@ export function useMfaSettings(): UseMfaSettingsResult {
     backupCodes,
     showBackupCodes,
     showDisableMfa,
-    disableMfaPassword,
+    disableMfaCredential,
     showSecret,
     copiedSecret,
     loadMfaStatus,
@@ -273,6 +291,6 @@ export function useMfaSettings(): UseMfaSettingsResult {
     openDisableMfa,
     toggleShowSecret,
     setMfaVerifyCode,
-    setDisableMfaPassword,
+    setDisableMfaCredential,
   };
 }
