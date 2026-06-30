@@ -2487,6 +2487,88 @@ describe('Hold Point Token Release', () => {
     }
   });
 
+  it('rejects an unused public release token for a completed hold point without consuming it', async () => {
+    const completedLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `TOK-COMPLETE-LOT-${Date.now()}`,
+        status: 'completed',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const completedTemplateSnapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+    });
+    const completedItpInstance = await prisma.iTPInstance.create({
+      data: {
+        templateId,
+        lotId: completedLot.id,
+        templateSnapshot: JSON.stringify(buildTemplateSnapshot(completedTemplateSnapshotSource)),
+        status: 'completed',
+      },
+    });
+    const completedHoldPoint = await prisma.holdPoint.create({
+      data: {
+        lotId: completedLot.id,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        status: 'completed',
+      },
+    });
+    const rawCompletedToken = `completed-public-token-${Date.now()}`;
+    await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: completedHoldPoint.id,
+        token: hashHoldPointReleaseTokenForTest(rawCompletedToken),
+        recipientEmail: 'completed-public-external@example.com',
+        recipientName: 'Completed Public Reviewer',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const publicRes = await request(app).get(`/api/holdpoints/public/${rawCompletedToken}`);
+      expect(publicRes.status).toBe(200);
+      expect(publicRes.body.evidencePackage.holdPoint.status).toBe('completed');
+      expect(publicRes.body.tokenInfo.canRelease).toBe(false);
+
+      const releaseRes = await request(app)
+        .post(`/api/holdpoints/public/${rawCompletedToken}/release`)
+        .send({
+          releasedByName: 'Completed Public Reviewer',
+          releasedByOrg: 'Client Company',
+          signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+        });
+
+      expect(releaseRes.status).toBe(400);
+      expect(releaseRes.body.error.message).toContain('already been completed');
+
+      const unchangedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: completedHoldPoint.id },
+      });
+      expect(unchangedHoldPoint.status).toBe('completed');
+      expect(unchangedHoldPoint.releasedAt).toBeNull();
+
+      const unusedToken = await prisma.holdPointReleaseToken.findFirstOrThrow({
+        where: { holdPointId: completedHoldPoint.id },
+      });
+      expect(unusedToken.usedAt).toBeNull();
+      expect(unusedToken.releasedByName).toBeNull();
+    } finally {
+      await prisma.holdPointReleaseToken.deleteMany({
+        where: { holdPointId: completedHoldPoint.id },
+      });
+      await prisma.holdPoint.delete({ where: { id: completedHoldPoint.id } }).catch(() => {});
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: completedItpInstance.id },
+      });
+      await prisma.iTPInstance.delete({ where: { id: completedItpInstance.id } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: completedLot.id } }).catch(() => {});
+    }
+  });
+
   it('does not overwrite a failed ITP completion when public token releases a hold point', async () => {
     const rawFailedToken = `failed-public-token-${Date.now()}`;
     const failedToken = await prisma.holdPointReleaseToken.create({
@@ -2847,6 +2929,115 @@ describe('Hold Point Token Release', () => {
         where: { holdPointId: publicToggleHoldPoint.id },
       });
       await prisma.holdPoint.delete({ where: { id: publicToggleHoldPoint.id } }).catch(() => {});
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
+      await cleanupTestUser(foreman.userId);
+      clearEmailQueue();
+    }
+  });
+
+  it('formats public release confirmation email timestamps in the project timezone', async () => {
+    const originalProject = await prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { state: true, settings: true },
+    });
+    const foreman = await registerTestUser('HP Public Release WA Foreman', 'user', companyId);
+    const timezoneLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `TOK-WA-TZ-${Date.now()}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const templateSnapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+    });
+    const timezoneItpInstance = await prisma.iTPInstance.create({
+      data: {
+        templateId,
+        lotId: timezoneLot.id,
+        templateSnapshot: JSON.stringify(buildTemplateSnapshot(templateSnapshotSource)),
+        status: 'not_started',
+      },
+    });
+    const timezoneHoldPoint = await prisma.holdPoint.create({
+      data: {
+        lotId: timezoneLot.id,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        status: 'pending',
+      },
+    });
+    const rawTimezoneToken = `timezone-public-token-${Date.now()}`;
+    await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: timezoneHoldPoint.id,
+        token: hashHoldPointReleaseTokenForTest(rawTimezoneToken),
+        recipientEmail: 'timezone-public-external@example.com',
+        recipientName: 'Timezone Public External Reviewer',
+        expiresAt: new Date('2026-01-03T00:00:00.000Z'),
+      },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { state: 'WA', settings: null },
+    });
+
+    const releasedAt = new Date('2026-01-01T17:30:00.000Z');
+    const expectedReleasedAtDisplay = releasedAt.toLocaleString('en-AU', {
+      timeZone: projectTimeZoneFromState('WA'),
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    try {
+      clearEmailQueue();
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(releasedAt);
+
+      const res = await request(app)
+        .post(`/api/holdpoints/public/${rawTimezoneToken}/release`)
+        .send({
+          releasedByName: 'Timezone Public External Reviewer',
+          releasedByOrg: 'Client Company',
+          releaseNotes: 'Project timezone should be used',
+          signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+        });
+
+      expect(res.status).toBe(200);
+
+      const confirmationEmail = getQueuedEmails().find(
+        (email) => email.to === foreman.email && email.text?.includes('RELEASE DETAILS'),
+      );
+      expect(confirmationEmail?.text).toContain(`Released At: ${expectedReleasedAtDisplay}`);
+    } finally {
+      vi.useRealTimers();
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          state: originalProject.state,
+          settings: originalProject.settings,
+        },
+      });
+      await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
+      await prisma.holdPointReleaseToken.deleteMany({
+        where: { holdPointId: timezoneHoldPoint.id },
+      });
+      await prisma.holdPoint.delete({ where: { id: timezoneHoldPoint.id } }).catch(() => {});
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: timezoneItpInstance.id },
+      });
+      await prisma.iTPInstance.delete({ where: { id: timezoneItpInstance.id } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: timezoneLot.id } }).catch(() => {});
       await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
       await cleanupTestUser(foreman.userId);
       clearEmailQueue();
