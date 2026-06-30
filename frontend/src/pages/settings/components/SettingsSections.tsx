@@ -271,7 +271,7 @@ export function PrivacyDataSection({
           {exportSuccess && (
             <div role="status" className="flex items-center gap-2 text-sm text-success">
               <Check className="h-4 w-4" />
-              Data exported successfully! Check your downloads folder.
+              Your data export download has started.
             </div>
           )}
 
