@@ -45,6 +45,7 @@ import {
   type OfflineDailyDiary,
   type SyncQueueItem,
 } from '../offlineDb';
+import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './diaryMessages';
 import { readResponseError, syncOfflineDiarySnapshot } from './syncClient';
 import { buildOfflineLotEditPayload } from './syncPayloads';
 
@@ -355,6 +356,11 @@ async function syncDiary(item: DiaryItem, itemId: number): Promise<SyncItemResul
       const diary = await offlineDb.diaries.get(diaryId);
 
       if (!diary) {
+        if (item.type === 'diary_submit') {
+          await markSyncItemTerminalError(itemId, MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE);
+          return HANDLED;
+        }
+
         // Diary was deleted, remove from queue
         await removeSyncQueueItem(itemId);
         return HANDLED;
