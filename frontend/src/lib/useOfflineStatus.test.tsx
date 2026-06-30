@@ -133,6 +133,7 @@ import {
   syncOfflineDiarySnapshot,
   syncOfflineDocketDraft,
 } from './offline/syncClient';
+import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './offline/diaryMessages';
 import { buildOfflineLotEditPayload } from './offline/syncPayloads';
 import { devWarn } from './logger';
 import { useOfflineStatus, type SyncCallbacks } from './useOfflineStatus';
@@ -571,6 +572,29 @@ describe('diary dispatch', () => {
     expect(syncOfflineDiarySnapshotMock).not.toHaveBeenCalled();
     expect(markDiarySyncedMock).not.toHaveBeenCalled();
     expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('diary_submit: dead-letters when its offline snapshot no longer exists locally', async () => {
+    getPendingSyncItemsMock.mockResolvedValue([
+      diaryItem('diary_submit', { diaryId: 'missing-submit' }),
+    ]);
+    diariesGetMock.mockResolvedValue(undefined);
+
+    const { onSyncComplete } = await runSync();
+
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      21,
+      MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE,
+    );
+    for (const sideEffect of [
+      removeSyncQueueItemMock,
+      syncOfflineDiarySnapshotMock,
+      markDiarySyncedMock,
+      markDiarySyncErrorMock,
+    ]) {
+      expect(sideEffect).not.toHaveBeenCalled();
+    }
+    expect(onSyncComplete).not.toHaveBeenCalled();
   });
 
   it('catches a thrown snapshot error and marks both the item and the diary error', async () => {

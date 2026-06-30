@@ -90,6 +90,7 @@ import { authFetch } from '../api';
 import { readResponseError, syncOfflineDiarySnapshot, syncOfflineDocketDraft } from './syncClient';
 import { buildOfflineLotEditPayload } from './syncPayloads';
 import { devWarn } from '../logger';
+import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './diaryMessages';
 import { syncSingleItem } from './syncWorker';
 
 const removeSyncQueueItemMock = removeSyncQueueItem as Mock;
@@ -527,6 +528,24 @@ describe('syncSingleItem — diary', () => {
     expect(result).toEqual({ status: 'handled' });
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(21);
     expect(syncOfflineDiarySnapshotMock).not.toHaveBeenCalled();
+  });
+
+  it('diary_submit dead-letters when its offline snapshot no longer exists', async () => {
+    diariesGetMock.mockResolvedValue(undefined);
+
+    const result = await syncSingleItem(
+      queueItem({ id: 28, type: 'diary_submit', data: { diaryId: 'missing-submit' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      28,
+      MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE,
+    );
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(syncOfflineDiarySnapshotMock).not.toHaveBeenCalled();
+    expect(markDiarySyncedMock).not.toHaveBeenCalled();
+    expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
   });
 
   it('catches a thrown snapshot error and marks item + diary', async () => {

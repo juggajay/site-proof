@@ -177,11 +177,12 @@ Documents and ITP:
   `/api/itp/pending-verifications` and diary timeline/docket-summary endpoints.
   The tests still pass, but route mocks should eventually cover these requests
   so console noise does not hide real failures.
-- Diary sidecar audit found a real offline-submit trust bug: `submitDiaryOffline`
-  can queue `diary_submit` without a local diary snapshot, and the sync worker
-  later drops that queue item. The UI can still say it will send when back on
-  signal. Next fix should make the offline submit path either create a replayable
-  snapshot before queueing or fail honestly.
+- Diary sidecar audit found a real offline-submit trust bug. The entry-point
+  `submitDiaryOffline` guard is already present, but the sync worker still
+  silently dropped older/corrupt `diary_submit` queue items when the local diary
+  snapshot was missing. PR branch `fix/diary-offline-submit-replay` now
+  dead-letters that stale submit with a visible terminal error while preserving
+  benign `diary_save` cleanup.
 - The full existing browser suite is now green on Chromium when real-backend
   seeded specs are run with their required backend setup.
 
@@ -189,13 +190,28 @@ Documents and ITP:
 
 Continue filling the highest-value browser gaps from the scout map:
 
-1. Diary offline submit false-queue bug: fix `submitDiaryOffline` /
-   `syncWorker` behavior and add focused tests.
-2. NCR desktop lifecycle through request-revision, rectification/evidence,
+1. NCR desktop lifecycle through request-revision, rectification/evidence,
    submit for verification, reject rectification, resubmit, and concession close.
-3. Diary copy/reopen/entry CRUD.
-4. ITP completion PATCH and positive attachment GET/DELETE if those flows are
+2. Diary copy/reopen/entry CRUD.
+3. ITP completion PATCH and positive attachment GET/DELETE if those flows are
    visible to users.
-5. Decide whether document versions and ITP template archive/restore/propagate
+4. Decide whether document versions and ITP template archive/restore/propagate
    are intended user-facing features. If yes, wire UI before browser coverage;
    if no, keep them API-only and add backend success coverage where thin.
+
+## Stage 104 - Diary Offline Submit Replay Hardening
+
+- Fixed branch: `fix/diary-offline-submit-replay`.
+- Behavior hardened:
+  - `submitDiaryOffline` uses a shared missing-snapshot message.
+  - `syncWorker` preserves benign `diary_save` missing-snapshot cleanup.
+  - `syncWorker` now marks stale `diary_submit` queue items as terminal failed
+    instead of silently removing them when their local diary snapshot is gone.
+- Verification:
+  `npm run test:unit -- src/lib/offline/diaries.test.ts src/lib/offline/syncWorker.test.ts src/lib/useOfflineStatus.test.tsx src/components/foreman/DiaryFinishFlow.test.tsx src/shell/screens/diary/ReviewScreen.test.tsx`
+  passed 134/134.
+- Additional local checks:
+  - `npm run type-check` passed.
+  - `npm run lint` passed with the existing `theme.tsx` fast-refresh warning.
+  - `npx prettier --check ...` passed for touched files.
+  - `git diff --check` passed.
