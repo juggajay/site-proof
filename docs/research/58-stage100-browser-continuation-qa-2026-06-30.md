@@ -136,8 +136,18 @@ Documents and ITP:
 
 - Documents browser coverage handles list/filter/upload/favourite/preview/
   download/delete with mocked signed-url responses.
-- Missing user-facing browser coverage remains for classification save from the
-  AI classification modal.
+- Follow-up lot-detail coverage added in PR branch
+  `qa/document-classification-browser-coverage`:
+  - ITP evidence photo upload from a checklist row
+  - uploaded document attachment to the ITP completion
+  - AI classification modal opening from the uploaded photo
+  - saving a user-selected classification payload
+  - signed-url mock for the newly uploaded photo thumbnail
+- Verification:
+  `npx playwright test e2e/lot-detail.spec.ts --project=chromium --reporter=list --grep "uploads an ITP evidence photo"`
+  passed 1/1, and full `lot-detail.spec.ts` passed 15/15 on rerun. The first
+  full-spec run again hit the existing transient empty-app-shell first-load miss
+  in the first readiness tests; rerun was clean.
 - Document version upload/list routes exist, but no current UI route/component
   was found. Treat this like a UI decision before adding Playwright coverage.
 - ITP browser coverage handles templates and lot checklist completion/attachment
@@ -167,6 +177,11 @@ Documents and ITP:
   `/api/itp/pending-verifications` and diary timeline/docket-summary endpoints.
   The tests still pass, but route mocks should eventually cover these requests
   so console noise does not hide real failures.
+- Diary sidecar audit found a real offline-submit trust bug: `submitDiaryOffline`
+  can queue `diary_submit` without a local diary snapshot, and the sync worker
+  later drops that queue item. The UI can still say it will send when back on
+  signal. Next fix should make the offline submit path either create a replayable
+  snapshot before queueing or fail honestly.
 - The full existing browser suite is now green on Chromium when real-backend
   seeded specs are run with their required backend setup.
 
@@ -174,9 +189,10 @@ Documents and ITP:
 
 Continue filling the highest-value browser gaps from the scout map:
 
-1. NCR desktop lifecycle through request-revision, rectification/evidence,
+1. Diary offline submit false-queue bug: fix `submitDiaryOffline` /
+   `syncWorker` behavior and add focused tests.
+2. NCR desktop lifecycle through request-revision, rectification/evidence,
    submit for verification, reject rectification, resubmit, and concession close.
-2. Document classification save from the lot photo/ITP evidence flow.
 3. Diary copy/reopen/entry CRUD.
 4. ITP completion PATCH and positive attachment GET/DELETE if those flows are
    visible to users.
