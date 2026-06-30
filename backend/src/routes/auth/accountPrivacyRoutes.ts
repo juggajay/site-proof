@@ -3,6 +3,11 @@ import type { PrismaClient } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import {
+  REDACTED_LOG_VALUE,
+  sanitizeLogText,
+  sanitizeUrlValueForLog,
+} from '../../lib/logSanitization.js';
 import { createAccountDeletionRouter } from './accountDeletionRoutes.js';
 
 type NormalizePasswordInput = (value: unknown, fieldName?: string) => string;
@@ -13,6 +18,23 @@ type CreateAccountPrivacyRouterDependencies = {
 };
 
 const DATA_EXPORT_FILENAME_MAX_LENGTH = 180;
+const SENSITIVE_EXPORT_KEY_PATTERNS = [
+  /password/i,
+  /token/i,
+  /secret/i,
+  /api[-_]?key/i,
+  /^key$/i,
+  /^code$/i,
+  /^state$/i,
+  /^credential$/i,
+  /^authorization$/i,
+  /^signature$/i,
+  /^auth$/i,
+  /^p256dh$/i,
+];
+const URL_EXPORT_KEY_PATTERN = /(^|_)(url|uri)$|urls?$|endpoint$/i;
+
+type JsonRecord = Record<string, unknown>;
 
 function sanitizeDownloadFilenameSegment(
   value: string,
@@ -40,6 +62,110 @@ export function getSafeDataExportFilename(email: string, date = new Date()): str
   const safeEmail = sanitizeDownloadFilenameSegment(email, maxEmailLength) || 'user';
 
   return `${prefix}${safeEmail}${suffix}`;
+}
+
+function isSensitiveExportKey(key: string): boolean {
+  return SENSITIVE_EXPORT_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+function isUrlExportKey(key: string): boolean {
+  return key === 'fileUrl' || URL_EXPORT_KEY_PATTERN.test(key);
+}
+
+function sanitizeDataExportValue(key: string, value: unknown): unknown {
+  if (isSensitiveExportKey(key)) {
+    return REDACTED_LOG_VALUE;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDataExportValue(key, item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as JsonRecord).map(([childKey, childValue]) => [
+        childKey,
+        sanitizeDataExportValue(childKey, childValue),
+      ]),
+    );
+  }
+
+  if (typeof value === 'string') {
+    if (isUrlExportKey(key)) {
+      return sanitizeUrlValueForLog(value);
+    }
+
+    return sanitizeLogText(value);
+  }
+
+  return value;
+}
+
+function sanitizeStoredPayload(payload: string): unknown {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return sanitizeDataExportValue('payload', parsed);
+  } catch {
+    return sanitizeLogText(payload);
+  }
+}
+
+function buildCommentAttachmentDownloadUrl(attachmentId: string): string {
+  return `/api/comments/attachments/${encodeURIComponent(attachmentId)}/download`;
+}
+
+function buildDocumentDownloadUrl(documentId: string): string {
+  return `/api/documents/file/${encodeURIComponent(documentId)}`;
+}
+
+function buildCommentAttachmentExport(attachment: JsonRecord): JsonRecord {
+  const { fileUrl: _fileUrl, ...safeAttachment } = attachment;
+  return {
+    ...safeAttachment,
+    downloadUrl:
+      typeof safeAttachment.id === 'string'
+        ? buildCommentAttachmentDownloadUrl(safeAttachment.id)
+        : undefined,
+  };
+}
+
+function buildCommentExport(comment: JsonRecord): JsonRecord {
+  return {
+    ...comment,
+    attachments: Array.isArray(comment.attachments)
+      ? comment.attachments.map((attachment) =>
+          attachment && typeof attachment === 'object'
+            ? buildCommentAttachmentExport(attachment as JsonRecord)
+            : attachment,
+        )
+      : comment.attachments,
+  };
+}
+
+function buildDocumentExport(document: JsonRecord): JsonRecord {
+  const { fileUrl: _fileUrl, ...safeDocument } = document;
+  return {
+    ...safeDocument,
+    downloadUrl:
+      typeof safeDocument.id === 'string' ? buildDocumentDownloadUrl(safeDocument.id) : undefined,
+  };
+}
+
+function getUrlOrigin(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function countDelimitedRecipients(value: string | null): number {
+  if (!value) return 0;
+  return value
+    .split(/[;,]/)
+    .map((recipient) => recipient.trim())
+    .filter(Boolean).length;
 }
 
 export function createAccountPrivacyRouter({
@@ -437,7 +563,7 @@ export function createAccountPrivacyRouter({
           email: user.email,
           fullName: user.fullName,
           phone: user.phone,
-          avatarUrl: user.avatarUrl,
+          hasAvatar: Boolean(user.avatarUrl),
           role: user.roleInCompany,
           emailVerified: user.emailVerified,
           emailVerifiedAt: user.emailVerifiedAt,
@@ -485,19 +611,35 @@ export function createAccountPrivacyRouter({
         })),
         testResults: testResults,
         lotsCreated: lotsCreated,
-        commentsAuthored: commentsAuthored,
-        uploadedDocuments: uploadedDocuments,
+        commentsAuthored: commentsAuthored.map((comment) =>
+          buildCommentExport(comment as JsonRecord),
+        ),
+        uploadedDocuments: uploadedDocuments.map((document) =>
+          buildDocumentExport(document as JsonRecord),
+        ),
         notifications: notifications,
         notificationEmailPreference: notificationEmailPreference,
         notificationDigestItems: notificationDigestItems,
         notificationAlerts: notificationAlerts,
         consentRecords: consentRecords,
         apiKeys: apiKeys,
-        pushSubscriptions: pushSubscriptions,
-        scheduledReports: scheduledReports,
-        webhookConfigsCreated: webhookConfigsCreated,
+        pushSubscriptions: pushSubscriptions.map(({ endpoint, ...subscription }) => ({
+          ...subscription,
+          endpointOrigin: getUrlOrigin(endpoint),
+        })),
+        scheduledReports: scheduledReports.map(({ recipients, ...report }) => ({
+          ...report,
+          recipientCount: countDelimitedRecipients(recipients),
+        })),
+        webhookConfigsCreated: webhookConfigsCreated.map((webhookConfig) => ({
+          ...webhookConfig,
+          url: sanitizeUrlValueForLog(webhookConfig.url),
+        })),
         documentSignedUrlTokens: documentSignedUrlTokens,
-        syncQueueItems: syncQueueItems,
+        syncQueueItems: syncQueueItems.map(({ payload, ...item }) => ({
+          ...item,
+          payload: sanitizeStoredPayload(payload),
+        })),
         activityLog: auditLogs,
       };
 

@@ -42,6 +42,9 @@ describe('createAccountDeletionRouter', () => {
       projectUser: {
         deleteMany: vi.fn(),
       },
+      scheduledReport: {
+        updateMany: vi.fn(),
+      },
       user: {
         delete: vi.fn(),
       },
@@ -88,6 +91,14 @@ describe('createAccountDeletionRouter', () => {
     expect(tx.iTPCompletion.updateMany).toHaveBeenNthCalledWith(2, {
       where: { verifiedById: 'deleted-user-id' },
       data: { verifiedById: null },
+    });
+    expect(tx.scheduledReport.updateMany).toHaveBeenCalledWith({
+      where: { createdById: 'deleted-user-id' },
+      data: {
+        isActive: false,
+        recipients: '',
+        createdById: null,
+      },
     });
     expect(tx.user.delete).toHaveBeenCalledWith({ where: { id: 'deleted-user-id' } });
     expect(removeStoredAvatar).toHaveBeenCalledWith(

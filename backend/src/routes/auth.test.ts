@@ -3421,6 +3421,21 @@ describe('Avatar Upload', () => {
 });
 
 describe('GET /api/auth/export-data', () => {
+  it('rejects missing bearer authentication', async () => {
+    const res = await request(app).get('/api/auth/export-data');
+
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects invalid bearer authentication', async () => {
+    const res = await request(app)
+      .get('/api/auth/export-data')
+      .set('Authorization', 'Bearer not-a-valid-token');
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.message).toContain('Invalid token');
+  });
+
   it('exports privacy-relevant account records without stored secrets', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const email = `export-data-${suffix}@example.com`;
@@ -3454,7 +3469,7 @@ describe('GET /api/auth/export-data', () => {
         data: {
           companyId,
           roleInCompany: 'admin',
-          avatarUrl: '/uploads/avatars/export-avatar.png',
+          avatarUrl: `https://fixture-project.supabase.co/storage/v1/object/public/documents/avatars/${createdUserId}/export-avatar.png?token=secret-avatar-token`,
           emailVerified: true,
           emailVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
         },
@@ -3491,12 +3506,13 @@ describe('GET /api/auth/export-data', () => {
           attachments: {
             create: {
               filename: 'export-comment-photo.jpg',
-              fileUrl: '/uploads/comments/export-comment-photo.jpg',
+              fileUrl: `https://fixture-project.supabase.co/storage/v1/object/public/documents/comments/${projectId}/export-comment-photo.jpg?token=secret-comment-token`,
               fileSize: 1234,
               mimeType: 'image/jpeg',
             },
           },
         },
+        include: { attachments: true },
       });
 
       const document = await prisma.document.create({
@@ -3505,7 +3521,7 @@ describe('GET /api/auth/export-data', () => {
           documentType: 'photo',
           category: 'quality',
           filename: 'export-document.jpg',
-          fileUrl: '/uploads/documents/export-document.jpg',
+          fileUrl: `https://fixture-project.supabase.co/storage/v1/object/public/documents/${projectId}/export-document.jpg?X-Amz-Signature=secret-document-signature`,
           fileSize: 4567,
           mimeType: 'image/jpeg',
           uploadedById: createdUserId,
@@ -3586,7 +3602,7 @@ describe('GET /api/auth/export-data', () => {
         data: {
           id: `push-export-${suffix}`,
           userId: createdUserId,
-          endpoint: `https://push.example.com/export/${suffix}`,
+          endpoint: `https://push.example.com/export/${suffix}/secret-push-endpoint-token`,
           p256dh: 'secret-p256dh-should-not-export',
           auth: 'secret-push-auth-should-not-export',
           userAgent: 'Export Push Browser',
@@ -3601,7 +3617,7 @@ describe('GET /api/auth/export-data', () => {
           frequency: 'weekly',
           dayOfWeek: 1,
           timeOfDay: '09:00',
-          recipients: 'export@example.com',
+          recipients: 'export@example.com, third-party@example.com',
           isActive: true,
           nextRunAt: new Date('2026-01-05T09:00:00.000Z'),
         },
@@ -3611,7 +3627,7 @@ describe('GET /api/auth/export-data', () => {
         data: {
           companyId,
           createdById: createdUserId,
-          url: 'https://example.com/export-webhook',
+          url: 'https://example.com/export-webhook?token=secret-webhook-query&tenant=secret-tenant',
           secret: 'secret-webhook-value-should-not-export',
           events: JSON.stringify(['lot.updated']),
           enabled: true,
@@ -3635,7 +3651,11 @@ describe('GET /api/auth/export-data', () => {
           entityType: 'Lot',
           entityId: 'export-lot-id',
           action: 'update',
-          payload: JSON.stringify({ notes: 'offline export payload' }),
+          payload: JSON.stringify({
+            notes: 'offline export payload',
+            fileUrl: 'https://files.example.com/documents/sync.pdf?token=secret-sync-token',
+            nested: { auth: 'secret-sync-auth' },
+          }),
           status: 'pending',
         },
       });
@@ -3648,9 +3668,10 @@ describe('GET /api/auth/export-data', () => {
       expect(res.body.user).toMatchObject({
         id: createdUserId,
         email,
-        avatarUrl: '/uploads/avatars/export-avatar.png',
+        hasAvatar: true,
         twoFactorEnabled: false,
       });
+      expect(res.body.user).not.toHaveProperty('avatarUrl');
       expect(res.body.projectMemberships).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -3668,7 +3689,7 @@ describe('GET /api/auth/export-data', () => {
             attachments: [
               expect.objectContaining({
                 filename: 'export-comment-photo.jpg',
-                fileUrl: '/uploads/comments/export-comment-photo.jpg',
+                downloadUrl: `/api/comments/attachments/${comment.attachments[0]!.id}/download`,
               }),
             ],
           }),
@@ -3679,7 +3700,7 @@ describe('GET /api/auth/export-data', () => {
           expect.objectContaining({
             id: document.id,
             filename: 'export-document.jpg',
-            fileUrl: '/uploads/documents/export-document.jpg',
+            downloadUrl: `/api/documents/file/${document.id}`,
             caption: 'Exported document caption',
           }),
         ]),
@@ -3737,7 +3758,7 @@ describe('GET /api/auth/export-data', () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: `push-export-${suffix}`,
-            endpoint: `https://push.example.com/export/${suffix}`,
+            endpointOrigin: 'https://push.example.com',
             userAgent: 'Export Push Browser',
           }),
         ]),
@@ -3747,14 +3768,14 @@ describe('GET /api/auth/export-data', () => {
           expect.objectContaining({
             reportType: 'lot-status',
             frequency: 'weekly',
-            recipients: 'export@example.com',
+            recipientCount: 2,
           }),
         ]),
       );
       expect(res.body.webhookConfigsCreated).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            url: 'https://example.com/export-webhook',
+            url: 'https://example.com/export-webhook?token=[REDACTED]&tenant=[REDACTED]',
             events: JSON.stringify(['lot.updated']),
             enabled: true,
           }),
@@ -3771,13 +3792,26 @@ describe('GET /api/auth/export-data', () => {
         expect.arrayContaining([
           expect.objectContaining({
             deviceId: 'export-device',
-            payload: JSON.stringify({ notes: 'offline export payload' }),
+            payload: {
+              notes: 'offline export payload',
+              fileUrl: 'https://files.example.com/documents/sync.pdf?token=[REDACTED]',
+              nested: { auth: '[REDACTED]' },
+            },
             status: 'pending',
           }),
         ]),
       );
 
       const exportedJson = JSON.stringify(res.body);
+      expect(exportedJson).not.toContain('secret-avatar-token');
+      expect(exportedJson).not.toContain('secret-comment-token');
+      expect(exportedJson).not.toContain('secret-document-signature');
+      expect(exportedJson).not.toContain('secret-push-endpoint-token');
+      expect(exportedJson).not.toContain('third-party@example.com');
+      expect(exportedJson).not.toContain('secret-webhook-query');
+      expect(exportedJson).not.toContain('secret-tenant');
+      expect(exportedJson).not.toContain('secret-sync-token');
+      expect(exportedJson).not.toContain('secret-sync-auth');
       expect(exportedJson).not.toContain('secret-api-key-hash-should-not-export');
       expect(exportedJson).not.toContain('secret-p256dh-should-not-export');
       expect(exportedJson).not.toContain('secret-push-auth-should-not-export');
@@ -3787,8 +3821,12 @@ describe('GET /api/auth/export-data', () => {
       expect(res.body.apiKeys[0]).not.toHaveProperty('keyHash');
       expect(res.body.pushSubscriptions[0]).not.toHaveProperty('p256dh');
       expect(res.body.pushSubscriptions[0]).not.toHaveProperty('auth');
+      expect(res.body.pushSubscriptions[0]).not.toHaveProperty('endpoint');
+      expect(res.body.scheduledReports[0]).not.toHaveProperty('recipients');
       expect(res.body.webhookConfigsCreated[0]).not.toHaveProperty('secret');
       expect(res.body.documentSignedUrlTokens[0]).not.toHaveProperty('tokenHash');
+      expect(res.body.commentsAuthored[0].attachments[0]).not.toHaveProperty('fileUrl');
+      expect(res.body.uploadedDocuments[0]).not.toHaveProperty('fileUrl');
     } finally {
       if (userId) {
         await prisma.auditLog.deleteMany({ where: { userId } });
