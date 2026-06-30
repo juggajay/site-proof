@@ -203,6 +203,7 @@ export function buildDocketQueriedNotifications(ctx: DocketQueriedNotificationCo
 
 export type DocketQueryResponseNotificationContext = {
   projectId: string;
+  projectName: string;
   docketNumber: string;
   docketDate: string;
   responderName: string;
@@ -211,15 +212,23 @@ export type DocketQueryResponseNotificationContext = {
 
 export function buildDocketQueryResponseNotification(ctx: DocketQueryResponseNotificationContext): {
   inApp: DocketInAppNotification;
+  email: DocketEmailNotification;
 } {
-  const { projectId, docketNumber, docketDate, responderName, response } = ctx;
+  const { projectId, projectName, docketNumber, docketDate, responderName, response } = ctx;
+  const linkUrl = docketsLink(projectId);
   return {
     inApp: {
       projectId,
       type: 'docket_query_response',
       title: 'Docket Query Response',
       message: `${responderName} has responded to the query on docket ${docketNumber} (${docketDate}).\n\nResponse: ${response.substring(0, 200)}${response.length > 200 ? '...' : ''}\n\nThe docket is ready for review.`,
-      linkUrl: docketsLink(projectId),
+      linkUrl,
+    },
+    email: {
+      title: 'Docket Query Response',
+      message: `${responderName} has responded to the query on docket ${docketNumber} (${docketDate}).\n\nProject: ${projectName}\n\nResponse:\n${response}\n\nThe docket is ready for review.`,
+      projectName,
+      linkUrl,
     },
   };
 }

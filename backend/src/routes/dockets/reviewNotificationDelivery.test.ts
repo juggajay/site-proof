@@ -3,6 +3,9 @@ import type { DocketEmailNotification, DocketInAppNotification } from './notific
 
 const { prismaMock, sendNotificationIfEnabledMock } = vi.hoisted(() => ({
   prismaMock: {
+    projectUser: {
+      findMany: vi.fn(),
+    },
     subcontractorUser: {
       findMany: vi.fn(),
     },
@@ -24,7 +27,8 @@ vi.mock('../notifications.js', () => ({
   sendNotificationIfEnabled: sendNotificationIfEnabledMock,
 }));
 
-const { notifyDocketSubcontractorUsers } = await import('./reviewNotificationDelivery.js');
+const { notifyDocketApproverUsers, notifyDocketSubcontractorUsers } =
+  await import('./reviewNotificationDelivery.js');
 
 const inApp: DocketInAppNotification = {
   projectId: 'project-1',
@@ -136,6 +140,116 @@ describe('notifyDocketSubcontractorUsers', () => {
         email,
       }),
     ).resolves.toEqual([{ id: 'user-1', email: 'one@example.com', fullName: 'One' }]);
+    expect(prismaMock.notification.createMany).toHaveBeenCalledOnce();
+  });
+});
+
+describe('notifyDocketApproverUsers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sendNotificationIfEnabledMock.mockResolvedValue(undefined);
+  });
+
+  it('does not create notifications or emails when no active approvers match', async () => {
+    prismaMock.projectUser.findMany.mockResolvedValue([]);
+
+    const users = await notifyDocketApproverUsers({
+      projectId: 'project-1',
+      roles: ['project_manager', 'foreman'],
+      inApp,
+      email,
+    });
+
+    expect(users).toEqual([]);
+    expect(prismaMock.projectUser.findMany).toHaveBeenCalledWith({
+      where: {
+        projectId: 'project-1',
+        role: { in: ['project_manager', 'foreman'] },
+        status: 'active',
+      },
+      include: {
+        user: { select: { id: true, email: true, fullName: true } },
+      },
+    });
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+    expect(sendNotificationIfEnabledMock).not.toHaveBeenCalled();
+  });
+
+  it('creates one in-app notification and attempts one email per approver user', async () => {
+    prismaMock.projectUser.findMany.mockResolvedValue([
+      { userId: 'approver-1', user: { id: 'approver-1', email: 'pm@example.com', fullName: 'PM' } },
+      {
+        userId: 'approver-2',
+        user: { id: 'approver-2', email: 'foreman@example.com', fullName: 'Foreman' },
+      },
+    ]);
+
+    const users = await notifyDocketApproverUsers({
+      projectId: 'project-1',
+      roles: ['project_manager', 'foreman'],
+      inApp,
+      email,
+    });
+
+    expect(users).toEqual([
+      { id: 'approver-1', email: 'pm@example.com', fullName: 'PM' },
+      { id: 'approver-2', email: 'foreman@example.com', fullName: 'Foreman' },
+    ]);
+    expect(prismaMock.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        { userId: 'approver-1', ...inApp },
+        { userId: 'approver-2', ...inApp },
+      ],
+    });
+    expect(sendNotificationIfEnabledMock).toHaveBeenCalledTimes(2);
+    expect(sendNotificationIfEnabledMock).toHaveBeenNthCalledWith(
+      1,
+      'approver-1',
+      'enabled',
+      email,
+    );
+    expect(sendNotificationIfEnabledMock).toHaveBeenNthCalledWith(
+      2,
+      'approver-2',
+      'enabled',
+      email,
+    );
+  });
+
+  it('deduplicates approver users before creating notifications and emails', async () => {
+    prismaMock.projectUser.findMany.mockResolvedValue([
+      { userId: 'approver-1', user: { id: 'approver-1', email: 'pm@example.com', fullName: 'PM' } },
+      { userId: 'approver-1', user: { id: 'approver-1', email: 'pm@example.com', fullName: 'PM' } },
+    ]);
+
+    const users = await notifyDocketApproverUsers({
+      projectId: 'project-1',
+      roles: ['project_manager', 'foreman'],
+      inApp,
+      email,
+    });
+
+    expect(users).toEqual([{ id: 'approver-1', email: 'pm@example.com', fullName: 'PM' }]);
+    expect(prismaMock.notification.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'approver-1', ...inApp }],
+    });
+    expect(sendNotificationIfEnabledMock).toHaveBeenCalledOnce();
+  });
+
+  it('swallows individual approver email delivery failures after creating in-app notifications', async () => {
+    prismaMock.projectUser.findMany.mockResolvedValue([
+      { userId: 'approver-1', user: { id: 'approver-1', email: 'pm@example.com', fullName: 'PM' } },
+    ]);
+    sendNotificationIfEnabledMock.mockRejectedValue(new Error('email down'));
+
+    await expect(
+      notifyDocketApproverUsers({
+        projectId: 'project-1',
+        roles: ['project_manager'],
+        inApp,
+        email,
+      }),
+    ).resolves.toEqual([{ id: 'approver-1', email: 'pm@example.com', fullName: 'PM' }]);
     expect(prismaMock.notification.createMany).toHaveBeenCalledOnce();
   });
 });
