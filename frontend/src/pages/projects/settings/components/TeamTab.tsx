@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Users, UserPlus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -170,10 +171,19 @@ export function TeamTab({
     <>
       <div className="space-y-6">
         <div className="rounded-lg border p-4">
-          <h2 className="text-lg font-semibold mb-2">Team Members</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Manage team members and their roles on this project.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Team Members</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Review this project team. Use Project Users for role changes and removals.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/projects/${encodeURIComponent(projectId)}/users`}>
+                Manage project team
+              </Link>
+            </Button>
+          </div>
           {readOnly && (
             <div role="status" className="mb-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
               Team membership is read-only while this project is archived.
@@ -251,7 +261,8 @@ export function TeamTab({
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-2">Role Permissions</h2>
           <p className="text-sm text-muted-foreground">
-            Configure what each role can access and modify in this project.
+            Project role permissions are fixed by role. Change a person's project role from Project
+            Users.
           </p>
         </div>
       </div>

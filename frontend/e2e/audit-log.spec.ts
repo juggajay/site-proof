@@ -441,6 +441,22 @@ test.describe('Audit log seeded admin contract', () => {
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
   });
 
+  test('restores audit log filters from browser history URLs', async ({ page }) => {
+    await mockAuditLogApi(page);
+
+    await page.goto('/audit-log?search=E2E%20Admin');
+    await expect(page.getByLabel('Search audit logs')).toHaveValue('E2E Admin');
+    await expect(page.getByText('Showing 2 of 2 audit log entries')).toBeVisible();
+
+    await page.goto('/audit-log?search=project');
+    await expect(page.getByLabel('Search audit logs')).toHaveValue('project');
+    await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByLabel('Search audit logs')).toHaveValue('E2E Admin');
+    await expect(page.getByText('Showing 2 of 2 audit log entries')).toBeVisible();
+  });
+
   test('exports all filtered audit log pages instead of only the visible table page', async ({
     page,
   }) => {
