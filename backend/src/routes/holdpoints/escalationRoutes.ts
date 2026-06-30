@@ -159,6 +159,10 @@ holdPointEscalationRouter.post(
       { requireWritable: true },
     );
 
+    if (!existingHP.isEscalated || existingHP.escalationResolved) {
+      throw AppError.badRequest('Hold point is not currently escalated.');
+    }
+
     const holdPoint = await prisma.holdPoint.update({
       where: { id },
       data: {
