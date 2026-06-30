@@ -37,7 +37,7 @@ interface Document {
   documentType: string;
   category: string | null;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   fileSize: number | null;
   mimeType: string | null;
   uploadedAt: string;

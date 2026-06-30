@@ -18,7 +18,7 @@ type Drawing = {
   document: {
     id: string;
     filename: string;
-    fileUrl: string;
+    fileUrl?: string | null;
     fileSize: number | null;
     mimeType: string | null;
     uploadedAt: string;
@@ -54,7 +54,6 @@ function buildDrawing(
     document: {
       id: documentId,
       filename,
-      fileUrl: `/uploads/drawings/${filename}`,
       fileSize,
       mimeType: 'application/pdf',
       uploadedAt: '2026-05-01T00:00:00.000Z',
@@ -206,7 +205,6 @@ async function mockSeededDrawingsApi(
                 drawingNumber: drawing.drawingNumber,
                 revision: drawing.revision,
                 filename: drawing.document.filename,
-                fileUrl: drawing.document.fileUrl,
               })),
       });
       return;

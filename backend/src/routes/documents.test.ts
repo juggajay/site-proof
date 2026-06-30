@@ -2484,6 +2484,23 @@ describe('Documents API', () => {
       expect(updateRes.status).toBe(403);
     });
 
+    it('should deny active viewers from triggering AI classification', async () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ content: [{ type: 'text', text: 'Safety|95' }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      const res = await request(app)
+        .post(`/api/documents/${documentId}/classify`)
+        .set('Authorization', `Bearer ${viewerUserToken}`);
+
+      expect(res.status).toBe(403);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('should not grant cross-company admins write access through viewer project membership', async () => {
       const otherCompany = await prisma.company.create({
         data: { name: `Other Document Admin Company ${Date.now()}` },
