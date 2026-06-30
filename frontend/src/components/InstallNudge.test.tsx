@@ -32,8 +32,9 @@ const { openCount, dismissedAt, incrementFn, writeDismissedAtFn } = vi.hoisted((
   writeDismissedAtFn: vi.fn(),
 }));
 
-const { userRole } = vi.hoisted(() => ({
+const { userRole, loggedOut } = vi.hoisted(() => ({
   userRole: { current: 'foreman' as string | undefined },
+  loggedOut: { current: false },
 }));
 
 vi.mock('@/hooks/usePwaInstall', () => ({
@@ -56,7 +57,7 @@ vi.mock('@/lib/storagePreferences', () => ({
 }));
 
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ user: { role: userRole.current } }),
+  useAuth: () => ({ user: loggedOut.current ? null : { role: userRole.current } }),
 }));
 
 // ── import after mocks ───────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ beforeEach(() => {
   dismissedAt.current = null;
   isMobileValue.current = true;
   userRole.current = 'foreman';
+  loggedOut.current = false;
   pwaInstallState.current = 'unsupported';
   canPromptInstall.current = false;
   promptInstall.mockResolvedValue('accepted');
@@ -171,6 +173,17 @@ describe('InstallNudge', () => {
 
       render(<InstallNudge />);
       expect(screen.getByRole('complementary')).toBeInTheDocument();
+    });
+  });
+
+  describe('unauthenticated visitor', () => {
+    it('renders nothing when the user is not logged in (e.g. public landing page)', () => {
+      setupEngagedSession();
+      pwaInstallState.current = 'ios-manual';
+      loggedOut.current = true; // logged-out visitor on landing/login
+
+      const { container } = render(<InstallNudge />);
+      expect(container).toBeEmptyDOMElement();
     });
   });
 

@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect } from 'react';
 import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider } from '@/lib/auth';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
@@ -121,6 +121,18 @@ import { applyShellFlagFromUrl } from '@/shell/shellFlag';
 // Apply ?shell= param immediately (runs once before first render)
 applyShellFlagFromUrl();
 
+/**
+ * Root route. Logged-out visitors get the public marketing landing page so the
+ * domain root (e.g. civos.com.au) isn't an auth wall; authenticated users go
+ * straight to the app dashboard. A short skeleton covers the auth check so
+ * signed-in users never flash the landing page.
+ */
+function RootRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <PageSkeleton />;
+  return user ? <Navigate to="/dashboard" replace /> : <LandingPage />;
+}
+
 function App() {
   // Request persistent storage once on app start so iOS/Safari cannot evict
   // the IndexedDB offline queue under storage pressure. No-throw: returns
@@ -150,7 +162,11 @@ function App() {
               )}
             </Route>
 
-            {/* Landing Page (public) */}
+            {/* Public root: landing page for logged-out visitors, dashboard for
+                authenticated users (see RootRoute). */}
+            <Route path="/" element={<RootRoute />} />
+
+            {/* Landing Page (public; also at /landing for direct links) */}
             <Route path="/landing" element={<LandingPage />} />
 
             {/* Legal Pages (public, no layout) */}
@@ -204,7 +220,6 @@ function App() {
 
             {/* Protected Routes */}
             <Route element={<ProtectedAppShell />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/onboarding" element={<CompanyOnboardingPage />} />
               <Route
                 path="/dashboard"
