@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 const mocks = vi.hoisted(() => ({
   user: null as { id: string; email: string } | null,
@@ -27,7 +32,7 @@ function renderBanner() {
 }
 
 function readStoredConsent() {
-  return JSON.parse(localStorage.getItem('cookie_consent') ?? 'null') as {
+  return JSON.parse(readLocalStorageItem('cookie_consent') ?? 'null') as {
     version: string;
     accepted: boolean;
     timestamp: string;
@@ -35,7 +40,7 @@ function readStoredConsent() {
 }
 
 beforeEach(() => {
-  localStorage.clear();
+  removeLocalStorageItem('cookie_consent');
   vi.clearAllMocks();
   mocks.user = null;
   mocks.recordCookiePolicyConsentDecision.mockResolvedValue(undefined);
@@ -73,7 +78,7 @@ describe('CookieConsentBanner', () => {
   });
 
   it('does not render when current-version consent already exists', async () => {
-    localStorage.setItem(
+    writeLocalStorageItem(
       'cookie_consent',
       JSON.stringify({
         version: 'v1',

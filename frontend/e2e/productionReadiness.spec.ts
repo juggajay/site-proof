@@ -1554,7 +1554,10 @@ test.describe('production readiness guardrails', () => {
     expect(serverSource.indexOf("app.get('/ready'")).toBeLessThan(
       serverSource.indexOf('app.listen'),
     );
-    expect(serverSource).toContain('createReadinessHandler(() => isShuttingDown)');
+    expect(serverSource).toContain("app.get('/ready', createReadinessHandler(isShuttingDown));");
+    expect(serverSource).toContain(
+      'const app = createServerApp({ isShuttingDown: () => isShuttingDown });',
+    );
     expect(serverSource).toContain("Readiness check: ${buildBackendUrl('/ready')}");
     expect(serverSource).toContain("express.json({ limit: '1mb' })");
     expect(serverSource).toContain(
