@@ -124,6 +124,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
   let evidenceUploadCount = 0;
   let chaseCount = 0;
   let holdPointLoadCount = 0;
+  const holdPointRegisterRequests: string[] = [];
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -171,6 +172,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
 
     if (url.pathname === `/api/holdpoints/project/${E2E_PROJECT_ID}`) {
       holdPointLoadCount += 1;
+      holdPointRegisterRequests.push(url.search);
       if (holdPointLoadCount <= (options.failHoldPointLoadsUntil || 0)) {
         await json({ message: 'Hold point register unavailable' }, 503);
         return;
@@ -179,10 +181,13 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
       const allHoldPoints =
         options.paginatedHoldPoints ||
         buildHoldPoints(pendingReleaseRequested, requestedScheduledDate, notifiedReleaseRecorded);
-      const pageNumber = Number(url.searchParams.get('page') || '1');
-      const limit = Number(url.searchParams.get('limit') || '20');
+      const returnAll = url.searchParams.get('all') === 'true';
+      const pageNumber = returnAll ? 1 : Number(url.searchParams.get('page') || '1');
+      const limit = returnAll ? 5000 : Number(url.searchParams.get('limit') || '20');
       const start = (pageNumber - 1) * limit;
-      const holdPoints = allHoldPoints.slice(start, start + limit);
+      const holdPoints = returnAll
+        ? allHoldPoints.slice(0, limit)
+        : allHoldPoints.slice(start, start + limit);
 
       await json({
         holdPoints,
@@ -311,6 +316,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
     getRecordReleaseRequest: () => recordReleaseRequest,
     getEvidenceUploadCount: () => evidenceUploadCount,
     getChaseCount: () => chaseCount,
+    getHoldPointRegisterRequests: () => holdPointRegisterRequests,
   };
 }
 
@@ -662,15 +668,18 @@ test.describe('Hold points seeded release contract', () => {
     await expect(page.getByText('Total HPs')).toBeVisible();
   });
 
-  test('loads every backend page before treating the hold point register as complete', async ({
+  test('loads the bounded backend register before treating the hold point register as complete', async ({
     page,
   }) => {
-    await mockSeededHoldPointsApi(page, { paginatedHoldPoints: buildManyHoldPoints(25) });
+    const api = await mockSeededHoldPointsApi(page, {
+      paginatedHoldPoints: buildManyHoldPoints(25),
+    });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
 
     await expect(page.getByText('LOT-HP-001')).toBeVisible();
     await expect(page.getByText('Total HPs').locator('..').getByText('25')).toBeVisible();
+    expect(api.getHoldPointRegisterRequests()).toEqual(['?all=true']);
   });
 
   test('guards duplicate chase notifications from rapid clicks', async ({ page }) => {
