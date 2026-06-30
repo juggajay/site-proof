@@ -23,6 +23,14 @@ interface UploadCertificateModalProps {
   onFailedResult?: (input: FailedTestNcrInput) => void;
 }
 
+interface SuggestedLot {
+  id: string;
+  lotNumber: string;
+  chainageStart: number;
+  chainageEnd: number;
+  matchScore: number;
+}
+
 export const UploadCertificateModal = React.memo(function UploadCertificateModal({
   isOpen,
   onClose,
@@ -36,6 +44,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
   const [extractedTestId, setExtractedTestId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [reviewFormData, setReviewFormData] = useState<Record<string, string>>({});
+  const [suggestedLots, setSuggestedLots] = useState<SuggestedLot[]>([]);
   const [confirmingExtraction, setConfirmingExtraction] = useState(false);
   const pdfUrlRef = useRef<string | null>(null);
 
@@ -54,6 +63,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
     setExtractedTestId(null);
     updatePdfUrl(null);
     setReviewFormData({});
+    setSuggestedLots([]);
   }, [updatePdfUrl]);
 
   useEffect(() => {
@@ -99,6 +109,8 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
 
         // Set form data for review from extracted values
         const extractedFields = data.extraction.extractedFields;
+        const nextSuggestedLots = (data.lotSuggestion?.suggestedLots || []) as SuggestedLot[];
+        setSuggestedLots(nextSuggestedLots);
         // H13: seed pass/fail from the extracted value + spec so the reviewer
         // sees a computed outcome they can confirm or override.
         setReviewFormData(
@@ -114,6 +126,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
             specificationMin: extractedFields.specificationMin?.value || '',
             specificationMax: extractedFields.specificationMax?.value || '',
             passFail: 'pending',
+            lotId: nextSuggestedLots[0]?.id || '',
           }),
         );
 
@@ -190,7 +203,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
           resultUnit: reviewed.resultUnit,
           specificationMin: reviewed.specificationMin,
           specificationMax: reviewed.specificationMax,
-          lotId: null,
+          lotId: reviewed.lotId || null,
         });
       }
     } catch (err) {
@@ -416,6 +429,28 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                       {confidenceForField('sampleLocation').text}
                     </p>
                   </div>
+                  {suggestedLots.length > 0 && (
+                    <div>
+                      <Label htmlFor="upload-lot-id">Suggested Lot</Label>
+                      <NativeSelect
+                        id="upload-lot-id"
+                        value={reviewFormData.lotId || ''}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, lotId: e.target.value })
+                        }
+                      >
+                        <option value="">No lot</option>
+                        {suggestedLots.map((lot) => (
+                          <option key={lot.id} value={lot.id}>
+                            {lot.lotNumber} ({lot.chainageStart}-{lot.chainageEnd})
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Matched from the extracted sample location. Confirm or clear before saving.
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Result Value</Label>

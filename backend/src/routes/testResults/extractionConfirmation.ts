@@ -2,7 +2,9 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { applyTestResultCorrections, type TestResultCorrections } from './corrections.js';
+import { requireLotInProject } from './accessControl.js';
 import { derivePassFail } from './certificateExtraction.js';
+import { MAX_TEST_ID_LENGTH, normalizeOptionalString } from './validation.js';
 import {
   hasRecordedResult,
   RESULT_REQUIRED_CODE,
@@ -112,6 +114,22 @@ export function buildConfirmationUpdateData(
   return updateData;
 }
 
+async function applyConfirmedLotCorrection(
+  updateData: Prisma.TestResultUncheckedUpdateInput,
+  corrections: TestResultCorrections | undefined,
+  projectId: string,
+) {
+  if (!corrections || corrections.lotId === undefined) {
+    return;
+  }
+
+  const lotId = normalizeOptionalString(corrections.lotId, 'lotId', MAX_TEST_ID_LENGTH);
+  if (lotId) {
+    await requireLotInProject(lotId, projectId);
+  }
+  updateData.lotId = lotId || null;
+}
+
 export interface ConfirmExtractionInput {
   id: string;
   corrections: TestResultCorrections | undefined;
@@ -148,6 +166,7 @@ export async function confirmExtraction({
   }
 
   const updateData = buildConfirmationUpdateData(corrections, userId);
+  await applyConfirmedLotCorrection(updateData, corrections, testResult.projectId);
 
   // H13: recompute pass/fail server-side from the effective value + spec before
   // the row is recorded, so a confirmed result can't claim a pass the data
@@ -260,6 +279,7 @@ export async function processBatchConfirm({ confirmations, userId, authorize }: 
       }
 
       const updateData = buildConfirmationUpdateData(corrections, userId);
+      await applyConfirmedLotCorrection(updateData, corrections, testResult.projectId);
 
       // H13: same server-side pass/fail backstop as the single-confirm path.
       applyConfirmedPassFailBackstop(updateData, testResult);

@@ -147,6 +147,50 @@ describe('ITP Templates API', () => {
       expect(res.body.templates.length).toBeGreaterThan(0);
     });
 
+    it('filters inactive templates when activeOnly is requested', async () => {
+      const activeTemplate = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Assignable Active Template ${Date.now()}`,
+          activityType: 'Earthworks',
+          isActive: true,
+        },
+      });
+      const inactiveTemplate = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Archived Template ${Date.now()}`,
+          activityType: 'Earthworks',
+          isActive: false,
+        },
+      });
+
+      try {
+        const defaultRes = await request(app)
+          .get(`/api/itp/templates?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        const activeOnlyRes = await request(app)
+          .get(`/api/itp/templates?projectId=${projectId}&activeOnly=true`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(defaultRes.status).toBe(200);
+        expect(defaultRes.body.templates.map((template: { id: string }) => template.id)).toContain(
+          inactiveTemplate.id,
+        );
+
+        expect(activeOnlyRes.status).toBe(200);
+        const activeOnlyIds = activeOnlyRes.body.templates.map(
+          (template: { id: string }) => template.id,
+        );
+        expect(activeOnlyIds).toContain(activeTemplate.id);
+        expect(activeOnlyIds).not.toContain(inactiveTemplate.id);
+      } finally {
+        await prisma.iTPTemplate.deleteMany({
+          where: { id: { in: [activeTemplate.id, inactiveTemplate.id] } },
+        });
+      }
+    });
+
     it('should reject malformed template query parameters', async () => {
       const duplicateProjectRes = await request(app)
         .get('/api/itp/templates')
@@ -176,6 +220,13 @@ describe('ITP Templates API', () => {
       expect(invalidIncludeGlobalRes.body.error.message).toContain(
         'includeGlobal must be true or false',
       );
+
+      const invalidActiveOnlyRes = await request(app)
+        .get(`/api/itp/templates?projectId=${projectId}&activeOnly=yes`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(invalidActiveOnlyRes.status).toBe(400);
+      expect(invalidActiveOnlyRes.body.error.message).toContain('activeOnly must be true or false');
 
       const duplicateCurrentProjectRes = await request(app)
         .get('/api/itp/templates/cross-project')

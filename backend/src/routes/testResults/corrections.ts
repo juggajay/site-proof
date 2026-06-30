@@ -35,6 +35,7 @@ export type TestResultCorrections = {
   laboratoryReportNumber?: unknown;
   sampleDate?: unknown;
   sampleLocation?: unknown;
+  lotId?: unknown;
   testDate?: unknown;
   resultDate?: unknown;
   resultValue?: unknown;

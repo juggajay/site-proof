@@ -282,9 +282,32 @@ describe('useItpInstance — fetch + offline', () => {
     const { result } = renderHook(() => useItpInstance(baseParams));
 
     await waitFor(() => expect(result.current.templates).toEqual(templatesFixture));
+    expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(expect.stringContaining('activeOnly=true'));
     expect(result.current.itpInstance).toBeNull();
     expect(result.current.itpLoadError).toBeNull();
     expect(cacheITPChecklist).not.toHaveBeenCalled();
+  });
+
+  it('drops inactive templates from lot assignment choices defensively', async () => {
+    routeApiFetch({
+      getInstance: () => ({ instance: null }),
+      getTemplates: () => ({
+        templates: [
+          ...templatesFixture,
+          {
+            id: 'template-archived',
+            name: 'Archived ITP',
+            activityType: 'Earthworks',
+            isActive: false,
+            checklistItems: [],
+          },
+        ],
+      }),
+    });
+
+    const { result } = renderHook(() => useItpInstance(baseParams));
+
+    await waitFor(() => expect(result.current.templates).toEqual(templatesFixture));
   });
 
   it('sets an error when templates cannot be loaded for an unassigned lot', async () => {

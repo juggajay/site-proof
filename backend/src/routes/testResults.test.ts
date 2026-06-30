@@ -3385,6 +3385,90 @@ describe('Test Results API', () => {
       }
     });
 
+    it('persists a reviewed lot correction when confirming an AI certificate', async () => {
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          testType: `Unlinked Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'pending_extraction',
+          aiExtracted: true,
+          resultValue: 98.0,
+          passFail: 'pass',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { lotId } });
+
+        expect(res.status).toBe(200);
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { lotId: true, status: true },
+        });
+        expect(persisted.lotId).toBe(lotId);
+        expect(persisted.status).toBe('entered');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('rejects lot corrections outside the test result project', async () => {
+      const otherProject = await prisma.project.create({
+        data: {
+          name: `Other Test Results Project ${Date.now()}`,
+          projectNumber: `TR-OTHER-${Date.now()}`,
+          companyId,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const otherLot = await prisma.lot.create({
+        data: {
+          projectId: otherProject.id,
+          lotNumber: `OTHER-LOT-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          testType: `Cross Project Lot Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'pending_extraction',
+          aiExtracted: true,
+          resultValue: 98.0,
+          passFail: 'pass',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { lotId: otherLot.id } });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Lot not found');
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { lotId: true, status: true },
+        });
+        expect(persisted.lotId).toBeNull();
+        expect(persisted.status).toBe('pending_extraction');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.lot.deleteMany({ where: { projectId: otherProject.id } });
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+      }
+    });
+
     it('blocks confirming extraction corrections against a verified test result', async () => {
       const verifiedAt = new Date('2026-08-09T10:11:12.000Z');
       const testResult = await prisma.testResult.create({
@@ -3618,6 +3702,40 @@ describe('Test Results API', () => {
         expect(persisted.every((row) => row.enteredById === userId)).toBe(true);
       } finally {
         await prisma.testResult.deleteMany({ where: { id: { in: [first.id, second.id] } } });
+      }
+    });
+
+    it('persists reviewed lot corrections during batch confirmation', async () => {
+      const target = await prisma.testResult.create({
+        data: {
+          projectId,
+          testType: `Batch Unlinked Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'pending_extraction',
+          aiExtracted: true,
+          resultValue: 98.0,
+          passFail: 'pass',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            confirmations: [{ testResultId: target.id, corrections: { lotId } }],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toEqual({ total: 1, success: 1, failed: 0 });
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: target.id },
+          select: { lotId: true, status: true },
+        });
+        expect(persisted.lotId).toBe(lotId);
+        expect(persisted.status).toBe('entered');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: target.id } });
       }
     });
 

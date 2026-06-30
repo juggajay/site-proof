@@ -12,7 +12,15 @@ vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 const apiFetchMock = vi.mocked(apiFetch);
 const authFetchMock = vi.mocked(authFetch);
 
-function batchResponse() {
+function batchResponse(
+  suggestedLots: Array<{
+    id: string;
+    lotNumber: string;
+    chainageStart: number;
+    chainageEnd: number;
+    matchScore: number;
+  }> = [],
+) {
   return {
     ok: true,
     json: async () => ({
@@ -31,6 +39,9 @@ function batchResponse() {
             needsReview: false,
           },
           testResult: { id: 'tr-1', testType: 'Compaction' },
+          lotSuggestion: {
+            suggestedLots,
+          },
         },
       ],
     }),
@@ -43,8 +54,17 @@ beforeEach(() => {
   apiFetchMock.mockResolvedValue({ testResults: [] } as never);
 });
 
-async function reachReview(onFailedResult?: (input: unknown) => void) {
-  authFetchMock.mockResolvedValue(batchResponse());
+async function reachReview(
+  onFailedResult?: (input: unknown) => void,
+  suggestedLots?: Array<{
+    id: string;
+    lotNumber: string;
+    chainageStart: number;
+    chainageEnd: number;
+    matchScore: number;
+  }>,
+) {
+  authFetchMock.mockResolvedValue(batchResponse(suggestedLots));
   render(
     <BatchUploadModal
       isOpen
@@ -99,6 +119,34 @@ describe('BatchUploadModal pass/fail review (H13)', () => {
         resultValue: '5',
         specificationMin: '10',
         lotId: null,
+      }),
+    );
+  });
+
+  it('carries a reviewed suggested lot into batch-confirm corrections and NCR prompt', async () => {
+    const onFailedResult = vi.fn();
+    await reachReview(onFailedResult, [
+      {
+        id: 'lot-1',
+        lotNumber: 'LOT-001',
+        chainageStart: 100,
+        chainageEnd: 150,
+        matchScore: 100,
+      },
+    ]);
+
+    expect(screen.getByLabelText('Suggested Lot')).toHaveValue('lot-1');
+    fireEvent.click(screen.getByRole('button', { name: /Confirm All/ }));
+
+    await waitFor(() => expect(onFailedResult).toHaveBeenCalledTimes(1));
+    const confirmCall = apiFetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('/batch-confirm'),
+    );
+    expect(String((confirmCall?.[1] as { body?: string })?.body)).toContain('"lotId":"lot-1"');
+    expect(onFailedResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        testId: 'tr-1',
+        lotId: 'lot-1',
       }),
     );
   });

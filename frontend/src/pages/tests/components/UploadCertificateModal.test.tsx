@@ -12,7 +12,16 @@ vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 const apiFetchMock = vi.mocked(apiFetch);
 const authFetchMock = vi.mocked(authFetch);
 
-function extractionResponse(fields: Record<string, string>) {
+function extractionResponse(
+  fields: Record<string, string>,
+  suggestedLots: Array<{
+    id: string;
+    lotNumber: string;
+    chainageStart: number;
+    chainageEnd: number;
+    matchScore: number;
+  }> = [],
+) {
   const extractedFields = Object.fromEntries(
     Object.entries(fields).map(([k, v]) => [k, { value: v }]),
   );
@@ -26,6 +35,9 @@ function extractionResponse(fields: Record<string, string>) {
         needsReview: false,
       },
       testResult: { id: 'test-1' },
+      lotSuggestion: {
+        suggestedLots,
+      },
     }),
   } as unknown as Response;
 }
@@ -44,8 +56,15 @@ beforeEach(() => {
 async function reachReview(
   fields: Record<string, string>,
   onFailedResult?: (input: unknown) => void,
+  suggestedLots?: Array<{
+    id: string;
+    lotNumber: string;
+    chainageStart: number;
+    chainageEnd: number;
+    matchScore: number;
+  }>,
 ) {
-  authFetchMock.mockResolvedValue(extractionResponse(fields));
+  authFetchMock.mockResolvedValue(extractionResponse(fields, suggestedLots));
   render(
     <UploadCertificateModal
       isOpen
@@ -110,6 +129,43 @@ describe('UploadCertificateModal pass/fail review (H13)', () => {
         resultValue: '5',
         specificationMin: '10',
         lotId: null,
+      }),
+    );
+  });
+
+  it('carries a reviewed suggested lot into confirm corrections and NCR prompt', async () => {
+    const onFailedResult = vi.fn();
+    await reachReview(
+      {
+        testType: 'Compaction',
+        resultValue: '5',
+        specificationMin: '10',
+        sampleLocation: 'CH 120',
+      },
+      onFailedResult,
+      [
+        {
+          id: 'lot-1',
+          lotNumber: 'LOT-001',
+          chainageStart: 100,
+          chainageEnd: 150,
+          matchScore: 100,
+        },
+      ],
+    );
+
+    expect(screen.getByLabelText('Suggested Lot')).toHaveValue('lot-1');
+    fireEvent.click(screen.getByRole('button', { name: /Confirm & Save/ }));
+
+    await waitFor(() => expect(onFailedResult).toHaveBeenCalledTimes(1));
+    const confirmCall = apiFetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('/confirm-extraction'),
+    );
+    expect(String((confirmCall?.[1] as { body?: string })?.body)).toContain('"lotId":"lot-1"');
+    expect(onFailedResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        testId: 'test-1',
+        lotId: 'lot-1',
       }),
     );
   });

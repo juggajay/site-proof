@@ -97,7 +97,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
           `/api/lots/suggest-number?projectId=${encodedProjectId}`,
         ),
         apiFetch<{ templates: ItpTemplateOption[] }>(
-          `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true`,
+          `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true&activeOnly=true`,
         ),
         apiFetch<{ subcontractors: SubcontractorOption[] }>(
           `/api/subcontractors/for-project/${encodedProjectId}`,
