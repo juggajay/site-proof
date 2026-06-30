@@ -29,6 +29,17 @@ function normalizePublicUrl(name: string, rawValue: string): string {
   }
 }
 
+function normalizePublicOrigin(name: string, rawValue: string): string {
+  const normalizedUrl = normalizePublicUrl(name, rawValue);
+  const url = new URL(normalizedUrl);
+
+  if (url.pathname !== '/' || url.search || url.hash) {
+    throw new Error(`FATAL: ${name} entries must be origins only, not paths`);
+  }
+
+  return url.origin;
+}
+
 function assertProductionPublicUrl(name: string, urlValue: string): void {
   const url = new URL(urlValue);
   if (url.protocol !== 'https:') {
@@ -320,8 +331,34 @@ function assertProductionGoogleOAuthConfig(): void {
 
 const LOCAL_DEVELOPMENT_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 
+function getConfiguredCorsOrigins(): string[] {
+  const value = process.env.CORS_ALLOWED_ORIGINS?.trim();
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => normalizePublicOrigin('CORS_ALLOWED_ORIGINS', origin));
+}
+
 export function getFrontendUrl(): string {
   return envUrl('FRONTEND_URL', DEFAULT_FRONTEND_URL);
+}
+
+export function getAllowedCorsOrigins(): string[] {
+  if (!isProduction()) {
+    return [];
+  }
+
+  return Array.from(
+    new Set([
+      normalizePublicOrigin('FRONTEND_URL', getFrontendUrl()),
+      ...getConfiguredCorsOrigins(),
+    ]),
+  );
 }
 
 export function getBackendUrl(): string {
@@ -373,7 +410,7 @@ export function isCorsOriginAllowed(origin: string | undefined): boolean {
   }
 
   if (isProduction()) {
-    return origin === getFrontendUrl();
+    return getAllowedCorsOrigins().includes(origin);
   }
 
   return LOCAL_DEVELOPMENT_ORIGIN.test(origin);
@@ -441,6 +478,9 @@ export function validateRuntimeConfig(): void {
   const backendUrl = getBackendUrl();
 
   assertProductionPublicUrl('FRONTEND_URL', frontendUrl);
+  for (const origin of getConfiguredCorsOrigins()) {
+    assertProductionPublicUrl('CORS_ALLOWED_ORIGINS', origin);
+  }
   assertProductionPublicUrl('BACKEND_URL/API_URL', backendUrl);
   assertProductionStorageConfig();
   assertProductionSentryConfig();
