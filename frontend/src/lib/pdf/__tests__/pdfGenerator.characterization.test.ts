@@ -517,7 +517,8 @@ describe('pdfGenerator characterization', () => {
         '1. Hold Point Identification',
         'STATUS: RELEASED',
         'Hold Point Description: Subgrade proof roll prior to pavement layer',
-        'Released By: Sam Supervisor',
+        'Released By: Sam Supervisor, Client Superintendent Org',
+        'Release Method: Secure Link',
         'Release Notes: Released after surveyor confirmed level tolerance.',
       ]),
     );

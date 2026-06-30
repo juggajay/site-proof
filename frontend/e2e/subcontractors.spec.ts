@@ -708,6 +708,26 @@ async function mockPortalModuleAccessApi(page: Page, portalAccess?: PortalAccess
       return;
     }
 
+    if (url.pathname === `/api/holdpoints/project/${E2E_PROJECT_ID}`) {
+      await json({
+        holdPoints: [
+          {
+            id: 'e2e-subbie-released-hold-point',
+            lotId: 'e2e-itp-lot',
+            lotNumber: 'LOT-001',
+            description: 'Subgrade release',
+            status: 'released',
+            releasedAt: '2026-06-09T00:00:00.000Z',
+            releasedByName: 'Casey Reviewer',
+            releasedByOrg: 'Client Superintendent Org',
+            releaseMethod: 'secure_link',
+            releaseRecipientEmail: 'casey.super@example.com',
+          },
+        ],
+      });
+      return;
+    }
+
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
@@ -1221,6 +1241,19 @@ test.describe('Subcontractor portal module access', () => {
     await expect(page.getByRole('link', { name: /Test Results/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Documents/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /NCRs/ })).toHaveCount(0);
+  });
+
+  test('shows full release identity on subcontractor hold point cards', async ({ page }) => {
+    await mockPortalModuleAccessApi(page);
+
+    await page.goto('/subcontractor-portal/holdpoints');
+
+    await expect(page.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
+    await expect(page.getByText('LOT-001')).toBeVisible();
+    await expect(
+      page.getByText(/Released by Casey Reviewer, Client Superintendent Org/),
+    ).toBeVisible();
+    await expect(page.getByText(/Secure link .* sent to casey.super@example.com/)).toBeVisible();
   });
 
   test('shows only unread rate counter notifications in the dashboard attention list', async ({

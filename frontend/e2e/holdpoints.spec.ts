@@ -339,6 +339,8 @@ function buildPublicReleasePackage({
         scheduledDate: '2026-03-02T00:00:00.000Z',
         releasedAt: released ? '2026-03-02T01:00:00.000Z' : null,
         releasedByName: released ? 'Already Released Superintendent' : null,
+        releasedByOrg: released ? 'Client Superintendent Org' : null,
+        releaseMethod: released ? 'secure_link' : null,
         releaseNotes: released ? 'Released before reopening the secure link' : null,
       },
       lot: {
@@ -505,6 +507,7 @@ async function mockPublicHoldPointReleaseApi(
           releasedAt: '2026-03-02T01:20:00.000Z',
           releasedByName: requestBody.releasedByName || 'E2E Superintendent',
           releasedByOrg: 'Client Superintendent Org',
+          releaseMethod: 'secure_link',
           releaseNotes: 'Evidence reviewed and accepted',
         },
       }),
@@ -841,7 +844,10 @@ test.describe('Public hold point secure release page', () => {
       releaseNotes: 'Evidence reviewed and accepted',
     });
     await expect(page.getByRole('status')).toContainText('Hold Point Released');
-    await expect(page.getByText('Released by E2E Superintendent')).toBeVisible();
+    await expect(
+      page.getByText(/Released by E2E Superintendent, Client Superintendent Org/),
+    ).toBeVisible();
+    await expect(page.getByText(/Secure link/)).toBeVisible();
     await expect(page.getByText('1/1 checklist items')).toBeVisible();
     await expect(page.getByRole('row').filter({ hasText: 'Confirm formwork' })).toContainText(
       'Yes',
@@ -882,7 +888,10 @@ test.describe('Public hold point secure release page', () => {
 
     await page.goto('/hp-release/e2e-public-token');
 
-    await expect(page.getByText('Already Released Superintendent')).toBeVisible();
+    await expect(
+      page.getByText(/Already Released Superintendent, Client Superintendent Org/),
+    ).toBeVisible();
+    await expect(page.getByText(/Secure link/)).toBeVisible();
     await expect(page.getByText('Released before reopening the secure link')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Download Evidence PDF' })).toBeVisible();

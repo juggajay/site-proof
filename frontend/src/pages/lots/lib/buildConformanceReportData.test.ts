@@ -105,12 +105,18 @@ describe('buildConformanceReportData', () => {
     expect(report.photoCount).toBe(5);
   });
 
-  it('maps only verified hold-point completions, preserving release fallbacks and order', () => {
+  it('maps verified release-gated completions, preserving release attribution and order', () => {
     const checklistItems: ITPChecklistItem[] = [
       checklistItem({ id: 'hp1', description: 'Subgrade hold point', pointType: 'hold_point' }),
       checklistItem({ id: 'std', description: 'Standard check', pointType: 'standard' }),
       checklistItem({ id: 'hp2', description: 'Compaction hold point', pointType: 'hold_point' }),
       checklistItem({ id: 'hp3', description: 'Unverified hold point', pointType: 'hold_point' }),
+      checklistItem({
+        id: 'hp4',
+        description: 'Superintendent release-gated check',
+        pointType: 'standard',
+        responsibleParty: 'superintendent',
+      }),
     ];
     const completions: ITPCompletion[] = [
       // verified HP: verifiedAt + verifiedBy win over completed* fallbacks
@@ -137,6 +143,22 @@ describe('buildConformanceReportData', () => {
       }),
       // hold point with an unverified completion — must be excluded
       completion({ id: 'cHp3', checklistItemId: 'hp3', isVerified: false }),
+      // public secure-link releases have no SiteProof user, so holdPointRelease wins
+      completion({
+        id: 'cHp4',
+        checklistItemId: 'hp4',
+        isVerified: true,
+        verifiedAt: '2026-01-04T00:00:00.000Z',
+        verifiedBy: null,
+        completedAt: '2026-01-04T00:00:00.000Z',
+        completedBy: null,
+        holdPointRelease: {
+          releasedAt: '2026-01-04T01:00:00.000Z',
+          releasedByName: 'External Super',
+          releasedByOrg: 'Client Superintendent Org',
+          releaseMethod: 'secure_link',
+        },
+      }),
     ];
     const itpInstance: ITPInstance = {
       id: 'itp-1',
@@ -155,11 +177,25 @@ describe('buildConformanceReportData', () => {
         checklistItemDescription: 'Subgrade hold point',
         releasedAt: '2026-01-02T00:00:00.000Z',
         releasedBy: { id: 'u-v1@example.com', fullName: 'Verifier One', email: 'v1@example.com' },
+        releasedByName: null,
+        releasedByOrg: null,
+        releaseMethod: null,
       },
       {
         checklistItemDescription: 'Compaction hold point',
         releasedAt: '2026-01-03T00:00:00.000Z',
         releasedBy: { id: 'u-c2@example.com', fullName: 'Completer Two', email: 'c2@example.com' },
+        releasedByName: null,
+        releasedByOrg: null,
+        releaseMethod: null,
+      },
+      {
+        checklistItemDescription: 'Superintendent release-gated check',
+        releasedAt: '2026-01-04T01:00:00.000Z',
+        releasedBy: null,
+        releasedByName: 'External Super',
+        releasedByOrg: 'Client Superintendent Org',
+        releaseMethod: 'secure_link',
       },
     ]);
   });
@@ -198,7 +234,14 @@ describe('buildConformanceReportData', () => {
     });
 
     expect(report.holdPointReleases).toEqual([
-      { checklistItemDescription: 'HP without timestamps', releasedAt: '', releasedBy: null },
+      {
+        checklistItemDescription: 'HP without timestamps',
+        releasedAt: '',
+        releasedBy: null,
+        releasedByName: null,
+        releasedByOrg: null,
+        releaseMethod: null,
+      },
     ]);
   });
 

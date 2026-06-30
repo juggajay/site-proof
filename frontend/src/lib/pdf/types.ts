@@ -119,6 +119,9 @@ export interface HoldPointRelease {
   checklistItemDescription: string;
   releasedAt: string;
   releasedBy: { fullName: string | null; email: string } | null;
+  releasedByName?: string | null;
+  releasedByOrg?: string | null;
+  releaseMethod?: string | null;
 }
 
 export interface ConformanceReportData {
@@ -176,6 +179,8 @@ export interface HPEvidencePackageData {
     scheduledDate: string | null;
     releasedAt: string | null;
     releasedByName: string | null;
+    releasedByOrg?: string | null;
+    releaseMethod?: string | null;
     releaseNotes: string | null;
   };
   lot: {
