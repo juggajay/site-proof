@@ -74,7 +74,9 @@ describe('NotificationsPage', () => {
 
     renderPage();
 
-    expect(await screen.findByText('Notifications could not be loaded.')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Notifications could not be loaded.',
+    );
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
     expect(await screen.findByText('Recovered notification')).toBeInTheDocument();
@@ -136,6 +138,31 @@ describe('NotificationsPage', () => {
     });
   });
 
+  it('does not navigate to notification links containing control characters', async () => {
+    apiFetchMock.mockImplementation((_path: string, options?: { method?: string }) => {
+      if (options?.method === 'PUT') {
+        return Promise.resolve({ success: true });
+      }
+      return Promise.resolve({
+        notifications: [
+          buildNotification({ id: 'n1', isRead: false, linkUrl: '/projects/p1\n/hold-points' }),
+        ],
+        unreadCount: 1,
+      });
+    });
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /A notification/i }));
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/notifications/n1/read', {
+        method: 'PUT',
+      });
+    });
+  });
+
   it('M62: unread tab requests the server-side unreadOnly filter', async () => {
     apiFetchMock.mockResolvedValue({
       notifications: [buildNotification()],
@@ -188,6 +215,7 @@ describe('NotificationsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /@mentions/i }));
 
     expect(await screen.findByText('No notifications')).toBeInTheDocument();
+    expect(screen.getByText(/No mention notifications in the loaded results/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /load more/i }));
 
     await waitFor(() => {
@@ -197,5 +225,21 @@ describe('NotificationsPage', () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it('exposes the selected notification filter state to assistive technology', async () => {
+    apiFetchMock.mockResolvedValue({
+      notifications: [buildNotification()],
+      unreadCount: 1,
+    });
+
+    renderPage();
+    await screen.findByText('A notification');
+
+    expect(screen.getByRole('button', { name: /^all$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^unread$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });

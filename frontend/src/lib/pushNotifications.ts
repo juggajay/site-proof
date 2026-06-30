@@ -330,6 +330,14 @@ export async function getPushStatus(token: string): Promise<{
 }> {
   const supported = isPushSupported();
   const permission = getNotificationPermission();
+  if (!supported) {
+    return {
+      supported: false,
+      permission,
+      subscribed: false,
+      configured: false,
+    };
+  }
 
   const response = await authFetch('/api/push/status', {
     headers: {
