@@ -112,7 +112,9 @@ function CertificationReadBack({ claim }: { claim: Claim }) {
         <button
           type="button"
           onClick={() => {
-            void openDocumentAccessUrl(certificationDocumentId).catch((error) => {
+            void openDocumentAccessUrl(certificationDocumentId, null, {
+              disposition: 'inline',
+            }).catch((error) => {
               logError('Failed to open certification document', error);
               toast({
                 title: 'Certificate unavailable',

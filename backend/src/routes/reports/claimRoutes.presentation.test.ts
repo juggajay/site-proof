@@ -18,6 +18,22 @@ describe('claim report amount presentation', () => {
     });
   });
 
+  it('rounds report amount arithmetic to cents', () => {
+    expect(
+      buildClaimReportAmounts({
+        totalClaimedAmount: 0.1 + 0.2,
+        certifiedAmount: 0.1,
+        paidAmount: 0.03,
+      }),
+    ).toEqual({
+      totalClaimedAmount: 0.3,
+      certifiedAmount: 0.1,
+      paidAmount: 0.03,
+      variance: 0.2,
+      outstanding: 0.07,
+    });
+  });
+
   it('excludes disputed certified amounts from live certified and outstanding totals', () => {
     expect(
       buildClaimReportFinancialSummary([
@@ -44,6 +60,32 @@ describe('claim report amount presentation', () => {
       certificationRate: '30.0',
       collectionRate: '44.4',
       totalLots: 3,
+    });
+  });
+
+  it('rounds report financial summary totals to cents', () => {
+    expect(
+      buildClaimReportFinancialSummary([
+        {
+          status: 'certified',
+          totalClaimedAmount: 0.1,
+          certifiedAmount: 0.1,
+          paidAmount: 0.03,
+          lotCount: 1,
+        },
+        {
+          status: 'certified',
+          totalClaimedAmount: 0.2,
+          certifiedAmount: 0.2,
+          paidAmount: 0.04,
+          lotCount: 1,
+        },
+      ]),
+    ).toMatchObject({
+      totalClaimed: 0.3,
+      totalCertified: 0.3,
+      totalPaid: 0.07,
+      outstanding: 0.23,
     });
   });
 });

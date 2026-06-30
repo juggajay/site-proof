@@ -325,6 +325,12 @@ export async function generateClaimEvidencePackagePDF(
 
       // Test Results Summary (conditional)
       if (options.includeTestResults && (lot.testResults ?? []).length > 0) {
+        const failedTestCount =
+          lot.summary.failedTestCount ??
+          (lot.testResults ?? []).filter((test) => test.passFail === 'fail').length;
+        const pendingTestCount =
+          lot.summary.pendingTestCount ??
+          Math.max(0, lot.summary.testResultCount - lot.summary.passedTestCount - failedTestCount);
         checkPageBreak(20);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
@@ -333,7 +339,7 @@ export async function generateClaimEvidencePackagePDF(
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.text(
-          `Total: ${lot.summary.testResultCount} | Passed: ${lot.summary.passedTestCount} | Failed: ${lot.summary.testResultCount - lot.summary.passedTestCount}`,
+          `Total: ${lot.summary.testResultCount} | Passed: ${lot.summary.passedTestCount} | Pending: ${pendingTestCount} | Failed: ${failedTestCount}`,
           margin,
           yPos,
         );
@@ -342,7 +348,12 @@ export async function generateClaimEvidencePackagePDF(
         // List first few test results
         (lot.testResults ?? []).slice(0, 5).forEach((test) => {
           checkPageBreak(6);
-          const passFail = test.passFail === 'pass' ? '✓' : test.passFail === 'fail' ? '✗' : '-';
+          const passFail =
+            test.passFail === 'pass' && test.status === 'verified'
+              ? '✓'
+              : test.passFail === 'fail'
+                ? '✗'
+                : '-';
           const result =
             test.resultValue !== null ? `${test.resultValue} ${test.resultUnit || ''}` : 'pending';
           doc.text(`  ${passFail} ${test.testType}: ${result}`, margin, yPos);

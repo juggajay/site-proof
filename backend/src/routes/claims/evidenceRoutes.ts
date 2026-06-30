@@ -3,6 +3,8 @@ import { Router } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
+import { isItpCompletionFinished } from '../../lib/conformancePrerequisites.js';
+import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 import {
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
@@ -144,17 +146,23 @@ export function createClaimEvidenceRouter({
         lots: claim.claimedLots.map((claimedLot) => {
           const lot = claimedLot.lot;
           const itpInstance = lot.itpInstance;
-          const itpChecklistItemIds = new Set(
-            itpInstance?.template.checklistItems.map((item) => item.id) ?? [],
-          );
+          const checklistItems = itpInstance ? getChecklistItemsForInstance(itpInstance) : [];
+          const itpChecklistItemIds = new Set(checklistItems.map((item) => item.id));
           const acceptedItpCompletionCount =
             itpInstance?.completions.filter(
               (completion) =>
                 itpChecklistItemIds.has(completion.checklistItemId) &&
-                (completion.status === 'completed' || completion.status === 'not_applicable') &&
+                isItpCompletionFinished(completion.status) &&
                 completion.verificationStatus !== 'pending_verification' &&
                 completion.verificationStatus !== 'rejected',
             ).length ?? 0;
+          const verifiedPassingTestCount = lot.testResults.filter(
+            (test) => test.passFail === 'pass' && test.status === 'verified',
+          ).length;
+          const failedTestCount = lot.testResults.filter((test) => test.passFail === 'fail').length;
+          const pendingTestCount = lot.testResults.filter(
+            (test) => test.passFail !== 'fail' && test.status !== 'verified',
+          ).length;
 
           return {
             id: lot.id,
@@ -181,7 +189,7 @@ export function createClaimEvidenceRouter({
             itp: itpInstance
               ? {
                   templateName: itpInstance.template.name,
-                  checklistItems: itpInstance.template.checklistItems.map((item) => ({
+                  checklistItems: checklistItems.map((item) => ({
                     id: item.id,
                     sequenceNumber: item.sequenceNumber,
                     description: item.description,
@@ -287,7 +295,9 @@ export function createClaimEvidenceRouter({
             // Summary stats
             summary: {
               testResultCount: lot.testResults.length,
-              passedTestCount: lot.testResults.filter((t) => t.passFail === 'pass').length,
+              passedTestCount: verifiedPassingTestCount,
+              failedTestCount,
+              pendingTestCount,
               ncrCount: lot.ncrLots.length,
               openNcrCount: lot.ncrLots.filter(
                 (nl) => !['closed', 'closed_concession'].includes(nl.ncr.status),
@@ -295,9 +305,7 @@ export function createClaimEvidenceRouter({
               photoCount: lot.documents.filter((d) => d.documentType === 'photo').length,
               itpCompletionPercentage: itpInstance
                 ? Math.round(
-                    (acceptedItpCompletionCount /
-                      Math.max(1, itpInstance.template.checklistItems.length)) *
-                      100,
+                    (acceptedItpCompletionCount / Math.max(1, checklistItems.length)) * 100,
                   )
                 : 0,
             },
@@ -313,7 +321,21 @@ export function createClaimEvidenceRouter({
             0,
           ),
           totalPassedTests: claim.claimedLots.reduce(
-            (sum, cl) => sum + cl.lot.testResults.filter((t) => t.passFail === 'pass').length,
+            (sum, cl) =>
+              sum +
+              cl.lot.testResults.filter((t) => t.passFail === 'pass' && t.status === 'verified')
+                .length,
+            0,
+          ),
+          totalFailedTests: claim.claimedLots.reduce(
+            (sum, cl) => sum + cl.lot.testResults.filter((t) => t.passFail === 'fail').length,
+            0,
+          ),
+          totalPendingTests: claim.claimedLots.reduce(
+            (sum, cl) =>
+              sum +
+              cl.lot.testResults.filter((t) => t.passFail !== 'fail' && t.status !== 'verified')
+                .length,
             0,
           ),
           totalNCRs: claim.claimedLots.reduce((sum, cl) => sum + cl.lot.ncrLots.length, 0),

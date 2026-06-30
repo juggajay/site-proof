@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, Download, FileText } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -29,6 +29,7 @@ export function ScheduledReportArtifactPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<DownloadState>('downloading');
   const [error, setError] = useState<string | null>(null);
+  const autoDownloadedRunIdRef = useRef<string | null>(null);
 
   const downloadReport = useCallback(async () => {
     if (!runId) {
@@ -67,8 +68,17 @@ export function ScheduledReportArtifactPage() {
   }, [runId]);
 
   useEffect(() => {
+    if (!runId) {
+      void downloadReport();
+      return;
+    }
+
+    if (autoDownloadedRunIdRef.current === runId) {
+      return;
+    }
+    autoDownloadedRunIdRef.current = runId;
     void downloadReport();
-  }, [downloadReport]);
+  }, [downloadReport, runId]);
 
   const isDownloading = state === 'downloading';
   const isDownloaded = state === 'downloaded';

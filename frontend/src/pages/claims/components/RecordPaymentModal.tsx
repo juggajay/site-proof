@@ -92,7 +92,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
   };
 
   return (
-    <Modal onClose={onClose} className="max-w-md">
+    <Modal onClose={() => (!recording ? onClose() : undefined)} className="max-w-md">
       <ModalHeader>Record Payment</ModalHeader>
       <ModalDescription>
         Record a payment against the certified amount for this progress claim.
@@ -174,7 +174,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={recording}>
           Cancel
         </Button>
         <Button

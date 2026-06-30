@@ -123,7 +123,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
   };
 
   return (
-    <Modal onClose={onClose} className="max-w-md">
+    <Modal onClose={() => (!certifying ? onClose() : undefined)} className="max-w-md">
       <ModalHeader>Record certification received</ModalHeader>
       <ModalDescription>
         Record the certificate or payment schedule received from the principal (or their
@@ -243,7 +243,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={certifying}>
           Cancel
         </Button>
         <Button

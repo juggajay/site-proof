@@ -263,6 +263,7 @@ export interface ClaimTestResult {
   resultValue: number | string | null;
   resultUnit?: string | null;
   passFail?: string | null;
+  status?: string | null;
 }
 
 export interface ClaimNcr {
@@ -325,6 +326,8 @@ export interface ClaimEvidencePackageData {
     summary: {
       testResultCount: number;
       passedTestCount: number;
+      failedTestCount?: number;
+      pendingTestCount?: number;
       ncrCount: number;
       openNcrCount: number;
       photoCount: number;
@@ -336,6 +339,8 @@ export interface ClaimEvidencePackageData {
     totalClaimedAmount: number;
     totalTestResults: number;
     totalPassedTests: number;
+    totalFailedTests?: number;
+    totalPendingTests?: number;
     totalNCRs: number;
     totalOpenNCRs: number;
     totalPhotos: number;
