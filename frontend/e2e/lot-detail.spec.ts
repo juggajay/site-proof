@@ -8,6 +8,7 @@ const E2E_PHOTO_CHECKLIST_ITEM_ID = 'e2e-photo-checklist-item';
 const E2E_PHOTO_COMPLETION_ID = 'e2e-photo-completion';
 const E2E_PHOTO_ATTACHMENT_ID = 'e2e-photo-attachment';
 const E2E_PHOTO_DOCUMENT_ID = 'e2e-photo-document';
+const E2E_UPLOADED_PHOTO_DOCUMENT_ID = 'e2e-uploaded-photo-document';
 const E2E_TARGET_COMPLETION_ID = 'e2e-target-completion';
 const E2E_PENDING_VERIFICATION_COMPLETION_ID = 'e2e-pending-verification-completion';
 const E2E_SUBBIE_USER = {
@@ -148,7 +149,12 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
   let lotLoadAttempts = 0;
   let itpLoadAttempts = 0;
   let completionRequestCount = 0;
+  let uploadRequestCount = 0;
+  let uploadRequestText: string | null = null;
   let attachmentRequest: unknown;
+  let classificationRequestCount = 0;
+  let saveClassificationRequest: unknown;
+  let saveClassificationRequestCount = 0;
   let conformRequestBody: unknown;
   let forceConformed = false;
   let templatesRequestIncludesGlobal = false;
@@ -565,6 +571,21 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       return;
     }
 
+    if (url.pathname === `/api/documents/${E2E_UPLOADED_PHOTO_DOCUMENT_ID}/signed-url`) {
+      await json({
+        signedUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/documents/upload' && route.request().method() === 'POST') {
+      uploadRequestCount += 1;
+      uploadRequestText = route.request().postData();
+      await json({ id: E2E_UPLOADED_PHOTO_DOCUMENT_ID });
+      return;
+    }
+
     if (url.pathname === '/api/itp/completions' && route.request().method() === 'POST') {
       completionRequestCount += 1;
       const request = route.request().postDataJSON() as {
@@ -650,14 +671,47 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       route.request().method() === 'POST'
     ) {
       attachmentRequest = route.request().postDataJSON();
+      const documentId =
+        (attachmentRequest as { documentId?: string }).documentId ?? E2E_PHOTO_DOCUMENT_ID;
       await json({
         attachment: {
           id: 'e2e-linked-photo-attachment',
           completionId: E2E_TARGET_COMPLETION_ID,
-          documentId: E2E_PHOTO_DOCUMENT_ID,
-          document: E2E_ITP_INSTANCE_WITH_PHOTO.completions[0].attachments[0].document,
+          documentId,
+          document: {
+            ...E2E_ITP_INSTANCE_WITH_PHOTO.completions[0].attachments[0].document,
+            id: documentId,
+            filename:
+              documentId === E2E_UPLOADED_PHOTO_DOCUMENT_ID
+                ? 'classification-upload.jpg'
+                : 'supabase-proof-photo.jpg',
+          },
         },
       });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/documents/${E2E_UPLOADED_PHOTO_DOCUMENT_ID}/classify` &&
+      route.request().method() === 'POST'
+    ) {
+      classificationRequestCount += 1;
+      await json({
+        documentId: E2E_UPLOADED_PHOTO_DOCUMENT_ID,
+        suggestedClassification: 'itp_evidence',
+        confidence: 92,
+        categories: ['itp_evidence', 'progress_photo', 'defect_photo'],
+      });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/documents/${E2E_UPLOADED_PHOTO_DOCUMENT_ID}/save-classification` &&
+      route.request().method() === 'POST'
+    ) {
+      saveClassificationRequestCount += 1;
+      saveClassificationRequest = route.request().postDataJSON();
+      await json({ documentId: E2E_UPLOADED_PHOTO_DOCUMENT_ID, classification: 'progress_photo' });
       return;
     }
 
@@ -668,7 +722,12 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
 
   return {
     getCompletionRequestCount: () => completionRequestCount,
+    getUploadRequestCount: () => uploadRequestCount,
+    getUploadRequestText: () => uploadRequestText,
     getAttachmentRequest: () => attachmentRequest,
+    getClassificationRequestCount: () => classificationRequestCount,
+    getSaveClassificationRequest: () => saveClassificationRequest,
+    getSaveClassificationRequestCount: () => saveClassificationRequestCount,
     getConformRequestBody: () => conformRequestBody,
     getItpLoadAttempts: () => itpLoadAttempts,
     getLotLoadAttempts: () => lotLoadAttempts,
@@ -933,6 +992,57 @@ test.describe('Lot detail ITP workflow', () => {
       fileUrl:
         'https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/projects/e2e/supabase-proof-photo.jpg',
     });
+  });
+
+  test('uploads an ITP evidence photo and saves the selected classification', async ({ page }) => {
+    const api = await mockLotDetailApi(page, { withPhotoEvidence: true });
+    await page.context().grantPermissions(['geolocation']);
+    await page.context().setGeolocation({ latitude: -33.8688, longitude: 151.2093 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    const evidenceRow = page
+      .locator('.p-4')
+      .filter({ hasText: 'Document compaction proof' })
+      .filter({ hasText: 'Add Photo' })
+      .first();
+    await expect(evidenceRow).toBeVisible();
+
+    await evidenceRow.locator('input[type="file"]').setInputFiles({
+      name: 'classification-upload.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('fake-image-for-classification'),
+    });
+
+    await expect.poll(() => api.getUploadRequestCount()).toBe(1);
+    const uploadRequestText = api.getUploadRequestText() ?? '';
+    expect(uploadRequestText).toContain('projectId');
+    expect(uploadRequestText).toContain(E2E_PROJECT_ID);
+    expect(uploadRequestText).toContain('category');
+    expect(uploadRequestText).toContain('itp_evidence');
+    await expect
+      .poll(() => api.getAttachmentRequest())
+      .toMatchObject({
+        documentId: E2E_UPLOADED_PHOTO_DOCUMENT_ID,
+        gpsLatitude: -33.8688,
+        gpsLongitude: 151.2093,
+      });
+    await expect.poll(() => api.getClassificationRequestCount()).toBe(1);
+
+    const modal = page.getByTestId('ai-classification-modal');
+    await expect(modal).toBeVisible();
+    await expect(modal.getByText('AI Photo Classification')).toBeVisible();
+    await expect(modal.getByText('classification-upload.jpg')).toBeVisible();
+    await expect(modal.getByTestId('ai-suggested-classification')).toHaveText('itp_evidence');
+
+    await modal.getByTestId('classification-option-progress_photo').click();
+    await modal.getByTestId('save-classification-btn').click();
+
+    await expect.poll(() => api.getSaveClassificationRequestCount()).toBe(1);
+    expect(api.getSaveClassificationRequest()).toEqual({ classification: 'progress_photo' });
+    await expect(page.getByText('Classification saved')).toBeVisible();
+    await expect(modal).toHaveCount(0);
   });
 
   test('lets admins force conform when prerequisites block normal conformance', async ({
