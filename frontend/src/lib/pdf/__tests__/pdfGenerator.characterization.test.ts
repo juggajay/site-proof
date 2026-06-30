@@ -329,7 +329,7 @@ describe('pdfGenerator characterization', () => {
         'NCRs: 1 (1 open)',
         'Photos: 9',
         'Conformed Lots: 1',
-        'Status: SUBMITTED',
+        'Status: Submitted',
         'Prepared by: Morgan Estimator',
         'This evidence package supports your payment claim evidence record.',
         'State: NSW',
@@ -351,13 +351,13 @@ describe('pdfGenerator characterization', () => {
         'Claim Amount',
         'EW-001',
         'Earthworks',
-        'conformed',
+        'Conformed',
         '100%',
         '3/3',
         '$185,000',
         'DR-014',
         'Drainage',
-        'in_progres', // status.slice(0, 10) truncates 'in_progress'
+        'In Progress',
         '75%',
         '1/2',
         'TOTAL',
@@ -373,7 +373,7 @@ describe('pdfGenerator characterization', () => {
         'Activity: Earthworks',
         'Chainage: 100 - 350',
         'Layer: Subgrade',
-        'Status: conformed | Claim Amount: $185,000',
+        'Status: Conformed | Claim Amount: $185,000',
         'ITP Checklist',
         'Template: Earthworks ITP - Subgrade',
         'Completion: 4/4 items (100%)',
@@ -386,7 +386,7 @@ describe('pdfGenerator characterization', () => {
         'LOT: DR-014',
         'Stormwater drainage line and pits',
         'Activity: Drainage',
-        'Status: in_progress | Claim Amount: $63,500',
+        'Status: In Progress | Claim Amount: $63,500',
         'Template: Drainage ITP - Pipe Laying',
         'Completion: 3/4 items (75%)',
         'Hold Points: 1/2 released',
@@ -429,6 +429,50 @@ describe('pdfGenerator characterization', () => {
     );
     expect(textContent).not.toContain('All lots included have been completed');
     expect(textContent).not.toContain('SiteProof v2');
+  });
+
+  it('includes ITP completion attachment documents in the claim evidence manifest', async () => {
+    const lotWithAttachmentOnlyEvidence = {
+      ...submittedClaimEvidencePackageFixture.lots[0],
+      lotNumber: 'ITP-ATTACH',
+      documents: [],
+      itp: {
+        ...submittedClaimEvidencePackageFixture.lots[0].itp!,
+        completions: [
+          {
+            isCompleted: true,
+            attachments: [
+              {
+                id: 'attachment-1',
+                documentId: 'doc-itp-attachment-1',
+                document: {
+                  id: 'doc-itp-attachment-1',
+                  filename: 'itp-completion-photo.jpg',
+                  documentType: 'photo',
+                  caption: 'Checklist item evidence photo',
+                  uploadedAt: '2026-05-20T05:10:00.000Z',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    await generateClaimEvidencePackagePDF({
+      ...submittedClaimEvidencePackageFixture,
+      lots: [lotWithAttachmentOnlyEvidence],
+      summary: {
+        ...submittedClaimEvidencePackageFixture.summary,
+        totalLots: 1,
+      },
+    });
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).toContain('LOT ITP-ATTACH');
+    expect(textContent).toContain('itp-completion-photo.jpg');
+    expect(textContent).toContain('photo | Checklist item evidence photo');
+    expect(textContent).toContain('Document ID: doc-itp-attachment-1');
   });
 
   it('keeps claim evidence ITP detail counts aligned with accepted completion percentage', async () => {
@@ -484,7 +528,7 @@ describe('pdfGenerator characterization', () => {
     expect(text).toEqual(
       expect.arrayContaining([
         'LOT: EW-001',
-        'Status: conformed | Claim Amount: $185,000',
+        'Status: Conformed | Claim Amount: $185,000',
         'Hold Points',
         'Hold Points: 2/2 released',
         'Test Results',

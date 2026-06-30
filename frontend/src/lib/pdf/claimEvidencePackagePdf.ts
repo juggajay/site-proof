@@ -48,15 +48,47 @@ export async function generateClaimEvidencePackagePDF(
     }).format(amount);
   };
 
-  const getLotDocuments = (lot: ClaimEvidencePackageData['lots'][number]) =>
-    Array.isArray(lot.documents)
-      ? lot.documents.filter(
-          (document) =>
-            document &&
-            typeof document.filename === 'string' &&
-            document.filename.trim().length > 0,
-        )
-      : [];
+  const isEvidenceDocument = (
+    document: unknown,
+  ): document is NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number] =>
+    Boolean(
+      document &&
+      typeof document === 'object' &&
+      'filename' in document &&
+      typeof document.filename === 'string' &&
+      document.filename.trim().length > 0,
+    );
+
+  const getLotDocuments = (lot: ClaimEvidencePackageData['lots'][number]) => {
+    const documentsById = new Map<
+      string,
+      NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number]
+    >();
+
+    const addDocument = (
+      document: NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number],
+    ) => {
+      documentsById.set(
+        document.id || `${document.filename}:${document.uploadedAt ?? ''}`,
+        document,
+      );
+    };
+
+    if (Array.isArray(lot.documents)) {
+      lot.documents.filter(isEvidenceDocument).forEach(addDocument);
+    }
+
+    if (Array.isArray(lot.itp?.completions)) {
+      lot.itp.completions.forEach((completion) => {
+        completion.attachments
+          ?.map((attachment) => attachment.document)
+          .filter(isEvidenceDocument)
+          .forEach(addDocument);
+      });
+    }
+
+    return [...documentsById.values()];
+  };
 
   // ========== COVER PAGE ==========
   doc.setFontSize(24);
@@ -101,7 +133,7 @@ export async function generateClaimEvidencePackagePDF(
 
   doc.text(`Photos: ${data.summary.totalPhotos}`, margin + contentWidth / 2, 150);
   doc.text(`Conformed Lots: ${data.summary.conformedLots}`, margin + contentWidth / 2, 158);
-  doc.text(`Status: ${data.claim.status.toUpperCase()}`, margin + contentWidth / 2, 166);
+  doc.text(`Status: ${formatStatusLabel(data.claim.status)}`, margin + contentWidth / 2, 166);
 
   // Prepared by
   if (data.claim.preparedBy) {
@@ -182,7 +214,7 @@ export async function generateClaimEvidencePackagePDF(
       doc.text((lot.activityType || 'N/A').slice(0, 25), xPos, yPos + 4);
       xPos += colWidths[1];
 
-      doc.text(lot.status.slice(0, 10), xPos, yPos + 4);
+      doc.text(formatStatusLabel(lot.status), xPos, yPos + 4);
       xPos += colWidths[2];
 
       doc.text(`${lot.summary.itpCompletionPercentage}%`, xPos, yPos + 4);
@@ -274,7 +306,7 @@ export async function generateClaimEvidencePackagePDF(
 
       // Status badge
       doc.text(
-        `Status: ${lot.status} | Claim Amount: ${formatCurrency(lot.claimAmount)}`,
+        `Status: ${formatStatusLabel(lot.status)} | Claim Amount: ${formatCurrency(lot.claimAmount)}`,
         margin,
         yPos,
       );

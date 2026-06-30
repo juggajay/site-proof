@@ -257,6 +257,11 @@ export interface HPEvidencePackageData {
 export interface ClaimItpCompletion {
   isCompleted?: boolean;
   isNotApplicable?: boolean;
+  attachments?: {
+    id: string;
+    documentId: string;
+    document: ClaimEvidenceDocument | null;
+  }[];
 }
 
 export interface ClaimHoldPoint {

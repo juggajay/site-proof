@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
 import type { TestReport } from '../types';
@@ -11,12 +11,14 @@ export interface TestResultsTabProps {
   report: TestReport | null;
   loading: boolean;
   onRefresh: (startDate: string, endDate: string, testTypes: string[]) => void;
+  onFiltersChange?: (startDate: string, endDate: string, testTypes: string[]) => void;
 }
 
 export const TestResultsTab = React.memo(function TestResultsTab({
   report,
   loading,
   onRefresh,
+  onFiltersChange,
 }: TestResultsTabProps) {
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
@@ -34,6 +36,10 @@ export const TestResultsTab = React.memo(function TestResultsTab({
       )
     : null;
   const dateRangeError = getReportDateRangeError(testStartDate, testEndDate);
+
+  useEffect(() => {
+    onFiltersChange?.(testStartDate, testEndDate, selectedTestTypes);
+  }, [onFiltersChange, testStartDate, testEndDate, selectedTestTypes]);
 
   const availableTestTypes = useMemo(() => {
     if (!report) return [];

@@ -1108,6 +1108,50 @@ describe('Reports API - Test Results Report', () => {
     expect(res.body.tests.length).toBe(2);
   });
 
+  it('filters test report date-only ranges in the project timezone', async () => {
+    const inLocalDay = await prisma.testResult.create({
+      data: {
+        projectId,
+        lotId,
+        testRequestNumber: 'TR-QLD-IN-DAY',
+        testType: 'Timezone',
+        sampleDate: new Date('2026-05-01T13:30:00.000Z'),
+        status: 'completed',
+        passFail: 'pass',
+      },
+    });
+    const nextLocalDay = await prisma.testResult.create({
+      data: {
+        projectId,
+        lotId,
+        testRequestNumber: 'TR-QLD-NEXT-DAY',
+        testType: 'Timezone',
+        sampleDate: new Date('2026-05-01T14:30:00.000Z'),
+        status: 'completed',
+        passFail: 'pass',
+      },
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/test')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId, startDate: '2026-05-01', endDate: '2026-05-01' });
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.tests.map((test: { testRequestNumber: string }) => test.testRequestNumber),
+      ).toEqual(['TR-QLD-IN-DAY']);
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.testResult.deleteMany({
+        where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
+      });
+    }
+  });
+
   it('should reject invalid test report query filters', async () => {
     const invalidDateRes = await request(app)
       .get('/api/reports/test')
@@ -1342,6 +1386,49 @@ describe('Reports API - Diary Report', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.diaries.length).toBe(1);
+  });
+
+  it('filters diary report date-only ranges in the project timezone', async () => {
+    const inLocalDay = await prisma.dailyDiary.create({
+      data: {
+        projectId,
+        date: new Date('2026-05-01T13:30:00.000Z'),
+        status: 'submitted',
+        weatherConditions: 'Fine',
+      },
+    });
+    const nextLocalDay = await prisma.dailyDiary.create({
+      data: {
+        projectId,
+        date: new Date('2026-05-01T14:30:00.000Z'),
+        status: 'submitted',
+        weatherConditions: 'Rain',
+      },
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({
+          projectId,
+          startDate: '2026-05-01',
+          endDate: '2026-05-01',
+          sections: 'weather',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.diaries.map((diary: { id: string }) => diary.id)).toEqual([inLocalDay.id]);
+      expect(res.body.summary.weather.Fine).toBe(1);
+      expect(res.body.summary.weather.Rain).toBeUndefined();
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.dailyDiary.deleteMany({
+        where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
+      });
+    }
   });
 
   it('should support pagination', async () => {
@@ -1701,6 +1788,50 @@ describe('Reports API - Claims Report', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.claims.length).toBe(1);
+  });
+
+  it('filters claim report date-only ranges in the project timezone', async () => {
+    const inLocalDay = await prisma.progressClaim.create({
+      data: {
+        projectId,
+        claimNumber: 9101,
+        claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-01T13:30:00.000Z'),
+        status: 'submitted',
+        preparedById: userId,
+        totalClaimedAmount: 100,
+      },
+    });
+    const nextLocalDay = await prisma.progressClaim.create({
+      data: {
+        projectId,
+        claimNumber: 9102,
+        claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-01T14:30:00.000Z'),
+        status: 'submitted',
+        preparedById: userId,
+        totalClaimedAmount: 100,
+      },
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/claims')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId, startDate: '2026-05-01', endDate: '2026-05-01' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.claims.map((claim: { claimNumber: number }) => claim.claimNumber)).toEqual([
+        9101,
+      ]);
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.progressClaim.deleteMany({
+        where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
+      });
+    }
   });
 
   it('should include export data', async () => {

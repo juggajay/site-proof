@@ -48,6 +48,8 @@ type ReportDataTab = (typeof REPORT_DATA_TABS)[number];
 type ReportTab = (typeof REPORT_TABS)[number];
 type PaginatedReportDataTab = Exclude<ReportDataTab, 'claims'>;
 type PaginatedReport = LotStatusReport | NCRReport | TestReport | DiaryReport;
+type ReportQueryParams = Record<string, string>;
+type ReportFilterParams = Partial<Record<ReportDataTab, ReportQueryParams>>;
 
 const REPORT_DETAIL_PAGE_LIMIT = 500;
 
@@ -61,6 +63,54 @@ function isReportTab(tab: string): tab is ReportTab {
 
 function isPaginatedReportDataTab(tab: ReportDataTab): tab is PaginatedReportDataTab {
   return tab !== 'claims';
+}
+
+function areReportQueryParamsEqual(
+  left: ReportQueryParams | undefined,
+  right: ReportQueryParams,
+): boolean {
+  const leftEntries = Object.entries(left ?? {});
+  const rightEntries = Object.entries(right);
+  return (
+    leftEntries.length === rightEntries.length &&
+    rightEntries.every(([key, value]) => left?.[key] === value)
+  );
+}
+
+function buildTestReportParams(
+  startDate: string,
+  endDate: string,
+  testTypes: string[],
+): ReportQueryParams {
+  const extraParams: ReportQueryParams = {};
+  if (startDate) extraParams.startDate = startDate;
+  if (endDate) extraParams.endDate = endDate;
+  if (testTypes.length > 0) extraParams.testTypes = testTypes.join(',');
+  return extraParams;
+}
+
+function buildDiaryReportParams(
+  sections: string[],
+  startDate: string,
+  endDate: string,
+): ReportQueryParams {
+  const extraParams: ReportQueryParams = {};
+  if (sections.length > 0) extraParams.sections = sections.join(',');
+  if (startDate) extraParams.startDate = startDate;
+  if (endDate) extraParams.endDate = endDate;
+  return extraParams;
+}
+
+function buildClaimsReportParams(
+  startDate: string,
+  endDate: string,
+  statuses: string[],
+): ReportQueryParams {
+  const extraParams: ReportQueryParams = {};
+  if (startDate) extraParams.startDate = startDate;
+  if (endDate) extraParams.endDate = endDate;
+  if (statuses.length > 0) extraParams.status = statuses.join(',');
+  return extraParams;
 }
 
 function markReportAsFullyLoaded<T extends { pagination?: ReportPagination }>(
@@ -185,6 +235,7 @@ export function ReportsPage() {
   // Feature #702: Company logo on reports
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
+  const [reportFilterParams, setReportFilterParams] = useState<ReportFilterParams>({});
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -231,7 +282,26 @@ export function ReportsPage() {
     (activeTab === 'test' && Boolean(testReport)) ||
     (activeTab === 'diary' && Boolean(diaryReport)) ||
     (activeTab === 'claims' && Boolean(claimsReport));
-  const printGeneratedAt = useMemo(
+  const activeReportGeneratedAt =
+    activeTab === 'lot-status'
+      ? lotReport?.generatedAt
+      : activeTab === 'ncr'
+        ? ncrReport?.generatedAt
+        : activeTab === 'test'
+          ? testReport?.generatedAt
+          : activeTab === 'diary'
+            ? diaryReport?.generatedAt
+            : activeTab === 'claims'
+              ? claimsReport?.generatedAt
+              : null;
+  const printReportGeneratedAt = useMemo(
+    () =>
+      activeReportGeneratedAt
+        ? formatReportDateTime(activeReportGeneratedAt, dateFormat, timezone)
+        : null,
+    [activeReportGeneratedAt, dateFormat, timezone],
+  );
+  const printPrintedAt = useMemo(
     () => formatReportDateTime(new Date(), dateFormat, timezone),
     [dateFormat, timezone],
   );
@@ -328,7 +398,7 @@ export function ReportsPage() {
   }, [projectId]);
 
   const fetchReport = useCallback(
-    async (reportType: ReportDataTab, extraParams?: Record<string, string>) => {
+    async (reportType: ReportDataTab, extraParams?: ReportQueryParams) => {
       if (!projectId) {
         clearReportState();
         setError('Project not found');
@@ -429,6 +499,19 @@ export function ReportsPage() {
     [projectId, canViewClaimsReport, clearReportState],
   );
 
+  const handleReportFilterParamsChange = useCallback(
+    (reportType: ReportDataTab, extraParams: ReportQueryParams) => {
+      setReportFilterParams((prev) => {
+        if (areReportQueryParamsEqual(prev[reportType], extraParams)) {
+          return prev;
+        }
+
+        return { ...prev, [reportType]: extraParams };
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!projectRoleResolved) {
       return;
@@ -452,11 +535,11 @@ export function ReportsPage() {
   const handleRefreshReport = useCallback(() => {
     lastAutomaticReportRequestKeyRef.current = null;
     if (isReportDataTab(activeTab)) {
-      fetchReport(activeTab);
+      fetchReport(activeTab, reportFilterParams[activeTab]);
     } else if (!projectId) {
       setError('Project not found');
     }
-  }, [fetchReport, activeTab, projectId]);
+  }, [fetchReport, activeTab, projectId, reportFilterParams]);
 
   const handleOpenScheduleModal = useCallback(() => {
     if (!canManageScheduledReports) {
@@ -482,36 +565,54 @@ export function ReportsPage() {
   // Callback for TestResultsTab to refresh with filters
   const handleTestReportRefresh = useCallback(
     (startDate: string, endDate: string, testTypes: string[]) => {
-      const extraParams: Record<string, string> = {};
-      if (startDate) extraParams.startDate = startDate;
-      if (endDate) extraParams.endDate = endDate;
-      if (testTypes.length > 0) extraParams.testTypes = testTypes.join(',');
+      const extraParams = buildTestReportParams(startDate, endDate, testTypes);
+      handleReportFilterParamsChange('test', extraParams);
       fetchReport('test', extraParams);
     },
-    [fetchReport],
+    [fetchReport, handleReportFilterParamsChange],
+  );
+
+  const handleTestReportFiltersChange = useCallback(
+    (startDate: string, endDate: string, testTypes: string[]) => {
+      handleReportFilterParamsChange('test', buildTestReportParams(startDate, endDate, testTypes));
+    },
+    [handleReportFilterParamsChange],
   );
 
   // Callback for DiaryReportTab to generate report with options
   const handleDiaryReportGenerate = useCallback(
     (sections: string[], startDate: string, endDate: string) => {
-      const extraParams: Record<string, string> = {};
-      if (sections.length > 0) extraParams.sections = sections.join(',');
-      if (startDate) extraParams.startDate = startDate;
-      if (endDate) extraParams.endDate = endDate;
+      const extraParams = buildDiaryReportParams(sections, startDate, endDate);
+      handleReportFilterParamsChange('diary', extraParams);
       fetchReport('diary', extraParams);
     },
-    [fetchReport],
+    [fetchReport, handleReportFilterParamsChange],
+  );
+
+  const handleDiaryReportFiltersChange = useCallback(
+    (sections: string[], startDate: string, endDate: string) => {
+      handleReportFilterParamsChange('diary', buildDiaryReportParams(sections, startDate, endDate));
+    },
+    [handleReportFilterParamsChange],
   );
 
   const handleClaimsReportGenerate = useCallback(
     (startDate: string, endDate: string, statuses: string[]) => {
-      const extraParams: Record<string, string> = {};
-      if (startDate) extraParams.startDate = startDate;
-      if (endDate) extraParams.endDate = endDate;
-      if (statuses.length > 0) extraParams.status = statuses.join(',');
+      const extraParams = buildClaimsReportParams(startDate, endDate, statuses);
+      handleReportFilterParamsChange('claims', extraParams);
       fetchReport('claims', extraParams);
     },
-    [fetchReport],
+    [fetchReport, handleReportFilterParamsChange],
+  );
+
+  const handleClaimsReportFiltersChange = useCallback(
+    (startDate: string, endDate: string, statuses: string[]) => {
+      handleReportFilterParamsChange(
+        'claims',
+        buildClaimsReportParams(startDate, endDate, statuses),
+      );
+    },
+    [handleReportFilterParamsChange],
   );
 
   const actionContainerClassName = canManageScheduledReports
@@ -657,7 +758,11 @@ export function ReportsPage() {
             </div>
           </div>
           <div className="flex justify-between text-sm text-muted-foreground mt-3">
-            <span>Generated: {printGeneratedAt}</span>
+            <span>
+              Report data:{' '}
+              {printReportGeneratedAt ?? (hasPrintableReport ? 'Not available' : 'Not loaded')}
+            </span>
+            <span>Printed: {printPrintedAt}</span>
             <span>Report ID: {projectId?.slice(0, 8)}</span>
           </div>
         </div>
@@ -680,6 +785,7 @@ export function ReportsPage() {
                 report={testReport}
                 loading={loading}
                 onRefresh={handleTestReportRefresh}
+                onFiltersChange={handleTestReportFiltersChange}
               />
             )}
 
@@ -688,6 +794,7 @@ export function ReportsPage() {
                 report={diaryReport}
                 loading={loading}
                 onGenerateReport={handleDiaryReportGenerate}
+                onFiltersChange={handleDiaryReportFiltersChange}
               />
             )}
 
@@ -696,6 +803,7 @@ export function ReportsPage() {
                 report={claimsReport}
                 loading={loading}
                 onGenerateReport={handleClaimsReportGenerate}
+                onFiltersChange={handleClaimsReportFiltersChange}
               />
             )}
 

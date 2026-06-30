@@ -196,6 +196,19 @@ describe('ReportsPage diary tab', () => {
     expect(apiFetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`endDate=${selectedEndDate}`),
     );
+
+    apiFetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Report' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(`startDate=${selectedStartDate}`),
+      );
+    });
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`endDate=${selectedEndDate}`),
+    );
   });
 });
 

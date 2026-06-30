@@ -92,7 +92,19 @@ export function createClaimEvidenceRouter({
                           verifiedBy: {
                             select: { id: true, fullName: true, email: true },
                           },
-                          attachments: true,
+                          attachments: {
+                            include: {
+                              document: {
+                                select: {
+                                  id: true,
+                                  filename: true,
+                                  documentType: true,
+                                  caption: true,
+                                  uploadedAt: true,
+                                },
+                              },
+                            },
+                          },
                         },
                       },
                     },
@@ -231,6 +243,18 @@ export function createClaimEvidenceRouter({
                           }
                         : null,
                       attachmentCount: c.attachments?.length || 0,
+                      attachments:
+                        c.attachments?.map((attachment) => ({
+                          id: attachment.id,
+                          documentId: attachment.documentId,
+                          document: {
+                            id: attachment.document.id,
+                            filename: attachment.document.filename,
+                            documentType: attachment.document.documentType,
+                            caption: attachment.document.caption || null,
+                            uploadedAt: attachment.document.uploadedAt?.toISOString() || null,
+                          },
+                        })) || [],
                     };
                   }),
                 }
