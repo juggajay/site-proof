@@ -112,7 +112,13 @@ function readMultipartField(body: string, name: string): string {
 
 async function mockSeededDrawingsApi(
   page: Page,
-  options: { failList?: boolean; failCurrentSet?: boolean; projectRole?: string } = {},
+  options: {
+    emptyCurrentSet?: boolean;
+    failList?: boolean;
+    failCurrentSet?: boolean;
+    failSignedUrlForDocumentId?: string;
+    projectRole?: string;
+  } = {},
 ) {
   const drawings: Drawing[] = [
     buildDrawing(
@@ -191,15 +197,17 @@ async function mockSeededDrawingsApi(
         return;
       }
       await json({
-        drawings: drawings
-          .filter((drawing) => !drawing.supersededBy)
-          .map((drawing) => ({
-            documentId: drawing.document.id,
-            drawingNumber: drawing.drawingNumber,
-            revision: drawing.revision,
-            filename: drawing.document.filename,
-            fileUrl: drawing.document.fileUrl,
-          })),
+        drawings: options.emptyCurrentSet
+          ? []
+          : drawings
+              .filter((drawing) => !drawing.supersededBy)
+              .map((drawing) => ({
+                documentId: drawing.document.id,
+                drawingNumber: drawing.drawingNumber,
+                revision: drawing.revision,
+                filename: drawing.document.filename,
+                fileUrl: drawing.document.fileUrl,
+              })),
       });
       return;
     }
@@ -228,6 +236,10 @@ async function mockSeededDrawingsApi(
 
     if (url.pathname.endsWith('/signed-url') && route.request().method() === 'POST') {
       const documentId = url.pathname.split('/').at(-2);
+      if (documentId === options.failSignedUrlForDocumentId) {
+        await json({ message: 'Signed URL unavailable' }, 500);
+        return;
+      }
       await json({
         signedUrl: `/signed/${documentId}`,
         expiresAt: '2026-05-09T02:00:00.000Z',
@@ -324,6 +336,22 @@ async function mockSeededDrawingsApi(
     getStatusRequest: () => statusRequest,
     getDeleteRequestId: () => deleteRequestId,
   };
+}
+
+async function captureDrawingAnchorDownloads(page: Page, anchorDownloads: AnchorDownload[]) {
+  await page.exposeFunction('recordAnchorDownload', (download: AnchorDownload) => {
+    anchorDownloads.push(download);
+  });
+  await page.addInitScript(() => {
+    HTMLAnchorElement.prototype.click = function () {
+      void (
+        window as typeof window & { recordAnchorDownload?: (download: AnchorDownload) => void }
+      ).recordAnchorDownload?.({
+        href: this.getAttribute('href') || this.href,
+        download: this.download,
+      });
+    };
+  });
 }
 
 test.describe('Drawings seeded register contract', () => {
@@ -499,6 +527,47 @@ test.describe('Drawings seeded register contract', () => {
     await expect(page.getByRole('button', { name: 'Download Current Set' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Add Drawing' })).toBeDisabled();
     await expect(page.getByText('No drawings found')).toBeHidden();
+  });
+
+  test('surfaces partial current-set download failures without leaving the button stuck', async ({
+    page,
+  }) => {
+    const anchorDownloads: AnchorDownload[] = [];
+    await captureDrawingAnchorDownloads(page, anchorDownloads);
+    await mockSeededDrawingsApi(page, { failSignedUrlForDocumentId: 'e2e-prelim-document' });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/drawings`);
+
+    await expect(page.getByRole('row').filter({ hasText: 'DRW-E2E-001' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download Current Set' }).click();
+
+    await expect
+      .poll(() => anchorDownloads.map((download) => download.download))
+      .toContain('DRW-E2E-001_RevA_e2e-site-grading.pdf');
+    await expect(page.getByText('Download failed')).toBeVisible();
+    await expect(page.getByText('Signed URL unavailable')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download Current Set' })).toBeEnabled();
+    expect(anchorDownloads.map((download) => download.download)).not.toContain(
+      'DRW-E2E-002_RevP1_e2e-temporary-works.pdf',
+    );
+  });
+
+  test('shows a clear warning when the current drawing set is empty', async ({ page }) => {
+    const anchorDownloads: AnchorDownload[] = [];
+    await captureDrawingAnchorDownloads(page, anchorDownloads);
+    await mockSeededDrawingsApi(page, { emptyCurrentSet: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/drawings`);
+
+    await expect(page.getByRole('heading', { name: 'Drawing Register' })).toBeVisible();
+    await page.getByRole('button', { name: 'Download Current Set' }).click();
+
+    await expect(page.getByText('No current drawings', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('There are no current drawings available to download.'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download Current Set' })).toBeEnabled();
+    expect(anchorDownloads).toEqual([]);
   });
 
   test('uses current project role for drawing write controls', async ({ page }) => {

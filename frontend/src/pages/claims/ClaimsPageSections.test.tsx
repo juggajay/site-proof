@@ -20,9 +20,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
-vi.mock('@/lib/csv', () => ({
-  downloadCsv: downloadCsvMock,
-}));
+vi.mock('@/lib/csv', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/csv')>();
+  return { ...actual, downloadCsv: downloadCsvMock };
+});
 
 vi.mock('@/lib/documentAccess', () => ({
   openDocumentAccessUrl: openDocumentAccessUrlMock,

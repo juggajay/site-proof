@@ -1,4 +1,4 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 type ScheduledReport = {
@@ -550,6 +550,105 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
     getScheduleLoadCount: () => scheduleLoadCount,
   };
 }
+
+async function mockScheduledReportArtifactApi(
+  page: Page,
+  artifactHandler: (route: Route) => Promise<void>,
+) {
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    if (url.pathname === '/api/auth/me') {
+      await json({ user: E2E_ADMIN_USER });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications') {
+      await json({ notifications: [], unreadCount: 0 });
+      return;
+    }
+
+    if (url.pathname === '/api/reports/scheduled-runs/e2e-run/artifact') {
+      await artifactHandler(route);
+      return;
+    }
+
+    await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
+  });
+
+  await mockAuthenticatedUserState(page);
+}
+
+async function fulfillScheduledReportPdf(route: Route) {
+  await route.fulfill({
+    status: 200,
+    headers: {
+      'content-type': 'application/pdf',
+      'content-disposition': "attachment; filename*=UTF-8''Lot%20Status%20Report.pdf",
+      'access-control-expose-headers': 'Content-Disposition',
+    },
+    body: '%PDF-1.4\n% scheduled report e2e\n%%EOF',
+  });
+}
+
+test.describe('Scheduled report artifact link', () => {
+  test('auto-downloads the scheduled report artifact once with the server filename', async ({
+    page,
+  }) => {
+    let artifactRequests = 0;
+    await mockScheduledReportArtifactApi(page, async (route) => {
+      artifactRequests += 1;
+      await fulfillScheduledReportPdf(route);
+    });
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.goto('/reports/scheduled-runs/e2e-run/artifact');
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('Lot Status Report.pdf');
+    await expect(page.getByText('Your report download has started.')).toBeVisible();
+    expect(artifactRequests).toBe(1);
+    await download.delete();
+  });
+
+  test('lets users retry a scheduled report artifact after the first download fails', async ({
+    page,
+  }) => {
+    let artifactRequests = 0;
+    await mockScheduledReportArtifactApi(page, async (route) => {
+      artifactRequests += 1;
+      if (artifactRequests === 1) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Artifact unavailable' }),
+        });
+        return;
+      }
+      await fulfillScheduledReportPdf(route);
+    });
+
+    await page.goto('/reports/scheduled-runs/e2e-run/artifact');
+
+    await expect(page.getByText('This scheduled report could not be downloaded.')).toBeVisible();
+    expect(artifactRequests).toBe(1);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Retry download' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('Lot Status Report.pdf');
+    await expect(page.getByText('Your report download has started.')).toBeVisible();
+    expect(artifactRequests).toBe(2);
+    await download.delete();
+  });
+});
 
 test.describe('Reports seeded analytics contract', () => {
   test('normalizes an invalid reports tab URL back to lot status', async ({ page }) => {

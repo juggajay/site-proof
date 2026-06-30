@@ -3,7 +3,7 @@ import { useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
-import { downloadCsv } from '@/lib/csv';
+import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
@@ -90,6 +90,16 @@ export function ClaimsPage() {
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project(projectId ?? ''),
+    queryFn: async () =>
+      apiFetch<{ project?: { name?: string | null } }>(
+        `/api/projects/${encodeURIComponent(projectId ?? '')}`,
+      ),
+    enabled: !!projectId,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const loading = Boolean(projectId) && isLoading;
   const loadError = !projectId
@@ -170,8 +180,11 @@ export function ClaimsPage() {
         paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
       ];
     });
-    downloadCsv(`progress-claims-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
-  }, [claims, projectId]);
+    downloadCsv(
+      buildScopedCsvFilename('progress-claims', projectQuery.data?.project?.name || 'project'),
+      [headers, ...rows],
+    );
+  }, [claims, projectQuery.data?.project?.name]);
 
   const handleExportCumulativeData = useCallback(() => {
     exportChartDataToCSV(
