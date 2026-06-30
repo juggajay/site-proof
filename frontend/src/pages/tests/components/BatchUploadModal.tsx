@@ -27,6 +27,14 @@ interface BatchExtractedField {
   value?: string;
 }
 
+interface SuggestedLot {
+  id: string;
+  lotNumber: string;
+  chainageStart: number;
+  chainageEnd: number;
+  matchScore: number;
+}
+
 interface BatchUploadResult {
   success: boolean;
   filename: string;
@@ -38,6 +46,9 @@ interface BatchUploadResult {
   testResult?: {
     id: string;
     testType: string;
+  };
+  lotSuggestion?: {
+    suggestedLots?: SuggestedLot[];
   };
 }
 
@@ -127,6 +138,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
               specificationMin: extracted.specificationMin?.value || '',
               specificationMax: extracted.specificationMax?.value || '',
               passFail: 'pending',
+              lotId: result.lotSuggestion?.suggestedLots?.[0]?.id || '',
             });
           }
         }
@@ -215,7 +227,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
           resultUnit: reviewed.resultUnit,
           specificationMin: reviewed.specificationMin,
           specificationMax: reviewed.specificationMax,
-          lotId: null,
+          lotId: reviewed.lotId || null,
         });
       }
     } catch (err) {
@@ -469,6 +481,29 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                               className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'sampleLocation').color}`}
                             />
                           </div>
+                          {(result.lotSuggestion?.suggestedLots?.length || 0) > 0 && (
+                            <div>
+                              <Label className="text-xs" htmlFor={`batch-lot-${testId}`}>
+                                Suggested Lot
+                              </Label>
+                              <NativeSelect
+                                id={`batch-lot-${testId}`}
+                                value={formData.lotId || ''}
+                                onChange={(e) => updateField('lotId', e.target.value)}
+                                className="h-8 text-sm"
+                              >
+                                <option value="">No lot</option>
+                                {result.lotSuggestion?.suggestedLots?.map((lot) => (
+                                  <option key={lot.id} value={lot.id}>
+                                    {lot.lotNumber} ({lot.chainageStart}-{lot.chainageEnd})
+                                  </option>
+                                ))}
+                              </NativeSelect>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Matched from the extracted sample location.
+                              </p>
+                            </div>
+                          )}
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <Label className="text-xs">Result Value</Label>

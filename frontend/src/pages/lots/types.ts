@@ -192,6 +192,7 @@ export interface ITPTemplate {
   id: string;
   name: string;
   activityType: string;
+  isActive?: boolean;
   checklistItems: ITPChecklistItem[];
 }
 

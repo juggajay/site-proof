@@ -124,9 +124,11 @@ export function useItpInstance({
       setItpInstance(null);
       try {
         const templatesData = await apiFetch<{ templates: ITPTemplate[] }>(
-          `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true`,
+          `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true&activeOnly=true`,
         );
-        setTemplates(templatesData.templates || []);
+        setTemplates(
+          (templatesData.templates || []).filter((template) => template.isActive !== false),
+        );
       } catch (templateErr) {
         logError('Failed to fetch ITP templates for lot:', templateErr);
         setTemplates([]);

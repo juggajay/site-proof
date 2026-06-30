@@ -1,4 +1,5 @@
 // Feature #592 trigger - ITP template CRUD and management
+import type { Prisma } from '@prisma/client';
 import { Router, type Request, type Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -105,6 +106,8 @@ templatesRouter.get(
     const projectId = parseRequiredTemplateQueryString(req.query.projectId, 'projectId');
     const includeGlobal =
       parseOptionalTemplateBooleanQuery(req.query.includeGlobal, 'includeGlobal') ?? false;
+    const activeOnly =
+      parseOptionalTemplateBooleanQuery(req.query.activeOnly, 'activeOnly') ?? false;
 
     await requireProjectTemplateAccess(projectId, user);
 
@@ -115,7 +118,7 @@ templatesRouter.get(
     });
 
     // Build the query - include project templates and optionally global templates matching spec
-    const whereClause =
+    const scopedWhere: Prisma.ITPTemplateWhereInput =
       includeGlobal && project?.specificationSet
         ? {
             OR: [
@@ -127,6 +130,9 @@ templatesRouter.get(
             ],
           }
         : { projectId };
+    const whereClause: Prisma.ITPTemplateWhereInput = activeOnly
+      ? { AND: [scopedWhere, { isActive: true }] }
+      : scopedWhere;
 
     const templates = await prisma.iTPTemplate.findMany({
       where: whereClause,

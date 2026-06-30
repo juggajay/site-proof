@@ -39,6 +39,19 @@ type BatchUploadResult =
         lowConfidenceFields: Array<{ field: string; confidence: number }>;
         needsReview: boolean;
       };
+      lotSuggestion: {
+        extractedLocation: string;
+        extractedChainage: number | null;
+        suggestedLots: Array<{
+          id: string;
+          lotNumber: string;
+          chainageStart: number;
+          chainageEnd: number;
+          matchScore: number;
+        }>;
+        hasSuggestion: boolean;
+        message: string;
+      };
     }
   | { success: false; filename: string; error: string };
 
@@ -301,6 +314,10 @@ export async function processBatchCertificateUpload({
 
       // Identify low confidence fields
       const lowConfidenceFields = getLowConfidenceFields(confidenceObj);
+      const locationSuggestion = await suggestLotsFromLocation(
+        projectId,
+        extractedData.sampleLocation.value,
+      );
 
       results.push({
         success: true,
@@ -317,6 +334,16 @@ export async function processBatchCertificateUpload({
           confidence: confidenceObj,
           lowConfidenceFields,
           needsReview: lowConfidenceFields.length > 0,
+        },
+        lotSuggestion: {
+          extractedLocation: extractedData.sampleLocation.value,
+          extractedChainage: locationSuggestion.extractedChainage,
+          suggestedLots: locationSuggestion.suggestedLots,
+          hasSuggestion: locationSuggestion.suggestedLots.length > 0,
+          message:
+            locationSuggestion.suggestedLots.length > 0
+              ? `Found ${locationSuggestion.suggestedLots.length} lot(s) matching the extracted location`
+              : 'No matching lots found for the extracted location',
         },
       });
     } catch {
