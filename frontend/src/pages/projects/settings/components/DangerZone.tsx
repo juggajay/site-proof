@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Archive, CheckCircle2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { extractErrorMessage, isUnauthorized } from '@/lib/errorHandling';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -91,11 +91,7 @@ export function DangerZone({
       // Success - navigate to projects list
       navigate('/projects', { replace: true });
     } catch (error) {
-      if (isUnauthorized(error)) {
-        setDeleteError('Incorrect password');
-      } else {
-        setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'));
-      }
+      setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'));
     } finally {
       deletingRef.current = false;
       setDeleting(false);

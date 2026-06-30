@@ -8,6 +8,7 @@ interface ModulesTabProps {
   projectId: string;
   initialEnabledModules: EnabledModules;
   readOnly?: boolean;
+  onSettingsSaved?: (settings: Record<string, unknown>) => void;
 }
 
 const MODULE_CONFIG = [
@@ -42,6 +43,7 @@ export function ModulesTab({
   projectId,
   initialEnabledModules,
   readOnly = false,
+  onSettingsSaved,
 }: ModulesTabProps) {
   const [enabledModules, setEnabledModules] = useState<EnabledModules>(initialEnabledModules);
   const [savingModule, setSavingModule] = useState<keyof EnabledModules | null>(null);
@@ -73,6 +75,7 @@ export function ModulesTab({
         method: 'PATCH',
         body: JSON.stringify({ settings: { enabledModules: newModules } }),
       });
+      onSettingsSaved?.({ enabledModules: newModules });
     } catch (error) {
       logError('Failed to save module settings:', error);
       setEnabledModules(previousModules);

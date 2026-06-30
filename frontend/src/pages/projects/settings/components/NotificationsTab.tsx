@@ -38,6 +38,25 @@ interface NotificationsTabProps {
   initialWitnessPointNotifications: WitnessPointNotificationSettings;
   initialHpMinimumNoticeDays: number;
   readOnly?: boolean;
+  onSettingsSaved?: (settings: Record<string, unknown>) => void;
+}
+
+function getHpRecipientValidationError({
+  role,
+  email,
+  projectId,
+  hpRecipients,
+}: {
+  role: string;
+  email: string;
+  projectId: string;
+  hpRecipients: HpRecipient[];
+}) {
+  if (!role || !email) return 'Role and email are required.';
+  if (!isValidEmail(email)) return 'Enter a valid recipient email.';
+  if (!projectId) return 'Project not found';
+  if (isDuplicateHpRecipient(hpRecipients, { role, email })) return 'Recipient already exists.';
+  return '';
 }
 
 export function NotificationsTab({
@@ -49,6 +68,7 @@ export function NotificationsTab({
   initialWitnessPointNotifications,
   initialHpMinimumNoticeDays,
   readOnly = false,
+  onSettingsSaved,
 }: NotificationsTabProps) {
   const [hpRecipients, setHpRecipients] = useState<HpRecipient[]>(initialHpRecipients);
   const [showAddRecipientModal, setShowAddRecipientModal] = useState(false);
@@ -116,6 +136,7 @@ export function NotificationsTab({
         method: 'PATCH',
         body: JSON.stringify({ settings }),
       });
+      onSettingsSaved?.(settings);
       setSettingsStatus(successMessage);
       return true;
     } catch (error) {
@@ -198,17 +219,20 @@ export function NotificationsTab({
       return;
     }
 
-    await saveSettings(
-      {
-        witnessPointNotifications: {
-          ...witnessPointNotifications,
-          clientEmail: contactEmail,
-          clientName: witnessPointNotifications.clientName.trim(),
-        },
-      },
+    const nextWitnessPointNotifications = {
+      ...witnessPointNotifications,
+      clientEmail: contactEmail,
+      clientName: witnessPointNotifications.clientName.trim(),
+    };
+
+    const saved = await saveSettings(
+      { witnessPointNotifications: nextWitnessPointNotifications },
       'witnessPointNotifications',
       'Witness point notification settings saved.',
     );
+    if (saved) {
+      setWitnessPointNotifications(nextWitnessPointNotifications);
+    }
   };
 
   const closeRecipientModal = (force = false) => {
@@ -229,23 +253,14 @@ export function NotificationsTab({
       email: newRecipientEmail,
     });
 
-    if (!role || !email) {
-      setRecipientError('Role and email are required.');
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      setRecipientError('Enter a valid recipient email.');
-      return;
-    }
-
-    if (!projectId) {
-      setRecipientError('Project not found');
-      return;
-    }
-
-    if (isDuplicateHpRecipient(hpRecipients, { role, email })) {
-      setRecipientError('Recipient already exists.');
+    const validationError = getHpRecipientValidationError({
+      role,
+      email,
+      projectId,
+      hpRecipients,
+    });
+    if (validationError) {
+      setRecipientError(validationError);
       return;
     }
 
@@ -262,6 +277,7 @@ export function NotificationsTab({
         body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
       });
       setHpRecipients(newRecipients);
+      onSettingsSaved?.({ hpRecipients: newRecipients });
       setSettingsStatus('Hold point recipient added.');
       closeRecipientModal(true);
     } catch (error) {
@@ -276,16 +292,24 @@ export function NotificationsTab({
   const handleRemoveRecipient = async (index: number) => {
     if (readOnly) return;
     if (savingSettingRef.current) return;
+    if (savingRecipientsRef.current) return;
 
     const previous = hpRecipients;
     const newRecipients = hpRecipients.filter((_, i) => i !== index);
+    savingRecipientsRef.current = true;
+    setSavingRecipients(true);
     setHpRecipients(newRecipients);
-    await saveSettings(
-      { hpRecipients: newRecipients },
-      `removeRecipient-${index}`,
-      'Hold point recipient removed.',
-      () => setHpRecipients(previous),
-    );
+    try {
+      await saveSettings(
+        { hpRecipients: newRecipients },
+        `removeRecipient-${index}`,
+        'Hold point recipient removed.',
+        () => setHpRecipients(previous),
+      );
+    } finally {
+      savingRecipientsRef.current = false;
+      setSavingRecipients(false);
+    }
   };
 
   return (

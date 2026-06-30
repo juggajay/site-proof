@@ -10,6 +10,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Moda
 import type { TeamMember } from '../types';
 import { ROLE_OPTIONS } from '../types';
 import { logError } from '@/lib/logger';
+import { isProtectedProjectManagementRole } from '../projectPageAccess';
 
 interface TeamTabProps {
   projectId: string;
@@ -48,7 +49,7 @@ export function TeamTab({
   const inviteCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignableRoleOptions = canGrantProjectAdmin
     ? ROLE_OPTIONS
-    : ROLE_OPTIONS.filter((role) => role.value !== 'admin');
+    : ROLE_OPTIONS.filter((role) => !isProtectedProjectManagementRole(role.value));
 
   const fetchTeamMembers = useCallback(async () => {
     if (!projectId) {

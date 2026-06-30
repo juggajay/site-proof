@@ -38,6 +38,7 @@ function parseCompanyApiKeyRouteId(value: unknown): string {
 companyApiKeyRoutes.get(
   '/api-keys',
   asyncHandler(async (req, res) => {
+    requireBrowserSession(req, 'Company API key inventory');
     const user = req.user!;
     const companyId = requireCompanyAdmin(user);
 

@@ -1595,6 +1595,26 @@ describe('Company API', () => {
       expect(res.body.error.message).toContain('Only company owners and admins');
     });
 
+    it('rejects API-key-authenticated company API key inventory', async () => {
+      const rawApiKey = 'sp_abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+      const key = await prisma.apiKey.create({
+        data: {
+          userId,
+          name: 'Inventory browser-session-required key',
+          keyHash: hashApiKeyForTest(rawApiKey),
+          keyPrefix: rawApiKey.slice(0, 10),
+          scopes: 'admin',
+          isActive: true,
+        },
+      });
+      createdKeyIds.push(key.id);
+
+      const res = await request(app).get('/api/company/api-keys').set('x-api-key', rawApiKey);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('requires an authenticated browser session');
+    });
+
     it('lets an owner revoke an active same-company member API key', async () => {
       const memberKey = await prisma.apiKey.create({
         data: {
