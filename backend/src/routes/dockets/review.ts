@@ -35,7 +35,10 @@ import {
   buildDocketQueryResponseSubmittedResponse,
   buildDocketRejectedResponse,
 } from './reviewResponses.js';
-import { notifyDocketSubcontractorUsers } from './reviewNotificationDelivery.js';
+import {
+  notifyDocketApproverUsers,
+  notifyDocketSubcontractorUsers,
+} from './reviewNotificationDelivery.js';
 import { parseDocketReviewRequest, requireNonBlankReviewText } from './reviewRequest.js';
 import { Prisma } from '@prisma/client';
 
@@ -640,35 +643,22 @@ docketReviewRouter.post(
     const docketDate = formatDocketDate(docket.date);
     const responderName = formatDocketUserName(user);
 
-    const projectUsers = await prisma.projectUser.findMany({
-      where: {
+    const { inApp: queryResponseInApp, email: queryResponseEmail } =
+      buildDocketQueryResponseNotification({
         projectId: docket.projectId,
-        role: { in: DOCKET_APPROVERS },
-        status: 'active',
-      },
-      include: {
-        user: { select: { id: true, email: true, fullName: true } },
-      },
-    });
-
-    const { inApp: queryResponseInApp } = buildDocketQueryResponseNotification({
-      projectId: docket.projectId,
-      docketNumber,
-      docketDate,
-      responderName,
-      response,
-    });
-
-    const notificationsToCreate = projectUsers.map((pu) => ({
-      userId: pu.userId,
-      ...queryResponseInApp,
-    }));
-
-    if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate,
+        projectName: docket.project.name,
+        docketNumber,
+        docketDate,
+        responderName,
+        response,
       });
-    }
+
+    await notifyDocketApproverUsers({
+      projectId: docket.projectId,
+      roles: DOCKET_APPROVERS,
+      inApp: queryResponseInApp,
+      email: queryResponseEmail,
+    });
 
     res.json(buildDocketQueryResponseSubmittedResponse(updatedDocket));
   }),

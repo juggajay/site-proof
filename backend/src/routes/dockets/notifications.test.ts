@@ -160,15 +160,15 @@ describe('dockets notification builders (pure)', () => {
   });
 
   describe('buildDocketQueryResponseNotification', () => {
-    it('builds only an in-app payload (no email)', () => {
+    it('builds in-app and email payloads with a short response', () => {
       const result = buildDocketQueryResponseNotification({
         projectId: 'proj-1',
+        projectName: 'Test Project',
         docketNumber: 'DKT-ABC123',
         docketDate: '2026-01-15',
         responderName: 'Dave',
         response: 'Fixed the hours',
       });
-      expect('email' in result).toBe(false);
       expect(result.inApp).toStrictEqual({
         projectId: 'proj-1',
         type: 'docket_query_response',
@@ -177,11 +177,19 @@ describe('dockets notification builders (pure)', () => {
           'Dave has responded to the query on docket DKT-ABC123 (2026-01-15).\n\nResponse: Fixed the hours\n\nThe docket is ready for review.',
         linkUrl: LINK,
       });
+      expect(result.email).toStrictEqual({
+        title: 'Docket Query Response',
+        message:
+          'Dave has responded to the query on docket DKT-ABC123 (2026-01-15).\n\nProject: Test Project\n\nResponse:\nFixed the hours\n\nThe docket is ready for review.',
+        projectName: 'Test Project',
+        linkUrl: LINK,
+      });
     });
 
-    it('truncates the response to 200 chars with an ellipsis', () => {
-      const { inApp } = buildDocketQueryResponseNotification({
+    it('truncates the in-app response to 200 chars with an ellipsis but keeps the email full', () => {
+      const { inApp, email } = buildDocketQueryResponseNotification({
         projectId: 'proj-1',
+        projectName: 'Test Project',
         docketNumber: 'DKT-ABC123',
         docketDate: '2026-01-15',
         responderName: 'Dave',
@@ -189,6 +197,7 @@ describe('dockets notification builders (pure)', () => {
       });
       expect(inApp.message).toContain(`Response: ${'r'.repeat(200)}...`);
       expect(inApp.message).not.toContain('r'.repeat(201));
+      expect(email.message).toContain(`Response:\n${'r'.repeat(250)}`);
     });
   });
 });
