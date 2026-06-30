@@ -239,6 +239,7 @@ ALLOW_LOCAL_FILE_STORAGE=false               # explicit in prod
 RESEND_API_KEY=...
 EMAIL_FROM="..."
 FRONTEND_URL=https://...                     # https in prod, not localhost
+CORS_ALLOWED_ORIGINS=https://...,https://... # optional extra frontend origins/aliases
 BACKEND_URL=https://...                      # or API_URL; https in prod, not localhost
 TRUST_PROXY=1                                # required behind Railway/CDN; do not use true in prod
 SENTRY_DSN=...                               # required in production for backend error monitoring
