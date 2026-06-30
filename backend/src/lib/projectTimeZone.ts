@@ -87,6 +87,31 @@ export function zonedWallClockToUtc(
   return new Date(utcGuess - offset);
 }
 
+export function zonedStartOfDayToUtc(
+  year: number,
+  month: number,
+  day: number,
+  timeZone: string,
+): Date {
+  return zonedWallClockToUtc(year, month, day, 0, 0, timeZone);
+}
+
+export function zonedEndOfDayToUtc(
+  year: number,
+  month: number,
+  day: number,
+  timeZone: string,
+): Date {
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextDayStart = zonedStartOfDayToUtc(
+    nextDay.getUTCFullYear(),
+    nextDay.getUTCMonth() + 1,
+    nextDay.getUTCDate(),
+    timeZone,
+  );
+  return new Date(nextDayStart.getTime() - 1);
+}
+
 /**
  * The calendar date (1-indexed month) shown by `date` in `timeZone`. Useful for
  * resolving "today" in a project's local zone.

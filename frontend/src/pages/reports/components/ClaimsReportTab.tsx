@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
 import type { ClaimsReport } from '../types';
@@ -12,6 +12,7 @@ export interface ClaimsReportTabProps {
   report: ClaimsReport | null;
   loading: boolean;
   onGenerateReport: (startDate: string, endDate: string, statuses: string[]) => void;
+  onFiltersChange?: (startDate: string, endDate: string, statuses: string[]) => void;
 }
 
 const CLAIM_REPORT_STATUSES = [
@@ -41,6 +42,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
   report,
   loading,
   onGenerateReport,
+  onFiltersChange,
 }: ClaimsReportTabProps) {
   const { dateFormat, formatDate } = useDateFormat();
   const { timezone } = useTimezone();
@@ -51,6 +53,10 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
     ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
     : null;
   const dateRangeError = getReportDateRangeError(claimStartDate, claimEndDate);
+
+  useEffect(() => {
+    onFiltersChange?.(claimStartDate, claimEndDate, claimStatus ? [claimStatus] : []);
+  }, [claimEndDate, claimStartDate, claimStatus, onFiltersChange]);
 
   const handleGenerateReport = useCallback(() => {
     if (dateRangeError) return;

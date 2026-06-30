@@ -2983,6 +2983,24 @@ describe('Progress Claims API', () => {
           completedAt: new Date('2025-02-22T09:00:00.000Z'),
         },
       });
+      const attachmentDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: 'itp-attachment-evidence.jpg',
+          fileUrl: '/uploads/documents/itp-attachment-evidence.jpg',
+          uploadedById: userId,
+          uploadedAt: new Date('2025-02-22T09:15:00.000Z'),
+          caption: 'ITP attachment evidence',
+        },
+      });
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId: completion.id,
+          documentId: attachmentDocument.id,
+        },
+      });
 
       try {
         const res = await request(app)
@@ -3005,11 +3023,29 @@ describe('Progress Claims API', () => {
               checklistItemId: assignedItem.id,
               isCompleted: false,
               isNotApplicable: true,
+              attachmentCount: 1,
+              attachments: [
+                expect.objectContaining({
+                  id: attachment.id,
+                  documentId: attachmentDocument.id,
+                  document: expect.objectContaining({
+                    id: attachmentDocument.id,
+                    filename: 'itp-attachment-evidence.jpg',
+                    documentType: 'photo',
+                    caption: 'ITP attachment evidence',
+                    uploadedAt: '2025-02-22T09:15:00.000Z',
+                  }),
+                }),
+              ],
             }),
           ]),
         );
         expect(res.body.lots[0].summary.itpCompletionPercentage).toBe(100);
       } finally {
+        await prisma.iTPCompletionAttachment
+          .delete({ where: { id: attachment.id } })
+          .catch(() => {});
+        await prisma.document.delete({ where: { id: attachmentDocument.id } }).catch(() => {});
         await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
         await prisma.iTPInstance.delete({ where: { id: instance.id } }).catch(() => {});
         await prisma.iTPChecklistItem.deleteMany({

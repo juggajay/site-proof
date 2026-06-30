@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
 import type { DiaryReport } from '../types';
@@ -11,12 +11,14 @@ export interface DiaryReportTabProps {
   report: DiaryReport | null;
   loading: boolean;
   onGenerateReport: (sections: string[], startDate: string, endDate: string) => void;
+  onFiltersChange?: (sections: string[], startDate: string, endDate: string) => void;
 }
 
 export const DiaryReportTab = React.memo(function DiaryReportTab({
   report,
   loading,
   onGenerateReport,
+  onFiltersChange,
 }: DiaryReportTabProps) {
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
@@ -40,6 +42,10 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
       )
     : null;
   const dateRangeError = getReportDateRangeError(diaryStartDate, diaryEndDate);
+
+  useEffect(() => {
+    onFiltersChange?.(diarySections, diaryStartDate, diaryEndDate);
+  }, [onFiltersChange, diarySections, diaryStartDate, diaryEndDate]);
 
   const toggleDiarySection = useCallback((sectionId: string) => {
     setDiarySections((prev) =>

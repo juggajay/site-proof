@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_PROJECT_TIME_ZONE,
   projectTimeZoneFromState,
+  zonedEndOfDayToUtc,
+  zonedStartOfDayToUtc,
   zonedWallClockToUtc,
 } from './projectTimeZone.js';
 
@@ -62,6 +64,26 @@ describe('zonedWallClockToUtc', () => {
     // Midnight in Brisbane (UTC+10) is 14:00 the previous day in UTC.
     expect(zonedWallClockToUtc(2026, 3, 15, 0, 0, 'Australia/Brisbane').toISOString()).toBe(
       '2026-03-14T14:00:00.000Z',
+    );
+  });
+});
+
+describe('zoned day bounds', () => {
+  it('builds a Brisbane local-day UTC range without using the server timezone', () => {
+    expect(zonedStartOfDayToUtc(2026, 5, 1, 'Australia/Brisbane').toISOString()).toBe(
+      '2026-04-30T14:00:00.000Z',
+    );
+    expect(zonedEndOfDayToUtc(2026, 5, 1, 'Australia/Brisbane').toISOString()).toBe(
+      '2026-05-01T13:59:59.999Z',
+    );
+  });
+
+  it('uses the Sydney DST offset for summer local-day bounds', () => {
+    expect(zonedStartOfDayToUtc(2026, 1, 15, 'Australia/Sydney').toISOString()).toBe(
+      '2026-01-14T13:00:00.000Z',
+    );
+    expect(zonedEndOfDayToUtc(2026, 1, 15, 'Australia/Sydney').toISOString()).toBe(
+      '2026-01-15T12:59:59.999Z',
     );
   });
 });

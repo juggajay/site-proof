@@ -8,6 +8,8 @@ import { downloadBlob } from '@/lib/downloads';
 
 type DownloadState = 'downloading' | 'downloaded' | 'error';
 
+const EXPECTED_ARTIFACT_CONTENT_TYPE = 'application/pdf';
+
 function filenameFromContentDisposition(value: string | null): string | null {
   if (!value) return null;
 
@@ -22,6 +24,44 @@ function filenameFromContentDisposition(value: string | null): string | null {
 
   const filenameMatch = /filename="?([^";]+)"?/i.exec(value);
   return filenameMatch?.[1]?.trim() || null;
+}
+
+async function errorMessageFromResponse(response: Response): Promise<string | null> {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      const body = (await response.clone().json()) as { error?: unknown; message?: unknown };
+      if (typeof body.message === 'string' && body.message.trim()) {
+        return body.message.trim();
+      }
+      if (typeof body.error === 'string' && body.error.trim()) {
+        return body.error.trim();
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+async function validateScheduledArtifactResponse(response: Response): Promise<void> {
+  const responseMessage = await errorMessageFromResponse(response);
+
+  if (!response.ok) {
+    throw new Error(
+      responseMessage ||
+        (response.status === 404
+          ? 'This scheduled report file could not be found.'
+          : 'This scheduled report could not be downloaded.'),
+    );
+  }
+
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (!contentType.includes(EXPECTED_ARTIFACT_CONTENT_TYPE)) {
+    throw new Error(responseMessage || 'This scheduled report did not return a PDF file.');
+  }
 }
 
 export function ScheduledReportArtifactPage() {
@@ -45,15 +85,13 @@ export function ScheduledReportArtifactPage() {
       const response = await authFetch(
         `/api/reports/scheduled-runs/${encodeURIComponent(runId)}/artifact`,
       );
-      if (!response.ok) {
-        throw new Error(
-          response.status === 404
-            ? 'This scheduled report file could not be found.'
-            : 'This scheduled report could not be downloaded.',
-        );
-      }
+      await validateScheduledArtifactResponse(response);
 
       const blob = await response.blob();
+      if (blob.size === 0) {
+        throw new Error('This scheduled report file is empty.');
+      }
+
       const filename = filenameFromContentDisposition(response.headers.get('content-disposition'));
       downloadBlob(blob, filename, 'scheduled-report.pdf');
       setState('downloaded');

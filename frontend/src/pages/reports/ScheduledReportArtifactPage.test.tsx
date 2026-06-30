@@ -101,4 +101,32 @@ describe('ScheduledReportArtifactPage', () => {
     expect(await screen.findByText('This scheduled report file could not be found.')).toBeVisible();
     expect(downloadBlobMock).not.toHaveBeenCalled();
   });
+
+  it('rejects a JSON response even when the API returns HTTP 200', async () => {
+    authFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Scheduled report artifact is not ready.' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText('Scheduled report artifact is not ready.')).toBeVisible();
+    expect(downloadBlobMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty PDF artifact', async () => {
+    authFetchMock.mockResolvedValueOnce(
+      new Response('', {
+        status: 200,
+        headers: { 'content-type': 'application/pdf' },
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText('This scheduled report file is empty.')).toBeVisible();
+    expect(downloadBlobMock).not.toHaveBeenCalled();
+  });
 });

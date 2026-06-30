@@ -29,6 +29,7 @@ type ClaimReportRouterDependencies = {
     value: unknown,
     fieldName: string,
     endOfDay?: boolean,
+    timeZone?: string,
   ) => ParsedDateQuery | undefined;
   parseOptionalCommaSeparatedQuery: (value: unknown, fieldName: string) => string[];
   validateDateRange: (
@@ -36,6 +37,7 @@ type ClaimReportRouterDependencies = {
     endDate: ParsedDateQuery | undefined,
   ) => void;
   requireClaimsReportAccess: (user: AuthUser | undefined, projectId: string) => Promise<void>;
+  resolveReportProjectTimeZone: (projectId: string) => Promise<string>;
 };
 
 function escapeOptionalCsvExportValue(value: string | null | undefined): string | null | undefined {
@@ -176,6 +178,7 @@ export function createClaimReportRouter({
   parseOptionalCommaSeparatedQuery,
   validateDateRange,
   requireClaimsReportAccess,
+  resolveReportProjectTimeZone,
 }: ClaimReportRouterDependencies): Router {
   const router = Router();
 
@@ -189,13 +192,19 @@ export function createClaimReportRouter({
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
       await requireClaimsReportAccess(req.user, projectId);
+      const projectTimeZone = await resolveReportProjectTimeZone(projectId);
 
       // Build where clause with optional filters
       const whereClause: Prisma.ProgressClaimWhereInput = { projectId };
 
       // Filter by date range (using claimPeriodEnd)
-      const parsedStartDate = parseOptionalDateQuery(startDate, 'startDate');
-      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true);
+      const parsedStartDate = parseOptionalDateQuery(
+        startDate,
+        'startDate',
+        false,
+        projectTimeZone,
+      );
+      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true, projectTimeZone);
       validateDateRange(parsedStartDate, parsedEndDate);
       if (parsedStartDate || parsedEndDate) {
         const claimPeriodEnd: Prisma.DateTimeFilter = {};

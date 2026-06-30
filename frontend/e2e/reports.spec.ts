@@ -636,7 +636,7 @@ test.describe('Scheduled report artifact link', () => {
 
     await page.goto('/reports/scheduled-runs/e2e-run/artifact');
 
-    await expect(page.getByText('This scheduled report could not be downloaded.')).toBeVisible();
+    await expect(page.getByText('Artifact unavailable')).toBeVisible();
     expect(artifactRequests).toBe(1);
 
     const downloadPromise = page.waitForEvent('download');
