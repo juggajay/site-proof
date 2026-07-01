@@ -22,12 +22,17 @@ import { useDocketsShellContext } from './docketsShellContext';
 import { useShellDocketParam } from './useShellDocketParam';
 import { useDocketAction } from './useDocketAction';
 import { isReasonValid } from './docketsShellState';
+import {
+  DocketActionLoading,
+  DocketActionMissing,
+  DocketActionNotPending,
+} from './DocketActionState';
 
 export function RejectFormScreen() {
   const navigate = useNavigate();
   const { isOnline } = useOfflineStatus();
   const docketId = useShellDocketParam();
-  const { projectId, dockets, refetch } = useDocketsShellContext();
+  const { projectId, dockets, loading, refetch } = useDocketsShellContext();
   const { submitting, runAction } = useDocketAction(projectId);
   const [reason, setReason] = useState('');
 
@@ -35,11 +40,12 @@ export function RejectFormScreen() {
 
   const detailPath = withProjectQuery(`/m/dockets/${docketId}`, projectId);
   const listPath = withProjectQuery('/m/dockets', projectId);
+  const isPending = docket?.status === 'pending_approval';
 
-  const canSubmit = isReasonValid(reason) && isOnline && Boolean(docket);
+  const canSubmit = isReasonValid(reason) && isOnline && Boolean(docket) && isPending;
 
   const handleSubmit = () => {
-    if (!docket || !isReasonValid(reason)) return;
+    if (!docket || !isPending || !isReasonValid(reason)) return;
     void runAction({
       docketId: docket.id,
       actionType: 'reject',
@@ -51,6 +57,20 @@ export function RejectFormScreen() {
       }
     });
   };
+
+  if (!docket && loading) {
+    return <DocketActionLoading title="Reject Docket" parent={listPath} />;
+  }
+
+  if (!docket) {
+    return <DocketActionMissing title="Reject Docket" parent={listPath} />;
+  }
+
+  if (!isPending) {
+    return (
+      <DocketActionNotPending title="Reject Docket" parent={detailPath} status={docket.status} />
+    );
+  }
 
   return (
     <ShellScreen

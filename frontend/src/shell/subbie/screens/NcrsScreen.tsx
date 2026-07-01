@@ -394,6 +394,9 @@ export function NcrsScreen() {
         ncr={rectifyingNcr ? toWorkflowNcr(rectifyingNcr, projectId, projectName) : null}
         projectId={projectId ?? undefined}
         onClose={() => setRectifyingNcr(null)}
+        onEvidenceUploaded={async () => {
+          await refetchNcrs();
+        }}
         onSuccess={async () => {
           setRectifyingNcr(null);
           await refetchNcrs();

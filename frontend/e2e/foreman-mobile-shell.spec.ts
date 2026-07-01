@@ -244,6 +244,7 @@ async function mockForemanShellApi(page: Page) {
   const drawingProjectIds: Array<string | null> = [];
   const signedUrlDocumentIds: string[] = [];
   const docketQueries: unknown[] = [];
+  const docketApprovals: unknown[] = [];
   const ncrResponses: unknown[] = [];
   const photoRefileBodies: unknown[] = [];
 
@@ -467,6 +468,15 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
+    if (path === `/api/dockets/${encodeURIComponent(dockets[0].id)}/approve`) {
+      const body = request.postDataJSON();
+      await fulfillJson(route, {
+        docket: { ...dockets[0], status: 'approved', approvedAt: TODAY },
+      });
+      docketApprovals.push(body);
+      return;
+    }
+
     if (path === '/api/ncrs') {
       ncrProjectIds.push(url.searchParams.get('projectId'));
       await fulfillJson(route, { data: ncrs, ncrs, pagination: { page: 1, limit: 20, total: 1 } });
@@ -534,6 +544,7 @@ async function mockForemanShellApi(page: Page) {
     drawingProjectIds,
     signedUrlDocumentIds,
     docketQueries,
+    docketApprovals,
     ncrResponses,
     photoRefileBodies,
   };
@@ -744,6 +755,49 @@ test.describe('Foreman mobile shell', () => {
         await expect(page.getByLabel(/Plant hours/i)).toHaveValue('6');
       }
     }
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('approves adjusted docket hours from the mobile shell', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    const api = await mockForemanShellApi(page);
+    const projectQuery = `?projectId=${encodeURIComponent(PROJECT_ID)}`;
+
+    await page.goto(`/m/dockets/${encodeURIComponent(dockets[0].id)}/adjust${projectQuery}`);
+    await expect(page.getByRole('heading', { name: 'Adjust Hours' })).toBeVisible();
+    await expect(page.getByLabel(/Labour hours/i)).toHaveValue('8');
+    await expect(page.getByLabel(/Plant hours/i)).toHaveValue('6');
+
+    const approve = page.getByRole('button', { name: /Approve with adjusted hours/i });
+    await expect(approve).toBeEnabled();
+
+    await page.getByLabel(/Labour hours/i).fill('7.5');
+    await expect(approve).toBeDisabled();
+
+    await page.getByLabel(/Adjustment reason/i).fill('Matched signed timesheet.');
+    await page.getByLabel(/Approval notes/i).fill('Approved after timesheet check.');
+    await expect(approve).toBeEnabled();
+    await approve.click();
+
+    await expect
+      .poll(() => api.docketApprovals)
+      .toContainEqual({
+        foremanNotes: 'Approved after timesheet check.',
+        adjustedLabourHours: 7.5,
+        adjustedPlantHours: 6,
+        adjustmentReason: 'Matched signed timesheet.',
+      });
+    await expect(page.getByRole('heading', { name: 'Dockets' })).toBeVisible();
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

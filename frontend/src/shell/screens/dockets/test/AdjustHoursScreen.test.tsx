@@ -174,4 +174,12 @@ describe('AdjustHoursScreen', () => {
     expect(screen.getByRole('button', { name: /Approve with adjusted hours/i })).toBeDisabled();
     expect(screen.getByText(/Approvals need signal/i)).toBeInTheDocument();
   });
+
+  it('does not allow adjusting a docket that is no longer pending approval', () => {
+    renderWithData({ dockets: [makeDocket({ status: 'approved' })], pendingCount: 0 });
+
+    expect(screen.getByText(/This docket is no longer pending approval/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Labour hours/i)).not.toBeInTheDocument();
+    expect(runAction).not.toHaveBeenCalled();
+  });
 });
