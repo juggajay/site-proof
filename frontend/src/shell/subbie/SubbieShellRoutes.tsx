@@ -39,11 +39,27 @@ import { DocketScreen } from './screens/dockets/DocketScreen';
 import { DocketsListScreen } from './screens/dockets/DocketsListScreen';
 import { useSubbieShellData } from './subbieShellData';
 import { SubbieShellContext } from './subbieShellContext';
+import { ShellScreen } from '../components/ShellScreen';
+
+function SubbieBootstrapError({ message }: { message: string }) {
+  return (
+    <ShellScreen variant="home" roleLabel="SUBCONTRACTOR" projectLabel="Portal access">
+      <div className="rounded-2xl border border-destructive/35 bg-destructive/10 p-4" role="alert">
+        <div className="text-[15px] font-semibold text-destructive">Cannot open portal</div>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">{message}</p>
+      </div>
+    </ShellScreen>
+  );
+}
 
 function SubbieShellProvider({ children }: { children: React.ReactNode }) {
   const data = useSubbieShellData();
   const value = useMemo(() => data, [data]);
-  return <SubbieShellContext.Provider value={value}>{children}</SubbieShellContext.Provider>;
+  return (
+    <SubbieShellContext.Provider value={value}>
+      {data.loadError ? <SubbieBootstrapError message={data.loadError} /> : children}
+    </SubbieShellContext.Provider>
+  );
 }
 
 export function SubbieShellRoutes() {

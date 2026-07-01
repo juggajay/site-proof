@@ -106,6 +106,7 @@ function renderRun() {
       <Routes>
         <Route path="/m/lots/:lotId/itp" element={<ItpRunScreen />} />
         <Route path="/m/lots/:lotId" element={<div>lot hub</div>} />
+        <Route path="/projects/:projectId/hold-points" element={<div>hold points screen</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -233,6 +234,19 @@ describe('ItpRunScreen — hold-point gating', () => {
     // N/A + Fail remain available on the hold point (in the persistent bottom bar).
     expect(screen.getByRole('button', { name: /Mark not applicable/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Fail this check/i })).toBeInTheDocument();
+  });
+
+  it('opens the existing project hold-points register from an unreleased hold point', () => {
+    _run = makeRun(
+      makeInstance([
+        makeItem({ id: 'hp', pointType: 'hold_point', isHoldPoint: true, description: 'HP check' }),
+      ]),
+    );
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Hold Points/i }));
+
+    expect(screen.getByText('hold points screen')).toBeInTheDocument();
   });
 
   it('a released hold point CAN be passed', async () => {

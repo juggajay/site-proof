@@ -190,6 +190,20 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByText('ITP checks & hold points')).toBeVisible();
   });
 
+  test('seeded foreman can open hold points from a blocked mobile ITP check', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page, 'foreman@example.com', /\/(dashboard|m|projects)/);
+
+    await page.goto(`/m/lots/e2e-lot/itp?projectId=${E2E_PROJECT_ID}`);
+
+    await expect(page.getByText('Awaiting hold point release').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Open Hold Points' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/projects/${E2E_PROJECT_ID}/hold-points`));
+    await expect(page.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
+    await expect(page.getByText('LOT-001')).toBeVisible();
+  });
+
   test('hold point release completes the seeded ITP item and enables normal conformance', async ({
     browser,
   }) => {
