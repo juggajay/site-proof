@@ -48,7 +48,7 @@ describe('TeamTab', () => {
     const user = userEvent.setup();
     renderTeamTab(false);
 
-    await user.click(await screen.findByRole('button', { name: /invite team member/i }));
+    await user.click(await screen.findByRole('button', { name: /add team member/i }));
 
     const roleSelect = screen.getByLabelText('Role');
     expect(within(roleSelect).queryByRole('option', { name: 'Admin' })).toBeNull();
@@ -63,7 +63,7 @@ describe('TeamTab', () => {
     const user = userEvent.setup();
     renderTeamTab(true);
 
-    await user.click(await screen.findByRole('button', { name: /invite team member/i }));
+    await user.click(await screen.findByRole('button', { name: /add team member/i }));
 
     expect(
       within(screen.getByLabelText('Role')).getByRole('option', { name: 'Admin' }),
