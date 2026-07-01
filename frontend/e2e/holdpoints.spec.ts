@@ -669,7 +669,7 @@ test.describe('Hold points seeded release contract', () => {
     await page.getByRole('button', { name: 'Try again' }).click();
 
     await expect(page.getByRole('alert')).toBeHidden();
-    await expect(page.getByText('LOT-HP-001')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'LOT-HP-001', exact: true })).toBeVisible();
     await expect(page.getByText('Total HPs')).toBeVisible();
   });
 
@@ -682,7 +682,7 @@ test.describe('Hold points seeded release contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
 
-    await expect(page.getByText('LOT-HP-001')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'LOT-HP-001', exact: true })).toBeVisible();
     await expect(page.getByText('Total HPs').locator('..').getByText('25')).toBeVisible();
     expect(api.getHoldPointRegisterRequests()).toEqual(['?all=true']);
   });
@@ -977,7 +977,7 @@ test.describe('Hold points mobile card layout', () => {
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeHidden();
 
     // Pending hold point is a card with the primary release action.
-    await expect(page.getByText('LOT-HP-001')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'LOT-HP-001', exact: true })).toBeVisible();
     await expect(page.getByText('Verify formation before covering work')).toBeVisible();
     const requestRelease = page.getByRole('button', { name: 'Request Release' });
     await expect(requestRelease).toBeVisible();

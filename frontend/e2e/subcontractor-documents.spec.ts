@@ -141,7 +141,7 @@ test.describe('Subcontractor documents mobile access', () => {
     await page.goto('/subcontractor-portal?projectId=project-2');
     await expect(page).toHaveURL(/\/p\?projectId=project-2/);
     await expect(page.getByRole('combobox', { name: 'Project' })).toHaveValue('portal-project-2');
-    await page.getByRole('button', { name: 'Documents' }).click();
+    await page.getByRole('link', { name: 'Documents' }).click();
 
     await expect(page).toHaveURL(/\/p\/docs\?projectId=project-2/);
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();

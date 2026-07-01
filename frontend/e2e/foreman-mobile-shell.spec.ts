@@ -609,7 +609,7 @@ test.describe('Foreman mobile shell', () => {
     await inspectionsTile.click();
     await expect(page.getByRole('heading', { name: 'Inspection' })).toBeVisible();
     await expect(page.getByText('Superintendent hold point release recorded')).toBeVisible();
-    await expect(page.getByText('Awaiting hold point release').first()).toBeVisible();
+    await expect(page.getByText('Superintendent sign-off required').first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pass this check' })).toHaveCount(0);
 
     await page.goto(`/m/diary?projectId=${encodeURIComponent(PROJECT_ID)}`);

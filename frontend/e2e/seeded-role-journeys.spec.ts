@@ -188,9 +188,12 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByText('E2E Owner')).toBeVisible();
     await expect(page.getByText('E2E Admin')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Invite User' }).click();
-    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
-    await inviteDialog.getByLabel('Email Address').fill(E2E_PROJECT_CANDIDATE_EMAIL);
+    await page.getByRole('button', { name: 'Add Team Member' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Add Team Member' });
+    await inviteDialog.getByLabel('Search company users').fill(E2E_PROJECT_CANDIDATE_EMAIL);
+    await inviteDialog.getByLabel('Project member').selectOption({
+      label: `${E2E_PROJECT_CANDIDATE_NAME} - ${E2E_PROJECT_CANDIDATE_EMAIL} - Viewer`,
+    });
     await inviteDialog.getByLabel('Role').selectOption('quality_manager');
 
     await Promise.all([
@@ -200,11 +203,11 @@ test.describe.serial('seeded real-backend role journeys', () => {
           response.request().method() === 'POST' &&
           response.status() === 201,
       ),
-      inviteDialog.getByRole('button', { name: 'Send Invite' }).click(),
+      inviteDialog.getByRole('button', { name: 'Add to Project' }).click(),
     ]);
 
     await expect(
-      page.getByText(`${E2E_PROJECT_CANDIDATE_EMAIL} has been added to the project.`),
+      page.getByText(`${E2E_PROJECT_CANDIDATE_NAME} has been added to the project.`),
     ).toBeVisible();
     const candidateRow = page.locator('tbody tr').filter({ hasText: E2E_PROJECT_CANDIDATE_NAME });
     await expect(candidateRow).toBeVisible();
@@ -501,7 +504,7 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByRole('button', { name: 'My Work — 2 lots' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Inspections' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Holds and Tests' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Documents' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Documents' })).toBeVisible();
 
     await page.goto(`/p/work?${query}`);
     await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible();
@@ -641,7 +644,7 @@ test.describe.serial('seeded real-backend role journeys', () => {
 
     await expect(page).toHaveURL(new RegExp(`/projects/${E2E_PROJECT_ID}/hold-points`));
     await expect(page.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
-    await expect(page.getByText('LOT-001')).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'LOT-001', exact: true })).toBeVisible();
   });
 
   test('hold point release completes the seeded ITP item and enables normal conformance', async ({
