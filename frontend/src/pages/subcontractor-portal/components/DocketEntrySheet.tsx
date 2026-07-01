@@ -28,6 +28,7 @@ export function DocketEntrySheet({
   wetOrDry,
   selectedLotId,
   assignedLots,
+  labourHoursError,
   plantHoursError,
   previewHours,
   previewCost,
@@ -50,6 +51,7 @@ export function DocketEntrySheet({
   wetOrDry: 'dry' | 'wet';
   selectedLotId: string;
   assignedLots: Lot[];
+  labourHoursError: string | null;
   plantHoursError: string | null;
   previewHours: number;
   previewCost: number;
@@ -125,6 +127,9 @@ export function DocketEntrySheet({
                   />
                 </div>
               </div>
+              {labourHoursError && (
+                <p className="-mt-4 text-sm text-destructive">{labourHoursError}</p>
+              )}
 
               {/* Quick presets */}
               <div>
@@ -252,12 +257,14 @@ export function DocketEntrySheet({
             onClick={sheetType === 'labour' ? onAddLabourEntry : onAddPlantEntry}
             disabled={
               saving ||
+              (sheetType === 'labour' && Boolean(labourHoursError)) ||
               (sheetType === 'labour' && !selectedLotId) ||
               (sheetType === 'plant' && Boolean(plantHoursError))
             }
             className={cn(
               'w-full h-12',
               saving ||
+                (sheetType === 'labour' && Boolean(labourHoursError)) ||
                 (sheetType === 'labour' && !selectedLotId) ||
                 (sheetType === 'plant' && Boolean(plantHoursError))
                 ? ''

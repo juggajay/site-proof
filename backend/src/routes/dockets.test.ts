@@ -1032,6 +1032,98 @@ describe('Dockets API', () => {
       expect(res.body.labourEntry).toBeDefined();
     });
 
+    it('should recalculate labour hours and submitted total on one-sided time updates', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 1296000000),
+          status: 'draft',
+          totalLabourSubmitted: 364,
+        },
+      });
+      const labourEntry = await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .put(`/api/dockets/${docket.id}/labour/${labourEntry.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({ finishTime: '12:00' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.labourEntry).toMatchObject({
+          startTime: '07:00',
+          finishTime: '12:00',
+          submittedHours: 5,
+          submittedCost: 227.5,
+        });
+
+        const stored = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: docket.id },
+          select: { totalLabourSubmitted: true },
+        });
+        expect(Number(stored.totalLabourSubmitted)).toBe(227.5);
+      } finally {
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject reduced labour hours when existing lot allocations exceed the new entry hours', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 1382400000),
+          status: 'draft',
+          totalLabourSubmitted: 364,
+        },
+      });
+      const labourEntry = await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+          lotAllocations: { create: [{ lotId: assignedLotId, hours: 8 }] },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .put(`/api/dockets/${docket.id}/labour/${labourEntry.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({ finishTime: '12:00' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Lot allocation hours');
+        const stored = await prisma.docketLabour.findUniqueOrThrow({
+          where: { id: labourEntry.id },
+          select: { startTime: true, finishTime: true, submittedHours: true, submittedCost: true },
+        });
+        expect(stored).toMatchObject({ startTime: '07:00', finishTime: '15:00' });
+        expect(Number(stored.submittedHours)).toBe(8);
+        expect(Number(stored.submittedCost)).toBe(364);
+      } finally {
+        await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labourEntry.id } });
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+      }
+    });
+
     it('should reject adding labour without employeeId', async () => {
       const res = await request(app)
         .post(`/api/dockets/${docketId}/labour`)
@@ -1559,13 +1651,28 @@ describe('Dockets API', () => {
         tosAccepted: true,
       });
       const pendingUserId = pendingRes.body.user.id;
+      const qualityEmail = `dockets-quality-approver-${Date.now()}@example.com`;
+      const qualityRes = await request(app).post('/api/auth/register').send({
+        email: qualityEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Quality Docket Approver',
+        tosAccepted: true,
+      });
+      const qualityUserId = qualityRes.body.user.id;
 
       await prisma.user.update({
         where: { id: pendingUserId },
         data: { companyId, roleInCompany: 'project_manager' },
       });
+      await prisma.user.update({
+        where: { id: qualityUserId },
+        data: { companyId, roleInCompany: 'quality_manager' },
+      });
       await prisma.projectUser.create({
         data: { projectId, userId: pendingUserId, role: 'project_manager', status: 'pending' },
+      });
+      await prisma.projectUser.create({
+        data: { projectId, userId: qualityUserId, role: 'quality_manager', status: 'active' },
       });
 
       try {
@@ -1585,6 +1692,15 @@ describe('Dockets API', () => {
         });
         expect(pendingNotification).toBeNull();
 
+        const qualityNotification = await prisma.notification.findFirst({
+          where: {
+            projectId,
+            userId: qualityUserId,
+            type: 'docket_pending',
+          },
+        });
+        expect(qualityNotification).toBeTruthy();
+
         const auditLog = await prisma.auditLog.findFirst({
           where: {
             projectId,
@@ -1599,9 +1715,15 @@ describe('Dockets API', () => {
           status: { from: 'draft', to: 'pending_approval' },
         });
       } finally {
-        await prisma.projectUser.deleteMany({ where: { userId: pendingUserId } });
-        await prisma.emailVerificationToken.deleteMany({ where: { userId: pendingUserId } });
+        await prisma.projectUser.deleteMany({
+          where: { userId: { in: [pendingUserId, qualityUserId] } },
+        });
+        await prisma.notification.deleteMany({ where: { userId: qualityUserId } });
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: { in: [pendingUserId, qualityUserId] } },
+        });
         await prisma.user.delete({ where: { id: pendingUserId } }).catch(() => {});
+        await prisma.user.delete({ where: { id: qualityUserId } }).catch(() => {});
       }
     });
 
@@ -2292,8 +2414,30 @@ describe('Dockets API', () => {
   describe('Docket Query Flow', () => {
     let queryableDocketId: string;
 
+    async function resetQueryableDocketLabourEntry() {
+      await prisma.docketLabourLot.deleteMany({
+        where: { docketLabour: { docketId: queryableDocketId } },
+      });
+      await prisma.docketLabour.deleteMany({ where: { docketId: queryableDocketId } });
+
+      return prisma.docketLabour.create({
+        data: {
+          docketId: queryableDocketId,
+          employeeId,
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 8,
+            },
+          },
+        },
+      });
+    }
+
     beforeAll(async () => {
-      const lot = await prisma.lot.findUnique({ where: { id: assignedLotId } });
       const docket = await prisma.dailyDocket.create({
         data: {
           projectId,
@@ -2305,21 +2449,7 @@ describe('Dockets API', () => {
       });
       queryableDocketId = docket.id;
 
-      await prisma.docketLabour.create({
-        data: {
-          docketId: queryableDocketId,
-          employeeId,
-          submittedHours: 8,
-          hourlyRate: 45.5,
-          submittedCost: 364,
-          lotAllocations: {
-            create: {
-              lotId: lot!.id,
-              hours: 8,
-            },
-          },
-        },
-      });
+      await resetQueryableDocketLabourEntry();
     });
 
     it('should query docket', async () => {
@@ -2371,6 +2501,7 @@ describe('Dockets API', () => {
     it('should respond to query', async () => {
       // Set to queried state
       await prisma.auditLog.deleteMany({ where: { entityId: queryableDocketId } });
+      await resetQueryableDocketLabourEntry();
       await prisma.dailyDocket.update({
         where: { id: queryableDocketId },
         data: { status: 'queried' },
@@ -2400,6 +2531,33 @@ describe('Dockets API', () => {
         status: { from: 'queried', to: 'pending_approval' },
         responseLength: 'This was for the northern section'.length,
       });
+    });
+
+    it('should reject query responses when editable labour entries no longer have lot allocations', async () => {
+      await resetQueryableDocketLabourEntry();
+      await prisma.dailyDocket.update({
+        where: { id: queryableDocketId },
+        data: { status: 'queried' },
+      });
+      await prisma.docketLabourLot.deleteMany({
+        where: { docketLabour: { docketId: queryableDocketId } },
+      });
+
+      const res = await request(app)
+        .post(`/api/dockets/${queryableDocketId}/respond`)
+        .set('Authorization', `Bearer ${subcontractorToken}`)
+        .send({
+          response: 'I updated the hours but missed the lot split',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('LOT_REQUIRED');
+      await expect(
+        prisma.dailyDocket.findUnique({
+          where: { id: queryableDocketId },
+          select: { status: true },
+        }),
+      ).resolves.toMatchObject({ status: 'queried' });
     });
 
     afterAll(async () => {
@@ -2583,6 +2741,12 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toContain('deleted');
+      expect(res.body.runningTotal).toStrictEqual({ hours: 0, cost: 0 });
+      const updatedDocket = await prisma.dailyDocket.findUnique({
+        where: { id: deletableDocketId },
+        select: { totalLabourSubmitted: true },
+      });
+      expect(Number(updatedDocket?.totalLabourSubmitted)).toBe(0);
     });
 
     afterAll(async () => {
@@ -2625,6 +2789,12 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toContain('deleted');
+      expect(res.body.runningTotal).toStrictEqual({ hours: 0, cost: 0 });
+      const updatedDocket = await prisma.dailyDocket.findUnique({
+        where: { id: deletableDocketId },
+        select: { totalPlantSubmitted: true },
+      });
+      expect(Number(updatedDocket?.totalPlantSubmitted)).toBe(0);
     });
 
     afterAll(async () => {

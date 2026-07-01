@@ -40,6 +40,7 @@ import {
   notifyDocketSubcontractorUsers,
 } from './reviewNotificationDelivery.js';
 import { parseDocketReviewRequest, requireNonBlankReviewText } from './reviewRequest.js';
+import { assertDocketSubmittable } from './submissionGuards.js';
 import { Prisma } from '@prisma/client';
 
 export const docketReviewRouter = Router();
@@ -594,6 +595,10 @@ docketReviewRouter.post(
         project: {
           select: { id: true, name: true },
         },
+        labourEntries: {
+          include: { lotAllocations: true },
+        },
+        plantEntries: true,
       },
     });
 
@@ -602,9 +607,10 @@ docketReviewRouter.post(
     }
     await requireDocketSubcontractorAccess(user, docket);
 
-    if (docket.status !== 'queried') {
-      throw AppError.badRequest('Only queried dockets can be responded to');
-    }
+    assertDocketSubmittable(docket, {
+      allowedStatuses: ['queried'],
+      invalidStatusMessage: 'Only queried dockets can be responded to',
+    });
 
     // Update status back to pending_approval and append response to notes
     const newNotes = buildQueryResponseNotes(docket.notes, response);

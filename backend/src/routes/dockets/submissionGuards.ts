@@ -19,13 +19,24 @@ export interface DocketSubmissionSource {
   plantEntries: unknown[];
 }
 
+interface DocketSubmissionGuardOptions {
+  allowedStatuses?: string[];
+  invalidStatusMessage?: string;
+}
+
 /**
  * Throws if the docket cannot be submitted for approval. Returns void when all
  * preconditions pass. Mirrors the original inline guard order exactly.
  */
-export function assertDocketSubmittable(docket: DocketSubmissionSource): void {
-  if (!['draft', 'rejected'].includes(docket.status)) {
-    throw AppError.badRequest('Only draft or rejected dockets can be submitted');
+export function assertDocketSubmittable(
+  docket: DocketSubmissionSource,
+  options: DocketSubmissionGuardOptions = {},
+): void {
+  const allowedStatuses = options.allowedStatuses ?? ['draft', 'rejected'];
+  if (!allowedStatuses.includes(docket.status)) {
+    throw AppError.badRequest(
+      options.invalidStatusMessage ?? 'Only draft or rejected dockets can be submitted',
+    );
   }
 
   // Feature #891: Require at least one entry before submission

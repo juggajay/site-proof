@@ -186,6 +186,9 @@ docketEntriesRouter.put(
       where: { id: entryId, docketId: id },
       include: {
         employee: { select: { hourlyRate: true, status: true } },
+        lotAllocations: {
+          select: { lotId: true, hours: true },
+        },
       },
     });
 
@@ -202,18 +205,28 @@ docketEntriesRouter.put(
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
     requireApprovedDocketResource(entry.employee.status, 'Employee');
+
+    const effectiveStartTime = startTime ?? entry.startTime;
+    const effectiveFinishTime = finishTime ?? entry.finishTime;
+    const effectiveLotAllocations =
+      lotAllocations ??
+      entry.lotAllocations.map((allocation) => ({
+        lotId: allocation.lotId,
+        hours: Number(allocation.hours),
+      }));
+
     await requireLotAllocationsInProject(
       docket.projectId,
       docket.subcontractorCompanyId,
-      lotAllocations,
+      effectiveLotAllocations,
     );
 
     const hours = calculateHoursFromTimeRange(
-      startTime,
-      finishTime,
+      effectiveStartTime,
+      effectiveFinishTime,
       Number(entry.submittedHours) || 0,
     );
-    assertLotAllocationHoursWithinEntry(hours, lotAllocations);
+    assertLotAllocationHoursWithinEntry(hours, effectiveLotAllocations);
 
     const hourlyRate = Number(entry.hourlyRate) || Number(entry.employee.hourlyRate) || 0;
     const cost = calculateLabourEntryCost(hours, hourlyRate);
@@ -224,8 +237,8 @@ docketEntriesRouter.put(
       await tx.docketLabour.update({
         where: { id: entryId },
         data: {
-          startTime,
-          finishTime,
+          startTime: effectiveStartTime,
+          finishTime: effectiveFinishTime,
           submittedHours: hours,
           submittedCost: cost,
         },
@@ -290,15 +303,15 @@ docketEntriesRouter.delete(
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
 
-    await prisma.$transaction(async (tx) => {
+    const totals = await prisma.$transaction(async (tx) => {
       await lockEditableDocketForEntryMutation(tx, id);
 
       // Delete entry (cascade deletes lot allocations)
       await tx.docketLabour.delete({ where: { id: entryId } });
-      await refreshLabourSubmittedTotals(tx, id);
+      return refreshLabourSubmittedTotals(tx, id);
     });
 
-    res.json(buildDocketEntryDeletedResponse('Labour entry deleted'));
+    res.json(buildDocketEntryDeletedResponse('Labour entry deleted', totals));
   }),
 );
 

@@ -248,14 +248,14 @@ plantDocketEntriesRouter.delete(
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
 
-    await prisma.$transaction(async (tx) => {
+    const totals = await prisma.$transaction(async (tx) => {
       await lockEditableDocketForEntryMutation(tx, id);
 
       // Delete entry
       await tx.docketPlant.delete({ where: { id: entryId } });
-      await refreshPlantSubmittedTotals(tx, id);
+      return refreshPlantSubmittedTotals(tx, id);
     });
 
-    res.json(buildDocketEntryDeletedResponse('Plant entry deleted'));
+    res.json(buildDocketEntryDeletedResponse('Plant entry deleted', totals));
   }),
 );

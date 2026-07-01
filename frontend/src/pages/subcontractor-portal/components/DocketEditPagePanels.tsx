@@ -98,6 +98,8 @@ interface DocketEditNoticesProps {
   queryResponse: string;
   respondingToQuery: boolean;
   assignedLotCount: number;
+  canEdit: boolean;
+  isOnline: boolean;
   // True when the assigned-lots fetch 403'd because the HC disabled the subbie's
   // "Assigned Work" (lots) portal module. Distinguishes "module off" (HC must
   // enable lot access) from "module on, but no lots assigned yet".
@@ -111,6 +113,8 @@ export function DocketEditNotices({
   queryResponse,
   respondingToQuery,
   assignedLotCount,
+  canEdit,
+  isOnline,
   lotsModuleDisabled,
   onQueryResponseChange,
   onRespondToQuery,
@@ -130,16 +134,19 @@ export function DocketEditNotices({
             <Textarea
               value={queryResponse}
               onChange={(e) => onQueryResponseChange(e.target.value)}
-              placeholder="Type your response to the query..."
+              placeholder={
+                isOnline ? 'Type your response to the query...' : 'Reconnect to reply...'
+              }
               rows={3}
+              disabled={!isOnline}
               className="border-warning/40 focus-visible:ring-warning"
             />
             <Button
               onClick={onRespondToQuery}
-              disabled={!queryResponse.trim() || respondingToQuery}
+              disabled={!isOnline || !queryResponse.trim() || respondingToQuery}
               className={cn(
                 'w-full',
-                queryResponse.trim() && !respondingToQuery
+                isOnline && queryResponse.trim() && !respondingToQuery
                   ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                   : '',
               )}
@@ -178,6 +185,15 @@ export function DocketEditNotices({
           <div className="text-warning">
             <strong>Approved with adjustment:</strong> {docket.adjustmentReason.trim()}
           </div>
+        </div>
+      )}
+
+      {canEdit && !isOnline && (
+        <div className="flex items-start gap-3 p-4 mb-4 bg-warning/10 border border-warning/30 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <p className="text-warning">
+            Dockets need a connection. Reconnect before adding hours, editing notes, or submitting.
+          </p>
         </div>
       )}
 

@@ -146,6 +146,7 @@ export function DocketScreen() {
     hoursOperated,
     wetOrDry,
     selectedLotId,
+    labourHoursError,
     plantHoursError,
     previewHours,
     previewCost,
@@ -402,17 +403,23 @@ export function DocketScreen() {
     if (!docket) return;
     if (!confirmArmed(`labour-${entryId}`)) return;
     try {
-      await apiFetch(
+      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
         `/api/dockets/${encodeURIComponent(docket.id)}/labour/${encodeURIComponent(entryId)}`,
         { method: 'DELETE' },
       );
       setDocket((prev) => {
         if (!prev) return prev;
         const removed = prev.labourEntries.find((e) => e.id === entryId);
+        const fallbackTotal = Math.max(
+          0,
+          prev.totalLabourSubmitted - (removed?.submittedCost || 0),
+        );
+        const newTotal =
+          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
         return {
           ...prev,
           labourEntries: prev.labourEntries.filter((e) => e.id !== entryId),
-          totalLabourSubmitted: prev.totalLabourSubmitted - (removed?.submittedCost || 0),
+          totalLabourSubmitted: newTotal,
         };
       });
       toast({ title: 'Entry deleted', variant: 'success' });
@@ -425,17 +432,20 @@ export function DocketScreen() {
     if (!docket) return;
     if (!confirmArmed(`plant-${entryId}`)) return;
     try {
-      await apiFetch(
+      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
         `/api/dockets/${encodeURIComponent(docket.id)}/plant/${encodeURIComponent(entryId)}`,
         { method: 'DELETE' },
       );
       setDocket((prev) => {
         if (!prev) return prev;
         const removed = prev.plantEntries.find((e) => e.id === entryId);
+        const fallbackTotal = Math.max(0, prev.totalPlantSubmitted - (removed?.submittedCost || 0));
+        const newTotal =
+          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
         return {
           ...prev,
           plantEntries: prev.plantEntries.filter((e) => e.id !== entryId),
-          totalPlantSubmitted: prev.totalPlantSubmitted - (removed?.submittedCost || 0),
+          totalPlantSubmitted: newTotal,
         };
       });
       toast({ title: 'Entry deleted', variant: 'success' });
@@ -937,6 +947,7 @@ export function DocketScreen() {
           finishTime={finishTime}
           selectedLotId={selectedLotId}
           assignedLots={assignedLots}
+          labourHoursError={labourHoursError}
           previewHours={previewHours}
           previewCost={previewCost}
           saving={saving}
