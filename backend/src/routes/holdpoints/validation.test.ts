@@ -5,6 +5,7 @@ import {
   MAX_ID_LENGTH,
   MAX_RELEASE_TOKEN_LENGTH,
   parseHoldPointRouteParam,
+  requestReleaseSchema,
   publicReleaseSchema,
   releaseHoldPointSchema,
 } from './validation.js';
@@ -81,6 +82,31 @@ describe('getHoldPointMinimumNoticeDays (pure, DB-free)', () => {
       }),
     ).toBe(2);
     expect(getHoldPointMinimumNoticeDays({})).toBe(1);
+  });
+});
+
+describe('requestReleaseSchema evidence document validation (pure, DB-free)', () => {
+  it('accepts and trims hold point request evidence document ids', () => {
+    const result = requestReleaseSchema.safeParse({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      evidenceDocumentIds: [' doc-1 ', 'doc-2'],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.evidenceDocumentIds).toEqual(['doc-1', 'doc-2']);
+    }
+  });
+
+  it('rejects overlong hold point request evidence document ids', () => {
+    const result = requestReleaseSchema.safeParse({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      evidenceDocumentIds: ['a'.repeat(MAX_ID_LENGTH + 1)],
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

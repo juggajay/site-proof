@@ -98,6 +98,7 @@ export const MAX_SIGNATURE_DATA_URL_LENGTH = 900_000;
 export const MAX_DATE_INPUT_LENGTH = 64;
 export const MAX_TIME_INPUT_LENGTH = 5;
 export const MAX_RELEASE_TOKEN_LENGTH = 512;
+export const MAX_EVIDENCE_DOCUMENT_IDS = 50;
 export const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 export const DATE_COMPONENT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 export const TIME_24H_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -203,6 +204,14 @@ export const requestReleaseSchema = z
   .object({
     lotId: requiredIdSchema('lotId'),
     itpChecklistItemId: requiredIdSchema('itpChecklistItemId'),
+    evidenceDocumentIds: z
+      .array(requiredIdSchema('evidenceDocumentIds'))
+      .max(
+        MAX_EVIDENCE_DOCUMENT_IDS,
+        `evidenceDocumentIds cannot exceed ${MAX_EVIDENCE_DOCUMENT_IDS} documents`,
+      )
+      .optional()
+      .default([]),
     scheduledDate: nullableScheduledDateSchema,
     scheduledTime: nullableScheduledTimeSchema,
     notificationSentTo: nullableTrimmedStringSchema(MAX_NOTE_LENGTH, 'notificationSentTo').refine(

@@ -2789,6 +2789,26 @@ describe('Project Team Management', () => {
       .set('Authorization', `Bearer ${authToken}`)
       .send({ email, role });
 
+  const createCompanyTeamCandidate = async (
+    label: string,
+    candidateCompanyId = companyId,
+    roleInCompany = 'viewer',
+  ) => {
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return prisma.user.create({
+      data: {
+        email: `${label}-${suffix}@example.com`,
+        fullName: label
+          .split('-')
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' '),
+        companyId: candidateCompanyId,
+        roleInCompany,
+        emailVerified: true,
+      },
+    });
+  };
+
   it('should get project team members', async () => {
     const res = await request(app)
       .get(`/api/projects/${projectId}/users`)
@@ -2891,6 +2911,91 @@ describe('Project Team Management', () => {
     } finally {
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } });
       await prisma.user.delete({ where: { id: otherUserId } }).catch(() => {});
+      await prisma.company.delete({ where: { id: otherCompany.id } }).catch(() => {});
+    }
+  });
+
+  it('should list assignable same-company users for project admins', async () => {
+    const candidate = await createCompanyTeamCandidate('assignable-company-member');
+
+    try {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/assignable-users`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.users).toContainEqual({
+        id: candidate.id,
+        email: candidate.email,
+        fullName: candidate.fullName,
+        roleInCompany: 'viewer',
+      });
+      expect(res.body.users).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: userId })]),
+      );
+    } finally {
+      await prisma.user.delete({ where: { id: candidate.id } }).catch(() => {});
+    }
+  });
+
+  it('should exclude already-assigned users from assignable users', async () => {
+    const candidate = await createCompanyTeamCandidate('assigned-company-member');
+    await prisma.projectUser.create({
+      data: { projectId, userId: candidate.id, role: 'viewer', status: 'active' },
+    });
+
+    try {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/assignable-users`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.users).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: candidate.id })]),
+      );
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: candidate.id } });
+      await prisma.user.delete({ where: { id: candidate.id } }).catch(() => {});
+    }
+  });
+
+  it('should add user to project team by user ID', async () => {
+    const candidate = await createCompanyTeamCandidate('id-assigned-member');
+
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ userId: candidate.id, role: 'viewer' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.projectUser.userId).toBe(candidate.id);
+      expect(res.body.projectUser.email).toBe(candidate.email);
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: candidate.id } });
+      await prisma.user.delete({ where: { id: candidate.id } }).catch(() => {});
+    }
+  });
+
+  it('should reject assigning a user from another company by ID', async () => {
+    const otherCompany = await prisma.company.create({
+      data: { name: `Outside Assignable Company ${Date.now()}` },
+    });
+    const outsideUser = await createCompanyTeamCandidate(
+      'outside-assignable-member',
+      otherCompany.id,
+    );
+
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ userId: outsideUser.id, role: 'viewer' });
+
+      expect(res.status).toBe(403);
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: outsideUser.id } });
+      await prisma.user.delete({ where: { id: outsideUser.id } }).catch(() => {});
       await prisma.company.delete({ where: { id: otherCompany.id } }).catch(() => {});
     }
   });

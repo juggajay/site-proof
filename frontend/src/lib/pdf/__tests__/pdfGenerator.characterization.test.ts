@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   approvedDocketDetailFixture,
+  dashboardPdfFixture,
   majorNcrDetailFixture,
   notifiedHpEvidencePackageFixture,
   passingTestCertificateFixture,
@@ -12,6 +13,7 @@ import {
 import {
   generateClaimEvidencePackagePDF,
   generateDailyDiaryPDF,
+  generateDashboardPDF,
   generateDocketDetailPDF,
   generateHPEvidencePackagePDF,
   generateNCRDetailPDF,
@@ -31,6 +33,49 @@ describe('pdfGenerator characterization', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('renders dashboard company branding and continues when the logo URL cannot be loaded', async () => {
+    const failingFetch = vi.fn().mockRejectedValue(new Error('expired logo URL'));
+    vi.stubGlobal('fetch', failingFetch);
+
+    await generateDashboardPDF({
+      ...dashboardPdfFixture,
+      branding: {
+        companyName: 'Gateway Civil Pty Ltd',
+        logoUrl: '/api/company/logo/file/company-1?token=expired',
+      },
+    });
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+
+    expect(failingFetch).toHaveBeenCalledWith(
+      '/api/company/logo/file/company-1?token=expired',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(text).toEqual(expect.arrayContaining(['Dashboard Summary', 'Gateway Civil Pty Ltd']));
+    expect(doc.operations.some((operation) => operation.name === 'addImage')).toBe(false);
+    expect(doc.savedFilename).toBe('siteproof-dashboard-2026-05-28.pdf');
+  });
+
+  it('renders a bounded dashboard logo when branding provides an image data URL', async () => {
+    const logoDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+
+    await generateDashboardPDF({
+      ...dashboardPdfFixture,
+      branding: {
+        companyName: 'Gateway Civil Pty Ltd',
+        logoUrl: logoDataUrl,
+      },
+    });
+
+    const doc = latestPdf();
+    const logo = doc.operations.find((operation) => operation.name === 'addImage');
+
+    expect(logo?.args).toEqual([logoDataUrl, 'PNG', 160, 8, 30, 18]);
+    expect(renderedText(doc)).toContain('Gateway Civil Pty Ltd');
   });
 
   it('preserves major NCR detail PDF sections, resolution fields, and filename', async () => {

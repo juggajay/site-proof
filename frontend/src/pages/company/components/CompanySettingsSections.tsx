@@ -163,7 +163,8 @@ export function CompanyInformationCard({
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Recommended: Square image, PNG or JPG, max 2MB
+          Recommended: Square image, PNG or JPG, max 2MB. Appears on branded PDF reports where
+          supported.
         </p>
       </div>
 

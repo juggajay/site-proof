@@ -369,6 +369,7 @@ export function HoldPointsPage() {
       notificationSentTo: string,
       overrideNoticePeriod?: boolean,
       overrideReason?: string,
+      evidenceDocumentIds?: string[],
     ) => {
       if (!selectedHoldPoint || requestingRef.current) return;
       requestingRef.current = true;
@@ -383,6 +384,7 @@ export function HoldPointsPage() {
             scheduledDate: scheduledDate || null,
             scheduledTime: scheduledTime || null,
             notificationSentTo: notificationSentTo.trim() || null,
+            evidenceDocumentIds: evidenceDocumentIds || [],
             noticePeriodOverride: overrideNoticePeriod || false,
             noticePeriodOverrideReason: overrideReason?.trim() || null,
           }),

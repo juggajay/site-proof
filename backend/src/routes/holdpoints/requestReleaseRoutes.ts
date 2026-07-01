@@ -35,6 +35,7 @@ import {
   resolveHoldPointChecklistItemForInstance,
 } from './itpSnapshot.js';
 import { emitHoldPointWebhookEvent } from './webhookEvents.js';
+import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
 
 // =============================================================================
 // Authenticated hold point RELEASE-REQUEST route. Moved verbatim from
@@ -129,6 +130,7 @@ holdPointRequestReleaseRouter.post(
       scheduledDate,
       scheduledTime,
       notificationSentTo,
+      evidenceDocumentIds,
       noticePeriodOverride,
       noticePeriodOverrideReason,
     } = parseResult.data;
@@ -437,6 +439,14 @@ holdPointRequestReleaseRouter.post(
         });
       }
 
+      await attachHoldPointEvidenceDocuments(tx, {
+        projectId: releaseLot.project.id,
+        lotId: releaseLot.id,
+        itpInstanceId: releaseLot.itpInstance!.id,
+        itpChecklistItemId,
+        documentIds: evidenceDocumentIds,
+      });
+
       return savedHoldPoint;
     });
 
@@ -472,6 +482,8 @@ holdPointRequestReleaseRouter.post(
         scheduledDate,
         scheduledTime,
         notificationSentTo: normalizedNotificationSentTo,
+        evidenceDocumentIds,
+        evidenceDocumentCount: evidenceDocumentIds.length,
         noticePeriodOverride,
         emailDelivery: {
           sent: sentDeliveryCount,
