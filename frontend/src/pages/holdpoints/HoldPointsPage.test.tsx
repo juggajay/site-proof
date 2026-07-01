@@ -116,27 +116,35 @@ function buildBatchRegister(): HoldPoint[] {
   ];
 }
 
+function getHoldPointsApiResponse(path: string, register: HoldPoint[]) {
+  const url = new URL(path, 'http://localhost');
+  if (url.pathname === '/api/projects/p1') {
+    return Promise.resolve({
+      project: {
+        id: 'p1',
+        name: 'Hold Point Test Project',
+        currentUserRole: 'project_manager',
+      },
+    });
+  }
+  if (url.pathname === '/api/holdpoints/project/p1') {
+    return Promise.resolve({
+      holdPoints: register,
+      pagination: {
+        page: 1,
+        totalPages: 1,
+        hasNextPage: false,
+      },
+    });
+  }
+  return null;
+}
+
 function mockHoldPointsApi(register: HoldPoint[]) {
   apiFetchMock.mockImplementation((path: string) => {
-    const url = new URL(path, 'http://localhost');
-    if (url.pathname === '/api/projects/p1') {
-      return Promise.resolve({
-        project: {
-          id: 'p1',
-          name: 'Hold Point Test Project',
-          currentUserRole: 'project_manager',
-        },
-      });
-    }
-    if (url.pathname === '/api/holdpoints/project/p1') {
-      return Promise.resolve({
-        holdPoints: register,
-        pagination: {
-          page: 1,
-          totalPages: 1,
-          hasNextPage: false,
-        },
-      });
+    const response = getHoldPointsApiResponse(path, register);
+    if (response) {
+      return response;
     }
     return Promise.reject(new Error(`Unhandled apiFetch path in test: ${path}`));
   });
@@ -145,11 +153,9 @@ function mockHoldPointsApi(register: HoldPoint[]) {
 function mockBatchHoldPointsApi(register: HoldPoint[]) {
   apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
     const url = new URL(path, 'http://localhost');
-    if (url.pathname === '/api/holdpoints/project/p1') {
-      return Promise.resolve({
-        holdPoints: register,
-        pagination: { page: 1, totalPages: 1, hasNextPage: false },
-      });
+    const response = getHoldPointsApiResponse(path, register);
+    if (response) {
+      return response;
     }
     if (url.pathname === '/api/holdpoints/request-release/batch') {
       return Promise.resolve({
@@ -377,7 +383,7 @@ describe('HoldPointsPage register data layer', () => {
     });
   });
 
-  it('does not include prerequisite-blocked pending hold points in batch release requests', async () => {
+  it('includes prerequisite-blocked pending hold points in batch release packages', async () => {
     const register = [
       makeHoldPoint({
         id: 'hp-ready',
@@ -410,15 +416,16 @@ describe('HoldPointsPage register data layer', () => {
     const blockedCheckbox = screen.getByRole('checkbox', {
       name: /Select Basecourse inspection for batch release/i,
     });
-    expect(blockedCheckbox).toBeDisabled();
-    expect(
-      screen.getByText(/1 blocked until earlier checklist items are complete/i),
-    ).toBeInTheDocument();
+    expect(blockedCheckbox).toBeEnabled();
+    expect(screen.getByText(/2 pending hold points in this lot/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Select all ready/i }));
-    await sendBatchReleaseRequest(user, /Request selected \(1\)/i);
+    await user.click(screen.getByRole('button', { name: /Select all pending/i }));
+    await sendBatchReleaseRequest(user, /Request selected \(2\)/i);
 
     const body = await expectBatchRequestBody();
-    expect(body.items).toEqual([{ itpChecklistItemId: 'item-ready' }]);
+    expect(body.items).toEqual([
+      { itpChecklistItemId: 'item-ready' },
+      { itpChecklistItemId: 'item-blocked' },
+    ]);
   });
 });

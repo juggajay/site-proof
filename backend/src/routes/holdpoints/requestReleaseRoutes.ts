@@ -288,7 +288,6 @@ holdPointRequestReleaseRouter.post(
       }
     }
 
-    const checklistItems = getHoldPointChecklistItemsForInstance(lot.itpInstance);
     const existingHoldPointByItemId = new Map(
       lot.holdPoints.map((holdPoint) => [holdPoint.itpChecklistItemId, holdPoint]),
     );
@@ -311,28 +310,9 @@ holdPointRequestReleaseRouter.post(
         throw AppError.badRequest('This hold point has already been completed.');
       }
 
-      const precedingItems = getPrecedingChecklistItems(
-        checklistItems,
-        holdPointItem.sequenceNumber,
-      );
-      const prerequisites = buildHoldPointPrerequisites(
-        precedingItems,
-        lot.itpInstance!.completions,
-      );
-      const incompleteItems = getIncompletePrerequisites(prerequisites);
-
-      if (incompleteItems.length > 0) {
-        throw AppError.badRequest(
-          `Cannot request release for "${holdPointItem.description}" until all preceding checklist items are completed.`,
-          {
-            itpChecklistItemId: itemRequest.itpChecklistItemId,
-            incompleteItems: buildIncompletePrerequisiteDetails(
-              incompleteItems,
-            ) as unknown as Record<string, unknown>,
-          },
-        );
-      }
-
+      // A batch request is a superintendent review package. Earlier incomplete
+      // checklist items still prevent ITP/lot conformance, but they should not
+      // stop the package from being sent for review.
       return {
         itemRequest,
         holdPointItem,

@@ -69,7 +69,6 @@ import {
 import { downloadCsv } from '@/lib/csv';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { getReleaseIdentityText, getReleaseMethodLabel } from './holdPointReleaseIdentity';
-import { isHoldPointBatchRequestReady } from './holdPointBatchSelection';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 
@@ -232,25 +231,7 @@ export function HoldPointsPage() {
     () =>
       selectedLotId === 'all'
         ? []
-        : filteredHoldPoints.filter(
-            (hp) =>
-              hp.lotId === selectedLotId &&
-              hp.status === 'pending' &&
-              isHoldPointBatchRequestReady(hp),
-          ),
-    [filteredHoldPoints, selectedLotId],
-  );
-
-  const batchBlockedHoldPointCount = useMemo(
-    () =>
-      selectedLotId === 'all'
-        ? 0
-        : filteredHoldPoints.filter(
-            (hp) =>
-              hp.lotId === selectedLotId &&
-              hp.status === 'pending' &&
-              !isHoldPointBatchRequestReady(hp),
-          ).length,
+        : filteredHoldPoints.filter((hp) => hp.lotId === selectedLotId && hp.status === 'pending'),
     [filteredHoldPoints, selectedLotId],
   );
 
@@ -717,7 +698,7 @@ export function HoldPointsPage() {
             <div className="text-sm text-muted-foreground">
               {selectedLotId === 'all'
                 ? 'Select one lot to request multiple hold point releases together.'
-                : `${batchEligibleHoldPoints.length} request-ready pending hold point${batchEligibleHoldPoints.length === 1 ? '' : 's'} in this lot.${batchBlockedHoldPointCount > 0 ? ` ${batchBlockedHoldPointCount} blocked until earlier checklist items are complete.` : ''}`}
+                : `${batchEligibleHoldPoints.length} pending hold point${batchEligibleHoldPoints.length === 1 ? '' : 's'} in this lot can be sent for superintendent review.`}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -727,7 +708,7 @@ export function HoldPointsPage() {
               onClick={handleSelectAllBatchEligible}
               disabled={batchEligibleHoldPoints.length === 0}
             >
-              Select all ready
+              Select all pending
             </Button>
             <Button
               type="button"
