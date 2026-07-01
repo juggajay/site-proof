@@ -53,6 +53,34 @@ type CreateDocumentVersionRouterDependencies = {
   sanitizeUploadFilename: (filename: string) => string;
 };
 
+async function assertDocumentCanUseGenericVersioning(
+  prisma: PrismaClient,
+  documentId: string,
+): Promise<void> {
+  const [itpAttachment, ncrEvidence] = await Promise.all([
+    prisma.iTPCompletionAttachment.findFirst({
+      where: { documentId },
+      select: { id: true },
+    }),
+    prisma.nCREvidence.findFirst({
+      where: { documentId },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!itpAttachment && !ncrEvidence) {
+    return;
+  }
+
+  throw AppError.conflict(
+    'Workflow evidence documents must be replaced from the ITP or NCR workflow.',
+    {
+      code: 'WORKFLOW_EVIDENCE_VERSION_BLOCKED',
+      evidenceType: itpAttachment ? 'itp' : 'ncr',
+    },
+  );
+}
+
 export function createDocumentVersionRouter({
   prisma,
   uploadFileMiddleware,
@@ -104,6 +132,12 @@ export function createDocumentVersionRouter({
       }
       try {
         await requireDocumentMutationAccess(req.user!, originalDocument);
+      } catch (error) {
+        cleanupUploadedFile(uploadedFile);
+        throw error;
+      }
+      try {
+        await assertDocumentCanUseGenericVersioning(prisma, originalDocument.id);
       } catch (error) {
         cleanupUploadedFile(uploadedFile);
         throw error;

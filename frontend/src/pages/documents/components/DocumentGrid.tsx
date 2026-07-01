@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { DocumentAccessUrl } from '@/lib/documentAccess';
 import {
@@ -26,6 +27,7 @@ export interface DocumentGridDoc {
   caption: string | null;
   lot: { lotNumber: string } | null;
   isFavourite: boolean;
+  version?: number | null;
 }
 
 interface DocumentGridProps<TDoc extends DocumentGridDoc> {
@@ -38,6 +40,7 @@ interface DocumentGridProps<TDoc extends DocumentGridDoc> {
   onToggleFavourite: (doc: TDoc) => void;
   onOpenViewer: (doc: TDoc) => void;
   onDownload: (doc: TDoc) => void;
+  onViewVersions: (doc: TDoc) => void;
   onMarkPendingDelete: (doc: TDoc) => void;
 }
 
@@ -87,6 +90,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
   onToggleFavourite,
   onOpenViewer,
   onDownload,
+  onViewVersions,
   onMarkPendingDelete,
 }: DocumentGridProps<TDoc>) {
   return (
@@ -201,6 +205,11 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium truncate">{doc.filename}</span>
+                  {doc.version && doc.version > 1 && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                      v{doc.version}
+                    </span>
+                  )}
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
                     {getTypeLabel(doc.documentType)}
                   </span>
@@ -298,6 +307,16 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                     />
                   </svg>
                 </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onViewVersions(doc)}
+                  className="text-muted-foreground hover:bg-muted"
+                  title="Version history"
+                  aria-label={`Version history for ${doc.filename}`}
+                >
+                  <History className="h-5 w-5" />
+                </Button>
                 {canManageDocuments && (
                   <Button
                     variant="ghost"

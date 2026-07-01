@@ -2130,6 +2130,29 @@ describe('Documents API', () => {
   });
 
   describe('POST /api/documents/:documentId/version', () => {
+    async function expectGenericVersionUploadBlocked(documentId: string, filename: string) {
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      const res = await request(app)
+        .post(`/api/documents/${documentId}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename,
+          contentType: 'application/pdf',
+        });
+
+      expect(res.status).toBe(409);
+      expect(String(res.body.error.message)).toContain('Workflow evidence documents');
+      expect(res.body.error.details).toMatchObject({
+        code: 'WORKFLOW_EVIDENCE_VERSION_BLOCKED',
+      });
+      expect(
+        fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(filename)),
+      ).toHaveLength(0);
+    }
+
     it('creates a new version transactionally with exactly one latest version', async () => {
       const sourceDocument = await prisma.document.create({
         data: {
@@ -2338,6 +2361,106 @@ describe('Documents API', () => {
           const leakedPath = path.join(uploadDir, leakedFile);
           if (fs.existsSync(leakedPath)) fs.unlinkSync(leakedPath);
         }
+      }
+    });
+
+    it('rejects generic version uploads for documents linked as ITP evidence', async () => {
+      const suffix = Date.now();
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Version ITP Evidence Template ${suffix}`,
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [{ sequenceNumber: 1, description: 'Versioned evidence item' }],
+          },
+        },
+        include: { checklistItems: true },
+      });
+      const instance = await prisma.iTPInstance.create({
+        data: { lotId, templateId: template.id, status: 'in_progress' },
+      });
+      const completion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: instance.id,
+          checklistItemId: template.checklistItems[0].id,
+          status: 'pending',
+        },
+      });
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `version-itp-evidence-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/version-itp-evidence-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      await prisma.iTPCompletionAttachment.create({
+        data: { completionId: completion.id, documentId: sourceDocument.id },
+      });
+
+      try {
+        await expectGenericVersionUploadBlocked(
+          sourceDocument.id,
+          `version-itp-evidence-replacement-${suffix}.pdf`,
+        );
+        await expect(
+          prisma.document.count({ where: { parentDocumentId: sourceDocument.id } }),
+        ).resolves.toBe(0);
+      } finally {
+        await prisma.iTPCompletionAttachment.deleteMany({ where: { completionId: completion.id } });
+        await prisma.iTPCompletion.deleteMany({ where: { id: completion.id } });
+        await prisma.iTPInstance.deleteMany({ where: { id: instance.id } });
+        await prisma.iTPTemplate.deleteMany({ where: { id: template.id } });
+        await prisma.document.deleteMany({ where: { id: sourceDocument.id } });
+      }
+    });
+
+    it('rejects generic version uploads for documents linked as NCR evidence', async () => {
+      const suffix = Date.now();
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'ncr_evidence',
+          filename: `version-ncr-evidence-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/version-ncr-evidence-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-VERSION-${suffix}`,
+          description: 'Versioned NCR evidence fixture',
+          category: 'workmanship',
+          raisedById: userId,
+        },
+      });
+      await prisma.nCREvidence.create({
+        data: { ncrId: ncr.id, documentId: sourceDocument.id, evidenceType: 'photo' },
+      });
+
+      try {
+        await expectGenericVersionUploadBlocked(
+          sourceDocument.id,
+          `version-ncr-evidence-replacement-${suffix}.pdf`,
+        );
+        await expect(
+          prisma.document.count({ where: { parentDocumentId: sourceDocument.id } }),
+        ).resolves.toBe(0);
+      } finally {
+        await prisma.nCREvidence.deleteMany({ where: { ncrId: ncr.id } });
+        await prisma.nCR.deleteMany({ where: { id: ncr.id } });
+        await prisma.document.deleteMany({ where: { id: sourceDocument.id } });
       }
     });
 

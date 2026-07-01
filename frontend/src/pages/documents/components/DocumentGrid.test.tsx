@@ -36,6 +36,7 @@ function renderGrid(documentUrls: Record<string, DocumentAccessUrl>) {
     onToggleFavourite: vi.fn(),
     onOpenViewer: vi.fn(),
     onDownload: vi.fn(),
+    onViewVersions: vi.fn(),
     onMarkPendingDelete: vi.fn(),
   };
 
@@ -89,6 +90,7 @@ describe('DocumentGrid empty states', () => {
         onToggleFavourite={vi.fn()}
         onOpenViewer={vi.fn()}
         onDownload={vi.fn()}
+        onViewVersions={vi.fn()}
         onMarkPendingDelete={vi.fn()}
       />,
     );
