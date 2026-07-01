@@ -34,6 +34,11 @@ import {
   validateHours,
 } from '@/pages/dockets/docketActionData';
 import { toast } from '@/components/ui/toaster';
+import {
+  DocketActionLoading,
+  DocketActionMissing,
+  DocketActionNotPending,
+} from './DocketActionState';
 
 export function AdjustHoursScreen() {
   const navigate = useNavigate();
@@ -52,6 +57,7 @@ export function AdjustHoursScreen() {
 
   const detailPath = withProjectQuery(`/m/dockets/${docketId}`, projectId);
   const listPath = withProjectQuery('/m/dockets', projectId);
+  const isPending = docket?.status === 'pending_approval';
 
   const labourValidation = validateHours(labour);
   const plantValidation = validateHours(plant);
@@ -61,7 +67,7 @@ export function AdjustHoursScreen() {
     hasHoursChanged(labour, submittedLabour) || hasHoursChanged(plant, submittedPlant);
 
   const handleSubmit = () => {
-    if (!docket) return;
+    if (!docket || !isPending) return;
     const parsedLabour = parseHoursInput(labour);
     const parsedPlant = parseHoursInput(plant);
     if (parsedLabour === null || parsedPlant === null) {
@@ -89,7 +95,7 @@ export function AdjustHoursScreen() {
 
   const parseOk = parseHoursInput(labour) !== null && parseHoursInput(plant) !== null;
   const hasRequiredReason = !hoursChanged || Boolean(reason.trim());
-  const canSubmit = parseOk && hasRequiredReason && isOnline && Boolean(docket);
+  const canSubmit = parseOk && hasRequiredReason && isOnline && Boolean(docket) && isPending;
 
   useEffect(() => {
     if (!docket || seededDocketId === docket.id) return;
@@ -99,33 +105,16 @@ export function AdjustHoursScreen() {
   }, [docket, seededDocketId]);
 
   if (!docket && loading) {
-    return (
-      <ShellScreen
-        variant="inner"
-        title="Adjust Hours"
-        parent={listPath}
-        sub={<span>Loading docket</span>}
-      >
-        <div className="flex min-h-[220px] items-center justify-center gap-2 text-[14px] font-semibold text-muted-foreground">
-          <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-          Loading docket…
-        </div>
-      </ShellScreen>
-    );
+    return <DocketActionLoading title="Adjust Hours" parent={listPath} />;
   }
 
   if (!docket) {
+    return <DocketActionMissing title="Adjust Hours" parent={listPath} />;
+  }
+
+  if (!isPending) {
     return (
-      <ShellScreen
-        variant="inner"
-        title="Adjust Hours"
-        parent={listPath}
-        sub={<span>Not found</span>}
-      >
-        <div className="py-16 text-center text-[14px] text-muted-foreground">
-          This docket isn’t here anymore.
-        </div>
-      </ShellScreen>
+      <DocketActionNotPending title="Adjust Hours" parent={detailPath} status={docket.status} />
     );
   }
 

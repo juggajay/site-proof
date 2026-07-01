@@ -28,7 +28,11 @@ vi.mock('@/lib/auth', () => ({
 }));
 
 const apiFetchMock = vi.fn();
-vi.mock('@/lib/api', () => ({ apiFetch: (...a: unknown[]) => apiFetchMock(...a) }));
+const authFetchMock = vi.fn();
+vi.mock('@/lib/api', () => ({
+  apiFetch: (...a: unknown[]) => apiFetchMock(...a),
+  authFetch: (...a: unknown[]) => authFetchMock(...a),
+}));
 vi.mock('@/lib/documentAccess', () => ({ openDocumentAccessUrl: vi.fn() }));
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
@@ -74,8 +78,22 @@ function setApi({ ncrs = [] as unknown[] } = {}) {
     if (url === '/api/ncrs/ncr-shell-open/respond' && options?.method === 'POST') {
       return Promise.resolve({ ncr: { id: 'ncr-shell-open', status: 'investigating' } });
     }
+    if (url === '/api/ncrs/ncr-shell-rectify/evidence' && options?.method === 'POST') {
+      return Promise.resolve({ evidence: { id: 'evidence-uploaded' } });
+    }
+    if (
+      url === '/api/ncrs/ncr-shell-rectify/submit-for-verification' &&
+      options?.method === 'POST'
+    ) {
+      return Promise.resolve({ ncr: { id: 'ncr-shell-rectify', status: 'pending_verification' } });
+    }
     if (url.startsWith('/api/ncrs')) return Promise.resolve({ ncrs });
     return Promise.resolve({});
+  });
+  authFetchMock.mockReset();
+  authFetchMock.mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ id: 'doc-uploaded-1', filename: 'repair-photo.jpg' }),
   });
 }
 
@@ -247,5 +265,80 @@ describe('subbie shell NcrsScreen', () => {
       screen.getByText('Photo does not show the repaired concrete edge clearly.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submit Rectification' })).toBeInTheDocument();
+  });
+
+  it('uploads rectification evidence, refreshes the NCR, then submits for verification', async () => {
+    const user = userEvent.setup();
+    _ctx = { ...makeCtx({ ncrs: true }), subcontractorCompanyId: 'sub-1' };
+    setApi({
+      ncrs: [
+        {
+          id: 'ncr-shell-rectify',
+          ncrNumber: 'NCR-303',
+          description: 'Ready for rectification evidence',
+          category: 'workmanship',
+          status: 'rectification',
+          severity: 'major',
+          raisedAt: '2026-06-09T00:00:00.000Z',
+          responsibleSubcontractorId: 'sub-1',
+          responsibleSubcontractor: { id: 'sub-1', companyName: 'Hargraves' },
+          ncrEvidence: [],
+        },
+      ],
+    });
+
+    renderScreen();
+    expect(await screen.findByText('NCR-303')).toBeInTheDocument();
+    const listUrl =
+      '/api/ncrs?projectId=proj-1&subcontractorCompanyId=sub-1&subcontractorView=true';
+    const listCallsBeforeUpload = apiFetchMock.mock.calls.filter(([url]) => url === listUrl).length;
+
+    await user.click(screen.getByRole('button', { name: 'Submit Rectification' }));
+    const photoInput = document.querySelector(
+      'input[type="file"][accept="image/*"]',
+    ) as HTMLInputElement;
+    expect(photoInput).toBeInTheDocument();
+    await user.upload(
+      photoInput,
+      new File(['repair photo'], 'repair-photo.jpg', { type: 'image/jpeg' }),
+    );
+
+    await waitFor(() =>
+      expect(authFetchMock).toHaveBeenCalledWith(
+        '/api/documents/upload',
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+      ),
+    );
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/ncrs/ncr-shell-rectify/evidence',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ documentId: 'doc-uploaded-1', evidenceType: 'photo' }),
+        }),
+      ),
+    );
+    await waitFor(() => {
+      const listCallsAfterUpload = apiFetchMock.mock.calls.filter(
+        ([url]) => url === listUrl,
+      ).length;
+      expect(listCallsAfterUpload).toBeGreaterThan(listCallsBeforeUpload);
+    });
+
+    await user.type(
+      screen.getByPlaceholderText(/Describe the corrective actions taken/i),
+      'Repaired failed area and retested.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Submit for Verification' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/ncrs/ncr-shell-rectify/submit-for-verification',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ rectificationNotes: 'Repaired failed area and retested.' }),
+        }),
+      ),
+    );
   });
 });

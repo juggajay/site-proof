@@ -57,7 +57,7 @@ function makeDocket(over: Partial<Docket> = {}): Docket {
   };
 }
 
-function setData() {
+function setData(over: Partial<DocketsShellData> = {}) {
   _data = {
     projectId: 'proj-1',
     dockets: [makeDocket()],
@@ -66,6 +66,7 @@ function setData() {
     loadError: null,
     pendingCount: 1,
     refetch: vi.fn(),
+    ...over,
   };
 }
 
@@ -98,6 +99,14 @@ beforeEach(() => {
 });
 
 describe('QueryFormScreen', () => {
+  it('shows loading instead of a false form while a direct route resolves', () => {
+    setData({ dockets: [], loading: true, pendingCount: 0 });
+    renderQuery();
+
+    expect(screen.getAllByText(/Loading docket/i).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/What needs clarifying/i)).not.toBeInTheDocument();
+  });
+
   it('disables Send until a reason is entered, then fires the query mutation', async () => {
     renderQuery();
     const send = screen.getByRole('button', { name: 'Send query' });
@@ -129,9 +138,25 @@ describe('QueryFormScreen', () => {
     expect(screen.getByRole('button', { name: 'Send query' })).toBeDisabled();
     expect(screen.getByText(/Queries need signal/i)).toBeInTheDocument();
   });
+
+  it('does not allow querying a docket that is no longer pending approval', () => {
+    setData({ dockets: [makeDocket({ status: 'approved' })], pendingCount: 0 });
+    renderQuery();
+
+    expect(screen.getByText(/This docket is no longer pending approval/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/What needs clarifying/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('RejectFormScreen', () => {
+  it('shows not found when a direct route points at a missing docket', () => {
+    setData({ dockets: [], loading: false, pendingCount: 0 });
+    renderReject();
+
+    expect(screen.getByText(/This docket isn’t here anymore/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Reason for rejection/i)).not.toBeInTheDocument();
+  });
+
   it('disables Reject until a reason is entered, then fires the reject mutation', async () => {
     renderReject();
     const reject = screen.getByRole('button', { name: 'Reject docket' });
@@ -162,5 +187,13 @@ describe('RejectFormScreen', () => {
     });
     expect(screen.getByRole('button', { name: 'Reject docket' })).toBeDisabled();
     expect(screen.getByText(/Rejections need signal/i)).toBeInTheDocument();
+  });
+
+  it('does not allow rejecting a docket that is no longer pending approval', () => {
+    setData({ dockets: [makeDocket({ status: 'queried' })], pendingCount: 0 });
+    renderReject();
+
+    expect(screen.getByText(/This docket is no longer pending approval/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Reason for rejection/i)).not.toBeInTheDocument();
   });
 });

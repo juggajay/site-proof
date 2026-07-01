@@ -134,8 +134,28 @@ const docket = {
   ],
 };
 
+const defaultNcr = {
+  id: 'ncr-1',
+  ncrNumber: 'NCR-SUB-001',
+  description: 'Bedding failed compaction on one section',
+  category: 'workmanship',
+  severity: 'major',
+  status: 'open',
+  raisedAt: '2026-06-22T11:00:00.000Z',
+  raisedBy: { fullName: 'E2E Foreman' },
+  responsibleSubcontractorId: SUBCONTRACTOR_COMPANY_ID,
+  responsibleSubcontractor: {
+    id: SUBCONTRACTOR_COMPANY_ID,
+    companyName: 'Mobile Shell Civil',
+  },
+  ncrLots: [{ lot: { lotNumber: assignedLot.lotNumber } }],
+  ncrEvidence: [],
+};
+
 type MockSubbieShellOptions = {
   dockets?: (typeof docket)[];
+  ncrs?: (typeof defaultNcr)[];
+  itpInstance?: typeof itpInstance;
 };
 
 function selectedProjectId(url: URL): string {
@@ -158,9 +178,14 @@ async function mockSubbieShellApi(page: Page, options: MockSubbieShellOptions = 
   const myCompanyProjectIds: Array<string | null> = [];
   const lotsProjectIds: Array<string | null> = [];
   const lotsSubcontractorCompanyIds: Array<string | null> = [];
+  const uploadedDocuments: unknown[] = [];
+  const ncrEvidenceLinks: unknown[] = [];
+  const ncrVerificationSubmissions: unknown[] = [];
+  const itpCompletionPosts: unknown[] = [];
 
   await page.route('**/api/**', async (route) => {
-    const url = new URL(route.request().url());
+    const request = route.request();
+    const url = new URL(request.url());
 
     if (url.pathname === '/api/auth/me') {
       await fulfillJson(route, { user: SUBBIE_USER });
@@ -249,7 +274,22 @@ async function mockSubbieShellApi(page: Page, options: MockSubbieShellOptions = 
     }
 
     if (url.pathname === `/api/itp/instances/lot/${assignedLot.id}`) {
-      await fulfillJson(route, { instance: itpInstance });
+      await fulfillJson(route, { instance: options.itpInstance ?? itpInstance });
+      return;
+    }
+
+    if (url.pathname === '/api/itp/completions' && request.method() === 'POST') {
+      const body = request.postDataJSON();
+      itpCompletionPosts.push(body);
+      await fulfillJson(route, {
+        completion: {
+          id: 'completion-resubmitted',
+          checklistItemId: body.checklistItemId,
+          status: 'pending_verification',
+          isCompleted: true,
+          isVerified: false,
+        },
+      });
       return;
     }
 
@@ -301,27 +341,27 @@ async function mockSubbieShellApi(page: Page, options: MockSubbieShellOptions = 
     }
 
     if (url.pathname === '/api/ncrs') {
-      await fulfillJson(route, {
-        ncrs: [
-          {
-            id: 'ncr-1',
-            ncrNumber: 'NCR-SUB-001',
-            description: 'Bedding failed compaction on one section',
-            category: 'workmanship',
-            severity: 'major',
-            status: 'open',
-            raisedAt: '2026-06-22T11:00:00.000Z',
-            raisedBy: { fullName: 'E2E Foreman' },
-            responsibleSubcontractorId: selectedSubcontractorCompanyId(url),
-            responsibleSubcontractor: {
-              id: selectedSubcontractorCompanyId(url),
-              companyName: 'Mobile Shell Civil',
-            },
-            ncrLots: [{ lot: { lotNumber: assignedLot.lotNumber } }],
-            ncrEvidence: [],
-          },
-        ],
-      });
+      await fulfillJson(route, { ncrs: options.ncrs ?? [defaultNcr] });
+      return;
+    }
+
+    if (url.pathname === `/api/ncrs/${encodeURIComponent('ncr-rectify')}/evidence`) {
+      const body = request.postDataJSON();
+      ncrEvidenceLinks.push(body);
+      await fulfillJson(route, { evidence: { id: 'ncr-evidence-1' } });
+      return;
+    }
+
+    if (url.pathname === `/api/ncrs/${encodeURIComponent('ncr-rectify')}/submit-for-verification`) {
+      const body = request.postDataJSON();
+      ncrVerificationSubmissions.push(body);
+      await fulfillJson(route, { ncr: { id: 'ncr-rectify', status: 'pending_verification' } });
+      return;
+    }
+
+    if (url.pathname === '/api/documents/upload') {
+      uploadedDocuments.push({ method: request.method() });
+      await fulfillJson(route, { id: 'doc-uploaded-1', filename: 'repair-photo.jpg' });
       return;
     }
 
@@ -351,6 +391,10 @@ async function mockSubbieShellApi(page: Page, options: MockSubbieShellOptions = 
     myCompanyProjectIds: () => myCompanyProjectIds,
     lotsProjectIds: () => lotsProjectIds,
     lotsSubcontractorCompanyIds: () => lotsSubcontractorCompanyIds,
+    uploadedDocuments: () => uploadedDocuments,
+    ncrEvidenceLinks: () => ncrEvidenceLinks,
+    ncrVerificationSubmissions: () => ncrVerificationSubmissions,
+    itpCompletionPosts: () => itpCompletionPosts,
   };
 }
 
@@ -530,6 +574,129 @@ test.describe('Subbie mobile shell direct routes', () => {
         await expect(page.getByText(route.text).first()).toBeVisible();
       }
     }
+  });
+
+  test('mobile subbie submits NCR rectification evidence from the shell', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    const api = await mockSubbieShellApi(page, {
+      ncrs: [
+        {
+          ...defaultNcr,
+          id: 'ncr-rectify',
+          ncrNumber: 'NCR-SUB-303',
+          description: 'Ready for rectification evidence',
+          status: 'rectification',
+        },
+      ],
+    });
+    const projectQuery = `?projectId=${encodeURIComponent(
+      PROJECT_ID,
+    )}&subcontractorCompanyId=${encodeURIComponent(SUBCONTRACTOR_COMPANY_ID)}`;
+
+    await page.goto(`/p/ncrs${projectQuery}`);
+    await expect(page.getByRole('heading', { name: 'NCRs' })).toBeVisible();
+    await expect(page.getByText('NCR-SUB-303')).toBeVisible();
+    await page.getByRole('button', { name: 'Submit Rectification' }).click();
+
+    const submit = page.getByRole('button', { name: 'Submit for Verification' });
+    await expect(submit).toBeDisabled();
+
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: 'repair-photo.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('repair photo'),
+    });
+    await expect.poll(() => api.uploadedDocuments()).toContainEqual({ method: 'POST' });
+    await expect
+      .poll(() => api.ncrEvidenceLinks())
+      .toContainEqual({
+        documentId: 'doc-uploaded-1',
+        evidenceType: 'photo',
+      });
+    await expect(page.getByText('✓ repair-photo.jpg')).toBeVisible();
+
+    await page
+      .getByPlaceholder(/Describe the corrective actions taken/i)
+      .fill('Repaired bedding and retested compaction.');
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    await expect
+      .poll(() => api.ncrVerificationSubmissions())
+      .toContainEqual({
+        rectificationNotes: 'Repaired bedding and retested compaction.',
+      });
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('mobile subbie resubmits a rejected ITP check from the shell', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    const api = await mockSubbieShellApi(page, {
+      itpInstance: {
+        ...itpInstance,
+        completions: [
+          {
+            id: 'completion-rejected',
+            checklistItemId: 'check-1',
+            status: 'rejected',
+            isCompleted: true,
+            isNotApplicable: false,
+            isFailed: false,
+            isRejected: true,
+            verificationStatus: 'rejected',
+            verificationNotes: 'Photo does not show bedding depth.',
+            notes: null,
+            completedAt: '2026-06-22T09:00:00.000Z',
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+            holdPointRelease: null,
+          },
+        ],
+      },
+    });
+    const projectQuery = `?projectId=${encodeURIComponent(
+      PROJECT_ID,
+    )}&subcontractorCompanyId=${encodeURIComponent(SUBCONTRACTOR_COMPANY_ID)}`;
+
+    await page.goto(`/p/lots/${encodeURIComponent(assignedLot.id)}/itp${projectQuery}`);
+    await expect(page.getByRole('heading', { name: 'Inspection' })).toBeVisible();
+    await expect(page.getByText('Rejected by head contractor')).toBeVisible();
+    await expect(page.getByText(/Photo does not show bedding depth/i).first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Pass this check' }).click();
+
+    await expect
+      .poll(() => api.itpCompletionPosts())
+      .toContainEqual({
+        itpInstanceId: 'itp-instance-1',
+        checklistItemId: 'check-1',
+        isCompleted: true,
+        notes: null,
+      });
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 
   test('desktop classic portal deep links stay classic when shell is off', async ({ page }) => {

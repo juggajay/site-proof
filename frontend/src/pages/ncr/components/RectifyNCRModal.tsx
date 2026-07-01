@@ -24,6 +24,7 @@ interface RectifyNCRModalProps {
   projectId?: string;
   onClose: () => void;
   onSuccess: () => void;
+  onEvidenceUploaded?: () => void | Promise<void>;
 }
 
 interface UploadedEvidenceDocument {
@@ -37,6 +38,7 @@ function RectifyNCRModalInner({
   projectId,
   onClose,
   onSuccess,
+  onEvidenceUploaded,
 }: RectifyNCRModalProps) {
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
@@ -98,6 +100,7 @@ function RectifyNCRModalInner({
       });
 
       setEvidenceFiles((prev) => [...prev, file]);
+      await onEvidenceUploaded?.();
     } catch (err) {
       handleApiError(err, 'Failed to upload evidence');
     } finally {
