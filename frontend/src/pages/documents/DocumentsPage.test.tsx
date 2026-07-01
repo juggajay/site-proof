@@ -2,15 +2,16 @@ import { Route, Routes } from 'react-router-dom';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, authFetch } from '@/lib/api';
 import { DocumentsPage } from './DocumentsPage';
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
-  return { ...actual, apiFetch: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), authFetch: vi.fn() };
 });
 
 const apiFetchMock = vi.mocked(apiFetch);
+const authFetchMock = vi.mocked(authFetch);
 let projectRole = 'admin';
 let documentTotal = 0;
 
@@ -47,6 +48,45 @@ describe('DocumentsPage', () => {
         };
       }
 
+      if (path === '/api/documents/doc-page-1/versions') {
+        return {
+          documentId: 'doc-page-1',
+          totalVersions: 2,
+          versions: [
+            {
+              id: 'doc-page-1',
+              documentType: 'photo',
+              category: 'quality',
+              filename: 'document-page-1.jpg',
+              fileSize: 1024,
+              mimeType: 'image/jpeg',
+              uploadedAt: '2026-06-02T00:00:00.000Z',
+              uploadedBy: { id: 'user-1', fullName: 'QA User', email: 'qa@example.com' },
+              caption: null,
+              lot: null,
+              isFavourite: false,
+              version: 2,
+              isLatestVersion: true,
+            },
+            {
+              id: 'doc-page-1-v1',
+              documentType: 'photo',
+              category: 'quality',
+              filename: 'document-page-1-original.jpg',
+              fileSize: 512,
+              mimeType: 'image/jpeg',
+              uploadedAt: '2026-06-01T00:00:00.000Z',
+              uploadedBy: { id: 'user-1', fullName: 'QA User', email: 'qa@example.com' },
+              caption: null,
+              lot: null,
+              isFavourite: false,
+              version: 1,
+              isLatestVersion: false,
+            },
+          ],
+        };
+      }
+
       if (path.startsWith('/api/documents/project-1')) {
         const url = new URL(path, 'http://siteproof.test');
         const page = Number(url.searchParams.get('page') || '1');
@@ -66,6 +106,8 @@ describe('DocumentsPage', () => {
                     caption: null,
                     lot: null,
                     isFavourite: false,
+                    version: page + 1,
+                    isLatestVersion: true,
                   },
                 ]
               : [],
@@ -89,11 +131,23 @@ describe('DocumentsPage', () => {
 
       throw new Error(`Unexpected apiFetch path in test: ${path}`);
     });
+    authFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'doc-page-1-v3',
+          filename: 'document-page-1-v3.jpg',
+          version: 3,
+          isLatestVersion: true,
+        }),
+        { status: 201, headers: { 'content-type': 'application/json' } },
+      ),
+    );
   });
 
   afterEach(() => {
     cleanup();
     apiFetchMock.mockReset();
+    authFetchMock.mockReset();
   });
 
   it('uses lotId and upload query params to filter documents and preselect upload lot', async () => {
@@ -270,5 +324,88 @@ describe('DocumentsPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('document-viewer-modal')).not.toBeInTheDocument();
     });
+  });
+
+  it('shows version history and uploads a new document version', async () => {
+    documentTotal = 1;
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Version history for document-page-1.jpg' }),
+    );
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/doc-page-1/versions');
+    });
+    expect(screen.getByRole('heading', { name: 'Version history' })).toBeInTheDocument();
+    expect(screen.getByText('document-page-1-original.jpg')).toBeInTheDocument();
+    expect(screen.getByText('Current')).toBeInTheDocument();
+
+    const openedWindow = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: '' },
+      opener: null,
+    } as unknown as Window;
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(openedWindow);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View document-page-1-original.jpg version 1' }),
+    );
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/doc-page-1-v1/signed-url', {
+        method: 'POST',
+        body: JSON.stringify({ expiresInMinutes: 15, disposition: 'inline' }),
+      });
+    });
+    expect(openedWindow.location.href).toBe('/signed/document-preview');
+    openSpy.mockRestore();
+
+    const nextFile = new File(['new-version'], 'document-page-1-v3.jpg', {
+      type: 'image/jpeg',
+    });
+    fireEvent.change(screen.getByLabelText('New version file'), {
+      target: { files: [nextFile] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload version' }));
+
+    await waitFor(() => {
+      expect(authFetchMock).toHaveBeenCalledWith('/api/documents/doc-page-1/version', {
+        method: 'POST',
+        body: expect.any(FormData),
+      });
+    });
+
+    const body = authFetchMock.mock.calls[0]?.[1]?.body;
+    expect(body).toBeInstanceOf(FormData);
+    expect((body as FormData).get('file')).toBe(nextFile);
+  });
+
+  it('lets project viewers inspect versions without upload controls', async () => {
+    projectRole = 'viewer';
+    documentTotal = 1;
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Version history for document-page-1.jpg' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('document-page-1-original.jpg')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText('New version file')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upload version' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download document-page-1-original.jpg version 1' }),
+    ).toBeVisible();
   });
 });

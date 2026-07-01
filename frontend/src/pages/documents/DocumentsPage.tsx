@@ -18,6 +18,7 @@ import { DocumentFiltersPanel } from './components/DocumentFiltersPanel';
 import { DocumentGrid } from './components/DocumentGrid';
 import { DocumentUploadModal } from './components/DocumentUploadModal';
 import { DocumentViewerModal } from './components/DocumentViewerModal';
+import { DocumentVersionsModal } from './components/DocumentVersionsModal';
 import {
   DeleteDocumentDialog,
   DocumentCategorySummary,
@@ -45,6 +46,8 @@ interface Document {
   caption: string | null;
   lot: { id: string; lotNumber: string; description: string } | null;
   isFavourite: boolean;
+  version?: number | null;
+  isLatestVersion?: boolean | null;
 }
 
 interface Lot {
@@ -121,6 +124,7 @@ export function DocumentsPage() {
   const [viewerZoom, setViewerZoom] = useState(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [documentPendingDelete, setDocumentPendingDelete] = useState<Document | null>(null);
+  const [versionsDoc, setVersionsDoc] = useState<Document | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const viewerRequestIdRef = useRef(0);
   const appliedUploadQueryRef = useRef<string | null>(null);
@@ -522,6 +526,7 @@ export function DocumentsPage() {
         onToggleFavourite={toggleFavourite}
         onOpenViewer={(doc) => void openViewer(doc)}
         onDownload={(doc) => void handleDownload(doc)}
+        onViewVersions={(doc) => setVersionsDoc(doc)}
         onMarkPendingDelete={(doc) => setDocumentPendingDelete(doc)}
       />
 
@@ -569,6 +574,15 @@ export function DocumentsPage() {
           onDownload={() => void handleDownload(viewerDoc)}
           onClose={closeViewer}
           onRetry={() => void openViewer(viewerDoc)}
+        />
+      )}
+
+      {versionsDoc && projectId && (
+        <DocumentVersionsModal
+          projectId={projectId}
+          document={versionsDoc}
+          canManageDocuments={canManageDocuments}
+          onClose={() => setVersionsDoc(null)}
         />
       )}
 

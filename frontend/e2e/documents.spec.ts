@@ -19,11 +19,20 @@ type SeededDocument = {
   caption: string | null;
   lot: { id: string; lotNumber: string; description: string } | null;
   isFavourite: boolean;
+  version?: number;
+  isLatestVersion?: boolean;
 };
 
 const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
-function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): SeededDocument[] {
+function buildSeedDocuments(
+  pdfFavourite = false,
+  includeUploaded = false,
+  pdfVersion: { filename: string; version: number } = {
+    filename: 'e2e-drawing.pdf',
+    version: 2,
+  },
+): SeededDocument[] {
   const documents: SeededDocument[] = [
     {
       id: E2E_PHOTO_DOC_ID,
@@ -37,12 +46,14 @@ function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): Seed
       caption: 'E2E evidence photo',
       lot: { id: 'e2e-document-lot', lotNumber: 'LOT-DOC-001', description: 'Document lot' },
       isFavourite: true,
+      version: 1,
+      isLatestVersion: true,
     },
     {
       id: E2E_PDF_DOC_ID,
       documentType: 'drawing',
       category: 'design',
-      filename: 'e2e-drawing.pdf',
+      filename: pdfVersion.filename,
       fileSize: 1048576,
       mimeType: 'application/pdf',
       uploadedAt: '2026-05-02T01:00:00.000Z',
@@ -50,6 +61,8 @@ function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): Seed
       caption: 'E2E IFC drawing',
       lot: null,
       isFavourite: pdfFavourite,
+      version: pdfVersion.version,
+      isLatestVersion: true,
     },
   ];
 
@@ -66,6 +79,8 @@ function buildSeedDocuments(pdfFavourite = false, includeUploaded = false): Seed
       caption: 'Uploaded from E2E',
       lot: { id: 'e2e-document-lot', lotNumber: 'LOT-DOC-001', description: 'Document lot' },
       isFavourite: false,
+      version: 1,
+      isLatestVersion: true,
     });
   }
 
@@ -115,6 +130,9 @@ async function mockSeededDocumentsApi(
   let favouriteRequestCount = 0;
   let deleteRequestId: string | null = null;
   let uploadBody = '';
+  let versionUploadBody = '';
+  let pdfFilename = 'e2e-drawing.pdf';
+  let pdfVersion = 2;
   let documentLoadCount = 0;
   const deletedDocumentIds = new Set<string>();
   const signedUrlRequestCounts = new Map<string, number>();
@@ -186,9 +204,10 @@ async function mockSeededDocumentsApi(
       }
 
       const documents = filterDocuments(
-        buildSeedDocuments(pdfFavourite, includeUploaded).filter(
-          (doc) => !deletedDocumentIds.has(doc.id),
-        ),
+        buildSeedDocuments(pdfFavourite, includeUploaded, {
+          filename: pdfFilename,
+          version: pdfVersion,
+        }).filter((doc) => !deletedDocumentIds.has(doc.id)),
         url,
       );
       const page = Number(url.searchParams.get('page') || '1');
@@ -208,6 +227,51 @@ async function mockSeededDocumentsApi(
           hasNextPage: page < Math.ceil(documents.length / limit),
         },
       });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/documents/${E2E_PDF_DOC_ID}/versions` &&
+      route.request().method() === 'GET'
+    ) {
+      const current = buildSeedDocuments(pdfFavourite, includeUploaded, {
+        filename: pdfFilename,
+        version: pdfVersion,
+      }).find((doc) => doc.id === E2E_PDF_DOC_ID)!;
+      await json({
+        documentId: E2E_PDF_DOC_ID,
+        totalVersions: 2,
+        versions: [
+          current,
+          {
+            ...current,
+            id: `${E2E_PDF_DOC_ID}-v1`,
+            filename: 'e2e-drawing-v1.pdf',
+            uploadedAt: '2026-04-25T01:00:00.000Z',
+            version: 1,
+            isLatestVersion: false,
+          },
+        ],
+      });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/documents/${E2E_PDF_DOC_ID}/version` &&
+      route.request().method() === 'POST'
+    ) {
+      versionUploadBody = route.request().postDataBuffer()?.toString('latin1') || '';
+      pdfVersion += 1;
+      pdfFilename = 'e2e-drawing-revision.pdf';
+      await json(
+        {
+          ...buildSeedDocuments(pdfFavourite, includeUploaded, {
+            filename: pdfFilename,
+            version: pdfVersion,
+          }).find((doc) => doc.id === E2E_PDF_DOC_ID),
+        },
+        201,
+      );
       return;
     }
 
@@ -241,7 +305,10 @@ async function mockSeededDocumentsApi(
       pdfFavourite = Boolean((favouriteRequest as { isFavourite?: boolean }).isFavourite);
       await new Promise((resolve) => setTimeout(resolve, 250));
       await json(
-        buildSeedDocuments(pdfFavourite, includeUploaded).find((doc) => doc.id === E2E_PDF_DOC_ID),
+        buildSeedDocuments(pdfFavourite, includeUploaded, {
+          filename: pdfFilename,
+          version: pdfVersion,
+        }).find((doc) => doc.id === E2E_PDF_DOC_ID),
       );
       return;
     }
@@ -259,7 +326,12 @@ async function mockSeededDocumentsApi(
     if (url.pathname === '/api/documents/upload' && route.request().method() === 'POST') {
       uploadBody = route.request().postDataBuffer()?.toString('latin1') || '';
       includeUploaded = true;
-      await json(buildSeedDocuments(pdfFavourite, includeUploaded)[0]);
+      await json(
+        buildSeedDocuments(pdfFavourite, includeUploaded, {
+          filename: pdfFilename,
+          version: pdfVersion,
+        })[0],
+      );
       return;
     }
 
@@ -276,6 +348,7 @@ async function mockSeededDocumentsApi(
     getSignedUrlRequestCount: (documentId: string) => signedUrlRequestCounts.get(documentId) ?? 0,
     getSignedUrlRequests: (documentId: string) => signedUrlRequests.get(documentId) ?? [],
     getUploadBody: () => uploadBody,
+    getVersionUploadBody: () => versionUploadBody,
   };
 }
 
@@ -424,6 +497,48 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(page.getByText('e2e-proof-photo.jpg')).toBeVisible();
     await expect(page.getByText('e2e-drawing.pdf')).toBeVisible();
     expect(api.getDocumentLoadCount()).toBeGreaterThanOrEqual(3);
+  });
+
+  test('opens document version history and uploads a new version', async ({ page }) => {
+    const api = await mockSeededDocumentsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/documents`);
+
+    const pdfItem = page
+      .locator('.flex.items-center.gap-4.p-4')
+      .filter({ hasText: 'e2e-drawing.pdf' });
+    await expect(pdfItem).toBeVisible();
+
+    await pdfItem.getByRole('button', { name: 'Version history for e2e-drawing.pdf' }).click();
+
+    const versionModal = page.getByRole('dialog').filter({ hasText: 'Version history' });
+    await expect(versionModal.getByRole('heading', { name: 'Version history' })).toBeVisible();
+    await expect(
+      versionModal.getByRole('button', { name: 'View e2e-drawing.pdf version 2' }),
+    ).toBeVisible();
+    await expect(versionModal.getByText('e2e-drawing-v1.pdf')).toBeVisible();
+    await expect(versionModal.getByText('Current')).toBeVisible();
+
+    const versionPopupPromise = page.waitForEvent('popup');
+    await versionModal.getByRole('button', { name: 'View e2e-drawing-v1.pdf version 1' }).click();
+    const versionPopup = await versionPopupPromise;
+    await expect.poll(() => versionPopup.url()).toContain('/signed/e2e-document');
+    expect(api.getSignedUrlRequests(`${E2E_PDF_DOC_ID}-v1`)).toContainEqual(
+      expect.objectContaining({ disposition: 'inline' }),
+    );
+    await versionPopup.close();
+
+    await versionModal.getByLabel('New version file').setInputFiles({
+      name: 'e2e-drawing-revision.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n%E2E revision\n'),
+    });
+    await versionModal.getByRole('button', { name: 'Upload version' }).click();
+
+    await expect(
+      page.getByText('The document register now shows the latest version.'),
+    ).toBeVisible();
+    expect(api.getVersionUploadBody()).toContain('e2e-drawing-revision.pdf');
   });
 
   test('opens a real download tab before a delayed signed URL response completes', async ({
