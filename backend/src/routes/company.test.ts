@@ -334,6 +334,77 @@ describe('Company API', () => {
       expect(typeof res.body.company.projectCount).toBe('number');
     });
 
+    it('should exclude archived projects from project count usage', async () => {
+      const usageCompany = await prisma.company.create({
+        data: {
+          name: `Project Usage Count ${Date.now()}`,
+          subscriptionTier: 'basic',
+        },
+      });
+      const usageUser = await registerTestUser(app, {
+        emailPrefix: 'project-usage-count',
+        fullName: 'Project Usage Count Owner',
+        companyId: usageCompany.id,
+        roleInCompany: 'owner',
+      });
+      const suffix = `${Date.now()}-${usageUser.userId.slice(0, 8)}`;
+
+      try {
+        await prisma.project.createMany({
+          data: [
+            {
+              name: 'Active Project 1',
+              projectNumber: `USAGE-A-${suffix}`,
+              companyId: usageCompany.id,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+            {
+              name: 'Active Project 2',
+              projectNumber: `USAGE-B-${suffix}`,
+              companyId: usageCompany.id,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+            {
+              name: 'Active Project 3',
+              projectNumber: `USAGE-C-${suffix}`,
+              companyId: usageCompany.id,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+            {
+              name: 'Archived Project',
+              projectNumber: `USAGE-ARCHIVED-${suffix}`,
+              companyId: usageCompany.id,
+              status: 'archived',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+          ],
+        });
+
+        const res = await request(app)
+          .get('/api/company')
+          .set('Authorization', `Bearer ${usageUser.token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.projectCount).toBe(3);
+        expect(res.body.company.projectLimit).toBe(3);
+      } finally {
+        await prisma.auditLog.deleteMany({
+          where: { OR: [{ entityId: usageCompany.id }, { userId: usageUser.userId }] },
+        });
+        await prisma.project.deleteMany({ where: { companyId: usageCompany.id } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: usageUser.userId } });
+        await prisma.user.delete({ where: { id: usageUser.userId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: usageCompany.id } }).catch(() => {});
+      }
+    });
+
     it('should include user count and limit', async () => {
       const res = await request(app)
         .get('/api/company')

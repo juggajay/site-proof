@@ -1,10 +1,13 @@
 import React from 'react';
-import type { StatusFilter, HoldPointStats } from '../types';
+import type { HoldPointLotOption, StatusFilter, HoldPointStats } from '../types';
 
 interface HoldPointStatusFilterProps {
   statusFilter: StatusFilter;
+  selectedLotId: string;
   searchQuery: string;
+  lotOptions: HoldPointLotOption[];
   onStatusFilterChange: (filter: StatusFilter) => void;
+  onLotFilterChange: (lotId: string) => void;
   onSearchChange: (query: string) => void;
   onExportCSV: () => void;
   // Mobile hides the CSV export to keep the primary actions uncluttered; desktop
@@ -14,8 +17,11 @@ interface HoldPointStatusFilterProps {
 
 export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
   statusFilter,
+  selectedLotId,
   searchQuery,
+  lotOptions,
   onStatusFilterChange,
+  onLotFilterChange,
   onSearchChange,
   onExportCSV,
   showExport = true,
@@ -32,6 +38,19 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
           aria-label="Search hold points by lot or description"
           className="w-56 rounded-lg border border-border px-3 py-2 text-sm bg-card"
         />
+        <select
+          value={selectedLotId}
+          onChange={(e) => onLotFilterChange(e.target.value)}
+          aria-label="Filter hold points by lot"
+          className="rounded-lg border border-border px-3 py-2 text-sm bg-card"
+        >
+          <option value="all">All lots</option>
+          {lotOptions.map((lot) => (
+            <option key={lot.lotId} value={lot.lotId}>
+              {lot.lotNumber}
+            </option>
+          ))}
+        </select>
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}

@@ -4,6 +4,7 @@ import {
   CHAINAGE_MAX,
   CREATE_LOT_DEFAULT_VALUES,
   createLotSchema,
+  parseBudgetAmountInput,
   parseChainageInput,
 } from './createLotForm';
 
@@ -28,6 +29,11 @@ describe('createLotSchema', () => {
     expect(parseChainageInput('')).toBeNull();
   });
 
+  it('preserves decimal budget parsing used by the submit payload', () => {
+    expect(parseBudgetAmountInput('1250.25')).toBe(1250.25);
+    expect(parseBudgetAmountInput('')).toBeNull();
+  });
+
   it('rejects lot numbers shorter than the existing minimum', () => {
     expect(issueMessagesFor({ ...validLot, lotNumber: 'AB' })).toContain(
       'Lot Number must be at least 3 characters',
@@ -37,6 +43,12 @@ describe('createLotSchema', () => {
   it('rejects invalid optional chainage text', () => {
     expect(issueMessagesFor({ ...validLot, chainageStart: 'abc' })).toContain(
       'Chainage Start must be a valid number',
+    );
+  });
+
+  it('rejects invalid optional budget text', () => {
+    expect(issueMessagesFor({ ...validLot, budgetAmount: 'abc' })).toContain(
+      'Budget Amount must be a valid number',
     );
   });
 

@@ -1,18 +1,15 @@
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { MemoryRouter, Outlet } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Outlet } from 'react-router-dom';
 
 const authState = vi.hoisted(() => ({
-  user: {
-    id: 'project-pm-1',
-    email: 'project-pm@example.com',
-    role: 'member',
-    roleInCompany: 'member',
-    dashboardRole: 'project_manager',
-    companyId: 'company-1',
-  } as Record<string, unknown> | null,
+  user: null as Record<string, unknown> | null,
   loading: false,
+}));
+
+const protectedShellRenderCount = vi.hoisted(() => ({
+  value: 0,
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -25,7 +22,14 @@ vi.mock('@/lib/offline/storagePersistence', () => ({
 }));
 
 vi.mock('@/components/layouts/ProtectedAppShell', () => ({
-  ProtectedAppShell: () => <Outlet />,
+  ProtectedAppShell: () => {
+    protectedShellRenderCount.value += 1;
+    return (
+      <div data-testid="protected-app-shell">
+        <Outlet />
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/components/layouts/AuthLayout', () => ({
@@ -42,19 +46,12 @@ vi.mock('@/components/UpdatePrompt', () => ({ UpdatePrompt: () => null }));
 vi.mock('@/components/InstallNudge', () => ({ InstallNudge: () => null }));
 vi.mock('@/components/CookieConsentBanner', () => ({ CookieConsentBanner: () => null }));
 vi.mock('@/components/dev/RoleSwitcher', () => ({ RoleSwitcher: () => null }));
-vi.mock('@/shell/shellFlag', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shell/shellFlag')>();
-  return { ...actual, applyShellFlagFromUrl: vi.fn() };
-});
-vi.mock('@/shell/ShellGuard', () => ({
-  ShellGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
-vi.mock('@/shell/ShellRoutes', () => ({ ShellRoutes: () => <div>Shell routes</div> }));
-vi.mock('@/shell/SubbieShellGuard', () => ({
-  SubbieShellGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
+
+vi.mock('@/shell/ShellRoutes', () => ({
+  ShellRoutes: () => <div>Foreman shell home</div>,
 }));
 vi.mock('@/shell/subbie/SubbieShellRoutes', () => ({
-  SubbieShellRoutes: () => <div>Subbie shell routes</div>,
+  SubbieShellRoutes: () => <div>Subbie shell home</div>,
 }));
 
 vi.mock('./appProjectRoutes', () => ({
@@ -86,8 +83,8 @@ vi.mock('./appLazyPages', () => ({
   DailyDiaryPage: () => <div>Daily diary</div>,
   DelayRegisterPage: () => <div>Delays</div>,
   DocketApprovalsPage: () => <div>Docket approvals</div>,
-  ClaimsPage: () => <div>Claims route reached</div>,
-  CostsPage: () => <div>Costs route reached</div>,
+  ClaimsPage: () => <div>Claims</div>,
+  CostsPage: () => <div>Costs</div>,
   DocumentsPage: () => <div>Documents</div>,
   DrawingsPage: () => <div>Drawings</div>,
   SubcontractorsPage: () => <div>Subcontractors</div>,
@@ -120,7 +117,15 @@ vi.mock('./appLazyPages', () => ({
   SubcontractorDocumentsPage: () => <div>Subcontractor documents</div>,
 }));
 
+import { removeLocalStorageItem } from '@/lib/storagePreferences';
 import App from './App';
+
+const FLAG_KEY = 'siteproof.shell.v2';
+let mobileViewport = true;
+
+function setMobileViewport(isMobile: boolean) {
+  mobileViewport = isMobile;
+}
 
 function renderAppAt(path: string) {
   return render(
@@ -131,54 +136,92 @@ function renderAppAt(path: string) {
 }
 
 beforeEach(() => {
+  protectedShellRenderCount.value = 0;
   authState.loading = false;
-  authState.user = {
-    id: 'project-pm-1',
-    email: 'project-pm@example.com',
-    role: 'member',
-    roleInCompany: 'member',
-    dashboardRole: 'project_manager',
-    companyId: 'company-1',
-  };
-});
-
-describe('project-scoped commercial routes', () => {
-  it.each([
-    ['/projects/project-1/claims', 'Claims route reached'],
-    ['/projects/project-1/costs', 'Costs route reached'],
-    ['/projects/project-1/lots/lot-1/edit', 'Lot edit'],
-    ['/projects/project-1/subcontractors', 'Subcontractors'],
-  ])('allows project-scoped project managers to open %s', async (path, expectedText) => {
-    renderAppAt(path);
-
-    expect(await screen.findByText(expectedText)).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
+  authState.user = null;
+  removeLocalStorageItem(FLAG_KEY);
+  setMobileViewport(true);
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: mobileViewport,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
   });
 });
 
-describe('root route (/)', () => {
-  it('shows the landing page to logged-out visitors (not the login wall)', async () => {
-    authState.user = null;
-
-    renderAppAt('/');
-
-    expect(await screen.findByText('Landing')).toBeInTheDocument();
-    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
-  });
-
-  it('sends authenticated users straight to the dashboard', async () => {
+describe('role shell entry redirects', () => {
+  it('sends mobile foremen from /dashboard to /m before ProtectedAppShell renders', async () => {
     authState.user = {
-      id: 'u1',
-      email: 'u1@example.com',
-      role: 'member',
-      roleInCompany: 'member',
-      dashboardRole: 'project_manager',
+      id: 'foreman-1',
+      email: 'foreman@example.com',
+      role: 'foreman',
+      roleInCompany: 'foreman',
       companyId: 'company-1',
     };
 
-    renderAppAt('/');
+    renderAppAt('/dashboard');
+
+    expect(await screen.findByText('Foreman shell home')).toBeInTheDocument();
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('protected-app-shell')).not.toBeInTheDocument();
+    expect(protectedShellRenderCount.value).toBe(0);
+  });
+
+  it('sends mobile subcontractors from /subcontractor-portal to /p before ProtectedAppShell renders', async () => {
+    authState.user = {
+      id: 'subbie-1',
+      email: 'subbie@example.com',
+      role: 'subcontractor',
+      roleInCompany: 'subcontractor',
+      companyId: null,
+      hasSubcontractorPortalAccess: true,
+    };
+
+    renderAppAt('/subcontractor-portal');
+
+    expect(await screen.findByText('Subbie shell home')).toBeInTheDocument();
+    expect(screen.queryByText('Subcontractor dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('protected-app-shell')).not.toBeInTheDocument();
+    expect(protectedShellRenderCount.value).toBe(0);
+  });
+
+  it('keeps the classic dashboard when the shell is disabled in the URL', async () => {
+    authState.user = {
+      id: 'foreman-1',
+      email: 'foreman@example.com',
+      role: 'foreman',
+      roleInCompany: 'foreman',
+      companyId: 'company-1',
+    };
+
+    renderAppAt('/dashboard?shell=off');
 
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();
-    expect(screen.queryByText('Landing')).not.toBeInTheDocument();
+    expect(screen.getByTestId('protected-app-shell')).toBeInTheDocument();
+    expect(screen.queryByText('Foreman shell home')).not.toBeInTheDocument();
+  });
+
+  it('keeps desktop foremen on the classic dashboard', async () => {
+    setMobileViewport(false);
+    authState.user = {
+      id: 'foreman-1',
+      email: 'foreman@example.com',
+      role: 'foreman',
+      roleInCompany: 'foreman',
+      companyId: 'company-1',
+    };
+
+    renderAppAt('/dashboard');
+
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByTestId('protected-app-shell')).toBeInTheDocument();
+    expect(screen.queryByText('Foreman shell home')).not.toBeInTheDocument();
   });
 });

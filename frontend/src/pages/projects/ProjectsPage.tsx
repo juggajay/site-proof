@@ -19,6 +19,10 @@ import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontrac
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 import { useCreateSampleProject } from '@/hooks/useCreateSampleProject';
 import { SPECIFICATION_SET_HELPER_TEXT } from './settings/types';
+import {
+  getSpecificationSetForStateChange,
+  getSpecificationSetOptionsForState,
+} from './projectSpecifications';
 
 interface Project {
   id: string;
@@ -39,16 +43,6 @@ const STATE_OPTIONS = [
   { value: 'TAS', label: 'Tasmania' },
   { value: 'NT', label: 'Northern Territory' },
   { value: 'ACT', label: 'Australian Capital Territory' },
-];
-
-const SPEC_SET_OPTIONS = [
-  { value: 'Austroads', label: 'Austroads (National)' },
-  { value: 'TfNSW', label: 'TfNSW (NSW)' },
-  { value: 'MRTS', label: 'MRTS (QLD)' },
-  { value: 'VicRoads', label: 'VicRoads (VIC)' },
-  { value: 'DIT', label: 'DIT (SA)' },
-  { value: 'MRWA', label: 'Main Roads WA' },
-  { value: 'custom', label: 'Custom' },
 ];
 
 // Status configuration with colors and descriptions.
@@ -215,10 +209,21 @@ export function ProjectsPage() {
   // membership yet, rather than a dead-end create button or a blank page.
   const canCreateProjects = hasRoleInGroup(getCompanyRole(user), ROLE_GROUPS.ADMIN);
   const companyLabel = user?.companyName?.trim() || 'your company';
+  const specificationSetOptions = getSpecificationSetOptionsForState(formData.state);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      if (name === 'state') {
+        return {
+          ...prev,
+          state: value,
+          specSet: getSpecificationSetForStateChange(value, prev.specSet),
+        };
+      }
+
+      return { ...prev, [name]: value };
+    });
   };
 
   const openCreateModal = () => {
@@ -435,7 +440,7 @@ export function ProjectsPage() {
                   onChange={handleInputChange}
                 >
                   <option value="">Select specification set</option>
-                  {SPEC_SET_OPTIONS.map((opt) => (
+                  {specificationSetOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
