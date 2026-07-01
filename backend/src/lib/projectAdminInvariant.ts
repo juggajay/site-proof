@@ -2,7 +2,7 @@ import { AppError } from './AppError.js';
 import { prisma } from './prisma.js';
 import { Prisma } from '@prisma/client';
 
-export const PROJECT_ADMIN_ROLES = ['admin', 'project_manager'];
+export const PROJECT_ADMIN_ROLES = ['owner', 'admin', 'project_manager'];
 
 type ProjectAdminInvariantClient = typeof prisma | Prisma.TransactionClient;
 

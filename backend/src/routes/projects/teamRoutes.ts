@@ -45,7 +45,7 @@ type ProjectTeamRouterDependencies = {
   parseProjectTeamRole: (value: unknown) => string;
 };
 
-const PROTECTED_PROJECT_MEMBER_ROLES = new Set(['admin', 'project_manager']);
+const PROTECTED_PROJECT_MEMBER_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 function isProjectUserUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
