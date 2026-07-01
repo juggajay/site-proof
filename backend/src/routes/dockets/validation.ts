@@ -189,11 +189,25 @@ export const addPlantEntrySchema = z.object({
   plantId: requiredDocketIdSchema('plantId'),
   hoursOperated: dailyHoursNumber('Hours operated'),
   wetOrDry: z.enum(['wet', 'dry']).optional(),
+  lotAllocations: z
+    .array(lotAllocationSchema)
+    .max(
+      MAX_LOT_ALLOCATIONS_PER_ENTRY,
+      `Cannot allocate more than ${MAX_LOT_ALLOCATIONS_PER_ENTRY} lots to one entry`,
+    )
+    .optional(),
 });
 
 export const updatePlantEntrySchema = z.object({
   hoursOperated: dailyHoursNumber('Hours operated').optional(),
   wetOrDry: z.enum(['wet', 'dry']).optional(),
+  lotAllocations: z
+    .array(lotAllocationSchema)
+    .max(
+      MAX_LOT_ALLOCATIONS_PER_ENTRY,
+      `Cannot allocate more than ${MAX_LOT_ALLOCATIONS_PER_ENTRY} lots to one entry`,
+    )
+    .optional(),
 });
 
 export function parseRequiredQueryString(value: unknown, fieldName: string): string {

@@ -84,6 +84,11 @@ export type DocketPlantEntrySource = {
   submittedCost: NumericLike;
   approvedCost: NumericLike;
   adjustmentReason: string | null;
+  lotAllocations: Array<{
+    lotId: string;
+    lot: { lotNumber: string };
+    hours: NumericLike;
+  }>;
 };
 
 type CommercialPresentationOptions = { includeCommercialAmounts?: boolean };
@@ -144,11 +149,17 @@ export function mapDocketPlantEntry(
     approvedCost: commercialNumericValue(entry.approvedCost, options),
   };
 
+  const lotAllocations = entry.lotAllocations.map((a) => ({
+    lotId: a.lotId,
+    lotNumber: a.lot.lotNumber,
+    hours: numericValue(a.hours),
+  }));
+
   if (options.includeAdjustmentReason) {
-    return { ...base, adjustmentReason: entry.adjustmentReason };
+    return { ...base, adjustmentReason: entry.adjustmentReason, lotAllocations };
   }
 
-  return base;
+  return { ...base, lotAllocations };
 }
 
 export function sumDocketLabourTotals(

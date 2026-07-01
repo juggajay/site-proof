@@ -76,6 +76,25 @@ export function buildLabourLotAllocationRows(
   }));
 }
 
+export function buildPlantLotAllocationCreate(lotAllocations?: DocketLotAllocationInput[]):
+  | {
+      create: DocketLotAllocationInput[];
+    }
+  | undefined {
+  return lotAllocations?.length ? { create: lotAllocations } : undefined;
+}
+
+export function buildPlantLotAllocationRows(
+  docketPlantId: string,
+  lotAllocations: DocketLotAllocationInput[],
+): Array<DocketLotAllocationInput & { docketPlantId: string }> {
+  return lotAllocations.map((alloc) => ({
+    docketPlantId,
+    lotId: alloc.lotId,
+    hours: alloc.hours,
+  }));
+}
+
 export function selectPlantHourlyRate(
   wetOrDry: string | null | undefined,
   rates: { dryRate: unknown; wetRate: unknown },

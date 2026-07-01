@@ -7,6 +7,7 @@ import {
   isDocketEntryEditable,
   requireApprovedDocketResource,
   requireDocketReadAccess,
+  requireLotAllocationsInProject,
   requireDocketSubcontractorAccess,
 } from './access.js';
 import {
@@ -21,7 +22,12 @@ import {
   buildDocketPlantEntriesResponse,
   mapDocketPlantEntry,
 } from './presentation.js';
-import { calculatePlantEntryCost } from './entryCalculations.js';
+import {
+  assertLotAllocationHoursWithinEntry,
+  buildPlantLotAllocationCreate,
+  buildPlantLotAllocationRows,
+  calculatePlantEntryCost,
+} from './entryCalculations.js';
 
 export const plantDocketEntriesRouter = Router();
 // ============================================================================
@@ -47,6 +53,11 @@ plantDocketEntriesRouter.get(
                 idRego: true,
                 dryRate: true,
                 wetRate: true,
+              },
+            },
+            lotAllocations: {
+              include: {
+                lot: { select: { id: true, lotNumber: true } },
               },
             },
           },
@@ -82,7 +93,7 @@ plantDocketEntriesRouter.post(
       throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Invalid request body');
     }
 
-    const { plantId, hoursOperated, wetOrDry } = parseResult.data;
+    const { plantId, hoursOperated, wetOrDry, lotAllocations } = parseResult.data;
 
     // Get docket
     const docket = await prisma.dailyDocket.findUnique({
@@ -100,6 +111,11 @@ plantDocketEntriesRouter.post(
     if (!isDocketEntryEditable(docket.status)) {
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
+    await requireLotAllocationsInProject(
+      docket.projectId,
+      docket.subcontractorCompanyId,
+      lotAllocations,
+    );
 
     // Get plant from register
     const plant = await prisma.plantRegister.findFirst({
@@ -115,6 +131,7 @@ plantDocketEntriesRouter.post(
     requireApprovedDocketResource(plant.status, 'Plant');
 
     const plantCost = calculatePlantEntryCost(hoursOperated, wetOrDry, plant);
+    assertLotAllocationHoursWithinEntry(plantCost.hours, lotAllocations);
 
     const { entry, totals } = await prisma.$transaction(async (tx) => {
       await lockEditableDocketForEntryMutation(tx, id);
@@ -127,6 +144,7 @@ plantDocketEntriesRouter.post(
           wetOrDry: wetOrDry || 'dry',
           hourlyRate: plantCost.hourlyRate,
           submittedCost: plantCost.cost,
+          lotAllocations: buildPlantLotAllocationCreate(lotAllocations),
         },
         include: {
           plant: {
@@ -137,6 +155,11 @@ plantDocketEntriesRouter.post(
               idRego: true,
               dryRate: true,
               wetRate: true,
+            },
+          },
+          lotAllocations: {
+            include: {
+              lot: { select: { id: true, lotNumber: true } },
             },
           },
         },
@@ -165,12 +188,15 @@ plantDocketEntriesRouter.put(
       throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Invalid request body');
     }
 
-    const { hoursOperated, wetOrDry } = parseResult.data;
+    const { hoursOperated, wetOrDry, lotAllocations } = parseResult.data;
 
     const entry = await prisma.docketPlant.findFirst({
       where: { id: entryId, docketId: id },
       include: {
         plant: { select: { dryRate: true, wetRate: true, status: true } },
+        lotAllocations: {
+          select: { lotId: true, hours: true },
+        },
       },
     });
 
@@ -189,12 +215,26 @@ plantDocketEntriesRouter.put(
     requireApprovedDocketResource(entry.plant.status, 'Plant');
 
     const hours = hoursOperated !== undefined ? Number(hoursOperated) : Number(entry.hoursOperated);
+    const effectiveLotAllocations =
+      lotAllocations ??
+      entry.lotAllocations.map((allocation) => ({
+        lotId: allocation.lotId,
+        hours: Number(allocation.hours),
+      }));
+
+    await requireLotAllocationsInProject(
+      docket.projectId,
+      docket.subcontractorCompanyId,
+      effectiveLotAllocations,
+    );
+    assertLotAllocationHoursWithinEntry(hours, effectiveLotAllocations);
+
     const plantCost = calculatePlantEntryCost(hours, wetOrDry || entry.wetOrDry, entry.plant);
 
     const updated = await prisma.$transaction(async (tx) => {
       await lockEditableDocketForEntryMutation(tx, id);
 
-      const refreshed = await tx.docketPlant.update({
+      await tx.docketPlant.update({
         where: { id: entryId },
         data: {
           hoursOperated: hours,
@@ -202,6 +242,21 @@ plantDocketEntriesRouter.put(
           hourlyRate: plantCost.hourlyRate,
           submittedCost: plantCost.cost,
         },
+      });
+
+      if (lotAllocations) {
+        await tx.docketPlantLot.deleteMany({ where: { docketPlantId: entryId } });
+        if (lotAllocations.length > 0) {
+          await tx.docketPlantLot.createMany({
+            data: buildPlantLotAllocationRows(entryId, lotAllocations),
+          });
+        }
+      }
+
+      await refreshPlantSubmittedTotals(tx, id);
+
+      const refreshed = await tx.docketPlant.findUnique({
+        where: { id: entryId },
         include: {
           plant: {
             select: {
@@ -213,10 +268,17 @@ plantDocketEntriesRouter.put(
               wetRate: true,
             },
           },
+          lotAllocations: {
+            include: {
+              lot: { select: { id: true, lotNumber: true } },
+            },
+          },
         },
       });
 
-      await refreshPlantSubmittedTotals(tx, id);
+      if (!refreshed) {
+        throw AppError.notFound('Plant entry');
+      }
       return refreshed;
     });
 

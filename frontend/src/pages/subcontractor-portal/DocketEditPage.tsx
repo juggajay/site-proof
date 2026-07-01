@@ -310,6 +310,14 @@ export function DocketEditPage() {
       });
       return;
     }
+    if (assignedLots.length > 0 && !selectedLotId) {
+      toast({
+        title: 'Missing information',
+        description: 'Please select a lot',
+        variant: 'error',
+      });
+      return;
+    }
 
     const parsedHoursOperated = parseDailyHoursInput(hoursOperated);
     if (parsedHoursOperated === null) {
@@ -333,6 +341,9 @@ export function DocketEditPage() {
             plantId: selectedPlant.id,
             hoursOperated: parsedHoursOperated,
             wetOrDry,
+            lotAllocations: selectedLotId
+              ? [{ lotId: selectedLotId, hours: parsedHoursOperated }]
+              : undefined,
           }),
         },
       );

@@ -266,6 +266,9 @@ docketsRouter.get(
                 wetRate: true,
               },
             },
+            lotAllocations: {
+              include: { lot: { select: { id: true, lotNumber: true } } },
+            },
           },
           orderBy: { hoursOperated: 'desc' },
         },
@@ -441,7 +444,11 @@ docketsRouter.post(
               lotAllocations: true,
             },
           },
-          plantEntries: true,
+          plantEntries: {
+            include: {
+              lotAllocations: true,
+            },
+          },
         },
       });
 

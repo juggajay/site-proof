@@ -228,6 +228,8 @@ export function PlantSheet({
   selectedPlant,
   hoursOperated,
   wetOrDry,
+  selectedLotId,
+  assignedLots,
   plantHoursError,
   previewHours,
   previewCost,
@@ -235,6 +237,7 @@ export function PlantSheet({
   onSelectPlant,
   onHoursOperatedChange,
   onWetOrDryChange,
+  onSelectedLotIdChange,
   onClose,
   onAdd,
 }: {
@@ -243,6 +246,8 @@ export function PlantSheet({
   selectedPlant: Plant | null;
   hoursOperated: string;
   wetOrDry: 'dry' | 'wet';
+  selectedLotId: string;
+  assignedLots: Lot[];
   plantHoursError: string | null;
   previewHours: number;
   previewCost: number;
@@ -250,10 +255,12 @@ export function PlantSheet({
   onSelectPlant: (plant: Plant) => void;
   onHoursOperatedChange: (value: string) => void;
   onWetOrDryChange: (value: 'dry' | 'wet') => void;
+  onSelectedLotIdChange: (value: string) => void;
   onClose: () => void;
   onAdd: () => void;
 }) {
-  const canAdd = Boolean(selectedPlant) && !plantHoursError && !saving;
+  const lotMissing = assignedLots.length > 0 && !selectedLotId;
+  const canAdd = Boolean(selectedPlant) && !lotMissing && !plantHoursError && !saving;
   // Wet/dry toggle only when the plant carries a wet rate (classic guard).
   const showWetDry = Boolean(selectedPlant && selectedPlant.wetRate > 0);
 
@@ -344,6 +351,36 @@ export function PlantSheet({
                 Wet — ${selectedPlant.wetRate}/h
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Lot allocation — auto-selected when exactly one assigned lot. */}
+        {assignedLots.length > 0 && (
+          <div>
+            <span className="shell-field-label">Worked on lot</span>
+            {assignedLots.length === 1 ? (
+              <div className="shell-pickrow on">
+                <span className="grow">
+                  <span className="t block">{assignedLots[0].lotNumber}</span>
+                </span>
+                <Check size={18} className="flex-shrink-0 text-success" aria-hidden="true" />
+              </div>
+            ) : (
+              <select
+                value={selectedLotId}
+                onChange={(e) => onSelectedLotIdChange(e.target.value)}
+                className="shell-input"
+                aria-label="Allocate plant to lot"
+              >
+                <option value="">Select a lot</option>
+                {assignedLots.map((lot) => (
+                  <option key={lot.id} value={lot.id}>
+                    {lot.lotNumber}
+                    {lot.activity ? ` — ${lot.activity}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 

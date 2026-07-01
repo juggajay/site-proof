@@ -72,6 +72,11 @@ export interface PlantEntry {
   hourlyRate: number;
   submittedCost: number;
   approvedCost?: number | null;
+  lotAllocations?: Array<{
+    lotId: string;
+    lotNumber: string;
+    hours: number;
+  }>;
 }
 
 export interface Docket {

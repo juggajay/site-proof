@@ -39,6 +39,11 @@ type DocketPlantEntryMutationSource = {
   wetOrDry: string | null;
   hourlyRate: NumericLike;
   submittedCost: NumericLike;
+  lotAllocations: Array<{
+    lotId: string;
+    lot: { lotNumber: string };
+    hours: NumericLike;
+  }>;
 };
 
 export function buildDocketLabourEntryMutationResponse(
@@ -99,6 +104,11 @@ export function buildDocketPlantEntryMutationResponse(
       wetOrDry: entry.wetOrDry || 'dry',
       hourlyRate: Number(entry.hourlyRate) || 0,
       submittedCost: Number(entry.submittedCost) || 0,
+      lotAllocations: entry.lotAllocations.map((alloc) => ({
+        lotId: alloc.lotId,
+        lotNumber: alloc.lot.lotNumber,
+        hours: Number(alloc.hours) || 0,
+      })),
     },
   };
 

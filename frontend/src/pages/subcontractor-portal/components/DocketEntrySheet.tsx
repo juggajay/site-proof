@@ -65,6 +65,8 @@ export function DocketEntrySheet({
   onAddLabourEntry: () => void;
   onAddPlantEntry: () => void;
 }) {
+  const plantLotMissing = sheetType === 'plant' && assignedLots.length > 0 && !selectedLotId;
+
   return (
     <div className="fixed inset-0 z-50">
       {/* Backdrop */}
@@ -233,6 +235,32 @@ export function DocketEntrySheet({
                   </div>
                 </div>
               )}
+
+              {assignedLots.length > 0 && (
+                <div>
+                  <Label>Allocate to Lot</Label>
+                  {assignedLots.length === 1 ? (
+                    <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mt-1">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-foreground">{assignedLots[0].lotNumber}</span>
+                      <Check className="h-4 w-4 text-success ml-auto" />
+                    </div>
+                  ) : (
+                    <NativeSelect
+                      value={selectedLotId}
+                      onChange={(e) => onSelectedLotIdChange(e.target.value)}
+                      className="mt-1 h-12"
+                    >
+                      <option value="">Select a lot</option>
+                      {assignedLots.map((lot) => (
+                        <option key={lot.id} value={lot.id}>
+                          {lot.lotNumber} {lot.activity && `- ${lot.activity}`}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -259,14 +287,16 @@ export function DocketEntrySheet({
               saving ||
               (sheetType === 'labour' && Boolean(labourHoursError)) ||
               (sheetType === 'labour' && !selectedLotId) ||
-              (sheetType === 'plant' && Boolean(plantHoursError))
+              (sheetType === 'plant' && Boolean(plantHoursError)) ||
+              plantLotMissing
             }
             className={cn(
               'w-full h-12',
               saving ||
                 (sheetType === 'labour' && Boolean(labourHoursError)) ||
                 (sheetType === 'labour' && !selectedLotId) ||
-                (sheetType === 'plant' && Boolean(plantHoursError))
+                (sheetType === 'plant' && Boolean(plantHoursError)) ||
+                plantLotMissing
                 ? ''
                 : 'bg-primary hover:bg-primary/90 text-primary-foreground',
             )}
