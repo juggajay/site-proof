@@ -14,6 +14,7 @@ import {
   isForemanDashboardUser,
 } from '@/lib/subcontractorIdentity';
 import { MainLayout } from './MainLayout';
+import { canBypassCompanyOnboardingGate } from './protectedAppShellCompanyGate';
 import { shouldAutoShowGeneralOnboardingForPath } from './protectedAppShellOnboarding';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
@@ -24,7 +25,11 @@ function CompanyOnboardingGate({ children }: { children: ReactNode }) {
   const isSubcontractor = hasSubcontractorPortalIdentity(user);
   const needsCompany = Boolean(user) && !user?.companyId && !isSubcontractor;
 
-  if (needsCompany && location.pathname !== '/onboarding') {
+  if (
+    needsCompany &&
+    location.pathname !== '/onboarding' &&
+    !canBypassCompanyOnboardingGate(location.pathname)
+  ) {
     return <Navigate to="/onboarding" replace />;
   }
 

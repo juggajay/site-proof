@@ -31,12 +31,24 @@ async function errorMessageFromResponse(response: Response): Promise<string | nu
 
   if (contentType.includes('application/json')) {
     try {
-      const body = (await response.clone().json()) as { error?: unknown; message?: unknown };
+      const body = (await response.clone().json()) as {
+        error?: unknown;
+        message?: unknown;
+      };
       if (typeof body.message === 'string' && body.message.trim()) {
         return body.message.trim();
       }
       if (typeof body.error === 'string' && body.error.trim()) {
         return body.error.trim();
+      }
+      if (
+        body.error &&
+        typeof body.error === 'object' &&
+        'message' in body.error &&
+        typeof body.error.message === 'string' &&
+        body.error.message.trim()
+      ) {
+        return body.error.message.trim();
       }
     } catch {
       return null;

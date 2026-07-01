@@ -52,6 +52,9 @@ const ids = {
   adminUser: 'e2e-admin-user',
   foremanUser: 'e2e-foreman-user',
   projectTeamCandidateUser: 'e2e-project-team-candidate-user',
+  companyMemberCandidateUser: 'e2e-company-member-candidate-user',
+  companyLeaveUser: 'e2e-company-leave-user',
+  accountDeleteUser: 'e2e-account-delete-user',
   subcontractorUser: 'e2e-subcontractor-user',
   project: 'e2e-project',
   ownerProjectUser: 'e2e-owner-project-user',
@@ -243,6 +246,96 @@ async function main() {
 
   await prisma.projectUser.deleteMany({
     where: { projectId: project.id, userId: projectTeamCandidateUser.id },
+  });
+
+  const companyMemberCandidateUser = await prisma.user.upsert({
+    where: { email: 'company-candidate@example.com' },
+    update: {
+      passwordHash,
+      fullName: 'E2E Company Candidate',
+      companyId: null,
+      roleInCompany: 'member',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+    create: {
+      id: ids.companyMemberCandidateUser,
+      email: 'company-candidate@example.com',
+      passwordHash,
+      fullName: 'E2E Company Candidate',
+      companyId: null,
+      roleInCompany: 'member',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+  });
+
+  await prisma.projectUser.deleteMany({
+    where: { userId: companyMemberCandidateUser.id },
+  });
+
+  const companyLeaveUser = await prisma.user.upsert({
+    where: { email: 'company-leaver@example.com' },
+    update: {
+      passwordHash,
+      fullName: 'E2E Company Leaver',
+      companyId: company.id,
+      roleInCompany: 'site_engineer',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+    create: {
+      id: ids.companyLeaveUser,
+      email: 'company-leaver@example.com',
+      passwordHash,
+      fullName: 'E2E Company Leaver',
+      companyId: company.id,
+      roleInCompany: 'site_engineer',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+  });
+
+  await prisma.projectUser.deleteMany({
+    where: { userId: companyLeaveUser.id },
+  });
+
+  const accountDeleteUser = await prisma.user.upsert({
+    where: { email: 'account-delete@example.com' },
+    update: {
+      passwordHash,
+      fullName: 'E2E Account Delete',
+      companyId: null,
+      roleInCompany: 'member',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+    create: {
+      id: ids.accountDeleteUser,
+      email: 'account-delete@example.com',
+      passwordHash,
+      fullName: 'E2E Account Delete',
+      companyId: null,
+      roleInCompany: 'member',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+  });
+
+  await prisma.projectUser.deleteMany({
+    where: { userId: accountDeleteUser.id },
   });
 
   await prisma.scheduledReport.deleteMany({ where: { projectId: project.id } });
@@ -696,7 +789,7 @@ async function main() {
   });
 
   console.log(
-    'Seeded E2E users: owner@example.com, test@example.com, foreman@example.com, and subcontractor@example.com',
+    'Seeded E2E users: owner@example.com, test@example.com, foreman@example.com, subcontractor@example.com, company-candidate@example.com, company-leaver@example.com, and account-delete@example.com',
   );
 }
 

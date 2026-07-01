@@ -102,6 +102,20 @@ describe('ScheduledReportArtifactPage', () => {
     expect(downloadBlobMock).not.toHaveBeenCalled();
   });
 
+  it('surfaces the real backend error envelope message', async () => {
+    authFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'Access denied' } }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText('Access denied')).toBeVisible();
+    expect(downloadBlobMock).not.toHaveBeenCalled();
+  });
+
   it('rejects a JSON response even when the API returns HTTP 200', async () => {
     authFetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ message: 'Scheduled report artifact is not ready.' }), {
