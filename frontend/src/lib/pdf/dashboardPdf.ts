@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
+import { drawPdfBrandingHeader, resolvePdfBranding } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DashboardPDFAttentionItem, DashboardPDFData } from './types';
@@ -108,6 +109,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
     yPos += 2;
   };
 
+  const branding = resolvePdfBranding(data);
   doc.setFillColor(15, 23, 42);
   doc.rect(0, 0, pageWidth, 34, 'F');
   doc.setTextColor(255, 255, 255);
@@ -117,6 +119,19 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text('SiteProof Civil Execution and Conformance Platform', margin, 27);
+  if (branding) {
+    await drawPdfBrandingHeader(doc, branding, {
+      logoX: pageWidth - margin - 30,
+      logoY: 8,
+      logoWidth: 30,
+      logoHeight: 18,
+      companyNameX: pageWidth - margin,
+      companyNameY: 30,
+      companyNameAlign: 'right',
+      companyNameColor: [255, 255, 255],
+      companyNameFontSize: 8,
+    });
+  }
 
   yPos = 45;
   doc.setTextColor(15, 23, 42);

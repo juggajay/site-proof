@@ -6,6 +6,7 @@ import {
   getItpVerificationDisplay,
   type ItpVerificationTone,
 } from './itpChecklistTabHelpers';
+import { ITPChecklistStatusActions } from './ITPChecklistStatusActions';
 
 // I1-core: human-readable hold-point release method for the attribution line.
 const RELEASE_METHOD_LABELS: Record<string, string> = {
@@ -92,6 +93,7 @@ export function ITPChecklistItemRow({
     >
       <div className="flex items-start gap-3">
         <button
+          type="button"
           onClick={() =>
             !isNotApplicable &&
             !isFailed &&
@@ -313,6 +315,17 @@ export function ITPChecklistItemRow({
               className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
             />
           </div>
+          <ITPChecklistStatusActions
+            isCompleted={isCompleted}
+            isNotApplicable={isNotApplicable}
+            isFailed={isFailed}
+            isUpdating={updatingCompletion === item.id}
+            canPass={!isHoldPointLocked}
+            holdPointBlocked={isHoldPointLocked}
+            onPass={() => onToggleCompletion(item.id, isCompleted, notes)}
+            onFail={() => onMarkAsFailed(item.id, item.description)}
+            onMarkNotApplicable={() => onMarkAsNA(item.id, item.description)}
+          />
           {isHoldPoint && completion?.holdPointRelease?.releasedByName ? (
             <p className="text-xs text-muted-foreground mt-1">
               Released by {completion.holdPointRelease.releasedByName}
@@ -396,28 +409,6 @@ export function ITPChecklistItemRow({
               <span className="text-xs text-muted-foreground italic">
                 Complete the item first to attach photos
               </span>
-            )}
-
-            {/* Mark as N/A and Mark as Failed Buttons - only show for pending items */}
-            {!isCompleted && !isNotApplicable && !isFailed && (
-              <div className="flex items-center gap-2 ml-3">
-                <button
-                  onClick={() => onMarkAsNA(item.id, item.description)}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  title="Mark this item as Not Applicable"
-                >
-                  <span>-</span>
-                  <span>Mark as N/A</span>
-                </button>
-                <button
-                  onClick={() => onMarkAsFailed(item.id, item.description)}
-                  className="inline-flex items-center gap-1 text-xs text-destructive hover:text-destructive/80"
-                  title="Mark this item as Failed and raise an NCR"
-                >
-                  <span>X</span>
-                  <span>Mark as Failed</span>
-                </button>
-              </div>
             )}
 
             {/* Show N/A reason */}

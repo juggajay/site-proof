@@ -587,6 +587,29 @@ describe('header mappers', () => {
     ).toEqual({ id: 'p1', name: 'Highway', projectNumber: 'PRJ-9' });
   });
 
+  it('mapHoldPointEvidenceProject includes display-safe company branding when present', () => {
+    expect(
+      mapHoldPointEvidenceProject({
+        id: 'p1',
+        name: 'Highway',
+        projectNumber: 'PRJ-9',
+        company: {
+          id: 'company-1',
+          name: 'Gateway Civil Pty Ltd',
+          logoUrl: 'https://cdn.example.com/gateway-logo.png',
+        },
+      }),
+    ).toEqual({
+      id: 'p1',
+      name: 'Highway',
+      projectNumber: 'PRJ-9',
+      company: {
+        name: 'Gateway Civil Pty Ltd',
+        logoUrl: 'https://cdn.example.com/gateway-logo.png',
+      },
+    });
+  });
+
   it('mapHoldPointEvidenceItpTemplate selects id/name/activityType (nullable)', () => {
     expect(
       mapHoldPointEvidenceItpTemplate({ id: 'tpl1', name: 'Subgrade ITP', activityType: null }),

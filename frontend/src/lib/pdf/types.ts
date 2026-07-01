@@ -12,6 +12,21 @@ export interface ConformanceFormatOptions {
   contractNumber?: string;
 }
 
+export interface PDFCompanyBranding {
+  name?: string | null;
+  logoUrl?: string | null;
+}
+
+export interface PDFBrandingData {
+  companyName?: string | null;
+  logoUrl?: string | null;
+}
+
+export interface PDFBrandableData {
+  company?: PDFCompanyBranding | null;
+  branding?: PDFBrandingData | null;
+}
+
 // Default format options
 export const defaultConformanceOptions: ConformanceFormatOptions = {
   format: 'standard',
@@ -38,7 +53,7 @@ export interface DashboardPDFAttentionItem {
   };
 }
 
-export interface DashboardPDFData {
+export interface DashboardPDFData extends PDFBrandableData {
   generatedAt: string;
   exportedBy?: string | null;
   dateRange: {
@@ -115,7 +130,7 @@ export interface HoldPointRelease {
   releasedBy: { fullName: string | null; email: string } | null;
 }
 
-export interface ConformanceReportData {
+export interface ConformanceReportData extends PDFBrandableData {
   lot: {
     lotNumber: string;
     description: string | null;
@@ -160,7 +175,7 @@ export const defaultHPPackageOptions: HPPackageOptions = {
   includeSummary: true,
 };
 
-export interface HPEvidencePackageData {
+export interface HPEvidencePackageData extends PDFBrandableData {
   holdPoint: {
     id: string;
     description: string;
@@ -272,7 +287,7 @@ export interface ClaimEvidenceDocument {
   uploadedAt: string | null;
 }
 
-export interface ClaimEvidencePackageData {
+export interface ClaimEvidencePackageData extends PDFBrandableData {
   claim: {
     id: string;
     claimNumber: number;
@@ -361,7 +376,7 @@ export const defaultPackageOptions: ClaimPackageOptions = {
   includeDeclaration: true,
 };
 
-export interface NCRDetailData {
+export interface NCRDetailData extends PDFBrandableData {
   ncr: {
     ncrNumber: string;
     description: string;
@@ -399,7 +414,7 @@ export interface NCRDetailData {
   }>;
 }
 
-export interface TestCertificateData {
+export interface TestCertificateData extends PDFBrandableData {
   test: {
     id: string;
     testType: string;
@@ -432,7 +447,7 @@ export interface TestCertificateData {
   };
 }
 
-export interface DailyDiaryPDFData {
+export interface DailyDiaryPDFData extends PDFBrandableData {
   diary: {
     id: string;
     date: string;
@@ -495,7 +510,7 @@ export interface DailyDiaryPDFData {
   }>;
 }
 
-export interface DocketDetailPDFData {
+export interface DocketDetailPDFData extends PDFBrandableData {
   docket: {
     id: string;
     docketNumber: string;

@@ -1,9 +1,9 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/ui/toaster';
 import { apiFetch } from '@/lib/api';
-import { UserPlus, Trash2, Edit2, X, Check, Mail, Shield } from 'lucide-react';
+import { UserPlus, Trash2, Edit2, X, Check, Search, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,13 @@ interface ProjectUser {
   acceptedAt?: string | null;
 }
 
+interface AssignableProjectUser {
+  id: string;
+  email: string;
+  fullName?: string | null;
+  roleInCompany?: string | null;
+}
+
 const ROLES = [
   { value: 'admin', label: 'Admin', description: 'Full project access' },
   {
@@ -52,8 +59,18 @@ const statusColors: Record<string, string> = {
   inactive: 'bg-muted text-muted-foreground',
 };
 
-function normalizeInviteEmail(email: string) {
-  return email.trim().toLowerCase();
+function formatCompanyRole(role?: string | null): string {
+  if (!role) return 'Member';
+  return role
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatAssignableUserOption(user: AssignableProjectUser): string {
+  const displayName = user.fullName?.trim();
+  const role = formatCompanyRole(user.roleInCompany);
+  return displayName ? `${displayName} - ${user.email} - ${role}` : `${user.email} - ${role}`;
 }
 
 function getProjectUserInviteErrorMessage(error: unknown): string {
@@ -74,7 +91,11 @@ export function ProjectUsersPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [assignableUsers, setAssignableUsers] = useState<AssignableProjectUser[]>([]);
+  const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(false);
+  const [assignableUsersError, setAssignableUsersError] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [userSearch, setUserSearch] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
   const [inviting, setInviting] = useState(false);
   const [editingUser, setEditingUser] = useState<ProjectUser | null>(null);
@@ -112,32 +133,104 @@ export function ProjectUsersPage() {
     }
   }, [projectId]);
 
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!projectId) {
+      setAssignableUsers([]);
+      setSelectedUserId('');
+      setAssignableUsersError('Project not found');
+      return;
+    }
+
+    setLoadingAssignableUsers(true);
+    setAssignableUsersError('');
+
+    try {
+      const data = await apiFetch<{ users: AssignableProjectUser[] }>(
+        `/api/projects/${encodeURIComponent(projectId)}/assignable-users`,
+      );
+      const users = data.users || [];
+      setAssignableUsers(users);
+      setSelectedUserId((current) =>
+        current && users.some((user) => user.id === current) ? current : users[0]?.id || '',
+      );
+    } catch (error) {
+      logError('Failed to fetch assignable project users:', error);
+      setAssignableUsers([]);
+      setSelectedUserId('');
+      setAssignableUsersError(
+        extractErrorMessage(error, 'Could not load company users. Please try again.'),
+      );
+    } finally {
+      setLoadingAssignableUsers(false);
+    }
+  }, [projectId]);
+
+  const filteredAssignableUsers = useMemo(() => {
+    const query = userSearch.trim().toLowerCase();
+    if (!query) return assignableUsers;
+
+    return assignableUsers.filter((user) =>
+      [user.fullName, user.email, user.roleInCompany].some((value) =>
+        value?.toLowerCase().includes(query),
+      ),
+    );
+  }, [assignableUsers, userSearch]);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    if (!showInviteModal) return;
+
+    if (filteredAssignableUsers.length === 0) {
+      setSelectedUserId('');
+      return;
+    }
+
+    if (!filteredAssignableUsers.some((user) => user.id === selectedUserId)) {
+      setSelectedUserId(filteredAssignableUsers[0].id);
+    }
+  }, [filteredAssignableUsers, selectedUserId, showInviteModal]);
+
+  const handleOpenInviteModal = () => {
+    setShowInviteModal(true);
+    setAssignableUsers([]);
+    setAssignableUsersError('');
+    setSelectedUserId('');
+    setUserSearch('');
+    setInviteRole('viewer');
+    void fetchAssignableUsers();
+  };
+
+  const handleCloseInviteModal = () => {
+    if (inviting) return;
+    setShowInviteModal(false);
+    setAssignableUsersError('');
+  };
+
   // Invite user
   const handleInvite = async () => {
-    const email = normalizeInviteEmail(inviteEmail);
-    if (!projectId || !email || invitingRef.current) return;
+    if (!projectId || !selectedUserId || invitingRef.current) return;
 
     invitingRef.current = true;
     setInviting(true);
 
     try {
+      const selectedUser = assignableUsers.find((user) => user.id === selectedUserId);
       const data = await apiFetch<{ projectUser: ProjectUser }>(
         `/api/projects/${encodeURIComponent(projectId)}/users`,
         {
           method: 'POST',
           body: JSON.stringify({
-            email,
+            userId: selectedUserId,
             role: inviteRole,
           }),
         },
       );
       toast({
         title: 'User invited',
-        description: `${email} has been added to the project.`,
+        description: `${selectedUser?.fullName || selectedUser?.email || 'User'} has been added to the project.`,
       });
       setUsers((prev) =>
         prev.some(
@@ -146,8 +239,10 @@ export function ProjectUsersPage() {
           ? prev
           : [...prev, data.projectUser],
       );
+      setAssignableUsers((current) => current.filter((user) => user.id !== selectedUserId));
       setShowInviteModal(false);
-      setInviteEmail('');
+      setSelectedUserId('');
+      setUserSearch('');
       setInviteRole('viewer');
     } catch (error) {
       logError('Failed to invite project user:', error);
@@ -250,7 +345,7 @@ export function ProjectUsersPage() {
           <h1 className="text-2xl font-bold">Project Team</h1>
           <p className="text-muted-foreground">Manage team members and their roles</p>
         </div>
-        <Button type="button" onClick={() => setShowInviteModal(true)}>
+        <Button type="button" onClick={handleOpenInviteModal}>
           <UserPlus className="h-4 w-4" />
           Invite User
         </Button>
@@ -277,7 +372,7 @@ export function ProjectUsersPage() {
           <Shield className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 text-lg font-semibold">No team members yet</h3>
           <p className="mt-2 text-muted-foreground">Invite users to collaborate on this project.</p>
-          <Button type="button" onClick={() => setShowInviteModal(true)} className="mt-4">
+          <Button type="button" onClick={handleOpenInviteModal} className="mt-4">
             Invite First User
           </Button>
         </div>
@@ -404,30 +499,79 @@ export function ProjectUsersPage() {
       {showInviteModal && (
         <Modal
           onClose={() => {
-            if (!inviting) setShowInviteModal(false);
+            handleCloseInviteModal();
           }}
         >
           <ModalHeader>Invite User</ModalHeader>
           <ModalDescription>
-            Add an existing company user to this project and choose their project role.
+            Select an existing company user to add to this project and choose their project role.
           </ModalDescription>
           <ModalBody>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="project-user-invite-email" className="mb-1">
-                  Email Address
+                <Label htmlFor="project-user-search" className="mb-1">
+                  Search company users
                 </Label>
                 <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <Search className="h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="project-user-invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="user@example.com"
+                    id="project-user-search"
+                    type="search"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search by name, email, or company role"
                     className="flex-1"
+                    disabled={inviting || loadingAssignableUsers}
                   />
                 </div>
+              </div>
+
+              <div>
+                <Label htmlFor="project-user-assignable-user" className="mb-1">
+                  Project member
+                </Label>
+                {loadingAssignableUsers ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                    Loading company users...
+                  </div>
+                ) : assignableUsersError ? (
+                  <div
+                    role="alert"
+                    className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+                  >
+                    <p>{assignableUsersError}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => void fetchAssignableUsers()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : assignableUsers.length === 0 ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                    All company users are already on this project.
+                  </div>
+                ) : filteredAssignableUsers.length === 0 ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                    No company users match your search.
+                  </div>
+                ) : (
+                  <NativeSelect
+                    id="project-user-assignable-user"
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    disabled={inviting}
+                  >
+                    {filteredAssignableUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {formatAssignableUserOption(user)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                )}
               </div>
 
               <div>
@@ -452,7 +596,7 @@ export function ProjectUsersPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowInviteModal(false)}
+              onClick={handleCloseInviteModal}
               disabled={inviting}
             >
               Cancel
@@ -460,9 +604,9 @@ export function ProjectUsersPage() {
             <Button
               type="button"
               onClick={handleInvite}
-              disabled={inviting || !normalizeInviteEmail(inviteEmail)}
+              disabled={inviting || loadingAssignableUsers || !selectedUserId}
             >
-              {inviting ? 'Inviting...' : 'Send Invite'}
+              {inviting ? 'Inviting...' : 'Add to Project'}
             </Button>
           </ModalFooter>
         </Modal>

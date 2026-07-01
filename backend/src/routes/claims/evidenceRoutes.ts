@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
+import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
 import {
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
@@ -41,6 +42,13 @@ export function createClaimEvidenceRouter({
               projectNumber: true,
               clientName: true,
               state: true,
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                  logoUrl: true,
+                },
+              },
             },
           },
           preparedBy: {
@@ -133,6 +141,13 @@ export function createClaimEvidenceRouter({
               }
             : null,
           preparedAt: claim.preparedAt?.toISOString() || null,
+        },
+        company: {
+          name: claim.project.company.name,
+          logoUrl: buildCompanyLogoDisplayUrl(
+            claim.project.company.id,
+            claim.project.company.logoUrl,
+          ),
         },
         project: {
           id: claim.project.id,

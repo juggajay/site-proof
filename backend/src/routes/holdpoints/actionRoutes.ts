@@ -35,6 +35,7 @@ import { isProjectNotificationEnabled } from '../../lib/projectNotificationPrefe
 import { SECURE_LINK_EXPIRY_HOURS, hashHoldPointReleaseToken } from './tokens.js';
 import { updateLotStatusFromITP } from '../itp/helpers/lotProgression.js';
 import { emitHoldPointWebhookEvent } from './webhookEvents.js';
+import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -426,6 +427,16 @@ holdPointActionRouter.post(
             ...completionData,
           },
         });
+
+        if (releaseEvidenceDocument) {
+          await attachHoldPointEvidenceDocuments(tx, {
+            projectId: existingHP.lot.projectId,
+            lotId: updatedHoldPoint.lotId,
+            itpInstanceId: itpInstance.id,
+            itpChecklistItemId: updatedHoldPoint.itpChecklistItemId,
+            documentIds: [releaseEvidenceDocument.id],
+          });
+        }
       }
 
       return updatedHoldPoint;

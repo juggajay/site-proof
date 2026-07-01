@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+import { Check, Eye, Upload, X } from 'lucide-react';
+import { apiFetch, authFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import type { HoldPoint, HoldPointDetails, RequestError } from '../types';
@@ -15,6 +15,11 @@ import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 import { EvidencePreviewModal } from './EvidencePreviewModal';
 import { requestReleaseSchema, type RequestReleaseFormData } from './requestReleaseModalHelpers';
+
+interface UploadedEvidenceDocument {
+  id: string;
+  filename: string;
+}
 
 interface RequestReleaseModalProps {
   holdPoint: HoldPoint;
@@ -29,7 +34,39 @@ interface RequestReleaseModalProps {
     notificationSentTo: string,
     overrideNoticePeriod?: boolean,
     overrideReason?: string,
+    evidenceDocumentIds?: string[],
   ) => void;
+}
+
+function getCurrentProjectId(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const match = window.location.pathname.match(/\/projects\/([^/?#]+)/);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch (_error) {
+    return match[1];
+  }
+}
+
+async function getUploadErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as {
+      error?: string | { message?: string };
+      message?: string;
+    };
+    if (typeof data.error === 'string') return data.error;
+    if (typeof data.error === 'object' && data.error?.message) return data.error.message;
+    return data.message || 'Evidence upload failed';
+  } catch (_error) {
+    return 'Evidence upload failed';
+  }
 }
 
 export function RequestReleaseModal({
@@ -44,6 +81,11 @@ export function RequestReleaseModal({
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<HPEvidencePackageData | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [uploadedEvidenceDocuments, setUploadedEvidenceDocuments] = useState<
+    UploadedEvidenceDocument[]
+  >([]);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const loadingPreviewRef = useRef(false);
 
   const {
@@ -75,12 +117,38 @@ export function RequestReleaseModal({
 
   // Check if we have a notice period warning that needs override
   const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING';
+  const evidenceDocumentIds = uploadedEvidenceDocuments.map((document) => document.id);
 
   const onFormSubmit = (data: RequestReleaseFormData) => {
-    onSubmit(data.scheduledDate, data.scheduledTime, data.notificationSentTo);
+    if (uploadingEvidence) {
+      toast({
+        title: 'Evidence upload in progress',
+        description: 'Wait for the upload to finish before requesting release.',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    onSubmit(
+      data.scheduledDate,
+      data.scheduledTime,
+      data.notificationSentTo,
+      undefined,
+      undefined,
+      evidenceDocumentIds,
+    );
   };
 
   const handleOverrideSubmit = () => {
+    if (uploadingEvidence) {
+      toast({
+        title: 'Evidence upload in progress',
+        description: 'Wait for the upload to finish before requesting release.',
+        variant: 'warning',
+      });
+      return;
+    }
+
     const overrideReason = getValues('overrideReason');
     if (!overrideReason?.trim()) {
       toast({
@@ -91,7 +159,84 @@ export function RequestReleaseModal({
       return;
     }
     const { scheduledDate, scheduledTime, notificationSentTo: sentTo } = getValues();
-    onSubmit(scheduledDate, scheduledTime, sentTo, true, overrideReason);
+    onSubmit(scheduledDate, scheduledTime, sentTo, true, overrideReason, evidenceDocumentIds);
+  };
+
+  const handleEvidenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+
+    if (files.length === 0) {
+      return;
+    }
+
+    const projectId = getCurrentProjectId();
+    if (!projectId) {
+      setUploadError('Unable to determine the project for this evidence upload.');
+      toast({
+        title: 'Evidence upload failed',
+        description: 'Unable to determine the project for this evidence upload.',
+        variant: 'error',
+      });
+      return;
+    }
+
+    setUploadingEvidence(true);
+    setUploadError(null);
+
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('projectId', projectId);
+        formData.append('lotId', holdPoint.lotId);
+        formData.append('documentType', 'hold_point_request_evidence');
+        formData.append('category', 'itp_evidence');
+        formData.append('caption', `Release request evidence - ${holdPoint.lotNumber}`);
+
+        const response = await authFetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(await getUploadErrorMessage(response));
+        }
+
+        const uploadedDocument = (await response.json()) as {
+          id?: string;
+          filename?: string;
+        };
+        if (!uploadedDocument.id) {
+          throw new Error('Evidence upload did not return a document id');
+        }
+        const uploadedDocumentId = uploadedDocument.id;
+
+        setUploadedEvidenceDocuments((current) => [
+          ...current,
+          {
+            id: uploadedDocumentId,
+            filename: uploadedDocument.filename || file.name,
+          },
+        ]);
+      }
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : 'Evidence upload failed';
+      setUploadError(message);
+      toast({
+        title: 'Evidence upload failed',
+        description: message,
+        variant: 'error',
+      });
+    } finally {
+      setUploadingEvidence(false);
+    }
+  };
+
+  const removeEvidenceDocument = (documentId: string) => {
+    setUploadedEvidenceDocuments((current) =>
+      current.filter((document) => document.id !== documentId),
+    );
   };
 
   const handlePreviewPackage = async () => {
@@ -146,7 +291,7 @@ export function RequestReleaseModal({
     }
   };
 
-  const canSubmit = details?.canRequestRelease && !requesting;
+  const canSubmit = details?.canRequestRelease && !requesting && !uploadingEvidence;
 
   // Footer for the "can request" happy-path form — rendered in the sticky footer
   // of the sheet so Submit is always in reach without scrolling.
@@ -311,7 +456,9 @@ export function RequestReleaseModal({
                         <Button
                           type="button"
                           onClick={handleOverrideSubmit}
-                          disabled={requesting || !watch('overrideReason')?.trim()}
+                          disabled={
+                            requesting || uploadingEvidence || !watch('overrideReason')?.trim()
+                          }
                           className="bg-warning text-warning-foreground hover:bg-warning/90 min-h-[44px]"
                         >
                           {requesting ? 'Requesting...' : 'Override & Submit'}
@@ -349,8 +496,9 @@ export function RequestReleaseModal({
                 </div>
 
                 <div>
-                  <Label>Scheduled Date</Label>
+                  <Label htmlFor="request-release-scheduled-date">Scheduled Date</Label>
                   <Input
+                    id="request-release-scheduled-date"
                     type="date"
                     {...register('scheduledDate')}
                     min={formatDateKey()}
@@ -364,8 +512,9 @@ export function RequestReleaseModal({
                 </div>
 
                 <div>
-                  <Label>Scheduled Time</Label>
+                  <Label htmlFor="request-release-scheduled-time">Scheduled Time</Label>
                   <Input
+                    id="request-release-scheduled-time"
                     type="time"
                     {...register('scheduledTime')}
                     className={errors.scheduledTime ? 'border-destructive' : ''}
@@ -378,8 +527,9 @@ export function RequestReleaseModal({
                 </div>
 
                 <div>
-                  <Label>Notify (Emails)</Label>
+                  <Label htmlFor="request-release-notification-emails">Notify (Emails)</Label>
                   <Input
+                    id="request-release-notification-emails"
                     type="text"
                     {...register('notificationSentTo')}
                     className={errors.notificationSentTo ? 'border-destructive' : ''}
@@ -390,6 +540,61 @@ export function RequestReleaseModal({
                       {errors.notificationSentTo.message}
                     </p>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="request-release-evidence">Release Evidence</Label>
+                  <div className="rounded-lg border border-dashed border-border bg-muted p-3">
+                    <div className="flex items-center gap-3">
+                      <Upload className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="request-release-evidence"
+                        type="file"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv"
+                        onChange={handleEvidenceUpload}
+                        disabled={uploadingEvidence || requesting}
+                        className="min-h-[44px] bg-background"
+                      />
+                    </div>
+                    {uploadingEvidence && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        <span>Uploading...</span>
+                      </div>
+                    )}
+                    {uploadError && (
+                      <p className="mt-2 text-sm text-destructive" role="alert">
+                        {uploadError}
+                      </p>
+                    )}
+                    {uploadedEvidenceDocuments.length > 0 && (
+                      <ul className="mt-3 space-y-2">
+                        {uploadedEvidenceDocuments.map((document) => (
+                          <li
+                            key={document.id}
+                            className="flex items-center justify-between gap-2 rounded bg-success/10 px-2 py-1 text-sm text-success"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <Check className="h-4 w-4 shrink-0" />
+                              <span className="truncate">Uploaded: {document.filename}</span>
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-success hover:bg-success/10"
+                              aria-label={`Remove ${document.filename}`}
+                              onClick={() => removeEvidenceDocument(document.id)}
+                              disabled={requesting}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               </form>
             )}

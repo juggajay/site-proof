@@ -404,6 +404,25 @@ describe('Hold Points API', () => {
       return lot;
     }
 
+    async function createRequestEvidenceDocument(
+      documentLotId: string,
+      filename = 'request-release-evidence.pdf',
+    ) {
+      return prisma.document.create({
+        data: {
+          projectId,
+          lotId: documentLotId,
+          uploadedById: userId,
+          filename,
+          fileUrl: `/uploads/documents/${filename}`,
+          mimeType: 'application/pdf',
+          fileSize: 1234,
+          documentType: 'hold_point_request_evidence',
+          category: 'itp_evidence',
+        },
+      });
+    }
+
     async function cleanupRequestReleaseLot(lotIdToDelete: string, holdPointIdToDelete?: string) {
       if (holdPointIdToDelete) {
         await prisma.holdPointReleaseToken.deleteMany({
@@ -592,6 +611,105 @@ describe('Hold Points API', () => {
         await prisma.webhookConfig.delete({ where: { id: webhook.id } }).catch(() => {});
         await cleanupRequestReleaseLot(lot.id, holdPointIdToDelete);
         fetchMock.mockRestore();
+      }
+    });
+
+    it('attaches uploaded request evidence to a pending ITP completion', async () => {
+      clearEmailQueue();
+      const lot = await createRequestReleaseLot('request-evidence');
+      const firstEvidence = await createRequestEvidenceDocument(lot.id, 'request-evidence-1.pdf');
+      const secondEvidence = await createRequestEvidenceDocument(lot.id, 'request-evidence-2.pdf');
+      let holdPointIdToDelete: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/holdpoints/request-release')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            lotId: lot.id,
+            itpChecklistItemId: checklistItemId,
+            notificationSentTo: 'evidence-reviewer@example.com',
+            evidenceDocumentIds: [firstEvidence.id, secondEvidence.id, firstEvidence.id],
+          });
+
+        expect(res.status).toBe(200);
+        holdPointIdToDelete = res.body.holdPoint.id;
+
+        const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
+          where: { lotId: lot.id },
+          select: { id: true },
+        });
+        const completion = await prisma.iTPCompletion.findUniqueOrThrow({
+          where: {
+            itpInstanceId_checklistItemId: {
+              itpInstanceId: itpInstance.id,
+              checklistItemId,
+            },
+          },
+        });
+        expect(completion.status).toBe('pending');
+
+        const attachments = await prisma.iTPCompletionAttachment.findMany({
+          where: { completionId: completion.id },
+          select: { documentId: true },
+        });
+        expect(attachments.map((attachment) => attachment.documentId).sort()).toEqual(
+          [firstEvidence.id, secondEvidence.id].sort(),
+        );
+      } finally {
+        await prisma.document.deleteMany({
+          where: { id: { in: [firstEvidence.id, secondEvidence.id] } },
+        });
+        if (!holdPointIdToDelete) {
+          const createdHoldPoint = await prisma.holdPoint.findFirst({
+            where: { lotId: lot.id, itpChecklistItemId: checklistItemId },
+            select: { id: true },
+          });
+          holdPointIdToDelete = createdHoldPoint?.id;
+        }
+        await cleanupRequestReleaseLot(lot.id, holdPointIdToDelete);
+      }
+    });
+
+    it('rejects request evidence documents from another lot', async () => {
+      clearEmailQueue();
+      const lot = await createRequestReleaseLot('request-evidence-wrong-lot');
+      const otherLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `HP-REQUEST-OTHER-${Date.now()}`,
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const evidenceDocument = await createRequestEvidenceDocument(
+        otherLot.id,
+        'wrong-lot-request-evidence.pdf',
+      );
+
+      try {
+        const res = await request(app)
+          .post('/api/holdpoints/request-release')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            lotId: lot.id,
+            itpChecklistItemId: checklistItemId,
+            notificationSentTo: 'wrong-lot-reviewer@example.com',
+            evidenceDocumentIds: [evidenceDocument.id],
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Evidence documents');
+        await expect(
+          prisma.holdPoint.count({
+            where: { lotId: lot.id, itpChecklistItemId: checklistItemId },
+          }),
+        ).resolves.toBe(0);
+        expect(getQueuedEmails()).toHaveLength(0);
+      } finally {
+        await prisma.document.delete({ where: { id: evidenceDocument.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: otherLot.id } }).catch(() => {});
+        await cleanupRequestReleaseLot(lot.id);
       }
     });
 
@@ -1027,8 +1145,8 @@ describe('Hold Points API', () => {
       }
     });
 
-    it('records same-lot manual release evidence document ids in the release audit log', async () => {
-      const { holdPoint: hp } = await createReleaseReadyHoldPoint();
+    it('records and attaches same-lot manual release evidence documents', async () => {
+      const { holdPoint: hp, completion } = await createReleaseReadyHoldPoint();
       const evidenceDocument = await createReleaseEvidenceDocument(lotId);
 
       const res = await postRelease(
@@ -1050,6 +1168,16 @@ describe('Hold Points API', () => {
         releaseEvidenceDocumentId: evidenceDocument.id,
         releaseEvidenceFilename: 'manual-release-email.pdf',
       });
+
+      const attachment = await prisma.iTPCompletionAttachment.findUnique({
+        where: {
+          completionId_documentId: {
+            completionId: completion.id,
+            documentId: evidenceDocument.id,
+          },
+        },
+      });
+      expect(attachment).not.toBeNull();
     });
 
     it('rejects manual release evidence documents from another lot', async () => {

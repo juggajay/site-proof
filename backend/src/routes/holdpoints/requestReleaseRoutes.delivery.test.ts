@@ -14,6 +14,15 @@ const mocks = vi.hoisted(() => {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    document: {
+      findMany: vi.fn(),
+    },
+    iTPCompletion: {
+      upsert: vi.fn(),
+    },
+    iTPCompletionAttachment: {
+      createMany: vi.fn(),
+    },
   };
 
   return {
@@ -97,6 +106,7 @@ function releaseReadyLot() {
       workingDays: '1,2,3,4,5',
     },
     itpInstance: {
+      id: 'itp-1',
       template: {
         checklistItems: [
           {
@@ -150,6 +160,9 @@ describe('hold point request-release delivery failure', () => {
     });
     mocks.tx.holdPointReleaseToken.deleteMany.mockResolvedValue({ count: 1 });
     mocks.tx.holdPointReleaseToken.createMany.mockResolvedValue({ count: 1 });
+    mocks.tx.document.findMany.mockResolvedValue([]);
+    mocks.tx.iTPCompletion.upsert.mockResolvedValue({ id: 'completion-1' });
+    mocks.tx.iTPCompletionAttachment.createMany.mockResolvedValue({ count: 0 });
     mocks.sendHPReleaseRequestEmail.mockResolvedValue({
       success: true,
       messageId: 'mock-message',
@@ -229,6 +242,52 @@ describe('hold point request-release delivery failure', () => {
     expect(mocks.createAuditLog.mock.calls[0][0].changes.emailDelivery).toEqual({
       sent: 1,
       failed: 1,
+    });
+  });
+
+  it('attaches request evidence documents inside the committed request transaction', async () => {
+    mocks.tx.document.findMany.mockResolvedValueOnce([{ id: 'doc-1' }, { id: 'doc-2' }]);
+    mocks.tx.iTPCompletionAttachment.createMany.mockResolvedValueOnce({ count: 2 });
+
+    const res = await request(app)
+      .post('/api/holdpoints/request-release')
+      .send({
+        lotId: 'lot-1',
+        itpChecklistItemId: 'item-1',
+        notificationSentTo: 'superintendent@example.com',
+        evidenceDocumentIds: ['doc-1', 'doc-2', 'doc-1'],
+      });
+
+    expect(res.status).toBe(200);
+    expect(mocks.tx.document.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['doc-1', 'doc-2'] },
+        projectId: 'project-1',
+        lotId: 'lot-1',
+      },
+      select: { id: true },
+    });
+    expect(mocks.tx.iTPCompletion.upsert).toHaveBeenCalledWith({
+      where: {
+        itpInstanceId_checklistItemId: {
+          itpInstanceId: 'itp-1',
+          checklistItemId: 'item-1',
+        },
+      },
+      update: {},
+      create: {
+        itpInstanceId: 'itp-1',
+        checklistItemId: 'item-1',
+        status: 'pending',
+      },
+      select: { id: true },
+    });
+    expect(mocks.tx.iTPCompletionAttachment.createMany).toHaveBeenCalledWith({
+      data: [
+        { completionId: 'completion-1', documentId: 'doc-1' },
+        { completionId: 'completion-1', documentId: 'doc-2' },
+      ],
+      skipDuplicates: true,
     });
   });
 
