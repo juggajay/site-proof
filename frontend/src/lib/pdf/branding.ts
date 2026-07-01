@@ -1,4 +1,5 @@
 import type { PDFBrandableData, PDFBrandingData, PDFCompanyBranding } from './types';
+import { fetchWithTimeout } from '../fetchWithTimeout';
 
 type PdfBrandingDocument = {
   addImage?: (
@@ -127,31 +128,16 @@ async function loadLogoDataUrl(
     return null;
   }
 
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
   try {
-    const response = await Promise.race([
-      globalThis.fetch(logoUrl, controller ? { signal: controller.signal } : undefined),
-      new Promise<null>((resolve) => {
-        timeoutId = setTimeout(() => {
-          controller?.abort();
-          resolve(null);
-        }, timeoutMs);
-      }),
-    ]);
+    const response = await fetchWithTimeout(logoUrl, {}, timeoutMs);
 
-    if (!response || !response.ok) {
+    if (!response.ok) {
       return null;
     }
 
     return blobToDataUrl(await response.blob());
   } catch {
     return null;
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
   }
 }
 
