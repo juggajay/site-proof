@@ -71,7 +71,13 @@ function makeHoldPoint(overrides: Partial<HoldPoint> = {}): HoldPoint {
   };
 }
 
-function renderModal(options: { isMobile?: boolean } = {}) {
+function renderModal(
+  options: {
+    isMobile?: boolean;
+    canSubmitRelease?: boolean;
+    releasePermissionMessage?: string | null;
+  } = {},
+) {
   useIsMobileMock.mockReturnValue(options.isMobile ?? false);
 
   return render(
@@ -80,6 +86,8 @@ function renderModal(options: { isMobile?: boolean } = {}) {
       recording={false}
       error={null}
       approvalRequirement="superintendent"
+      canSubmitRelease={options.canSubmitRelease}
+      releasePermissionMessage={options.releasePermissionMessage}
       onClose={vi.fn()}
       onSubmit={vi.fn()}
     />,
@@ -103,6 +111,22 @@ describe('RecordReleaseModal — desktop', () => {
 
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Record Manual Release' })).toBeInTheDocument();
+  });
+
+  it('disables submit when superintendent-required release is not permitted', () => {
+    renderModal({
+      canSubmitRelease: false,
+      releasePermissionMessage: 'This project requires superintendent authorization.',
+    });
+
+    expect(
+      screen.getByText('This project requires superintendent authorization.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record Manual Release' })).toBeDisabled();
+    expect(screen.getByTestId('signature-pad-container').querySelector('canvas')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 });
 

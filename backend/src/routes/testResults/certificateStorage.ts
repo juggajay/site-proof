@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import { AppError } from '../../lib/AppError.js';
 import { logError } from '../../lib/serverLogger.js';
-import { ensureUploadSubdirectory } from '../../lib/uploadPaths.js';
+import { ensureUploadSubdirectory, resolveUploadPath } from '../../lib/uploadPaths.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
@@ -123,6 +123,27 @@ export async function deleteCertificateFromSupabase(
   if (error) {
     logError('Supabase certificate delete failed:', error);
   }
+}
+
+export async function deleteLocalCertificateFile(fileUrl: string): Promise<void> {
+  try {
+    const filePath = resolveUploadPath(fileUrl, CERTIFICATES_STORAGE_PREFIX);
+    await fs.promises.rm(filePath, { force: true });
+  } catch {
+    // Unsupported legacy/external URLs are not local certificate files.
+  }
+}
+
+export async function deleteStoredCertificateFile(
+  fileUrl: string,
+  projectId: string,
+): Promise<void> {
+  if (isOwnedSupabaseCertificateUrl(fileUrl, projectId)) {
+    await deleteCertificateFromSupabase(fileUrl, projectId);
+    return;
+  }
+
+  await deleteLocalCertificateFile(fileUrl);
 }
 
 // Best-effort cleanup after a failed certificate upload. Removes either the

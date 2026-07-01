@@ -5,8 +5,7 @@ import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation
 import {
   cleanupStoredCertificateUpload,
   cleanupUploadedCertificateFile,
-  deleteCertificateFromSupabase,
-  isOwnedSupabaseCertificateUrl,
+  deleteStoredCertificateFile,
   sanitizeUploadFilename,
   shouldUploadCertificateToSupabase,
   uploadCertificateToSupabase,
@@ -160,20 +159,14 @@ export async function processCertificateAttachment({
     throw error;
   }
 
-  // Best-effort Supabase removal of the replaced object after the DB state is
+  // Best-effort removal of the replaced object after the DB state is
   // committed. A failure here leaves an orphan storage object but the DB is the
   // source of truth (mirrors the DELETE handler in crudRoutes.ts).
-  if (
-    previousCertificateDoc?.fileUrl &&
-    isOwnedSupabaseCertificateUrl(previousCertificateDoc.fileUrl, projectId)
-  ) {
+  if (previousCertificateDoc?.fileUrl) {
     try {
-      await deleteCertificateFromSupabase(previousCertificateDoc.fileUrl, projectId);
+      await deleteStoredCertificateFile(previousCertificateDoc.fileUrl, projectId);
     } catch (error) {
-      logWarn(
-        'Failed to delete replaced test certificate file from Supabase after attachment:',
-        error,
-      );
+      logWarn('Failed to delete replaced test certificate file after attachment:', error);
     }
   }
 

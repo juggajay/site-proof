@@ -64,6 +64,7 @@ import { downloadCsv } from '@/lib/csv';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { getReleaseIdentityText, getReleaseMethodLabel } from './holdPointReleaseIdentity';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
+import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 
 // Read side of the "Copy link" action (?hp=<id>): stable references so the
 // deep-link effect doesn't re-run on every render.
@@ -75,10 +76,19 @@ const HOLD_POINT_LINK_NOT_FOUND = {
 
 // Stable empty register so a disabled/loading query never churns hook deps.
 const NO_HOLD_POINTS: HoldPoint[] = [];
+const SUPERINTENDENT_RELEASE_ROLES = new Set([
+  'owner',
+  'admin',
+  'project_manager',
+  'superintendent',
+]);
+const SUPERINTENDENT_RELEASE_PERMISSION_MESSAGE =
+  'This project requires superintendent, project manager, admin, or owner authorization before a manual release can be recorded.';
 
 export function HoldPointsPage() {
   const { projectId } = useParams();
   const isMobile = useIsMobile();
+  const currentProjectRole = useCurrentProjectRole(projectId);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -128,6 +138,15 @@ export function HoldPointsPage() {
   const loadError = holdPointsError
     ? extractErrorMessage(holdPointsError, 'Failed to load hold points.')
     : null;
+  const requiresSuperintendentRelease = holdPointDetails?.approvalRequirement === 'superintendent';
+  const currentUserCanRecordSuperintendentRelease =
+    currentProjectRole !== null && SUPERINTENDENT_RELEASE_ROLES.has(currentProjectRole);
+  const recordReleasePermissionMessage = loadingDetails
+    ? 'Checking release permissions...'
+    : requiresSuperintendentRelease && !currentUserCanRecordSuperintendentRelease
+      ? SUPERINTENDENT_RELEASE_PERMISSION_MESSAGE
+      : null;
+  const canSubmitRecordRelease = !recordReleasePermissionMessage;
 
   // Mutation handlers await this so modals close only once the register
   // reflects the change. A failed refetch surfaces via the query error state
@@ -404,6 +423,10 @@ export function HoldPointsPage() {
         recordingReleaseRef.current
       )
         return;
+      if (recordReleasePermissionMessage) {
+        setRecordReleaseError(recordReleasePermissionMessage);
+        return;
+      }
       recordingReleaseRef.current = true;
       setRecordingRelease(true);
       setRecordReleaseError(null);
@@ -472,7 +495,7 @@ export function HoldPointsPage() {
         setRecordingRelease(false);
       }
     },
-    [projectId, selectedHoldPoint, refreshHoldPoints],
+    [projectId, selectedHoldPoint, recordReleasePermissionMessage, refreshHoldPoints],
   );
 
   const handleExportCSV = useCallback(() => {
@@ -607,6 +630,8 @@ export function HoldPointsPage() {
           recording={recordingRelease}
           error={recordReleaseError}
           approvalRequirement={holdPointDetails?.approvalRequirement}
+          canSubmitRelease={canSubmitRecordRelease}
+          releasePermissionMessage={recordReleasePermissionMessage}
           onClose={handleCloseRecordModal}
           onSubmit={handleSubmitRecordRelease}
         />

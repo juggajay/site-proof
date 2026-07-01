@@ -10,11 +10,9 @@
  * ADD: the existing two-step pipeline, VERBATIM from RectifyNCRModal —
  *   1. POST /api/documents/upload (multipart) → { id }
  *   2. POST /api/ncrs/:id/evidence { documentId, evidenceType: 'photo' }
- * This is the same evidence-add path the offline sync executor follows (#833),
- * and is permission-gated server-side: only the NCR's responsible party or a
- * project quality role may add evidence. The foreman raises NCRs and adds/deletes
- * evidence (research doc 14), so the "Add photo" affordance is always available
- * on the detail screen; the server is the authority on the narrower cases.
+ * This is the same evidence-add path the offline sync executor follows (#833).
+ * The detail screen gates the affordance before upload; the backend remains the
+ * authority for the final evidence-link permission check.
  *
  * Online-only: photo upload needs signal. We never fake an offline add here.
  */

@@ -30,6 +30,8 @@ interface RecordReleaseModalProps {
   recording: boolean;
   error?: string | null;
   approvalRequirement?: 'any' | 'superintendent';
+  canSubmitRelease?: boolean;
+  releasePermissionMessage?: string | null;
   onClose: () => void;
   onSubmit: (
     releasedByName: string,
@@ -48,6 +50,8 @@ export function RecordReleaseModal({
   recording,
   error,
   approvalRequirement,
+  canSubmitRelease = true,
+  releasePermissionMessage,
   onClose,
   onSubmit,
 }: RecordReleaseModalProps) {
@@ -104,6 +108,16 @@ export function RecordReleaseModal({
     };
 
   const onFormSubmit = (data: RecordReleaseFormData) => {
+    if (!canSubmitRelease) {
+      toast({
+        title: 'Release not available',
+        description:
+          releasePermissionMessage || 'You do not have permission to record this release',
+        variant: 'error',
+      });
+      return;
+    }
+
     const evidenceFile = getEvidenceFileForMethod(data.releaseMethod);
 
     // Feature #884: Require signature for digital release
@@ -144,7 +158,9 @@ export function RecordReleaseModal({
         variant="success"
         type="submit"
         form="record-release-form"
-        disabled={recording || !releasedByName?.trim() || !releasedByOrg?.trim()}
+        disabled={
+          recording || !releasedByName?.trim() || !releasedByOrg?.trim() || !canSubmitRelease
+        }
       >
         {recording ? 'Recording...' : 'Record Manual Release'}
       </Button>
@@ -177,6 +193,11 @@ export function RecordReleaseModal({
           <p className="text-xs text-warning mt-1">
             This project requires superintendent-level authorization to release hold points.
           </p>
+          {releasePermissionMessage && (
+            <p className="text-xs font-medium text-warning mt-2" role="status">
+              {releasePermissionMessage}
+            </p>
+          )}
         </div>
       )}
 
@@ -319,6 +340,7 @@ export function RecordReleaseModal({
               width={380}
               height={150}
               mobileHeight={160}
+              disabled={!canSubmitRelease || recording}
               className={isMobile ? 'w-full' : 'mx-auto'}
             />
             <p className="text-xs text-muted-foreground">

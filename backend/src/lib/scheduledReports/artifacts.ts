@@ -334,6 +334,49 @@ export async function loadScheduledReportArtifactBuffer(
   return fs.promises.readFile(filePath);
 }
 
+export async function deleteScheduledReportArtifactFile(
+  run: ScheduledReportArtifactRecord,
+): Promise<void> {
+  if (!run.artifactFileUrl) {
+    return;
+  }
+
+  const storagePath = getOwnedScheduledReportArtifactStoragePath(
+    run.artifactFileUrl,
+    run.projectId,
+    run.scheduleId,
+    run.id,
+  );
+  if (storagePath) {
+    if (!isSupabaseConfigured()) {
+      return;
+    }
+
+    const { error } = await getSupabaseClient()
+      .storage.from(DOCUMENTS_BUCKET)
+      .remove([storagePath]);
+    if (error) {
+      logWarn('[Scheduled Reports] Supabase artifact delete failed:', error);
+    }
+    return;
+  }
+
+  try {
+    const filePath = resolveOwnedLocalArtifactPath(
+      run.artifactFileUrl,
+      run.projectId,
+      run.scheduleId,
+      run.id,
+    );
+    await fs.promises.rm(filePath, { force: true });
+  } catch (error) {
+    if (error instanceof AppError && [400, 404].includes(error.statusCode)) {
+      return;
+    }
+    logWarn('[Scheduled Reports] Local artifact delete failed:', error);
+  }
+}
+
 export async function sendScheduledReportArtifactFile(
   run: ScheduledReportArtifactRecord,
   res: Response,

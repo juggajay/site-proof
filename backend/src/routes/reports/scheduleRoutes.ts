@@ -20,7 +20,10 @@ import {
   buildScheduledReportResponse,
   buildScheduledReportsResponse,
 } from '../reportResponses.js';
-import { sendScheduledReportArtifactFile } from '../../lib/scheduledReports/artifacts.js';
+import {
+  deleteScheduledReportArtifactFile,
+  sendScheduledReportArtifactFile,
+} from '../../lib/scheduledReports/artifacts.js';
 
 const scheduledReportTypeSchema = z.enum(SCHEDULED_REPORT_TYPES);
 const scheduledReportFrequencySchema = z.enum(SCHEDULED_REPORT_FREQUENCIES);
@@ -700,12 +703,29 @@ export function createScheduledReportRouter({
       }
       await requireScheduledReportAccess(req.user, existing.projectId, { requireWritable: true });
 
+      const artifactRuns = await prisma.scheduledReportRun.findMany({
+        where: { scheduleId: id, artifactFileUrl: { not: null } },
+        select: {
+          id: true,
+          scheduleId: true,
+          projectId: true,
+          artifactFileUrl: true,
+          artifactReportName: true,
+          artifactFilename: true,
+          artifactMimeType: true,
+          artifactFileSize: true,
+          artifactSha256: true,
+        },
+      });
+
       await prisma.$transaction(async (tx) => {
         await deleteQueuedScheduledReportDigestItems(tx, id);
         await tx.scheduledReport.delete({
           where: { id },
         });
       });
+
+      await Promise.all(artifactRuns.map((run) => deleteScheduledReportArtifactFile(run)));
 
       await createAuditLog({
         projectId: existing.projectId,
