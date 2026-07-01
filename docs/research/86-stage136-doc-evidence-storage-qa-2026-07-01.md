@@ -58,7 +58,18 @@ Read-only subagents covered backend storage/access, frontend evidence surfaces, 
 - `backend`: `npm run type-check` - passed.
 - `backend`: `npm run lint` - passed.
 - `frontend`: `npm run test:unit -- src/shell/screens/issues/test/IssueDetailScreen.test.tsx src/pages/holdpoints/components/RecordReleaseModal.test.tsx` - 20 passed.
+- `frontend`: `npm run test:unit -- src/pages/holdpoints/HoldPointsPage.test.tsx src/pages/holdpoints/components/RecordReleaseModal.test.tsx` - 14 passed.
+- `frontend`: `npm run test:coverage` - 348 files passed, 2,974 tests passed.
 - `frontend`: `npm run type-check` - passed.
 - `frontend`: `npm run lint` - passed with one existing warning in `frontend/src/lib/theme.tsx`.
+- `frontend`: `npx playwright test --grep "@pr-smoke"` - 12 passed.
 - `git diff --check` - passed.
 - `fallow audit --base origin/master --format json --quiet` - advisory fail: 0 dead code, 0 introduced duplication, 5 introduced complexity findings in already-large touched React functions.
+
+## CI Fix Follow-Up
+
+PR #1299 initially failed Frontend coverage and PR smoke because the new hold-point
+role gate reads `/api/projects/:id` through `useCurrentProjectRole`. The real
+project detail response includes `currentUserRole`, but the unit and Playwright
+mocks did not. Updated the mocks to return `currentUserRole: 'project_manager'`
+and adjusted the register unit assertion to check the hold-point fetch directly.
