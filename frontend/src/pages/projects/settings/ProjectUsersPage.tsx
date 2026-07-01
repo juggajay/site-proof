@@ -716,12 +716,7 @@ export function ProjectUsersPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closeInviteModal}
-              disabled={inviting}
-            >
+            <Button type="button" variant="outline" onClick={closeInviteModal} disabled={inviting}>
               Cancel
             </Button>
             <Button

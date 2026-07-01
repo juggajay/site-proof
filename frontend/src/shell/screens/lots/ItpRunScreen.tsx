@@ -432,77 +432,78 @@ export function ItpRunScreen() {
   // Tri-state PASS / FAIL / N-A — pinned at the bottom of the content zone,
   // ABOVE the fixed bar: the natural thumb range for one-handed use (owner
   // refinement). Hold points still never offer Pass.
-  const triStateCluster = awaitingVerification || superintendentSignoffOnly ? null : gate.kind === 'awaiting-release' ? (
-    <div className="grid grid-cols-2 gap-3">
-      <button
-        type="button"
-        className="shell-tri-btn shell-tri-na min-h-[58px]"
-        disabled={busy}
-        onClick={() => {
-          setReasonMode('na');
-          setReason('');
-          setReasonError(null);
-        }}
-        aria-label="Mark not applicable"
-      >
-        N/A
-      </button>
-      <button
-        type="button"
-        className="shell-tri-btn shell-tri-fail min-h-[58px]"
-        disabled={busy}
-        onClick={() => {
-          setReasonMode('fail');
-          setReason('');
-          setReasonError(null);
-        }}
-        aria-label="Fail this check"
-      >
-        <AlertTriangle size={20} aria-hidden />
-        Fail
-      </button>
-    </div>
-  ) : (
-    <div className="grid grid-cols-3 gap-3">
-      <button
-        type="button"
-        className="shell-tri-pass shell-tri-btn min-h-[58px]"
-        disabled={busy}
-        onClick={handlePass}
-        aria-label="Pass this check"
-      >
-        <Check size={22} strokeWidth={2.4} aria-hidden />
-        Pass
-      </button>
-      <button
-        type="button"
-        className="shell-tri-fail shell-tri-btn min-h-[58px]"
-        disabled={busy}
-        onClick={() => {
-          setReasonMode('fail');
-          setReason('');
-          setReasonError(null);
-        }}
-        aria-label="Fail this check"
-      >
-        <AlertTriangle size={22} aria-hidden />
-        Fail
-      </button>
-      <button
-        type="button"
-        className="shell-tri-na shell-tri-btn min-h-[58px]"
-        disabled={busy}
-        onClick={() => {
-          setReasonMode('na');
-          setReason('');
-          setReasonError(null);
-        }}
-        aria-label="Mark not applicable"
-      >
-        N/A
-      </button>
-    </div>
-  );
+  const triStateCluster =
+    awaitingVerification || superintendentSignoffOnly ? null : gate.kind === 'awaiting-release' ? (
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          className="shell-tri-btn shell-tri-na min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('na');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Mark not applicable"
+        >
+          N/A
+        </button>
+        <button
+          type="button"
+          className="shell-tri-btn shell-tri-fail min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('fail');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Fail this check"
+        >
+          <AlertTriangle size={20} aria-hidden />
+          Fail
+        </button>
+      </div>
+    ) : (
+      <div className="grid grid-cols-3 gap-3">
+        <button
+          type="button"
+          className="shell-tri-pass shell-tri-btn min-h-[58px]"
+          disabled={busy}
+          onClick={handlePass}
+          aria-label="Pass this check"
+        >
+          <Check size={22} strokeWidth={2.4} aria-hidden />
+          Pass
+        </button>
+        <button
+          type="button"
+          className="shell-tri-fail shell-tri-btn min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('fail');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Fail this check"
+        >
+          <AlertTriangle size={22} aria-hidden />
+          Fail
+        </button>
+        <button
+          type="button"
+          className="shell-tri-na shell-tri-btn min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('na');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Mark not applicable"
+        >
+          N/A
+        </button>
+      </div>
+    );
 
   return (
     <ShellScreen
