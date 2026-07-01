@@ -160,6 +160,29 @@ async function cleanupExpiredDigestItems(now: Date, retentionDays: number): Prom
   return deleted.count;
 }
 
+async function cleanupDisabledDueDigestItems(
+  cutoffAt: Date,
+  now: Date,
+  userIds?: string[],
+): Promise<number> {
+  const deleted = await prisma.notificationDigestItem.deleteMany({
+    where: {
+      ...(userIds ? { userId: { in: userIds } } : {}),
+      createdAt: { lte: cutoffAt },
+      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      user: {
+        OR: [
+          { notificationEmailPreference: null },
+          { notificationEmailPreference: { is: { enabled: false } } },
+          { notificationEmailPreference: { is: { dailyDigest: false } } },
+        ],
+      },
+    },
+  });
+
+  return deleted.count;
+}
+
 async function processUserDigest(
   userId: string,
   cutoffAt: Date,
@@ -313,6 +336,8 @@ async function processDueNotificationDigestsUnlocked(
   const failureRetryDelayMs = parseDigestFailureRetryDelayMs(
     options.failureRetryDelayMs ?? process.env.NOTIFICATION_DIGEST_FAILURE_RETRY_DELAY_MS,
   );
+  await cleanupDisabledDueDigestItems(cutoffAt, now, options.userIds);
+
   const dueUsers = await prisma.notificationDigestItem.findMany({
     where: {
       ...(options.userIds ? { userId: { in: options.userIds } } : {}),

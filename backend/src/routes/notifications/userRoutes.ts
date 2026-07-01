@@ -32,19 +32,67 @@ import {
 
 export const notificationUserRouter = Router();
 
+const COMPANY_PROJECT_NOTIFICATION_ROLES = new Set(['owner', 'admin']);
+
+function buildVisibleNotificationWhere(
+  user: NonNullable<Express.Request['user']>,
+): Prisma.NotificationWhereInput {
+  const projectAccessOr: Prisma.ProjectWhereInput[] = [
+    {
+      projectUsers: {
+        some: {
+          userId: user.id,
+          status: 'active',
+        },
+      },
+    },
+    {
+      subcontractorCompanies: {
+        some: {
+          status: 'approved',
+          users: {
+            some: {
+              userId: user.id,
+            },
+          },
+        },
+      },
+    },
+  ];
+
+  if (user.companyId && COMPANY_PROJECT_NOTIFICATION_ROLES.has(user.roleInCompany || '')) {
+    projectAccessOr.push({
+      companyId: user.companyId,
+    });
+  }
+
+  return {
+    userId: user.id,
+    OR: [
+      { projectId: null },
+      {
+        project: {
+          status: 'active',
+          OR: projectAccessOr,
+        },
+      },
+    ],
+  };
+}
+
 // GET /api/notifications - Get notifications for current user
 notificationUserRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const user = req.user;
+    if (!user) {
       throw AppError.unauthorized();
     }
 
     const unreadOnly = parseOptionalString(req.query.unreadOnly, 'unreadOnly', 5);
     const { limit, offset } = parseNotificationPagination(req.query);
 
-    const where: Prisma.NotificationWhereInput = { userId };
+    const where = buildVisibleNotificationWhere(user);
     if (unreadOnly !== undefined && unreadOnly !== 'true' && unreadOnly !== 'false') {
       throw AppError.badRequest('unreadOnly must be true or false');
     }
@@ -70,7 +118,7 @@ notificationUserRouter.get(
       }),
       prisma.notification.count({
         where: {
-          userId,
+          ...buildVisibleNotificationWhere(user),
           isRead: false,
         },
       }),
@@ -84,14 +132,14 @@ notificationUserRouter.get(
 notificationUserRouter.get(
   '/unread-count',
   asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const user = req.user;
+    if (!user) {
       throw AppError.unauthorized();
     }
 
     const count = await prisma.notification.count({
       where: {
-        userId,
+        ...buildVisibleNotificationWhere(user),
         isRead: false,
       },
     });
@@ -104,23 +152,36 @@ notificationUserRouter.get(
 notificationUserRouter.put(
   '/:id/read',
   asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const user = req.user;
+    if (!user) {
       throw AppError.unauthorized();
     }
 
     const id = parseNotificationRouteId(req.params.id);
 
-    const notification = await prisma.notification.findUnique({
+    const ownedNotification = await prisma.notification.findUnique({
       where: { id },
+      select: { userId: true },
     });
 
-    if (!notification) {
+    if (!ownedNotification) {
       throw AppError.notFound('Notification');
     }
 
-    if (notification.userId !== userId) {
+    if (ownedNotification.userId !== user.id) {
       throw AppError.forbidden('Access denied');
+    }
+
+    const visibleNotification = await prisma.notification.findFirst({
+      where: {
+        ...buildVisibleNotificationWhere(user),
+        id,
+      },
+      select: { id: true },
+    });
+
+    if (!visibleNotification) {
+      throw AppError.notFound('Notification');
     }
 
     const updated = await prisma.notification.update({
@@ -136,14 +197,14 @@ notificationUserRouter.put(
 notificationUserRouter.put(
   '/read-all',
   asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const user = req.user;
+    if (!user) {
       throw AppError.unauthorized();
     }
 
     await prisma.notification.updateMany({
       where: {
-        userId,
+        ...buildVisibleNotificationWhere(user),
         isRead: false,
       },
       data: { isRead: true },
@@ -160,23 +221,36 @@ notificationUserRouter.put(
 notificationUserRouter.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
+    const user = req.user;
+    if (!user) {
       throw AppError.unauthorized();
     }
 
     const id = parseNotificationRouteId(req.params.id);
 
-    const notification = await prisma.notification.findUnique({
+    const ownedNotification = await prisma.notification.findUnique({
       where: { id },
+      select: { userId: true },
     });
 
-    if (!notification) {
+    if (!ownedNotification) {
       throw AppError.notFound('Notification');
     }
 
-    if (notification.userId !== userId) {
+    if (ownedNotification.userId !== user.id) {
       throw AppError.forbidden('Access denied');
+    }
+
+    const visibleNotification = await prisma.notification.findFirst({
+      where: {
+        ...buildVisibleNotificationWhere(user),
+        id,
+      },
+      select: { id: true },
+    });
+
+    if (!visibleNotification) {
+      throw AppError.notFound('Notification');
     }
 
     await prisma.notification.delete({

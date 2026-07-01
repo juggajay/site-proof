@@ -214,7 +214,7 @@ describe('processDueNotificationDigests', () => {
     }
   });
 
-  it('skips users that have disabled daily digest delivery', async () => {
+  it('deletes due digest items for users that have disabled daily digest delivery', async () => {
     const user = await createDigestUser(false);
     const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
 
@@ -240,7 +240,7 @@ describe('processDueNotificationDigests', () => {
       expect(result.skipped).toBe(0);
       await expect(
         prisma.notificationDigestItem.count({ where: { userId: user.id } }),
-      ).resolves.toBe(1);
+      ).resolves.toBe(0);
       expect(getQueuedEmails()).toHaveLength(0);
     } finally {
       await cleanupDigestUser(user.id);
@@ -285,7 +285,7 @@ describe('processDueNotificationDigests', () => {
         prisma.notificationDigestItem.count({
           where: { userId: { in: disabledUsers.map((user) => user.id) } },
         }),
-      ).resolves.toBe(disabledUsers.length);
+      ).resolves.toBe(0);
     } finally {
       for (const user of allUsers) {
         await cleanupDigestUser(user.id);

@@ -139,6 +139,10 @@ type ResolvedScheduledReportRecipients = {
   suppressedRecipients: string[];
 };
 
+type ScheduledReportFailureRecord =
+  | { status: 'failed' | 'disabled'; failureCount: number; nextRunAt: Date | null }
+  | { status: 'skipped'; failureCount: number; nextRunAt: null; error: string };
+
 export type ScheduledReportDeliveryStatus = 'sent' | 'failed' | 'disabled' | 'skipped';
 
 export type ScheduledReportDeliveryResult = {
@@ -341,6 +345,87 @@ async function resolveScheduledReportRecipients(
   return resolvedRecipients;
 }
 
+async function findKnownScheduledReportRecipientByEmail(
+  email: string,
+  projectId: string,
+): Promise<KnownScheduledReportRecipientUser | null> {
+  return prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+    select: {
+      id: true,
+      email: true,
+      companyId: true,
+      roleInCompany: true,
+      notificationEmailPreference: {
+        select: {
+          enabled: true,
+          scheduledReports: true,
+          scheduledReportsTiming: true,
+          dailyDigest: true,
+        },
+      },
+      projectUsers: {
+        where: { projectId },
+        select: { role: true, status: true },
+      },
+    },
+  });
+}
+
+async function canRetryScheduledReportDeliveryForCurrentRecipient(
+  schedule: ScheduledReportForDelivery,
+  delivery: ScheduledReportRecipientDeliveryRecord,
+): Promise<boolean> {
+  if (delivery.recipientKind === 'email') {
+    const user = await findKnownScheduledReportRecipientByEmail(
+      delivery.recipient,
+      schedule.projectId,
+    );
+    if (!user) {
+      return true;
+    }
+
+    return (
+      classifyKnownScheduledReportRecipient(user, delivery.recipient, schedule.project.companyId)
+        .kind !== 'suppressed'
+    );
+  }
+
+  if (delivery.recipientKind === 'digest') {
+    const user = await prisma.user.findUnique({
+      where: { id: delivery.recipient },
+      select: {
+        id: true,
+        email: true,
+        companyId: true,
+        roleInCompany: true,
+        notificationEmailPreference: {
+          select: {
+            enabled: true,
+            scheduledReports: true,
+            scheduledReportsTiming: true,
+            dailyDigest: true,
+          },
+        },
+        projectUsers: {
+          where: { projectId: schedule.projectId },
+          select: { role: true, status: true },
+        },
+      },
+    });
+    if (!user) {
+      return false;
+    }
+
+    return (
+      classifyKnownScheduledReportRecipient(user, user.email, schedule.project.companyId).kind ===
+      'digest'
+    );
+  }
+
+  return false;
+}
+
 async function queueScheduledReportDigestItem(
   schedule: ScheduledReportForDelivery,
   document: ScheduledReportDeliveryDocument,
@@ -521,9 +606,9 @@ export async function canSendClaimedScheduledReportRecipientDelivery(
   );
 }
 
-async function markScheduledReportRecipientDeliverySent(deliveryId: string): Promise<void> {
-  await prisma.scheduledReportRecipientDelivery.update({
-    where: { id: deliveryId },
+async function markScheduledReportRecipientDeliverySent(deliveryId: string): Promise<boolean> {
+  const update = await prisma.scheduledReportRecipientDelivery.updateMany({
+    where: { id: deliveryId, status: 'sending' },
     data: {
       status: 'sent',
       retryable: false,
@@ -532,15 +617,17 @@ async function markScheduledReportRecipientDeliverySent(deliveryId: string): Pro
       errorReason: null,
     },
   });
+
+  return update.count === 1;
 }
 
 async function markScheduledReportRecipientDeliveryFailed(
   deliveryId: string,
   errorMessage: string,
   retryAt: Date,
-): Promise<void> {
-  await prisma.scheduledReportRecipientDelivery.update({
-    where: { id: deliveryId },
+): Promise<boolean> {
+  const update = await prisma.scheduledReportRecipientDelivery.updateMany({
+    where: { id: deliveryId, status: 'sending' },
     data: {
       status: 'failed',
       retryable: true,
@@ -549,6 +636,26 @@ async function markScheduledReportRecipientDeliveryFailed(
       errorReason: truncateFailureReason(errorMessage),
     },
   });
+
+  return update.count === 1;
+}
+
+async function suppressClaimedScheduledReportRecipientDelivery(
+  deliveryId: string,
+  reason: string,
+): Promise<boolean> {
+  const update = await prisma.scheduledReportRecipientDelivery.updateMany({
+    where: { id: deliveryId, status: 'sending' },
+    data: {
+      status: 'suppressed',
+      retryable: false,
+      lockedUntil: null,
+      nextAttemptAt: null,
+      errorReason: truncateFailureReason(reason),
+    },
+  });
+
+  return update.count === 1;
 }
 
 async function recordScheduledReportFailure(
@@ -557,13 +664,17 @@ async function recordScheduledReportFailure(
   scheduleId: string,
   now: Date,
   retryDelayMs: number,
-): Promise<{ status: 'failed' | 'disabled'; failureCount: number; nextRunAt: Date | null }> {
+): Promise<ScheduledReportFailureRecord> {
   const failureCount = Math.max(0, schedule.failureCount ?? 0) + 1;
   const shouldDisable = failureCount >= MAX_SCHEDULED_REPORT_DELIVERY_FAILURES;
   const retryAt = new Date(now.getTime() + retryDelayMs);
 
-  await prisma.scheduledReport.update({
-    where: { id: scheduleId },
+  const update = await prisma.scheduledReport.updateMany({
+    where: {
+      id: scheduleId,
+      isActive: true,
+      project: { status: 'active' },
+    },
     data: {
       failureCount,
       lastFailureAt: now,
@@ -572,6 +683,15 @@ async function recordScheduledReportFailure(
       nextRunAt: shouldDisable ? null : retryAt,
     },
   });
+
+  if (update.count === 0) {
+    return {
+      status: 'skipped',
+      failureCount: 0,
+      nextRunAt: null,
+      error: 'Schedule was cancelled before delivery failure could be recorded',
+    };
+  }
 
   return {
     status: shouldDisable ? 'disabled' : 'failed',
@@ -586,8 +706,12 @@ async function markScheduledReportSkipped(
   recipients: number,
   error: string,
 ): Promise<ScheduledReportDeliveryResult> {
-  await prisma.scheduledReport.update({
-    where: { id: schedule.id },
+  await prisma.scheduledReport.updateMany({
+    where: {
+      id: schedule.id,
+      isActive: true,
+      project: { status: 'active' },
+    },
     data: {
       failureCount: 0,
       lastFailureAt: null,
@@ -680,6 +804,14 @@ async function sendImmediateScheduledReportEmail(
       continue;
     }
 
+    if (!(await canRetryScheduledReportDeliveryForCurrentRecipient(schedule, delivery))) {
+      await suppressClaimedScheduledReportRecipientDelivery(
+        delivery.id,
+        'Scheduled report recipient no longer has project report access',
+      );
+      continue;
+    }
+
     const emailResult = await sendScheduledReportEmail({
       to: delivery.recipient,
       projectName: schedule.project.name,
@@ -723,6 +855,14 @@ async function queueScheduledReportDigestDeliveries(
         continue;
       }
 
+      if (!(await canRetryScheduledReportDeliveryForCurrentRecipient(schedule, delivery))) {
+        await suppressClaimedScheduledReportRecipientDelivery(
+          delivery.id,
+          'Scheduled report recipient no longer has project report access',
+        );
+        continue;
+      }
+
       await queueScheduledReportDigestItem(schedule, document, delivery.recipient, delivery.id);
       await markScheduledReportRecipientDeliverySent(delivery.id);
     } catch (error) {
@@ -743,15 +883,33 @@ async function finalizeScheduledReportRun(
   retryDelayMs: number,
   currentDeliveryIds: Set<string>,
 ): Promise<ScheduledReportDeliveryResult> {
-  const deliveries = await prisma.scheduledReportRecipientDelivery.findMany({
-    where: { runId },
+  const run = await prisma.scheduledReportRun.findUnique({
+    where: { id: runId },
     select: {
-      id: true,
       status: true,
-      recipientKind: true,
-      errorReason: true,
+      deliveries: {
+        select: {
+          id: true,
+          status: true,
+          recipientKind: true,
+          errorReason: true,
+        },
+      },
     },
   });
+
+  if (!run || run.status === 'cancelled') {
+    return {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      recipients: 0,
+      status: 'skipped',
+      error: 'Schedule was cancelled before delivery completed',
+    };
+  }
+
+  const deliveries = run.deliveries;
   const sentCount = deliveries.filter((delivery) => delivery.status === 'sent').length;
   const currentSentCount = deliveries.filter(
     (delivery) => currentDeliveryIds.has(delivery.id) && delivery.status === 'sent',
@@ -768,8 +926,27 @@ async function finalizeScheduledReportRun(
 
   if (failedCount > 0) {
     const runStatus = sentCount > 0 || suppressedCount > 0 ? 'partial_failed' : 'failed';
-    await prisma.scheduledReportRun.update({
-      where: { id: runId },
+    const failure = await recordScheduledReportFailure(
+      schedule,
+      firstError,
+      schedule.id,
+      now,
+      retryDelayMs,
+    );
+
+    if (failure.status === 'skipped') {
+      return {
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+        reportType: schedule.reportType,
+        recipients: 0,
+        status: 'skipped',
+        error: failure.error,
+      };
+    }
+
+    const runUpdate = await prisma.scheduledReportRun.updateMany({
+      where: { id: runId, status: { not: 'cancelled' } },
       data: {
         status: runStatus,
         sentCount,
@@ -781,13 +958,16 @@ async function finalizeScheduledReportRun(
       },
     });
 
-    const failure = await recordScheduledReportFailure(
-      schedule,
-      firstError,
-      schedule.id,
-      now,
-      retryDelayMs,
-    );
+    if (runUpdate.count === 0) {
+      return {
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+        reportType: schedule.reportType,
+        recipients: 0,
+        status: 'skipped',
+        error: 'Schedule was cancelled before delivery completed',
+      };
+    }
 
     return {
       scheduleId: schedule.id,
@@ -801,8 +981,35 @@ async function finalizeScheduledReportRun(
     };
   }
 
-  await prisma.scheduledReportRun.update({
-    where: { id: runId },
+  if (sentCount === 0 && suppressedCount > 0) {
+    await prisma.scheduledReportRun.updateMany({
+      where: { id: runId, status: { not: 'cancelled' } },
+      data: {
+        status: 'cancelled',
+        sentCount: 0,
+        failedCount: 0,
+        digestCount,
+        suppressedCount,
+        errorReason: 'No eligible scheduled report recipients',
+        completedAt: now,
+      },
+    });
+
+    return markScheduledReportSkipped(
+      schedule,
+      nextRunAt,
+      0,
+      'No eligible scheduled report recipients',
+    );
+  }
+
+  const sentResult = await markScheduledReportSent(schedule, now, nextRunAt, currentSentCount);
+  if (sentResult.status !== 'sent') {
+    return sentResult;
+  }
+
+  const runUpdate = await prisma.scheduledReportRun.updateMany({
+    where: { id: runId, status: { not: 'cancelled' } },
     data: {
       status: 'sent',
       sentCount,
@@ -814,7 +1021,18 @@ async function finalizeScheduledReportRun(
     },
   });
 
-  return markScheduledReportSent(schedule, now, nextRunAt, currentSentCount);
+  if (runUpdate.count === 0) {
+    return {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      recipients: 0,
+      status: 'skipped',
+      error: 'Schedule was cancelled before delivery completed',
+    };
+  }
+
+  return sentResult;
 }
 
 async function markScheduledReportSent(
@@ -823,8 +1041,12 @@ async function markScheduledReportSent(
   nextRunAt: Date,
   deliveredRecipients: number,
 ): Promise<ScheduledReportDeliveryResult> {
-  await prisma.scheduledReport.update({
-    where: { id: schedule.id },
+  const update = await prisma.scheduledReport.updateMany({
+    where: {
+      id: schedule.id,
+      isActive: true,
+      project: { status: 'active' },
+    },
     data: {
       failureCount: 0,
       lastFailureAt: null,
@@ -833,6 +1055,17 @@ async function markScheduledReportSent(
       nextRunAt,
     },
   });
+
+  if (update.count === 0) {
+    return {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      recipients: 0,
+      status: 'skipped',
+      error: 'Schedule was cancelled before delivery completed',
+    };
+  }
 
   return {
     scheduleId: schedule.id,
@@ -988,6 +1221,17 @@ async function processScheduledReport(
       now,
       options.retryDelayMs,
     );
+
+    if (failure.status === 'skipped') {
+      return {
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+        reportType: schedule.reportType,
+        recipients: recipients.length,
+        status: 'skipped',
+        error: failure.error,
+      };
+    }
 
     return {
       scheduleId: schedule.id,

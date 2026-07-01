@@ -308,6 +308,101 @@ describe('Notifications API', () => {
 
       expect(res.status).toBe(401);
     });
+
+    it('should hide stale project notifications after project access is removed', async () => {
+      const suffix = Date.now();
+      const scopedUser = await registerTestUser(app, {
+        email: `notifications-removed-${suffix}@example.com`,
+        fullName: 'Removed Notification User',
+        companyId,
+        roleInCompany: 'site_manager',
+      });
+      const scopedProject = await prisma.project.create({
+        data: {
+          name: `Notifications Removed Project ${suffix}`,
+          projectNumber: `NOT-REM-${suffix}`,
+          companyId,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId: scopedProject.id,
+          userId: scopedUser.userId,
+          role: 'site_manager',
+          status: 'active',
+        },
+      });
+
+      const projectNotification = await prisma.notification.create({
+        data: {
+          userId: scopedUser.userId,
+          projectId: scopedProject.id,
+          type: 'project_update',
+          title: 'Stale project notification',
+          message: 'This should be hidden after project access is removed',
+          isRead: false,
+        },
+      });
+      const projectlessNotification = await prisma.notification.create({
+        data: {
+          userId: scopedUser.userId,
+          type: 'account_notice',
+          title: 'Project access removed',
+          message: 'Projectless notices should remain visible',
+          isRead: false,
+        },
+      });
+
+      try {
+        await prisma.projectUser.updateMany({
+          where: { projectId: scopedProject.id, userId: scopedUser.userId },
+          data: { status: 'removed' },
+        });
+
+        const listRes = await request(app)
+          .get('/api/notifications')
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+        const countRes = await request(app)
+          .get('/api/notifications/unread-count')
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(listRes.status).toBe(200);
+        expect(listRes.body.notifications.map((item: { id: string }) => item.id)).toContain(
+          projectlessNotification.id,
+        );
+        expect(listRes.body.notifications.map((item: { id: string }) => item.id)).not.toContain(
+          projectNotification.id,
+        );
+        expect(listRes.body.unreadCount).toBe(1);
+        expect(countRes.status).toBe(200);
+        expect(countRes.body.count).toBe(1);
+
+        const directReadRes = await request(app)
+          .put(`/api/notifications/${projectNotification.id}/read`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+        const directDeleteRes = await request(app)
+          .delete(`/api/notifications/${projectNotification.id}`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(directReadRes.status).toBe(404);
+        expect(directDeleteRes.status).toBe(404);
+
+        const staleNotification = await prisma.notification.findUnique({
+          where: { id: projectNotification.id },
+        });
+        expect(staleNotification?.isRead).toBe(false);
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.projectUser.deleteMany({ where: { projectId: scopedProject.id } });
+        await prisma.project.delete({ where: { id: scopedProject.id } }).catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.user.delete({ where: { id: scopedUser.userId } }).catch(() => {});
+      }
+    });
   });
 
   describe('GET /api/notifications/unread-count', () => {

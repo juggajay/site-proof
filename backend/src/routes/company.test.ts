@@ -1429,6 +1429,67 @@ describe('Company API', () => {
       expect(changes.roleInCompany).toEqual({ from: 'foreman', to: 'project_manager' });
     });
 
+    it('disables owned scheduled reports when company admin is demoted without project manager access', async () => {
+      const project = await prisma.project.create({
+        data: {
+          name: `Company Demotion Schedule Project ${Date.now()}`,
+          projectNumber: `COMP-DEMOTE-${Date.now()}`,
+          companyId,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const schedule = await prisma.scheduledReport.create({
+        data: {
+          projectId: project.id,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '08:00',
+          recipients: 'demoted-company-admin@example.com',
+          isActive: true,
+          createdById: memberId,
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: memberId },
+        data: { roleInCompany: 'admin' },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/company/members/${memberId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ roleInCompany: 'foreman' });
+
+        expect(res.status).toBe(200);
+        await expect(
+          prisma.scheduledReport.findUnique({
+            where: { id: schedule.id },
+            select: { isActive: true, recipients: true, createdById: true },
+          }),
+        ).resolves.toMatchObject({
+          isActive: false,
+          recipients: '',
+          createdById: null,
+        });
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: { entityId: memberId, action: AuditAction.USER_ROLE_CHANGED },
+          orderBy: { createdAt: 'desc' },
+        });
+        const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+        expect(changes).toMatchObject({
+          roleInCompany: { from: 'admin', to: 'foreman' },
+          disabledScheduledReportCount: 1,
+        });
+      } finally {
+        await prisma.scheduledReport.deleteMany({ where: { projectId: project.id } });
+        await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      }
+    });
+
     it('rejects API-key-authenticated company member role changes before mutating data', async () => {
       const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
 

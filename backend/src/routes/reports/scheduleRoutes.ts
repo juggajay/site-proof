@@ -308,6 +308,29 @@ async function cancelIncompleteScheduledReportRuns(
   });
 }
 
+async function deleteQueuedScheduledReportDigestItems(
+  client: Prisma.TransactionClient,
+  scheduleId: string,
+): Promise<void> {
+  const digestDeliveries = await client.scheduledReportRecipientDelivery.findMany({
+    where: { scheduleId, recipientKind: 'digest' },
+    select: { id: true },
+  });
+
+  if (digestDeliveries.length === 0) {
+    return;
+  }
+
+  await client.notificationDigestItem.deleteMany({
+    where: {
+      type: 'scheduledReports',
+      sourceKey: {
+        in: digestDeliveries.map((delivery) => `scheduled-report-delivery:${delivery.id}`),
+      },
+    },
+  });
+}
+
 function normalizeScheduleTiming(input: {
   frequency: ScheduledReportFrequency;
   dayOfWeek: unknown;
@@ -637,6 +660,7 @@ export function createScheduledReportRouter({
         await lockScheduledReportForUpdate(tx, id);
 
         if (shouldCancelIncompleteRuns) {
+          await deleteQueuedScheduledReportDigestItems(tx, id);
           await cancelIncompleteScheduledReportRuns(tx, id);
         }
 
@@ -676,8 +700,11 @@ export function createScheduledReportRouter({
       }
       await requireScheduledReportAccess(req.user, existing.projectId, { requireWritable: true });
 
-      await prisma.scheduledReport.delete({
-        where: { id },
+      await prisma.$transaction(async (tx) => {
+        await deleteQueuedScheduledReportDigestItems(tx, id);
+        await tx.scheduledReport.delete({
+          where: { id },
+        });
       });
 
       await createAuditLog({
