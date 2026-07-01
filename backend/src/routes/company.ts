@@ -316,7 +316,7 @@ companyRouter.get(
 
     // Get project count for this company
     const projectCount = await prisma.project.count({
-      where: { companyId: user.companyId },
+      where: { companyId: user.companyId, status: { not: 'archived' } },
     });
 
     // Get user count for this company

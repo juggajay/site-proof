@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HoldPoint } from './types';
 import {
+  buildHoldPointLotOptions,
   buildHoldPointChartData,
   buildHoldPointStats,
   filterHoldPoints,
@@ -191,21 +192,23 @@ describe('isNoticeExpired', () => {
 describe('filterHoldPoints', () => {
   const reference = new Date('2026-06-10T12:00:00.000Z');
   const register = [
-    makeHoldPoint({ id: 'pending', status: 'pending', lotNumber: 'LOT-001' }),
+    makeHoldPoint({ id: 'pending', status: 'pending', lotId: 'lot-1', lotNumber: 'LOT-001' }),
     makeHoldPoint({
       id: 'notified-fresh',
+      lotId: 'lot-2',
       status: 'notified',
       lotNumber: 'LOT-002',
       notificationSentAt: '2026-06-10T01:00:00.000Z',
     }),
     makeHoldPoint({
       id: 'notified-expired',
+      lotId: 'lot-3',
       status: 'notified',
       lotNumber: 'LOT-003',
       description: 'Subgrade proof roll',
       notificationSentAt: '2026-06-05T01:00:00.000Z',
     }),
-    makeHoldPoint({ id: 'released', status: 'released', lotNumber: 'LOT-004' }),
+    makeHoldPoint({ id: 'released', status: 'released', lotId: 'lot-4', lotNumber: 'LOT-004' }),
   ];
 
   it('passes everything through for the all view', () => {
@@ -242,6 +245,28 @@ describe('filterHoldPoints', () => {
       ['notified-fresh'],
     );
     expect(filterHoldPoints(register, 'released', 'LOT-002', reference)).toHaveLength(0);
+  });
+
+  it('combines selected lot, status, and search filters', () => {
+    expect(
+      filterHoldPoints(register, 'notified', 'LOT-002', reference, 'lot-2').map((hp) => hp.id),
+    ).toEqual(['notified-fresh']);
+    expect(filterHoldPoints(register, 'notified', 'LOT-002', reference, 'lot-3')).toHaveLength(0);
+  });
+});
+
+describe('buildHoldPointLotOptions', () => {
+  it('derives sorted unique lot options from the loaded register', () => {
+    const options = buildHoldPointLotOptions([
+      makeHoldPoint({ id: 'b-1', lotId: 'lot-b', lotNumber: 'LOT-B' }),
+      makeHoldPoint({ id: 'a-1', lotId: 'lot-a', lotNumber: 'LOT-A' }),
+      makeHoldPoint({ id: 'b-2', lotId: 'lot-b', lotNumber: 'LOT-B' }),
+    ]);
+
+    expect(options).toEqual([
+      { lotId: 'lot-a', lotNumber: 'LOT-A', holdPointCount: 1 },
+      { lotId: 'lot-b', lotNumber: 'LOT-B', holdPointCount: 2 },
+    ]);
   });
 });
 

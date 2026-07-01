@@ -127,6 +127,18 @@ function renderPage(initialEntry = '/projects/p1/hold-points') {
   );
 }
 
+function findLotCard(lotNumber: string) {
+  return screen.findByRole('heading', { name: lotNumber });
+}
+
+function getLotCard(lotNumber: string) {
+  return screen.getByRole('heading', { name: lotNumber });
+}
+
+function queryLotCard(lotNumber: string) {
+  return screen.queryByRole('heading', { name: lotNumber });
+}
+
 beforeEach(() => {
   apiFetchMock.mockReset();
 });
@@ -136,6 +148,7 @@ describe('HoldPointsPage register data layer', () => {
     const bigRegister = Array.from({ length: 150 }, (_, index) =>
       makeHoldPoint({
         id: `hp-${index + 1}`,
+        lotId: `lot-${index + 1}`,
         lotNumber: `LOT-${String(index + 1).padStart(3, '0')}`,
       }),
     );
@@ -153,9 +166,9 @@ describe('HoldPointsPage register data layer', () => {
 
     renderPage('/projects/p1/hold-points?status=released');
 
-    expect(await screen.findByText('LOT-004')).toBeInTheDocument();
-    expect(screen.queryByText('LOT-001')).not.toBeInTheDocument();
-    expect(screen.queryByText('LOT-002')).not.toBeInTheDocument();
+    expect(await findLotCard('LOT-004')).toBeInTheDocument();
+    expect(queryLotCard('LOT-001')).not.toBeInTheDocument();
+    expect(queryLotCard('LOT-002')).not.toBeInTheDocument();
   });
 
   it('persists status filter changes to the URL', async () => {
@@ -164,12 +177,15 @@ describe('HoldPointsPage register data layer', () => {
 
     renderPage();
 
-    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox'), 'Released');
+    expect(await findLotCard('LOT-001')).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filter hold points by status' }),
+      'Released',
+    );
 
     expect(screen.getByTestId('location-search')).toHaveTextContent('?status=released');
-    expect(screen.getByText('LOT-004')).toBeInTheDocument();
-    expect(screen.queryByText('LOT-001')).not.toBeInTheDocument();
+    expect(getLotCard('LOT-004')).toBeInTheDocument();
+    expect(queryLotCard('LOT-001')).not.toBeInTheDocument();
   });
 
   it('shows only awaiting-release hold points with elapsed notice in the notice-expired view', async () => {
@@ -178,14 +194,17 @@ describe('HoldPointsPage register data layer', () => {
 
     renderPage();
 
-    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox'), 'Awaiting Release — Notice Expired');
+    expect(await findLotCard('LOT-001')).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filter hold points by status' }),
+      'Awaiting Release — Notice Expired',
+    );
 
     expect(screen.getByTestId('location-search')).toHaveTextContent('?status=notice-expired');
     // hp-3 was notified long ago (expired); hp-2 was notified just now (fresh).
-    expect(screen.getByText('LOT-003')).toBeInTheDocument();
-    expect(screen.queryByText('LOT-002')).not.toBeInTheDocument();
-    expect(screen.queryByText('LOT-001')).not.toBeInTheDocument();
+    expect(getLotCard('LOT-003')).toBeInTheDocument();
+    expect(queryLotCard('LOT-002')).not.toBeInTheDocument();
+    expect(queryLotCard('LOT-001')).not.toBeInTheDocument();
   });
 
   it('filters by lot search and records the query in the URL', async () => {
@@ -194,16 +213,34 @@ describe('HoldPointsPage register data layer', () => {
 
     renderPage();
 
-    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    expect(await findLotCard('LOT-001')).toBeInTheDocument();
     const search = screen.getByRole('textbox', {
       name: 'Search hold points by lot or description',
     });
     await user.type(search, 'LOT-002');
 
     expect(screen.getByTestId('location-search')).toHaveTextContent('search=LOT-002');
-    expect(screen.getByText('LOT-002')).toBeInTheDocument();
-    expect(screen.queryByText('LOT-001')).not.toBeInTheDocument();
-    expect(screen.queryByText('LOT-004')).not.toBeInTheDocument();
+    expect(getLotCard('LOT-002')).toBeInTheDocument();
+    expect(queryLotCard('LOT-001')).not.toBeInTheDocument();
+    expect(queryLotCard('LOT-004')).not.toBeInTheDocument();
+  });
+
+  it('filters the register by selected lot and records the lot in the URL', async () => {
+    mockHoldPointsApi(buildRegister());
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(await findLotCard('LOT-001')).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filter hold points by lot' }),
+      'LOT-002',
+    );
+
+    expect(screen.getByTestId('location-search')).toHaveTextContent('lotId=lot-2');
+    expect(getLotCard('LOT-002')).toBeInTheDocument();
+    expect(queryLotCard('LOT-001')).not.toBeInTheDocument();
+    expect(queryLotCard('LOT-003')).not.toBeInTheDocument();
   });
 
   it('still resolves ?hp= deep links from the full register once data loads', async () => {

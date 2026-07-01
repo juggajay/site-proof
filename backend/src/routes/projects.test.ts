@@ -130,6 +130,86 @@ describe('Projects API', () => {
       }
     });
 
+    it('defaults omitted specification set to the state-specific NSW standard', async () => {
+      let createdProjectId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/projects')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            name: 'NSW Default Spec Project',
+            projectNumber: `NSW-DEFAULT-SPEC-${Date.now()}`,
+            state: 'NSW',
+          });
+
+        expect(res.status).toBe(201);
+        createdProjectId = res.body.project.id;
+
+        const createdProject = await prisma.project.findUnique({
+          where: { id: createdProjectId },
+          select: { state: true, specificationSet: true },
+        });
+
+        expect(createdProject).toMatchObject({
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId: createdProjectId,
+            userId,
+            entityType: 'project',
+            entityId: createdProjectId,
+            action: AuditAction.PROJECT_CREATED,
+          },
+        });
+        const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+        expect(changes.specificationSet).toBe('TfNSW');
+      } finally {
+        if (createdProjectId) {
+          await prisma.auditLog.deleteMany({ where: { projectId: createdProjectId } });
+          await prisma.projectUser.deleteMany({ where: { projectId: createdProjectId } });
+          await prisma.project.delete({ where: { id: createdProjectId } }).catch(() => {});
+        }
+      }
+    });
+
+    it('defaults omitted specification set to the state-specific QLD standard', async () => {
+      let createdProjectId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/projects')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            name: 'QLD Default Spec Project',
+            projectNumber: `QLD-DEFAULT-SPEC-${Date.now()}`,
+            state: 'QLD',
+          });
+
+        expect(res.status).toBe(201);
+        createdProjectId = res.body.project.id;
+
+        const createdProject = await prisma.project.findUnique({
+          where: { id: createdProjectId },
+          select: { state: true, specificationSet: true },
+        });
+
+        expect(createdProject).toMatchObject({
+          state: 'QLD',
+          specificationSet: 'MRTS',
+        });
+      } finally {
+        if (createdProjectId) {
+          await prisma.auditLog.deleteMany({ where: { projectId: createdProjectId } });
+          await prisma.projectUser.deleteMany({ where: { projectId: createdProjectId } });
+          await prisma.project.delete({ where: { id: createdProjectId } }).catch(() => {});
+        }
+      }
+    });
+
     it('should reject project without name', async () => {
       const res = await request(app)
         .post('/api/projects')

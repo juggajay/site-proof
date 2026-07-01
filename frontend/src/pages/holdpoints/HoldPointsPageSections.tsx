@@ -1,14 +1,17 @@
 import { Button } from '@/components/ui/button';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
-import type { StatusFilter } from './types';
+import type { HoldPointLotOption, StatusFilter } from './types';
 import { HoldPointStatusFilter } from './components/HoldPointStatusFilter';
 
 interface HoldPointsPageHeaderProps {
   holdPointCount: number;
   isMobile: boolean;
   statusFilter: StatusFilter;
+  selectedLotId: string;
   searchQuery: string;
+  lotOptions: HoldPointLotOption[];
   onStatusFilterChange: (filter: StatusFilter) => void;
+  onLotFilterChange: (lotId: string) => void;
   onSearchChange: (query: string) => void;
   onExportCSV: () => void;
 }
@@ -17,8 +20,11 @@ export function HoldPointsPageHeader({
   holdPointCount,
   isMobile,
   statusFilter,
+  selectedLotId,
   searchQuery,
+  lotOptions,
   onStatusFilterChange,
+  onLotFilterChange,
   onSearchChange,
   onExportCSV,
 }: HoldPointsPageHeaderProps) {
@@ -39,8 +45,11 @@ export function HoldPointsPageHeader({
       {holdPointCount > 0 && (
         <HoldPointStatusFilter
           statusFilter={statusFilter}
+          selectedLotId={selectedLotId}
           searchQuery={searchQuery}
+          lotOptions={lotOptions}
           onStatusFilterChange={onStatusFilterChange}
+          onLotFilterChange={onLotFilterChange}
           onSearchChange={onSearchChange}
           onExportCSV={onExportCSV}
           showExport={!isMobile}

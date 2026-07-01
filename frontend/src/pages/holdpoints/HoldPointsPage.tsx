@@ -50,6 +50,7 @@ import { HoldPointsMobileList } from './components/HoldPointsMobileList';
 import { formatHoldPointDate, getStatusLabel } from './components/holdPointTableUtils';
 import {
   buildHoldPointChartData,
+  buildHoldPointLotOptions,
   buildHoldPointStats,
   filterHoldPoints,
   parseSortDirectionParam,
@@ -112,6 +113,7 @@ export function HoldPointsPage() {
   // refresh and can be shared as links.
   const statusFilter = parseStatusFilterParam(searchParams.get('status'));
   const searchQuery = searchParams.get('search') || '';
+  const requestedLotId = searchParams.get('lotId') || 'all';
   const sortField = parseSortFieldParam(searchParams.get('sort'));
   const sortDirection = parseSortDirectionParam(searchParams.get('dir'));
 
@@ -196,14 +198,21 @@ export function HoldPointsPage() {
 
   // --- Derived data ---
 
+  const lotOptions = useMemo(() => buildHoldPointLotOptions(holdPoints), [holdPoints]);
+
+  const selectedLotId = useMemo(() => {
+    if (requestedLotId === 'all') return 'all';
+    return lotOptions.some((lot) => lot.lotId === requestedLotId) ? requestedLotId : 'all';
+  }, [lotOptions, requestedLotId]);
+
   const filteredHoldPoints = useMemo(
     () =>
       sortHoldPoints(
-        filterHoldPoints(holdPoints, statusFilter, searchQuery),
+        filterHoldPoints(holdPoints, statusFilter, searchQuery, new Date(), selectedLotId),
         sortField,
         sortDirection,
       ),
-    [holdPoints, statusFilter, searchQuery, sortField, sortDirection],
+    [holdPoints, statusFilter, searchQuery, selectedLotId, sortField, sortDirection],
   );
 
   const stats = useMemo(() => buildHoldPointStats(holdPoints), [holdPoints]);
@@ -229,6 +238,11 @@ export function HoldPointsPage() {
 
   const handleStatusFilterChange = useCallback(
     (filter: StatusFilter) => updateFilters({ status: filter === 'all' ? '' : filter }),
+    [updateFilters],
+  );
+
+  const handleLotFilterChange = useCallback(
+    (lotId: string) => updateFilters({ lotId: lotId === 'all' ? '' : lotId }),
     [updateFilters],
   );
 
@@ -540,7 +554,7 @@ export function HoldPointsPage() {
   }, []);
 
   const handleClearFilter = useCallback(
-    () => updateFilters({ status: '', search: '' }),
+    () => updateFilters({ status: '', search: '', lotId: '' }),
     [updateFilters],
   );
 
@@ -552,8 +566,11 @@ export function HoldPointsPage() {
         holdPointCount={holdPoints.length}
         isMobile={isMobile}
         statusFilter={statusFilter}
+        selectedLotId={selectedLotId}
         searchQuery={searchQuery}
+        lotOptions={lotOptions}
         onStatusFilterChange={handleStatusFilterChange}
+        onLotFilterChange={handleLotFilterChange}
         onSearchChange={handleSearchChange}
         onExportCSV={handleExportCSV}
       />

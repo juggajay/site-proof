@@ -63,6 +63,21 @@ const RETAINED_PROJECT_RELATIONS = [
 type RetainedProjectRelation = (typeof RETAINED_PROJECT_RELATIONS)[number];
 type RetainedProjectCounts = Record<RetainedProjectRelation, number>;
 
+const AUSTROADS_SPECIFICATION_SET = 'Austroads';
+
+const PROJECT_SPECIFICATION_SET_BY_STATE: Record<string, string> = {
+  NSW: 'TfNSW',
+  QLD: 'MRTS',
+  VIC: 'VicRoads',
+  SA: 'DIT',
+  WA: 'MRWA',
+};
+
+export function getDefaultProjectSpecificationSet(state: string | null | undefined): string {
+  const normalizedState = state?.trim().toUpperCase() ?? '';
+  return PROJECT_SPECIFICATION_SET_BY_STATE[normalizedState] ?? AUSTROADS_SPECIFICATION_SET;
+}
+
 function nonZeroRetainedProjectCounts(
   counts: RetainedProjectCounts,
 ): Partial<RetainedProjectCounts> {
@@ -247,6 +262,9 @@ export function createProjectWriteRouter({
         'Specification set',
         projectSpecificationSetMaxLength,
       );
+      const effectiveState = state || 'NSW';
+      const effectiveSpecificationSet =
+        specificationSet || getDefaultProjectSpecificationSet(effectiveState);
 
       if (await hasSubcontractorProjectIdentity(user)) {
         throw AppError.forbidden('Subcontractor portal users cannot create company projects');
@@ -278,8 +296,8 @@ export function createProjectWriteRouter({
             targetCompletion,
             contractValue: contractValue ?? null,
             companyId,
-            state: state || 'NSW',
-            specificationSet: specificationSet || 'MRTS',
+            state: effectiveState,
+            specificationSet: effectiveSpecificationSet,
           },
           select: {
             id: true,
@@ -312,8 +330,8 @@ export function createProjectWriteRouter({
         changes: {
           name: project.name,
           projectNumber: project.projectNumber,
-          state: state || 'NSW',
-          specificationSet: specificationSet || 'MRTS',
+          state: effectiveState,
+          specificationSet: effectiveSpecificationSet,
           clientName: clientName || null,
           contractValue: contractValue ?? null,
         },

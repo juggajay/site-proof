@@ -62,7 +62,10 @@ vi.mock('@/components/UpdatePrompt', () => ({ UpdatePrompt: () => null }));
 vi.mock('@/components/InstallNudge', () => ({ InstallNudge: () => null }));
 vi.mock('@/components/CookieConsentBanner', () => ({ CookieConsentBanner: () => null }));
 vi.mock('@/components/dev/RoleSwitcher', () => ({ RoleSwitcher: () => null }));
-vi.mock('@/shell/shellFlag', () => ({ applyShellFlagFromUrl: vi.fn() }));
+vi.mock('@/shell/shellFlag', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shell/shellFlag')>();
+  return { ...actual, applyShellFlagFromUrl: vi.fn() };
+});
 vi.mock('@/shell/ShellGuard', () => ({
   ShellGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));

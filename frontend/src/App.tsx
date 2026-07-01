@@ -1,10 +1,11 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
+import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
@@ -84,6 +85,7 @@ import {
   VerifyEmailPage,
 } from './appLazyPages';
 import { ProjectDetailRoute } from './appProjectRoutes';
+import { getDefaultPostLoginRedirect, type RedirectUser } from './pages/auth/postLoginRedirect';
 
 const ENABLE_DEV_TOOLS = import.meta.env.DEV;
 const ENABLE_MOCK_OAUTH_ROUTE =
@@ -109,7 +111,6 @@ const RoleSwitcher = ENABLE_DEV_TOOLS
 const ShellRoutes = lazy(() =>
   import('@/shell/ShellRoutes').then((m) => ({ default: m.ShellRoutes })),
 );
-import { ShellGuard } from '@/shell/ShellGuard';
 import { ShellRouteGuard } from '@/shell/ShellRouteGuard';
 // Subbie portal shell — /p/* subtree (lazy-loaded; default-ON for portal roles).
 const SubbieShellRoutes = lazy(() =>
@@ -117,9 +118,50 @@ const SubbieShellRoutes = lazy(() =>
 );
 import { SubbieShellGuard } from '@/shell/SubbieShellGuard';
 import { SubbieShellRouteGuard } from '@/shell/SubbieShellRouteGuard';
-import { applyShellFlagFromUrl } from '@/shell/shellFlag';
+import {
+  applyShellFlagFromUrl,
+  getActiveShellHomePath,
+  getShellOverrideFromSearch,
+} from '@/shell/shellFlag';
 // Apply ?shell= param immediately (runs once before first render)
 applyShellFlagFromUrl();
+
+type ShellEntryMode = 'any-active-shell' | 'subbie-shell';
+
+function userNeedsCompanyOnboarding(user: RedirectUser | null | undefined): boolean {
+  return Boolean(user) && !user?.companyId && !hasSubcontractorPortalIdentity(user);
+}
+
+function locationTarget(pathname: string, search: string, hash: string): string {
+  return `${pathname}${search}${hash}`;
+}
+
+function RoleShellEntryRoute({ mode }: { mode: ShellEntryMode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <PageSkeleton />;
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (userNeedsCompanyOnboarding(user)) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  const shellHomePath = getActiveShellHomePath(user, {
+    override: getShellOverrideFromSearch(location.search),
+  });
+  const shouldUseShell =
+    mode === 'any-active-shell' ? Boolean(shellHomePath) : shellHomePath === '/p';
+
+  if (shellHomePath && shouldUseShell) {
+    return <Navigate to={locationTarget(shellHomePath, location.search, location.hash)} replace />;
+  }
+
+  return <Outlet />;
+}
 
 /**
  * Root route. Logged-out visitors get the public marketing landing page so the
@@ -130,7 +172,11 @@ applyShellFlagFromUrl();
 function RootRoute() {
   const { user, loading } = useAuth();
   if (loading) return <PageSkeleton />;
-  return user ? <Navigate to="/dashboard" replace /> : <LandingPage />;
+  if (!user) return <LandingPage />;
+  const target = userNeedsCompanyOnboarding(user)
+    ? '/onboarding'
+    : getDefaultPostLoginRedirect(user);
+  return <Navigate to={target} replace />;
 }
 
 function App() {
@@ -218,17 +264,28 @@ function App() {
               }
             />
 
+            <Route element={<RoleShellEntryRoute mode="any-active-shell" />}>
+              <Route element={<ProtectedAppShell />}>
+                <Route path="/dashboard" element={<DashboardPage />} />
+              </Route>
+            </Route>
+
+            <Route element={<RoleShellEntryRoute mode="subbie-shell" />}>
+              <Route element={<ProtectedAppShell />}>
+                <Route
+                  path="/subcontractor-portal"
+                  element={
+                    <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                      <SubcontractorDashboard />
+                    </RoleProtectedRoute>
+                  }
+                />
+              </Route>
+            </Route>
+
             {/* Protected Routes */}
             <Route element={<ProtectedAppShell />}>
               <Route path="/onboarding" element={<CompanyOnboardingPage />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ShellGuard>
-                    <DashboardPage />
-                  </ShellGuard>
-                }
-              />
 
               {/* Portfolio - Admin Only */}
               <Route
@@ -494,16 +551,6 @@ function App() {
               />
 
               {/* Subcontractor Portal - Protected routes */}
-              <Route
-                path="/subcontractor-portal"
-                element={
-                  <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubbieShellGuard>
-                      <SubcontractorDashboard />
-                    </SubbieShellGuard>
-                  </RoleProtectedRoute>
-                }
-              />
               <Route
                 path="/subcontractor-portal/docket/new"
                 element={

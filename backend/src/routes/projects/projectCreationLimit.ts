@@ -14,7 +14,7 @@ export type ProjectCreationLimitClient = {
     }) => Promise<{ subscriptionTier: string | null } | null>;
   };
   project: {
-    count: (args: { where: { companyId: string } }) => Promise<number>;
+    count: (args: { where: { companyId: string; status: { not: string } } }) => Promise<number>;
   };
 };
 
@@ -46,7 +46,7 @@ export async function assertCompanyProjectCapacity(
   }
 
   const projectCount = await client.project.count({
-    where: { companyId },
+    where: { companyId, status: { not: 'archived' } },
   });
 
   // G1: quota enforcement is disabled until a billing/upgrade path exists, so
