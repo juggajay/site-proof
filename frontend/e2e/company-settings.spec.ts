@@ -104,6 +104,7 @@ const seededWebhooks: CompanyWebhook[] = [
 type MockCompanySettingsApiOptions = {
   failCompanyLoadsUntil?: number;
   failMemberLoadsUntil?: number;
+  userOverride?: Partial<typeof E2E_OWNER_USER>;
   companyOverride?: Partial<Company>;
   membersOverride?: CompanyMember[];
   apiKeysOverride?: CompanyApiKey[];
@@ -136,10 +137,14 @@ type CompanySettingsApiState = {
   memberLoadCount: number;
 };
 
-async function respondStaticSettingsRoute(url: URL, json: JsonResponder): Promise<boolean> {
+async function respondStaticSettingsRoute(
+  url: URL,
+  json: JsonResponder,
+  user: typeof E2E_OWNER_USER,
+): Promise<boolean> {
   switch (url.pathname) {
     case '/api/auth/me':
-      await json({ user: E2E_OWNER_USER });
+      await json({ user });
       return true;
     case '/api/notifications':
       await json({ notifications: [], unreadCount: 0 });
@@ -623,6 +628,7 @@ async function handleTransferOwnershipRoute(
 }
 
 async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsApiOptions = {}) {
+  const user = { ...E2E_OWNER_USER, ...options.userOverride };
   const state: CompanySettingsApiState = {
     company: { ...structuredClone(seededCompany), ...options.companyOverride },
     members: structuredClone(options.membersOverride ?? seededMembers),
@@ -648,7 +654,7 @@ async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsAp
     const url = new URL(route.request().url());
     const json = createJsonResponder(route);
 
-    if (await respondStaticSettingsRoute(url, json)) return;
+    if (await respondStaticSettingsRoute(url, json, user)) return;
     if (await handleCompanyProfileRoute(route, url, json, state, options)) return;
     if (await handleCompanyMembersRoute(route, url, json, state, options)) return;
     if (await handleCompanyApiKeyRoute(route, url, json, state)) return;
@@ -658,7 +664,7 @@ async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsAp
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
-  await mockAuthenticatedUserState(page, E2E_OWNER_USER);
+  await mockAuthenticatedUserState(page, user);
 
   return {
     getPatchRequests: () => state.patchRequests,
@@ -771,6 +777,83 @@ test.describe('Company settings seeded owner contract', () => {
     await expect(billingSection).toContainText('Unlimited');
     await expect(billingSection.getByText('Free', { exact: true })).toHaveCount(0);
     await expect(billingSection.getByText('1 GB', { exact: true })).toHaveCount(0);
+  });
+
+  test('allows company admins to manage team and integrations without owner-only controls', async ({
+    page,
+  }) => {
+    await mockCompanySettingsApi(page, {
+      userOverride: {
+        id: 'e2e-company-admin',
+        email: 'company.admin@example.com',
+        fullName: 'E2E Company Admin',
+        role: 'admin',
+        roleInCompany: 'admin',
+      },
+    });
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'Company Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Company Information' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'API keys' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Billing & Subscription' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Transfer Ownership' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Invite Member' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create API key' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add webhook' })).toBeVisible();
+  });
+
+  test('denies company settings to company members before loading settings data', async ({
+    page,
+  }) => {
+    const memberUser = {
+      ...E2E_ADMIN_USER,
+      id: 'e2e-company-member',
+      email: 'company.member@example.com',
+      fullName: 'E2E Company Member',
+      role: 'member',
+      roleInCompany: 'member',
+    };
+    let companySettingsRequests = 0;
+
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      const json = createJsonResponder(route);
+
+      if (url.pathname === '/api/auth/me') {
+        await json({ user: memberUser });
+        return;
+      }
+      if (url.pathname === '/api/notifications') {
+        await json({ notifications: [], unreadCount: 0 });
+        return;
+      }
+      if (url.pathname === '/api/projects') {
+        await json({ projects: [] });
+        return;
+      }
+      if (
+        url.pathname.startsWith('/api/company') ||
+        url.pathname.startsWith('/api/webhooks') ||
+        url.pathname === '/api/api-keys'
+      ) {
+        companySettingsRequests += 1;
+        await json({ message: `Unexpected company settings API route: ${url.pathname}` }, 500);
+        return;
+      }
+
+      await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
+    });
+    await mockAuthenticatedUserState(page, memberUser);
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(page.getByText("You don't have permission to access this page.")).toBeVisible();
+    expect(companySettingsRequests).toBe(0);
   });
 
   test('transfers ownership to another company member', async ({ page }) => {

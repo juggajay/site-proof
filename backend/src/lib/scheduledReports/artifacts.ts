@@ -54,15 +54,26 @@ function assertSafeStorageId(value: string, fieldName: string): void {
   }
 }
 
+function isUnsafeFilenameChar(char: string, options: { asciiOnly?: boolean } = {}): boolean {
+  const code = char.charCodeAt(0);
+  return (
+    code < 32 ||
+    code === 127 ||
+    Boolean(options.asciiOnly && code > 126) ||
+    '<>:"/\\|?*'.includes(char)
+  );
+}
+
+function replaceUnsafeFilenameChars(value: string, options: { asciiOnly?: boolean } = {}): string {
+  return value
+    .split('')
+    .map((char) => (isUnsafeFilenameChar(char, options) ? '_' : char))
+    .join('');
+}
+
 function getSafeDownloadFilename(filename: string | null | undefined): string {
   const basename = path.basename((filename || '').replace(/\\/g, '/'));
-  const sanitized = basename
-    .split('')
-    .map((char) => {
-      const code = char.charCodeAt(0);
-      return code < 32 || code === 127 || '<>:"/\\|?*'.includes(char) ? '_' : char;
-    })
-    .join('')
+  const sanitized = replaceUnsafeFilenameChars(basename)
     .replace(/^\.+/, '')
     .trim()
     .slice(0, MAX_SAFE_FILENAME_LENGTH);
@@ -73,6 +84,39 @@ function getSafeDownloadFilename(filename: string | null | undefined): string {
 function normalizeArtifactFilename(filename: string): string {
   const safe = getSafeDownloadFilename(filename);
   return safe.toLowerCase().endsWith('.pdf') ? safe : `${safe}.pdf`;
+}
+
+function getAsciiDownloadFilenameFallback(filename: string): string {
+  const fallback = replaceUnsafeFilenameChars(filename, { asciiOnly: true })
+    .trim()
+    .slice(0, MAX_SAFE_FILENAME_LENGTH);
+
+  return fallback || 'scheduled-report.pdf';
+}
+
+function encodeContentDispositionFilename(filename: string): string {
+  return encodeURIComponent(filename)
+    .replace(/['()]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/\*/g, '%2A');
+}
+
+function buildAttachmentContentDisposition(filename: string | null | undefined): string {
+  const safeFilename = getSafeDownloadFilename(filename);
+  const fallbackFilename = getAsciiDownloadFilenameFallback(safeFilename);
+
+  if (fallbackFilename === safeFilename) {
+    return `attachment; filename="${fallbackFilename}"`;
+  }
+
+  return `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeContentDispositionFilename(safeFilename)}`;
+}
+
+function setPrivateArtifactDownloadHeaders(res: Response): void {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 }
 
 export function getScheduledReportArtifactStoragePath(
@@ -296,15 +340,8 @@ export async function sendScheduledReportArtifactFile(
     throw AppError.internal('Scheduled report artifact integrity check failed');
   }
 
-  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader(
-    'Content-Disposition',
-    `attachment; filename="${getSafeDownloadFilename(run.artifactFilename)}"`,
-  );
+  setPrivateArtifactDownloadHeaders(res);
+  res.setHeader('Content-Disposition', buildAttachmentContentDisposition(run.artifactFilename));
   res.setHeader('Content-Type', run.artifactMimeType || SCHEDULED_REPORT_ARTIFACT_MIME_TYPE);
   res.setHeader('Content-Length', String(buffer.length));
   res.send(buffer);

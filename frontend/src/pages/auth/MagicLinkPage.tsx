@@ -4,14 +4,45 @@ import { useAuth, type User } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
 import { getPostLoginRedirect } from './postLoginRedirect';
 
+const MAGIC_LINK_API_ERROR_MESSAGES = [
+  {
+    status: 403,
+    match: 'MFA-enabled accounts',
+    message:
+      'This account has two-factor authentication enabled. Sign in with your email, password, and verification code.',
+  },
+  {
+    status: 403,
+    match: 'Complete account setup',
+    message: 'Complete your account setup before using magic link sign-in.',
+  },
+  {
+    status: 400,
+    match: 'expired',
+    message: 'This magic link has expired. Please request a new sign-in link.',
+  },
+  {
+    status: 400,
+    match: 'already been used',
+    message: 'This magic link has already been used. Please request a new sign-in link.',
+  },
+  {
+    status: 400,
+    match: 'Invalid token format',
+    message: 'This magic link is invalid. Please request a new sign-in link.',
+  },
+];
+
 function getMagicLinkErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     const message =
       typeof error.data?.error === 'object' ? error.data.error.message : error.data?.message;
 
-    if (error.status === 403 && message?.includes('MFA-enabled accounts')) {
-      return 'This account has two-factor authentication enabled. Sign in with your email, password, and verification code.';
-    }
+    return (
+      MAGIC_LINK_API_ERROR_MESSAGES.find(
+        (entry) => entry.status === error.status && message?.includes(entry.match),
+      )?.message ?? 'Failed to verify magic link. Please try again.'
+    );
   }
 
   return 'Failed to verify magic link. Please try again.';

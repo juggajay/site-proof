@@ -2351,6 +2351,23 @@ describe('Magic Link Authentication', () => {
     }
   });
 
+  async function createMagicLinkTokenForUser(
+    userId: string,
+    options: { expiresAt?: Date; usedAt?: Date | null } = {},
+  ) {
+    const token = `magic_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId,
+        token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
+        expiresAt: options.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000),
+        ...(options.usedAt !== undefined ? { usedAt: options.usedAt } : {}),
+      },
+    });
+    return token;
+  }
+
   it('should request magic link for existing user', async () => {
     const user = await prisma.user.findUnique({ where: { email: magicEmail } });
     expect(user).toBeDefined();
@@ -2682,6 +2699,42 @@ describe('Magic Link Authentication', () => {
       .send({ token: 'invalid-token' });
 
     expect(res.status).toBe(400);
+  });
+
+  it('rejects expired magic link tokens with a specific error and deletes the token', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    const token = await createMagicLinkTokenForUser(user!.id, {
+      expiresAt: new Date(Date.now() - 60 * 1000),
+    });
+
+    const res = await request(app).post('/api/auth/magic-link/verify').send({ token });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('expired');
+    await expect(
+      prisma.passwordResetToken.findFirst({ where: { token: hashAuthTokenForTest(token) } }),
+    ).resolves.toBeNull();
+  });
+
+  it('rejects already used magic link tokens with a specific error', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    const token = await createMagicLinkTokenForUser(user!.id, {
+      usedAt: new Date(),
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/magic-link/verify').send({ token });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('already been used');
+      expect(res.body.token).toBeUndefined();
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+    }
   });
 
   it('should audit successful magic link login without logging the token', async () => {
