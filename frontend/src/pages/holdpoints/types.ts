@@ -22,6 +22,8 @@ export interface HoldPoint {
   sequenceNumber: number;
   isCompleted: boolean;
   isVerified: boolean;
+  canRequestRelease?: boolean;
+  incompletePrerequisiteCount?: number;
   createdAt: string;
 }
 

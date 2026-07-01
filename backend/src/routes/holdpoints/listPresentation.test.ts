@@ -191,6 +191,8 @@ describe('buildHoldPointListItems', () => {
       sequenceNumber: 7,
       isCompleted: false,
       isVerified: false,
+      canRequestRelease: true,
+      incompletePrerequisiteCount: 0,
       createdAt: HP_CREATED_AT,
     });
   });
@@ -232,8 +234,47 @@ describe('buildHoldPointListItems', () => {
       sequenceNumber: 3,
       isCompleted: false,
       isVerified: false,
+      canRequestRelease: true,
+      incompletePrerequisiteCount: 0,
       createdAt: LOT_CREATED_AT,
     });
+  });
+
+  it('marks pending hold points blocked until preceding checklist items are complete', () => {
+    const result = buildHoldPointListItems([
+      lot({
+        id: 'lot1',
+        lotNumber: 'A',
+        itpInstance: {
+          template: {
+            checklistItems: [
+              checklistItem({ id: 'prep', pointType: 'standard', sequenceNumber: 1 }),
+              checklistItem({ id: 'ready-hp', pointType: 'hold_point', sequenceNumber: 2 }),
+              checklistItem({ id: 'blocked-hp', pointType: 'hold_point', sequenceNumber: 3 }),
+            ],
+          },
+          completions: [
+            {
+              checklistItemId: 'prep',
+              status: 'completed',
+              verificationStatus: 'verified',
+              completedAt: HP_CREATED_AT,
+            },
+          ],
+        },
+      }),
+    ]);
+
+    expect(
+      result.map((hp) => ({
+        id: hp.itpChecklistItemId,
+        canRequestRelease: hp.canRequestRelease,
+        incompletePrerequisiteCount: hp.incompletePrerequisiteCount,
+      })),
+    ).toEqual([
+      { id: 'ready-hp', canRequestRelease: true, incompletePrerequisiteCount: 0 },
+      { id: 'blocked-hp', canRequestRelease: false, incompletePrerequisiteCount: 1 },
+    ]);
   });
 
   it('maps completion status to isCompleted and isVerified exactly', () => {

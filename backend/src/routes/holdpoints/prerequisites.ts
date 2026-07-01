@@ -22,14 +22,14 @@ export type PrerequisiteChecklistItem = {
   id: string;
   description: string;
   sequenceNumber: number;
-  pointType: string;
+  pointType: string | null;
 };
 
 export type PrerequisiteCompletion = {
   checklistItemId: string;
   status: string;
   verificationStatus: string;
-  completedAt: Date | null;
+  completedAt?: Date | null;
 };
 
 // Find all checklist items that come before the hold point (lower sequence number).

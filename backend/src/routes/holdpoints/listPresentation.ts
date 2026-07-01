@@ -23,6 +23,11 @@
 
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 import { getHoldPointChecklistItemsForInstance } from './itpSnapshot.js';
+import {
+  buildHoldPointPrerequisites,
+  getIncompletePrerequisites,
+  getPrecedingChecklistItems,
+} from './prerequisites.js';
 import type { ChecklistItem } from '../itp/helpers/templateSnapshot.js';
 
 // Shape of each item in the list response (formerly inline in holdpoints.ts).
@@ -45,6 +50,8 @@ export interface HoldPointListItem {
   sequenceNumber: number;
   isCompleted: boolean;
   isVerified: boolean;
+  canRequestRelease: boolean;
+  incompletePrerequisiteCount: number;
   createdAt: Date;
 }
 
@@ -54,6 +61,7 @@ export type HoldPointListCompletion = {
   checklistItemId: string;
   status: string;
   verificationStatus: string;
+  completedAt?: Date | null;
 };
 
 export type HoldPointListPersistedHoldPoint = {
@@ -111,7 +119,9 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
   for (const lot of lots) {
     if (!lot.itpInstance) continue;
 
-    for (const item of getHoldPointChecklistItemsForInstance(lot.itpInstance)) {
+    const checklistItems = getHoldPointChecklistItemsForInstance(lot.itpInstance);
+
+    for (const item of checklistItems) {
       if (!isReleaseGatedChecklistItem(item)) continue;
 
       // Find existing hold point record or create virtual one
@@ -119,6 +129,12 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
 
       // Find the completion status for this item
       const completion = lot.itpInstance.completions.find((c) => c.checklistItemId === item.id);
+      const precedingItems = getPrecedingChecklistItems(checklistItems, item.sequenceNumber);
+      const prerequisites = buildHoldPointPrerequisites(
+        precedingItems,
+        lot.itpInstance.completions,
+      );
+      const incompletePrerequisiteCount = getIncompletePrerequisites(prerequisites).length;
 
       holdPoints.push({
         id: existingHP?.id || `virtual-${lot.id}-${item.id}`,
@@ -140,6 +156,8 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
         sequenceNumber: item.sequenceNumber,
         isCompleted: completion?.status === 'completed',
         isVerified: completion?.verificationStatus === 'verified',
+        canRequestRelease: incompletePrerequisiteCount === 0,
+        incompletePrerequisiteCount,
         createdAt: existingHP?.createdAt || lot.createdAt,
       });
     }
