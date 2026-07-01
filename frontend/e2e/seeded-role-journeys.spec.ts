@@ -672,7 +672,11 @@ test.describe.serial('seeded real-backend role journeys', () => {
       await loginAsAdmin(adminPage);
       await adminPage.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
       await expect(adminPage.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
-      await expect(adminPage.getByText('LOT-001')).toBeVisible();
+      await expect(
+        adminPage
+          .getByRole('cell', { name: 'LOT-001', exact: true })
+          .or(adminPage.getByRole('heading', { name: 'LOT-001', exact: true })),
+      ).toBeVisible();
 
       await adminPage.getByRole('button', { name: 'Request Release' }).click();
       const requestModal = adminPage
