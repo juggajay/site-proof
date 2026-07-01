@@ -48,10 +48,12 @@ const passwordHash = bcrypt.hashSync(password, 12);
 
 const ids = {
   company: 'e2e-company',
+  ownerUser: 'e2e-owner-user',
   adminUser: 'e2e-admin-user',
   foremanUser: 'e2e-foreman-user',
   subcontractorUser: 'e2e-subcontractor-user',
   project: 'e2e-project',
+  ownerProjectUser: 'e2e-owner-project-user',
   projectUser: 'e2e-project-user',
   foremanProjectUser: 'e2e-foreman-project-user',
   subcontractorCompany: 'e2e-subcontractor-company',
@@ -127,6 +129,32 @@ async function main() {
     },
   });
 
+  const ownerUser = await prisma.user.upsert({
+    where: { email: 'owner@example.com' },
+    update: {
+      passwordHash,
+      fullName: 'E2E Owner',
+      companyId: company.id,
+      roleInCompany: 'owner',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+    create: {
+      id: ids.ownerUser,
+      email: 'owner@example.com',
+      passwordHash,
+      fullName: 'E2E Owner',
+      companyId: company.id,
+      roleInCompany: 'owner',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+  });
+
   const adminUser = await prisma.user.upsert({
     where: { email: 'test@example.com' },
     update: {
@@ -171,6 +199,25 @@ async function main() {
       status: 'active',
       state: 'NSW',
       specificationSet: 'TfNSW',
+    },
+  });
+
+  await prisma.projectUser.upsert({
+    where: { id: ids.ownerProjectUser },
+    update: {
+      projectId: project.id,
+      userId: ownerUser.id,
+      role: 'owner',
+      status: 'active',
+      acceptedAt: now,
+    },
+    create: {
+      id: ids.ownerProjectUser,
+      projectId: project.id,
+      userId: ownerUser.id,
+      role: 'owner',
+      status: 'active',
+      acceptedAt: now,
     },
   });
 
@@ -604,7 +651,7 @@ async function main() {
   });
 
   console.log(
-    'Seeded E2E users: test@example.com, foreman@example.com, and subcontractor@example.com',
+    'Seeded E2E users: owner@example.com, test@example.com, foreman@example.com, and subcontractor@example.com',
   );
 }
 

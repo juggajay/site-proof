@@ -76,6 +76,27 @@ function renderScreen() {
   );
 }
 
+function renderWithData(data: Partial<DocketsShellData>) {
+  _data = {
+    projectId: 'proj-1',
+    dockets: [makeDocket()],
+    projectName: 'Demo Project',
+    loading: false,
+    loadError: null,
+    pendingCount: 1,
+    refetch: vi.fn(),
+    ...data,
+  };
+  return render(
+    <MemoryRouter initialEntries={['/m/dockets/d1/adjust']}>
+      <Routes>
+        <Route path="/m/dockets" element={<div>list</div>} />
+        <Route path="/m/dockets/:docketId/adjust" element={<AdjustHoursScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   _online = true;
@@ -86,6 +107,31 @@ describe('AdjustHoursScreen', () => {
     renderScreen();
     expect(screen.getByLabelText(/Labour hours/i)).toHaveValue(48);
     expect(screen.getByLabelText(/Plant hours/i)).toHaveValue(16);
+  });
+
+  it('seeds the fields when a direct route resolves docket data after loading', () => {
+    const { rerender } = renderWithData({ dockets: [], loading: true, pendingCount: 0 });
+
+    expect(screen.getAllByText(/Loading docket/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/isn’t here anymore/i)).not.toBeInTheDocument();
+
+    _data = {
+      ..._data,
+      dockets: [makeDocket({ labourHours: 32, plantHours: 9 })],
+      loading: false,
+      pendingCount: 1,
+    };
+    rerender(
+      <MemoryRouter initialEntries={['/m/dockets/d1/adjust']}>
+        <Routes>
+          <Route path="/m/dockets" element={<div>list</div>} />
+          <Route path="/m/dockets/:docketId/adjust" element={<AdjustHoursScreen />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByLabelText(/Labour hours/i)).toHaveValue(32);
+    expect(screen.getByLabelText(/Plant hours/i)).toHaveValue(9);
   });
 
   it('fires approve with adjusted hours + reason', async () => {
