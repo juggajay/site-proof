@@ -20,11 +20,14 @@ interface LotReadinessPanelProps {
 
 const TAB_IDS: LotTab[] = ['itp', 'tests', 'ncrs', 'photos', 'documents', 'comments', 'history'];
 
-function bucketTitle(kind: 'conformance' | 'claim'): string {
+type ReadinessBucketKind = 'conformance' | 'claim' | 'managementPrep';
+
+function bucketTitle(kind: ReadinessBucketKind): string {
+  if (kind === 'managementPrep') return 'Management prep';
   return kind === 'conformance' ? 'Conformance' : 'Claim';
 }
 
-function stateLabel(bucket: ReadinessBucket, kind: 'conformance' | 'claim'): string {
+function stateLabel(bucket: ReadinessBucket, kind: ReadinessBucketKind): string {
   const title = bucketTitle(kind);
 
   if (bucket.state === 'ready') return `${title}: Ready`;
@@ -58,6 +61,7 @@ function bucketTone(bucket: ReadinessBucket): string {
 
 function tabFromHref(href?: string): LotTab | null {
   if (!href) return null;
+  if (!href.startsWith('?')) return null;
   const params = new URLSearchParams(href.startsWith('?') ? href.slice(1) : href);
   const tab = params.get('tab');
   return tab && TAB_IDS.includes(tab as LotTab) ? (tab as LotTab) : null;
@@ -72,7 +76,17 @@ function tabFromArea(area: EvidenceReadinessItem['area']): LotTab | null {
 }
 
 function actionTab(item: EvidenceReadinessItem): LotTab | null {
-  return tabFromHref(item.actionHref) ?? tabFromArea(item.area);
+  const tab = tabFromHref(item.actionHref);
+  if (item.actionHref && !tab) return null;
+  return tab ?? tabFromArea(item.area);
+}
+
+function externalActionHref(item: EvidenceReadinessItem): string | null {
+  if (!item.actionHref || tabFromHref(item.actionHref)) return null;
+  if (item.actionHref.startsWith('/') || item.actionHref.startsWith('http')) {
+    return item.actionHref;
+  }
+  return null;
 }
 
 function itemIcon(item: EvidenceReadinessItem) {
@@ -90,9 +104,11 @@ function itemIcon(item: EvidenceReadinessItem) {
 function ItemList({
   items,
   onTabChange,
+  maxItems = 4,
 }: {
   items: EvidenceReadinessItem[];
   onTabChange: (tab: LotTab, actionCode?: string) => void;
+  maxItems?: number;
 }) {
   if (items.length === 0) {
     return (
@@ -104,15 +120,23 @@ function ItemList({
 
   return (
     <ul className="mt-3 space-y-2">
-      {items.slice(0, 4).map((item) => {
+      {items.slice(0, maxItems).map((item) => {
         const tab = actionTab(item);
+        const href = externalActionHref(item);
         return (
           <li key={`${item.area}-${item.code}`} className="flex items-start gap-2 text-sm">
             {itemIcon(item)}
             <span className="min-w-0">
               <span className="font-medium">{item.title}</span>
               <span className="text-muted-foreground"> - {item.detail}</span>
-              {tab && item.actionLabel && (
+              {href && item.actionLabel ? (
+                <a
+                  className="ml-2 font-medium text-primary underline-offset-4 hover:underline"
+                  href={href}
+                >
+                  {item.actionLabel}
+                </a>
+              ) : tab && item.actionLabel ? (
                 <button
                   type="button"
                   className="ml-2 font-medium text-primary underline-offset-4 hover:underline"
@@ -120,7 +144,7 @@ function ItemList({
                 >
                   {item.actionLabel}
                 </button>
-              )}
+              ) : null}
             </span>
           </li>
         );
@@ -136,18 +160,19 @@ function ReadinessBucketView({
   fieldView = false,
 }: {
   bucket: ReadinessBucket;
-  kind: 'conformance' | 'claim';
+  kind: ReadinessBucketKind;
   onTabChange: (tab: LotTab, actionCode?: string) => void;
   fieldView?: boolean;
 }) {
   const items = [...bucket.blockers, ...bucket.warnings, ...bucket.support];
+  const maxItems = kind === 'managementPrep' ? 5 : 4;
 
   return (
     <div className={`rounded-md border p-3 ${bucketTone(bucket)}`}>
       <h3 className="text-sm font-semibold">
         {fieldView ? conformanceFieldLabel(bucket) : stateLabel(bucket, kind)}
       </h3>
-      <ItemList items={items} onTabChange={onTabChange} />
+      <ItemList items={items} onTabChange={onTabChange} maxItems={maxItems} />
     </div>
   );
 }
@@ -241,13 +266,20 @@ export function LotReadinessPanel({
         <ShieldCheck className="h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <ReadinessBucketView
           bucket={readiness.conformance}
           kind="conformance"
           onTabChange={onTabChange}
         />
         <ReadinessBucketView bucket={readiness.claim} kind="claim" onTabChange={onTabChange} />
+        {readiness.managementPrep && (
+          <ReadinessBucketView
+            bucket={readiness.managementPrep}
+            kind="managementPrep"
+            onTabChange={onTabChange}
+          />
+        )}
       </div>
     </section>
   );

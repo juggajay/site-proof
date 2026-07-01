@@ -32,6 +32,7 @@ interface ProjectResponse {
     name?: string | null;
     projectNumber?: string | null;
     clientName?: string | null;
+    company?: ConformanceReportData['company'];
   };
 }
 
@@ -114,7 +115,11 @@ export function useConformanceReportGeneration({
       }
       const reportData = buildConformanceReportData({
         lot,
-        project: { name: project.name, projectNumber: project.projectNumber },
+        project: {
+          name: project.name,
+          projectNumber: project.projectNumber,
+          company: project.company,
+        },
         itpInstance: itpData.instance,
         testResults: testsData.testResults,
         ncrs: ncrsData.ncrs,

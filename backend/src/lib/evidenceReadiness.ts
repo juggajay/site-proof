@@ -2,6 +2,7 @@ import type {
   EvidenceReadinessItem,
   LotEvidenceReadiness,
   LotReadinessInput,
+  ManagementPrepCounts,
 } from './evidenceReadiness/core.js';
 import { bucketState, item, splitItems, summarize } from './evidenceReadiness/core.js';
 
@@ -13,6 +14,9 @@ export type {
   EvidenceReadinessSeverity,
   LotEvidenceReadiness,
   LotReadinessInput,
+  ManagementPrepBucket,
+  ManagementPrepCounts,
+  ManagementPrepInput,
   ReadinessBucket,
 } from './evidenceReadiness/core.js';
 export { buildClaimEvidenceReviewFromInputs } from './evidenceReadiness/claimReview.js';
@@ -291,12 +295,126 @@ function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
   return items;
 }
 
+function buildManagementPrepItems(input: LotReadinessInput): EvidenceReadinessItem[] {
+  const prep = input.managementPrep;
+  if (!prep) {
+    return [];
+  }
+
+  const holdPointsAction = prep.batchRequestHref
+    ? {
+        actionLabel: 'Batch request',
+        actionHref: prep.batchRequestHref,
+      }
+    : prep.holdPointsHref
+      ? {
+          actionLabel: 'Open Hold Points',
+          actionHref: prep.holdPointsHref,
+        }
+      : {};
+
+  const items: EvidenceReadinessItem[] = [];
+
+  if (prep.missingRequestEvidence > 0) {
+    items.push(
+      item({
+        code: 'missing_request_evidence',
+        severity: 'warning',
+        area: 'hold_point',
+        title: 'Request evidence missing',
+        detail: `${prep.missingRequestEvidence} release-gated hold point${prep.missingRequestEvidence === 1 ? '' : 's'} ${prep.missingRequestEvidence === 1 ? 'has' : 'have'} no request evidence attached yet.`,
+        blocksAction: false,
+        count: prep.missingRequestEvidence,
+        relatedIds: prep.missingRequestEvidenceIds,
+        ...holdPointsAction,
+      }),
+    );
+  }
+
+  if (prep.missingRecipients > 0) {
+    items.push(
+      item({
+        code: 'missing_hold_point_recipients',
+        severity: 'warning',
+        area: 'hold_point',
+        title: 'Hold point recipients missing',
+        detail: `${prep.missingRecipients} release-gated hold point${prep.missingRecipients === 1 ? '' : 's'} ${prep.missingRecipients === 1 ? 'has' : 'have'} no request recipient or default recipient setting detectable.`,
+        blocksAction: false,
+        count: prep.missingRecipients,
+        relatedIds: prep.missingRecipientIds,
+        ...holdPointsAction,
+      }),
+    );
+  }
+
+  if (prep.managementOnlyItems > 0) {
+    items.push(
+      item({
+        code: 'management_only_items',
+        severity: 'warning',
+        area: 'hold_point',
+        title: 'Management-only items',
+        detail: `${prep.managementOnlyItems} hold point${prep.managementOnlyItems === 1 ? '' : 's'} need management or superintendent release before field handoff.`,
+        blocksAction: false,
+        count: prep.managementOnlyItems,
+        relatedIds: prep.managementOnlyItemIds,
+        ...holdPointsAction,
+      }),
+    );
+  }
+
+  if (prep.releaseGatedHoldPoints > 0) {
+    items.push(
+      item({
+        code: 'release_gated_hold_points',
+        severity: 'support',
+        area: 'hold_point',
+        title: 'Release-gated hold points',
+        detail: `${prep.releaseGatedHoldPoints} release-gated hold point${prep.releaseGatedHoldPoints === 1 ? '' : 's'} ${prep.releaseGatedHoldPoints === 1 ? 'is' : 'are'} in this lot's ITP.`,
+        blocksAction: false,
+        count: prep.releaseGatedHoldPoints,
+        relatedIds: prep.releaseGatedHoldPointIds,
+      }),
+    );
+  }
+
+  if (prep.fieldActionableItems > 0) {
+    items.push(
+      item({
+        code: 'field_actionable_items',
+        severity: 'support',
+        area: 'itp',
+        title: 'Field-actionable ITP items',
+        detail: `${prep.fieldActionableItems} checklist item${prep.fieldActionableItems === 1 ? '' : 's'} can be worked by field teams.`,
+        blocksAction: false,
+        count: prep.fieldActionableItems,
+        relatedIds: prep.fieldActionableItemIds,
+      }),
+    );
+  }
+
+  return items;
+}
+
+function managementPrepCounts(input: LotReadinessInput): ManagementPrepCounts {
+  const prep = input.managementPrep;
+  return {
+    releaseGatedHoldPoints: prep?.releaseGatedHoldPoints ?? 0,
+    missingRequestEvidence: prep?.missingRequestEvidence ?? 0,
+    missingRecipients: prep?.missingRecipients ?? 0,
+    fieldActionableItems: prep?.fieldActionableItems ?? 0,
+    managementOnlyItems: prep?.managementOnlyItems ?? 0,
+  };
+}
+
 export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEvidenceReadiness {
   const conformanceItems = buildConformanceItems(input);
   const claimItems = buildClaimItems(input);
+  const managementPrepItems = buildManagementPrepItems(input);
 
   const conformanceSplit = splitItems(conformanceItems);
   const claimSplit = splitItems(claimItems);
+  const managementPrepSplit = splitItems(managementPrepItems);
 
   const claimedPercentage = roundReadinessPercentage(input.lot.claimedPercentage ?? 0);
   const remainingPercentage = roundReadinessPercentage(100 - claimedPercentage);
@@ -315,6 +433,14 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
         ? 'not_conformed'
         : bucketState(claimItems);
 
+  const managementPrep = input.managementPrep
+    ? {
+        state: bucketState(managementPrepItems),
+        counts: managementPrepCounts(input),
+        ...managementPrepSplit,
+      }
+    : undefined;
+
   const readiness: LotEvidenceReadiness = {
     lotId: input.lot.id,
     lotNumber: input.lot.lotNumber,
@@ -331,7 +457,8 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
       claimedPercentage: claimedPercentage,
       remainingPercentage: remainingPercentage,
     },
-    summary: summarize(conformanceSplit, claimSplit),
+    ...(managementPrep ? { managementPrep } : {}),
+    summary: summarize(conformanceSplit, claimSplit, ...(managementPrep ? [managementPrep] : [])),
   };
 
   return input.canViewCommercial ? readiness : filterCommercialReadiness(readiness);
@@ -362,6 +489,10 @@ export function filterCommercialReadiness(readiness: LotEvidenceReadiness): LotE
     ...readiness,
     conformance,
     claim,
-    summary: summarize(conformance, claim),
+    summary: summarize(
+      conformance,
+      claim,
+      ...(readiness.managementPrep ? [readiness.managementPrep] : []),
+    ),
   };
 }

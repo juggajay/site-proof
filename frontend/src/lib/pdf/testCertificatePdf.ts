@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
+import { drawPdfBrandingHeader } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { TestCertificateData } from './types';
@@ -82,6 +83,17 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   doc.setFontSize(14);
   const badgeX = pageWidth - margin - doc.getTextWidth(passFailText);
   doc.text(passFailText, badgeX, 27);
+  await drawPdfBrandingHeader(doc, data, {
+    logoX: pageWidth - margin - 28,
+    logoY: 5,
+    logoWidth: 28,
+    logoHeight: 16,
+    companyNameX: pageWidth - margin,
+    companyNameY: 36,
+    companyNameAlign: 'right',
+    companyNameColor: [255, 255, 255],
+    companyNameFontSize: 8,
+  });
 
   yPos = 50;
   doc.setTextColor(0, 0, 0);

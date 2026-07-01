@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
       ),
     },
     sendHPReleaseRequestEmail: vi.fn(),
+    sendEmail: vi.fn(),
     createAuditLog: vi.fn(),
     requireLotReadAccess: vi.fn(),
     requireProjectRole: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('../../lib/prisma.js', () => ({ prisma: mocks.prisma }));
 
 vi.mock('../../lib/email.js', () => ({
   sendHPReleaseRequestEmail: mocks.sendHPReleaseRequestEmail,
+  sendEmail: mocks.sendEmail,
 }));
 
 vi.mock('../../middleware/authMiddleware.js', () => ({
@@ -129,6 +131,55 @@ function releaseReadyLot() {
   };
 }
 
+function releaseReadyBatchLot() {
+  return {
+    id: 'lot-1',
+    projectId: 'project-1',
+    lotNumber: 'LOT-1',
+    project: {
+      id: 'project-1',
+      name: 'Bridge Upgrade',
+      settings: null,
+      workingDays: '1,2,3,4,5',
+    },
+    itpInstance: {
+      id: 'itp-1',
+      template: {
+        checklistItems: [
+          {
+            id: 'item-1',
+            description: 'Footing inspection',
+            pointType: 'hold_point',
+            responsibleParty: 'contractor',
+            sequenceNumber: 1,
+          },
+          {
+            id: 'item-2',
+            description: 'Deck pour inspection',
+            pointType: 'hold_point',
+            responsibleParty: 'contractor',
+            sequenceNumber: 2,
+          },
+        ],
+      },
+      completions: [
+        {
+          checklistItemId: 'item-1',
+          status: 'completed',
+          completedAt: new Date('2026-07-01T00:00:00.000Z'),
+        },
+      ],
+    },
+    holdPoints: [
+      {
+        id: 'hp-1',
+        itpChecklistItemId: 'item-1',
+        status: 'pending',
+      },
+    ],
+  };
+}
+
 describe('hold point request-release delivery failure', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -166,6 +217,11 @@ describe('hold point request-release delivery failure', () => {
     mocks.sendHPReleaseRequestEmail.mockResolvedValue({
       success: true,
       messageId: 'mock-message',
+      provider: 'mock',
+    });
+    mocks.sendEmail.mockResolvedValue({
+      success: true,
+      messageId: 'mock-batch-message',
       provider: 'mock',
     });
   });
@@ -311,5 +367,156 @@ describe('hold point request-release delivery failure', () => {
     expect(mocks.tx.holdPointReleaseToken.createMany).not.toHaveBeenCalled();
     expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
     expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('sends one consolidated batch email while preserving per-hold-point rows, tokens, audits, and evidence', async () => {
+    mocks.prisma.lot.findUnique.mockResolvedValueOnce(releaseReadyBatchLot());
+    mocks.tx.holdPoint.findUnique
+      .mockResolvedValueOnce({
+        id: 'hp-1',
+        status: 'notified',
+        itpChecklistItem: { id: 'item-1' },
+      })
+      .mockResolvedValueOnce({
+        id: 'hp-created-2',
+        status: 'notified',
+        itpChecklistItem: { id: 'item-2' },
+      });
+    mocks.tx.holdPoint.create.mockResolvedValueOnce({
+      id: 'hp-created-2',
+      status: 'notified',
+      description: 'Deck pour inspection',
+      itpChecklistItemId: 'item-2',
+      itpChecklistItem: { id: 'item-2' },
+    });
+    mocks.tx.document.findMany.mockImplementation(async (args) => {
+      const ids = (args.where?.id as { in?: string[] } | undefined)?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
+    mocks.tx.iTPCompletion.upsert.mockImplementation(async (args) => {
+      const itemId = args.where?.itpInstanceId_checklistItemId?.checklistItemId;
+      return { id: `completion-${itemId}` };
+    });
+
+    const res = await request(app)
+      .post('/api/holdpoints/request-release/batch')
+      .send({
+        lotId: 'lot-1',
+        items: [
+          { itpChecklistItemId: 'item-1', evidenceDocumentIds: ['doc-item-1'] },
+          { itpChecklistItemId: 'item-2' },
+        ],
+        sharedEvidenceDocumentIds: ['doc-shared'],
+        scheduledDate: '2026-07-10',
+        scheduledTime: '09:30',
+        recipientEmail: 'reviewer@example.com',
+        recipientName: 'Site Reviewer',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.holdPoints).toEqual([
+      expect.objectContaining({ id: 'hp-1' }),
+      expect.objectContaining({ id: 'hp-created-2' }),
+    ]);
+    expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledTimes(2);
+    expect(mocks.tx.holdPointReleaseToken.createMany.mock.calls[0][0].data).toHaveLength(1);
+    expect(mocks.tx.holdPointReleaseToken.createMany.mock.calls[1][0].data).toHaveLength(1);
+    expect(mocks.tx.iTPCompletionAttachment.createMany).toHaveBeenCalledWith({
+      data: [
+        { completionId: 'completion-item-1', documentId: 'doc-shared' },
+        { completionId: 'completion-item-1', documentId: 'doc-item-1' },
+      ],
+      skipDuplicates: true,
+    });
+    expect(mocks.tx.iTPCompletionAttachment.createMany).toHaveBeenCalledWith({
+      data: [{ completionId: 'completion-item-2', documentId: 'doc-shared' }],
+      skipDuplicates: true,
+    });
+    expect(mocks.createAuditLog).toHaveBeenCalledTimes(2);
+    expect(mocks.sendEmail).toHaveBeenCalledOnce();
+    expect(mocks.sendEmail.mock.calls[0][0]).toMatchObject({
+      to: 'reviewer@example.com',
+      subject: '[SiteProof] Batch Hold Point Release Request - LOT-1',
+    });
+    expect(mocks.sendEmail.mock.calls[0][0].text).toContain('Footing inspection');
+    expect(mocks.sendEmail.mock.calls[0][0].text).toContain('Deck pour inspection');
+    expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects a batch when any selected hold point is already released before writing tokens', async () => {
+    mocks.prisma.lot.findUnique.mockResolvedValueOnce({
+      ...releaseReadyBatchLot(),
+      holdPoints: [
+        { id: 'hp-1', itpChecklistItemId: 'item-1', status: 'pending' },
+        { id: 'hp-2', itpChecklistItemId: 'item-2', status: 'released' },
+      ],
+    });
+
+    const res = await request(app)
+      .post('/api/holdpoints/request-release/batch')
+      .send({
+        lotId: 'lot-1',
+        items: [{ itpChecklistItemId: 'item-1' }, { itpChecklistItemId: 'item-2' }],
+        recipientEmail: 'reviewer@example.com',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('This hold point has already been released.');
+    expect(mocks.tx.holdPointReleaseToken.createMany).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate hold point items in a batch before loading the lot', async () => {
+    const res = await request(app)
+      .post('/api/holdpoints/request-release/batch')
+      .send({
+        lotId: 'lot-1',
+        items: [{ itpChecklistItemId: 'item-1' }, { itpChecklistItemId: ' item-1 ' }],
+        recipientEmail: 'reviewer@example.com',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('Validation failed');
+    expect(mocks.prisma.lot.findUnique).not.toHaveBeenCalled();
+    expect(mocks.tx.holdPointReleaseToken.createMany).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('reports a saved batch request clearly when the consolidated email fails after commit', async () => {
+    mocks.prisma.lot.findUnique.mockResolvedValueOnce(releaseReadyBatchLot());
+    mocks.tx.holdPoint.findUnique.mockResolvedValueOnce({
+      id: 'hp-1',
+      status: 'notified',
+      itpChecklistItem: { id: 'item-1' },
+    });
+    mocks.sendEmail.mockResolvedValueOnce({
+      success: false,
+      error: 'Resend rejected the batch email',
+      provider: 'resend',
+    });
+
+    const res = await request(app)
+      .post('/api/holdpoints/request-release/batch')
+      .send({
+        lotId: 'lot-1',
+        items: [{ itpChecklistItemId: 'item-1' }],
+        recipientEmail: 'reviewer@example.com',
+      });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.message).toBe(
+      'Batch release request was saved but the consolidated email could not be sent.',
+    );
+    expect(res.body.error.details).toEqual({
+      requestCreated: true,
+      emailDelivery: { sent: 0, failed: 1 },
+    });
+    expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledOnce();
+    expect(mocks.createAuditLog).toHaveBeenCalledOnce();
+    expect(mocks.createAuditLog.mock.calls[0][0].changes.emailDelivery).toEqual({
+      sent: 0,
+      failed: 1,
+    });
   });
 });

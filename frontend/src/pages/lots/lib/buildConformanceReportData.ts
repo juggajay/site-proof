@@ -12,7 +12,11 @@ import type { ITPInstance, Lot } from '../types';
 
 export interface ConformanceReportSources {
   lot: Lot;
-  project: { name: string; projectNumber?: string | null };
+  project: {
+    name: string;
+    projectNumber?: string | null;
+    company?: ConformanceReportData['company'];
+  };
   itpInstance: ITPInstance | null;
   testResults?: ConformanceReportData['testResults'];
   ncrs?: ConformanceReportData['ncrs'];
@@ -73,6 +77,7 @@ export function buildConformanceReportData({
       name: project.name,
       projectNumber: project.projectNumber || null,
     },
+    company: project.company || null,
     itp: itpInstance
       ? {
           templateName: itpInstance.template?.name || 'Unknown Template',

@@ -25,12 +25,15 @@ interface HoldPointsTableProps {
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
+  batchSelectableHoldPointIds: Set<string>;
+  selectedBatchHoldPointIds: Set<string>;
   onSort: (field: HoldPointSortField) => void;
   onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  onToggleBatchSelection: (hp: HoldPoint) => void;
   onClearFilter: () => void;
 }
 
@@ -90,12 +93,15 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
   copiedHpId,
   generatingPdf,
   chasingHpId,
+  batchSelectableHoldPointIds,
+  selectedBatchHoldPointIds,
   onSort,
   onCopyLink,
   onRequestRelease,
   onRecordRelease,
   onChase,
   onGenerateEvidence,
+  onToggleBatchSelection,
   onClearFilter,
 }: HoldPointsTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -166,6 +172,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
       <table className="w-full">
         <thead className="bg-muted/50 sticky top-0 z-10">
           <tr>
+            <th className="px-4 py-3 text-left text-sm font-medium">Select</th>
             <SortableHeader
               field="lot"
               sortField={sortField}
@@ -215,7 +222,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
           {virtualItems.length > 0 && (
             <tr>
               <td
-                colSpan={7}
+                colSpan={8}
                 style={{ height: `${virtualItems[0]?.start ?? 0}px`, padding: 0, border: 'none' }}
               />
             </tr>
@@ -233,11 +240,14 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
                 copiedHpId={copiedHpId}
                 generatingPdf={generatingPdf}
                 chasingHpId={chasingHpId}
+                canSelectForBatch={batchSelectableHoldPointIds.has(hp.id)}
+                isSelectedForBatch={selectedBatchHoldPointIds.has(hp.id)}
                 onCopyLink={onCopyLink}
                 onRequestRelease={onRequestRelease}
                 onRecordRelease={onRecordRelease}
                 onChase={onChase}
                 onGenerateEvidence={onGenerateEvidence}
+                onToggleBatchSelection={onToggleBatchSelection}
               />
             );
           })}
@@ -245,7 +255,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
           {virtualItems.length > 0 && (
             <tr>
               <td
-                colSpan={7}
+                colSpan={8}
                 style={{
                   height: `${virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)}px`,
                   padding: 0,
@@ -270,11 +280,14 @@ interface HoldPointRowProps {
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
+  canSelectForBatch: boolean;
+  isSelectedForBatch: boolean;
   onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  onToggleBatchSelection: (hp: HoldPoint) => void;
 }
 
 function HoldPointRow({
@@ -285,11 +298,14 @@ function HoldPointRow({
   copiedHpId,
   generatingPdf,
   chasingHpId,
+  canSelectForBatch,
+  isSelectedForBatch,
   onCopyLink,
   onRequestRelease,
   onRecordRelease,
   onChase,
   onGenerateEvidence,
+  onToggleBatchSelection,
 }: HoldPointRowProps) {
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
@@ -302,6 +318,16 @@ function HoldPointRow({
       className={`border-b hover:bg-muted/25 ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${isDeepLinked ? 'bg-primary/10' : ''}`}
       data-deep-linked={isDeepLinked ? 'true' : undefined}
     >
+      <td className="px-4 py-3">
+        <input
+          type="checkbox"
+          checked={isSelectedForBatch}
+          disabled={!canSelectForBatch}
+          onChange={() => onToggleBatchSelection(hp)}
+          aria-label={`Select ${hp.description} for batch release`}
+          className="h-4 w-4 rounded border-border"
+        />
+      </td>
       <td className="px-4 py-3 font-medium">
         {hp.lotNumber}
         {overdue && (

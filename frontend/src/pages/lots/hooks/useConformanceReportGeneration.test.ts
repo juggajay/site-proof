@@ -131,9 +131,10 @@ describe('useConformanceReportGeneration', () => {
   });
 
   it('reuses an already-loaded ITP instance instead of re-fetching it', async () => {
+    const company = { name: 'Gateway Civil Pty Ltd', logoUrl: null };
     apiFetchMock.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/projects/'))
-        return { project: { name: 'Demo', projectNumber: 'PN-1', clientName: 'Client' } };
+        return { project: { name: 'Demo', projectNumber: 'PN-1', clientName: 'Client', company } };
       if (path.startsWith('/api/test-results')) return { testResults: [] };
       if (path.startsWith('/api/ncrs')) return { ncrs: [] };
       throw new Error(`unexpected path ${path}`);
@@ -149,7 +150,12 @@ describe('useConformanceReportGeneration', () => {
 
     const fetchedPaths = apiFetchMock.mock.calls.map((call) => call[0] as string);
     expect(fetchedPaths.some((path) => path.startsWith('/api/itp/instances/lot/'))).toBe(false);
-    expect(buildReportDataMock).toHaveBeenCalledWith(expect.objectContaining({ itpInstance }));
+    expect(buildReportDataMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itpInstance,
+        project: expect.objectContaining({ company }),
+      }),
+    );
     expect(generatePdfMock).toHaveBeenCalledTimes(1);
     expect(generatePdfMock).toHaveBeenCalledWith(
       { marker: 'report-data' },

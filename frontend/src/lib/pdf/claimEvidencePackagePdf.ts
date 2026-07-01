@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
+import { drawPdfBrandingHeader } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
@@ -58,6 +59,17 @@ export async function generateClaimEvidencePackagePDF(
       : [];
 
   // ========== COVER PAGE ==========
+  await drawPdfBrandingHeader(doc, data, {
+    logoX: pageWidth - margin - 30,
+    logoY: 12,
+    logoWidth: 30,
+    logoHeight: 18,
+    companyNameX: pageWidth - margin,
+    companyNameY: 35,
+    companyNameAlign: 'right',
+    companyNameColor: [71, 85, 105],
+    companyNameFontSize: 8,
+  });
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);

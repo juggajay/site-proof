@@ -1,4 +1,5 @@
 import { devLog } from '../logger';
+import { drawPdfBrandingHeader } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DocketDetailPDFData } from './types';
@@ -121,6 +122,17 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   const statusText = statusLabels[data.docket.status] || data.docket.status.toUpperCase();
   const badgeX = pageWidth - margin - doc.getTextWidth(statusText);
   doc.text(statusText, badgeX, 27);
+  await drawPdfBrandingHeader(doc, data, {
+    logoX: pageWidth - margin - 28,
+    logoY: 5,
+    logoWidth: 28,
+    logoHeight: 16,
+    companyNameX: pageWidth - margin,
+    companyNameY: 36,
+    companyNameAlign: 'right',
+    companyNameColor: [255, 255, 255],
+    companyNameFontSize: 8,
+  });
 
   yPos = 50;
   doc.setTextColor(0, 0, 0);

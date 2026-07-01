@@ -177,6 +177,76 @@ describe('evidence readiness helpers', () => {
     expect(readiness.summary.actionBlockerCount).toBe(0);
   });
 
+  it('builds a management prep bucket for hold-point handoff readiness', () => {
+    const input = {
+      ...baseInput({
+        conformStatus: {
+          canConform: false,
+          blockingReasons: ['ITP checklist incomplete (2/5 items completed)'],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: false,
+            itpCompletedCount: 2,
+            itpTotalCount: 5,
+            itpIncompleteItems: [
+              { id: 'hp-2', description: 'Second hold point', pointType: 'hold_point' },
+              { id: 'super-1', description: 'Superintendent sign-off', pointType: 'standard' },
+            ],
+            testRequired: false,
+            hasPassingTest: false,
+            testResults: [],
+            noOpenNcrs: true,
+            openNcrs: [],
+          },
+        },
+      }),
+      managementPrep: {
+        releaseGatedHoldPoints: 3,
+        missingRequestEvidence: 2,
+        missingRecipients: 1,
+        fieldActionableItems: 2,
+        managementOnlyItems: 3,
+        holdPointsHref: '/projects/project-1/hold-points?lotId=lot-1',
+      },
+    };
+
+    const readiness = buildLotReadinessFromInputs(input as LotReadinessInput) as any;
+
+    expect(readiness.managementPrep.counts).toEqual({
+      releaseGatedHoldPoints: 3,
+      missingRequestEvidence: 2,
+      missingRecipients: 1,
+      fieldActionableItems: 2,
+      managementOnlyItems: 3,
+    });
+    expect(readiness.managementPrep.state).toBe('warning');
+    expect(readiness.managementPrep.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'missing_request_evidence',
+          count: 2,
+          actionHref: '/projects/project-1/hold-points?lotId=lot-1',
+        }),
+        expect.objectContaining({
+          code: 'missing_hold_point_recipients',
+          count: 1,
+          actionHref: '/projects/project-1/hold-points?lotId=lot-1',
+        }),
+        expect.objectContaining({
+          code: 'management_only_items',
+          count: 3,
+        }),
+      ]),
+    );
+    expect(readiness.managementPrep.support).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'release_gated_hold_points', count: 3 }),
+        expect.objectContaining({ code: 'field_actionable_items', count: 2 }),
+      ]),
+    );
+    expect(readiness.summary.warningCount).toBeGreaterThanOrEqual(3);
+  });
+
   it('physically removes commercial readiness fields for subcontractor callers', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({

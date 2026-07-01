@@ -20,7 +20,8 @@
  * un-released hold point — it shows an honest "Awaiting hold point release" state
  * and points the foreman at the Hold Points screen, where the request-release
  * flow lives today. N/A and FAIL stay available on hold-point items (the backend
- * guard only blocks 'completed').
+ * guard only blocks 'completed') except superintendent-owned sign-off items,
+ * which are status-only for field users even after release.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +35,7 @@ import {
   advanceToNextIncomplete,
   firstIncompleteIndex,
   holdPointGateDecision,
+  isSuperintendentSignoffOnlyItem,
   runItemOrder,
   runProgress,
 } from './lotsShellState';
@@ -70,6 +72,13 @@ const STRIP_STATE_LINE: Record<string, string> = {
   hold: 'Awaiting hold point release',
   open: 'Not started',
 };
+
+function stripStateLine(item: ITPChecklistItem, state: string): string {
+  if (!isSuperintendentSignoffOnlyItem(item)) return STRIP_STATE_LINE[state];
+  if (state === 'done') return 'Superintendent sign-off recorded';
+  if (state === 'failed' || state === 'na') return STRIP_STATE_LINE[state];
+  return 'Superintendent sign-off required';
+}
 
 // Pass-flash auto-advance timing — long enough to register the green flash,
 // short enough not to stall a foreman moving fast. Reduced-motion users still
@@ -126,6 +135,9 @@ export function ItpRunScreen() {
   const gate = currentItem
     ? holdPointGateDecision(currentItem, currentCompletion)
     : { kind: 'open' as const };
+  const superintendentSignoffOnly = currentItem
+    ? isSuperintendentSignoffOnlyItem(currentItem)
+    : false;
 
   // Dot-track entries: each run item + its completion + derived on-track state,
   // straight from the run's EXISTING data (no new fetch / no behavior change).
@@ -183,6 +195,7 @@ export function ItpRunScreen() {
 
   const handlePass = async () => {
     if (!currentItem || submitting) return;
+    if (superintendentSignoffOnly) return;
     if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
     setSubmitting(true);
     const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
@@ -217,7 +230,7 @@ export function ItpRunScreen() {
 
   const onPhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && currentItem) void run.addPhoto(currentItem.id, file);
+    if (file && currentItem && !superintendentSignoffOnly) void run.addPhoto(currentItem.id, file);
     e.target.value = '';
   };
 
@@ -326,7 +339,7 @@ export function ItpRunScreen() {
   // never hidden during a scrub. When a reason is being captured it replaces the
   // tri-state in place (same bottom position). The completion mutations are
   // untouched; an un-released hold point still never offers Pass.
-  const bottom = (
+  const bottom = superintendentSignoffOnly ? undefined : (
     <div className="shell-primary">
       {reasonMode ? (
         // Solid card background — this panel sits in the fixed bottom bar OVER
@@ -400,78 +413,77 @@ export function ItpRunScreen() {
   // Tri-state PASS / FAIL / N-A — pinned at the bottom of the content zone,
   // ABOVE the fixed bar: the natural thumb range for one-handed use (owner
   // refinement). Hold points still never offer Pass.
-  const triStateCluster =
-    gate.kind === 'awaiting-release' ? (
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className="shell-tri-btn shell-tri-na min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('na');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Mark not applicable"
-        >
-          N/A
-        </button>
-        <button
-          type="button"
-          className="shell-tri-btn shell-tri-fail min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('fail');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Fail this check"
-        >
-          <AlertTriangle size={20} aria-hidden />
-          Fail
-        </button>
-      </div>
-    ) : (
-      <div className="grid grid-cols-3 gap-3">
-        <button
-          type="button"
-          className="shell-tri-pass shell-tri-btn min-h-[58px]"
-          disabled={busy}
-          onClick={handlePass}
-          aria-label="Pass this check"
-        >
-          <Check size={22} strokeWidth={2.4} aria-hidden />
-          Pass
-        </button>
-        <button
-          type="button"
-          className="shell-tri-fail shell-tri-btn min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('fail');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Fail this check"
-        >
-          <AlertTriangle size={22} aria-hidden />
-          Fail
-        </button>
-        <button
-          type="button"
-          className="shell-tri-na shell-tri-btn min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('na');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Mark not applicable"
-        >
-          N/A
-        </button>
-      </div>
-    );
+  const triStateCluster = superintendentSignoffOnly ? null : gate.kind === 'awaiting-release' ? (
+    <div className="grid grid-cols-2 gap-3">
+      <button
+        type="button"
+        className="shell-tri-btn shell-tri-na min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('na');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Mark not applicable"
+      >
+        N/A
+      </button>
+      <button
+        type="button"
+        className="shell-tri-btn shell-tri-fail min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('fail');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Fail this check"
+      >
+        <AlertTriangle size={20} aria-hidden />
+        Fail
+      </button>
+    </div>
+  ) : (
+    <div className="grid grid-cols-3 gap-3">
+      <button
+        type="button"
+        className="shell-tri-pass shell-tri-btn min-h-[58px]"
+        disabled={busy}
+        onClick={handlePass}
+        aria-label="Pass this check"
+      >
+        <Check size={22} strokeWidth={2.4} aria-hidden />
+        Pass
+      </button>
+      <button
+        type="button"
+        className="shell-tri-fail shell-tri-btn min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('fail');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Fail this check"
+      >
+        <AlertTriangle size={22} aria-hidden />
+        Fail
+      </button>
+      <button
+        type="button"
+        className="shell-tri-na shell-tri-btn min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('na');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Mark not applicable"
+      >
+        N/A
+      </button>
+    </div>
+  );
 
   return (
     <ShellScreen
@@ -544,7 +556,7 @@ export function ItpRunScreen() {
                           : 'text-muted-foreground',
                   ].join(' ')}
                 >
-                  {STRIP_STATE_LINE[cellState]}
+                  {stripStateLine(cell, cellState)}
                 </p>
               </>
             );
@@ -557,7 +569,19 @@ export function ItpRunScreen() {
             at the top and the actions at the bottom. They belong to the LANDED
             item; a scrub preview above doesn't change them until release. */}
         <div className="flex flex-col gap-3 pt-3">
-          {gate.kind === 'awaiting-release' && (
+          {superintendentSignoffOnly && (
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+                <Lock size={16} strokeWidth={2.2} aria-hidden />
+                Superintendent sign-off required
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                This item is for superintendent sign-off. Field users can view the status here;
+                request and release status stays managed from the Hold Points screen.
+              </p>
+            </div>
+          )}
+          {!superintendentSignoffOnly && gate.kind === 'awaiting-release' && (
             <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
               <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
                 <Lock size={16} strokeWidth={2.2} aria-hidden />
@@ -580,14 +604,16 @@ export function ItpRunScreen() {
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onPhotoSelected}
-      />
+      {!superintendentSignoffOnly && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={onPhotoSelected}
+        />
+      )}
     </ShellScreen>
   );
 }

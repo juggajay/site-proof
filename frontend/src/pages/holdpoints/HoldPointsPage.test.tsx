@@ -84,6 +84,34 @@ function buildRegister(): HoldPoint[] {
   ];
 }
 
+function buildBatchRegister(): HoldPoint[] {
+  return [
+    makeHoldPoint({
+      id: 'hp-batch-1',
+      lotId: 'lot-1',
+      lotNumber: 'LOT-001',
+      itpChecklistItemId: 'item-1',
+      description: 'Formation inspection',
+    }),
+    makeHoldPoint({
+      id: 'hp-batch-2',
+      lotId: 'lot-1',
+      lotNumber: 'LOT-001',
+      itpChecklistItemId: 'item-2',
+      description: 'Basecourse inspection',
+      sequenceNumber: 2,
+    }),
+    makeHoldPoint({
+      id: 'hp-other-lot',
+      lotId: 'lot-2',
+      lotNumber: 'LOT-002',
+      itpChecklistItemId: 'item-3',
+      description: 'Other lot inspection',
+      sequenceNumber: 3,
+    }),
+  ];
+}
+
 function mockHoldPointsApi(register: HoldPoint[]) {
   apiFetchMock.mockImplementation((path: string) => {
     const url = new URL(path, 'http://localhost');
@@ -252,6 +280,72 @@ describe('HoldPointsPage register data layer', () => {
     // commit above, so the URL assertion must also wait.
     await waitFor(() => {
       expect(screen.getByTestId('location-search')).not.toHaveTextContent('hp=hp-3');
+    });
+  });
+
+  it('submits one batch release request for selected pending hold points in the selected lot', async () => {
+    const register = buildBatchRegister();
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      const url = new URL(path, 'http://localhost');
+      if (url.pathname === '/api/holdpoints/project/p1') {
+        return Promise.resolve({
+          holdPoints: register,
+          pagination: { page: 1, totalPages: 1, hasNextPage: false },
+        });
+      }
+      if (url.pathname === '/api/holdpoints/request-release/batch') {
+        return Promise.resolve({
+          success: true,
+          holdPoints: [],
+          receivedBody: options?.body,
+        });
+      }
+      return Promise.reject(new Error(`Unhandled apiFetch path in test: ${path}`));
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect((await screen.findAllByRole('heading', { name: 'LOT-001' })).length).toBeGreaterThan(0);
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filter hold points by lot' }),
+      'LOT-001',
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: /Select Formation inspection for batch release/i }),
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: /Select Basecourse inspection for batch release/i }),
+    );
+    await user.click(screen.getByRole('button', { name: /Request selected/i }));
+
+    await user.type(screen.getByLabelText(/Scheduled Date/i), '2026-07-10');
+    await user.type(screen.getByLabelText(/Scheduled Time/i), '09:30');
+    await user.type(screen.getByLabelText(/Recipient Email/i), 'reviewer@example.com');
+    await user.type(screen.getByLabelText(/Recipient Name/i), 'Site Reviewer');
+    await user.click(screen.getByRole('button', { name: /Send batch request/i }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/holdpoints/request-release/batch',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    const batchCall = apiFetchMock.mock.calls.find(
+      ([path]) => path === '/api/holdpoints/request-release/batch',
+    );
+    expect(batchCall).toBeDefined();
+    const body = JSON.parse((batchCall?.[1] as RequestInit).body as string);
+    expect(body).toEqual({
+      lotId: 'lot-1',
+      items: [{ itpChecklistItemId: 'item-1' }, { itpChecklistItemId: 'item-2' }],
+      sharedEvidenceDocumentIds: [],
+      scheduledDate: '2026-07-10',
+      scheduledTime: '09:30',
+      recipientEmail: 'reviewer@example.com',
+      recipientName: 'Site Reviewer',
+      noticeHours: 24,
     });
   });
 });

@@ -1,4 +1,5 @@
 import { formatDateKey } from '../localDate';
+import { drawPdfBrandingHeader } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultConformanceOptions } from './types';
@@ -103,9 +104,32 @@ export async function generateConformanceReportPDF(
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text(formatConfig.title, pageWidth / 2, 15, { align: 'center' });
+    await drawPdfBrandingHeader(doc, data, {
+      logoX: pageWidth - margin - 24,
+      logoY: 4,
+      logoWidth: 24,
+      logoHeight: 14,
+      companyNameX: pageWidth - margin,
+      companyNameY: 23,
+      companyNameAlign: 'right',
+      companyNameColor: [255, 255, 255],
+      companyNameFontSize: 7,
+    });
     doc.setTextColor(0, 0, 0);
     yPos = 35;
   } else {
+    await drawPdfBrandingHeader(doc, data, {
+      logoX: pageWidth - margin - 26,
+      logoY: 5,
+      logoWidth: 26,
+      logoHeight: 16,
+      companyNameX: pageWidth - margin,
+      companyNameY: 11,
+      companyNameAlign: 'right',
+      companyNameColor: [75, 85, 99],
+      companyNameFontSize: 8,
+    });
+    doc.setTextColor(0, 0, 0);
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
     doc.text(formatConfig.title, pageWidth / 2, yPos, { align: 'center' });

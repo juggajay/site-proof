@@ -1887,6 +1887,165 @@ describe('Lots API', () => {
       }
     });
 
+    it('should derive management prep counts from release-gated ITP items', async () => {
+      const suffix = Date.now();
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Readiness management prep ${suffix}`,
+          activityType: 'Earthworks',
+        },
+      });
+      const fieldItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Field compaction check',
+          pointType: 'standard',
+          responsibleParty: 'contractor',
+        },
+      });
+      const evidencedHoldPoint = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 2,
+          description: 'First superintendent release',
+          pointType: 'hold_point',
+          responsibleParty: 'contractor',
+        },
+      });
+      const missingEvidenceHoldPoint = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 3,
+          description: 'Second superintendent release',
+          pointType: 'hold_point',
+          responsibleParty: 'contractor',
+        },
+      });
+      const superintendentSignoff = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 4,
+          description: 'Superintendent sign-off',
+          pointType: 'standard',
+          responsibleParty: 'superintendent',
+        },
+      });
+      const witnessItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 5,
+          description: 'Witness inspection',
+          pointType: 'witness',
+          responsibleParty: 'superintendent',
+        },
+      });
+      const readinessLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-READY-MGMT-${suffix}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          itpTemplateId: template.id,
+        },
+      });
+      const instance = await prisma.iTPInstance.create({
+        data: {
+          lotId: readinessLot.id,
+          templateId: template.id,
+        },
+      });
+      const completion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: instance.id,
+          checklistItemId: evidencedHoldPoint.id,
+          status: 'pending',
+        },
+      });
+      const evidenceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId: readinessLot.id,
+          documentType: 'hold_point_request_evidence',
+          category: 'itp_evidence',
+          filename: `hp-evidence-${suffix}.pdf`,
+          fileUrl: `supabase://documents/test/hp-evidence-${suffix}.pdf`,
+          uploadedById: userId,
+        },
+      });
+      await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId: completion.id,
+          documentId: evidenceDocument.id,
+        },
+      });
+      await prisma.holdPoint.create({
+        data: {
+          lotId: readinessLot.id,
+          itpChecklistItemId: evidencedHoldPoint.id,
+          pointType: 'hold_point',
+          description: 'First superintendent release',
+          status: 'notified',
+          notificationSentTo: 'reviewer@example.com',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/lots/${readinessLot.id}/readiness`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.readiness.managementPrep.counts).toEqual({
+          releaseGatedHoldPoints: 3,
+          missingRequestEvidence: 2,
+          missingRecipients: 2,
+          fieldActionableItems: 2,
+          managementOnlyItems: 3,
+        });
+        expect(res.body.readiness.managementPrep.warnings).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              code: 'missing_request_evidence',
+              count: 2,
+              relatedIds: expect.arrayContaining([
+                missingEvidenceHoldPoint.id,
+                superintendentSignoff.id,
+              ]),
+              actionHref: `/projects/${projectId}/hold-points?lotId=${readinessLot.id}`,
+            }),
+            expect.objectContaining({
+              code: 'missing_hold_point_recipients',
+              count: 2,
+              relatedIds: expect.arrayContaining([
+                missingEvidenceHoldPoint.id,
+                superintendentSignoff.id,
+              ]),
+            }),
+          ]),
+        );
+        expect(res.body.readiness.managementPrep.support).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              code: 'field_actionable_items',
+              count: 2,
+              relatedIds: expect.arrayContaining([fieldItem.id, witnessItem.id]),
+            }),
+            expect.objectContaining({
+              code: 'release_gated_hold_points',
+              count: 3,
+            }),
+          ]),
+        );
+      } finally {
+        await prisma.document.delete({ where: { id: evidenceDocument.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: readinessLot.id } }).catch(() => {});
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    }, 30000);
+
     it('should omit commercial fields and enforce lot assignment for subcontractor readiness', async () => {
       const assignedLot = await prisma.lot.create({
         data: {

@@ -85,6 +85,18 @@ describe('buildConformanceReportData', () => {
     expect(report.project).toEqual({ name: 'No Number Project', projectNumber: null });
   });
 
+  it('preserves company branding from the loaded project', () => {
+    const company = { name: 'Gateway Civil Pty Ltd', logoUrl: null };
+
+    const report = buildConformanceReportData({
+      lot: baseLot,
+      project: { name: 'Pacific Highway Upgrade', projectNumber: 'PRJ-42', company },
+      itpInstance: null,
+    });
+
+    expect(report.company).toEqual(company);
+  });
+
   it('sums photo count across completion attachments', () => {
     const itpInstance: ITPInstance = {
       id: 'itp-1',

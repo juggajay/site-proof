@@ -10,7 +10,7 @@
  * Pins:
  *   - hero states: none / draft-with-total / queried
  *   - NCR tile hidden by default, shown when ncrs module enabled
- *   - module-disabled tile hidden (documents off → no Documents tile)
+ *   - demoted destinations render as secondary links, not daily-work cards
  *   - role chip text (SUBCONTRACTOR)
  *   - bottom bar navigation target (/p/docket)
  */
@@ -198,17 +198,25 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.getByText('ncrs screen')).toBeInTheDocument();
   });
 
-  it('hides a module tile when its module is disabled (documents off)', () => {
+  it('demotes Documents and My Company out of daily-work card buttons', () => {
+    renderHome();
+    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'My Company' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /My Company/i })).toBeInTheDocument();
+  });
+
+  it('hides the secondary Documents link when its module is disabled', () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, documents: false };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
-    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Documents' })).toBeNull();
   });
 
-  it('Documents tile preserves the selected project query', () => {
+  it('Documents secondary link preserves the selected project query', () => {
     _ctx = makeCtx({ projectId: 'project-2', projectName: 'Second Project' });
     renderHome();
-    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Documents' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=project-2');
   });
 
