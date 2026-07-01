@@ -11,6 +11,13 @@ type ProjectUser = {
   joinedAt: string;
 };
 
+type AssignableProjectUser = {
+  id: string;
+  email: string;
+  fullName: string | null;
+  roleInCompany: string;
+};
+
 type ProjectUsersApiOptions = {
   failUserLoadsUntil?: number;
   failRemoveAttemptsUntil?: number;
@@ -58,6 +65,13 @@ const viewerUser: ProjectUser = {
   role: 'viewer',
   status: 'pending',
   joinedAt: '2026-05-03T00:00:00.000Z',
+};
+
+const qaManagerAssignableUser: AssignableProjectUser = {
+  id: 'e2e-invited-user',
+  email: 'qa.manager@example.com',
+  fullName: 'QA Manager',
+  roleInCompany: 'member',
 };
 
 async function fulfillProjectUserRoleUpdate(route: Route, userId: string, users: ProjectUser[]) {
@@ -162,6 +176,7 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
     structuredClone(engineerUser),
     structuredClone(viewerUser),
   ];
+  const assignableUsers: AssignableProjectUser[] = [structuredClone(qaManagerAssignableUser)];
   const inviteRequests: unknown[] = [];
   let updateRoleRequest: { userId: string; body: unknown } | null = null;
   let removeUserId: string | null = null;
@@ -171,6 +186,10 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
   await mockProjectShellApi(page, {
     user: options.user,
     projectOverrides: options.projectOverrides,
+  });
+
+  await page.route(`**/api/projects/${E2E_PROJECT_ID}/assignable-users`, async (route) => {
+    await fulfillJson(route, { users: assignableUsers });
   });
 
   await page.route(`**/api/projects/${E2E_PROJECT_ID}/users`, async (route) => {
@@ -198,17 +217,22 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
       if (options.inviteDelayMs) {
         await delay(options.inviteDelayMs);
       }
-      const body = inviteRequests.at(-1) as { email: string; role: string };
+      const body = inviteRequests.at(-1) as { userId: string; role: string };
+      const selectedUser = assignableUsers.find((user) => user.id === body.userId);
       const invited: ProjectUser = {
         id: 'e2e-project-user-invited',
-        userId: 'e2e-invited-user',
-        email: body.email,
-        fullName: null,
+        userId: body.userId,
+        email: selectedUser?.email ?? 'qa.manager@example.com',
+        fullName: selectedUser?.fullName ?? null,
         role: body.role,
         status: 'pending',
         joinedAt: '2026-05-09T00:00:00.000Z',
       };
       users.push(invited);
+      const assignableIndex = assignableUsers.findIndex((user) => user.id === body.userId);
+      if (assignableIndex >= 0) {
+        assignableUsers.splice(assignableIndex, 1);
+      }
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -290,23 +314,22 @@ test.describe('Project users seeded admin contract', () => {
     await expect(page.getByText('E2E Engineer')).toBeVisible();
     await expect(page.getByText('E2E Viewer')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Invite User' }).click();
-    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
+    await page.getByRole('button', { name: 'Add Team Member' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Add Team Member' });
     await expect(
-      inviteDialog.getByText('Add an existing company user to this project'),
+      inviteDialog.getByText('Select an existing company user to add to this project'),
     ).toBeVisible();
-    await inviteDialog.getByLabel('Email Address').fill('qa.manager@example.com');
+    await inviteDialog.getByLabel('Search company users').fill('QA Manager');
+    await inviteDialog.getByLabel('Project member').selectOption(qaManagerAssignableUser.id);
     await inviteDialog.getByLabel('Role').selectOption('quality_manager');
-    await inviteDialog.getByRole('button', { name: 'Send Invite' }).click();
+    await inviteDialog.getByRole('button', { name: 'Add to Project' }).click();
 
-    await expect(
-      page.getByText('qa.manager@example.com has been added to the project.'),
-    ).toBeVisible();
+    await expect(page.getByText('QA Manager has been added to the project.')).toBeVisible();
     expect(api.getInviteRequest()).toMatchObject({
-      email: 'qa.manager@example.com',
+      userId: qaManagerAssignableUser.id,
       role: 'quality_manager',
     });
-    const invitedRow = page.locator('tbody tr').filter({ hasText: 'qa.manager@example.com' });
+    const invitedRow = page.locator('tbody tr').filter({ hasText: 'QA Manager' });
     await expect(invitedRow).toBeVisible();
 
     await page.getByRole('button', { name: 'Change role for E2E Engineer' }).click();
@@ -358,28 +381,29 @@ test.describe('Project users seeded admin contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
 
-    await page.getByRole('button', { name: 'Invite User' }).click();
-    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
-    await inviteDialog.getByLabel('Email Address').fill('QA.Manager@Example.com');
+    await page.getByRole('button', { name: 'Add Team Member' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Add Team Member' });
+    await inviteDialog.getByLabel('Search company users').fill('QA Manager');
+    await inviteDialog.getByLabel('Project member').selectOption(qaManagerAssignableUser.id);
     await inviteDialog.getByLabel('Role').selectOption('quality_manager');
 
-    const emailInput = inviteDialog.getByLabel('Email Address');
+    const userSearchInput = inviteDialog.getByLabel('Search company users');
+    const projectMemberSelect = inviteDialog.getByLabel('Project member');
     const roleSelect = inviteDialog.getByLabel('Role');
     await inviteDialog
-      .getByRole('button', { name: 'Send Invite' })
+      .getByRole('button', { name: 'Add to Project' })
       .evaluate((button: HTMLElement) => {
         button.click();
         button.click();
       });
 
-    await expect(emailInput).toBeDisabled();
+    await expect(userSearchInput).toBeDisabled();
+    await expect(projectMemberSelect).toBeDisabled();
     await expect(roleSelect).toBeDisabled();
-    await expect(
-      page.getByText('qa.manager@example.com has been added to the project.'),
-    ).toBeVisible();
+    await expect(page.getByText('QA Manager has been added to the project.')).toBeVisible();
     expect(api.getInviteRequests()).toHaveLength(1);
     expect(api.getInviteRequest()).toMatchObject({
-      email: 'qa.manager@example.com',
+      userId: qaManagerAssignableUser.id,
       role: 'quality_manager',
     });
   });
@@ -404,7 +428,7 @@ test.describe('Project users seeded admin contract', () => {
     await expect(page.getByRole('alert')).toContainText(
       "You don't have permission to manage users for this project.",
     );
-    await expect(page.getByRole('button', { name: 'Invite User' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add Team Member' })).toHaveCount(0);
     expect(api.getUserLoadCount()).toBe(0);
   });
 
@@ -430,8 +454,8 @@ test.describe('Project users seeded admin contract', () => {
       0,
     );
 
-    await page.getByRole('button', { name: 'Invite User' }).click();
-    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
+    await page.getByRole('button', { name: 'Add Team Member' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Add Team Member' });
     await expect(
       inviteDialog.locator('select#project-user-invite-role option[value="admin"]'),
     ).toHaveCount(0);

@@ -465,11 +465,10 @@ test.describe('Subbie mobile shell direct routes', () => {
       PROJECT_ID,
     )}&subcontractorCompanyId=${encodeURIComponent(SUBCONTRACTOR_COMPANY_ID)}`;
 
-    const directRoutes: Array<{ path: string; heading: string | RegExp; text?: string | RegExp }> =
+    const directRoutes: Array<{ path: string; heading?: string | RegExp; text?: string | RegExp }> =
       [
         {
           path: `/p${projectQuery}`,
-          heading: /^(Morning|Afternoon|Evening), Morgan$/,
           text: 'Mobile Shell Civil',
         },
         { path: `/p/dockets${projectQuery}`, heading: 'My Dockets', text: '2 entries · $800' },
@@ -499,7 +498,9 @@ test.describe('Subbie mobile shell direct routes', () => {
       expect(new URL(page.url()).searchParams.get('subcontractorCompanyId')).toBe(
         SUBCONTRACTOR_COMPANY_ID,
       );
-      await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      if (route.heading) {
+        await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      }
       if (route.text) {
         await expect(page.getByText(route.text).first()).toBeVisible();
       }

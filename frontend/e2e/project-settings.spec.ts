@@ -528,7 +528,7 @@ test.describe('Project settings seeded admin contract', () => {
     await expect(page.getByRole('button', { name: 'Mark as Completed' })).toHaveCount(0);
 
     await page.getByRole('tab', { name: /Team/ }).click();
-    await expect(page.getByRole('button', { name: 'Invite Team Member' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Add Team Member' })).toBeDisabled();
 
     await page.getByRole('tab', { name: /Areas/ }).click();
     await expect(
