@@ -606,6 +606,92 @@ describe('processDueScheduledReports', () => {
     }
   });
 
+  it('does not resurrect a cancelled run when the schedule changes during provider delivery', async () => {
+    const { company, project, now, schedule } = await createDueScheduleFixture();
+    const cancellationReason = 'Schedule paused while provider call was in flight';
+    const sendSpy = vi.spyOn(email, 'sendScheduledReportEmail').mockImplementation(async () => {
+      const activeRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        select: { id: true },
+      });
+
+      if (!activeRun) {
+        throw new Error('Expected scheduled report run to exist before provider send');
+      }
+
+      await prisma.scheduledReport.update({
+        where: { id: schedule.id },
+        data: { isActive: false },
+      });
+      await prisma.scheduledReportRecipientDelivery.updateMany({
+        where: { scheduleId: schedule.id, status: 'sending' },
+        data: {
+          status: 'cancelled',
+          retryable: false,
+          lockedUntil: null,
+          nextAttemptAt: null,
+          errorReason: cancellationReason,
+        },
+      });
+      await prisma.scheduledReportRun.updateMany({
+        where: { id: activeRun.id, status: 'processing' },
+        data: {
+          status: 'cancelled',
+          completedAt: now,
+          errorReason: cancellationReason,
+        },
+      });
+
+      return {
+        success: true,
+        messageId: 'provider-accepted-before-cancellation-was-observed',
+        provider: 'mock',
+      };
+    });
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.results[0]).toMatchObject({
+        status: 'skipped',
+        error: 'Schedule was cancelled before delivery completed',
+      });
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+
+      const cancelledRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        include: { deliveries: true },
+      });
+      expect(cancelledRun).toMatchObject({
+        status: 'cancelled',
+        sentCount: 0,
+        failedCount: 0,
+        errorReason: cancellationReason,
+      });
+      expect(cancelledRun?.deliveries[0]).toMatchObject({
+        status: 'cancelled',
+        retryable: false,
+        errorReason: cancellationReason,
+      });
+
+      const pausedSchedule = await prisma.scheduledReport.findUnique({
+        where: { id: schedule.id },
+      });
+      expect(pausedSchedule).toMatchObject({
+        isActive: false,
+        lastSentAt: null,
+        failureCount: 0,
+      });
+    } finally {
+      sendSpy.mockRestore();
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
   it('suppresses opted-out app recipients while preserving external recipients', async () => {
     const fixture = await createRecipientScheduleFixture({
       preferences: { scheduledReports: false },
@@ -877,6 +963,68 @@ describe('processDueScheduledReports', () => {
     } finally {
       sendSpy.mockRestore();
       await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('suppresses retry delivery when a known recipient loses project access', async () => {
+    const fixture = await createRecipientScheduleFixture({});
+    const { now, project, schedule, user } = fixture;
+    const sendSpy = vi.spyOn(email, 'sendScheduledReportEmail').mockResolvedValue({
+      success: false,
+      error: 'temporary provider failure',
+      provider: 'mock',
+    });
+
+    try {
+      const firstRun = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expect(firstRun.failed).toBe(1);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+
+      await prisma.projectUser.updateMany({
+        where: { projectId: project.id, userId: user.id },
+        data: { status: 'removed' },
+      });
+
+      sendSpy.mockClear();
+      sendSpy.mockResolvedValue({
+        success: true,
+        messageId: 'should-not-send',
+        provider: 'mock',
+      });
+
+      const failedSchedule = await getScheduledReport(schedule.id);
+      const retryRun = await processDueScheduledReports({
+        now: failedSchedule!.nextRunAt!,
+        scheduleIds: [schedule.id],
+      });
+
+      expect(retryRun.processed).toBe(1);
+      expect(retryRun.sent).toBe(0);
+      expect(retryRun.failed).toBe(0);
+      expect(retryRun.skipped).toBe(1);
+      expect(sendSpy).not.toHaveBeenCalled();
+      expect(retryRun.results[0]).toMatchObject({
+        status: 'skipped',
+        error: 'No eligible scheduled report recipients',
+      });
+
+      const completedRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        include: { deliveries: true },
+      });
+      expect(completedRun).toMatchObject({
+        status: 'cancelled',
+        errorReason: 'No eligible scheduled report recipients',
+      });
+      expect(completedRun?.deliveries[0]).toMatchObject({
+        status: 'suppressed',
+        retryable: false,
+        errorReason: 'Scheduled report recipient no longer has project report access',
+      });
+    } finally {
+      sendSpy.mockRestore();
+      await cleanupRecipientScheduleFixture(fixture);
     }
   });
 

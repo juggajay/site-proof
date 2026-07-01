@@ -9,7 +9,10 @@ import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
-import { disableOwnedScheduledReportsForAccessRemoval } from '../../lib/scheduledReports/ownershipCleanup.js';
+import {
+  disableOwnedScheduledReportsForAccessRemoval,
+  disableOwnedScheduledReportsForProjectManagerDemotion,
+} from '../../lib/scheduledReports/ownershipCleanup.js';
 import {
   buildProjectUserInvitedResponse,
   buildProjectUserRemovedResponse,
@@ -47,6 +50,7 @@ type ProjectTeamRouterDependencies = {
 };
 
 const PROTECTED_PROJECT_MEMBER_ROLES = new Set(['owner', 'admin', 'project_manager']);
+const SCHEDULED_REPORT_MANAGER_PROJECT_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 function isProjectUserUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
@@ -54,6 +58,10 @@ function isProjectUserUniqueConstraintError(error: unknown): boolean {
 
 function isProtectedProjectMemberRole(role: string | null | undefined): boolean {
   return typeof role === 'string' && PROTECTED_PROJECT_MEMBER_ROLES.has(role);
+}
+
+function canProjectRoleManageScheduledReports(role: string | null | undefined): boolean {
+  return typeof role === 'string' && SCHEDULED_REPORT_MANAGER_PROJECT_ROLES.has(role);
 }
 
 function assertActorMayManageProjectMemberRole(params: {
@@ -363,6 +371,14 @@ export function createProjectTeamRouter({
           where: { id: targetProjectUser.id },
           data: { role },
         });
+        const disabledScheduledReportCount =
+          canProjectRoleManageScheduledReports(oldRole) &&
+          !canProjectRoleManageScheduledReports(role)
+            ? await disableOwnedScheduledReportsForProjectManagerDemotion(tx, {
+                userId: targetUserId,
+                projectId,
+              })
+            : 0;
 
         // M73: write the audit record inside the transaction so a role change
         // cannot persist without it (hard-fail).
@@ -377,6 +393,7 @@ export function createProjectTeamRouter({
             targetUserEmail: targetProjectUser.user.email,
             oldRole,
             newRole: role,
+            disabledScheduledReportCount,
           },
           req,
         });

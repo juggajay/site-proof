@@ -15,7 +15,10 @@ import {
   getUserLimitForTier,
   normalizeSubscriptionTier,
 } from '../../lib/tierLimits.js';
-import { disableOwnedScheduledReportsForAccessRemoval } from '../../lib/scheduledReports/ownershipCleanup.js';
+import {
+  disableOwnedScheduledReportsForAccessRemoval,
+  disableOwnedScheduledReportsForCompanyManagerDemotion,
+} from '../../lib/scheduledReports/ownershipCleanup.js';
 import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
@@ -50,8 +53,13 @@ const COMPANY_MEMBER_INVITATION_EMAIL_FAILURE_COPY = {
   quotaMessage: 'Company invitation email quota exceeded. Please try again later.',
   unavailableMessage: 'Company invitation email could not be sent',
 };
+const SCHEDULED_REPORT_MANAGER_COMPANY_ROLES = new Set(['owner', 'admin']);
 
 export const companyMemberRoutes = Router();
+
+function canCompanyRoleManageScheduledReports(role: string | null | undefined): boolean {
+  return typeof role === 'string' && SCHEDULED_REPORT_MANAGER_COMPANY_ROLES.has(role);
+}
 
 type CompanyMemberInvitationRollbackState = {
   id: string;
@@ -805,6 +813,7 @@ companyMemberRoutes.patch(
 
     let previousRole = '';
     let targetEmail = '';
+    let disabledScheduledReportCount = 0;
 
     await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
@@ -860,6 +869,14 @@ companyMemberRoutes.patch(
         where: { id: memberId },
         data: { roleInCompany: newRole },
       });
+      disabledScheduledReportCount =
+        canCompanyRoleManageScheduledReports(previousRole) &&
+        !canCompanyRoleManageScheduledReports(newRole)
+          ? await disableOwnedScheduledReportsForCompanyManagerDemotion(tx, {
+              userId: memberId,
+              companyId,
+            })
+          : 0;
 
       // M73: write the audit inside the transaction so a privileged role change
       // cannot persist without it (hard-fail).
@@ -873,6 +890,7 @@ companyMemberRoutes.patch(
           targetUserEmail: targetEmail,
           companyId,
           roleInCompany: { from: previousRole, to: newRole },
+          disabledScheduledReportCount,
         },
         req,
       });

@@ -3474,6 +3474,68 @@ describe('Project Team Management', () => {
     });
   });
 
+  it('should disable owned scheduled reports when project manager is demoted', async () => {
+    const membership = await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'project_manager', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'project_manager', status: 'active' },
+    });
+    const schedule = await prisma.scheduledReport.create({
+      data: {
+        projectId,
+        reportType: 'lot-status',
+        frequency: 'daily',
+        timeOfDay: '08:45',
+        recipients: 'demoted-project-manager@example.com',
+        isActive: true,
+        createdById: secondUserId,
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .patch(`/api/projects/${projectId}/users/${secondUserId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          role: 'foreman',
+        });
+
+      expect(res.status).toBe(200);
+      await expect(
+        prisma.scheduledReport.findUnique({
+          where: { id: schedule.id },
+          select: { isActive: true, recipients: true, createdById: true },
+        }),
+      ).resolves.toMatchObject({
+        isActive: false,
+        recipients: '',
+        createdById: null,
+      });
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_user',
+          entityId: membership.id,
+          action: AuditAction.USER_ROLE_CHANGED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(parseAuditLogChanges(auditLog?.changes ?? null)).toMatchObject({
+        oldRole: 'project_manager',
+        newRole: 'foreman',
+        disabledScheduledReportCount: 1,
+      });
+    } finally {
+      await prisma.scheduledReport.deleteMany({ where: { id: schedule.id } });
+      await prisma.projectUser.update({
+        where: { id: membership.id },
+        data: { role: 'viewer', status: 'active' },
+      });
+    }
+  });
+
   it('should remove a project user and write an audit record', async () => {
     const membership = await prisma.projectUser.upsert({
       where: { projectId_userId: { projectId, userId: secondUserId } },

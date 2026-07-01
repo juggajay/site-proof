@@ -380,6 +380,41 @@ describe('Reports API - Project Access', () => {
     }
   });
 
+  it('should treat unsupported signed artifact URLs as missing artifacts', async () => {
+    const run = await prisma.scheduledReportRun.create({
+      data: {
+        scheduleId,
+        projectId,
+        reportType: 'lot-status',
+        status: 'sent',
+        recipientCount: 1,
+        sentCount: 1,
+        generatedAt: new Date('2026-06-30T00:00:00.000Z'),
+        completedAt: new Date('2026-06-30T00:00:00.000Z'),
+        artifactFileUrl:
+          'https://storage.example.com/storage/v1/object/sign/documents/scheduled-reports/private.pdf?token=expired',
+        artifactReportName: 'Lot Status Report - Access Project',
+        artifactFilename: 'Lot_Status_Report.pdf',
+        artifactMimeType: 'application/pdf',
+        artifactFileSize: 100,
+        artifactSha256: 'not-used-for-missing-private-url',
+        artifactCreatedAt: new Date('2026-06-30T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.message).toContain('Scheduled report artifact');
+      expect(res.body.error.message).not.toContain('Invalid upload path');
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+    }
+  });
+
   it('should deny report access for pending project memberships', async () => {
     const res = await request(app)
       .get('/api/reports/summary')
@@ -2596,6 +2631,63 @@ describe('Reports API - Scheduled Reports', () => {
       });
     });
 
+    it('should delete queued digest items when schedule recipients change', async () => {
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId,
+          projectId,
+          reportType: 'lot-status',
+          status: 'sent',
+          recipientCount: 1,
+          sentCount: 1,
+          digestCount: 1,
+          generatedAt: new Date('2026-06-30T02:00:00.000Z'),
+          completedAt: new Date('2026-06-30T02:01:00.000Z'),
+          deliveries: {
+            create: {
+              scheduleId,
+              projectId,
+              recipient: userId,
+              recipientKind: 'digest',
+              status: 'sent',
+              retryable: false,
+            },
+          },
+        },
+        include: { deliveries: true },
+      });
+      const sourceKey = `scheduled-report-delivery:${run.deliveries[0]!.id}`;
+
+      await prisma.notificationDigestItem.create({
+        data: {
+          userId,
+          type: 'scheduledReports',
+          title: 'Queued scheduled report',
+          message: 'This digest item should be removed when recipients change',
+          projectName: 'Reports Access Project',
+          linkUrl: '/reports/scheduled-runs/digest-run/artifact',
+          sourceKey,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .put(`/api/reports/schedules/${scheduleId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            recipients: 'changed-recipient@example.com',
+          });
+
+        expect(res.status).toBe(200);
+        await expect(prisma.notificationDigestItem.count({ where: { sourceKey } })).resolves.toBe(
+          0,
+        );
+      } finally {
+        await prisma.notificationDigestItem.deleteMany({ where: { sourceKey } });
+        await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+      }
+    });
+
     it('should clear delivery failure state when reactivating a paused schedule', async () => {
       const failedSchedule = await prisma.scheduledReport.create({
         data: {
@@ -2705,6 +2797,68 @@ describe('Reports API - Scheduled Reports', () => {
   });
 
   describe('DELETE /api/reports/schedules/:id', () => {
+    it('should delete queued digest items before deleting a scheduled report', async () => {
+      const digestSchedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '09:00',
+          recipients: 'digest-delete@example.com',
+          nextRunAt: new Date(),
+          createdById: userId,
+          isActive: true,
+        },
+      });
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId: digestSchedule.id,
+          projectId,
+          reportType: 'lot-status',
+          status: 'sent',
+          recipientCount: 1,
+          sentCount: 1,
+          digestCount: 1,
+          generatedAt: new Date('2026-06-30T02:00:00.000Z'),
+          completedAt: new Date('2026-06-30T02:01:00.000Z'),
+          deliveries: {
+            create: {
+              scheduleId: digestSchedule.id,
+              projectId,
+              recipient: userId,
+              recipientKind: 'digest',
+              status: 'sent',
+              retryable: false,
+            },
+          },
+        },
+        include: { deliveries: true },
+      });
+      const sourceKey = `scheduled-report-delivery:${run.deliveries[0]!.id}`;
+
+      await prisma.notificationDigestItem.create({
+        data: {
+          userId,
+          type: 'scheduledReports',
+          title: 'Queued scheduled report',
+          message: 'This digest item should be removed when schedule is deleted',
+          projectName: 'Reports Access Project',
+          linkUrl: '/reports/scheduled-runs/digest-run/artifact',
+          sourceKey,
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/reports/schedules/${digestSchedule.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      await expect(prisma.notificationDigestItem.count({ where: { sourceKey } })).resolves.toBe(0);
+      await expect(
+        prisma.scheduledReport.findUnique({ where: { id: digestSchedule.id } }),
+      ).resolves.toBeNull();
+    });
+
     it('should delete a scheduled report', async () => {
       const res = await request(app)
         .delete(`/api/reports/schedules/${scheduleId}`)

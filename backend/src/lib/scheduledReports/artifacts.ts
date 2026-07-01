@@ -159,6 +159,10 @@ function resolveOwnedLocalArtifactPath(
   scheduleId: string,
   runId: string,
 ): string {
+  if (!fileUrl.replace(/\\/g, '/').replace(/^\/+/, '').startsWith('uploads/')) {
+    throw AppError.notFound('Scheduled report artifact');
+  }
+
   const expectedFileUrl = getExpectedLocalArtifactPath(projectId, scheduleId, runId);
   const resolvedPath = resolveUploadPath(fileUrl, SCHEDULED_REPORT_ARTIFACT_ROOT);
   const expectedPath = resolveUploadPath(expectedFileUrl, SCHEDULED_REPORT_ARTIFACT_ROOT);
