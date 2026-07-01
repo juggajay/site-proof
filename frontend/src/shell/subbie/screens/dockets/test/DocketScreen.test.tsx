@@ -334,6 +334,7 @@ describe('subbie shell DocketScreen', () => {
             wetOrDry: 'dry',
             hourlyRate: 180,
             submittedCost: 1170,
+            lotAllocations: [{ lotId: 'lot-1', lotNumber: 'LOT-014', hours: 8 }],
           },
           runningTotal: { cost: 1170 },
         });
@@ -353,6 +354,7 @@ describe('subbie shell DocketScreen', () => {
       plantId: 'plant-1',
       hoursOperated: 8,
       wetOrDry: 'dry',
+      lotAllocations: [{ lotId: 'lot-1', hours: 8 }],
     });
   });
 
@@ -428,6 +430,7 @@ describe('subbie shell DocketScreen', () => {
             hourlyRate: 150,
             submittedCost: 450,
             approvedCost: 300,
+            lotAllocations: [{ lotId: 'lot-1', lotNumber: 'LOT-014', hours: 3 }],
           },
         ],
         totalLabourSubmitted: 592,
@@ -447,6 +450,7 @@ describe('subbie shell DocketScreen', () => {
     expect(screen.getAllByText('$300').length).toBeGreaterThan(0);
     expect(screen.getByText('was 8 h / $592')).toBeInTheDocument();
     expect(screen.getByText('was $450')).toBeInTheDocument();
+    expect(screen.getAllByText('LOT-014').length).toBeGreaterThan(1);
     expect(screen.getByText(/Approved with adjustment/i)).toBeInTheDocument();
     expect(screen.getByText('Reduced to verified site hours')).toBeInTheDocument();
 

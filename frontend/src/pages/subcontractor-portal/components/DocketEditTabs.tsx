@@ -292,6 +292,12 @@ export function DocketEditTabs({
                             {entry.wetOrDry}) = {formatCurrency(entry.submittedCost)}
                           </p>
                         )}
+                        {entry.lotAllocations && entry.lotAllocations.length > 0 && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3" />
+                            {entry.lotAllocations.map((a) => a.lotNumber).join(', ')}
+                          </p>
+                        )}
                       </div>
                       {canEdit && (
                         <Button

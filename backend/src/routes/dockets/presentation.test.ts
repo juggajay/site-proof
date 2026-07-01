@@ -50,6 +50,10 @@ const plantSource: DocketPlantEntrySource = {
   submittedCost: 900,
   approvedCost: 880,
   adjustmentReason: 'fuel adjusted',
+  lotAllocations: [
+    { lotId: 'lot-1', lot: { lotNumber: 'L-100' }, hours: 4 },
+    { lotId: 'lot-2', lot: { lotNumber: 'L-200' }, hours: 2 },
+  ],
 };
 
 const listSource: DocketListItemSource = {
@@ -211,6 +215,10 @@ describe('dockets presentation helpers (pure)', () => {
         hourlyRate: 150,
         submittedCost: 900,
         approvedCost: 880,
+        lotAllocations: [
+          { lotId: 'lot-1', lotNumber: 'L-100', hours: 4 },
+          { lotId: 'lot-2', lotNumber: 'L-200', hours: 2 },
+        ],
       });
       expect('adjustmentReason' in result).toBe(false);
     });
@@ -230,6 +238,7 @@ describe('dockets presentation helpers (pure)', () => {
         'submittedCost',
         'approvedCost',
         'adjustmentReason',
+        'lotAllocations',
       ]);
     });
 
@@ -243,6 +252,10 @@ describe('dockets presentation helpers (pure)', () => {
         approvedCost: null,
         hoursOperated: 6,
         wetOrDry: 'wet',
+        lotAllocations: [
+          { lotId: 'lot-1', lotNumber: 'L-100', hours: 4 },
+          { lotId: 'lot-2', lotNumber: 'L-200', hours: 2 },
+        ],
       });
     });
 
@@ -263,6 +276,7 @@ describe('dockets presentation helpers (pure)', () => {
         submittedCost: null,
         approvedCost: null,
         adjustmentReason: null,
+        lotAllocations: [{ lotId: 'lot-3', lot: { lotNumber: 'L-300' }, hours: null }],
       });
       expect(result).toStrictEqual({
         id: 'pl-2',
@@ -279,6 +293,7 @@ describe('dockets presentation helpers (pure)', () => {
         hourlyRate: 0,
         submittedCost: 0,
         approvedCost: 0,
+        lotAllocations: [{ lotId: 'lot-3', lotNumber: 'L-300', hours: 0 }],
       });
     });
   });

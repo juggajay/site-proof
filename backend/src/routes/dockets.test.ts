@@ -1423,6 +1423,54 @@ describe('Dockets API', () => {
       plantEntryId = res.body.plantEntry.id;
     });
 
+    it('should persist and return plant lot allocations', async () => {
+      const assignedLot = await prisma.lot.findUnique({
+        where: { id: assignedLotId },
+        select: { lotNumber: true },
+      });
+
+      const res = await request(app)
+        .post(`/api/dockets/${docketId}/plant`)
+        .set('Authorization', `Bearer ${subcontractorToken}`)
+        .send({
+          plantId,
+          hoursOperated: 4,
+          wetOrDry: 'dry',
+          lotAllocations: [{ lotId: assignedLotId, hours: 4 }],
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.plantEntry.lotAllocations).toEqual([
+        { lotId: assignedLotId, lotNumber: assignedLot!.lotNumber, hours: 4 },
+      ]);
+
+      const storedAllocations = await prisma.docketPlantLot.findMany({
+        where: { docketPlantId: res.body.plantEntry.id },
+        select: { lotId: true, hours: true },
+      });
+      expect(storedAllocations).toHaveLength(1);
+      expect(storedAllocations[0].lotId).toBe(assignedLotId);
+      expect(Number(storedAllocations[0].hours)).toBe(4);
+    });
+
+    it('should reject plant lot allocation hours above entry hours', async () => {
+      const beforeCount = await prisma.docketPlant.count({ where: { docketId } });
+
+      const res = await request(app)
+        .post(`/api/dockets/${docketId}/plant`)
+        .set('Authorization', `Bearer ${subcontractorToken}`)
+        .send({
+          plantId,
+          hoursOperated: 4,
+          wetOrDry: 'dry',
+          lotAllocations: [{ lotId: assignedLotId, hours: 5 }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('cannot exceed the entry hours');
+      expect(await prisma.docketPlant.count({ where: { docketId } })).toBe(beforeCount);
+    });
+
     it('should get plant entries for docket', async () => {
       const res = await request(app)
         .get(`/api/dockets/${docketId}/plant`)

@@ -380,6 +380,7 @@ async function mockSubcontractorDocketEditApi(
         plantId: string;
         hoursOperated: number;
         wetOrDry: 'dry' | 'wet';
+        lotAllocations?: Array<{ lotId: string; hours: number }>;
       };
       await json(
         {
@@ -396,6 +397,10 @@ async function mockSubcontractorDocketEditApi(
             wetOrDry: body.wetOrDry,
             hourlyRate: 180,
             submittedCost: body.hoursOperated * 180,
+            lotAllocations: body.lotAllocations?.map((allocation) => ({
+              ...allocation,
+              lotNumber: 'LOT-E2E-001',
+            })),
           },
           runningTotal: {
             hours: body.hoursOperated,
@@ -767,7 +772,9 @@ test.describe('Subcontractor portal docket editing', () => {
       plantId: 'e2e-plant',
       hoursOperated: 6.5,
       wetOrDry: 'dry',
+      lotAllocations: [{ lotId: 'e2e-lot', hours: 6.5 }],
     });
     await expect(page.getByText('6.5h × $180/hr')).toBeVisible();
+    await expect(page.getByText('LOT-E2E-001')).toBeVisible();
   });
 });

@@ -333,6 +333,14 @@ export function DocketScreen() {
       });
       return;
     }
+    if (assignedLots.length > 0 && !selectedLotId) {
+      toast({
+        title: 'Missing information',
+        description: 'Please select a lot',
+        variant: 'error',
+      });
+      return;
+    }
     const parsedHoursOperated = parseDailyHoursInput(hoursOperated);
     if (parsedHoursOperated === null) {
       toast({
@@ -353,6 +361,9 @@ export function DocketScreen() {
             plantId: selectedPlant.id,
             hoursOperated: parsedHoursOperated,
             wetOrDry,
+            lotAllocations: selectedLotId
+              ? [{ lotId: selectedLotId, hours: parsedHoursOperated }]
+              : undefined,
           }),
         },
       );
@@ -822,6 +833,9 @@ export function DocketScreen() {
               </div>
               <div className="d">
                 <span className="shell-mono">{entry.hoursOperated} h</span>
+                {entry.lotAllocations?.[0]?.lotNumber && (
+                  <span className="shell-lotchip">{entry.lotAllocations[0].lotNumber}</span>
+                )}
                 <span className="shell-lotchip">{entry.wetOrDry === 'wet' ? 'WET' : 'DRY'}</span>
               </div>
             </div>
@@ -966,6 +980,8 @@ export function DocketScreen() {
           selectedPlant={selectedPlant}
           hoursOperated={hoursOperated}
           wetOrDry={wetOrDry}
+          selectedLotId={selectedLotId}
+          assignedLots={assignedLots}
           plantHoursError={plantHoursError}
           previewHours={previewHours}
           previewCost={previewCost}
@@ -973,6 +989,7 @@ export function DocketScreen() {
           onSelectPlant={setSelectedPlant}
           onHoursOperatedChange={setHoursOperated}
           onWetOrDryChange={setWetOrDry}
+          onSelectedLotIdChange={setSelectedLotId}
           onClose={closeSheet}
           onAdd={addPlantEntry}
         />

@@ -41,6 +41,13 @@ describe('entryMutationResponses', () => {
     wetOrDry: null,
     hourlyRate: '120',
     submittedCost: '780',
+    lotAllocations: [
+      {
+        lotId: 'lot-1',
+        lot: { lotNumber: 'EW-001' },
+        hours: '6.5',
+      },
+    ],
   };
 
   it('builds a created labour entry response with running totals', () => {
@@ -113,6 +120,7 @@ describe('entryMutationResponses', () => {
         wetOrDry: 'dry',
         hourlyRate: 120,
         submittedCost: 780,
+        lotAllocations: [{ lotId: 'lot-1', lotNumber: 'EW-001', hours: 6.5 }],
       },
       runningTotal: {
         hours: 6.5,
@@ -137,6 +145,7 @@ describe('entryMutationResponses', () => {
         wetOrDry: 'dry',
         hourlyRate: 120,
         submittedCost: 780,
+        lotAllocations: [{ lotId: 'lot-1', lotNumber: 'EW-001', hours: 6.5 }],
       },
     });
   });

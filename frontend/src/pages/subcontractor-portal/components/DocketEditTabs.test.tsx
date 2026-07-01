@@ -54,6 +54,7 @@ const approvedDocket: Docket = {
       hourlyRate: 150,
       submittedCost: 450,
       approvedCost: 300,
+      lotAllocations: [{ lotId: 'lot-1', lotNumber: 'LOT-014', hours: 3 }],
     },
   ],
 };
@@ -98,5 +99,6 @@ describe('DocketEditTabs', () => {
     expect(screen.getByText('Excavator')).toBeInTheDocument();
     expect(screen.getAllByText('$300').length).toBeGreaterThan(0);
     expect(screen.getByText('Submitted: 3h × $150/hr (dry) = $450')).toBeInTheDocument();
+    expect(screen.getByText('LOT-014')).toBeInTheDocument();
   });
 });
