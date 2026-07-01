@@ -18,6 +18,23 @@ export interface HoldPointReleaseRequestTemplateData {
   noticeOverrideReason?: string;
 }
 
+export interface HoldPointBatchReleaseRequestTemplateData {
+  superintendentName: string;
+  projectName: string;
+  lotNumber: string;
+  holdPoints: Array<{
+    sequenceNumber?: number | null;
+    description: string;
+    secureReleaseUrl: string;
+    evidencePackageUrl?: string;
+  }>;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  releaseUrl: string;
+  requestedBy: string;
+  noticeHours?: number;
+}
+
 export interface HoldPointChaseTemplateData {
   superintendentName: string;
   projectName: string;
@@ -29,6 +46,158 @@ export interface HoldPointChaseTemplateData {
   evidencePackageUrl?: string;
   releaseUrl: string;
   requestedBy: string;
+}
+
+export function renderHoldPointBatchReleaseRequestEmail(
+  data: HoldPointBatchReleaseRequestTemplateData,
+): RenderedHoldPointEmail {
+  const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
+  const subject = `[SiteProof] Batch Hold Point Release Request - ${subjectLotNumber}`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeSuperintendentName = escapeEmailHtml(data.superintendentName);
+  const safeProjectName = escapeEmailHtml(data.projectName);
+  const safeLotNumber = escapeEmailHtml(data.lotNumber);
+  const safeRequestedBy = escapeEmailHtml(data.requestedBy);
+  const safeScheduledDate = data.scheduledDate ? escapeEmailHtml(data.scheduledDate) : '';
+  const safeScheduledTime = data.scheduledTime ? escapeEmailHtml(data.scheduledTime) : '';
+  const safeReleaseUrl = escapeEmailHtml(data.releaseUrl);
+  const safeNoticeHours =
+    typeof data.noticeHours === 'number' ? escapeEmailHtml(String(data.noticeHours)) : '';
+
+  const scheduledInfo = data.scheduledDate
+    ? `<strong>Scheduled:</strong> ${safeScheduledDate}${safeScheduledTime ? ` at ${safeScheduledTime}` : ''}`
+    : '<strong>Scheduled:</strong> As soon as possible';
+
+  const holdPointRows = data.holdPoints
+    .map((holdPoint, index) => {
+      const safeDescription = escapeEmailHtml(holdPoint.description);
+      const safeSecureReleaseUrl = escapeEmailHtml(holdPoint.secureReleaseUrl);
+      const safeEvidencePackageUrl = holdPoint.evidencePackageUrl
+        ? escapeEmailHtml(holdPoint.evidencePackageUrl)
+        : '';
+      const itemLabel = holdPoint.sequenceNumber
+        ? `${escapeEmailHtml(String(holdPoint.sequenceNumber))}.`
+        : `${index + 1}.`;
+
+      return `
+        <li style="margin: 0 0 18px 0; padding-bottom: 18px; border-bottom: 1px solid #e5e7eb;">
+          <div style="font-weight: 600; margin-bottom: 8px;">${itemLabel} ${safeDescription}</div>
+          <a href="${safeSecureReleaseUrl}" class="button" style="margin-left: 0;">
+            Release via Secure Link
+          </a>
+          ${
+            safeEvidencePackageUrl
+              ? `<a href="${safeEvidencePackageUrl}" class="button secondary">View Evidence Package</a>`
+              : ''
+          }
+        </li>
+      `;
+    })
+    .join('');
+
+  const textHoldPoints = data.holdPoints
+    .map((holdPoint, index) => {
+      const itemLabel = holdPoint.sequenceNumber ? `${holdPoint.sequenceNumber}.` : `${index + 1}.`;
+      return `${itemLabel} ${holdPoint.description}
+Secure release link: ${holdPoint.secureReleaseUrl}${
+        holdPoint.evidencePackageUrl ? `\nEvidence package: ${holdPoint.evidencePackageUrl}` : ''
+      }`;
+    })
+    .join('\n\n');
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeSubject}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 640px; margin: 0 auto; padding: 20px; }
+    .header { background: #dc2626; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .message-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0; }
+    .detail-row { padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+    .detail-row:last-child { border-bottom: none; }
+    .button { display: inline-block; background: #16a34a; color: white; padding: 12px 18px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 10px 5px; font-size: 14px; }
+    .button.secondary { background: #2563eb; }
+    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; background: #f3f4f6; border-radius: 0 0 8px 8px; }
+    .highlight { background: #fef3c7; padding: 12px; border-radius: 6px; border-left: 4px solid #f59e0b; margin: 15px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Hold Point Release Request</h1>
+      <p style="margin: 5px 0 0 0;">${data.holdPoints.length} hold points require review</p>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">Hi ${safeSuperintendentName},</h2>
+      <p>A batch hold point release has been requested on project <strong>${safeProjectName}</strong>.</p>
+
+      <div class="message-box">
+        <div class="detail-row"><strong>Lot:</strong> ${safeLotNumber}</div>
+        <div class="detail-row">${scheduledInfo}</div>
+        <div class="detail-row"><strong>Requested By:</strong> ${safeRequestedBy}</div>
+        ${
+          safeNoticeHours
+            ? `<div class="detail-row"><strong>Notice:</strong> ${safeNoticeHours} hours</div>`
+            : ''
+        }
+      </div>
+
+      <div class="highlight">
+        Review each hold point below. Each secure link releases only that individual hold point.
+      </div>
+
+      <ol style="padding-left: 22px; margin: 20px 0;">
+        ${holdPointRows}
+      </ol>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        Project lot page: <a href="${safeReleaseUrl}">${safeReleaseUrl}</a>
+      </p>
+    </div>
+    <div class="footer">
+      <p>This notification was sent from SiteProof Quality Management System.</p>
+      <p>Project: ${safeProjectName}</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const text = `
+Hi ${data.superintendentName},
+
+A batch hold point release has been requested on project ${data.projectName}.
+
+DETAILS
+-------
+Lot: ${data.lotNumber}
+Scheduled: ${data.scheduledDate ? `${data.scheduledDate}${data.scheduledTime ? ` at ${data.scheduledTime}` : ''}` : 'As soon as possible'}
+Requested By: ${data.requestedBy}
+${typeof data.noticeHours === 'number' ? `Notice: ${data.noticeHours} hours\n` : ''}
+HOLD POINTS
+-----------
+${textHoldPoints}
+
+Project lot page: ${data.releaseUrl}
+
+Each secure link releases only that individual hold point.
+
+---
+This notification was sent from SiteProof Quality Management System.
+Project: ${data.projectName}
+  `;
+
+  return {
+    subject,
+    html,
+    text,
+  };
 }
 
 export function renderHoldPointReleaseRequestEmail(

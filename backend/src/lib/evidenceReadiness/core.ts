@@ -39,6 +39,28 @@ export interface ReadinessBucket {
   support: EvidenceReadinessItem[];
 }
 
+export interface ManagementPrepCounts {
+  releaseGatedHoldPoints: number;
+  missingRequestEvidence: number;
+  missingRecipients: number;
+  fieldActionableItems: number;
+  managementOnlyItems: number;
+}
+
+export interface ManagementPrepInput extends ManagementPrepCounts {
+  holdPointsHref?: string;
+  batchRequestHref?: string;
+  releaseGatedHoldPointIds?: string[];
+  missingRequestEvidenceIds?: string[];
+  missingRecipientIds?: string[];
+  fieldActionableItemIds?: string[];
+  managementOnlyItemIds?: string[];
+}
+
+export type ManagementPrepBucket = ReadinessBucket & {
+  counts: ManagementPrepCounts;
+};
+
 export interface LotEvidenceReadiness {
   lotId: string;
   lotNumber: string;
@@ -52,6 +74,7 @@ export interface LotEvidenceReadiness {
     claimedPercentage?: number;
     remainingPercentage?: number;
   };
+  managementPrep?: ManagementPrepBucket;
   summary: {
     blockerCount: number;
     warningCount: number;
@@ -107,6 +130,7 @@ export interface LotReadinessInput {
     photos: number;
     pendingTests: number;
   };
+  managementPrep?: ManagementPrepInput;
 }
 
 export interface ClaimEvidenceReviewInput {
@@ -215,17 +239,13 @@ export function bucketState(
 }
 
 export function summarize(
-  conformance: Omit<ReadinessBucket, 'state'>,
-  claim: Omit<ReadinessBucket, 'state'>,
+  ...buckets: Array<Omit<ReadinessBucket, 'state'>>
 ): LotEvidenceReadiness['summary'] {
-  const allItems = [
-    ...conformance.blockers,
-    ...conformance.warnings,
-    ...conformance.support,
-    ...claim.blockers,
-    ...claim.warnings,
-    ...claim.support,
-  ];
+  const allItems = buckets.flatMap((bucket) => [
+    ...bucket.blockers,
+    ...bucket.warnings,
+    ...bucket.support,
+  ]);
 
   return {
     blockerCount: allItems.filter((readinessItem) => readinessItem.severity === 'blocker').length,

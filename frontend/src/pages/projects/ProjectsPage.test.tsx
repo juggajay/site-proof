@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
-import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import {
+  fireEvent,
+  renderWithProviders,
+  screen,
+  userEvent,
+  waitFor,
+} from '@/test/renderWithProviders';
 
 // Mutable auth user, hoisted so the vi.mock factory below (which runs before the
 // imports) can close over it. ProjectsPage only reads `user` from useAuth.
@@ -171,6 +177,64 @@ describe('ProjectsPage company-onboarding gating', () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/projects/sample-1');
     });
+  });
+
+  it('defaults the specification set from state and removes unrelated state specs', async () => {
+    const user = userEvent.setup();
+    authState.user = {
+      id: 'u7',
+      email: 'admin@example.com',
+      role: 'admin',
+      roleInCompany: 'admin',
+      companyId: 'c1',
+    };
+
+    renderWithProviders(<ProjectsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Project' }));
+    const stateSelect = screen.getByLabelText('State') as HTMLSelectElement;
+    const specSelect = screen.getByLabelText('Specification Set') as HTMLSelectElement;
+
+    await user.selectOptions(stateSelect, 'QLD');
+
+    expect(specSelect.value).toBe('MRTS');
+    const optionValues = Array.from(specSelect.options).map((option) => option.value);
+    expect(optionValues).toContain('Austroads');
+    expect(optionValues).toContain('MRTS');
+    expect(optionValues).toContain('custom');
+    expect(optionValues).not.toContain('TfNSW');
+    expect(optionValues).not.toContain('VicRoads');
+    expect(optionValues).not.toContain('DIT');
+    expect(optionValues).not.toContain('MRWA');
+  });
+
+  it('keeps Austroads when the user intentionally selected it before changing state', async () => {
+    const user = userEvent.setup();
+    authState.user = {
+      id: 'u8',
+      email: 'admin@example.com',
+      role: 'admin',
+      roleInCompany: 'admin',
+      companyId: 'c1',
+    };
+
+    renderWithProviders(<ProjectsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Project' }));
+    const stateSelect = screen.getByLabelText('State') as HTMLSelectElement;
+    const specSelect = screen.getByLabelText('Specification Set') as HTMLSelectElement;
+
+    await user.selectOptions(stateSelect, 'NSW');
+    expect(specSelect.value).toBe('TfNSW');
+
+    await user.selectOptions(specSelect, 'Austroads');
+    await user.selectOptions(stateSelect, 'WA');
+
+    expect(specSelect.value).toBe('Austroads');
+    const optionValues = Array.from(specSelect.options).map((option) => option.value);
+    expect(optionValues).toContain('Austroads');
+    expect(optionValues).toContain('MRWA');
+    expect(optionValues).not.toContain('TfNSW');
   });
 
   it('redirects subcontractor portal users away instead of offering the company-setup CTA', async () => {

@@ -5,7 +5,7 @@
  *   - Renders hero in "start" state (no diary) with correct copy
  *   - Renders hero in "in-progress" state with progress percentage
  *   - Renders hero in "submitted" state
- *   - Tiles render: Lots, Dockets, Issues, Drawings
+ *   - Tiles render: Lots, Dockets, Issues; Drawings is demoted off home cards
  *   - Live counts shown when data available
  *   - Tiles render without chip when count not available (no fake data)
  *   - Camera button present + opens CaptureModal
@@ -29,6 +29,18 @@ vi.mock('../hooks/useTimeGreeting', () => ({
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({
     user: { fullName: 'Jay Ryan', roleInCompany: 'foreman' },
+  }),
+  getAuthToken: () => null,
+}));
+
+vi.mock('@/lib/api', () => ({
+  apiFetch: vi.fn((url: string) => {
+    if (url.startsWith('/api/dashboard/')) return Promise.resolve({ blocking: [], dueToday: [] });
+    if (url.startsWith('/api/diary/')) return Promise.resolve(null);
+    if (url.startsWith('/api/dockets')) return Promise.resolve({ data: [] });
+    if (url.startsWith('/api/ncrs')) return Promise.resolve({ data: [] });
+    if (url.startsWith('/api/projects')) return Promise.resolve({ projects: [] });
+    return Promise.resolve({});
   }),
 }));
 
@@ -126,7 +138,7 @@ describe('HomeScreen — hub tiles', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Lots, Dockets, Issues, Drawings tiles', async () => {
+  it('renders the daily-work tiles and keeps Drawings demoted off home cards', async () => {
     const HomeScreen = await getHomeScreen();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
 
@@ -135,7 +147,7 @@ describe('HomeScreen — hub tiles', () => {
     expect(screen.getByRole('button', { name: /lots/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /dockets/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /issues/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /drawings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /drawings/i })).not.toBeInTheDocument();
   });
 
   it('shows ITP checks due count when seeded', async () => {
@@ -189,15 +201,13 @@ describe('HomeScreen — hub tiles', () => {
     expect(screen.getByText('0 open')).toBeInTheDocument();
   });
 
-  it('Drawings tile has no count chip (none shown by design)', async () => {
+  it('does not show a Drawings card or fake count chip', async () => {
     const HomeScreen = await getHomeScreen();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
 
     renderWithQueryClient(qc, <HomeScreen />);
 
-    const drawingsBtn = screen.getByRole('button', { name: /drawings/i });
-    // The aria-label should not contain a number for drawings
-    expect(drawingsBtn.getAttribute('aria-label')).toBe('Drawings and documents');
+    expect(screen.queryByRole('button', { name: /drawings/i })).not.toBeInTheDocument();
   });
 });
 

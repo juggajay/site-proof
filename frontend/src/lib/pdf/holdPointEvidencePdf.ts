@@ -1,4 +1,5 @@
 import { formatDateKey } from '../localDate';
+import { drawPdfBrandingHeader } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
@@ -60,6 +61,17 @@ export async function generateHPEvidencePackagePDF(
   };
 
   // ========== HEADER ==========
+  await drawPdfBrandingHeader(doc, data, {
+    logoX: pageWidth - margin - 28,
+    logoY: 5,
+    logoWidth: 28,
+    logoHeight: 16,
+    companyNameX: pageWidth - margin,
+    companyNameY: 10,
+    companyNameAlign: 'right',
+    companyNameColor: [75, 85, 99],
+    companyNameFontSize: 8,
+  });
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);

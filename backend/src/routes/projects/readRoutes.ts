@@ -4,6 +4,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
+import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
 import { buildProjectCostsResponse } from './costResponses.js';
 import { buildProjectDetailResponse, buildProjectListResponse } from './listDetailResponses.js';
 import { createProjectOverviewRouter } from './projectOverviewRoute.js';
@@ -23,6 +24,23 @@ type ProjectReadRouterDependencies = {
 };
 
 const PROJECT_COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];
+
+type CompanyBrandingRecord = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+} | null;
+
+function buildCompanyBranding(company: CompanyBrandingRecord) {
+  if (!company) {
+    return null;
+  }
+
+  return {
+    name: company.name,
+    logoUrl: buildCompanyLogoDisplayUrl(company.id, company.logoUrl),
+  };
+}
 
 function canViewProjectContractValue(role: string | null | undefined): boolean {
   return Boolean(role && PROJECT_COMMERCIAL_ROLES.includes(role));
@@ -180,21 +198,34 @@ export function createProjectReadRouter({
           contractValue: true,
           companyId: true,
           createdAt: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              logoUrl: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
 
       const projectRoleById = new Map(projectUsers.map((pu) => [pu.projectId, pu.role]));
-      const sanitizedProjects = projects.map(({ companyId: projectCompanyId, ...project }) => {
-        const effectiveRole =
-          hasCompanyAdminRole && user.companyId && projectCompanyId === user.companyId
-            ? user.roleInCompany
-            : projectRoleById.get(project.id);
+      const sanitizedProjects = projects.map(
+        ({ companyId: projectCompanyId, company, ...project }) => {
+          const effectiveRole =
+            hasCompanyAdminRole && user.companyId && projectCompanyId === user.companyId
+              ? user.roleInCompany
+              : projectRoleById.get(project.id);
+          const projectWithCompany = {
+            ...project,
+            company: buildCompanyBranding(company),
+          };
 
-        return canViewProjectContractValue(effectiveRole)
-          ? project
-          : { ...project, contractValue: null };
-      });
+          return canViewProjectContractValue(effectiveRole)
+            ? projectWithCompany
+            : { ...projectWithCompany, contractValue: null };
+        },
+      );
 
       res.json(buildProjectListResponse(sanitizedProjects, isStandaloneSubcontractor));
     }),
@@ -251,6 +282,13 @@ export function createProjectReadRouter({
           settings: true, // Feature #697 - HP recipients stored in JSON settings
           createdAt: true,
           updatedAt: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              logoUrl: true,
+            },
+          },
         },
       });
 
@@ -286,7 +324,13 @@ export function createProjectReadRouter({
         role: effectiveRole,
       });
 
-      res.json(buildProjectDetailResponse({ ...visibleProject, currentUserRole: effectiveRole }));
+      res.json(
+        buildProjectDetailResponse({
+          ...visibleProject,
+          company: buildCompanyBranding(visibleProject.company),
+          currentUserRole: effectiveRole,
+        }),
+      );
     }),
   );
 

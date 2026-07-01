@@ -1,5 +1,6 @@
 import type {
   HoldPoint,
+  HoldPointLotOption,
   HoldPointSortDirection,
   HoldPointSortField,
   HoldPointStats,
@@ -51,10 +52,15 @@ export function filterHoldPoints(
   statusFilter: StatusFilter,
   searchQuery: string,
   referenceDate: Date | string = new Date(),
+  selectedLotId = 'all',
 ): HoldPoint[] {
   const query = searchQuery.trim().toLowerCase();
 
   return holdPoints.filter((hp) => {
+    if (selectedLotId !== 'all' && hp.lotId !== selectedLotId) {
+      return false;
+    }
+
     if (statusFilter === 'notice-expired') {
       if (!isNoticeExpired(hp, referenceDate)) return false;
     } else if (statusFilter !== 'all' && hp.status !== statusFilter) {
@@ -68,6 +74,29 @@ export function filterHoldPoints(
     }
 
     return true;
+  });
+}
+
+export function buildHoldPointLotOptions(holdPoints: HoldPoint[]): HoldPointLotOption[] {
+  const optionsByLotId = new Map<string, HoldPointLotOption>();
+
+  holdPoints.forEach((hp) => {
+    const existing = optionsByLotId.get(hp.lotId);
+    if (existing) {
+      existing.holdPointCount += 1;
+      return;
+    }
+
+    optionsByLotId.set(hp.lotId, {
+      lotId: hp.lotId,
+      lotNumber: hp.lotNumber,
+      holdPointCount: 1,
+    });
+  });
+
+  return [...optionsByLotId.values()].sort((a, b) => {
+    const byLotNumber = a.lotNumber.localeCompare(b.lotNumber);
+    return byLotNumber !== 0 ? byLotNumber : a.lotId.localeCompare(b.lotId);
   });
 }
 

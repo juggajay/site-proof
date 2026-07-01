@@ -139,6 +139,90 @@ describe('ITPChecklistTab desktop default expansion', () => {
   });
 });
 
+describe('ITPChecklistTab desktop status actions (UTF-009)', () => {
+  function makeActionInstance(
+    itemOverrides: Partial<ITPChecklistItem> = {},
+    completions: ITPCompletion[] = [],
+  ): ITPInstance {
+    const item = makeChecklistItem({
+      id: 'action-item',
+      description: 'Check compaction result',
+      category: 'Field checks',
+      order: 1,
+      ...itemOverrides,
+    });
+
+    return {
+      id: 'instance-actions',
+      template: {
+        id: 'template-1',
+        name: 'Earthworks ITP',
+        checklistItems: [item],
+      },
+      completions,
+    };
+  }
+
+  it('passes an item through the existing completion handler', async () => {
+    const onToggleCompletion = vi.fn().mockResolvedValue(true);
+    renderChecklist({
+      itpInstance: makeActionInstance({}, [
+        makeCompletion({ checklistItemId: 'action-item', notes: 'Ready to pass' }),
+      ]),
+      onToggleCompletion,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Pass this check/i }));
+
+    expect(onToggleCompletion).toHaveBeenCalledWith('action-item', false, 'Ready to pass');
+  });
+
+  it('opens the existing failed-item flow from the Fail action', async () => {
+    const onOpenFailedModal = vi.fn();
+    renderChecklist({
+      itpInstance: makeActionInstance(),
+      onOpenFailedModal,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Fail this check/i }));
+
+    expect(onOpenFailedModal).toHaveBeenCalledWith({
+      checklistItemId: 'action-item',
+      itemDescription: 'Check compaction result',
+    });
+  });
+
+  it('opens the existing N/A flow from the N/A action', async () => {
+    const onOpenNaModal = vi.fn();
+    renderChecklist({
+      itpInstance: makeActionInstance(),
+      onOpenNaModal,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Mark not applicable/i }));
+
+    expect(onOpenNaModal).toHaveBeenCalledWith({
+      checklistItemId: 'action-item',
+      itemDescription: 'Check compaction result',
+    });
+  });
+
+  it('does not offer Pass for an unreleased hold point', async () => {
+    renderChecklist({
+      itpInstance: makeActionInstance({
+        pointType: 'hold_point',
+        isHoldPoint: true,
+        description: 'Hold point inspection',
+      }),
+    });
+
+    expect(await screen.findByText(/Awaiting hold point release/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pass this check/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fail this check/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mark not applicable/i })).toBeInTheDocument();
+  });
+});
+
 describe('ITPChecklistTab verification field-state (M15)', () => {
   it('shows the head-contractor rejection badge and reason on a rejected item', async () => {
     const instance: ITPInstance = {

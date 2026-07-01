@@ -49,11 +49,14 @@ function renderList(highlightedHpId: string | null) {
       copiedHpId={null}
       generatingPdf={null}
       chasingHpId={null}
+      batchSelectableHoldPointIds={new Set()}
+      selectedBatchHoldPointIds={new Set()}
       onCopyLink={vi.fn()}
       onRequestRelease={vi.fn()}
       onRecordRelease={vi.fn()}
       onChase={vi.fn()}
       onGenerateEvidence={vi.fn()}
+      onToggleBatchSelection={vi.fn()}
       onClearFilter={vi.fn()}
     />,
   );

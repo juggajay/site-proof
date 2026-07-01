@@ -21,6 +21,10 @@ export class JsPdfRecorder {
     JsPdfRecorder.instances.push(this);
   }
 
+  addImage(...args: unknown[]) {
+    this.operations.push({ name: 'addImage', args });
+  }
+
   addPage() {
     this.operations.push({ name: 'addPage', args: [] });
   }

@@ -52,6 +52,13 @@ export const SUBBIE_SHELL_DEFAULT_ROLES: ReadonlySet<string> = new Set([
 
 export type ShellOverride = 'on' | 'off' | null;
 
+export function getShellOverrideFromSearch(search: string): ShellOverride | undefined {
+  const param = new URLSearchParams(search).get('shell');
+  if (param === 'v2') return 'on';
+  if (param === 'off') return 'off';
+  return undefined;
+}
+
 // ── persistence helpers ──────────────────────────────────────────────────────
 
 /** Returns the per-device override: forced on, forced off, or none. */
@@ -88,10 +95,10 @@ export function disableShellFlag(): void {
  */
 export function applyShellFlagFromUrl(): void {
   if (typeof window === 'undefined') return;
-  const param = new URLSearchParams(window.location.search).get('shell');
-  if (param === 'v2') {
+  const override = getShellOverrideFromSearch(window.location.search);
+  if (override === 'on') {
     enableShellFlag();
-  } else if (param === 'off') {
+  } else if (override === 'off') {
     disableShellFlag();
   }
 }

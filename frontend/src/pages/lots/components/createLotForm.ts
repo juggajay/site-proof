@@ -10,12 +10,32 @@ export const LOT_NUMBER_MAX_LENGTH = 50;
 export const CHAINAGE_MIN = 0;
 export const CHAINAGE_MAX = 999999;
 
+export const CREATE_LOT_ACTIVITY_TYPES = [
+  'Earthworks',
+  'Concrete',
+  'Drainage',
+  'Pavement',
+  'Structures',
+  'Utilities',
+  'Landscaping',
+  'Services',
+  'Other',
+] as const;
+
 export const parseChainageInput = (value: string): number | null => {
+  return parseOptionalNonNegativeDecimalInput(value);
+};
+
+export const parseBudgetAmountInput = (value: string): number | null => {
   return parseOptionalNonNegativeDecimalInput(value);
 };
 
 const isValidOptionalChainage = (value: string): boolean => {
   return value.trim() === '' || parseChainageInput(value) !== null;
+};
+
+const isValidOptionalBudgetAmount = (value: string): boolean => {
+  return value.trim() === '' || parseBudgetAmountInput(value) !== null;
 };
 
 export const createLotSchema = z
@@ -36,6 +56,10 @@ export const createLotSchema = z
       .string()
       .trim()
       .refine(isValidOptionalChainage, 'Chainage End must be a valid number'),
+    budgetAmount: z
+      .string()
+      .trim()
+      .refine(isValidOptionalBudgetAmount, 'Budget Amount must be a valid number'),
     assignedSubcontractorId: z.string().trim(),
     canCompleteITP: z.boolean(),
     itpRequiresVerification: z.boolean(),
@@ -89,6 +113,7 @@ export const CREATE_LOT_DEFAULT_VALUES: CreateLotFormData = {
   activityType: 'Earthworks',
   chainageStart: '',
   chainageEnd: '',
+  budgetAmount: '',
   assignedSubcontractorId: '',
   canCompleteITP: false,
   itpRequiresVerification: true,

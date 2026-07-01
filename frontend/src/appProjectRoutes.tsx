@@ -7,15 +7,43 @@ import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
-import { useSubbieShellActive } from '@/shell/shellFlag';
+import { getActiveShellHomePath, getShellOverrideFromSearch } from '@/shell/shellFlag';
 import { ProjectDetailPage } from './appLazyPages';
 import { PROJECT_WORKSPACE_ROLES } from './appRouteRoles';
+
+function getSubcontractorWorkRoute(
+  user: Parameters<typeof getActiveShellHomePath>[0],
+  search: string,
+  projectId?: string,
+  subcontractorCompanyId?: string,
+): string {
+  const shellHomePath = getActiveShellHomePath(user, {
+    override: getShellOverrideFromSearch(search),
+  });
+  const basePath = shellHomePath === '/p' ? '/p/work' : '/subcontractor-portal/work';
+  const params = new URLSearchParams();
+  if (projectId) {
+    params.set('projectId', projectId);
+  }
+  if (subcontractorCompanyId) {
+    params.set('subcontractorCompanyId', subcontractorCompanyId);
+  }
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
+}
 
 function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) {
   const { user } = useAuth();
   const location = useLocation();
-  const subbieShellActive = useSubbieShellActive();
-  const subcontractorCompanyId = new URLSearchParams(location.search).get('subcontractorCompanyId');
+  const subcontractorCompanyId =
+    new URLSearchParams(location.search).get('subcontractorCompanyId') ?? undefined;
+  const workRoute = getSubcontractorWorkRoute(
+    user,
+    location.search,
+    projectId,
+    subcontractorCompanyId,
+  );
+  const workHomeRoute = getSubcontractorWorkRoute(user, location.search);
   const { isLoading, error } = useQuery({
     queryKey: ['subcontractor-project-route-access', user?.id, projectId, subcontractorCompanyId],
     queryFn: async () => {
@@ -31,10 +59,8 @@ function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) 
     retry: false,
   });
 
-  const assignedWorkPath = subbieShellActive ? '/p/work' : '/subcontractor-portal/work';
-
   if (!projectId) {
-    return <Navigate to={assignedWorkPath} replace />;
+    return <Navigate to={workHomeRoute} replace />;
   }
 
   if (isLoading) {
@@ -48,18 +74,13 @@ function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) 
           error,
           'You do not have subcontractor portal access to this project.',
         )}
-        backTo={assignedWorkPath}
+        backTo={workHomeRoute}
         backLabel="Back to Assigned Work"
       />
     );
   }
 
-  const params = new URLSearchParams({ projectId });
-  if (subcontractorCompanyId) {
-    params.set('subcontractorCompanyId', subcontractorCompanyId);
-  }
-
-  return <Navigate to={`${assignedWorkPath}?${params.toString()}`} replace />;
+  return <Navigate to={workRoute} replace />;
 }
 
 export function ProjectDetailRoute() {

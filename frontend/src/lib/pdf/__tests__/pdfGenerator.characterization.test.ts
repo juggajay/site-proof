@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   approvedDocketDetailFixture,
+  dashboardPdfFixture,
   majorNcrDetailFixture,
   notifiedHpEvidencePackageFixture,
   passingTestCertificateFixture,
@@ -10,13 +11,17 @@ import {
   submittedDailyDiaryFixture,
 } from './fixtures';
 import {
+  defaultConformanceOptions,
+  generateConformanceReportPDF,
   generateClaimEvidencePackagePDF,
   generateDailyDiaryPDF,
+  generateDashboardPDF,
   generateDocketDetailPDF,
   generateHPEvidencePackagePDF,
   generateNCRDetailPDF,
   generateTestCertificatePDF,
 } from '../../pdfGenerator';
+import type { ConformanceReportData } from '../../pdfGenerator';
 
 import { JsPdfRecorder, latestPdf, renderedText } from './pdfTestRecorder';
 vi.mock('jspdf', () => ({
@@ -31,6 +36,141 @@ describe('pdfGenerator characterization', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('renders dashboard company branding and continues when the logo URL cannot be loaded', async () => {
+    const failingFetch = vi.fn().mockRejectedValue(new Error('expired logo URL'));
+    vi.stubGlobal('fetch', failingFetch);
+
+    await generateDashboardPDF({
+      ...dashboardPdfFixture,
+      branding: {
+        companyName: 'Gateway Civil Pty Ltd',
+        logoUrl: '/api/company/logo/file/company-1?token=expired',
+      },
+    });
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+
+    expect(failingFetch).toHaveBeenCalledWith(
+      '/api/company/logo/file/company-1?token=expired',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(text).toEqual(expect.arrayContaining(['Dashboard Summary', 'Gateway Civil Pty Ltd']));
+    expect(doc.operations.some((operation) => operation.name === 'addImage')).toBe(false);
+    expect(doc.savedFilename).toBe('siteproof-dashboard-2026-05-28.pdf');
+  });
+
+  it('renders a bounded dashboard logo when branding provides an image data URL', async () => {
+    const logoDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+
+    await generateDashboardPDF({
+      ...dashboardPdfFixture,
+      branding: {
+        companyName: 'Gateway Civil Pty Ltd',
+        logoUrl: logoDataUrl,
+      },
+    });
+
+    const doc = latestPdf();
+    const logo = doc.operations.find((operation) => operation.name === 'addImage');
+
+    expect(logo?.args).toEqual([logoDataUrl, 'PNG', 160, 8, 30, 18]);
+    expect(renderedText(doc)).toContain('Gateway Civil Pty Ltd');
+  });
+
+  it('renders company branding without a logo across creatable PDF report families', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const company = { name: 'Gateway Civil Pty Ltd', logoUrl: null };
+    const withProjectCompany = <
+      TData extends { project: Record<string, unknown>; company?: unknown },
+    >(
+      data: TData,
+    ): TData => ({
+      ...data,
+      company: undefined,
+      project: {
+        ...data.project,
+        company,
+      },
+    });
+    const conformanceFixture: ConformanceReportData = {
+      lot: {
+        lotNumber: 'EW-001',
+        description: 'Bulk earthworks to subgrade level',
+        status: 'conformed',
+        activityType: 'Earthworks',
+        chainageStart: 100,
+        chainageEnd: 350,
+        layer: 'Subgrade',
+        areaZone: null,
+        conformedAt: '2026-05-28T01:00:00.000Z',
+        conformedBy: { fullName: 'Jordan Surveyor', email: 'jordan@example.com' },
+      },
+      project: {
+        name: 'Pacific Highway Upgrade',
+        projectNumber: 'PHU-001',
+      },
+      itp: null,
+      testResults: [],
+      ncrs: [],
+      holdPointReleases: [],
+      photoCount: 0,
+    };
+
+    const brandedCases = [
+      {
+        label: 'conformance report',
+        generate: () =>
+          generateConformanceReportPDF(withProjectCompany(conformanceFixture), {
+            ...defaultConformanceOptions,
+            format: 'standard',
+          }),
+      },
+      {
+        label: 'docket detail',
+        generate: () => generateDocketDetailPDF(withProjectCompany(approvedDocketDetailFixture)),
+      },
+      {
+        label: 'hold-point evidence',
+        generate: () =>
+          generateHPEvidencePackagePDF(withProjectCompany(releasedHpEvidencePackageFixture)),
+      },
+      {
+        label: 'claim evidence',
+        generate: () =>
+          generateClaimEvidencePackagePDF({ ...submittedClaimEvidencePackageFixture, company }),
+      },
+      {
+        label: 'daily diary',
+        generate: () => generateDailyDiaryPDF(withProjectCompany(submittedDailyDiaryFixture)),
+      },
+      {
+        label: 'NCR detail',
+        generate: () => generateNCRDetailPDF(withProjectCompany(majorNcrDetailFixture)),
+      },
+      {
+        label: 'test certificate',
+        generate: () =>
+          generateTestCertificatePDF(withProjectCompany(passingTestCertificateFixture)),
+      },
+    ];
+
+    for (const pdfCase of brandedCases) {
+      await pdfCase.generate();
+      const doc = latestPdf();
+      expect(renderedText(doc), pdfCase.label).toContain('Gateway Civil Pty Ltd');
+      expect(
+        doc.operations.some((operation) => operation.name === 'addImage'),
+        pdfCase.label,
+      ).toBe(false);
+      expect(doc.savedFilename, pdfCase.label).toBeTruthy();
+    }
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('preserves major NCR detail PDF sections, resolution fields, and filename', async () => {

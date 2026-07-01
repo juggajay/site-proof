@@ -7,8 +7,10 @@
  * 3. Loading state: spinner visible, no form
  * 4. Cannot-request state: warning block visible
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { authFetch } from '@/lib/api';
 import { RequestReleaseModal } from './RequestReleaseModal';
 import type { HoldPoint, HoldPointDetails } from '../types';
 
@@ -42,7 +44,7 @@ vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
 // ── Stub apiFetch (preview package) ───────────────────────────────────────
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
-  return { ...actual, apiFetch: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), authFetch: vi.fn() };
 });
 
 function makeHoldPoint(overrides: Partial<HoldPoint> = {}): HoldPoint {
@@ -121,6 +123,65 @@ describe('RequestReleaseModal — desktop', () => {
     expect(
       screen.getByPlaceholderText('inspector@example.com, superintendent@example.com'),
     ).toHaveValue('super@example.com');
+  });
+
+  it('uploads request evidence and includes uploaded document ids in the submit payload', async () => {
+    window.history.pushState({}, '', '/projects/project-1/hold-points');
+    useIsMobileMock.mockReturnValue(false);
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    vi.mocked(authFetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'doc-1', filename: 'proof.pdf' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(
+      <RequestReleaseModal
+        holdPoint={makeHoldPoint()}
+        details={makeDetails()}
+        loading={false}
+        requesting={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const evidenceFile = new File(['release proof'], 'proof.pdf', {
+      type: 'application/pdf',
+    });
+    await user.upload(screen.getByLabelText('Release Evidence'), evidenceFile);
+
+    expect(await screen.findByText('Uploaded: proof.pdf')).toBeInTheDocument();
+    expect(authFetch).toHaveBeenCalledWith(
+      '/api/documents/upload',
+      expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+    );
+    const uploadBody = vi.mocked(authFetch).mock.calls[0][1]?.body as FormData;
+    expect(uploadBody.get('projectId')).toBe('project-1');
+    expect(uploadBody.get('lotId')).toBe('lot-1');
+    expect(uploadBody.get('documentType')).toBe('hold_point_request_evidence');
+    expect(uploadBody.get('category')).toBe('itp_evidence');
+    expect(uploadBody.get('file')).toBe(evidenceFile);
+
+    fireEvent.change(screen.getByLabelText('Scheduled Date'), {
+      target: { value: '2026-07-10' },
+    });
+    fireEvent.change(screen.getByLabelText('Scheduled Time'), {
+      target: { value: '09:30' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Request Release' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      '2026-07-10',
+      '09:30',
+      'inspector@example.com',
+      undefined,
+      undefined,
+      ['doc-1'],
+    );
   });
 });
 

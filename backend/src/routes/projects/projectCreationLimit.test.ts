@@ -38,7 +38,17 @@ describe('assertCompanyProjectCapacity', () => {
     await assertCompanyProjectCapacity(client, 'company-1');
 
     expect(calls).toEqual(['lock', 'company', 'count']);
-    expect(client.project.count).toHaveBeenCalledWith({ where: { companyId: 'company-1' } });
+    expect(client.project.count).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts only non-archived projects toward creation capacity', async () => {
+    const { client } = createProjectLimitClient({ projectCount: 3 });
+
+    await assertCompanyProjectCapacity(client, 'company-1');
+
+    expect(client.project.count).toHaveBeenCalledWith({
+      where: { companyId: 'company-1', status: { not: 'archived' } },
+    });
   });
 
   it('does not reject project creation at the tier limit while enforcement is disabled (G1)', async () => {

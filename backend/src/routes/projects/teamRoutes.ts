@@ -91,6 +91,18 @@ function isCompanyAdminRole(role: string | null | undefined): boolean {
   return role === 'admin' || role === 'owner';
 }
 
+function parseProjectTeamUserLookup(
+  body: Record<string, unknown>,
+  parseProjectRouteParam: (value: unknown, fieldName: string) => string,
+  normalizeProjectUserEmail: (value: unknown) => string,
+): { userId: string; email?: never } | { email: string; userId?: never } {
+  if (body.userId !== undefined && body.userId !== null && body.userId !== '') {
+    return { userId: parseProjectRouteParam(body.userId, 'userId') };
+  }
+
+  return { email: normalizeProjectUserEmail(body.email) };
+}
+
 export function createProjectTeamRouter({
   assertCanReduceProjectAdmin,
   getProjectAccessContext,
@@ -174,6 +186,39 @@ export function createProjectTeamRouter({
     }),
   );
 
+  // GET /api/projects/:id/assignable-users - Get company users not already assigned to a project
+  projectTeamRouter.get(
+    '/:id/assignable-users',
+    asyncHandler(async (req, res) => {
+      const projectId = parseProjectRouteParam(req.params.id, 'id');
+      const user = req.user!;
+
+      const access = await getProjectAccessContext(projectId, user);
+
+      if (!access.isProjectAdmin) {
+        throw AppError.forbidden('Only admins can view assignable users');
+      }
+
+      const assignableUsers = await prisma.user.findMany({
+        where: {
+          companyId: access.project.companyId,
+          projectUsers: {
+            none: { projectId },
+          },
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          roleInCompany: true,
+        },
+        orderBy: [{ fullName: 'asc' }, { email: 'asc' }],
+      });
+
+      res.json({ users: assignableUsers });
+    }),
+  );
+
   // POST /api/projects/:id/users - Invite a user to a project
   projectTeamRouter.post(
     '/:id/users',
@@ -181,7 +226,11 @@ export function createProjectTeamRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const currentUser = req.user!;
       requireBrowserSession(req, 'Project team invitation');
-      const email = normalizeProjectUserEmail(req.body.email);
+      const lookup = parseProjectTeamUserLookup(
+        req.body as Record<string, unknown>,
+        parseProjectRouteParam,
+        normalizeProjectUserEmail,
+      );
       const role = parseProjectTeamRole(req.body.role);
 
       const access = await getProjectAccessContext(projectId, currentUser);
@@ -213,7 +262,7 @@ export function createProjectTeamRouter({
         // Project team assignment links an existing company member to a project;
         // it does not create a new company seat.
         const invitedUser = await tx.user.findUnique({
-          where: { email },
+          where: 'userId' in lookup ? { id: lookup.userId } : { email: lookup.email },
           select: { id: true, email: true, fullName: true, companyId: true },
         });
 

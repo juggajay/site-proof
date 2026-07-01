@@ -7,6 +7,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { parsePagination, getPrismaSkipTake } from '../../lib/pagination.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
 import {
   activeSubcontractorCompanyWhere,
   getActiveSubcontractorPortalCompanyIdsForProject,
@@ -276,7 +277,19 @@ ncrListRouter.get(
         skip,
         take,
         include: {
-          project: { select: { name: true, projectNumber: true } },
+          project: {
+            select: {
+              name: true,
+              projectNumber: true,
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                  logoUrl: true,
+                },
+              },
+            },
+          },
           raisedBy: { select: { fullName: true, email: true } },
           responsibleUser: { select: { id: true, fullName: true, email: true } },
           responsibleSubcontractor: { select: { id: true, companyName: true } },
@@ -315,6 +328,17 @@ ncrListRouter.get(
       prisma.nCR.count({ where: finalWhere }),
     ]);
 
-    res.json(buildNcrListResponse(ncrs, total, page, limit));
+    const ncrsWithCompanyBranding = ncrs.map((ncr) => ({
+      ...ncr,
+      project: {
+        ...ncr.project,
+        company: {
+          name: ncr.project.company.name,
+          logoUrl: buildCompanyLogoDisplayUrl(ncr.project.company.id, ncr.project.company.logoUrl),
+        },
+      },
+    }));
+
+    res.json(buildNcrListResponse(ncrsWithCompanyBranding, total, page, limit));
   }),
 );

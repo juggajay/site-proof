@@ -20,10 +20,12 @@ import { logError } from '@/lib/logger';
 import {
   CHAINAGE_MAX,
   CHAINAGE_MIN,
+  CREATE_LOT_ACTIVITY_TYPES,
   CREATE_LOT_DEFAULT_VALUES,
   LOT_NUMBER_MAX_LENGTH,
   LOT_NUMBER_MIN_LENGTH,
   createLotSchema,
+  parseBudgetAmountInput,
   parseChainageInput,
   type CreateLotFormData,
 } from './createLotForm';
@@ -33,6 +35,9 @@ interface CreateLotModalProps {
   onClose: () => void;
   onSuccess: (lot: Lot) => void;
   projectId: string;
+  canViewBudgets: boolean;
+  initialActivityType?: string;
+  initialAssignedSubcontractorId?: string;
 }
 
 interface ItpTemplateOption {
@@ -47,7 +52,28 @@ interface SubcontractorOption {
   companyName: string;
 }
 
-export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: CreateLotModalProps) {
+const getInitialFormValues = (
+  initialActivityType?: string,
+  initialAssignedSubcontractorId?: string,
+): CreateLotFormData => ({
+  ...CREATE_LOT_DEFAULT_VALUES,
+  activityType:
+    initialActivityType &&
+    (CREATE_LOT_ACTIVITY_TYPES as readonly string[]).includes(initialActivityType)
+      ? initialActivityType
+      : CREATE_LOT_DEFAULT_VALUES.activityType,
+  assignedSubcontractorId: initialAssignedSubcontractorId || '',
+});
+
+export function CreateLotModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  projectId,
+  canViewBudgets,
+  initialActivityType,
+  initialAssignedSubcontractorId,
+}: CreateLotModalProps) {
   const [creating, setCreating] = useState(false);
   const [loadingLookups, setLoadingLookups] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -73,7 +99,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
   } = useForm<CreateLotFormData>({
     resolver: zodResolver(createLotSchema),
     mode: 'onBlur',
-    defaultValues: CREATE_LOT_DEFAULT_VALUES,
+    defaultValues: getInitialFormValues(initialActivityType, initialAssignedSubcontractorId),
   });
 
   const activityType = watch('activityType');
@@ -81,11 +107,11 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
   const canCompleteITP = watch('canCompleteITP');
 
   const resetFormState = useCallback(() => {
-    reset(CREATE_LOT_DEFAULT_VALUES);
+    reset(getInitialFormValues(initialActivityType, initialAssignedSubcontractorId));
     setSuggestedTemplate(null);
     setSelectedTemplateId('');
     setLookupError(null);
-  }, [reset]);
+  }, [initialActivityType, initialAssignedSubcontractorId, reset]);
 
   const fetchLookupData = useCallback(async () => {
     setLoadingLookups(true);
@@ -167,6 +193,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
     try {
       const chainageStart = parseChainageInput(formData.chainageStart);
       const chainageEnd = parseChainageInput(formData.chainageEnd);
+      const budgetAmount = canViewBudgets ? parseBudgetAmountInput(formData.budgetAmount) : null;
 
       const data = await apiFetch<{ lot: Lot }>('/api/lots', {
         method: 'POST',
@@ -177,6 +204,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
           activityType: formData.activityType,
           chainageStart,
           chainageEnd,
+          ...(canViewBudgets && budgetAmount !== null ? { budgetAmount } : {}),
           itpTemplateId: selectedTemplateId || null,
           assignedSubcontractorId: formData.assignedSubcontractorId || null,
           canCompleteITP: formData.assignedSubcontractorId ? formData.canCompleteITP : undefined,
@@ -296,11 +324,11 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
               <Label htmlFor="lot-activity">Activity Type</Label>
               <NativeSelect id="lot-activity" {...register('activityType')} className="mt-1">
                 <option value="Earthworks">Earthworks</option>
-                <option value="Concrete">Concrete</option>
-                <option value="Drainage">Drainage</option>
-                <option value="Pavement">Pavement</option>
-                <option value="Structures">Structures</option>
-                <option value="Utilities">Utilities</option>
+                {CREATE_LOT_ACTIVITY_TYPES.filter((type) => type !== 'Earthworks').map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
               </NativeSelect>
             </div>
 
@@ -384,6 +412,26 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                 )}
               </div>
             </div>
+
+            {canViewBudgets && (
+              <div>
+                <Label htmlFor="lot-budget">Budget Amount ($)</Label>
+                <Input
+                  id="lot-budget"
+                  type="number"
+                  {...register('budgetAmount')}
+                  min={0}
+                  step="0.01"
+                  className={errors.budgetAmount ? 'border-destructive mt-1' : 'mt-1'}
+                  placeholder="Optional lot value"
+                />
+                {errors.budgetAmount && (
+                  <p className="text-sm text-destructive mt-1" role="alert" aria-live="assertive">
+                    {errors.budgetAmount.message}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Subcontractor assignment */}
             {subcontractors.length > 0 && (

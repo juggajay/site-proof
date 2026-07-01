@@ -551,7 +551,7 @@ test.describe('Hold points seeded release contract', () => {
       page.getByText('Track and release hold points requiring third-party inspection'),
     ).toBeVisible();
     await expect(page.getByText('Total HPs')).toBeVisible();
-    await expect(page.getByRole('combobox')).toContainText('Awaiting Release');
+    await expect(page.getByLabel('Filter hold points by status')).toContainText('Awaiting Release');
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
 
     const pendingRow = page.getByRole('row').filter({ hasText: 'LOT-HP-001' });
@@ -605,7 +605,8 @@ test.describe('Hold points seeded release contract', () => {
     await expect(pendingRow.getByText('Awaiting Release')).toBeVisible();
     await expect(pendingRow.getByRole('button', { name: 'Record Manual Release' })).toBeVisible();
 
-    await page.locator('select').selectOption('notified');
+    const statusFilter = page.getByLabel('Filter hold points by status');
+    await statusFilter.selectOption('notified');
     await expect(releasedRow).toBeHidden();
     await expect(pendingRow).toBeVisible();
     await expect(notifiedRow).toBeVisible();
@@ -613,7 +614,7 @@ test.describe('Hold points seeded release contract', () => {
     await notifiedRow.getByRole('button', { name: 'Chase' }).click();
     await expect.poll(() => api.getChaseCount()).toBe(1);
 
-    await page.locator('select').selectOption('all');
+    await statusFilter.selectOption('all');
     await notifiedRow.getByRole('button', { name: 'Record Manual Release' }).click();
 
     const recordModal = page

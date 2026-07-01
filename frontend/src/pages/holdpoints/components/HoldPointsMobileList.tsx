@@ -23,11 +23,14 @@ interface HoldPointsMobileListProps {
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
+  batchSelectableHoldPointIds: Set<string>;
+  selectedBatchHoldPointIds: Set<string>;
   onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  onToggleBatchSelection: (hp: HoldPoint) => void;
   onClearFilter: () => void;
 }
 
@@ -46,11 +49,14 @@ export function HoldPointsMobileList({
   copiedHpId,
   generatingPdf,
   chasingHpId,
+  batchSelectableHoldPointIds,
+  selectedBatchHoldPointIds,
   onCopyLink,
   onRequestRelease,
   onRecordRelease,
   onChase,
   onGenerateEvidence,
+  onToggleBatchSelection,
   onClearFilter,
 }: HoldPointsMobileListProps) {
   const highlightedCardRef = useRef<HTMLDivElement | null>(null);
@@ -114,11 +120,14 @@ export function HoldPointsMobileList({
               copiedHpId={copiedHpId}
               generatingPdf={generatingPdf}
               chasingHpId={chasingHpId}
+              canSelectForBatch={batchSelectableHoldPointIds.has(hp.id)}
+              isSelectedForBatch={selectedBatchHoldPointIds.has(hp.id)}
               onCopyLink={onCopyLink}
               onRequestRelease={onRequestRelease}
               onRecordRelease={onRecordRelease}
               onChase={onChase}
               onGenerateEvidence={onGenerateEvidence}
+              onToggleBatchSelection={onToggleBatchSelection}
             />
           </div>
         );
@@ -132,11 +141,14 @@ interface HoldPointMobileCardProps {
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
+  canSelectForBatch: boolean;
+  isSelectedForBatch: boolean;
   onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  onToggleBatchSelection: (hp: HoldPoint) => void;
 }
 
 const statusVariants: Record<string, 'default' | 'warning' | 'success'> = {
@@ -150,11 +162,14 @@ function HoldPointMobileCard({
   copiedHpId,
   generatingPdf,
   chasingHpId,
+  canSelectForBatch,
+  isSelectedForBatch,
   onCopyLink,
   onRequestRelease,
   onRecordRelease,
   onChase,
   onGenerateEvidence,
+  onToggleBatchSelection,
 }: HoldPointMobileCardProps) {
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
@@ -216,6 +231,18 @@ function HoldPointMobileCard({
       ]}
       actions={
         <div className="flex w-full flex-col gap-2">
+          <label className="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={isSelectedForBatch}
+              disabled={!canSelectForBatch}
+              onChange={() => onToggleBatchSelection(hp)}
+              aria-label={`Select ${hp.description} for batch release`}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span>Batch request</span>
+          </label>
+
           {hp.status === 'pending' && (
             <Button size="lg" className="w-full" onClick={() => onRequestRelease(hp)}>
               Request Release

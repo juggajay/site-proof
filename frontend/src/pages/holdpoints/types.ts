@@ -75,3 +75,9 @@ export interface HoldPointStats {
   releasedThisWeek: number;
   overdue: number;
 }
+
+export interface HoldPointLotOption {
+  lotId: string;
+  lotNumber: string;
+  holdPointCount: number;
+}

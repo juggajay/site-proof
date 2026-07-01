@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
 
 /**
  * Hold-point evidence-package presentation helpers, extracted verbatim from
@@ -86,6 +87,11 @@ export type EvidenceProjectInput = {
   id: string;
   name: string;
   projectNumber: string;
+  company?: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+  } | null;
 };
 
 export type EvidenceItpTemplateInput = {
@@ -254,10 +260,22 @@ export function mapHoldPointEvidenceLot(lot: EvidenceLotInput) {
 }
 
 export function mapHoldPointEvidenceProject(project: EvidenceProjectInput) {
-  return {
+  const mappedProject = {
     id: project.id,
     name: project.name,
     projectNumber: project.projectNumber,
+  };
+
+  if (!project.company) {
+    return mappedProject;
+  }
+
+  return {
+    ...mappedProject,
+    company: {
+      name: project.company.name,
+      logoUrl: buildCompanyLogoDisplayUrl(project.company.id, project.company.logoUrl),
+    },
   };
 }
 

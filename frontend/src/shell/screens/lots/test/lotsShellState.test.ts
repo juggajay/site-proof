@@ -14,6 +14,7 @@ import {
   formatItpOutcomeSummary,
   holdPointGateDecision,
   isItpItemActionable,
+  isSuperintendentSignoffOnlyItem,
   isItpItemResolved,
   itpCompletionDisposition,
   itpHubSummary,
@@ -446,7 +447,42 @@ describe('holdPointGateDecision', () => {
     expect(holdPointGateDecision(item, undefined).kind).toBe('awaiting-release');
   });
 
-  it('canCompleteItem is false only for awaiting-release', () => {
+  it('identifies superintendent non-witness items as sign-off-only', () => {
+    expect(
+      isSuperintendentSignoffOnlyItem(
+        makeItem({ responsibleParty: 'superintendent', pointType: 'standard' }),
+      ),
+    ).toBe(true);
+    expect(
+      isSuperintendentSignoffOnlyItem(
+        makeItem({ responsibleParty: 'superintendent', pointType: 'hold_point' }),
+      ),
+    ).toBe(true);
+    expect(
+      isSuperintendentSignoffOnlyItem(
+        makeItem({ responsibleParty: 'superintendent', pointType: 'witness' }),
+      ),
+    ).toBe(false);
+    expect(isSuperintendentSignoffOnlyItem(makeItem({ responsibleParty: 'contractor' }))).toBe(
+      false,
+    );
+  });
+
+  it('canCompleteItem keeps superintendent sign-off-only items field read-only after release', () => {
+    const item = makeItem({ responsibleParty: 'superintendent', pointType: 'standard' });
+    const released = makeCompletion({
+      holdPointRelease: {
+        releasedByName: 'Super',
+        releasedByOrg: 'Council',
+        releaseMethod: 'email',
+        releasedAt: '2026-06-11',
+      },
+    });
+
+    expect(canCompleteItem(item, released)).toBe(false);
+  });
+
+  it('canCompleteItem is false for awaiting-release and superintendent sign-off-only items', () => {
     const hp = makeItem({ pointType: 'hold_point' });
     expect(canCompleteItem(hp, undefined)).toBe(false);
     expect(canCompleteItem(makeItem(), undefined)).toBe(true);

@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, UserPlus } from 'lucide-react';
+import { Search, Users, UserPlus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,26 @@ interface TeamTabProps {
   canGrantProjectAdmin?: boolean;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+interface AssignableProjectUser {
+  id: string;
+  email: string;
+  fullName?: string | null;
+  roleInCompany?: string | null;
+}
+
+function formatCompanyRole(role?: string | null): string {
+  if (!role) return 'Member';
+  return role
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatAssignableUserOption(user: AssignableProjectUser): string {
+  const displayName = user.fullName?.trim();
+  const role = formatCompanyRole(user.roleInCompany);
+  return displayName ? `${displayName} - ${user.email} - ${role}` : `${user.email} - ${role}`;
+}
 
 function getProjectInviteErrorMessage(error: unknown): string {
   const message = extractErrorMessage(error, 'Failed to invite team member');
@@ -41,7 +60,11 @@ export function TeamTab({
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [teamError, setTeamError] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [assignableUsers, setAssignableUsers] = useState<AssignableProjectUser[]>([]);
+  const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(false);
+  const [assignableUsersError, setAssignableUsersError] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [userSearch, setUserSearch] = useState('');
   const [inviteRole, setInviteRole] = useState('site_engineer');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
@@ -77,6 +100,49 @@ export function TeamTab({
     }
   }, [projectId]);
 
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!projectId) {
+      setAssignableUsers([]);
+      setSelectedUserId('');
+      setAssignableUsersError('Project not found');
+      return;
+    }
+
+    setLoadingAssignableUsers(true);
+    setAssignableUsersError('');
+
+    try {
+      const data = await apiFetch<{ users: AssignableProjectUser[] }>(
+        `/api/projects/${encodeURIComponent(projectId)}/assignable-users`,
+      );
+      const users = data.users || [];
+      setAssignableUsers(users);
+      setSelectedUserId((current) =>
+        current && users.some((user) => user.id === current) ? current : users[0]?.id || '',
+      );
+    } catch (error) {
+      logError('Failed to fetch assignable project users:', error);
+      setAssignableUsers([]);
+      setSelectedUserId('');
+      setAssignableUsersError(
+        extractErrorMessage(error, 'Could not load company users. Please try again.'),
+      );
+    } finally {
+      setLoadingAssignableUsers(false);
+    }
+  }, [projectId]);
+
+  const filteredAssignableUsers = useMemo(() => {
+    const query = userSearch.trim().toLowerCase();
+    if (!query) return assignableUsers;
+
+    return assignableUsers.filter((user) =>
+      [user.fullName, user.email, user.roleInCompany].some((value) =>
+        value?.toLowerCase().includes(query),
+      ),
+    );
+  }, [assignableUsers, userSearch]);
+
   // Fetch team members on mount
   useEffect(() => {
     void fetchTeamMembers();
@@ -90,6 +156,19 @@ export function TeamTab({
     };
   }, []);
 
+  useEffect(() => {
+    if (!showInviteModal) return;
+
+    if (filteredAssignableUsers.length === 0) {
+      setSelectedUserId('');
+      return;
+    }
+
+    if (!filteredAssignableUsers.some((user) => user.id === selectedUserId)) {
+      setSelectedUserId(filteredAssignableUsers[0].id);
+    }
+  }, [filteredAssignableUsers, selectedUserId, showInviteModal]);
+
   const handleOpenInviteModal = () => {
     if (readOnly) return;
 
@@ -98,10 +177,14 @@ export function TeamTab({
       inviteCloseTimeoutRef.current = null;
     }
     setShowInviteModal(true);
-    setInviteEmail('');
+    setAssignableUsers([]);
+    setSelectedUserId('');
+    setUserSearch('');
     setInviteRole('site_engineer');
     setInviteError('');
     setInviteSuccess('');
+    setAssignableUsersError('');
+    void fetchAssignableUsers();
   };
 
   const handleCloseInviteModal = () => {
@@ -113,21 +196,15 @@ export function TeamTab({
     setShowInviteModal(false);
     setInviteError('');
     setInviteSuccess('');
+    setAssignableUsersError('');
   };
 
   const handleInviteTeamMember = async () => {
     if (readOnly) return;
     if (invitingRef.current) return;
 
-    const email = inviteEmail.trim().toLowerCase();
-
-    if (!email) {
-      setInviteError('Email is required');
-      return;
-    }
-
-    if (!EMAIL_PATTERN.test(email)) {
-      setInviteError('Enter a valid email address');
+    if (!selectedUserId) {
+      setInviteError('Select a company user to add to this project');
       return;
     }
 
@@ -145,12 +222,14 @@ export function TeamTab({
       await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/users`, {
         method: 'POST',
         body: JSON.stringify({
-          email,
+          userId: selectedUserId,
           role: inviteRole,
         }),
       });
 
-      setInviteSuccess(`Invitation sent to ${email}`);
+      const selectedUser = assignableUsers.find((user) => user.id === selectedUserId);
+      setInviteSuccess(`Added ${selectedUser?.fullName || selectedUser?.email || 'team member'}`);
+      setAssignableUsers((current) => current.filter((user) => user.id !== selectedUserId));
       // Refresh team members list
       await fetchTeamMembers();
       // Close modal after short delay
@@ -255,7 +334,7 @@ export function TeamTab({
             disabled={readOnly}
           >
             <UserPlus className="h-4 w-4" />
-            Invite Team Member
+            Add Team Member
           </Button>
         </div>
         <div className="rounded-lg border p-4">
@@ -267,10 +346,10 @@ export function TeamTab({
         </div>
       </div>
 
-      {/* Invite Team Member Modal */}
+      {/* Add Team Member Modal */}
       {showInviteModal && (
         <Modal onClose={handleCloseInviteModal}>
-          <ModalHeader>Invite Team Member</ModalHeader>
+          <ModalHeader>Add Team Member</ModalHeader>
           <ModalBody>
             {inviteError && (
               <div
@@ -289,17 +368,68 @@ export function TeamTab({
 
             <div className="space-y-4">
               <div>
-                <Label htmlFor="project-settings-invite-email" className="mb-1">
-                  Email Address
+                <Label htmlFor="project-settings-user-search" className="mb-1">
+                  Search company users
                 </Label>
-                <Input
-                  id="project-settings-invite-email"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="team.member@example.com"
-                  disabled={inviting}
-                />
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="project-settings-user-search"
+                    type="search"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search by name, email, or company role"
+                    disabled={inviting || loadingAssignableUsers}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="project-settings-assignable-user" className="mb-1">
+                  Project member
+                </Label>
+                {loadingAssignableUsers ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                    Loading company users...
+                  </div>
+                ) : assignableUsersError ? (
+                  <div
+                    role="alert"
+                    className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+                  >
+                    <p>{assignableUsersError}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => void fetchAssignableUsers()}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : assignableUsers.length === 0 ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                    All company users are already on this project.
+                  </div>
+                ) : filteredAssignableUsers.length === 0 ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                    No company users match your search.
+                  </div>
+                ) : (
+                  <NativeSelect
+                    id="project-settings-assignable-user"
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    disabled={inviting}
+                  >
+                    {filteredAssignableUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {formatAssignableUserOption(user)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                )}
               </div>
 
               <div>
@@ -325,8 +455,11 @@ export function TeamTab({
             <Button variant="outline" onClick={handleCloseInviteModal} disabled={inviting}>
               Cancel
             </Button>
-            <Button onClick={handleInviteTeamMember} disabled={inviting || !inviteEmail.trim()}>
-              {inviting ? 'Sending...' : 'Send Invitation'}
+            <Button
+              onClick={handleInviteTeamMember}
+              disabled={inviting || loadingAssignableUsers || !selectedUserId}
+            >
+              {inviting ? 'Adding...' : 'Add to Project'}
             </Button>
           </ModalFooter>
         </Modal>
