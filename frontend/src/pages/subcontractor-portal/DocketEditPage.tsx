@@ -6,6 +6,7 @@ import { extractErrorMessage, handleApiError, isForbidden } from '@/lib/errorHan
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 import { useAuth } from '@/lib/auth';
+import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import {
   buildDocketEditRoute,
   buildDocketDetailPath,
@@ -51,6 +52,7 @@ export function DocketEditPage() {
   const { docketId } = useParams();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { isOnline } = useOfflineStatus();
   const userId = user?.id;
   const requestedProjectId = searchParams.get('projectId');
   const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
@@ -93,6 +95,7 @@ export function DocketEditPage() {
     hoursOperated,
     wetOrDry,
     selectedLotId,
+    labourHoursError,
     plantHoursError,
     previewHours,
     previewCost,
@@ -190,7 +193,7 @@ export function DocketEditPage() {
   const saveDocketNotes = useCallback(
     async (targetDocket?: Docket | null) => {
       const currentDocket = targetDocket || docket;
-      if (!currentDocket || !isEditableDocketStatus(currentDocket.status)) {
+      if (!isOnline || !currentDocket || !isEditableDocketStatus(currentDocket.status)) {
         return currentDocket;
       }
 
@@ -214,7 +217,7 @@ export function DocketEditPage() {
       );
       return updatedDocket;
     },
-    [docket, notes],
+    [docket, isOnline, notes],
   );
 
   const handleNotesBlur = () => {
@@ -226,11 +229,27 @@ export function DocketEditPage() {
 
   // Add labour entry
   const addLabourEntry = async () => {
+    if (!isOnline) {
+      toast({
+        title: 'Reconnect to edit docket',
+        description: 'Dockets need a connection before adding labour hours.',
+        variant: 'warning',
+      });
+      return;
+    }
     if (!selectedEmployee || !selectedLotId) {
       toast({
         title: 'Missing information',
         description: 'Please select an employee and a lot',
         variant: 'error',
+      });
+      return;
+    }
+    if (labourHoursError) {
+      toast({
+        title: 'Invalid time range',
+        description: labourHoursError,
+        variant: 'warning',
       });
       return;
     }
@@ -275,6 +294,14 @@ export function DocketEditPage() {
 
   // Add plant entry
   const addPlantEntry = async () => {
+    if (!isOnline) {
+      toast({
+        title: 'Reconnect to edit docket',
+        description: 'Dockets need a connection before adding plant hours.',
+        variant: 'warning',
+      });
+      return;
+    }
     if (!selectedPlant) {
       toast({
         title: 'Missing information',
@@ -333,17 +360,33 @@ export function DocketEditPage() {
   // Delete labour entry
   const deleteLabourEntry = async (entryId: string) => {
     if (!docket) return;
+    if (!isOnline) {
+      toast({
+        title: 'Reconnect to edit docket',
+        description: 'Dockets need a connection before deleting entries.',
+        variant: 'warning',
+      });
+      return;
+    }
 
     try {
-      await apiFetch(buildDocketLabourEntryPath(docket.id, entryId), {
-        method: 'DELETE',
-      });
+      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
+        buildDocketLabourEntryPath(docket.id, entryId),
+        {
+          method: 'DELETE',
+        },
+      );
 
       // Update local state
       setDocket((prev) => {
         if (!prev) return prev;
         const removed = prev.labourEntries.find((e) => e.id === entryId);
-        const newTotal = prev.totalLabourSubmitted - (removed?.submittedCost || 0);
+        const fallbackTotal = Math.max(
+          0,
+          prev.totalLabourSubmitted - (removed?.submittedCost || 0),
+        );
+        const newTotal =
+          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
         return {
           ...prev,
           labourEntries: prev.labourEntries.filter((e) => e.id !== entryId),
@@ -360,17 +403,30 @@ export function DocketEditPage() {
   // Delete plant entry
   const deletePlantEntry = async (entryId: string) => {
     if (!docket) return;
+    if (!isOnline) {
+      toast({
+        title: 'Reconnect to edit docket',
+        description: 'Dockets need a connection before deleting entries.',
+        variant: 'warning',
+      });
+      return;
+    }
 
     try {
-      await apiFetch(buildDocketPlantEntryPath(docket.id, entryId), {
-        method: 'DELETE',
-      });
+      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
+        buildDocketPlantEntryPath(docket.id, entryId),
+        {
+          method: 'DELETE',
+        },
+      );
 
       // Update local state
       setDocket((prev) => {
         if (!prev) return prev;
         const removed = prev.plantEntries.find((e) => e.id === entryId);
-        const newTotal = prev.totalPlantSubmitted - (removed?.submittedCost || 0);
+        const fallbackTotal = Math.max(0, prev.totalPlantSubmitted - (removed?.submittedCost || 0));
+        const newTotal =
+          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
         return {
           ...prev,
           plantEntries: prev.plantEntries.filter((e) => e.id !== entryId),
@@ -419,8 +475,10 @@ export function DocketEditPage() {
   const totalCost = docket ? getDocketDisplayTotalCost(docket) : 0;
 
   const canEdit = isEditableDocketStatus(docket?.status);
+  const canWrite = canEdit && isOnline;
   const canSubmit = Boolean(
     docket &&
+    isOnline &&
     (docket.status === 'draft' || docket.status === 'rejected') &&
     (docket.labourEntries.length > 0 || docket.plantEntries.length > 0),
   );
@@ -449,6 +507,8 @@ export function DocketEditPage() {
         respondingToQuery={respondingToQuery}
         assignedLotCount={assignedLots.length}
         lotsModuleDisabled={lotsModuleDisabled}
+        canEdit={canEdit}
+        isOnline={isOnline}
         onQueryResponseChange={setQueryResponse}
         onRespondToQuery={respondToQuery}
       />
@@ -458,7 +518,7 @@ export function DocketEditPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         docket={docket}
-        canEdit={canEdit}
+        canEdit={canWrite}
         approvedEmployees={approvedEmployees}
         approvedPlant={approvedPlant}
         myCompanyLink={myCompanyLink}
@@ -494,6 +554,7 @@ export function DocketEditPage() {
           wetOrDry={wetOrDry}
           selectedLotId={selectedLotId}
           assignedLots={assignedLots}
+          labourHoursError={labourHoursError}
           plantHoursError={plantHoursError}
           previewHours={previewHours}
           previewCost={previewCost}

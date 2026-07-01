@@ -538,6 +538,15 @@ describe('dockets presentation helpers (pure)', () => {
         message: 'Plant entry deleted',
       });
     });
+
+    it('can include canonical running totals after entry deletion', () => {
+      expect(
+        buildDocketEntryDeletedResponse('Labour entry deleted', { hours: 4.5, cost: 409.5 }),
+      ).toStrictEqual({
+        message: 'Labour entry deleted',
+        runningTotal: { hours: 4.5, cost: 409.5 },
+      });
+    });
   });
 
   describe('buildDocketDetailResponse', () => {

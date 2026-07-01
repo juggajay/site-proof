@@ -688,6 +688,67 @@ describe('subbie shell DocketScreen', () => {
     });
   });
 
+  it('entry delete refreshes the grand total from runningTotal.cost', async () => {
+    apiFetchMock.mockImplementation((url: string, opts?: { method?: string }) => {
+      const method = opts?.method ?? 'GET';
+      if (url.startsWith('/api/subcontractors/my-company'))
+        return Promise.resolve({
+          company: {
+            id: 'c1',
+            projectId: PROJECT_ID,
+            projectName: 'Demo',
+            employees: [APPROVED_EMP],
+            plant: [APPROVED_PLANT],
+          },
+        });
+      if (url.startsWith('/api/lots')) return Promise.resolve({ lots: ASSIGNED_LOTS });
+      if (/^\/api\/dockets\?/.test(url)) return Promise.resolve({ dockets: [] });
+      if (/^\/api\/dockets\/dk-1$/.test(url) && method === 'GET')
+        return Promise.resolve({
+          docket: makeDocket({
+            labourEntries: [
+              {
+                id: 'le-1',
+                employee: { id: 'e1', name: 'Tommy Vella', role: 'Pipe Layer' },
+                startTime: '07:00',
+                finishTime: '15:00',
+                submittedHours: 8,
+                submittedCost: 592,
+                lotAllocations: [],
+              },
+              {
+                id: 'le-2',
+                employee: { id: 'e2', name: 'Rina Costa', role: 'Labourer' },
+                startTime: '07:00',
+                finishTime: '09:00',
+                submittedHours: 2,
+                submittedCost: 148,
+                lotAllocations: [],
+              },
+            ],
+            totalLabourSubmitted: 740,
+          }),
+        });
+      if (/\/labour\/le-1$/.test(url) && method === 'DELETE')
+        return Promise.resolve({ runningTotal: { cost: 111 } });
+      return Promise.resolve({});
+    });
+    renderDocket('/p/docket/dk-1');
+
+    const totalBefore = (await screen.findByText("Today's total")).closest('.grand')!;
+    expect(within(totalBefore as HTMLElement).getByText('$740')).toBeInTheDocument();
+
+    const removeBtn = await screen.findByRole('button', { name: /Remove Tommy Vella/ });
+    fireEvent.click(removeBtn);
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /Remove Tommy Vella/ })).not.toBeInTheDocument();
+    });
+    const totalAfter = screen.getByText("Today's total").closest('.grand')!;
+    expect(within(totalAfter as HTMLElement).getByText('$111')).toBeInTheDocument();
+  });
+
   it('a slow docket GET after the lazy create cannot erase the first entry (seed-once guard)', async () => {
     // The race: ensureDocket's navigate(replace) enables the docket GET while
     // the first labour POST is still in flight. The GET was dispatched before

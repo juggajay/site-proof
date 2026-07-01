@@ -290,8 +290,9 @@ export function buildDocketPlantEntriesResponse(
 
 export function buildDocketEntryDeletedResponse(
   message: 'Labour entry deleted' | 'Plant entry deleted',
+  runningTotal?: { hours: number; cost: number },
 ) {
-  return { message };
+  return runningTotal ? { message, runningTotal } : { message };
 }
 
 // =============================================================================

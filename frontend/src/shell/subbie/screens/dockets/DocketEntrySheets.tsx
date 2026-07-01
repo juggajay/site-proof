@@ -36,6 +36,7 @@ export function LabourSheet({
   finishTime,
   selectedLotId,
   assignedLots,
+  labourHoursError,
   previewHours,
   previewCost,
   saving,
@@ -54,6 +55,7 @@ export function LabourSheet({
   finishTime: string;
   selectedLotId: string;
   assignedLots: Lot[];
+  labourHoursError: string | null;
   previewHours: number;
   previewCost: number;
   saving: boolean;
@@ -65,7 +67,7 @@ export function LabourSheet({
   onAdd: () => void;
 }) {
   const lotMissing = !selectedLotId;
-  const canAdd = Boolean(selectedEmployee) && !lotMissing && !saving;
+  const canAdd = Boolean(selectedEmployee) && !lotMissing && !labourHoursError && !saving;
 
   return (
     <BottomSheet isOpen={open} onClose={onClose} title="Add crew hours">
@@ -159,6 +161,9 @@ export function LabourSheet({
             />
           </div>
         </div>
+        {labourHoursError && (
+          <p className="-mt-1 text-[12.5px] text-destructive">{labourHoursError}</p>
+        )}
 
         {/* Lot allocation — auto-selected when exactly one assigned lot. */}
         <div>

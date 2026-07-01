@@ -38,6 +38,31 @@ describe('assertDocketSubmittable (pure, DB-free)', () => {
     expect(() => assertDocketSubmittable(docket)).not.toThrow();
   });
 
+  it('can reuse the entry and lot checks for queried docket responses', () => {
+    const docket = makeDocket({ status: 'queried', labourEntries: [labourEntry(1)] });
+    expect(() =>
+      assertDocketSubmittable(docket, {
+        allowedStatuses: ['queried'],
+        invalidStatusMessage: 'Only queried dockets can be responded to',
+      }),
+    ).not.toThrow();
+  });
+
+  it('uses the caller message when a reused guard rejects the status', () => {
+    const docket = makeDocket({
+      status: 'pending_approval',
+      labourEntries: [labourEntry(1)],
+    });
+    const err = captureError(() =>
+      assertDocketSubmittable(docket, {
+        allowedStatuses: ['queried'],
+        invalidStatusMessage: 'Only queried dockets can be responded to',
+      }),
+    );
+    expect(err.code).toBe('VALIDATION_ERROR');
+    expect(err.message).toBe('Only queried dockets can be responded to');
+  });
+
   it('throws LOT_REQUIRED when any labour entry has no lot allocation', () => {
     const docket = makeDocket({
       status: 'draft',

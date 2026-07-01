@@ -6,6 +6,7 @@ const DEFAULT_START_TIME = '07:00';
 const DEFAULT_FINISH_TIME = '15:30';
 const DEFAULT_HOURS_OPERATED = '8';
 const DEFAULT_WET_OR_DRY = 'dry';
+export const LABOUR_HOURS_INPUT_ERROR = 'Start and finish times must produce more than 0 hours.';
 
 export type DocketEntrySheetType = 'labour' | 'plant';
 export type WetOrDry = 'dry' | 'wet';
@@ -91,6 +92,9 @@ export function useDocketEntrySheetState(assignedLots: Lot[]) {
     ],
   );
 
+  const labourHoursError =
+    sheetType === 'labour' && previewHours <= 0 ? LABOUR_HOURS_INPUT_ERROR : null;
+
   return {
     sheetOpen,
     sheetType,
@@ -101,6 +105,7 @@ export function useDocketEntrySheetState(assignedLots: Lot[]) {
     hoursOperated,
     wetOrDry,
     selectedLotId,
+    labourHoursError,
     plantHoursError,
     previewHours,
     previewCost,

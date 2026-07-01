@@ -8,6 +8,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
+  DOCKET_APPROVERS,
   canViewDocketAmounts,
   getLinkedSubcontractorCompanyIdsForProject,
   isDocketEntryEditable,
@@ -484,12 +485,11 @@ docketsRouter.post(
       req,
     });
 
-    // Feature #926 - Notify foremen and approvers about pending docket
-    // Get all project users who can approve dockets (foreman, site_manager, project_manager, admin, owner)
+    // Feature #926 - Notify project users who can approve dockets.
     const projectUsers = await prisma.projectUser.findMany({
       where: {
         projectId: docket.projectId,
-        role: { in: ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'] },
+        role: { in: DOCKET_APPROVERS },
         status: 'active',
       },
       include: {

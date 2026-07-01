@@ -66,6 +66,8 @@ describe('DocketEditPagePanels', () => {
         queryResponse=""
         respondingToQuery={false}
         assignedLotCount={0}
+        canEdit
+        isOnline
         lotsModuleDisabled={false}
         onQueryResponseChange={onQueryResponseChange}
         onRespondToQuery={onRespondToQuery}
@@ -88,6 +90,8 @@ describe('DocketEditPagePanels', () => {
         queryResponse=""
         respondingToQuery={false}
         assignedLotCount={1}
+        canEdit
+        isOnline
         lotsModuleDisabled={false}
         onQueryResponseChange={onQueryResponseChange}
         onRespondToQuery={onRespondToQuery}
@@ -108,6 +112,8 @@ describe('DocketEditPagePanels', () => {
         queryResponse=""
         respondingToQuery={false}
         assignedLotCount={1}
+        canEdit={false}
+        isOnline
         lotsModuleDisabled={false}
         onQueryResponseChange={onQueryResponseChange}
         onRespondToQuery={onRespondToQuery}
@@ -125,6 +131,8 @@ describe('DocketEditPagePanels', () => {
         queryResponse=""
         respondingToQuery={false}
         assignedLotCount={0}
+        canEdit
+        isOnline
         lotsModuleDisabled
         onQueryResponseChange={vi.fn()}
         onRespondToQuery={vi.fn()}
@@ -136,6 +144,26 @@ describe('DocketEditPagePanels', () => {
     expect(screen.getByText(/has not enabled assigned work \(lot\) access/i)).toBeInTheDocument();
     expect(screen.getByText(/plant-only dockets still work/i)).toBeInTheDocument();
     expect(screen.queryByText(/no lots have been assigned/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an offline write guard and disables query response controls', () => {
+    renderInRouter(
+      <DocketEditNotices
+        docket={{ ...baseDocket, status: 'queried', foremanNotes: 'Clarify trench hours' }}
+        queryResponse="Ready to resend"
+        respondingToQuery={false}
+        assignedLotCount={1}
+        canEdit
+        isOnline={false}
+        lotsModuleDisabled={false}
+        onQueryResponseChange={vi.fn()}
+        onRespondToQuery={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/dockets need a connection/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/reconnect to reply/i)).toBeDisabled();
+    expect(screen.getByRole('button', { name: /respond & resubmit/i })).toBeDisabled();
   });
 
   it('renders action bar states and reports submit clicks', () => {
