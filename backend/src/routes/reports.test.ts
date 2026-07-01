@@ -2550,6 +2550,29 @@ describe('Reports API - Scheduled Reports', () => {
     });
 
     it('should deactivate a scheduled report', async () => {
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId,
+          projectId,
+          reportType: 'lot-status',
+          status: 'processing',
+          recipientCount: 1,
+          generatedAt: new Date('2026-06-30T02:00:00.000Z'),
+          deliveries: {
+            create: {
+              scheduleId,
+              projectId,
+              recipient: 'paused@example.com',
+              recipientKind: 'email',
+              status: 'sending',
+              retryable: false,
+              attemptCount: 1,
+              lockedUntil: new Date('2026-06-30T02:15:00.000Z'),
+            },
+          },
+        },
+      });
+
       const res = await request(app)
         .put(`/api/reports/schedules/${scheduleId}`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -2559,6 +2582,18 @@ describe('Reports API - Scheduled Reports', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.schedule.isActive).toBe(false);
+
+      const cancelledRun = await prisma.scheduledReportRun.findUniqueOrThrow({
+        where: { id: run.id },
+        include: { deliveries: true },
+      });
+      expect(cancelledRun.status).toBe('cancelled');
+      expect(cancelledRun.deliveries[0]).toMatchObject({
+        status: 'cancelled',
+        retryable: false,
+        lockedUntil: null,
+        nextAttemptAt: null,
+      });
     });
 
     it('should clear delivery failure state when reactivating a paused schedule', async () => {

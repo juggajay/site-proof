@@ -496,6 +496,31 @@ async function claimScheduledReportRecipientDelivery(
   return claim.count === 1;
 }
 
+export async function canSendClaimedScheduledReportRecipientDelivery(
+  deliveryId: string,
+): Promise<boolean> {
+  const delivery = await prisma.scheduledReportRecipientDelivery.findUnique({
+    where: { id: deliveryId },
+    select: {
+      status: true,
+      schedule: {
+        select: {
+          isActive: true,
+          project: {
+            select: { status: true },
+          },
+        },
+      },
+    },
+  });
+
+  return (
+    delivery?.status === 'sending' &&
+    delivery.schedule.isActive &&
+    delivery.schedule.project.status === 'active'
+  );
+}
+
 async function markScheduledReportRecipientDeliverySent(deliveryId: string): Promise<void> {
   await prisma.scheduledReportRecipientDelivery.update({
     where: { id: deliveryId },
@@ -651,6 +676,10 @@ async function sendImmediateScheduledReportEmail(
       continue;
     }
 
+    if (!(await canSendClaimedScheduledReportRecipientDelivery(delivery.id))) {
+      continue;
+    }
+
     const emailResult = await sendScheduledReportEmail({
       to: delivery.recipient,
       projectName: schedule.project.name,
@@ -690,6 +719,10 @@ async function queueScheduledReportDigestDeliveries(
     }
 
     try {
+      if (!(await canSendClaimedScheduledReportRecipientDelivery(delivery.id))) {
+        continue;
+      }
+
       await queueScheduledReportDigestItem(schedule, document, delivery.recipient, delivery.id);
       await markScheduledReportRecipientDeliverySent(delivery.id);
     } catch (error) {

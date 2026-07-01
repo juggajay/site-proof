@@ -7,6 +7,8 @@ const E2E_OUTCOME_PASS_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000003';
 const E2E_OUTCOME_NA_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000004';
 const E2E_OUTCOME_FAIL_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000005';
 const E2E_SUBCONTRACTOR_COMPANY_ID = 'e2e-subcontractor-company';
+const E2E_PROJECT_CANDIDATE_EMAIL = 'project-candidate@example.com';
+const E2E_PROJECT_CANDIDATE_NAME = 'E2E Project Candidate';
 
 function subbieMobileQuery() {
   return `projectId=${E2E_PROJECT_ID}&subcontractorCompanyId=${E2E_SUBCONTRACTOR_COMPANY_ID}`;
@@ -90,6 +92,212 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
     await expect(page.getByText('E2E Owner')).toBeVisible();
     await expect(page.getByText('E2E Admin')).toBeVisible();
+  });
+
+  test('owner manages project team membership against the real backend', async ({ page }) => {
+    await loginAsOwner(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
+    await expect(page.getByText('E2E Owner')).toBeVisible();
+    await expect(page.getByText('E2E Admin')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Invite User' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
+    await inviteDialog.getByLabel('Email Address').fill(E2E_PROJECT_CANDIDATE_EMAIL);
+    await inviteDialog.getByLabel('Role').selectOption('quality_manager');
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(`/api/projects/${E2E_PROJECT_ID}/users`) &&
+          response.request().method() === 'POST' &&
+          response.status() === 201,
+      ),
+      inviteDialog.getByRole('button', { name: 'Send Invite' }).click(),
+    ]);
+
+    await expect(
+      page.getByText(`${E2E_PROJECT_CANDIDATE_EMAIL} has been added to the project.`),
+    ).toBeVisible();
+    const candidateRow = page.locator('tbody tr').filter({ hasText: E2E_PROJECT_CANDIDATE_NAME });
+    await expect(candidateRow).toBeVisible();
+    await expect(candidateRow.getByText('Quality Manager')).toBeVisible();
+
+    await page
+      .getByRole('button', { name: `Change role for ${E2E_PROJECT_CANDIDATE_NAME}` })
+      .click();
+    await page
+      .getByRole('combobox', { name: `Role for ${E2E_PROJECT_CANDIDATE_NAME}` })
+      .selectOption('foreman');
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(`/api/projects/${E2E_PROJECT_ID}/users/`) &&
+          response.request().method() === 'PATCH' &&
+          response.status() === 200,
+      ),
+      page.getByRole('button', { name: `Save role for ${E2E_PROJECT_CANDIDATE_NAME}` }).click(),
+    ]);
+
+    await expect(
+      page.getByText(`${E2E_PROJECT_CANDIDATE_NAME}'s role has been updated.`),
+    ).toBeVisible();
+    await expect(candidateRow.getByText('Foreman')).toBeVisible();
+
+    await page
+      .getByRole('button', { name: `Remove ${E2E_PROJECT_CANDIDATE_NAME} from project` })
+      .click();
+    const removeDialog = page.getByRole('alertdialog').filter({ hasText: 'Remove Project User' });
+    await expect(
+      removeDialog.getByText('They will lose access to this project immediately.'),
+    ).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(`/api/projects/${E2E_PROJECT_ID}/users/`) &&
+          response.request().method() === 'DELETE' &&
+          response.status() === 200,
+      ),
+      removeDialog.getByRole('button', { name: 'Remove' }).click(),
+    ]);
+
+    await expect(
+      page.getByText(`${E2E_PROJECT_CANDIDATE_NAME} has been removed from the project.`),
+    ).toBeVisible();
+    await expect(candidateRow).toBeHidden();
+  });
+
+  test('owner module shortcut changes persist through the real backend', async ({ page }) => {
+    await loginAsOwner(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/settings?tab=modules`);
+
+    await expect(page.getByRole('heading', { name: 'Project Settings' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Modules' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const docketsModule = page.locator('#project-module-dockets');
+    await expect(docketsModule).toBeChecked();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(`/api/projects/${E2E_PROJECT_ID}`) &&
+          response.request().method() === 'PATCH' &&
+          response.status() === 200,
+      ),
+      docketsModule.click(),
+    ]);
+    await expect(docketsModule).not.toBeChecked();
+
+    await page.reload();
+    await expect(page.getByRole('tab', { name: 'Modules' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(docketsModule).not.toBeChecked();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes(`/api/projects/${E2E_PROJECT_ID}`) &&
+          response.request().method() === 'PATCH' &&
+          response.status() === 200,
+      ),
+      docketsModule.click(),
+    ]);
+    await expect(docketsModule).toBeChecked();
+  });
+
+  test('owner creates, pauses, reactivates, and deletes scheduled report emails', async ({
+    page,
+  }) => {
+    await loginAsOwner(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+
+    await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
+    await page.getByRole('button', { name: 'Schedule Reports' }).click();
+    const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
+    await expect(scheduleDialog).toBeVisible();
+    await expect(scheduleDialog.getByText('No scheduled reports yet')).toBeVisible();
+
+    await scheduleDialog.getByRole('button', { name: '+ New Schedule' }).click();
+    await scheduleDialog.getByLabel('Report Type').selectOption('lot-status');
+    await scheduleDialog.getByLabel('Frequency').selectOption('daily');
+    await scheduleDialog.getByLabel('Time').fill('06:45');
+    await scheduleDialog
+      .getByLabel('Recipients (comma-separated emails)')
+      .fill('stage133-report@example.com');
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/reports/schedules') &&
+          response.request().method() === 'POST' &&
+          response.status() === 201,
+      ),
+      scheduleDialog.getByRole('button', { name: 'Create Schedule' }).click(),
+    ]);
+
+    await expect(page.getByText('The report schedule was saved.')).toBeVisible();
+    const scheduleCard = scheduleDialog.locator('.rounded-lg').filter({
+      hasText: 'Lot Status Report',
+    });
+    await expect(scheduleCard).toBeVisible();
+    await expect(scheduleCard.getByText('Daily at 06:45')).toBeVisible();
+    await expect(scheduleCard.getByText('Active')).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/reports/schedules/') &&
+          response.request().method() === 'PUT' &&
+          response.status() === 200,
+      ),
+      scheduleCard.getByRole('button', { name: 'Pause' }).click(),
+    ]);
+    await expect(page.getByText('The scheduled report was updated.')).toBeVisible();
+    await expect(scheduleCard.getByText('Paused')).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/reports/schedules/') &&
+          response.request().method() === 'PUT' &&
+          response.status() === 200,
+      ),
+      scheduleCard.getByRole('button', { name: 'Activate' }).click(),
+    ]);
+    await expect(scheduleCard.getByText('Active')).toBeVisible();
+
+    await scheduleCard.getByRole('button', { name: 'Delete' }).click();
+    const deleteDialog = page
+      .getByRole('alertdialog')
+      .filter({ hasText: 'Delete Scheduled Report' });
+    await expect(
+      deleteDialog.getByText('Recipients will no longer receive it automatically.'),
+    ).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/reports/schedules/') &&
+          response.request().method() === 'DELETE' &&
+          response.status() === 200,
+      ),
+      deleteDialog.getByRole('button', { name: 'Delete' }).click(),
+    ]);
+
+    await expect(
+      page.getByText('Recipients will no longer receive this report automatically.'),
+    ).toBeVisible();
+    await expect(scheduleDialog.getByText('No scheduled reports yet')).toBeVisible();
   });
 
   test('assigned subcontractor can open the seeded lot ITP with completion access', async ({

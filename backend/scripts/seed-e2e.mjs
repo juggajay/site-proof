@@ -51,6 +51,7 @@ const ids = {
   ownerUser: 'e2e-owner-user',
   adminUser: 'e2e-admin-user',
   foremanUser: 'e2e-foreman-user',
+  projectTeamCandidateUser: 'e2e-project-team-candidate-user',
   subcontractorUser: 'e2e-subcontractor-user',
   project: 'e2e-project',
   ownerProjectUser: 'e2e-owner-project-user',
@@ -74,6 +75,16 @@ const ids = {
   diary: 'e2e-diary',
   docket: 'e2e-docket',
 };
+
+const projectSettings = JSON.stringify({
+  enabledModules: {
+    costTracking: true,
+    progressClaims: true,
+    subcontractors: true,
+    dockets: true,
+    dailyDiary: true,
+  },
+});
 
 async function upsertItpCompletion(itpInstanceId, checklistItemId) {
   const existing = await prisma.iTPCompletion.findFirst({
@@ -190,6 +201,7 @@ async function main() {
       status: 'active',
       state: 'NSW',
       specificationSet: 'TfNSW',
+      settings: projectSettings,
     },
     create: {
       id: ids.project,
@@ -199,8 +211,41 @@ async function main() {
       status: 'active',
       state: 'NSW',
       specificationSet: 'TfNSW',
+      settings: projectSettings,
     },
   });
+
+  const projectTeamCandidateUser = await prisma.user.upsert({
+    where: { email: 'project-candidate@example.com' },
+    update: {
+      passwordHash,
+      fullName: 'E2E Project Candidate',
+      companyId: company.id,
+      roleInCompany: 'viewer',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+    create: {
+      id: ids.projectTeamCandidateUser,
+      email: 'project-candidate@example.com',
+      passwordHash,
+      fullName: 'E2E Project Candidate',
+      companyId: company.id,
+      roleInCompany: 'viewer',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+  });
+
+  await prisma.projectUser.deleteMany({
+    where: { projectId: project.id, userId: projectTeamCandidateUser.id },
+  });
+
+  await prisma.scheduledReport.deleteMany({ where: { projectId: project.id } });
 
   await prisma.projectUser.upsert({
     where: { id: ids.ownerProjectUser },

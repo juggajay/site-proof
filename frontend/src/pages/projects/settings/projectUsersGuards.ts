@@ -4,7 +4,7 @@ export type ProjectUserGuardRecord = {
   status: string;
 };
 
-export const PROJECT_TEAM_LEAD_ROLES = new Set(['admin', 'project_manager']);
+export const PROJECT_TEAM_LEAD_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 export function isActiveProjectTeamLead(user: Pick<ProjectUserGuardRecord, 'role' | 'status'>) {
   return user.status === 'active' && PROJECT_TEAM_LEAD_ROLES.has(user.role);

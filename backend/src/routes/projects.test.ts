@@ -3041,6 +3041,78 @@ describe('Project Team Management', () => {
     expect(res.body.error.message).toContain('own project role');
   });
 
+  it('treats owner project rows as project-admin rows for demotion and removal guards', async () => {
+    const suffix = Date.now();
+    const owner = await registerTestUser(app, {
+      emailPrefix: `team-owner-row-${suffix}`,
+      fullName: 'Team Owner Row',
+      companyId,
+      roleInCompany: 'owner',
+    });
+
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId } },
+      update: { role: 'viewer', status: 'active' },
+      create: { projectId, userId, role: 'viewer', status: 'active' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'viewer', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+    });
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: owner.userId,
+        role: 'owner',
+        status: 'active',
+        acceptedAt: new Date(),
+      },
+    });
+
+    try {
+      const demoteRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${owner.userId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ role: 'viewer' });
+
+      expect(demoteRes.status).toBe(400);
+      expect(demoteRes.body.error.message).toContain(
+        'Project must have at least one active admin or project manager',
+      );
+
+      const removeRes = await request(app)
+        .delete(`/api/projects/${projectId}/users/${owner.userId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(removeRes.status).toBe(400);
+      expect(removeRes.body.error.message).toContain(
+        'Project must have at least one active admin or project manager',
+      );
+
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId: owner.userId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'owner', status: 'active' });
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: owner.userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: owner.userId } });
+      await prisma.user.delete({ where: { id: owner.userId } }).catch(() => {});
+      await prisma.projectUser.upsert({
+        where: { projectId_userId: { projectId, userId } },
+        update: { role: 'admin', status: 'active' },
+        create: { projectId, userId, role: 'admin', status: 'active' },
+      });
+      await prisma.projectUser.upsert({
+        where: { projectId_userId: { projectId, userId: secondUserId } },
+        update: { role: 'viewer', status: 'active' },
+        create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+      });
+    }
+  });
+
   it('should reject project managers managing project administrators', async () => {
     const suffix = Date.now();
     const managerEmail = `team-project-manager-${suffix}@example.com`;
@@ -3354,7 +3426,13 @@ describe('Project Team Management', () => {
     }
   });
 
-  it('should update user role in project', async () => {
+  it('should update user role in project and write an audit record', async () => {
+    const membership = await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'viewer', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+    });
+
     const res = await request(app)
       .patch(`/api/projects/${projectId}/users/${secondUserId}`)
       .set('Authorization', `Bearer ${authToken}`)
@@ -3363,5 +3441,75 @@ describe('Project Team Management', () => {
       });
 
     expect(res.status).toBe(200);
+    expect(res.body.projectUser).toMatchObject({
+      id: membership.id,
+      userId: secondUserId,
+      email: secondUserEmail,
+      role: 'foreman',
+    });
+
+    await expect(
+      prisma.projectUser.findUnique({
+        where: { id: membership.id },
+        select: { role: true, status: true },
+      }),
+    ).resolves.toMatchObject({ role: 'foreman', status: 'active' });
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'project_user',
+        entityId: membership.id,
+        action: AuditAction.USER_ROLE_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      targetUserId: secondUserId,
+      targetUserEmail: secondUserEmail,
+      oldRole: 'viewer',
+      newRole: 'foreman',
+    });
+  });
+
+  it('should remove a project user and write an audit record', async () => {
+    const membership = await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'viewer', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+    });
+
+    const res = await request(app)
+      .delete(`/api/projects/${projectId}/users/${secondUserId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.removedUser).toMatchObject({
+      userId: secondUserId,
+      email: secondUserEmail,
+    });
+
+    await expect(
+      prisma.projectUser.findUnique({ where: { id: membership.id } }),
+    ).resolves.toBeNull();
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'project_user',
+        entityId: membership.id,
+        action: AuditAction.USER_REMOVED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      removedUserId: secondUserId,
+      removedUserEmail: secondUserEmail,
+      removedUserRole: 'viewer',
+    });
   });
 });

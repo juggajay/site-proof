@@ -16,24 +16,26 @@ function user(overrides: Partial<ProjectUserGuardRecord>): ProjectUserGuardRecor
 }
 
 describe('project user guard helpers', () => {
-  it('counts only active admins and project managers as project team leads', () => {
+  it('counts only active owners, admins, and project managers as project team leads', () => {
     const users = [
+      user({ id: 'owner', role: 'owner' }),
       user({ id: 'admin', role: 'admin' }),
       user({ id: 'pm', role: 'project_manager' }),
       user({ id: 'pending-admin', role: 'admin', status: 'pending' }),
       user({ id: 'viewer', role: 'viewer' }),
     ];
 
-    expect(countActiveProjectTeamLeads(users)).toBe(2);
+    expect(countActiveProjectTeamLeads(users)).toBe(3);
   });
 
-  it('blocks removing or demoting the last active project team lead', () => {
-    const lead = user({ id: 'lead', role: 'admin' });
+  it('blocks removing or demoting the last active project team lead, including owner rows', () => {
+    const lead = user({ id: 'lead', role: 'owner' });
     const users = [lead, user({ id: 'viewer', role: 'viewer' })];
 
     expect(isLastActiveProjectTeamLead(lead, users)).toBe(true);
     expect(canRemoveProjectUser(lead, users)).toBe(false);
     expect(canAssignProjectRole(lead, 'viewer', users)).toBe(false);
+    expect(canAssignProjectRole(lead, 'owner', users)).toBe(true);
     expect(canAssignProjectRole(lead, 'project_manager', users)).toBe(true);
   });
 

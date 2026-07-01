@@ -6,6 +6,7 @@ import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { prisma } from './prisma.js';
 import {
   calculateNextScheduledReportRunAt,
+  canSendClaimedScheduledReportRecipientDelivery,
   processDueScheduledReports,
 } from './scheduledReports.js';
 import { calculateScheduledReportArtifactSha256 } from './scheduledReports/artifacts.js';
@@ -553,6 +554,53 @@ describe('processDueScheduledReports', () => {
 
       const secondRun = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
       expect(secondRun.processed).toBe(0);
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('refuses to send a claimed delivery after the schedule is paused or deleted', async () => {
+    const { company, project, now, schedule } = await createDueScheduleFixture();
+    const run = await prisma.scheduledReportRun.create({
+      data: {
+        scheduleId: schedule.id,
+        projectId: project.id,
+        reportType: 'lot-status',
+        status: 'processing',
+        recipientCount: 1,
+        generatedAt: now,
+      },
+    });
+    const delivery = await prisma.scheduledReportRecipientDelivery.create({
+      data: {
+        runId: run.id,
+        scheduleId: schedule.id,
+        projectId: project.id,
+        recipient: 'claimed@example.com',
+        recipientKind: 'email',
+        status: 'sending',
+        retryable: false,
+        attemptCount: 1,
+        lastAttemptAt: now,
+        lockedUntil: new Date(now.getTime() + 60_000),
+      },
+    });
+
+    try {
+      await expect(canSendClaimedScheduledReportRecipientDelivery(delivery.id)).resolves.toBe(true);
+
+      await prisma.scheduledReport.update({
+        where: { id: schedule.id },
+        data: { isActive: false },
+      });
+      await expect(canSendClaimedScheduledReportRecipientDelivery(delivery.id)).resolves.toBe(
+        false,
+      );
+
+      await prisma.scheduledReport.delete({ where: { id: schedule.id } });
+      await expect(canSendClaimedScheduledReportRecipientDelivery(delivery.id)).resolves.toBe(
+        false,
+      );
     } finally {
       await cleanupProject(project.id, company.id);
     }

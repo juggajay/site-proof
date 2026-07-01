@@ -5,7 +5,7 @@ import { logError } from '@/lib/logger';
 import type { Project } from './types';
 
 export const PROJECT_ADMIN_ROLES = ['owner', 'admin', 'project_manager'] as const;
-export const PROTECTED_PROJECT_MANAGEMENT_ROLES = ['admin', 'project_manager'] as const;
+export const PROTECTED_PROJECT_MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager'] as const;
 
 export const ARCHIVED_PROJECT_SETTINGS_MESSAGE =
   'Archived projects are read-only. Restore the project before editing.';
