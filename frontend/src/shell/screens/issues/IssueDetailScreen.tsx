@@ -32,6 +32,7 @@ import { type NcrEvidenceItem, useNcrEvidence } from './useNcrEvidence';
 import { useNcrRespond } from './useNcrRespond';
 import {
   type IssuePillTone,
+  canAddNcrEvidence,
   canForemanRespond,
   issueSeverityLabel,
   issueSeverityTone,
@@ -123,15 +124,17 @@ export function IssueDetailScreen() {
   const visiblePhotos = photos.filter((item) => item.document?.id);
   const documentEvidence = evidence.filter((item) => item.document?.id && !isPhotoEvidence(item));
   const hasEvidence = visiblePhotos.length > 0 || documentEvidence.length > 0;
+  const canAddPhotoEvidence = canAddNcrEvidence(ncr, user);
+  const addPhotoDisabled = !isOnline || uploading || !canAddPhotoEvidence;
 
   const handleAddPhotoClick = () => {
-    if (!isOnline || uploading) return;
+    if (addPhotoDisabled) return;
     photoInputRef.current?.click();
   };
   const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
+    if (!file || !canAddPhotoEvidence) return;
     await addPhoto(file);
   };
   const handleOpenEvidence = (item: NcrEvidenceItem) => {
@@ -308,7 +311,7 @@ export function IssueDetailScreen() {
           <button
             type="button"
             onClick={handleAddPhotoClick}
-            disabled={!isOnline || uploading}
+            disabled={addPhotoDisabled}
             className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground underline underline-offset-2 touch-manipulation disabled:opacity-50"
           >
             {uploading ? (
@@ -322,6 +325,11 @@ export function IssueDetailScreen() {
         {!isOnline && (
           <p className="mt-2 text-[13px] font-semibold text-warning" role="status">
             Photo evidence needs signal: reconnect to upload.
+          </p>
+        )}
+        {isOnline && !canAddPhotoEvidence && (
+          <p className="mt-2 text-[13px] font-semibold text-muted-foreground" role="status">
+            Photo evidence can only be added to open issues by eligible project users.
           </p>
         )}
         <input

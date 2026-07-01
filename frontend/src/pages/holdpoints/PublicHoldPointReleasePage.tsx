@@ -618,6 +618,7 @@ export function PublicHoldPointReleasePage() {
                   onChange={setSignatureDataUrl}
                   required
                   fullWidth
+                  disabled={!canRelease || submitting}
                   label="Sign to confirm release"
                 />
                 {!signatureDataUrl && (

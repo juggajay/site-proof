@@ -96,6 +96,11 @@ function findNewFilesWithContent(beforeFiles: Set<string>, content: Buffer): str
     .filter((file) => fs.readFileSync(path.join(certificatesDir, file)).equals(content));
 }
 
+async function expectTestResultAndDocumentDeleted(testResultId: string, documentId: string) {
+  expect(await prisma.testResult.findUnique({ where: { id: testResultId } })).toBeNull();
+  expect(await prisma.document.findUnique({ where: { id: documentId } })).toBeNull();
+}
+
 async function registerTestUser(fullName: string, roleInCompany: string, companyId: string | null) {
   const { token, userId } = await registerSharedTestUser(app, {
     fullName,
@@ -2582,6 +2587,10 @@ describe('Test Results API', () => {
     });
 
     it('replaces the existing certificate and deletes the old Document row', async () => {
+      const firstFilePath = path.join(certificatesDir, 'first-cert.pdf');
+      await fs.promises.writeFile(firstFilePath, PDF_BYTES);
+      createdCertificatePaths.push(firstFilePath);
+
       const firstDoc = await prisma.document.create({
         data: {
           projectId,
@@ -2607,6 +2616,8 @@ describe('Test Results API', () => {
       });
 
       try {
+        expect(fs.existsSync(firstFilePath)).toBe(true);
+
         const res = await request(app)
           .post(`/api/test-results/${testResult.id}/certificate`)
           .set('Authorization', `Bearer ${authToken}`)
@@ -2627,7 +2638,9 @@ describe('Test Results API', () => {
         });
         expect(linked.certificateDocId).toBe(newDocId);
         expect(await prisma.document.findUnique({ where: { id: firstDoc.id } })).toBeNull();
+        expect(fs.existsSync(firstFilePath)).toBe(false);
       } finally {
+        await fs.promises.rm(firstFilePath, { force: true });
         await prisma.testResult.deleteMany({ where: { id: testResult.id } });
         await prisma.document.deleteMany({
           where: { projectId, filename: { in: ['first-cert.pdf', 'replacement-cert.pdf'] } },
@@ -3083,6 +3096,40 @@ describe('Test Results API', () => {
   });
 
   describe('DELETE /api/test-results/:id', () => {
+    async function createDeletableTestResultWithCertificate(params: {
+      filename: string;
+      fileUrl: string;
+    }) {
+      const doc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: params.filename,
+          fileUrl: params.fileUrl,
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const tr = await prisma.testResult.create({
+        data: {
+          projectId,
+          testType: 'CBR Test',
+          certificateDocId: doc.id,
+        },
+      });
+
+      return { doc, tr };
+    }
+
+    async function deleteTestResultThroughApi(testResultId: string) {
+      const res = await request(app)
+        .delete(`/api/test-results/${testResultId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(res.status).toBe(200);
+    }
+
     it('blocks deleting verified test results', async () => {
       const testResult = await createEnteredTestResult();
       const verifiedAt = new Date('2026-07-08T09:10:11.000Z');
@@ -3139,33 +3186,20 @@ describe('Test Results API', () => {
 
     it('should delete the linked Document row when a local certificate is attached', async () => {
       // Pre-seed a Document with a local-disk fileUrl + a TestResult that links to it
-      const doc = await prisma.document.create({
-        data: {
-          projectId,
-          documentType: 'test_certificate',
-          category: 'test_results',
-          filename: 'local-cert.pdf',
-          fileUrl: '/uploads/certificates/cert-local-fixture.pdf',
-          fileSize: 100,
-          mimeType: 'application/pdf',
-          uploadedById: userId,
-        },
-      });
-      const tr = await prisma.testResult.create({
-        data: {
-          projectId,
-          testType: 'CBR Test',
-          certificateDocId: doc.id,
-        },
+      const localCertificatePath = path.join(certificatesDir, 'cert-local-fixture.pdf');
+      await fs.promises.writeFile(localCertificatePath, Buffer.from('%PDF-1.4\nlocal cert\n%%EOF'));
+      createdCertificatePaths.push(localCertificatePath);
+
+      const { doc, tr } = await createDeletableTestResultWithCertificate({
+        filename: 'local-cert.pdf',
+        fileUrl: '/uploads/certificates/cert-local-fixture.pdf',
       });
 
-      const res = await request(app)
-        .delete(`/api/test-results/${tr.id}`)
-        .set('Authorization', `Bearer ${authToken}`);
+      expect(fs.existsSync(localCertificatePath)).toBe(true);
 
-      expect(res.status).toBe(200);
-      expect(await prisma.testResult.findUnique({ where: { id: tr.id } })).toBeNull();
-      expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+      await deleteTestResultThroughApi(tr.id);
+      await expectTestResultAndDocumentDeleted(tr.id, doc.id);
+      expect(fs.existsSync(localCertificatePath)).toBe(false);
 
       // Supabase remove must not have been called for a local certificate.
       expect(mockGetSupabaseClient).not.toHaveBeenCalled();
@@ -3190,33 +3224,13 @@ describe('Test Results API', () => {
         const storagePath = `certificates/${projectId}/cert-supabase-fixture.pdf`;
         const supabaseFileUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${storagePath}`;
 
-        const doc = await prisma.document.create({
-          data: {
-            projectId,
-            documentType: 'test_certificate',
-            category: 'test_results',
-            filename: 'supabase-cert.pdf',
-            fileUrl: supabaseFileUrl,
-            fileSize: 100,
-            mimeType: 'application/pdf',
-            uploadedById: userId,
-          },
-        });
-        const tr = await prisma.testResult.create({
-          data: {
-            projectId,
-            testType: 'CBR Test',
-            certificateDocId: doc.id,
-          },
+        const { doc, tr } = await createDeletableTestResultWithCertificate({
+          filename: 'supabase-cert.pdf',
+          fileUrl: supabaseFileUrl,
         });
 
-        const res = await request(app)
-          .delete(`/api/test-results/${tr.id}`)
-          .set('Authorization', `Bearer ${authToken}`);
-
-        expect(res.status).toBe(200);
-        expect(await prisma.testResult.findUnique({ where: { id: tr.id } })).toBeNull();
-        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+        await deleteTestResultThroughApi(tr.id);
+        await expectTestResultAndDocumentDeleted(tr.id, doc.id);
 
         expect(mockRemove).toHaveBeenCalledOnce();
         expect(mockRemove).toHaveBeenCalledWith([storagePath]);

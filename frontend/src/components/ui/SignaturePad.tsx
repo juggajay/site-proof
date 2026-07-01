@@ -10,6 +10,7 @@ interface SignaturePadProps {
   className?: string;
   label?: string;
   required?: boolean;
+  disabled?: boolean;
   /**
    * When true the canvas stretches to 100% of its container width rather than
    * using the fixed `width` prop.  Pass this inside a bottom-sheet so the
@@ -36,6 +37,7 @@ export function SignaturePad({
   className = '',
   label = 'Signature',
   required = false,
+  disabled = false,
   fullWidth = false,
   mobileHeight = 160,
 }: SignaturePadProps) {
@@ -125,7 +127,7 @@ export function SignaturePad({
 
   const startDrawing = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
-      if (!ctx) return;
+      if (!ctx || disabled) return;
       e.preventDefault();
 
       const { x, y } = getCoordinates(e);
@@ -136,7 +138,7 @@ export function SignaturePad({
       setHasSignature(true);
       setIsFocused(true);
     },
-    [ctx, getCoordinates],
+    [ctx, disabled, getCoordinates],
   );
 
   const draw = useCallback(
@@ -165,7 +167,7 @@ export function SignaturePad({
   }, [ctx, onChange]);
 
   const clearSignature = useCallback(() => {
-    if (!ctx || !canvasRef.current) return;
+    if (!ctx || !canvasRef.current || disabled) return;
 
     const drawWidth = fullWidth ? (containerRef.current?.clientWidth ?? width) : width;
     const drawHeight = fullWidth ? Math.max(mobileHeight, height) : height;
@@ -196,10 +198,10 @@ export function SignaturePad({
     hasSignatureRef.current = false;
     setHasSignature(false);
     onChange(null);
-  }, [ctx, width, height, fullWidth, mobileHeight, onChange]);
+  }, [ctx, disabled, width, height, fullWidth, mobileHeight, onChange]);
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-2', disabled && 'opacity-60', className)}>
       {/* Label */}
       {label && (
         <label className="block text-sm font-medium text-foreground">
@@ -237,6 +239,7 @@ export function SignaturePad({
                 ? 'ring-2 ring-success ring-offset-1'
                 : 'border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50',
             fullWidth && 'w-full',
+            disabled && 'pointer-events-none',
           )}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
@@ -255,6 +258,7 @@ export function SignaturePad({
             onTouchMove={draw}
             onTouchEnd={stopDrawing}
             className="cursor-crosshair touch-none bg-white"
+            aria-disabled={disabled}
             style={
               fullWidth
                 ? { width: '100%', height: resolvedHeight }
@@ -304,8 +308,9 @@ export function SignaturePad({
             hasSignature
               ? 'bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30'
               : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50',
+            disabled && 'cursor-not-allowed opacity-50',
           )}
-          disabled={!hasSignature}
+          disabled={disabled || !hasSignature}
           aria-label="Clear signature"
         >
           <Eraser className="h-3.5 w-3.5" />

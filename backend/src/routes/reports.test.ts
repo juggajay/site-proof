@@ -2859,6 +2859,45 @@ describe('Reports API - Scheduled Reports', () => {
       ).resolves.toBeNull();
     });
 
+    it('should delete generated report artifacts when deleting a scheduled report', async () => {
+      const artifactSchedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '09:00',
+          recipients: 'artifact-delete@example.com',
+          nextRunAt: new Date(),
+          createdById: userId,
+          isActive: true,
+        },
+      });
+      const { filePath } = await createLocalScheduledReportArtifactRun({
+        projectId,
+        scheduleId: artifactSchedule.id,
+      });
+
+      try {
+        expect(fs.existsSync(filePath)).toBe(true);
+
+        const res = await request(app)
+          .delete(`/api/reports/schedules/${artifactSchedule.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(fs.existsSync(filePath)).toBe(false);
+        await expect(
+          prisma.scheduledReportRun.count({ where: { scheduleId: artifactSchedule.id } }),
+        ).resolves.toBe(0);
+        await expect(
+          prisma.scheduledReport.findUnique({ where: { id: artifactSchedule.id } }),
+        ).resolves.toBeNull();
+      } finally {
+        await fs.promises.rm(filePath, { force: true });
+        await prisma.scheduledReport.delete({ where: { id: artifactSchedule.id } }).catch(() => {});
+      }
+    });
+
     it('should delete a scheduled report', async () => {
       const res = await request(app)
         .delete(`/api/reports/schedules/${scheduleId}`)

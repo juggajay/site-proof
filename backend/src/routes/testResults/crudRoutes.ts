@@ -13,10 +13,7 @@ import {
   requireTestProjectRole,
   requireTestResultReadAccess,
 } from './accessControl.js';
-import {
-  deleteCertificateFromSupabase,
-  isOwnedSupabaseCertificateUrl,
-} from './certificateStorage.js';
+import { deleteStoredCertificateFile } from './certificateStorage.js';
 import { applyTestResultCorrections } from './corrections.js';
 import { resolveEffectivePassFail } from './certificateExtraction.js';
 import { applyConfirmedPassFailBackstop } from './extractionConfirmation.js';
@@ -380,11 +377,8 @@ crudRoutes.delete(
     });
 
     // Capture certificate doc info before the row is gone, so we can clean up
-    // the linked Document and Supabase object after the DB transaction.
+    // the linked Document and stored file after the DB transaction.
     const certificateDoc = testResult.certificateDoc;
-    const isSupabaseStored =
-      !!certificateDoc?.fileUrl &&
-      isOwnedSupabaseCertificateUrl(certificateDoc.fileUrl, testResult.projectId);
 
     // Atomic DB delete: testResult plus the linked Document row when present.
     // The relation is `onDelete: SetNull`, so document deletion alone wouldn't
@@ -397,16 +391,13 @@ crudRoutes.delete(
     }
     await prisma.$transaction(operations);
 
-    // Best-effort Supabase removal after the DB state is committed. A failure
+    // Best-effort file removal after the DB state is committed. A failure
     // here leaves an orphan storage object but the DB is the source of truth.
-    if (isSupabaseStored && certificateDoc?.fileUrl) {
+    if (certificateDoc?.fileUrl) {
       try {
-        await deleteCertificateFromSupabase(certificateDoc.fileUrl, testResult.projectId);
+        await deleteStoredCertificateFile(certificateDoc.fileUrl, testResult.projectId);
       } catch (error) {
-        logWarn(
-          'Failed to delete test certificate file from Supabase after database delete:',
-          error,
-        );
+        logWarn('Failed to delete test certificate file after database delete:', error);
       }
     }
 

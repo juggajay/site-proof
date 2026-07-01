@@ -150,3 +150,39 @@ export function canForemanRespond(
   if (ncr.status !== 'open') return false;
   return ncr.responsibleUserId === currentUserId;
 }
+
+const NCR_EVIDENCE_MUTATION_ROLES = new Set([
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'quality_manager',
+  'site_engineer',
+  'foreman',
+]);
+
+type EvidenceMutationUser =
+  | {
+      id?: string | null;
+      role?: string | null;
+      roleInCompany?: string | null;
+      dashboardRole?: string | null;
+    }
+  | null
+  | undefined;
+
+function hasNcrEvidenceMutationRole(user: EvidenceMutationUser): boolean {
+  const roleCandidates = [user?.roleInCompany, user?.dashboardRole, user?.role];
+  return roleCandidates.some((role) =>
+    typeof role === 'string' ? NCR_EVIDENCE_MUTATION_ROLES.has(role) : false,
+  );
+}
+
+export function canAddNcrEvidence(
+  ncr: Pick<NCR, 'responsibleUserId' | 'status'>,
+  currentUser: EvidenceMutationUser,
+): boolean {
+  if (isClosedNcr(ncr)) return false;
+  if (!currentUser?.id) return false;
+  return hasNcrEvidenceMutationRole(currentUser) || ncr.responsibleUserId === currentUser.id;
+}

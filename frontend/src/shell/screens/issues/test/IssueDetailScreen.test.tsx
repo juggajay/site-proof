@@ -24,8 +24,11 @@ vi.mock('@/lib/useOfflineStatus', () => ({
 }));
 
 let _userId: string | null = 'user-me';
+let _roleInCompany = 'foreman';
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ user: _userId ? { id: _userId, fullName: 'Jay' } : null }),
+  useAuth: () => ({
+    user: _userId ? { id: _userId, fullName: 'Jay', roleInCompany: _roleInCompany } : null,
+  }),
 }));
 
 vi.mock('@/components/documents/SecureDocumentImage', () => ({
@@ -115,6 +118,11 @@ function renderScreen(ncrId = 'n1') {
   );
 }
 
+function expectAddPhotoDisabled(messagePattern: RegExp) {
+  expect(screen.getByRole('button', { name: /Add photo/i })).toBeDisabled();
+  expect(screen.getByText(messagePattern)).toBeInTheDocument();
+}
+
 const photo = (over: Partial<NcrEvidenceItem> = {}): NcrEvidenceItem => ({
   id: 'e1',
   evidenceType: 'photo',
@@ -144,6 +152,7 @@ describe('IssueDetailScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _userId = 'user-me';
+    _roleInCompany = 'foreman';
     _photos = [];
     _evidence = [];
   });
@@ -204,7 +213,20 @@ describe('IssueDetailScreen', () => {
   it('shows an Add photo affordance (foreman adds evidence)', () => {
     _data = makeData(makeNcr({}));
     renderScreen();
-    expect(screen.getByRole('button', { name: /Add photo/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add photo/i })).toBeEnabled();
+  });
+
+  it('disables Add photo on closed issues before starting an upload', () => {
+    _data = makeData(makeNcr({ status: 'closed' }));
+    renderScreen();
+    expectAddPhotoDisabled(/Photo evidence can only be added/i);
+  });
+
+  it('disables Add photo for ineligible project users before starting an upload', () => {
+    _roleInCompany = 'viewer';
+    _data = makeData(makeNcr({ responsibleUserId: 'someone-else' }));
+    renderScreen();
+    expectAddPhotoDisabled(/eligible project users/i);
   });
 
   it('shows Respond ONLY when the foreman is the responsible user', () => {

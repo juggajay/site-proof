@@ -87,6 +87,15 @@ function buildRegister(): HoldPoint[] {
 function mockHoldPointsApi(register: HoldPoint[]) {
   apiFetchMock.mockImplementation((path: string) => {
     const url = new URL(path, 'http://localhost');
+    if (url.pathname === '/api/projects/p1') {
+      return Promise.resolve({
+        project: {
+          id: 'p1',
+          name: 'Hold Point Test Project',
+          currentUserRole: 'project_manager',
+        },
+      });
+    }
     if (url.pathname === '/api/holdpoints/project/p1') {
       return Promise.resolve({
         holdPoints: register,
@@ -136,7 +145,6 @@ describe('HoldPointsPage register data layer', () => {
 
     expect(await screen.findByText('LOT-001')).toBeInTheDocument();
     expect(screen.getByText('LOT-150')).toBeInTheDocument();
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/holdpoints/project/p1?all=true');
   });
 
