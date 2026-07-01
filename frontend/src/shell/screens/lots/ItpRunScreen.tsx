@@ -312,6 +312,9 @@ export function ItpRunScreen() {
   const item = currentItem!;
   const photoCount = currentCompletion?.attachments?.length ?? 0;
   const busy = submitting || run.updatingItemId === item.id;
+  const holdPointsPath = projectId
+    ? `/projects/${encodeURIComponent(projectId)}/hold-points`
+    : null;
 
   const sub = (
     <span className="flex items-center gap-2">
@@ -613,9 +616,18 @@ export function ItpRunScreen() {
               </div>
               <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
                 This is a hold point. It can’t be ticked complete until it’s released (which records
-                who released it, when, and how). Request the release from the Hold Points screen —
-                you can still mark it N/A or raise an issue below.
+                who released it, when, and how). Open the Hold Points register to request or record
+                the release — you can still mark it N/A or raise an issue below.
               </p>
+              {holdPointsPath && (
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-xl border border-warning/40 bg-background px-3 py-3 text-[13px] font-semibold text-warning shadow-sm transition-colors active:bg-warning/10"
+                  onClick={() => navigate(holdPointsPath)}
+                >
+                  Open Hold Points
+                </button>
+              )}
             </div>
           )}
           {run.isOfflineData && (
