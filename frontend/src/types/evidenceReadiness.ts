@@ -39,6 +39,18 @@ export interface ReadinessBucket {
   support: EvidenceReadinessItem[];
 }
 
+export interface ManagementPrepCounts {
+  releaseGatedHoldPoints: number;
+  missingRequestEvidence: number;
+  missingRecipients: number;
+  fieldActionableItems: number;
+  managementOnlyItems: number;
+}
+
+export type ManagementPrepBucket = ReadinessBucket & {
+  counts: ManagementPrepCounts;
+};
+
 export interface LotEvidenceReadiness {
   lotId: string;
   lotNumber: string;
@@ -50,6 +62,7 @@ export interface LotEvidenceReadiness {
     claimedPercentage?: number;
     remainingPercentage?: number;
   };
+  managementPrep?: ManagementPrepBucket;
   summary: {
     blockerCount: number;
     warningCount: number;

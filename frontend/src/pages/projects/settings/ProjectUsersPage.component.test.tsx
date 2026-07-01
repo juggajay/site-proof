@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ProjectUsersPage } from './ProjectUsersPage';
 import { apiFetch } from '@/lib/api';
@@ -40,6 +41,15 @@ describe('ProjectUsersPage project member picker', () => {
     const user = userEvent.setup();
 
     apiFetchMock.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === '/api/projects/project-1' && !options) {
+        return {
+          project: {
+            id: 'project-1',
+            name: 'Bridgeworks',
+            currentUserRole: 'project_manager',
+          },
+        };
+      }
       if (path === '/api/projects/project-1/users' && !options) {
         return { users: [] };
       }
@@ -70,10 +80,14 @@ describe('ProjectUsersPage project member picker', () => {
       throw new Error(`Unexpected apiFetch call: ${String(path)}`);
     });
 
-    render(<ProjectUsersPage />);
+    render(
+      <MemoryRouter>
+        <ProjectUsersPage />
+      </MemoryRouter>,
+    );
 
     await screen.findByText('No team members yet');
-    await user.click(screen.getByRole('button', { name: /invite first user/i }));
+    await user.click(screen.getByRole('button', { name: /add first team member/i }));
 
     await screen.findByLabelText('Search company users');
     expect(screen.queryByLabelText('Email Address')).not.toBeInTheDocument();

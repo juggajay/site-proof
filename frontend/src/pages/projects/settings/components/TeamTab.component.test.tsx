@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '@/lib/api';
 import { TeamTab } from './TeamTab';
@@ -41,7 +42,11 @@ describe('TeamTab project member picker', () => {
       throw new Error(`Unexpected apiFetch call: ${String(path)}`);
     });
 
-    render(<TeamTab projectId="project-1" />);
+    render(
+      <MemoryRouter>
+        <TeamTab projectId="project-1" />
+      </MemoryRouter>,
+    );
 
     await screen.findByText('No team members yet.');
     await user.click(screen.getByRole('button', { name: /add team member/i }));

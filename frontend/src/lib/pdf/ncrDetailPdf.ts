@@ -1,6 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
+import { drawPdfBrandingHeader } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { NCRDetailData } from './types';
@@ -123,6 +124,17 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   // Severity badge in header
   doc.setFontSize(10);
   doc.text(`[${data.ncr.severity.toUpperCase()}]`, pageWidth - margin - 20, 25);
+  await drawPdfBrandingHeader(doc, data, {
+    logoX: pageWidth - margin - 28,
+    logoY: 5,
+    logoWidth: 28,
+    logoHeight: 16,
+    companyNameX: pageWidth - margin,
+    companyNameY: 33,
+    companyNameAlign: 'right',
+    companyNameColor: [255, 255, 255],
+    companyNameFontSize: 8,
+  });
 
   yPos = 45;
   doc.setTextColor(0, 0, 0);

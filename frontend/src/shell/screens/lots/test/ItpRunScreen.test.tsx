@@ -279,6 +279,49 @@ describe('ItpRunScreen — hold-point gating', () => {
     fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
     await waitFor(() => expect(pass).toHaveBeenCalledWith('hp', null));
   });
+
+  it('a superintendent sign-off item is status-only and has no field actions even after release', () => {
+    const released: ITPCompletion = {
+      id: 'c-sup',
+      checklistItemId: 'sup',
+      isCompleted: false,
+      notes: null,
+      completedAt: null,
+      completedBy: null,
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+      holdPointRelease: {
+        releasedByName: 'Super',
+        releasedByOrg: 'Council',
+        releaseMethod: 'email',
+        releasedAt: '2026-06-11',
+      },
+    };
+    _run = makeRun(
+      makeInstance(
+        [
+          makeItem({
+            id: 'sup',
+            responsibleParty: 'superintendent',
+            pointType: 'standard',
+            description: 'Superintendent sign-off',
+          }),
+        ],
+        [released],
+      ),
+    );
+    renderRun();
+
+    expect(screen.getAllByText(/Superintendent sign-off required/i).length).toBeGreaterThanOrEqual(
+      1,
+    );
+    expect(screen.queryByRole('button', { name: /Pass this check/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Fail this check/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Mark not applicable/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add evidence photo/i })).toBeNull();
+  });
 });
 
 describe('ItpRunScreen — dot track scrubber', () => {

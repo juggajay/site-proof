@@ -87,6 +87,16 @@ describe('CompanyInformationCard', () => {
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
   });
 
+  it('explains where company logos appear after upload', () => {
+    render(<CompanyInformationHarness />);
+
+    expect(
+      screen.getByText(
+        'Recommended: Square image, PNG or JPG, max 2MB. Appears on conformance, dashboard, docket, hold-point, claim, daily diary, NCR, test certificate, and printed project reports.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('removes the logo from the local form buffer', () => {
     render(<CompanyInformationHarness />);
 

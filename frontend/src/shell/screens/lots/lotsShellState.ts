@@ -314,12 +314,19 @@ export type HoldPointGate =
   | { kind: 'released' } // hold-point that has been released — completable
   | { kind: 'awaiting-release' }; // hold-point not yet released — NEVER offer complete
 
+export function isSuperintendentSignoffOnlyItem(
+  item: Pick<ITPChecklistItem, 'pointType' | 'responsibleParty'>,
+): boolean {
+  return item.responsibleParty === 'superintendent' && item.pointType !== 'witness';
+}
+
 /**
  * Decide the hold-point gate for an item, mirroring the backend guard
  * (completions.ts:209-228) and the existing ITPChecklistItemRow logic:
  *   - hold_point items (and superintendent non-witness items) are sign-off items;
- *   - they are completable only once the HoldPoint is released, which the
- *     completion surfaces as `holdPointRelease.releasedByName`;
+ *   - hold_point items are completable only once the HoldPoint is released,
+ *     which the completion surfaces as `holdPointRelease.releasedByName`;
+ *   - superintendent non-witness items stay field read-only even after release;
  *   - witness items are NOT gated (witness is not a hard blocker);
  *   - everything else is "open".
  *
@@ -332,9 +339,7 @@ export function holdPointGateDecision(
   item: Pick<ITPChecklistItem, 'pointType' | 'responsibleParty'>,
   completion: ITPCompletion | undefined,
 ): HoldPointGate {
-  const isSignoffItem =
-    item.pointType === 'hold_point' ||
-    (item.responsibleParty === 'superintendent' && item.pointType !== 'witness');
+  const isSignoffItem = item.pointType === 'hold_point' || isSuperintendentSignoffOnlyItem(item);
 
   if (!isSignoffItem) return { kind: 'open' };
 
@@ -347,6 +352,7 @@ export function canCompleteItem(
   item: Pick<ITPChecklistItem, 'pointType' | 'responsibleParty'>,
   completion: ITPCompletion | undefined,
 ): boolean {
+  if (isSuperintendentSignoffOnlyItem(item)) return false;
   return holdPointGateDecision(item, completion).kind !== 'awaiting-release';
 }
 

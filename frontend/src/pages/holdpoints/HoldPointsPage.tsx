@@ -1,10 +1,11 @@
-import { useRef, useState, useMemo, useCallback } from 'react';
+import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
 import { getAuthToken } from '@/lib/auth';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
+import { Button } from '@/components/ui/button';
 import {
   extractErrorMessage,
   extractErrorDetails,
@@ -61,6 +62,10 @@ import {
 import { fetchAllProjectHoldPoints } from './holdPointsApi';
 import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
+import {
+  BatchRequestReleaseModal,
+  type BatchRequestReleaseSubmitData,
+} from './components/BatchRequestReleaseModal';
 import { downloadCsv } from '@/lib/csv';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { getReleaseIdentityText, getReleaseMethodLabel } from './holdPointReleaseIdentity';
@@ -93,11 +98,17 @@ export function HoldPointsPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showBatchRequestModal, setShowBatchRequestModal] = useState(false);
   const [selectedHoldPoint, setSelectedHoldPoint] = useState<HoldPoint | null>(null);
+  const [selectedBatchHoldPointIds, setSelectedBatchHoldPointIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [holdPointDetails, setHoldPointDetails] = useState<HoldPointDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [batchRequesting, setBatchRequesting] = useState(false);
   const [requestError, setRequestError] = useState<RequestError | null>(null);
+  const [batchRequestError, setBatchRequestError] = useState<string | null>(null);
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [chasingHpId, setChasingHpId] = useState<string | null>(null);
@@ -107,6 +118,7 @@ export function HoldPointsPage() {
   const generatingPdfRef = useRef<string | null>(null);
   const chasingHpRef = useRef<string | null>(null);
   const requestingRef = useRef(false);
+  const batchRequestingRef = useRef(false);
   const recordingReleaseRef = useRef(false);
 
   // URL-persisted filter/sort state (LotsPage idiom) so register views survive
@@ -215,9 +227,36 @@ export function HoldPointsPage() {
     [holdPoints, statusFilter, searchQuery, selectedLotId, sortField, sortDirection],
   );
 
+  const batchEligibleHoldPoints = useMemo(
+    () =>
+      selectedLotId === 'all'
+        ? []
+        : filteredHoldPoints.filter((hp) => hp.lotId === selectedLotId && hp.status === 'pending'),
+    [filteredHoldPoints, selectedLotId],
+  );
+
+  const batchSelectableHoldPointIds = useMemo(
+    () => new Set(batchEligibleHoldPoints.map((hp) => hp.id)),
+    [batchEligibleHoldPoints],
+  );
+
+  const selectedBatchHoldPoints = useMemo(
+    () => filteredHoldPoints.filter((hp) => selectedBatchHoldPointIds.has(hp.id)),
+    [filteredHoldPoints, selectedBatchHoldPointIds],
+  );
+
   const stats = useMemo(() => buildHoldPointStats(holdPoints), [holdPoints]);
 
   const chartData = useMemo(() => buildHoldPointChartData(holdPoints), [holdPoints]);
+
+  useEffect(() => {
+    setSelectedBatchHoldPointIds((current) => {
+      const next = new Set(
+        Array.from(current).filter((holdPointId) => batchSelectableHoldPointIds.has(holdPointId)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [batchSelectableHoldPointIds]);
 
   // --- Handlers ---
 
@@ -325,6 +364,31 @@ export function HoldPointsPage() {
     [fetchHoldPointDetails],
   );
 
+  const handleToggleBatchSelection = useCallback(
+    (hp: HoldPoint) => {
+      if (!batchSelectableHoldPointIds.has(hp.id)) return;
+
+      setSelectedBatchHoldPointIds((current) => {
+        const next = new Set(current);
+        if (next.has(hp.id)) {
+          next.delete(hp.id);
+        } else {
+          next.add(hp.id);
+        }
+        return next;
+      });
+    },
+    [batchSelectableHoldPointIds],
+  );
+
+  const handleSelectAllBatchEligible = useCallback(() => {
+    setSelectedBatchHoldPointIds(new Set(batchEligibleHoldPoints.map((hp) => hp.id)));
+  }, [batchEligibleHoldPoints]);
+
+  const handleClearBatchSelection = useCallback(() => {
+    setSelectedBatchHoldPointIds(new Set());
+  }, []);
+
   const handleRecordRelease = useCallback(
     (hp: HoldPoint) => {
       setSelectedHoldPoint(hp);
@@ -419,6 +483,47 @@ export function HoldPointsPage() {
       }
     },
     [selectedHoldPoint, refreshHoldPoints],
+  );
+
+  const handleSubmitBatchRequest = useCallback(
+    async (data: BatchRequestReleaseSubmitData) => {
+      if (selectedBatchHoldPoints.length === 0 || batchRequestingRef.current) return;
+      const lotId = selectedBatchHoldPoints[0].lotId;
+      batchRequestingRef.current = true;
+      setBatchRequesting(true);
+      setBatchRequestError(null);
+
+      try {
+        await apiFetch('/api/holdpoints/request-release/batch', {
+          method: 'POST',
+          body: JSON.stringify({
+            lotId,
+            items: selectedBatchHoldPoints.map((hp) => ({
+              itpChecklistItemId: hp.itpChecklistItemId,
+            })),
+            sharedEvidenceDocumentIds: data.sharedEvidenceDocumentIds,
+            scheduledDate: data.scheduledDate || null,
+            scheduledTime: data.scheduledTime || null,
+            recipientEmail: data.recipientEmail,
+            recipientName: data.recipientName || null,
+            noticeHours: 24,
+          }),
+        });
+        await refreshHoldPoints();
+        toast({
+          title: 'Batch request sent',
+          description: `${selectedBatchHoldPoints.length} hold point release requests sent for ${selectedBatchHoldPoints[0].lotNumber}.`,
+        });
+        setShowBatchRequestModal(false);
+        setSelectedBatchHoldPointIds(new Set());
+      } catch (err) {
+        setBatchRequestError(extractErrorMessage(err, 'Failed to send batch release request'));
+      } finally {
+        batchRequestingRef.current = false;
+        setBatchRequesting(false);
+      }
+    },
+    [selectedBatchHoldPoints, refreshHoldPoints],
   );
 
   const handleSubmitRecordRelease = useCallback(
@@ -547,6 +652,11 @@ export function HoldPointsPage() {
     setRequestError(null);
   }, []);
 
+  const handleCloseBatchRequestModal = useCallback(() => {
+    setShowBatchRequestModal(false);
+    setBatchRequestError(null);
+  }, []);
+
   const handleCloseRecordModal = useCallback(() => {
     setShowRecordReleaseModal(false);
     setSelectedHoldPoint(null);
@@ -581,6 +691,47 @@ export function HoldPointsPage() {
 
       {!loading && !loadError && holdPoints.length > 0 && <HoldPointSummaryCards stats={stats} />}
 
+      {!loading && !loadError && holdPoints.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-medium">Batch release request</div>
+            <div className="text-sm text-muted-foreground">
+              {selectedLotId === 'all'
+                ? 'Select one lot to request multiple hold point releases together.'
+                : `${batchEligibleHoldPoints.length} pending hold point${batchEligibleHoldPoints.length === 1 ? '' : 's'} eligible in this lot.`}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSelectAllBatchEligible}
+              disabled={batchEligibleHoldPoints.length === 0}
+            >
+              Select all pending
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClearBatchSelection}
+              disabled={selectedBatchHoldPointIds.size === 0}
+            >
+              Clear
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setBatchRequestError(null);
+                setShowBatchRequestModal(true);
+              }}
+              disabled={selectedBatchHoldPoints.length === 0}
+            >
+              Request selected ({selectedBatchHoldPoints.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {!isMobile && !loading && !loadError && holdPoints.length > 0 && (
         <LazyHoldPointsChart
           releasesOverTime={chartData.releasesOverTime}
@@ -601,11 +752,14 @@ export function HoldPointsPage() {
             copiedHpId={copiedHpId}
             generatingPdf={generatingPdf}
             chasingHpId={chasingHpId}
+            batchSelectableHoldPointIds={batchSelectableHoldPointIds}
+            selectedBatchHoldPointIds={selectedBatchHoldPointIds}
             onCopyLink={handleCopyHpLink}
             onRequestRelease={handleRequestRelease}
             onRecordRelease={handleRecordRelease}
             onChase={handleChaseHoldPoint}
             onGenerateEvidence={handleGenerateEvidencePackage}
+            onToggleBatchSelection={handleToggleBatchSelection}
             onClearFilter={handleClearFilter}
           />
         ) : (
@@ -621,12 +775,15 @@ export function HoldPointsPage() {
             copiedHpId={copiedHpId}
             generatingPdf={generatingPdf}
             chasingHpId={chasingHpId}
+            batchSelectableHoldPointIds={batchSelectableHoldPointIds}
+            selectedBatchHoldPointIds={selectedBatchHoldPointIds}
             onSort={handleSort}
             onCopyLink={handleCopyHpLink}
             onRequestRelease={handleRequestRelease}
             onRecordRelease={handleRecordRelease}
             onChase={handleChaseHoldPoint}
             onGenerateEvidence={handleGenerateEvidencePackage}
+            onToggleBatchSelection={handleToggleBatchSelection}
             onClearFilter={handleClearFilter}
           />
         ))}
@@ -640,6 +797,17 @@ export function HoldPointsPage() {
           error={requestError}
           onClose={handleCloseRequestModal}
           onSubmit={handleSubmitRequest}
+        />
+      )}
+
+      {showBatchRequestModal && projectId && selectedBatchHoldPoints.length > 0 && (
+        <BatchRequestReleaseModal
+          holdPoints={selectedBatchHoldPoints}
+          projectId={projectId}
+          requesting={batchRequesting}
+          error={batchRequestError}
+          onClose={handleCloseBatchRequestModal}
+          onSubmit={handleSubmitBatchRequest}
         />
       )}
 

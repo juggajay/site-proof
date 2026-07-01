@@ -89,4 +89,67 @@ describe('LotReadinessPanel', () => {
     expect(screen.getByText('ITP checklist incomplete')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open ITP' })).toBeInTheDocument();
   });
+
+  it('shows management prep warnings with a filtered Hold Points CTA for managers', () => {
+    const managementReadiness = {
+      ...readiness,
+      managementPrep: {
+        state: 'warning',
+        counts: {
+          releaseGatedHoldPoints: 3,
+          missingRequestEvidence: 2,
+          missingRecipients: 1,
+          fieldActionableItems: 2,
+          managementOnlyItems: 3,
+        },
+        blockers: [],
+        warnings: [
+          {
+            code: 'missing_request_evidence',
+            severity: 'warning',
+            area: 'hold_point',
+            title: 'Request evidence missing',
+            detail: '2 release-gated hold points have no request evidence attached yet.',
+            blocksAction: false,
+            count: 2,
+            actionLabel: 'Open Hold Points',
+            actionHref: '/projects/project-1/hold-points?lotId=lot-1',
+          },
+          {
+            code: 'management_only_items',
+            severity: 'warning',
+            area: 'hold_point',
+            title: 'Management-only items',
+            detail: '3 hold points need management or superintendent release before handoff.',
+            blocksAction: false,
+            count: 3,
+            actionLabel: 'Review hold points',
+            actionHref: '/projects/project-1/hold-points?lotId=lot-1',
+          },
+        ],
+        support: [
+          {
+            code: 'field_actionable_items',
+            severity: 'support',
+            area: 'itp',
+            title: 'Field-actionable ITP items',
+            detail: '2 checklist items can be worked by field teams.',
+            blocksAction: false,
+            count: 2,
+          },
+        ],
+      },
+    } as LotEvidenceReadiness;
+
+    renderPanel({ readiness: managementReadiness });
+
+    expect(screen.getByText('Management prep: Needs attention')).toBeInTheDocument();
+    expect(screen.getByText('Request evidence missing')).toBeInTheDocument();
+    expect(screen.getByText('Management-only items')).toBeInTheDocument();
+    expect(screen.getByText('Field-actionable ITP items')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Hold Points' })).toHaveAttribute(
+      'href',
+      '/projects/project-1/hold-points?lotId=lot-1',
+    );
+  });
 });

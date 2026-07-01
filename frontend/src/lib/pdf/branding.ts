@@ -1,4 +1,4 @@
-import type { PDFBrandableData, PDFBrandingData } from './types';
+import type { PDFBrandableData, PDFBrandingData, PDFCompanyBranding } from './types';
 
 type PdfBrandingDocument = {
   addImage?: (
@@ -33,6 +33,12 @@ type DrawPdfBrandingOptions = {
   logoTimeoutMs?: number;
 };
 
+type ProjectBrandableData = PDFBrandableData & {
+  project?: {
+    company?: PDFCompanyBranding | null;
+  } | null;
+};
+
 const DEFAULT_LOGO_TIMEOUT_MS = 1500;
 
 function isDirectBrandingData(data: PDFBrandableData | PDFBrandingData): data is PDFBrandingData {
@@ -53,8 +59,17 @@ export function resolvePdfBranding(
 
   const explicitBranding = isDirectBrandingData(data) ? data : data.branding;
   const company = isDirectBrandingData(data) ? null : data.company;
-  const companyName = nonBlank(explicitBranding?.companyName) ?? nonBlank(company?.name);
-  const logoUrl = nonBlank(explicitBranding?.logoUrl) ?? nonBlank(company?.logoUrl);
+  const projectCompany = isDirectBrandingData(data)
+    ? null
+    : (data as ProjectBrandableData).project?.company;
+  const companyName =
+    nonBlank(explicitBranding?.companyName) ??
+    nonBlank(company?.name) ??
+    nonBlank(projectCompany?.name);
+  const logoUrl =
+    nonBlank(explicitBranding?.logoUrl) ??
+    nonBlank(company?.logoUrl) ??
+    nonBlank(projectCompany?.logoUrl);
 
   if (!companyName && !logoUrl) {
     return null;

@@ -266,6 +266,49 @@ describe('SubbieItpRunScreen', () => {
     expect(screen.queryByText('All checks complete')).not.toBeInTheDocument();
   });
 
+  it('superintendent sign-off item is status-only even when the subbie can complete ITPs', () => {
+    const released: ITPCompletion = {
+      id: 'comp-sup',
+      checklistItemId: 'sup',
+      isCompleted: false,
+      notes: null,
+      completedAt: null,
+      completedBy: null,
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+      holdPointRelease: {
+        releasedByName: 'Super',
+        releasedByOrg: 'Council',
+        releaseMethod: 'email',
+        releasedAt: '2026-06-11',
+      },
+    };
+    _run = makeRun(
+      makeInstance(
+        [
+          makeItem({
+            id: 'sup',
+            responsibleParty: 'superintendent',
+            pointType: 'standard',
+            description: 'Superintendent sign-off',
+          }),
+        ],
+        [released],
+      ),
+    );
+    renderRun();
+
+    expect(screen.getAllByText(/Superintendent sign-off required/i).length).toBeGreaterThanOrEqual(
+      1,
+    );
+    expect(screen.queryByRole('button', { name: /Pass this check/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Fail this check/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mark not applicable/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add evidence photo/i })).not.toBeInTheDocument();
+  });
+
   it('passes the right per-item states to the dot track', () => {
     const items = [
       makeItem({ id: 'a' }),

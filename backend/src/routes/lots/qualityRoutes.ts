@@ -6,9 +6,17 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
+import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 import { prisma } from '../../lib/prisma.js';
 import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
 import { PENDING_TEST_RESULT_STATUSES } from '../../lib/testResultStatus.js';
+import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
+import {
+  isValidEmailAddress,
+  parseHPDefaultRecipients,
+  parseHPProjectSettings,
+  parseNotificationEmailList,
+} from '../holdpoints/validation.js';
 import {
   isSubcontractorUser,
   canViewLotBudget,
@@ -32,6 +40,126 @@ const LOT_PHOTO_DOCUMENT_FILTER: Prisma.DocumentWhereInput = {
     { mimeType: { startsWith: 'image/' } },
   ],
 };
+
+const RELEASE_RECIPIENT_FALLBACK_PROJECT_ROLES = ['superintendent', 'project_manager'];
+const TERMINAL_HOLD_POINT_STATUSES = new Set(['released', 'completed']);
+
+type LotForManagementPrep = NonNullable<Awaited<ReturnType<typeof fetchLotReadinessRecord>>>;
+
+function holdPointHasRequestedRecipient(holdPoint: { notificationSentTo: string | null }): boolean {
+  return parseNotificationEmailList(holdPoint.notificationSentTo).some(isValidEmailAddress);
+}
+
+async function fetchLotReadinessRecord(id: string) {
+  return prisma.lot.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      lotNumber: true,
+      status: true,
+      projectId: true,
+      budgetAmount: true,
+      claimedInId: true,
+      project: {
+        select: {
+          settings: true,
+        },
+      },
+      holdPoints: {
+        select: {
+          itpChecklistItemId: true,
+          notificationSentTo: true,
+          status: true,
+        },
+      },
+      itpInstance: {
+        select: {
+          templateSnapshot: true,
+          template: {
+            select: {
+              checklistItems: {
+                orderBy: { sequenceNumber: 'asc' },
+                select: {
+                  id: true,
+                  description: true,
+                  sequenceNumber: true,
+                  pointType: true,
+                  responsibleParty: true,
+                  evidenceRequired: true,
+                  acceptanceCriteria: true,
+                  testType: true,
+                },
+              },
+            },
+          },
+          completions: {
+            select: {
+              checklistItemId: true,
+              attachments: {
+                select: {
+                  documentId: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function buildManagementPrepSnapshot(lot: LotForManagementPrep, fallbackRecipientCount: number) {
+  const checklistItems = lot.itpInstance ? getChecklistItemsForInstance(lot.itpInstance) : [];
+  const releaseGatedItems = checklistItems.filter(isReleaseGatedChecklistItem);
+  const releaseGatedIds = releaseGatedItems.map((item) => item.id);
+  const releaseGatedIdSet = new Set(releaseGatedIds);
+  const fieldActionableItemIds = checklistItems
+    .filter((item) => !releaseGatedIdSet.has(item.id))
+    .map((item) => item.id);
+
+  const completionByItemId = new Map(
+    (lot.itpInstance?.completions ?? []).map((completion) => [
+      completion.checklistItemId,
+      completion,
+    ]),
+  );
+  const holdPointByItemId = new Map(
+    lot.holdPoints.map((holdPoint) => [holdPoint.itpChecklistItemId, holdPoint]),
+  );
+  const projectSettings = parseHPProjectSettings(lot.project.settings);
+  const hasDefaultRecipients =
+    parseHPDefaultRecipients(projectSettings).length > 0 || fallbackRecipientCount > 0;
+
+  const missingRequestEvidenceIds = releaseGatedIds.filter((itemId) => {
+    const completion = completionByItemId.get(itemId);
+    return (completion?.attachments.length ?? 0) === 0;
+  });
+
+  const missingRecipientIds = releaseGatedIds.filter((itemId) => {
+    const holdPoint = holdPointByItemId.get(itemId);
+    if (holdPoint && TERMINAL_HOLD_POINT_STATUSES.has(holdPoint.status)) {
+      return false;
+    }
+
+    return !hasDefaultRecipients && (!holdPoint || !holdPointHasRequestedRecipient(holdPoint));
+  });
+
+  const holdPointsHref = `/projects/${encodeURIComponent(lot.projectId)}/hold-points?lotId=${encodeURIComponent(lot.id)}`;
+
+  return {
+    releaseGatedHoldPoints: releaseGatedIds.length,
+    missingRequestEvidence: missingRequestEvidenceIds.length,
+    missingRecipients: missingRecipientIds.length,
+    fieldActionableItems: fieldActionableItemIds.length,
+    managementOnlyItems: releaseGatedIds.length,
+    releaseGatedHoldPointIds: releaseGatedIds,
+    missingRequestEvidenceIds,
+    missingRecipientIds,
+    fieldActionableItemIds,
+    managementOnlyItemIds: releaseGatedIds,
+    holdPointsHref,
+  };
+}
 
 // GET /api/lots/check-role/:projectId - Check user's role on a project
 lotQualityRouter.get(
@@ -75,17 +203,7 @@ lotQualityRouter.get(
     const id = parseLotRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    const lot = await prisma.lot.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        lotNumber: true,
-        status: true,
-        projectId: true,
-        budgetAmount: true,
-        claimedInId: true,
-      },
-    });
+    const lot = await fetchLotReadinessRecord(id);
 
     if (!lot) {
       throw AppError.notFound('Lot');
@@ -117,6 +235,7 @@ lotQualityRouter.get(
       documents,
       photos,
       pendingTests,
+      fallbackRecipientCount,
     ] = await Promise.all([
       checkConformancePrerequisites(id),
       prisma.holdPoint.count({ where: { lotId: id, status: { not: 'released' } } }),
@@ -125,6 +244,13 @@ lotQualityRouter.get(
       prisma.document.count({ where: { lotId: id, ...LOT_PHOTO_DOCUMENT_FILTER } }),
       prisma.testResult.count({
         where: { lotId: id, status: { in: [...PENDING_TEST_RESULT_STATUSES] } },
+      }),
+      prisma.projectUser.count({
+        where: {
+          projectId: lot.projectId,
+          status: 'active',
+          role: { in: RELEASE_RECIPIENT_FALLBACK_PROJECT_ROLES },
+        },
       }),
     ]);
 
@@ -155,6 +281,7 @@ lotQualityRouter.get(
         photos,
         pendingTests,
       },
+      managementPrep: buildManagementPrepSnapshot(lot, fallbackRecipientCount),
     });
 
     res.json(buildLotReadinessResponse(readiness));

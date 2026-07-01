@@ -28,7 +28,6 @@ import {
   FlaskConical,
   MapPin,
   ClipboardCheck,
-  Building2,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
@@ -419,6 +418,7 @@ export function HomeScreen() {
     lotsModuleEnabled: lotsEnabled,
     assignedLotCount: hasAssignedLotsResponse ? assignedLots.length : 1,
   });
+  const showCompanySecondaryLink = docketPrerequisites.prerequisitesMet;
 
   const hero = computeHero(todaysDocket);
   const docketPath =
@@ -527,25 +527,26 @@ export function HomeScreen() {
         />
       )}
 
-      {/* Documents (documents module) */}
-      {documentsEnabled && (
-        <HubTile
-          icon={FileText}
-          title="Documents"
-          description="Specs & drawings shared with you"
-          onPress={() => navigate(`/p/docs${currentProjectQuery}`)}
-          ariaLabel="Documents"
-        />
+      {(documentsEnabled || showCompanySecondaryLink) && (
+        <div className="mt-1 flex flex-wrap gap-2" aria-label="Secondary navigation">
+          {documentsEnabled && (
+            <Link
+              to={`/p/docs${currentProjectQuery}`}
+              className="inline-flex min-h-[38px] items-center rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-muted-foreground"
+            >
+              Documents
+            </Link>
+          )}
+          {showCompanySecondaryLink && (
+            <Link
+              to={myCompanyLink}
+              className="inline-flex min-h-[38px] items-center rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-muted-foreground"
+            >
+              My Company
+            </Link>
+          )}
+        </div>
       )}
-
-      {/* My Company */}
-      <HubTile
-        icon={Building2}
-        title="My Company"
-        description="Crew, plant & rates"
-        onPress={() => navigate(myCompanyLink)}
-        ariaLabel="My Company"
-      />
     </ShellScreen>
   );
 }

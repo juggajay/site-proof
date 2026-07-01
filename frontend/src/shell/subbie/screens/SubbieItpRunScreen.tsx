@@ -20,7 +20,8 @@
  *   - Hold-point items follow the SAME rule as foreman (never Pass while
  *     unreleased) via the shared holdPointGateDecision; the subbie instance
  *     payload marks hold points with the same pointType + holdPointRelease shape,
- *     so no divergence.
+ *     so no divergence. Superintendent-owned non-witness sign-off items are
+ *     status-only for field users even after release.
  *   - Pending-verification state is whatever the shared completion exposes
  *     (`isVerified`); we surface it quietly, never invent a state.
  */
@@ -34,6 +35,7 @@ import {
   formatItpFinishedCopy,
   holdPointGateDecision,
   itpCompletionDisposition,
+  isSuperintendentSignoffOnlyItem,
   runItemOrder,
   runProgress,
 } from '@/shell/screens/lots/lotsShellState';
@@ -78,6 +80,13 @@ const STRIP_STATE_LINE: Record<string, string> = {
   rejected: 'Rejected — update and resubmit',
   open: 'Not started',
 };
+
+function stripStateLine(item: ITPChecklistItem, state: string): string {
+  if (!isSuperintendentSignoffOnlyItem(item)) return STRIP_STATE_LINE[state];
+  if (state === 'done') return 'Superintendent sign-off recorded';
+  if (state === 'failed' || state === 'na') return STRIP_STATE_LINE[state];
+  return 'Superintendent sign-off required';
+}
 
 const FLASH_MS = 650;
 
@@ -132,6 +141,9 @@ export function SubbieItpRunScreen() {
   const gate = currentItem
     ? holdPointGateDecision(currentItem, currentCompletion)
     : { kind: 'open' as const };
+  const superintendentSignoffOnly = currentItem
+    ? isSuperintendentSignoffOnlyItem(currentItem)
+    : false;
 
   const trackEntries: ItpDotTrackItem[] = useMemo(
     () =>
@@ -181,7 +193,7 @@ export function SubbieItpRunScreen() {
 
   const handlePass = async () => {
     if (!currentItem || submitting) return;
-    if (awaitingVerification) return;
+    if (awaitingVerification || superintendentSignoffOnly) return;
     if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
     setSubmitting(true);
     const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
@@ -216,11 +228,12 @@ export function SubbieItpRunScreen() {
 
   const onPhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && currentItem) void run.addPhoto(currentItem.id, file);
+    if (file && currentItem && !superintendentSignoffOnly) void run.addPhoto(currentItem.id, file);
     e.target.value = '';
   };
 
   const readOnly = !run.canComplete;
+  const fieldActionsReadOnly = readOnly || superintendentSignoffOnly;
 
   // ── Loading / error / empty ──────────────────────────────────────────────
   if (run.loading && !run.instance) {
@@ -327,7 +340,7 @@ export function SubbieItpRunScreen() {
   // Fixed bottom bar. Read-only subbies get NO evidence button (classic: photos
   // require completion access). When a reason is being captured it replaces the
   // evidence button in place.
-  const bottom = readOnly ? undefined : (
+  const bottom = fieldActionsReadOnly ? undefined : (
     <div className="shell-primary">
       {reasonMode ? (
         <div
@@ -395,8 +408,8 @@ export function SubbieItpRunScreen() {
 
   // Tri-state cluster — hidden entirely for read-only subbies. Hold points still
   // never offer Pass.
-  const triStateCluster = readOnly ? null : awaitingVerification ? null : gate.kind ===
-    'awaiting-release' ? (
+  const triStateCluster =
+    fieldActionsReadOnly || awaitingVerification ? null : gate.kind === 'awaiting-release' ? (
     <div className="grid grid-cols-2 gap-3">
       <button
         type="button"
@@ -531,7 +544,7 @@ export function SubbieItpRunScreen() {
                             : 'text-muted-foreground',
                   ].join(' ')}
                 >
-                  {STRIP_STATE_LINE[cellState]}
+                  {stripStateLine(cell, cellState)}
                 </p>
                 {cellState === 'review' && (
                   <p className="text-[12px] text-muted-foreground">
@@ -550,7 +563,7 @@ export function SubbieItpRunScreen() {
 
         <div className="flex flex-col gap-3 pt-3">
           {/* Persistent read-only banner — classic wording. */}
-          {readOnly && (
+          {readOnly && !superintendentSignoffOnly && (
             <div className="flex items-start gap-2 rounded-2xl border border-warning/30 bg-warning/10 p-4">
               <Eye
                 size={16}
@@ -583,7 +596,19 @@ export function SubbieItpRunScreen() {
               </p>
             </div>
           )}
-          {!readOnly && gate.kind === 'awaiting-release' && (
+          {superintendentSignoffOnly && (
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+                <Lock size={16} strokeWidth={2.2} aria-hidden />
+                Superintendent sign-off required
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                This item is for superintendent sign-off. Subcontractors can view the status here;
+                request and release status stays with the head contractor.
+              </p>
+            </div>
+          )}
+          {!fieldActionsReadOnly && gate.kind === 'awaiting-release' && (
             <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
               <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
                 <Lock size={16} strokeWidth={2.2} aria-hidden />
@@ -599,7 +624,7 @@ export function SubbieItpRunScreen() {
         </div>
       </div>
 
-      {!readOnly && (
+      {!fieldActionsReadOnly && (
         <input
           ref={fileInputRef}
           type="file"

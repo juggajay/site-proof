@@ -27,7 +27,6 @@ import {
   MapPin,
   FileText,
   AlertTriangle,
-  FileSpreadsheet,
   ClipboardCheck,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -393,15 +392,6 @@ export function HomeScreen() {
           chipOk={openNcrCount === 0}
           onPress={() => navTo('issues')}
           ariaLabel={`Issues${openNcrCount !== undefined ? ` — ${openNcrCount} open` : ''}`}
-        />
-
-        {/* Drawings & Docs tile */}
-        <HubTile
-          icon={FileSpreadsheet}
-          title="Drawings &amp; Docs"
-          description="Current revisions, by lot"
-          onPress={() => navTo('docs')}
-          ariaLabel="Drawings and documents"
         />
       </ShellScreen>
 
