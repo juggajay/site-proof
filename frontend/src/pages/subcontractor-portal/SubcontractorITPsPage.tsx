@@ -269,7 +269,7 @@ function ITPLotCard({ lot, projectQuery }: { lot: Lot; projectQuery: string }) {
 
   return (
     <Link
-      to={`/subcontractor-portal/lots/${lot.id}/itp${projectQuery}`}
+      to={`/subcontractor-portal/lots/${encodeURIComponent(lot.id)}/itp${projectQuery}`}
       className="block border border-border rounded-lg bg-card hover:border-primary transition-colors"
     >
       <div className="p-4">

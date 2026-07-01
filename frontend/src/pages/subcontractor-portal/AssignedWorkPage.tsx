@@ -6,7 +6,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
+import { getAssignedWorkStatusGroup } from './assignedWorkStatus';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 import {
@@ -33,14 +35,13 @@ function getStatusBadge(status: string) {
   const variants: Record<string, string> = {
     not_started: 'bg-muted text-muted-foreground',
     in_progress: 'bg-info/10 text-info',
-    completed: 'bg-success/10 text-success',
+    awaiting_test: 'bg-warning/10 text-warning',
+    hold_point: 'bg-warning/10 text-warning',
+    ncr_raised: 'bg-warning/10 text-warning',
     on_hold: 'bg-warning/10 text-warning',
-  };
-  const labels: Record<string, string> = {
-    not_started: 'Not Started',
-    in_progress: 'In Progress',
-    completed: 'Completed',
-    on_hold: 'On Hold',
+    completed: 'bg-success/10 text-success',
+    conformed: 'bg-success/10 text-success',
+    claimed: 'bg-success/10 text-success',
   };
   return (
     <span
@@ -49,7 +50,7 @@ function getStatusBadge(status: string) {
         variants[status] || variants.not_started,
       )}
     >
-      {labels[status] || status}
+      {formatStatusLabel(status, { fallback: 'Not Started' })}
     </span>
   );
 }
@@ -120,7 +121,10 @@ export function AssignedWorkPage() {
   };
   const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', portalScope);
   const lotItpPath = (lotId: string) =>
-    buildPortalCompanyScopedPath(`/subcontractor-portal/lots/${lotId}/itp`, portalScope);
+    buildPortalCompanyScopedPath(
+      `/subcontractor-portal/lots/${encodeURIComponent(lotId)}/itp`,
+      portalScope,
+    );
 
   const handleProjectChange = (value: string) => {
     const selected = findPortalCompanyOptionByValue(projectOptions, value);
@@ -129,10 +133,11 @@ export function AssignedWorkPage() {
   };
 
   // Group lots by status
-  const inProgress = lots.filter((l) => l.status === 'in_progress');
-  const notStarted = lots.filter((l) => l.status === 'not_started' || !l.status);
-  const completed = lots.filter((l) => l.status === 'completed');
-  const onHold = lots.filter((l) => l.status === 'on_hold');
+  const inProgress = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'inProgress');
+  const notStarted = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'notStarted');
+  const completed = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'completed');
+  const onHold = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'onHold');
+  const other = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'other');
 
   if (loading) {
     return (
@@ -301,6 +306,19 @@ export function AssignedWorkPage() {
               </h2>
               <div className="space-y-2">
                 {completed.map((lot) => (
+                  <LotCard key={lot.id} lot={lot} to={lotItpPath(lot.id)} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {other.length > 0 && (
+            <div>
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
+                Other ({other.length})
+              </h2>
+              <div className="space-y-2">
+                {other.map((lot) => (
                   <LotCard key={lot.id} lot={lot} to={lotItpPath(lot.id)} />
                 ))}
               </div>

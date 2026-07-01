@@ -21,10 +21,14 @@ vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
-const apiFetchMock = vi.fn();
-vi.mock('@/lib/api', () => ({
-  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
-}));
+const apiFetchMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    apiFetch: (...args: unknown[]) => apiFetchMock(...args),
+  };
+});
 
 const uploadMock = vi.fn();
 vi.mock('@/pages/lots/hooks/useLotPhotoUpload', () => ({
@@ -83,6 +87,7 @@ function setApi({
   canComplete = true,
   completions = [] as ITPCompletion[],
   createdCompletion = { id: 'comp-new' } as Partial<ITPCompletion>,
+  instanceError = null as Error | null,
 } = {}) {
   apiFetchMock.mockReset();
   apiFetchMock.mockImplementation((url: string, opts?: { method?: string }) => {
@@ -107,6 +112,7 @@ function setApi({
       url ===
         '/api/itp/instances/lot/lot-1?subcontractorView=true&projectId=proj-1&subcontractorCompanyId=sub-1'
     ) {
+      if (instanceError) return Promise.reject(instanceError);
       return Promise.resolve({ instance: { ...instance, completions } });
     }
     if (url === '/api/itp/completions' && opts?.method === 'POST') {
@@ -169,6 +175,21 @@ describe('useSubbieItpRun', () => {
     const { result } = renderHook(() => useSubbieItpRun('lot-1'));
     await waitFor(() => expect(result.current.instance).not.toBeNull());
     expect(result.current.canComplete).toBe(false);
+  });
+
+  it('surfaces instance access/server failures instead of hiding them as no ITP', async () => {
+    setApi({
+      canComplete: true,
+      instanceError: new Error('You do not have access to this project'),
+    });
+
+    const { result } = renderHook(() => useSubbieItpRun('lot-1'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.loadError).toBe('You do not have access to this project');
+    });
+    expect(result.current.instance).toBeNull();
   });
 
   it('photo on an item WITHOUT a completion creates a pending completion FIRST, then uploads', async () => {

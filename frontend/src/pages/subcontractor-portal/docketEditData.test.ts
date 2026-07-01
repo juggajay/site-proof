@@ -3,6 +3,10 @@ import {
   buildAssignedLotsPath,
   buildDocketDetailPath,
   buildDocketEditRoute,
+  buildDocketLabourEntryPath,
+  buildDocketLabourPath,
+  buildDocketPlantEntryPath,
+  buildDocketPlantPath,
   buildExistingDocketsPath,
   getDocketDisplayLabourEntryCost,
   getDocketDisplayLabourEntryHours,
@@ -58,6 +62,18 @@ describe('docket edit data – path builders', () => {
 
   it('builds the docket detail path', () => {
     expect(buildDocketDetailPath('docket-1')).toBe('/api/dockets/docket-1');
+    expect(buildDocketDetailPath('docket/1')).toBe('/api/dockets/docket%2F1');
+  });
+
+  it('encodes docket and entry ids in mutation paths', () => {
+    expect(buildDocketLabourPath('docket/1')).toBe('/api/dockets/docket%2F1/labour');
+    expect(buildDocketPlantPath('docket/1')).toBe('/api/dockets/docket%2F1/plant');
+    expect(buildDocketLabourEntryPath('docket/1', 'entry/2')).toBe(
+      '/api/dockets/docket%2F1/labour/entry%2F2',
+    );
+    expect(buildDocketPlantEntryPath('docket/1', 'entry/2')).toBe(
+      '/api/dockets/docket%2F1/plant/entry%2F2',
+    );
   });
 
   it('encodes the project id in the existing-dockets path', () => {
@@ -74,6 +90,7 @@ describe('docket edit data – route builder', () => {
   it('omits the project query when no project id is supplied', () => {
     expect(buildDocketEditRoute('docket-1')).toBe('/subcontractor-portal/docket/docket-1');
     expect(buildDocketEditRoute('docket-1', null)).toBe('/subcontractor-portal/docket/docket-1');
+    expect(buildDocketEditRoute('docket/1')).toBe('/subcontractor-portal/docket/docket%2F1');
   });
 
   it('appends an encoded project query when a project id is supplied', () => {
@@ -82,6 +99,9 @@ describe('docket edit data – route builder', () => {
     );
     expect(buildDocketEditRoute('docket-1', 'proj 1', 'sub 2')).toBe(
       '/subcontractor-portal/docket/docket-1?projectId=proj+1&subcontractorCompanyId=sub+2',
+    );
+    expect(buildDocketEditRoute('docket/1', 'proj 1', 'sub 2')).toBe(
+      '/subcontractor-portal/docket/docket%2F1?projectId=proj+1&subcontractorCompanyId=sub+2',
     );
   });
 });

@@ -100,6 +100,7 @@ function renderScreen() {
       <Routes>
         <Route path="/m/lots/:lotId" element={<LotHubScreen />} />
         <Route path="/m/docs" element={<LocationProbe />} />
+        <Route path="/m/photos" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -119,6 +120,21 @@ describe('LotHubScreen', () => {
 
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/m/docs?projectId=proj-1&lotId=lot-1',
+    );
+  });
+
+  it('carries project and lot context to the Photos surface', () => {
+    _data = {
+      ...makeData(),
+      lots: [makeLot({ id: 'lot-1', documentCount: 2 })],
+    };
+
+    renderScreen();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Photos — 2 on this lot' }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/m/photos?projectId=proj-1&lotId=lot-1',
     );
   });
 

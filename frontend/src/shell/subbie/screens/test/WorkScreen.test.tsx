@@ -126,10 +126,27 @@ describe('subbie shell WorkScreen', () => {
     ]);
     renderWork();
     await screen.findByText('LOT-001');
-    expect(screen.getByText(/In Progress \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Not Started \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText(/On Hold \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Completed \(1\)/)).toBeInTheDocument();
+    ['In Progress', 'Not Started', 'On Hold', 'Completed'].forEach((group) => {
+      expect(screen.getByText(new RegExp(`${group} \\(1\\)`))).toBeInTheDocument();
+    });
+  });
+
+  it('keeps later lifecycle statuses visible instead of dropping assigned lots', async () => {
+    setLots([
+      { id: 'l1', lotNumber: 'LOT-CONF', status: 'conformed' },
+      { id: 'l2', lotNumber: 'LOT-NCR', status: 'ncr_raised' },
+      { id: 'l3', lotNumber: 'LOT-TEST', status: 'awaiting_test' },
+      { id: 'l4', lotNumber: 'LOT-CUSTOM', status: 'custom_status' },
+    ]);
+    renderWork();
+
+    await screen.findByText('LOT-CONF');
+    ['Completed', 'On Hold', 'In Progress', 'Other'].forEach((group) => {
+      expect(screen.getByText(new RegExp(`${group} \\(1\\)`))).toBeInTheDocument();
+    });
+    ['CONFORMED', 'NCR RAISED', 'AWAITING TEST', 'CUSTOM STATUS'].forEach((label) => {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
   });
 
   it('navigates to the ITP run on tap when the itps module is enabled', async () => {

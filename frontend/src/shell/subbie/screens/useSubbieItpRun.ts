@@ -27,7 +27,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
+import { extractErrorMessage, handleApiError, isNotFound } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import type { ITPCompletion, ITPInstance } from '@/pages/lots/types';
 import { getItpPhotoValidationError } from '@/pages/lots/lib/itpEvidence';
@@ -102,6 +102,7 @@ export function useSubbieItpRun(
       return;
     }
     try {
+      setLoadError(null);
       const encodedLotId = encodeURIComponent(lotId);
       const lotData = await apiFetch<{ lot: SubbieLot }>(
         `/api/lots/${encodedLotId}?portalModule=itps${scopeQuery ? `&${scopeQuery.slice(1)}` : ''}`,
@@ -117,12 +118,17 @@ export function useSubbieItpRun(
           `/api/itp/instances/lot/${encodedLotId}?subcontractorView=true${scopeQuery ? `&${scopeQuery.slice(1)}` : ''}`,
         );
         setInstance(itpData.instance);
-      } catch {
-        // No ITP instance for this lot (classic swallows this).
+      } catch (err) {
+        if (!isNotFound(err)) {
+          throw err;
+        }
+        // No ITP instance for this lot.
+        setInstance(null);
       }
     } catch (err) {
       logError('Subbie ITP run: fetch failed', err);
       setLoadError(extractErrorMessage(err, 'Failed to load ITP data'));
+      setInstance(null);
     } finally {
       setLoading(false);
     }

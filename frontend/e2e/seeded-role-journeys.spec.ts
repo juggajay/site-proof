@@ -6,6 +6,11 @@ const E2E_OUTCOME_INSTANCE_ID = '8e580001-15c7-4f8b-9a2a-000000000002';
 const E2E_OUTCOME_PASS_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000003';
 const E2E_OUTCOME_NA_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000004';
 const E2E_OUTCOME_FAIL_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000005';
+const E2E_SUBCONTRACTOR_COMPANY_ID = 'e2e-subcontractor-company';
+
+function subbieMobileQuery() {
+  return `projectId=${E2E_PROJECT_ID}&subcontractorCompanyId=${E2E_SUBCONTRACTOR_COMPANY_ID}`;
+}
 
 function futureDateKey(daysAhead: number) {
   const date = new Date();
@@ -98,6 +103,63 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByText('Verify formation is ready for inspection')).toBeVisible();
     await expect(page.getByText(/View only/i)).toHaveCount(0);
     await expect(page.getByText(/do not have permission to complete/i)).toHaveCount(0);
+  });
+
+  test('assigned subcontractor can use the mobile shell against the real backend', async ({
+    page,
+  }) => {
+    await loginAsSubcontractor(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const query = subbieMobileQuery();
+
+    await page.goto(`/p?${query}`);
+    await expect(page.getByRole('banner').getByText('SITEPROOF', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('banner').getByText('SUBCONTRACTOR', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('E2E Subcontractors')).toBeVisible();
+    await expect(page.getByText('E2E Highway Upgrade')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'My Work — 2 lots' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Inspections' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Holds and Tests' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Documents' })).toBeVisible();
+
+    await page.goto(`/p/work?${query}`);
+    await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible();
+    await expect(page.getByText('LOT-001')).toBeVisible();
+    await expect(page.getByText('LOT-ITP-STD')).toBeVisible();
+
+    await page.goto(`/p/itps?${query}`);
+    await expect(page.getByRole('heading', { name: 'Inspections' })).toBeVisible();
+    await expect(page.getByText('E2E Roadworks ITP')).toBeVisible();
+    await expect(page.getByText('E2E Standard Outcomes ITP')).toBeVisible();
+    await expect(page.getByText('YOU CAN COMPLETE').first()).toBeVisible();
+
+    await page.goto(`/p/lots/e2e-lot/itp?${query}`);
+    const activeHoldPoint = page.getByText('Verify formation is ready for inspection');
+    const completedRun = page.getByText('All checks complete');
+    await expect(activeHoldPoint.or(completedRun).first()).toBeVisible();
+    if (await activeHoldPoint.isVisible()) {
+      await expect(page.getByText('Awaiting hold point release').first()).toBeVisible();
+    }
+
+    await page.goto(`/p/quality?${query}`);
+    await expect(page.getByRole('heading', { name: 'Holds & Tests' })).toBeVisible();
+    await expect(page.getByText('HOLD POINTS', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Verify formation is ready for inspection/i)).toBeVisible();
+    await expect(page.getByText('LOT-001').first()).toBeVisible();
+
+    await page.goto(`/p/dockets?${query}`);
+    await expect(page.getByRole('heading', { name: 'My Dockets' })).toBeVisible();
+    await expect(page.getByText('JANUARY 2026')).toBeVisible();
+    await expect(page.getByText('PENDING').first()).toBeVisible();
+
+    await page.goto(`/p/docs?${query}`);
+    await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();
+    await expect(
+      page.getByText('Project documents shared with you will appear here.'),
+    ).toBeVisible();
   });
 
   test('assigned subcontractor can submit ordinary ITP pass, N/A, and fail outcomes', async ({
