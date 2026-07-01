@@ -593,7 +593,9 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         photo.checklistItemId
       ) {
         try {
-          const instanceResponse = await authFetch(apiUrl(`/api/itp/instances/lot/${photo.lotId}`));
+          const instanceResponse = await authFetch(
+            apiUrl(`/api/itp/instances/lot/${encodeURIComponent(photo.lotId)}`),
+          );
 
           if (!instanceResponse.ok) {
             return keepPostUploadAttachQueued(

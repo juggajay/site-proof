@@ -159,7 +159,7 @@ export function LotHubScreen() {
         icon={Camera}
         title="Photos"
         description={documentCount > 0 ? `${documentCount} on this lot` : 'No documents yet'}
-        onPress={() => navigate(withProject('/m/photos'))}
+        onPress={() => navigate(withProject('/m/photos', { lotId }))}
         ariaLabel={`Photos${documentCount > 0 ? ` — ${documentCount} on this lot` : ''}`}
       />
 

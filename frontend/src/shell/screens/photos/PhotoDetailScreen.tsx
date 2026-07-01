@@ -28,6 +28,7 @@ import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { usePhotosShellContext } from './photosShellContext';
 import { useShellPhotoParam } from './useShellPhotoParam';
+import { useShellPhotoLotParam } from './useShellPhotoLotParam';
 import { usePhotoRefile } from './usePhotoRefile';
 import { formatGps, formatPhotoDateLong } from './photosShellState';
 
@@ -38,6 +39,7 @@ export function PhotoDetailScreen() {
   const navigate = useNavigate();
   const { isOnline } = useOfflineStatus();
   const documentId = useShellPhotoParam();
+  const lotId = useShellPhotoLotParam();
   const { projectId, items, loading, refetch } = usePhotosShellContext();
 
   const item = useMemo(() => items.find((p) => p.id === documentId) ?? null, [items, documentId]);
@@ -48,7 +50,7 @@ export function PhotoDetailScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [lotSearch, setLotSearch] = useState('');
 
-  const backPath = withProjectQuery('/m/photos', projectId);
+  const backPath = withProjectQuery('/m/photos', projectId, { lotId });
 
   const filteredLots = useMemo(() => {
     const q = lotSearch.trim().toLowerCase();

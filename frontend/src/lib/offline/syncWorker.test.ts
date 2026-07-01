@@ -969,6 +969,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
         entityId: 'offline-ci-1-12345',
         completionId: 'offline-ci-1-12345',
         checklistItemId: 'ci-1',
+        lotId: 'lot/1',
       }),
     );
     authFetchMock
@@ -987,7 +988,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     );
 
     expect(result).toEqual({ status: 'synced' });
-    expect(authFetchMock).toHaveBeenNthCalledWith(1, '/api/itp/instances/lot/lot-1');
+    expect(authFetchMock).toHaveBeenNthCalledWith(1, '/api/itp/instances/lot/lot%2F1');
     expect(authFetchMock.mock.calls[2][0]).toBe(
       '/api/itp/completions/completion-real-9/attachments',
     );

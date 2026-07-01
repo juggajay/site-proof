@@ -25,6 +25,8 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatStatusLabel } from '@/lib/statusLabels';
+import { getAssignedWorkStatusGroup } from '@/pages/subcontractor-portal/assignedWorkStatus';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { ShellAccessDenied } from './ShellAccessDenied';
 import { useSubbieShellContext } from '../subbieShellContext';
@@ -38,32 +40,31 @@ interface Lot {
   area?: number;
 }
 
-// Status pill tone + label — mirrors the classic AssignedWorkPage status badges.
-const STATUS_LABEL: Record<string, string> = {
-  not_started: 'Not Started',
-  in_progress: 'In Progress',
-  completed: 'Completed',
-  on_hold: 'On Hold',
-};
-
 const STATUS_PILL_CLASS: Record<string, string> = {
   not_started: 'shell-pill',
   in_progress: 'shell-pill',
-  completed: 'shell-pill shell-pill-good',
+  awaiting_test: 'shell-pill shell-pill-attention',
+  hold_point: 'shell-pill shell-pill-attention',
+  ncr_raised: 'shell-pill shell-pill-attention',
   on_hold: 'shell-pill shell-pill-attention',
+  completed: 'shell-pill shell-pill-good',
+  conformed: 'shell-pill shell-pill-good',
+  claimed: 'shell-pill shell-pill-good',
 };
 
 // Conservative, honest progress bar from status alone (the lots-module payload
 // carries no per-lot completion count). Done → full; in progress → partial;
 // everything else empty. Never a fabricated ratio.
 function lotProgressPct(status: string): number {
-  if (status === 'completed') return 100;
-  if (status === 'in_progress') return 55;
+  if (['completed', 'conformed', 'claimed'].includes(status)) return 100;
+  if (['in_progress', 'awaiting_test', 'hold_point', 'ncr_raised', 'on_hold'].includes(status)) {
+    return 55;
+  }
   return 0;
 }
 
 function LotCard({ lot, onPress }: { lot: Lot; onPress?: () => void }) {
-  const label = STATUS_LABEL[lot.status] ?? lot.status;
+  const label = formatStatusLabel(lot.status, { fallback: 'Not Started' });
   const pillClass = STATUS_PILL_CLASS[lot.status] ?? 'shell-pill';
   const pct = lotProgressPct(lot.status);
 
@@ -170,11 +171,12 @@ export function WorkScreen() {
 
   // Grouping mirrors the classic AssignedWorkPage exactly.
   const groups = useMemo(() => {
-    const inProgress = lots.filter((l) => l.status === 'in_progress');
-    const notStarted = lots.filter((l) => l.status === 'not_started' || !l.status);
-    const onHold = lots.filter((l) => l.status === 'on_hold');
-    const completed = lots.filter((l) => l.status === 'completed');
-    return { inProgress, notStarted, onHold, completed };
+    const inProgress = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'inProgress');
+    const notStarted = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'notStarted');
+    const onHold = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'onHold');
+    const completed = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'completed');
+    const other = lots.filter((l) => getAssignedWorkStatusGroup(l.status) === 'other');
+    return { inProgress, notStarted, onHold, completed, other };
   }, [lots]);
 
   if (!lotsEnabled) {
@@ -230,6 +232,7 @@ export function WorkScreen() {
       <LotGroup title="Not Started" lots={groups.notStarted} onPressLot={onPressLot} />
       <LotGroup title="On Hold" lots={groups.onHold} onPressLot={onPressLot} />
       <LotGroup title="Completed" lots={groups.completed} onPressLot={onPressLot} />
+      <LotGroup title="Other" lots={groups.other} onPressLot={onPressLot} />
     </ShellScreen>
   );
 }

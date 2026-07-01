@@ -8,6 +8,11 @@ import { formatDateKey } from '@/lib/localDate';
 import { useAuth } from '@/lib/auth';
 import {
   buildDocketEditRoute,
+  buildDocketDetailPath,
+  buildDocketLabourEntryPath,
+  buildDocketLabourPath,
+  buildDocketPlantEntryPath,
+  buildDocketPlantPath,
   findTodayDocket,
   getDocketDisplayTotalCost,
   useAssignedLotsQuery,
@@ -194,7 +199,7 @@ export function DocketEditPage() {
         return currentDocket;
       }
 
-      const data = await apiFetch<{ docket: Docket }>(`/api/dockets/${currentDocket.id}`, {
+      const data = await apiFetch<{ docket: Docket }>(buildDocketDetailPath(currentDocket.id), {
         method: 'PATCH',
         body: JSON.stringify({ notes }),
       });
@@ -236,7 +241,7 @@ export function DocketEditPage() {
       const hours = calculateHours(startTime, finishTime);
 
       const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(
-        `/api/dockets/${currentDocket.id}/labour`,
+        buildDocketLabourPath(currentDocket.id),
         {
           method: 'POST',
           body: JSON.stringify({
@@ -294,7 +299,7 @@ export function DocketEditPage() {
       const currentDocket = await ensureDocket();
 
       const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(
-        `/api/dockets/${currentDocket.id}/plant`,
+        buildDocketPlantPath(currentDocket.id),
         {
           method: 'POST',
           body: JSON.stringify({
@@ -330,7 +335,7 @@ export function DocketEditPage() {
     if (!docket) return;
 
     try {
-      await apiFetch(`/api/dockets/${docket.id}/labour/${entryId}`, {
+      await apiFetch(buildDocketLabourEntryPath(docket.id, entryId), {
         method: 'DELETE',
       });
 
@@ -357,7 +362,7 @@ export function DocketEditPage() {
     if (!docket) return;
 
     try {
-      await apiFetch(`/api/dockets/${docket.id}/plant/${entryId}`, {
+      await apiFetch(buildDocketPlantEntryPath(docket.id, entryId), {
         method: 'DELETE',
       });
 

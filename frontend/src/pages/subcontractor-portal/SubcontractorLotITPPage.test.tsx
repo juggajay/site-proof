@@ -141,9 +141,9 @@ function mutatingCompletionCalls() {
     );
 }
 
-function renderPage() {
+function renderPage(initialEntry = '/subcontractor-portal/itps/lot-1') {
   return render(
-    <MemoryRouter initialEntries={['/subcontractor-portal/itps/lot-1']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/subcontractor-portal/itps/:lotId" element={<SubcontractorLotITPPage />} />
       </Routes>
@@ -158,6 +158,18 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('SubcontractorLotITPPage — trust boundary', () => {
+  it('encodes route lot ids before building lot and ITP API paths', async () => {
+    mockApi(true);
+    renderPage('/subcontractor-portal/itps/lot%2F1?projectId=proj-1');
+
+    await waitFor(() => expect(screen.getByTestId('mobile-itp-checklist')).toBeInTheDocument());
+
+    expect(apiFetch).toHaveBeenCalledWith('/api/lots/lot%2F1?portalModule=itps&projectId=proj-1');
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/api/itp/instances/lot/lot%2F1?subcontractorView=true&projectId=proj-1',
+    );
+  });
+
   it('renders the checklist in read-only mode when canCompleteITP is false', async () => {
     mockApi(false);
     renderPage();

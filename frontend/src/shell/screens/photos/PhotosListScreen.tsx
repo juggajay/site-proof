@@ -22,9 +22,11 @@ import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { usePhotosShellContext } from './photosShellContext';
+import { useShellPhotoLotParam } from './useShellPhotoLotParam';
 import {
   PHOTO_FILTERS,
   filterPhotos,
+  unfiledPhotoCount,
   formatPhotoDate,
   type PhotoFilterKey,
   type PhotoItem,
@@ -114,18 +116,27 @@ function PhotoTile({ item, onPress }: { item: PhotoItem; onPress: () => void }) 
 export function PhotosListScreen() {
   const navigate = useNavigate();
   const { projectId, items, loading, loadError, unfiledCount, refetch } = usePhotosShellContext();
+  const lotId = useShellPhotoLotParam();
 
   const [filter, setFilter] = useState<PhotoFilterKey>('all');
 
-  const visible = useMemo(() => filterPhotos(items, filter), [items, filter]);
+  const scopedItems = useMemo(
+    () => (lotId ? items.filter((item) => item.lotId === lotId) : items),
+    [items, lotId],
+  );
+  const visible = useMemo(() => filterPhotos(scopedItems, filter), [scopedItems, filter]);
+  const scopedUnfiledCount = lotId ? unfiledPhotoCount(scopedItems) : unfiledCount;
 
-  const photoHref = (item: PhotoItem) => withProjectQuery(`/m/photos/${item.id}`, projectId);
+  const photoHref = (item: PhotoItem) =>
+    withProjectQuery(`/m/photos/${item.id}`, projectId, { lotId });
 
   const sub = (
     <span className="flex items-center gap-2">
-      {unfiledCount > 0 ? (
+      {lotId ? (
+        <span>Photos filed to this lot</span>
+      ) : scopedUnfiledCount > 0 ? (
         <span className="shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-warning">
-          {unfiledCount} unfiled
+          {scopedUnfiledCount} unfiled
         </span>
       ) : (
         <span>Recent &amp; unfiled photos</span>
@@ -147,34 +158,35 @@ export function PhotosListScreen() {
 
   return (
     <ShellScreen variant="inner" title="Photos" parent="/m" sub={sub}>
-      {/* Filter chips */}
-      <div
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-        role="group"
-        aria-label="Filter photos"
-      >
-        {PHOTO_FILTERS.map((f) => {
-          const active = filter === f.key;
-          const showCount = f.key === 'unfiled' && unfiledCount > 0;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              aria-pressed={active}
-              className={cn(
-                'min-h-[40px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
-                active
-                  ? 'bg-foreground text-[hsl(40_33%_98%)]'
-                  : 'bg-secondary text-muted-foreground',
-              )}
-            >
-              {f.label}
-              {showCount ? ` (${unfiledCount})` : ''}
-            </button>
-          );
-        })}
-      </div>
+      {!lotId && (
+        <div
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          role="group"
+          aria-label="Filter photos"
+        >
+          {PHOTO_FILTERS.map((f) => {
+            const active = filter === f.key;
+            const showCount = f.key === 'unfiled' && scopedUnfiledCount > 0;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                aria-pressed={active}
+                className={cn(
+                  'min-h-[40px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
+                  active
+                    ? 'bg-foreground text-[hsl(40_33%_98%)]'
+                    : 'bg-secondary text-muted-foreground',
+                )}
+              >
+                {f.label}
+                {showCount ? ` (${scopedUnfiledCount})` : ''}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loadError && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
@@ -192,7 +204,13 @@ export function PhotosListScreen() {
       {!loadError && visible.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-16 text-center text-[14px] leading-relaxed text-muted-foreground">
           <ImageOff size={28} className="text-muted-foreground/50" aria-hidden />
-          {filter === 'unfiled' ? (
+          {lotId ? (
+            <span>
+              No photos filed to this lot yet.
+              <br />
+              Lot photos appear here once captured or filed.
+            </span>
+          ) : filter === 'unfiled' ? (
             <span>
               Nothing unfiled. Nice and tidy.
               <br />

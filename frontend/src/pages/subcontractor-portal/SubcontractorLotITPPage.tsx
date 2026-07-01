@@ -39,13 +39,14 @@ export function SubcontractorLotITPPage() {
   const backToItpsPath = `/subcontractor-portal/itps${backQuery ? `?${backQuery}` : ''}`;
   const lotDetailQuery = `?portalModule=itps${backQuery ? `&${backQuery}` : ''}`;
   const instanceQuery = `?subcontractorView=true${backQuery ? `&${backQuery}` : ''}`;
+  const encodedLotId = lotId ? encodeURIComponent(lotId) : '';
 
   const fetchData = useCallback(async () => {
     if (!lotId) return;
 
     try {
       // Fetch lot details
-      const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lotId}${lotDetailQuery}`);
+      const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${encodedLotId}${lotDetailQuery}`);
       setLot(lotData.lot);
 
       // Check if subcontractor can complete items (check all assignments)
@@ -58,7 +59,7 @@ export function SubcontractorLotITPPage() {
       // Fetch ITP instance for this lot
       try {
         const itpData = await apiFetch<{ instance: ITPInstance | null }>(
-          `/api/itp/instances/lot/${lotId}${instanceQuery}`,
+          `/api/itp/instances/lot/${encodedLotId}${instanceQuery}`,
         );
         setItpInstance(itpData.instance);
       } catch {
@@ -70,7 +71,7 @@ export function SubcontractorLotITPPage() {
     } finally {
       setLoading(false);
     }
-  }, [lotId, lotDetailQuery, instanceQuery]);
+  }, [lotId, encodedLotId, lotDetailQuery, instanceQuery]);
 
   useEffect(() => {
     if (lotId) {
@@ -117,7 +118,7 @@ export function SubcontractorLotITPPage() {
 
         if (completion) {
           // Update existing completion
-          await apiFetch(`/api/itp/completions/${completion.id}`, {
+          await apiFetch(`/api/itp/completions/${encodeURIComponent(completion.id)}`, {
             method: 'PATCH',
             body: JSON.stringify({ notes }),
           });

@@ -130,7 +130,23 @@ export function buildAssignedLotsPath(
 }
 
 export function buildDocketDetailPath(docketId: string): string {
-  return `/api/dockets/${docketId}`;
+  return `/api/dockets/${encodeURIComponent(docketId)}`;
+}
+
+export function buildDocketLabourPath(docketId: string): string {
+  return `${buildDocketDetailPath(docketId)}/labour`;
+}
+
+export function buildDocketPlantPath(docketId: string): string {
+  return `${buildDocketDetailPath(docketId)}/plant`;
+}
+
+export function buildDocketLabourEntryPath(docketId: string, entryId: string): string {
+  return `${buildDocketLabourPath(docketId)}/${encodeURIComponent(entryId)}`;
+}
+
+export function buildDocketPlantEntryPath(docketId: string, entryId: string): string {
+  return `${buildDocketPlantPath(docketId)}/${encodeURIComponent(entryId)}`;
 }
 
 export function buildExistingDocketsPath(
@@ -145,7 +161,7 @@ export function buildDocketEditRoute(
   projectId?: string | null,
   subcontractorCompanyId?: string | null,
 ): string {
-  return `/subcontractor-portal/docket/${docketId}${buildPortalCompanyQuery({
+  return `/subcontractor-portal/docket/${encodeURIComponent(docketId)}${buildPortalCompanyQuery({
     projectId,
     subcontractorCompanyId,
   })}`;

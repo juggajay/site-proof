@@ -77,9 +77,9 @@ function pending(over: Partial<OfflinePendingPhoto> = {}): OfflinePendingPhoto {
   };
 }
 
-function renderScreen() {
+function renderScreen(initialEntry = '/m/photos') {
   return render(
-    <MemoryRouter initialEntries={['/m/photos']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/m/photos" element={<PhotosListScreen />} />
         <Route path="/m/photos/:documentId" element={<div>photo detail</div>} />
@@ -146,6 +146,31 @@ describe('PhotosListScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Unfiled/ }));
     expect(screen.queryByText('LOT-1')).toBeNull();
     expect(screen.getByText('UNFILED')).toBeInTheDocument();
+  });
+
+  it('honours lot-scoped deep links from the lot hub', () => {
+    _data = makeData({
+      items: mergePhotoItems(
+        [
+          server({ id: 'lot-photo', lotId: 'lot-77', lot: { id: 'lot-77', lotNumber: 'LOT-077' } }),
+          server({
+            id: 'other-photo',
+            lotId: 'lot-88',
+            lot: { id: 'lot-88', lotNumber: 'LOT-088' },
+          }),
+          server({ id: 'unfiled-photo' }),
+        ],
+        [],
+      ),
+    });
+
+    renderScreen('/m/photos?projectId=proj-1&lotId=lot-77');
+
+    expect(screen.getByText('Photos filed to this lot')).toBeInTheDocument();
+    expect(screen.getByText('LOT-077')).toBeInTheDocument();
+    expect(screen.queryByText('LOT-088')).toBeNull();
+    expect(screen.queryByText('UNFILED')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Unfiled/ })).toBeNull();
   });
 
   it('shows the loading skeleton grid', () => {
