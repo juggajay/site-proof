@@ -168,3 +168,4 @@ jobs:
           ALLOW_MOCK_OAUTH: "false"
           ALLOW_TEST_AUTH_ENDPOINTS: "false"
           RATE_LIMIT_STORE: database
+          TRUST_PROXY: "1"
