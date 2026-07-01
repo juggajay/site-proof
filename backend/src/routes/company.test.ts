@@ -1429,6 +1429,28 @@ describe('Company API', () => {
       expect(changes.roleInCompany).toEqual({ from: 'foreman', to: 'project_manager' });
     });
 
+    it('rejects API-key-authenticated company member role changes before mutating data', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app)
+          .patch(`/api/company/members/${memberId}`)
+          .set('x-api-key', apiKey)
+          .send({ roleInCompany: 'project_manager' });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('requires an authenticated browser session');
+        await expect(
+          prisma.user.findUnique({
+            where: { id: memberId },
+            select: { roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ roleInCompany: 'foreman' });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('rejects changing your own company role', async () => {
       const res = await request(app)
         .patch(`/api/company/members/${userId}`)
@@ -1826,6 +1848,28 @@ describe('Company API', () => {
         sendInviteSpy.mockRestore();
       }
     }
+
+    it('rejects API-key-authenticated company member invites before mutating data', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const email = `api-key-company-invite-${Date.now()}@example.com`;
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('x-api-key', apiKey)
+          .send({
+            email,
+            fullName: 'API Key Invite Target',
+            roleInCompany: 'foreman',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('requires an authenticated browser session');
+        await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
 
     it('creates a pending company member and one-time setup token', async () => {
       const email = `company-invite-${Date.now()}@example.com`;
@@ -2843,6 +2887,11 @@ describe('Company API', () => {
           OR: [{ entityId: { in: removalUserIds } }, { entityId: { in: removalCompanyIds } }],
         },
       });
+      await prisma.scheduledReport.deleteMany({
+        where: {
+          OR: [{ projectId: { in: removalProjectIds } }, { createdById: { in: removalUserIds } }],
+        },
+      });
       await prisma.projectUser.deleteMany({
         where: {
           OR: [{ userId: { in: removalUserIds } }, { projectId: { in: removalProjectIds } }],
@@ -2890,6 +2939,17 @@ describe('Company API', () => {
           status: 'active',
         },
       });
+      const schedule = await prisma.scheduledReport.create({
+        data: {
+          projectId: project.id,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '08:15',
+          recipients: 'removed-member-external@example.com',
+          isActive: true,
+          createdById: member.userId,
+        },
+      });
 
       const res = await request(app)
         .delete(`/api/company/members/${member.userId}`)
@@ -2911,6 +2971,16 @@ describe('Company API', () => {
       await expect(
         prisma.projectUser.count({ where: { projectId: project.id, userId: member.userId } }),
       ).resolves.toBe(0);
+      await expect(
+        prisma.scheduledReport.findUnique({
+          where: { id: schedule.id },
+          select: { isActive: true, recipients: true, createdById: true },
+        }),
+      ).resolves.toMatchObject({
+        isActive: false,
+        recipients: '',
+        createdById: null,
+      });
 
       const auditLog = await prisma.auditLog.findFirst({
         where: {
@@ -2930,6 +3000,34 @@ describe('Company API', () => {
         status: 'removed',
         removedProjectMembershipCount: 1,
       });
+    });
+
+    it('rejects API-key-authenticated company member removal before mutating data', async () => {
+      const member = await registerTestUser(app, {
+        emailPrefix: 'company-remove-api-key',
+        fullName: 'Company Remove API Key',
+        companyId,
+        roleInCompany: 'site_engineer',
+      });
+      removalUserIds.push(member.userId);
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app)
+          .delete(`/api/company/members/${member.userId}`)
+          .set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('requires an authenticated browser session');
+        await expect(
+          prisma.user.findUnique({
+            where: { id: member.userId },
+            select: { companyId: true, roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ companyId, roleInCompany: 'site_engineer' });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('revokes the removed member API keys (M72a)', async () => {
@@ -3584,6 +3682,7 @@ describe('Company API', () => {
     let leaveUserId: string;
     let leaveUserToken: string;
     let projectId: string;
+    let leaveScheduleId: string;
 
     beforeAll(async () => {
       // Create company
@@ -3652,6 +3751,19 @@ describe('Company API', () => {
           status: 'active',
         },
       });
+
+      const schedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '07:30',
+          recipients: 'leave-member-external@example.com',
+          isActive: true,
+          createdById: leaveUserId,
+        },
+      });
+      leaveScheduleId = schedule.id;
     });
 
     afterAll(async () => {
@@ -3661,6 +3773,7 @@ describe('Company API', () => {
           OR: [{ entityId: leaveCompanyId }, { userId: leaveOwnerId }, { userId: leaveUserId }],
         },
       });
+      await prisma.scheduledReport.deleteMany({ where: { projectId } });
       await prisma.projectUser.deleteMany({ where: { projectId } });
       await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
 
@@ -3794,6 +3907,17 @@ describe('Company API', () => {
         memberUserId: leaveUserId,
         previousRole: 'admin',
         removedProjectMembershipCount: 1,
+      });
+
+      await expect(
+        prisma.scheduledReport.findUnique({
+          where: { id: leaveScheduleId },
+          select: { isActive: true, recipients: true, createdById: true },
+        }),
+      ).resolves.toMatchObject({
+        isActive: false,
+        recipients: '',
+        createdById: null,
       });
     });
 

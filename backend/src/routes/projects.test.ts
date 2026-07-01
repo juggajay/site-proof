@@ -3480,6 +3480,17 @@ describe('Project Team Management', () => {
       update: { role: 'viewer', status: 'active' },
       create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
     });
+    const schedule = await prisma.scheduledReport.create({
+      data: {
+        projectId,
+        reportType: 'lot-status',
+        frequency: 'daily',
+        timeOfDay: '06:45',
+        recipients: 'removed-project-user-external@example.com',
+        isActive: true,
+        createdById: secondUserId,
+      },
+    });
 
     const res = await request(app)
       .delete(`/api/projects/${projectId}/users/${secondUserId}`)
@@ -3494,6 +3505,16 @@ describe('Project Team Management', () => {
     await expect(
       prisma.projectUser.findUnique({ where: { id: membership.id } }),
     ).resolves.toBeNull();
+    await expect(
+      prisma.scheduledReport.findUnique({
+        where: { id: schedule.id },
+        select: { isActive: true, recipients: true, createdById: true },
+      }),
+    ).resolves.toMatchObject({
+      isActive: false,
+      recipients: '',
+      createdById: null,
+    });
 
     const auditLog = await prisma.auditLog.findFirst({
       where: {

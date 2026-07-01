@@ -9,6 +9,7 @@ import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
+import { disableOwnedScheduledReportsForAccessRemoval } from '../../lib/scheduledReports/ownershipCleanup.js';
 import {
   buildProjectUserInvitedResponse,
   buildProjectUserRemovedResponse,
@@ -453,6 +454,7 @@ export function createProjectTeamRouter({
         throw AppError.badRequest('You cannot remove yourself from the project');
       }
 
+      let disabledScheduledReportCount = 0;
       const removedProjectUser = await prisma.$transaction(async (tx) => {
         // Re-read inside the transaction so concurrent role edits/removals cannot bypass the invariant.
         const targetProjectUser = await tx.projectUser.findFirst({
@@ -486,6 +488,11 @@ export function createProjectTeamRouter({
           where: { id: targetProjectUser.id },
         });
 
+        disabledScheduledReportCount = await disableOwnedScheduledReportsForAccessRemoval(tx, {
+          userId: targetUserId,
+          projectId,
+        });
+
         // M73: write the audit record inside the transaction so the removal
         // cannot persist without it (hard-fail).
         await writeAuditLogInTransaction(tx, {
@@ -498,6 +505,7 @@ export function createProjectTeamRouter({
             removedUserId: targetUserId,
             removedUserEmail: targetProjectUser.user.email,
             removedUserRole: targetProjectUser.role,
+            disabledScheduledReportCount,
           },
           req,
         });

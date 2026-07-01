@@ -1,5 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { E2E_PROJECT_ID, login, loginAsAdmin, loginAsOwner, loginAsSubcontractor } from './helpers';
+import { readFile } from 'node:fs/promises';
+import {
+  E2E_PASSWORD,
+  E2E_PROJECT_ID,
+  login,
+  loginAsAdmin,
+  loginAsOwner,
+  loginAsSubcontractor,
+} from './helpers';
 
 const E2E_OUTCOME_LOT_ID = 'e2e-itp-outcomes-lot';
 const E2E_OUTCOME_INSTANCE_ID = '8e580001-15c7-4f8b-9a2a-000000000002';
@@ -9,6 +17,10 @@ const E2E_OUTCOME_FAIL_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000005';
 const E2E_SUBCONTRACTOR_COMPANY_ID = 'e2e-subcontractor-company';
 const E2E_PROJECT_CANDIDATE_EMAIL = 'project-candidate@example.com';
 const E2E_PROJECT_CANDIDATE_NAME = 'E2E Project Candidate';
+const E2E_COMPANY_CANDIDATE_EMAIL = 'company-candidate@example.com';
+const E2E_COMPANY_CANDIDATE_NAME = 'E2E Company Candidate';
+const E2E_COMPANY_LEAVER_EMAIL = 'company-leaver@example.com';
+const E2E_ACCOUNT_DELETE_EMAIL = 'account-delete@example.com';
 
 function subbieMobileQuery() {
   return `projectId=${E2E_PROJECT_ID}&subcontractorCompanyId=${E2E_SUBCONTRACTOR_COMPANY_ID}`;
@@ -92,6 +104,79 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
     await expect(page.getByText('E2E Owner')).toBeVisible();
     await expect(page.getByText('E2E Admin')).toBeVisible();
+  });
+
+  test('owner manages a company member against the real backend', async ({ page }) => {
+    await loginAsOwner(page);
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'Company Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
+    await expect(page.getByText(E2E_COMPANY_CANDIDATE_EMAIL)).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Invite Member' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite Company Member' });
+    await inviteDialog.getByLabel('Email *').fill(E2E_COMPANY_CANDIDATE_EMAIL);
+    await inviteDialog.getByLabel('Full Name').fill(E2E_COMPANY_CANDIDATE_NAME);
+    await inviteDialog.getByLabel('Company Role').selectOption('foreman');
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/company/members/invite') &&
+          response.request().method() === 'POST' &&
+          response.status() === 201,
+      ),
+      inviteDialog.getByRole('button', { name: 'Send Invite' }).click(),
+    ]);
+
+    await expect(
+      inviteDialog.getByRole('status').filter({ hasText: 'already active in your company' }),
+    ).toBeVisible();
+    await inviteDialog.getByRole('button', { name: 'Close' }).first().click();
+
+    const candidateRoleSelect = page.getByLabel(`Change role for ${E2E_COMPANY_CANDIDATE_NAME}`);
+    await expect(candidateRoleSelect).toBeVisible();
+    await expect(candidateRoleSelect).toHaveValue('foreman');
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/company/members/') &&
+          response.request().method() === 'PATCH' &&
+          response.status() === 200,
+      ),
+      candidateRoleSelect.selectOption('site_engineer'),
+    ]);
+
+    await expect(candidateRoleSelect).toHaveValue('site_engineer');
+
+    const candidateRow = page
+      .getByText(E2E_COMPANY_CANDIDATE_NAME)
+      .locator('xpath=ancestor::div[contains(@class, "md:grid-cols")][1]');
+    await candidateRow.getByRole('button', { name: 'Remove' }).click();
+    const removeDialog = page.getByRole('dialog').filter({ hasText: 'Remove Company Member' });
+    await expect(
+      removeDialog.getByText(`Remove ${E2E_COMPANY_CANDIDATE_NAME} from this company`),
+    ).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/company/members/') &&
+          response.request().method() === 'DELETE' &&
+          response.status() === 200,
+      ),
+      removeDialog.getByRole('button', { name: 'Remove Member' }).click(),
+    ]);
+
+    await expect(
+      page.getByRole('status').filter({
+        hasText: `${E2E_COMPANY_CANDIDATE_NAME} was removed from the company.`,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText(E2E_COMPANY_CANDIDATE_EMAIL)).toHaveCount(0);
   });
 
   test('owner manages project team membership against the real backend', async ({ page }) => {
@@ -298,6 +383,91 @@ test.describe.serial('seeded real-backend role journeys', () => {
       page.getByText('Recipients will no longer receive this report automatically.'),
     ).toBeVisible();
     await expect(scheduleDialog.getByText('No scheduled reports yet')).toBeVisible();
+  });
+
+  test('non-owner can leave a company through settings against the real backend', async ({
+    page,
+  }) => {
+    await login(page, E2E_COMPANY_LEAVER_EMAIL, /\/(dashboard|projects)/);
+
+    await page.goto('/settings');
+
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Company Membership' })).toBeVisible();
+    await expect(page.getByText('E2E Civil Pty Ltd')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Leave Company' }).click();
+    const leaveDialog = page.getByRole('alertdialog').filter({ hasText: 'Leave Company' });
+    await expect(leaveDialog.getByText('Remove your access to all company projects')).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/company/leave') &&
+          response.request().method() === 'POST' &&
+          response.status() === 200,
+      ),
+      leaveDialog.getByRole('button', { name: 'Leave Company' }).click(),
+    ]);
+
+    await expect(page).toHaveURL(/\/onboarding/);
+
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Company Membership' })).toHaveCount(0);
+  });
+
+  test('non-owner can export data and delete their account against the real backend', async ({
+    page,
+  }) => {
+    await login(page, E2E_ACCOUNT_DELETE_EMAIL, /\/(dashboard|projects)/);
+
+    await page.goto('/settings');
+
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export My Data' }).click();
+    const download = await downloadPromise;
+
+    const downloadPath = await download.path();
+    expect(downloadPath).toBeTruthy();
+    expect(download.suggestedFilename()).toMatch(
+      /siteproof-data-export-account-delete@example\.com-\d{4}-\d{2}-\d{2}\.json/,
+    );
+
+    const exportedJson = JSON.parse(await readFile(downloadPath!, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(exportedJson.user).toMatchObject({ email: E2E_ACCOUNT_DELETE_EMAIL });
+    const exportedText = JSON.stringify(exportedJson);
+    expect(exportedText).not.toContain('passwordHash');
+    expect(exportedText).not.toContain('keyHash');
+    expect(exportedText).not.toContain('tokenHash');
+    expect(exportedText).not.toContain('p256dh');
+    await download.delete();
+
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Your data export download has started' }),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Delete My Account' }).click();
+    const deleteDialog = page.getByRole('alertdialog').filter({ hasText: 'Delete Account' });
+    await deleteDialog.getByLabel(/Type your email to confirm/).fill(E2E_ACCOUNT_DELETE_EMAIL);
+    await deleteDialog.getByLabel('Enter your password').fill(E2E_PASSWORD);
+
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/auth/delete-account') &&
+          response.request().method() === 'DELETE' &&
+          response.status() === 200,
+      ),
+      deleteDialog.getByRole('button', { name: 'Permanently Delete' }).click(),
+    ]);
+
+    await expect(page).toHaveURL(/\/login/);
   });
 
   test('assigned subcontractor can open the seeded lot ITP with completion access', async ({

@@ -10,12 +10,12 @@ import { logError } from '../../lib/serverLogger.js';
 import { AuditAction, createAuditLog, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { sendCompanyMemberInvitationEmail, sendNotificationEmail } from '../../lib/email.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
-import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
 import {
   TIER_QUOTA_ENFORCEMENT_ENABLED,
   getUserLimitForTier,
   normalizeSubscriptionTier,
 } from '../../lib/tierLimits.js';
+import { disableOwnedScheduledReportsForAccessRemoval } from '../../lib/scheduledReports/ownershipCleanup.js';
 import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
@@ -44,6 +44,8 @@ import {
 
 const COMPANY_MEMBER_INVITATION_EXPIRES_DAYS = 7;
 const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
+const EMAIL_VERIFICATION_REQUIRED_MESSAGE =
+  'Please verify your email address before performing this action. Check your inbox for the verification link.';
 const COMPANY_MEMBER_INVITATION_EMAIL_FAILURE_COPY = {
   quotaMessage: 'Company invitation email quota exceeded. Please try again later.',
   unavailableMessage: 'Company invitation email could not be sent',
@@ -127,6 +129,7 @@ companyMemberRoutes.post(
     const previousRole = user.roleInCompany || null;
     let removedProjectMembershipCount = 0;
     let revokedApiKeyCount = 0;
+    let disabledScheduledReportCount = 0;
     await prisma.$transaction(async (tx) => {
       await assertCanRemoveUserFromProjectAdminRoles(user.userId, {
         companyId,
@@ -151,6 +154,11 @@ companyMemberRoutes.post(
         },
       });
       removedProjectMembershipCount = removedProjectMemberships.count;
+
+      disabledScheduledReportCount = await disableOwnedScheduledReportsForAccessRemoval(tx, {
+        userId: user.userId,
+        companyId,
+      });
 
       // M72(a): revoke the leaving user's API keys. The user row is kept (only
       // detached from the company), so their keys would otherwise stay active and
@@ -177,6 +185,7 @@ companyMemberRoutes.post(
           // Field name avoids the audit redactor's /api[-_]?key/i pattern — a count
           // of revoked keys is not sensitive and must stay readable in the log.
           revokedKeyCount: revokedApiKeyCount,
+          disabledScheduledReportCount,
         },
         req,
       });
@@ -225,10 +234,12 @@ companyMemberRoutes.get(
 // POST /api/company/members/invite - Invite or attach a user to the current company
 companyMemberRoutes.post(
   '/members/invite',
-  requireEmailVerified,
   asyncHandler(async (req, res) => {
     const user = req.user!;
     requireBrowserSession(req, 'Company member invitation');
+    if (!user.emailVerified) {
+      throw AppError.forbidden(EMAIL_VERIFICATION_REQUIRED_MESSAGE);
+    }
     const companyId = requireCompanyAdmin(user);
     const email = normalizeCompanyMemberEmail(req.body.email);
     const roleInCompany = normalizeCompanyMemberRole(req.body.roleInCompany ?? req.body.role);
@@ -627,6 +638,7 @@ companyMemberRoutes.delete(
     let removedProjectMembershipCount = 0;
     let cancelledSetupInviteCount = 0;
     let revokedApiKeyCount = 0;
+    let disabledScheduledReportCount = 0;
     let removalStatus: 'removed' | 'cancelled' = 'removed';
     let targetEmail = '';
     let previousRole = '';
@@ -701,6 +713,11 @@ companyMemberRoutes.delete(
       });
       removedProjectMembershipCount = removedProjectMemberships.count;
 
+      disabledScheduledReportCount = await disableOwnedScheduledReportsForAccessRemoval(tx, {
+        userId: memberId,
+        companyId,
+      });
+
       const cancelledSetupTokens = await tx.passwordResetToken.updateMany({
         where: {
           userId: memberId,
@@ -753,6 +770,7 @@ companyMemberRoutes.delete(
           cancelledSetupInviteCount,
           // See the leave handler: keep this count out of the audit redactor.
           revokedKeyCount: revokedApiKeyCount,
+          disabledScheduledReportCount,
         },
         req,
       });
