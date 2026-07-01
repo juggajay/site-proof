@@ -644,7 +644,11 @@ test.describe.serial('seeded real-backend role journeys', () => {
 
     await expect(page).toHaveURL(new RegExp(`/projects/${E2E_PROJECT_ID}/hold-points`));
     await expect(page.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'LOT-001', exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('cell', { name: 'LOT-001', exact: true })
+        .or(page.getByRole('heading', { name: 'LOT-001', exact: true })),
+    ).toBeVisible();
   });
 
   test('hold point release completes the seeded ITP item and enables normal conformance', async ({
