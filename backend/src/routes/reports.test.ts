@@ -33,6 +33,7 @@ async function createLocalScheduledReportArtifactRun(params: {
   scheduleId: string;
   reportType?: string;
   pdfBytes?: Buffer;
+  artifactFilename?: string;
 }) {
   const runId = `artifact-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const pdfBytes = params.pdfBytes ?? Buffer.from('%PDF-1.4\nscheduled report artifact\n');
@@ -55,7 +56,7 @@ async function createLocalScheduledReportArtifactRun(params: {
       completedAt: new Date('2026-06-30T00:00:00.000Z'),
       artifactFileUrl: `uploads/scheduled-reports/${params.projectId}/${params.scheduleId}/${runId}.pdf`,
       artifactReportName: 'Lot Status Report - Access Project',
-      artifactFilename: 'Lot_Status_Report.pdf',
+      artifactFilename: params.artifactFilename ?? 'Lot_Status_Report.pdf',
       artifactMimeType: 'application/pdf',
       artifactFileSize: pdfBytes.length,
       artifactSha256: calculateScheduledReportArtifactSha256(pdfBytes),
@@ -296,6 +297,33 @@ describe('Reports API - Project Access', () => {
         .set('Authorization', `Bearer ${nonCommercialToken}`);
 
       expect(internalRes.status).toBe(200);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+      await fs.promises.unlink(filePath).catch(() => {});
+    }
+  });
+
+  it('should let users download scheduled report artifacts with non-ASCII filenames', async () => {
+    const { run, filePath, pdfBytes } = await createLocalScheduledReportArtifactRun({
+      projectId,
+      scheduleId,
+      artifactFilename: 'Lot Status Report — Stage 2.pdf',
+    });
+
+    try {
+      const res = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('application/pdf');
+      expect(res.headers['content-disposition']).toContain(
+        'filename="Lot Status Report _ Stage 2.pdf"',
+      );
+      expect(res.headers['content-disposition']).toContain(
+        "filename*=UTF-8''Lot%20Status%20Report%20%E2%80%94%20Stage%202.pdf",
+      );
+      expect(res.headers['content-length']).toBe(String(pdfBytes.length));
     } finally {
       await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
       await fs.promises.unlink(filePath).catch(() => {});

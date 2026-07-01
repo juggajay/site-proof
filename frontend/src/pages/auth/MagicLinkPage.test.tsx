@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import { ApiError } from '@/lib/api';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -140,5 +141,44 @@ describe('MagicLinkPage', () => {
     expect(window.location.pathname + window.location.search).toBe(
       '/auth/magic-link?redirect=%2Fprojects',
     );
+  });
+
+  it('shows expired-link copy from the API without restoring the token to the URL', async () => {
+    mocks.apiFetch.mockRejectedValue(
+      new ApiError(
+        400,
+        JSON.stringify({ error: { message: 'This link has expired. Please request a new one.' } }),
+      ),
+    );
+
+    renderWithProviders(<MagicLinkPage />, {
+      initialEntries: ['/auth/magic-link?token=magic_expired&redirect=%2Fprojects'],
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/this magic link has expired/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/request a new sign-in link/i);
+    expect(mocks.setToken).not.toHaveBeenCalled();
+    expect(window.location.pathname + window.location.search).toBe(
+      '/auth/magic-link?redirect=%2Fprojects',
+    );
+  });
+
+  it('shows reused-link copy from the API', async () => {
+    mocks.apiFetch.mockRejectedValue(
+      new ApiError(
+        400,
+        JSON.stringify({
+          error: { message: 'This link has already been used. Please request a new one.' },
+        }),
+      ),
+    );
+
+    renderWithProviders(<MagicLinkPage />, {
+      initialEntries: ['/auth/magic-link?token=magic_used'],
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/already been used/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/request a new sign-in link/i);
+    expect(mocks.setToken).not.toHaveBeenCalled();
   });
 });

@@ -543,6 +543,50 @@ test.describe('Authentication', () => {
     expect(JSON.parse(storedAuth as string).token).toBe('magic-session-token');
   });
 
+  test('shows specific magic-link errors after scrubbing the token', async ({ page }) => {
+    const cases = [
+      {
+        token: 'magic-expired-browser-token',
+        apiMessage: 'This link has expired. Please request a new one.',
+        expectedCopy: /this magic link has expired/i,
+      },
+      {
+        token: 'magic-used-browser-token',
+        apiMessage: 'This link has already been used. Please request a new one.',
+        expectedCopy: /this magic link has already been used/i,
+      },
+      {
+        token: 'not-a-magic-token',
+        apiMessage: 'Invalid token format',
+        expectedCopy: /this magic link is invalid/i,
+      },
+    ];
+
+    for (const scenario of cases) {
+      let verifyRequest: unknown;
+      await page.route('**/api/auth/magic-link/verify', async (route) => {
+        verifyRequest = route.request().postDataJSON();
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: scenario.apiMessage } }),
+        });
+      });
+
+      await page.goto(
+        `/auth/magic-link?token=${encodeURIComponent(scenario.token)}&redirect=%2Fprojects`,
+      );
+
+      await expect(page).toHaveURL('/auth/magic-link?redirect=%2Fprojects');
+      await expect(page.getByRole('alert')).toContainText(scenario.expectedCopy);
+      await expect(page.getByRole('alert')).toContainText(/request a new sign-in link/i);
+      expect(verifyRequest).toEqual({ token: scenario.token });
+      expect(await page.evaluate(() => localStorage.getItem('siteproof_auth'))).toBeNull();
+
+      await page.unroute('**/api/auth/magic-link/verify');
+    }
+  });
+
   test('should redirect unauthenticated users to login', async ({ page }) => {
     await page.goto('/projects');
 
