@@ -2,6 +2,7 @@ import type { Page, Route } from '@playwright/test';
 
 export const E2E_PASSWORD = 'testpassword123';
 export const ADMIN_EMAIL = 'test@example.com';
+export const OWNER_EMAIL = 'owner@example.com';
 export const SUBCONTRACTOR_EMAIL = 'subcontractor@example.com';
 export const E2E_PROJECT_ID = 'e2e-project';
 export const E2E_ADMIN_USER = {
@@ -125,6 +126,10 @@ export async function login(
 
 export async function loginAsAdmin(page: Page): Promise<void> {
   await login(page, ADMIN_EMAIL, /\/(dashboard|projects)/);
+}
+
+export async function loginAsOwner(page: Page): Promise<void> {
+  await login(page, OWNER_EMAIL, /\/(dashboard|projects)/);
 }
 
 export async function loginAsSubcontractor(page: Page): Promise<void> {

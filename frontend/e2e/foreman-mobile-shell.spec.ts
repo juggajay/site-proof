@@ -738,6 +738,11 @@ test.describe('Foreman mobile shell', () => {
       if (route.text) {
         await expect(page.getByText(route.text).first()).toBeVisible();
       }
+      if (route.path.includes('/m/dockets/') && route.path.includes('/adjust')) {
+        await expect(page.getByText('This docket isn’t here anymore.')).toHaveCount(0);
+        await expect(page.getByLabel(/Labour hours/i)).toHaveValue('8');
+        await expect(page.getByLabel(/Plant hours/i)).toHaveValue('6');
+      }
     }
 
     expect(consoleErrors).toEqual([]);

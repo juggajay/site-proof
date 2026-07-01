@@ -16,6 +16,7 @@ import { NCREvidenceList } from '../ncr/components/NCREvidenceList';
 import { RespondNCRModal } from '../ncr/components/RespondNCRModal';
 import { RectifyNCRModal } from '../ncr/components/RectifyNCRModal';
 import type { NCR as WorkflowNCR } from '../ncr/types';
+import { getSubcontractorNcrFeedback } from './ncrFeedback';
 
 interface NCR {
   id: string;
@@ -29,6 +30,9 @@ interface NCR {
   responsibleUserId?: string | null;
   responsibleSubcontractorId?: string | null;
   responsibleSubcontractor?: { id: string; companyName: string } | null;
+  revisionRequested?: boolean | null;
+  qmReviewComments?: string | null;
+  verificationNotes?: string | null;
   closedAt?: string;
   ncrLots?: Array<{
     lot?: {
@@ -86,6 +90,7 @@ function toWorkflowNcr(ncr: NCR, projectId?: string, projectName?: string): Work
     responsibleUserId: ncr.responsibleUserId ?? null,
     responsibleSubcontractorId: ncr.responsibleSubcontractorId ?? null,
     createdAt: ncr.raisedAt,
+    verificationNotes: ncr.verificationNotes ?? null,
     project: { id: projectId, name: projectName ?? '', projectNumber: '' },
     ncrLots:
       ncr.ncrLots?.map((ncrLot) => ({
@@ -432,6 +437,7 @@ function NCRCard({
     .filter(Boolean)
     .join(', ');
   const evidence = ncr.ncrEvidence ?? [];
+  const feedback = getSubcontractorNcrFeedback(ncr);
   const canRespond = responsible && ncr.status === 'open';
   const canRectify = responsible && ncr.status === 'rectification';
 
@@ -458,6 +464,12 @@ function NCRCard({
           </div>
           {getStatusBadge(ncr.status)}
         </div>
+        {feedback && (
+          <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+            <p className="text-xs font-semibold text-warning">{feedback.label}</p>
+            <p className="mt-1 text-sm leading-snug text-foreground">{feedback.message}</p>
+          </div>
+        )}
         {evidence.length > 0 && (
           <div className="mt-3">
             <NCREvidenceList evidence={evidence} title="Evidence" variant="inline" />

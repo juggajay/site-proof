@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { E2E_PROJECT_ID, login, loginAsAdmin, loginAsSubcontractor } from './helpers';
+import { E2E_PROJECT_ID, login, loginAsAdmin, loginAsOwner, loginAsSubcontractor } from './helpers';
 
 const E2E_OUTCOME_LOT_ID = 'e2e-itp-outcomes-lot';
 const E2E_OUTCOME_INSTANCE_ID = '8e580001-15c7-4f8b-9a2a-000000000002';
@@ -69,6 +69,22 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(
       page.getByText('Legacy assignment - click Add to set ITP permissions'),
     ).toHaveCount(0);
+  });
+
+  test('company owner reaches owner-only company settings against the real backend', async ({
+    page,
+  }) => {
+    await loginAsOwner(page);
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'Company Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Company Information' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Billing & Subscription' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Transfer Ownership' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
+    await expect(page.getByText('E2E Owner')).toBeVisible();
+    await expect(page.getByText('E2E Admin')).toBeVisible();
   });
 
   test('assigned subcontractor can open the seeded lot ITP with completion access', async ({

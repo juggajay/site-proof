@@ -99,6 +99,8 @@ describe('SubcontractorNCRsPage', () => {
                 id: 'subbie-company-1',
                 companyName: 'QA Subbie',
               },
+              revisionRequested: true,
+              verificationNotes: 'Photo does not show the repaired concrete edge clearly.',
               ncrLots: [{ lot: { lotNumber: 'LOT-014' } }],
               ncrEvidence: [
                 {
@@ -140,6 +142,21 @@ describe('SubcontractorNCRsPage', () => {
     expect(apiFetch).toHaveBeenCalledWith(
       '/api/ncrs?projectId=project-1&subcontractorCompanyId=subbie-company-1&subcontractorView=true',
     );
+  });
+
+  it('shows reviewer feedback when rectification is returned to the subcontractor', async () => {
+    renderWithProviders(<SubcontractorNCRsPage />, {
+      initialEntries: ['/subcontractor-portal/ncrs?projectId=project-1&shell=off'],
+    });
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'NCRs' })).toBeInTheDocument());
+
+    expect(screen.getByText('NCR-001')).toBeInTheDocument();
+    expect(screen.getByText('Rectification feedback')).toBeInTheDocument();
+    expect(
+      screen.getByText('Photo does not show the repaired concrete edge clearly.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit Rectification' })).toBeInTheDocument();
   });
 
   it('lets a responsible subcontractor submit an NCR response', async () => {

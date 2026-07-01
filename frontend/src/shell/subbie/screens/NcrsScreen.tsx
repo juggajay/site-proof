@@ -28,6 +28,7 @@ import { RespondNCRModal } from '@/pages/ncr/components/RespondNCRModal';
 import { RectifyNCRModal } from '@/pages/ncr/components/RectifyNCRModal';
 import type { NCR as WorkflowNCR } from '@/pages/ncr/types';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
+import { getSubcontractorNcrFeedback } from '@/pages/subcontractor-portal/ncrFeedback';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
 import { ModuleAccessChangedNotice } from '../ModuleAccessChangedNotice';
@@ -44,6 +45,9 @@ interface NCR {
   responsibleUserId?: string | null;
   responsibleSubcontractorId?: string | null;
   responsibleSubcontractor?: { id: string; companyName: string } | null;
+  revisionRequested?: boolean | null;
+  qmReviewComments?: string | null;
+  verificationNotes?: string | null;
   ncrLots?: Array<{ lot?: { lotNumber?: string; description?: string | null } }>;
   ncrEvidence?: Array<{
     id: string;
@@ -91,6 +95,7 @@ function toWorkflowNcr(
     responsibleUserId: ncr.responsibleUserId ?? null,
     responsibleSubcontractorId: ncr.responsibleSubcontractorId ?? null,
     createdAt: ncr.raisedAt,
+    verificationNotes: ncr.verificationNotes ?? null,
     project: { id: projectId ?? undefined, name: projectName ?? '', projectNumber: '' },
     ncrLots:
       ncr.ncrLots?.map((ncrLot) => ({
@@ -154,6 +159,7 @@ function NcrCard({
   const evidence = ncr.ncrEvidence ?? [];
   const severity = SEVERITY_BADGE[ncr.severity] ?? SEVERITY_BADGE.minor;
   const status = statusBadge(ncr.status);
+  const feedback = getSubcontractorNcrFeedback(ncr);
   const canRespond = responsible && ncr.status === 'open';
   const canRectify = responsible && ncr.status === 'rectification';
 
@@ -178,6 +184,12 @@ function NcrCard({
             Raised {formatRaisedDate(ncr.raisedAt)}
             {ncr.raisedBy ? ` by ${ncr.raisedBy.fullName}` : ''}
           </div>
+          {feedback && (
+            <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+              <div className="text-[12px] font-semibold text-warning">{feedback.label}</div>
+              <p className="mt-1 text-[13px] leading-snug text-foreground">{feedback.message}</p>
+            </div>
+          )}
           {evidence.length > 0 && (
             <div className="mt-3">
               <NCREvidenceList evidence={evidence} title="Evidence" variant="inline" />

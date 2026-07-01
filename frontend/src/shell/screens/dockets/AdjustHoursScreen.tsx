@@ -17,7 +17,7 @@
  * Offline: approval is online-only; the submit disables offline with an honest
  * note.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
@@ -39,13 +39,14 @@ export function AdjustHoursScreen() {
   const navigate = useNavigate();
   const { isOnline } = useOfflineStatus();
   const docketId = useShellDocketParam();
-  const { projectId, dockets, refetch } = useDocketsShellContext();
+  const { projectId, dockets, loading, refetch } = useDocketsShellContext();
   const { submitting, runAction } = useDocketAction(projectId);
 
   const docket = useMemo(() => dockets.find((d) => d.id === docketId) ?? null, [dockets, docketId]);
 
   const [labour, setLabour] = useState(String(docket?.labourHours ?? 0));
   const [plant, setPlant] = useState(String(docket?.plantHours ?? 0));
+  const [seededDocketId, setSeededDocketId] = useState(docket?.id ?? null);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -89,6 +90,29 @@ export function AdjustHoursScreen() {
   const parseOk = parseHoursInput(labour) !== null && parseHoursInput(plant) !== null;
   const hasRequiredReason = !hoursChanged || Boolean(reason.trim());
   const canSubmit = parseOk && hasRequiredReason && isOnline && Boolean(docket);
+
+  useEffect(() => {
+    if (!docket || seededDocketId === docket.id) return;
+    setLabour(String(docket.labourHours ?? 0));
+    setPlant(String(docket.plantHours ?? 0));
+    setSeededDocketId(docket.id);
+  }, [docket, seededDocketId]);
+
+  if (!docket && loading) {
+    return (
+      <ShellScreen
+        variant="inner"
+        title="Adjust Hours"
+        parent={listPath}
+        sub={<span>Loading docket</span>}
+      >
+        <div className="flex min-h-[220px] items-center justify-center gap-2 text-[14px] font-semibold text-muted-foreground">
+          <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+          Loading docket…
+        </div>
+      </ShellScreen>
+    );
+  }
 
   if (!docket) {
     return (

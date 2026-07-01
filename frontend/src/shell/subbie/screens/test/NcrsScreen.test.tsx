@@ -218,4 +218,34 @@ describe('subbie shell NcrsScreen', () => {
       ),
     );
   });
+
+  it('shows reviewer feedback when rectification is returned to the subcontractor', async () => {
+    _ctx = { ...makeCtx({ ncrs: true }), subcontractorCompanyId: 'sub-1' };
+    setApi({
+      ncrs: [
+        {
+          id: 'ncr-rectification-returned',
+          ncrNumber: 'NCR-202',
+          description: 'Returned rectification',
+          category: 'workmanship',
+          status: 'rectification',
+          severity: 'major',
+          raisedAt: '2026-06-09T00:00:00.000Z',
+          responsibleSubcontractorId: 'sub-1',
+          responsibleSubcontractor: { id: 'sub-1', companyName: 'Hargraves' },
+          revisionRequested: true,
+          verificationNotes: 'Photo does not show the repaired concrete edge clearly.',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    expect(await screen.findByText('NCR-202')).toBeInTheDocument();
+    expect(screen.getByText('Rectification feedback')).toBeInTheDocument();
+    expect(
+      screen.getByText('Photo does not show the repaired concrete edge clearly.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit Rectification' })).toBeInTheDocument();
+  });
 });
