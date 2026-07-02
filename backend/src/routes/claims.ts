@@ -7,6 +7,7 @@ import { createClaimEvidenceRouter } from './claims/evidenceRoutes.js';
 import { createClaimPostEvidenceWorkflowRouter } from './claims/postEvidenceWorkflowRoutes.js';
 import { createClaimReadRouter } from './claims/readRoutes.js';
 import { createClaimWorkflowRouter } from './claims/workflowRoutes.js';
+import { createClaimXeroExportRouter } from './claims/xeroExport.js';
 
 const router = Router();
 const CLAIM_COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];
@@ -78,6 +79,14 @@ router.use(
 
 router.use(
   createClaimPostEvidenceWorkflowRouter({
+    parseClaimRouteParam,
+    requireCommercialProjectAccess,
+  }),
+);
+
+// Read-only Xero invoice CSV export (GET); relies on the shared requireAuth gate above.
+router.use(
+  createClaimXeroExportRouter({
     parseClaimRouteParam,
     requireCommercialProjectAccess,
   }),

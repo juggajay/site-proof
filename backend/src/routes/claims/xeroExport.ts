@@ -1,4 +1,9 @@
+import { Router } from 'express';
+
 import { AppError } from '../../lib/AppError.js';
+import { asyncHandler } from '../../lib/asyncHandler.js';
+import { prisma } from '../../lib/prisma.js';
+import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import { roundClaimAmountToCents } from './workflowValidation.js';
 
 /**
@@ -126,4 +131,91 @@ export function buildXeroInvoiceExport(
     filename: `xero-claim-${claim.claimNumber}.csv`,
     rows: [[...XERO_INVOICE_CSV_HEADER], ...dataRows],
   };
+}
+
+type AuthUser = NonNullable<Express.Request['user']>;
+
+interface XeroExportRouterDependencies {
+  parseClaimRouteParam: (value: unknown, field: string) => string;
+  requireCommercialProjectAccess: (user: AuthUser, projectId: string) => Promise<void>;
+}
+
+/** Prisma Decimal | null -> number (0 when null), matching presentation.ts. */
+function toNumber(value: unknown): number {
+  return value == null ? 0 : Number(value);
+}
+
+function parseOptionalQueryString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    throw AppError.badRequest(`${field} query parameter must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+/**
+ * GET /:projectId/claims/:claimId/xero-export
+ * Returns { filename, rows } for a Xero sales-invoice CSV import. Mounted after
+ * the shared requireAuth gate in claims.ts, so no requireAuth in the deps here.
+ */
+export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies): Router {
+  const router = Router();
+
+  router.get(
+    '/:projectId/claims/:claimId/xero-export',
+    asyncHandler(async (req, res) => {
+      const projectId = deps.parseClaimRouteParam(req.params.projectId, 'projectId');
+      const claimId = deps.parseClaimRouteParam(req.params.claimId, 'claimId');
+      await deps.requireCommercialProjectAccess(req.user!, projectId);
+
+      const accountCode = parseOptionalQueryString(req.query.accountCode, 'accountCode') ?? '200';
+      const taxType = parseOptionalQueryString(req.query.taxType, 'taxType');
+
+      const claim = await prisma.progressClaim.findFirst({
+        where: { id: claimId, projectId },
+        include: {
+          claimedLots: {
+            include: {
+              lot: {
+                select: { id: true, lotNumber: true, activityType: true, budgetAmount: true },
+              },
+            },
+          },
+          project: { select: { name: true, clientName: true } },
+        },
+      });
+      if (!claim) {
+        throw AppError.notFound('Claim');
+      }
+
+      const cumulativeByLot = await getCumulativeClaimedPercentByLot(
+        claim.claimedLots.map((claimedLot) => claimedLot.lotId),
+      );
+
+      const result = buildXeroInvoiceExport(
+        {
+          claimNumber: claim.claimNumber,
+          projectName: claim.project.name,
+          clientName: claim.project.clientName,
+          periodEnd: claim.claimPeriodEnd.toISOString(),
+          totalClaimedAmount: toNumber(claim.totalClaimedAmount),
+          lots: claim.claimedLots.map((claimedLot) => ({
+            lotNumber: claimedLot.lot.lotNumber,
+            activityType: claimedLot.lot.activityType,
+            amountClaimed: toNumber(claimedLot.amountClaimed),
+            thisClaimPercent: toNumber(claimedLot.percentageComplete),
+            cumulativePercent:
+              cumulativeByLot.get(claimedLot.lotId) ?? toNumber(claimedLot.percentageComplete),
+          })),
+        },
+        { accountCode, taxType },
+      );
+
+      res.json(result);
+    }),
+  );
+
+  return router;
 }
