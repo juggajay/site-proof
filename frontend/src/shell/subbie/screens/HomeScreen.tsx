@@ -21,10 +21,12 @@
  */
 import {
   AlertTriangle,
+  Building2,
   ChevronRight,
   FileText,
   Flag,
   FlaskConical,
+  FolderOpen,
   MapPin,
   ClipboardCheck,
 } from 'lucide-react';
@@ -458,25 +460,26 @@ export function HomeScreen() {
         />
       )}
 
-      {(documentsEnabled || showCompanySecondaryLink) && (
-        <div className="mt-1 flex flex-wrap gap-2" aria-label="Secondary navigation">
-          {documentsEnabled && (
-            <Link
-              to={`/p/docs${currentProjectQuery}`}
-              className="inline-flex min-h-[38px] items-center rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-muted-foreground"
-            >
-              Documents
-            </Link>
-          )}
-          {showCompanySecondaryLink && (
-            <Link
-              to={myCompanyLink}
-              className="inline-flex min-h-[38px] items-center rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-muted-foreground"
-            >
-              My Company
-            </Link>
-          )}
-        </div>
+      {/* Documents */}
+      {documentsEnabled && (
+        <HubTile
+          icon={FolderOpen}
+          title="Documents"
+          description="Specs & files shared with you"
+          onPress={() => navigate(`/p/docs${currentProjectQuery}`)}
+          ariaLabel="Documents"
+        />
+      )}
+
+      {/* My Company */}
+      {showCompanySecondaryLink && (
+        <HubTile
+          icon={Building2}
+          title="My Company"
+          description="Crew & plant roster"
+          onPress={() => navigate(myCompanyLink)}
+          ariaLabel="My Company"
+        />
       )}
     </ShellScreen>
   );

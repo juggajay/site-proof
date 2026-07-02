@@ -10,7 +10,7 @@
  * Pins:
  *   - hero states: none / draft-with-total / queried
  *   - NCR tile hidden by default, shown when ncrs module enabled
- *   - demoted destinations render as secondary links, not daily-work cards
+ *   - Documents / My Company render as standard hub tiles (same gating)
  *   - role chip text (SUBCONTRACTOR)
  *   - bottom bar navigation target (/p/docket)
  */
@@ -206,25 +206,46 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.getByText('ncrs screen')).toBeInTheDocument();
   });
 
-  it('demotes Documents and My Company out of daily-work card buttons', () => {
+  it('renders Documents and My Company as standard hub tiles', async () => {
+    _ctx = makeCtx({
+      company: {
+        ...makeCtx().company!,
+        employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
+      },
+    });
+    // A lot must come back so docket prerequisites are met (My Company gating).
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.startsWith('/api/lots'))
+        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
     renderHome();
-    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'My Company' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /My Company/i })).toBeInTheDocument();
-  });
-
-  it('hides the secondary Documents link when its module is disabled', () => {
-    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, documents: false };
-    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
-    renderHome();
+    expect(screen.getByRole('button', { name: 'Documents' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    // No small chip links any more — one uniform card style.
     expect(screen.queryByRole('link', { name: 'Documents' })).toBeNull();
   });
 
-  it('Documents secondary link preserves the selected project query', () => {
+  it('hides the Documents tile when its module is disabled', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, documents: false };
+    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
+    renderHome();
+    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+  });
+
+  it('hides the My Company tile until docket prerequisites are met', () => {
+    // Default ctx has no approved crew/plant → prerequisites unmet → no tile.
+    renderHome();
+    expect(screen.queryByRole('button', { name: 'My Company' })).toBeNull();
+  });
+
+  it('Documents tile preserves the selected project query', () => {
     _ctx = makeCtx({ projectId: 'project-2', projectName: 'Second Project' });
     renderHome();
-    fireEvent.click(screen.getByRole('link', { name: 'Documents' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=project-2');
   });
 
