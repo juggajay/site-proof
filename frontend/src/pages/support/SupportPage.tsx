@@ -182,9 +182,7 @@ export function SupportPage() {
           <HelpCircle className="h-8 w-8 text-muted-foreground" />
           Help & Support
         </h1>
-        <p className="text-muted-foreground">
-          Get help with SiteProof or contact our support team.
-        </p>
+        <p className="text-muted-foreground">Get help with CIVOS or contact our support team.</p>
       </div>
 
       {/* Quick Links */}

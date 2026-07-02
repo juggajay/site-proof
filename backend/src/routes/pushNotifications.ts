@@ -255,7 +255,7 @@ pushNotificationsRouter.post(
     }
 
     const payload = JSON.stringify({
-      title: 'SiteProof Push Test',
+      title: 'CIVOS Push Test',
       body: `Hello ${user?.fullName || 'there'}! Push notifications are working.`,
       icon: '/pwa-192x192.png',
       badge: '/pwa-192x192.png',

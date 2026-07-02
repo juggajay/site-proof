@@ -571,7 +571,7 @@ companyMemberRoutes.post(
       try {
         await sendNotificationEmail(member.email, 'company_membership_added', {
           title: `You were added to ${company.name}`,
-          message: `${user.email} added your SiteProof account to ${company.name} as a ${roleInCompany}. If you were not expecting this, contact ${user.email} or SiteProof support.`,
+          message: `${user.email} added your CIVOS account to ${company.name} as a ${roleInCompany}. If you were not expecting this, contact ${user.email} or CIVOS support.`,
           userName: member.fullName ?? undefined,
           linkUrl: '/settings',
         });

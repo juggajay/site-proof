@@ -134,13 +134,13 @@ describe('ShellScreen — home variant', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Morning, Jay');
   });
 
-  it('renders SITEPROOF kicker', () => {
+  it('renders CIVOS kicker', () => {
     renderInRouter(
       <ShellScreen variant="home">
         <p>Content</p>
       </ShellScreen>,
     );
-    expect(screen.getByLabelText('SiteProof')).toBeInTheDocument();
+    expect(screen.getByLabelText('CIVOS')).toBeInTheDocument();
   });
 
   it('does not render a back button', () => {

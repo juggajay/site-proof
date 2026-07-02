@@ -118,7 +118,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   doc.text('Dashboard Summary', margin, 18);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text('SiteProof Civil Execution and Conformance Platform', margin, 27);
+  doc.text('CIVOS Civil Execution and Conformance Platform', margin, 27);
   if (branding) {
     await drawPdfBrandingHeader(doc, branding, {
       logoX: pageWidth - margin - 30,
@@ -184,10 +184,10 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
   doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Generated from SiteProof on ${formatDateTime(data.generatedAt)}`, margin, footerY);
+  doc.text(`Generated from CIVOS on ${formatDateTime(data.generatedAt)}`, margin, footerY);
 
   const filenameDate = formatDateKey(new Date(data.generatedAt));
-  savePdf(doc, `siteproof-dashboard-${filenameDate}.pdf`, 'siteproof-dashboard.pdf');
+  savePdf(doc, `civos-dashboard-${filenameDate}.pdf`, 'civos-dashboard.pdf');
 
   devLog(`Dashboard PDF generated in ${Date.now() - startTime}ms`);
 }

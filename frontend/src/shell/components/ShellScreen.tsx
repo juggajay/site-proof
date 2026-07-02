@@ -8,7 +8,7 @@
  * still works via history — we only override the in-app chevron.
  *
  * Variants:
- *   - `variant="home"` — shows the SITEPROOF kicker, role chip, greeting, and
+ *   - `variant="home"` — shows the CIVOS kicker, role chip, greeting, and
  *     project/date line. No back button.
  *   - `variant="inner"` — shows a back chevron + condensed title + a context
  *     sub-line. `parent` and `title` are required.
@@ -173,13 +173,13 @@ function HomeHeader({
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background px-5 pb-[14px] pt-3">
-      {/* Kicker row: SITEPROOF wordmark + role chip */}
+      {/* Kicker row: CIVOS wordmark + role chip */}
       <div className="mb-0.5 flex items-center gap-2">
         <span
           className="font-mono text-[11px] font-semibold tracking-[0.14em] text-muted-foreground"
-          aria-label="SiteProof"
+          aria-label="CIVOS"
         >
-          SITEPROOF
+          CIVOS
         </span>
         <span className="shell-chip text-[10.5px]">{chipLabel}</span>
       </div>

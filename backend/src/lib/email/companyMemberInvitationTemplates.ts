@@ -28,7 +28,7 @@ export function renderCompanyMemberInvitationEmail(
   data: CompanyMemberInvitationEmailData,
   { escapeEmailHtml }: CompanyMemberInvitationTemplateDependencies,
 ): RenderedCompanyMemberInvitationEmail {
-  const subject = `[SiteProof] Invitation to join ${sanitizeEmailSubjectLine(data.companyName) || 'your company'}`;
+  const subject = `[CIVOS] Invitation to join ${sanitizeEmailSubjectLine(data.companyName) || 'your company'}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
   const safeCompanyName = escapeEmailHtml(data.companyName);
@@ -56,12 +56,12 @@ export function renderCompanyMemberInvitationEmail(
 <body>
   <div class="container">
     <div class="header">
-      <h1>You're invited to SiteProof</h1>
+      <h1>You're invited to CIVOS</h1>
     </div>
     <div class="content">
       <h2 style="margin-top: 0;">Hi${safeUserName ? ` ${safeUserName}` : ''},</h2>
 
-      <p><strong>${safeInviterEmail}</strong> has invited you to join <strong>${safeCompanyName}</strong> on SiteProof.</p>
+      <p><strong>${safeInviterEmail}</strong> has invited you to join <strong>${safeCompanyName}</strong> on CIVOS.</p>
 
       <p>Set your password to activate your company account and start working on assigned projects.</p>
 
@@ -80,7 +80,7 @@ export function renderCompanyMemberInvitationEmail(
       </p>
     </div>
     <div class="footer">
-      <p>This invitation was sent from SiteProof.</p>
+      <p>This invitation was sent from CIVOS.</p>
     </div>
   </div>
 </body>
@@ -90,7 +90,7 @@ export function renderCompanyMemberInvitationEmail(
   const text = `
 Hi${data.userName ? ` ${data.userName}` : ''},
 
-${data.inviterEmail} has invited you to join ${data.companyName} on SiteProof.
+${data.inviterEmail} has invited you to join ${data.companyName} on CIVOS.
 
 Set your password to activate your company account:
 ${data.setupUrl}

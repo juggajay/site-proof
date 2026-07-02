@@ -346,7 +346,7 @@ export function PushNotificationSettings() {
       <div className="mt-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
         <p className="text-sm font-medium text-primary mb-2">Mobile Device Setup</p>
         <ul className="text-sm text-primary/80 space-y-1 list-disc list-inside">
-          <li>For best results, add SiteProof to your home screen</li>
+          <li>For best results, add CIVOS to your home screen</li>
           <li>On iOS 16.4+: Safari → Share → Add to Home Screen</li>
           <li>On Android: Chrome → Menu → Add to Home Screen</li>
           <li>Test notifications will then work even when the app is closed</li>

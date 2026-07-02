@@ -88,7 +88,7 @@ export function CompanyOnboardingPage() {
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
             Create the head contractor company profile that will own projects, users, lots, and
-            claim records in SiteProof.
+            claim records in CIVOS.
           </p>
         </div>
       </div>

@@ -1900,7 +1900,7 @@ test.describe('production readiness guardrails', () => {
       "export { generateDashboardPDF } from './pdf/dashboardPdf'",
     );
     expect(dashboardPdfSource).toContain('export async function generateDashboardPDF');
-    expect(dashboardPdfSource).toContain('siteproof-dashboard-');
+    expect(dashboardPdfSource).toContain('civos-dashboard-');
   });
 
   test('project report generated timestamps use date and timezone preferences', async () => {

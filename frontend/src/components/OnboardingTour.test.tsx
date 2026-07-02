@@ -37,7 +37,7 @@ const FOREMAN_USER = {
   companyId: 'company-1',
 };
 
-const TOUR_HEADING = 'Welcome to SiteProof!';
+const TOUR_HEADING = 'Welcome to CIVOS!';
 
 // Matches LEGACY_ONBOARDING_STORAGE_KEY in OnboardingTour.tsx — the device-wide
 // marker written by the pre-revival tour, which the revived tour must honour.

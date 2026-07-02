@@ -236,7 +236,7 @@ describe('email service configuration', () => {
 
     const queuedEmail = getQueuedEmails()[0]!;
     expect(queuedEmail.subject).toBe(
-      '[SiteProof] Invitation to join Builder Co Bcc: attacker@example.com',
+      '[CIVOS] Invitation to join Builder Co Bcc: attacker@example.com',
     );
     expect(queuedEmail.subject).not.toMatch(/[\r\n]/);
   });

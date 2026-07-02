@@ -14,7 +14,7 @@
 
 /**
  * Build the data payload passed to sendNotificationEmail for the test email.
- * userName falls back to 'SiteProof System' when the user has no full name.
+ * userName falls back to 'CIVOS System' when the user has no full name.
  */
 export function buildTestEmailPayload(fullName: string | null): {
   title: string;
@@ -25,8 +25,8 @@ export function buildTestEmailPayload(fullName: string | null): {
   return {
     title: 'Test Notification',
     message:
-      'This is a test email notification from SiteProof. If you received this email, your email notifications are configured correctly!',
-    userName: fullName || 'SiteProof System',
+      'This is a test email notification from CIVOS. If you received this email, your email notifications are configured correctly!',
+    userName: fullName || 'CIVOS System',
     linkUrl: '/settings',
   };
 }

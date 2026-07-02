@@ -78,14 +78,14 @@ export function InstallNudge() {
   return (
     <div
       role="complementary"
-      aria-label="Install SiteProof app"
+      aria-label="Install CIVOS app"
       className="fixed right-4 left-4 z-50 above-bottom-nav"
     >
       <div className="rounded-xl border bg-card shadow-lg p-4">
         {/* Header row */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <p className="text-sm font-semibold leading-snug">
-            Install SiteProof for offline mode — your work is safer on the home screen.
+            Install CIVOS for offline mode — your work is safer on the home screen.
           </p>
           <button
             onClick={handleDismiss}

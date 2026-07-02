@@ -11,7 +11,7 @@ import {
 // the exact payload/response strings, fallbacks, and status branches.
 
 const TEST_EMAIL_MESSAGE =
-  'This is a test email notification from SiteProof. If you received this email, your email notifications are configured correctly!';
+  'This is a test email notification from CIVOS. If you received this email, your email notifications are configured correctly!';
 
 describe('buildTestEmailPayload', () => {
   it('uses the user full name when present', () => {
@@ -23,9 +23,9 @@ describe('buildTestEmailPayload', () => {
     });
   });
 
-  it('falls back to SiteProof System when the full name is null or empty', () => {
-    expect(buildTestEmailPayload(null).userName).toBe('SiteProof System');
-    expect(buildTestEmailPayload('').userName).toBe('SiteProof System');
+  it('falls back to CIVOS System when the full name is null or empty', () => {
+    expect(buildTestEmailPayload(null).userName).toBe('CIVOS System');
+    expect(buildTestEmailPayload('').userName).toBe('CIVOS System');
   });
 });
 

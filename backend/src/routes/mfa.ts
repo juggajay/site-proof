@@ -148,7 +148,7 @@ mfaRouter.post(
     // Generate the otpauth URL using otplib v13 generateURI
     const otpAuthUrl = await generateURI({
       secret,
-      issuer: 'SiteProof',
+      issuer: 'CIVOS',
       label: userEmail,
     });
 

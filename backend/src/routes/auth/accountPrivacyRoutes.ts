@@ -55,7 +55,7 @@ function sanitizeDownloadFilenameSegment(
 }
 
 export function getSafeDataExportFilename(email: string, date = new Date()): string {
-  const prefix = 'siteproof-data-export-';
+  const prefix = 'civos-data-export-';
   const suffix = `-${date.toISOString().split('T')[0]}.json`;
   const maxEmailLength = Math.max(
     1,

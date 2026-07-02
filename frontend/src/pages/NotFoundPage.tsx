@@ -78,7 +78,7 @@ export function NotFoundPage() {
                 className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
               >
                 <Briefcase className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                View SiteProof
+                View CIVOS
               </Link>
             </>
           )}

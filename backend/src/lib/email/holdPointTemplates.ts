@@ -52,7 +52,7 @@ export function renderHoldPointBatchReleaseRequestEmail(
   data: HoldPointBatchReleaseRequestTemplateData,
 ): RenderedHoldPointEmail {
   const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
-  const subject = `[SiteProof] Batch Hold Point Release Request - ${subjectLotNumber}`;
+  const subject = `[CIVOS] Batch Hold Point Release Request - ${subjectLotNumber}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeSuperintendentName = escapeEmailHtml(data.superintendentName);
   const safeProjectName = escapeEmailHtml(data.projectName);
@@ -161,7 +161,7 @@ Secure release link: ${holdPoint.secureReleaseUrl}${
       </p>
     </div>
     <div class="footer">
-      <p>This notification was sent from SiteProof Quality Management System.</p>
+      <p>This notification was sent from CIVOS Quality Management System.</p>
       <p>Project: ${safeProjectName}</p>
     </div>
   </div>
@@ -189,7 +189,7 @@ Project lot page: ${data.releaseUrl}
 Each secure link releases only that individual hold point.
 
 ---
-This notification was sent from SiteProof Quality Management System.
+This notification was sent from CIVOS Quality Management System.
 Project: ${data.projectName}
   `;
 
@@ -204,7 +204,7 @@ export function renderHoldPointReleaseRequestEmail(
   data: HoldPointReleaseRequestTemplateData,
 ): RenderedHoldPointEmail {
   const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
-  const subject = `[SiteProof] Hold Point Release Request - ${subjectLotNumber}`;
+  const subject = `[CIVOS] Hold Point Release Request - ${subjectLotNumber}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeSuperintendentName = escapeEmailHtml(data.superintendentName);
   const safeProjectName = escapeEmailHtml(data.projectName);
@@ -331,7 +331,7 @@ export function renderHoldPointReleaseRequestEmail(
       </p>
     </div>
     <div class="footer">
-      <p>This notification was sent from SiteProof Quality Management System.</p>
+      <p>This notification was sent from CIVOS Quality Management System.</p>
       <p>Project: ${safeProjectName}</p>
     </div>
   </div>
@@ -369,7 +369,7 @@ ${data.secureReleaseUrl ? `\nOr release without logging in (secure link):\n${dat
 Please review the submission and release the hold point when satisfied, or contact the requestor if additional information is required.
 
 ---
-This notification was sent from SiteProof Quality Management System.
+This notification was sent from CIVOS Quality Management System.
 Project: ${data.projectName}
   `;
 
@@ -384,7 +384,7 @@ export function renderHoldPointChaseEmail(
   data: HoldPointChaseTemplateData,
 ): RenderedHoldPointEmail {
   const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
-  const subject = `[SiteProof] REMINDER: Hold Point Awaiting Release - ${subjectLotNumber} (Chase #${data.chaseCount})`;
+  const subject = `[CIVOS] REMINDER: Hold Point Awaiting Release - ${subjectLotNumber} (Chase #${data.chaseCount})`;
   const safeSubject = escapeEmailHtml(subject);
   const safeSuperintendentName = escapeEmailHtml(data.superintendentName);
   const safeProjectName = escapeEmailHtml(data.projectName);

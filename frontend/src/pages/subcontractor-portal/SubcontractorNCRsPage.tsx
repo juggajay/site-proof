@@ -82,7 +82,7 @@ function toWorkflowNcr(ncr: NCR, projectId?: string, projectName?: string): Work
     qmApprovalRequired: false,
     qmApprovedAt: null,
     raisedBy: {
-      fullName: ncr.raisedBy?.fullName ?? 'SiteProof',
+      fullName: ncr.raisedBy?.fullName ?? 'CIVOS',
       email: '',
     },
     responsibleUser: null,

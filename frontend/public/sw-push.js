@@ -8,7 +8,7 @@ function isRecord(value) {
 function parsePushPayload(eventData) {
   if (!eventData) {
     return {
-      title: 'SiteProof',
+      title: 'CIVOS',
       body: 'You have a new notification',
       data: {},
     }
@@ -21,14 +21,14 @@ function parsePushPayload(eventData) {
     }
   } catch {
     return {
-      title: 'SiteProof Notification',
+      title: 'CIVOS Notification',
       body: eventData.text(),
       data: {},
     }
   }
 
   return {
-    title: 'SiteProof Notification',
+    title: 'CIVOS Notification',
     body: eventData.text(),
     data: {},
   }
@@ -88,7 +88,7 @@ self.addEventListener('push', function(event) {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'SiteProof', options)
+    self.registration.showNotification(data.title || 'CIVOS', options)
   )
 })
 

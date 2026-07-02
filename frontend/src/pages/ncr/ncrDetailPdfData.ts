@@ -72,7 +72,7 @@ function buildNcrTimeline(ncr: NCR): NcrTimeline {
   if (ncr.clientNotifiedAt) {
     timeline.push({
       action: 'Client notified',
-      performedBy: 'SiteProof',
+      performedBy: 'CIVOS',
       performedAt: ncr.clientNotifiedAt,
     });
   }

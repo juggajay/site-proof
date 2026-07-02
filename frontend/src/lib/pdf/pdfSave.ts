@@ -7,7 +7,7 @@ type PdfSaveTarget = {
 export function savePdf(
   doc: PdfSaveTarget,
   filename: string | null | undefined,
-  fallback = 'siteproof-report.pdf',
+  fallback = 'civos-report.pdf',
 ): void {
   doc.save(sanitizeDownloadFilename(filename, fallback));
 }

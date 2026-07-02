@@ -224,7 +224,7 @@ describe('InstallNudge', () => {
       pwaInstallState.current = 'ios-manual';
 
       render(<InstallNudge />);
-      expect(screen.getByText(/Install SiteProof for offline mode/i)).toBeInTheDocument();
+      expect(screen.getByText(/Install CIVOS for offline mode/i)).toBeInTheDocument();
     });
   });
 

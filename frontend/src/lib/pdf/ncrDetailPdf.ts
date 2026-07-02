@@ -321,7 +321,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
 
   doc.setFontSize(7);
   doc.setTextColor(128, 128, 128);
-  doc.text(`Generated from SiteProof on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
+  doc.text(`Generated from CIVOS on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
   doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF

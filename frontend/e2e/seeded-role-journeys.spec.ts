@@ -436,7 +436,7 @@ test.describe.serial('seeded real-backend role journeys', () => {
     const downloadPath = await download.path();
     expect(downloadPath).toBeTruthy();
     expect(download.suggestedFilename()).toMatch(
-      /siteproof-data-export-account-delete@example\.com-\d{4}-\d{2}-\d{2}\.json/,
+      /civos-data-export-account-delete@example\.com-\d{4}-\d{2}-\d{2}\.json/,
     );
 
     const exportedJson = JSON.parse(await readFile(downloadPath!, 'utf8')) as Record<
@@ -495,7 +495,7 @@ test.describe.serial('seeded real-backend role journeys', () => {
     const query = subbieMobileQuery();
 
     await page.goto(`/p?${query}`);
-    await expect(page.getByRole('banner').getByText('SITEPROOF', { exact: true })).toBeVisible();
+    await expect(page.getByRole('banner').getByText('CIVOS', { exact: true })).toBeVisible();
     await expect(
       page.getByRole('banner').getByText('SUBCONTRACTOR', { exact: true }),
     ).toBeVisible();
@@ -626,7 +626,7 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await page.goto('/dashboard');
 
     await expect(page).toHaveURL(/\/m$/);
-    await expect(page.getByRole('banner').getByText('SITEPROOF', { exact: true })).toBeVisible();
+    await expect(page.getByRole('banner').getByText('CIVOS', { exact: true })).toBeVisible();
     await expect(page.getByRole('banner').getByText('FOREMAN', { exact: true })).toBeVisible();
     await expect(page.getByText('E2E Highway Upgrade')).toBeVisible();
     await expect(page.getByText('Lots')).toBeVisible();

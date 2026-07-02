@@ -308,7 +308,7 @@ export function PublicHoldPointReleasePage() {
                   {loadError || 'This secure release link could not be loaded.'}
                 </p>
                 <Button asChild variant="outline" className="mt-5">
-                  <Link to="/login">Go to SiteProof</Link>
+                  <Link to="/login">Go to CIVOS</Link>
                 </Button>
               </div>
             </div>
@@ -325,7 +325,7 @@ export function PublicHoldPointReleasePage() {
           <div>
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <LockKeyhole className="h-4 w-4" />
-              Secure SiteProof Release
+              Secure CIVOS Release
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">
               {evidencePackage.holdPoint.description}

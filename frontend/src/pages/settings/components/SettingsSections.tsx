@@ -53,9 +53,7 @@ export function AppearanceSection({ theme, resolvedTheme, onThemeChange }: Appea
     <div className="rounded-lg border bg-card p-6 space-y-4">
       <div>
         <h2 className="text-xl font-semibold">Appearance</h2>
-        <p className="text-sm text-muted-foreground">
-          Customize how SiteProof looks on your device.
-        </p>
+        <p className="text-sm text-muted-foreground">Customize how CIVOS looks on your device.</p>
       </div>
 
       <div>
@@ -248,9 +246,9 @@ export function PrivacyDataSection({
       <div className="border-t pt-4">
         <h3 className="text-lg font-medium mb-2">Export Your Data</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Download a copy of all your data stored in SiteProof. This includes your profile
-          information, project memberships, NCRs, daily diaries, test results, and activity logs.
-          The data is exported in a portable JSON format.
+          Download a copy of all your data stored in CIVOS. This includes your profile information,
+          project memberships, NCRs, daily diaries, test results, and activity logs. The data is
+          exported in a portable JSON format.
         </p>
 
         <div className="flex flex-col gap-3">
@@ -382,7 +380,7 @@ export function AboutSection() {
       <div>
         <h2 className="text-xl font-semibold flex items-center gap-2">
           <Info className="h-5 w-5" />
-          About SiteProof
+          About CIVOS
         </h2>
         <p className="text-sm text-muted-foreground">Application version and build information.</p>
       </div>
@@ -403,8 +401,8 @@ export function AboutSection() {
       </div>
 
       <div className="text-sm text-muted-foreground">
-        <p>SiteProof is a civil construction quality management platform.</p>
-        <p className="mt-2">© {new Date().getFullYear()} SiteProof. All rights reserved.</p>
+        <p>CIVOS is a civil construction quality management platform.</p>
+        <p className="mt-2">© {new Date().getFullYear()} CIVOS. All rights reserved.</p>
       </div>
     </div>
   );

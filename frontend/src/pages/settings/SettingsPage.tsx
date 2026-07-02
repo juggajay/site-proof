@@ -151,7 +151,7 @@ export function SettingsPage() {
         throw new Error('Export returned an unexpected file type. Please try again.');
       }
 
-      const fallbackFilename = `siteproof-data-export-${formatDateKey()}.json`;
+      const fallbackFilename = `civos-data-export-${formatDateKey()}.json`;
       const filename = sanitizeJsonExportFilename(
         getContentDispositionFilename(response.headers.get('Content-Disposition')),
         fallbackFilename,

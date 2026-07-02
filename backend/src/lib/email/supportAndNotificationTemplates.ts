@@ -62,7 +62,7 @@ export function renderSupportRequestEmail(data: SupportRequestTemplateData): {
   ].join('\n');
 
   return {
-    subject: `[SiteProof Support] ${safeTicketId}: ${safeSubject}`,
+    subject: `[CIVOS Support] ${safeTicketId}: ${safeSubject}`,
     text,
   };
 }
@@ -77,7 +77,7 @@ export function renderNotificationEmail(
   text: string;
 } {
   const subjectTitle = sanitizeSupportEmailLine(data.title, 'Notification');
-  const subject = `[SiteProof] ${subjectTitle}`;
+  const subject = `[CIVOS] ${subjectTitle}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeTitle = escapeEmailHtml(data.title);
   const safeMessage = escapeEmailHtml(data.message);
@@ -112,7 +112,7 @@ export function renderNotificationEmail(
 <body>
   <div class="container">
     <div class="header">
-      <h1>SiteProof</h1>
+      <h1>CIVOS</h1>
     </div>
     <div class="content">
       <h2 style="margin-top: 0;">${safeTitle}</h2>
@@ -125,14 +125,14 @@ export function renderNotificationEmail(
         safeNotificationLinkUrl
           ? `
         <a href="${safeNotificationLinkUrl}" class="button">
-          View in SiteProof
+          View in CIVOS
         </a>
       `
           : ''
       }
     </div>
     <div class="footer">
-      <p>This notification was sent from SiteProof Quality Management System.</p>
+      <p>This notification was sent from CIVOS Quality Management System.</p>
       <p>You received this email because you have notifications enabled for ${safeNotificationType} events.</p>
       <p>To manage your notification preferences, visit your <a href="${safeSettingsUrl}">Settings</a>.</p>
     </div>
@@ -149,10 +149,10 @@ ${data.userName ? `From: ${data.userName}` : ''}
 
 ${data.message}
 
-${urls.notificationLinkUrl ? `View in SiteProof: ${urls.notificationLinkUrl}` : ''}
+${urls.notificationLinkUrl ? `View in CIVOS: ${urls.notificationLinkUrl}` : ''}
 
 ---
-This notification was sent from SiteProof Quality Management System.
+This notification was sent from CIVOS Quality Management System.
 To manage your notification preferences, visit: ${urls.settingsUrl}
   `;
 

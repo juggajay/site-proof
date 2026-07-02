@@ -50,7 +50,7 @@ export async function sendVerificationEmail(
   { sendEmail, escapeEmailHtml }: AuthEmailDependencies,
 ): Promise<AuthEmailResult> {
   const expiresIn = data.expiresInHours || 24;
-  const subject = `[SiteProof] Verify your email address`;
+  const subject = `[CIVOS] Verify your email address`;
   const safeSubject = escapeEmailHtml(subject);
   const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
   const safeVerificationUrl = escapeEmailHtml(data.verificationUrl);
@@ -82,7 +82,7 @@ export async function sendVerificationEmail(
     <div class="content">
       <h2 style="margin-top: 0;">Hi${safeUserName ? ` ${safeUserName}` : ''},</h2>
 
-      <p>Thanks for signing up for SiteProof! Please verify your email address by clicking the button below.</p>
+      <p>Thanks for signing up for CIVOS! Please verify your email address by clicking the button below.</p>
 
       <div style="text-align: center;">
         <a href="${safeVerificationUrl}" class="button">
@@ -101,7 +101,7 @@ export async function sendVerificationEmail(
       </p>
     </div>
     <div class="footer">
-      <p>This verification link was sent from SiteProof.</p>
+      <p>This verification link was sent from CIVOS.</p>
     </div>
   </div>
 </body>
@@ -111,7 +111,7 @@ export async function sendVerificationEmail(
   const text = `
 Hi${data.userName ? ` ${data.userName}` : ''},
 
-Thanks for signing up for SiteProof! Please verify your email address by clicking the link below.
+Thanks for signing up for CIVOS! Please verify your email address by clicking the link below.
 
 ${data.verificationUrl}
 
@@ -120,7 +120,7 @@ This link expires in ${expiresIn} hours.
 If you didn't create an account, you can safely ignore this email.
 
 ---
-This verification link was sent from SiteProof.
+This verification link was sent from CIVOS.
   `;
 
   if (process.env.NODE_ENV !== 'production') {
@@ -144,7 +144,7 @@ export async function sendPasswordResetEmail(
   { sendEmail, escapeEmailHtml }: AuthEmailDependencies,
 ): Promise<AuthEmailResult> {
   const expiresIn = data.expiresInMinutes || 60;
-  const subject = `[SiteProof] Reset your password`;
+  const subject = `[CIVOS] Reset your password`;
   const safeSubject = escapeEmailHtml(subject);
   const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
   const safeResetUrl = escapeEmailHtml(data.resetUrl);
@@ -195,7 +195,7 @@ export async function sendPasswordResetEmail(
       </p>
     </div>
     <div class="footer">
-      <p>This password reset was requested from SiteProof.</p>
+      <p>This password reset was requested from CIVOS.</p>
       <p>For security reasons, this link can only be used once.</p>
     </div>
   </div>
@@ -215,7 +215,7 @@ This link expires in ${expiresIn} minutes.
 If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
 
 ---
-This password reset was requested from SiteProof.
+This password reset was requested from CIVOS.
 For security reasons, this link can only be used once.
   `;
 
@@ -239,7 +239,7 @@ export async function sendMagicLinkEmail(
   data: MagicLinkEmailData,
   { sendEmail, escapeEmailHtml }: AuthEmailDependencies,
 ): Promise<AuthEmailResult> {
-  const subject = `[SiteProof] Your Login Link`;
+  const subject = `[CIVOS] Your Login Link`;
   const safeSubject = escapeEmailHtml(subject);
   const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
   const safeMagicLinkUrl = escapeEmailHtml(data.magicLinkUrl);
@@ -266,16 +266,16 @@ export async function sendMagicLinkEmail(
 <body>
   <div class="container">
     <div class="header">
-      <h1>🔐 Sign In to SiteProof</h1>
+      <h1>🔐 Sign In to CIVOS</h1>
     </div>
     <div class="content">
       <h2 style="margin-top: 0;">Hi${safeUserName ? ` ${safeUserName}` : ''},</h2>
 
-      <p>Click the button below to sign in to your SiteProof account. No password needed!</p>
+      <p>Click the button below to sign in to your CIVOS account. No password needed!</p>
 
       <div style="text-align: center;">
         <a href="${safeMagicLinkUrl}" class="button">
-          Sign In to SiteProof
+          Sign In to CIVOS
         </a>
       </div>
 
@@ -290,7 +290,7 @@ export async function sendMagicLinkEmail(
       </p>
     </div>
     <div class="footer">
-      <p>This login link was requested from SiteProof.</p>
+      <p>This login link was requested from CIVOS.</p>
       <p>For security, this link can only be used once.</p>
     </div>
   </div>
@@ -301,7 +301,7 @@ export async function sendMagicLinkEmail(
   const text = `
 Hi${data.userName ? ` ${data.userName}` : ''},
 
-Sign In to SiteProof
+Sign In to CIVOS
 --------------------
 
 Click the link below to sign in to your account. No password needed!
@@ -314,7 +314,7 @@ If you didn't request this link, you can safely ignore this email.
 For security, this link can only be used once.
 
 ---
-This login link was requested from SiteProof.
+This login link was requested from CIVOS.
   `;
 
   if (process.env.NODE_ENV !== 'production') {

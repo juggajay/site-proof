@@ -205,8 +205,8 @@ export default defineConfig(({ mode }) => {
           'pwa-512x512.png',
         ],
         manifest: {
-          name: 'SiteProof v3',
-          short_name: 'SiteProof',
+          name: 'CIVOS',
+          short_name: 'CIVOS',
           description: 'Civil Execution and Conformance Platform',
           theme_color: '#1e40af',
           background_color: '#ffffff',

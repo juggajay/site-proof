@@ -19,7 +19,7 @@ export function renderHoldPointReleaseConfirmationEmail(
   data: HoldPointReleaseConfirmationTemplateData,
 ): RenderedHoldPointEmail {
   const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
-  const subject = `[SiteProof] Hold Point Released - ${subjectLotNumber}`;
+  const subject = `[CIVOS] Hold Point Released - ${subjectLotNumber}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeRecipientName = escapeEmailHtml(data.recipientName);
   const safeProjectName = escapeEmailHtml(data.projectName);
@@ -113,7 +113,7 @@ export function renderHoldPointReleaseConfirmationEmail(
       </div>
     </div>
     <div class="footer">
-      <p>This confirmation was sent from SiteProof Quality Management System.</p>
+      <p>This confirmation was sent from CIVOS Quality Management System.</p>
       <p>Project: ${safeProjectName}</p>
     </div>
   </div>
@@ -139,7 +139,7 @@ ${data.releaseMethod ? `Release Method: ${data.releaseMethod}\n` : ''}${data.rel
 View lot details: ${data.lotUrl}
 
 ---
-This confirmation was sent from SiteProof Quality Management System.
+This confirmation was sent from CIVOS Quality Management System.
 Project: ${data.projectName}
   `;
 
