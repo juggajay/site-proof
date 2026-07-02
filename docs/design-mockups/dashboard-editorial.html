@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SiteProof — Dashboard (editorial direction)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Geist:wght@400;500;600;700&display=swap');
+
+  /* ============================================================
+     SiteProof v3 — Direction C "EDITORIAL"
+     Refined, type-led, calm premium. Warm ivory canvas, a
+     characterful display serif (Fraunces) over a clean grotesque
+     (Geist). Hairline rules and air over heavy boxes. Muted,
+     sophisticated status colour, used sparingly. Amber as a thin
+     marker, not a block.
+     ============================================================ */
+  :root {
+    --paper: #faf8f3;           /* ivory page canvas */
+    --card: #fffefb;            /* near-white card */
+    --ink: #1a1a17;             /* warm near-black — primary */
+    --ink-soft: #2b2a26;
+    --muted-foreground: #6f6a5f;/* warm grey ink */
+    --faint: #9a9487;           /* whisper text on rules */
+    --hair: #e8e3d8;            /* hairline rule — warm */
+    --hair-strong: #d9d2c4;
+    --accent: #d97706;          /* refined amber — marker only */
+
+    /* status semantics — sophisticated, slightly muted */
+    --success: #15803d; --success-bg:#e7f0e8; --success-fg:#15603a;
+    --warning: #b45309; --warning-bg:#f6ecdc; --warning-fg:#7c4309;
+    --danger:  #b91c1c; --danger-bg:#f4e3e1;  --danger-fg:#8f201c;
+    --info:    #1d4ed8; --info-bg:#e3e8f6;     --info-fg:#1c3aa0;
+    --neutral-bg:#efebe1; --neutral-fg:#565147;
+
+    --radius: 8px;
+    --serif: 'Fraunces', 'Times New Roman', Georgia, serif;
+    --sans: 'Geist', ui-sans-serif, sans-serif;
+  }
+
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background:var(--paper); color:var(--ink);
+    font-family:var(--sans);
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .tnum { font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; }
+  .serif { font-family:var(--serif); font-optical-sizing:auto; }
+  .micro { font-size:11px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--muted-foreground); }
+  a { color:inherit; text-decoration:none; }
+  .ico { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .ico.sm{ width:14px; height:14px; stroke-width:1.7; } .ico.lg{ width:20px; height:20px; }
+
+  /* section eyebrow: serif label + thin rule */
+  .eyebrow { display:flex; align-items:center; gap:14px; margin:0 0 16px; }
+  .eyebrow .lab { font-family:var(--serif); font-optical-sizing:auto; font-size:13px; font-weight:600; letter-spacing:.02em;
+    color:var(--ink); text-transform:uppercase; white-space:nowrap; }
+  .eyebrow .rule { height:1px; background:var(--hair-strong); flex:1; }
+
+  /* ---------- App shell ---------- */
+  .app { display:grid; grid-template-columns:248px 1fr; height:100vh; }
+  .sidebar { border-right:1px solid var(--hair); background:var(--paper); display:flex; flex-direction:column; min-height:0; }
+  .brand { display:flex; align-items:center; gap:11px; padding:22px 22px 20px; border-bottom:1px solid var(--hair); }
+  .brand .logo { width:34px; height:34px; border-radius:8px; background:var(--ink); color:#faf8f3;
+    display:grid; place-items:center; font-family:var(--serif); font-weight:600; font-size:19px; }
+  .brand .name { font-family:var(--serif); font-optical-sizing:auto; font-weight:600; font-size:20px; letter-spacing:-.01em; }
+  .brand .name b { font-weight:600; color:var(--accent); }
+  .nav { padding:14px 14px; overflow-y:auto; flex:1; }
+  .nav .group { padding:20px 8px 8px; }
+  .nav a { display:flex; align-items:center; gap:12px; height:38px; padding:0 12px; border-radius:7px;
+    color:var(--muted-foreground); font-weight:500; position:relative; transition:color .15s, background .15s; }
+  .nav a:hover { background:#f3efe6; color:var(--ink); }
+  .nav a.active { color:var(--ink); font-weight:600; }
+  .nav a.active::before { content:""; position:absolute; left:-1px; top:9px; bottom:9px; width:2px; border-radius:2px; background:var(--accent); }
+  .nav a .badge { margin-left:auto; min-width:20px; height:20px; padding:0 6px; border-radius:10px; display:grid; place-items:center;
+    font-size:11px; font-weight:600; background:var(--danger-bg); color:var(--danger-fg); }
+  .sidebar .foot { border-top:1px solid var(--hair); padding:14px; }
+
+  /* ---------- Topbar ---------- */
+  .main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .topbar { height:68px; flex:none; border-bottom:1px solid var(--hair); background:var(--paper);
+    display:flex; align-items:center; gap:18px; padding:0 28px; }
+  .switcher { display:flex; align-items:center; gap:10px; padding:9px 14px; border:1px solid var(--hair-strong); border-radius:999px;
+    font-weight:600; cursor:pointer; background:var(--card); transition:border-color .15s; }
+  .switcher:hover{ border-color:var(--ink); }
+  .switcher .ctx { font-size:10px; font-weight:600; color:var(--muted-foreground); letter-spacing:.16em; text-transform:uppercase; margin-right:2px; }
+  .search { margin-left:2px; flex:1; max-width:380px; display:flex; align-items:center; gap:10px; height:40px; padding:0 14px;
+    border:1px solid var(--hair); border-radius:999px; color:var(--muted-foreground); background:var(--card); }
+  .search input{ border:0; background:transparent; outline:none; color:var(--ink); font:inherit; width:100%; }
+  .top-actions{ margin-left:auto; display:flex; align-items:center; gap:14px; }
+  .iconbtn{ width:40px; height:40px; display:grid; place-items:center; border:1px solid transparent; border-radius:999px;
+    background:transparent; color:var(--muted-foreground); cursor:pointer; position:relative; transition:color .15s, background .15s; }
+  .iconbtn:hover{ color:var(--ink); background:#f3efe6; }
+  .iconbtn .dot{ position:absolute; top:9px; right:10px; width:7px; height:7px; border-radius:50%; background:var(--accent); border:2px solid var(--paper); }
+  .avatar{ width:38px; height:38px; border-radius:50%; background:var(--ink); color:#faf8f3;
+    display:grid; place-items:center; font-family:var(--serif); font-weight:500; font-size:14px; letter-spacing:.02em; }
+
+  /* ---------- Content ---------- */
+  .content { padding:40px 44px 64px; overflow-y:auto; max-width:1320px; }
+  .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:30px;
+    padding-bottom:26px; border-bottom:1px solid var(--hair-strong); }
+  .page-head h1 { font-family:var(--serif); font-optical-sizing:auto; font-size:40px; font-weight:500; letter-spacing:-.02em;
+    line-height:1.08; margin:0; color:var(--ink); display:flex; align-items:baseline; flex-wrap:wrap; gap:14px; }
+  .page-head .sub { color:var(--muted-foreground); margin:12px 0 0; font-size:14px; letter-spacing:.01em; }
+  .head-actions{ display:flex; gap:10px; flex:none; padding-top:6px; }
+
+  /* buttons */
+  .btn{ display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 16px; border-radius:999px; font:inherit; font-weight:500;
+    cursor:pointer; border:1px solid var(--hair-strong); background:var(--card); color:var(--ink); white-space:nowrap; transition:border-color .15s, background .15s; }
+  .btn:hover{ border-color:var(--ink); }
+  .btn.primary{ background:var(--ink); color:#faf8f3; border-color:var(--ink); }
+  .btn.primary:hover{ background:#000; }
+  .btn.sm{ height:34px; padding:0 13px; font-size:13px; }
+
+  /* status pills — subtle, smallcaps, hairline */
+  .pill{ display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 11px; border-radius:999px;
+    font-size:11px; font-weight:500; letter-spacing:.1em; text-transform:lowercase; font-variant:small-caps;
+    border:1px solid transparent; }
+  .pill::before{ content:""; width:6px; height:6px; border-radius:50%; }
+  .pill.success{ color:var(--success-fg); border-color:#cfe1d2; background:var(--success-bg); }
+  .pill.success::before{ background:var(--success); }
+  .pill.warning{ color:var(--warning-fg); border-color:#ecdcc1; background:var(--warning-bg); }
+  .pill.warning::before{ background:var(--warning); }
+  .pill.danger { color:var(--danger-fg);  border-color:#e6cbc8; background:var(--danger-bg); }
+  .pill.danger::before{ background:var(--danger); }
+  .pill.info   { color:var(--info-fg);    border-color:#cdd6ef; background:var(--info-bg); }
+  .pill.info::before{ background:var(--info); }
+  .pill.neutral{ color:var(--neutral-fg); border-color:var(--hair-strong); background:var(--neutral-bg); }
+  .pill.neutral::before{ background:var(--muted-foreground); }
+
+  /* cards — elevated but quiet; hairline + a whisper of warm shadow */
+  .card{ background:var(--card); border:1px solid var(--hair); border-radius:var(--radius);
+    box-shadow:0 1px 2px rgba(60,50,30,.03), 0 8px 28px -16px rgba(60,50,30,.10); }
+  .card .ch{ padding:20px 24px 16px; border-bottom:1px solid var(--hair); display:flex; align-items:center; justify-content:space-between; }
+  .card .ch h2{ font-family:var(--serif); font-optical-sizing:auto; font-size:17px; font-weight:600; letter-spacing:-.01em;
+    margin:0; display:flex; align-items:center; gap:10px; color:var(--ink); }
+  .card .ch h2 .ico{ color:var(--muted-foreground); }
+  .card .ch .link{ font-size:12px; color:var(--muted-foreground); display:flex; align-items:center; gap:5px; transition:color .15s; }
+  .card .ch .link:hover{ color:var(--accent); }
+  .card .cb{ padding:24px; }
+  .muted{ color:var(--muted-foreground); }
+
+  /* attention banner — restrained: hairline frame, amber marker, no loud fill */
+  .attn{ border:1px solid var(--hair-strong); background:var(--card); border-radius:var(--radius); padding:22px 24px;
+    position:relative; box-shadow:0 1px 2px rgba(60,50,30,.03); }
+  .attn::before{ content:""; position:absolute; left:0; top:18px; bottom:18px; width:3px; border-radius:3px; background:var(--accent); }
+  .attn.crit::before{ background:var(--danger); }
+  .attn .ah{ display:flex; align-items:baseline; gap:10px; font-family:var(--serif); font-optical-sizing:auto;
+    font-weight:600; font-size:16px; color:var(--ink); margin-bottom:6px; }
+  .attn .ah .ico{ color:var(--danger); align-self:center; }
+  .attn .row{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 2px;
+    border-top:1px solid var(--hair); transition:padding-left .15s; }
+  .attn .row:hover{ padding-left:6px; }
+  .attn .row .l{ display:flex; align-items:center; gap:11px; min-width:0; font-weight:500; color:var(--ink-soft); }
+  .attn .row .late{ font-size:12px; white-space:nowrap; font-weight:500; letter-spacing:.02em; }
+  .c-danger{ color:var(--danger); } .c-warning{ color:var(--warning); } .c-success{ color:var(--success); }
+  .c-info{ color:var(--info); } .c-muted{ color:var(--muted-foreground); }
+
+  /* stat ribbon — open, no boxes; hairline columns + serif numerals */
+  .ribbon{ display:grid; grid-template-columns:repeat(8,1fr); gap:0;
+    border-top:1px solid var(--hair-strong); border-bottom:1px solid var(--hair-strong); margin:36px 0; }
+  .stat{ padding:22px 22px 22px 0; margin-left:22px; border-left:1px solid var(--hair); min-height:118px;
+    display:flex; flex-direction:column; }
+  .stat:first-child{ margin-left:0; padding-left:0; border-left:0; }
+  .stat .top{ display:flex; align-items:center; gap:7px; color:var(--muted-foreground); }
+  .stat .v{ font-family:var(--serif); font-optical-sizing:auto; font-size:38px; font-weight:500; letter-spacing:-.03em;
+    margin-top:14px; line-height:1; color:var(--ink); }
+  .stat .lbl{ margin-top:10px; }
+  .stat .sub{ font-size:12px; margin-top:5px; letter-spacing:.01em; }
+  @media (max-width:1180px){
+    .ribbon{ grid-template-columns:repeat(4,1fr); }
+    .stat:nth-child(4n+1){ margin-left:0; padding-left:0; border-left:0; }
+    .stat:nth-child(n+5){ border-top:1px solid var(--hair); }
+  }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+  @media (max-width:1040px){ .grid2{ grid-template-columns:1fr; } }
+  @media (max-width:920px){ .app{ grid-template-columns:72px 1fr; } .brand .name,.nav a span,.nav .group{ display:none; } }
+
+  /* progress */
+  .bigval{ font-family:var(--serif); font-optical-sizing:auto; font-size:48px; font-weight:500; letter-spacing:-.03em; line-height:1; color:var(--ink); }
+  .progress{ height:8px; background:var(--neutral-bg); border-radius:999px; overflow:hidden; display:flex; margin:18px 0 26px; }
+  .progress i{ display:block; height:100%; }
+  .seg-success{ background:var(--success);} .seg-info{ background:var(--info);} .seg-warning{ background:var(--warning);}
+  .scount{ text-align:left; padding-top:16px; border-top:1px solid var(--hair); }
+  .scount .dot{ width:8px; height:8px; border-radius:50%; margin:0 0 9px; }
+  .scount .n{ font-family:var(--serif); font-optical-sizing:auto; font-size:26px; font-weight:500; letter-spacing:-.02em; color:var(--ink); }
+  .scount .t{ font-size:11px; color:var(--muted-foreground); margin-top:4px; letter-spacing:.06em; text-transform:uppercase; }
+
+  .ncrbar{ margin-top:18px; }
+  .ncrbar:first-of-type{ margin-top:22px; }
+  .ncrbar .top{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:7px; color:var(--ink-soft); }
+  .ncrbar .top .lab{ letter-spacing:.01em; }
+  .ncrbar .track{ height:6px; background:var(--neutral-bg); border-radius:999px; overflow:hidden; }
+  .ncrbar .track i{ display:block; height:100%; }
+
+  /* activity */
+  .act{ display:flex; gap:15px; padding:18px 24px; border-bottom:1px solid var(--hair); align-items:flex-start; }
+  .act:last-child{ border-bottom:0; }
+  .act .ai{ width:34px; height:34px; border-radius:8px; display:grid; place-items:center; flex:none; border:1px solid transparent; }
+  .act .at{ font-weight:500; color:var(--ink); letter-spacing:.005em; }
+  .act .am{ font-size:12.5px; color:var(--muted-foreground); margin-top:3px; }
+  .act .when{ margin-left:auto; font-size:11px; color:var(--muted-foreground); white-space:nowrap; letter-spacing:.04em;
+    text-transform:uppercase; padding-top:2px; }
+  .ai.success{ background:var(--success-bg); color:var(--success-fg); border-color:#cfe1d2; }
+  .ai.danger{ background:var(--danger-bg); color:var(--danger-fg); border-color:#e6cbc8; }
+  .ai.info{ background:var(--info-bg); color:var(--info-fg); border-color:#cdd6ef; }
+  .ai.warning{ background:var(--warning-bg); color:var(--warning-fg); border-color:#ecdcc1; }
+  .ai.neutral{ background:var(--neutral-bg); color:var(--neutral-fg); border-color:var(--hair-strong); }
+
+  .previewbar{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:50; display:flex; align-items:center; gap:8px;
+    background:var(--ink); color:#faf8f3; padding:10px 18px; border-radius:999px; font-size:12px; letter-spacing:.04em;
+    box-shadow:0 8px 30px -8px rgba(40,30,15,.45); }
+  .previewbar b{ color:var(--accent); font-weight:600; }
+  .previewbar .serif{ font-weight:500; }
+</style>
+</head>
+<body>
+
+<!-- icon sprite (verbatim from dashboard.html) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></symbol>
+  <symbol id="i-filecheck" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div class="name">Site<b>Proof</b></div>
+    </div>
+    <nav class="nav">
+      <a class="active" href="#"><svg class="ico"><use href="#i-dash"/></svg><span>Dashboard</span></a>
+      <a href="#"><svg class="ico"><use href="#i-folder"/></svg><span>Projects</span></a>
+      <a href="#"><svg class="ico"><use href="#i-pin"/></svg><span>Lots</span></a>
+      <div class="group micro">Quality</div>
+      <a href="#"><svg class="ico"><use href="#i-clip"/></svg><span>ITPs</span></a>
+      <a href="#"><svg class="ico"><use href="#i-clock"/></svg><span>Hold Points</span><span class="badge" style="background:var(--warning-bg);color:var(--warning-fg)">3</span></a>
+      <a href="#"><svg class="ico"><use href="#i-flask"/></svg><span>Tests</span></a>
+      <a href="#"><svg class="ico"><use href="#i-alert"/></svg><span>NCRs</span><span class="badge">4</span></a>
+      <div class="group micro">Daily</div>
+      <a href="#"><svg class="ico"><use href="#i-cal"/></svg><span>Diary</span></a>
+      <a href="#"><svg class="ico"><use href="#i-filecheck"/></svg><span>Dockets</span><span class="badge" style="background:var(--warning-bg);color:var(--warning-fg)">6</span></a>
+      <div class="group micro">Commercial</div>
+      <a href="#"><svg class="ico"><use href="#i-file"/></svg><span>Claims</span></a>
+      <a href="#"><svg class="ico"><use href="#i-file"/></svg><span>Documents</span></a>
+      <a href="#"><svg class="ico"><use href="#i-trend"/></svg><span>Reports</span></a>
+      <a href="#"><svg class="ico"><use href="#i-users"/></svg><span>Subcontractors</span></a>
+    </nav>
+    <div class="foot">
+      <a class="nav" style="display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:7px;color:var(--muted-foreground)" href="#"><svg class="ico"><use href="#i-settings"/></svg><span>Settings</span></a>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="switcher"><span class="ctx">Project</span> Northern Connector — Stage 3 <svg class="ico sm muted"><use href="#i-chev"/></svg></div>
+      <div class="search"><svg class="ico sm"><use href="#i-search"/></svg><input placeholder="Search lots, ITPs, NCRs…" /></div>
+      <div class="top-actions">
+        <button class="iconbtn" title="Notifications"><svg class="ico"><use href="#i-bell"/></svg><span class="dot"></span></button>
+        <div class="avatar">JR</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- header -->
+      <div class="page-head">
+        <div>
+          <h1>Northern Connector — Stage 3 <span class="pill success">Active</span></h1>
+          <p class="sub">PRJ-2041 &bull; Transport for NSW &bull; NSW</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn"><svg class="ico"><use href="#i-refresh"/></svg> Refresh</button>
+          <button class="btn"><svg class="ico"><use href="#i-settings"/></svg> Settings</button>
+        </div>
+      </div>
+
+      <!-- attention banner (critical) -->
+      <div class="attn crit">
+        <div class="ah"><svg class="ico"><use href="#i-alert"/></svg> 3 items need attention</div>
+        <a class="row" href="#">
+          <span class="l"><svg class="ico sm c-danger"><use href="#i-x"/></svg> NCR-0042 — Subgrade compaction below spec, awaiting close-out</span>
+          <span class="late c-danger tnum">5d overdue</span>
+        </a>
+        <a class="row" href="#">
+          <span class="l"><svg class="ico sm c-warning"><use href="#i-alert"/></svg> Hold Point HP-12 — Pre-pour reinforcement, awaiting Superintendent</span>
+          <span class="late c-warning tnum">3d waiting</span>
+        </a>
+        <a class="row" href="#">
+          <span class="l"><svg class="ico sm c-warning"><use href="#i-alert"/></svg> Docket #318 — J. Mason Plant Hire, pending approval</span>
+          <span class="late c-warning tnum">2d waiting</span>
+        </a>
+      </div>
+
+      <!-- stat ribbon -->
+      <div class="eyebrow" style="margin-top:36px;margin-bottom:0"><span class="lab">At a glance</span><span class="rule"></span></div>
+      <div class="ribbon">
+        <div class="stat"><div class="top"><svg class="ico sm"><use href="#i-pin"/></svg></div><div class="v tnum">62%</div><div class="lbl micro">lots complete</div><div class="sub muted tnum">28 of 45 lots</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-danger"><use href="#i-alert"/></svg></div><div class="v tnum">4</div><div class="lbl micro">open NCRs</div><div class="sub c-danger tnum">2 late</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-warning"><use href="#i-clock"/></svg></div><div class="v tnum">3</div><div class="lbl micro">hold points</div><div class="sub muted">pending</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-success"><use href="#i-clip"/></svg></div><div class="v tnum">117</div><div class="lbl micro">ITPs complete</div><div class="sub muted tnum">9 in progress</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-warning"><use href="#i-filecheck"/></svg></div><div class="v tnum">6</div><div class="lbl micro">dockets pending</div><div class="sub muted">approval</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-info"><use href="#i-flask"/></svg></div><div class="v tnum">84</div><div class="lbl micro">test results</div><div class="sub muted">recorded</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm muted"><use href="#i-file"/></svg></div><div class="v tnum">213</div><div class="lbl micro">documents</div><div class="sub muted">on file</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-warning"><use href="#i-cal"/></svg></div><div class="v serif" style="font-size:28px">Draft</div><div class="lbl micro">diary today</div><div class="sub muted">8 Jun 2026</div></div>
+      </div>
+
+      <!-- main grid -->
+      <div class="eyebrow"><span class="lab">Project status</span><span class="rule"></span></div>
+      <div class="grid2">
+        <!-- left column -->
+        <div style="display:flex;flex-direction:column;gap:24px">
+          <!-- lot progress -->
+          <section class="card">
+            <div class="ch"><h2><svg class="ico sm"><use href="#i-trend"/></svg> Lot Progress</h2><a class="link" href="#">View all <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+            <div class="cb">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <span class="bigval tnum">62%</span>
+                <span class="micro tnum">28 of 45 lots completed</span>
+              </div>
+              <div class="progress">
+                <i class="seg-success" style="width:62%"></i>
+                <i class="seg-info" style="width:20%"></i>
+                <i class="seg-warning" style="width:4%"></i>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px">
+                <div class="scount"><div class="dot" style="background:var(--hair-strong)"></div><div class="n tnum">6</div><div class="t">Not Started</div></div>
+                <div class="scount"><div class="dot" style="background:var(--info)"></div><div class="n tnum">9</div><div class="t">In Progress</div></div>
+                <div class="scount"><div class="dot" style="background:var(--warning)"></div><div class="n tnum">2</div><div class="t">On Hold</div></div>
+                <div class="scount"><div class="dot" style="background:var(--success)"></div><div class="n tnum">28</div><div class="t">Complete</div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- quality overview -->
+          <section class="card">
+            <div class="ch"><h2><svg class="ico sm"><use href="#i-alert"/></svg> Quality Overview</h2><a class="link" href="#">View NCRs <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+            <div class="cb">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <span class="bigval tnum">4</span>
+                <span class="micro tnum">open of 9 total</span>
+              </div>
+              <div class="ncrbar"><div class="top"><span class="lab">Major</span><span class="muted tnum">1</span></div><div class="track"><i style="width:25%;background:var(--danger)"></i></div></div>
+              <div class="ncrbar"><div class="top"><span class="lab">Minor</span><span class="muted tnum">2</span></div><div class="track"><i style="width:50%;background:var(--warning)"></i></div></div>
+              <div class="ncrbar"><div class="top"><span class="lab">Observation</span><span class="muted tnum">1</span></div><div class="track"><i style="width:25%;background:var(--info)"></i></div></div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:20px;padding-top:18px;border-top:1px solid var(--hair);font-size:13px" class="c-danger">
+                <svg class="ico sm"><use href="#i-x"/></svg> 2 overdue NCRs
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- right column: activity -->
+        <section class="card">
+          <div class="ch"><h2><svg class="ico sm"><use href="#i-act"/></svg> Recent Activity</h2></div>
+          <div>
+            <div class="act"><div class="ai success"><svg class="ico sm"><use href="#i-check"/></svg></div><div><div class="at">ITP-204 witness point signed off — Lot 31</div><div class="am">Quality Manager · Dean Whitfield</div></div><div class="when">12m ago</div></div>
+            <div class="act"><div class="ai danger"><svg class="ico sm"><use href="#i-alert"/></svg></div><div><div class="at">NCR-0042 raised — subgrade compaction</div><div class="am">Site Engineer · Priya Nair</div></div><div class="when">1h ago</div></div>
+            <div class="act"><div class="ai success"><svg class="ico sm"><use href="#i-filecheck"/></svg></div><div><div class="at">Docket #316 approved — 4 labour, 2 plant</div><div class="am">Foreman · Jayson Ryan</div></div><div class="when">2h ago</div></div>
+            <div class="act"><div class="ai info"><svg class="ico sm"><use href="#i-clock"/></svg></div><div><div class="at">Hold Point HP-11 released — base course</div><div class="am">Superintendent · via secure link</div></div><div class="when">3h ago</div></div>
+            <div class="act"><div class="ai info"><svg class="ico sm"><use href="#i-flask"/></svg></div><div><div class="at">Test result added — MDD/OMC, Lot 33</div><div class="am">Construction Sciences · cert attached</div></div><div class="when">5h ago</div></div>
+            <div class="act"><div class="ai warning"><svg class="ico sm"><use href="#i-cal"/></svg></div><div><div class="at">Daily diary started (draft)</div><div class="am">Foreman · Jayson Ryan</div></div><div class="when">7h ago</div></div>
+            <div class="act"><div class="ai neutral"><svg class="ico sm"><use href="#i-file"/></svg></div><div><div class="at">Drawing C-204 Rev D superseded Rev C</div><div class="am">Project Manager · Alex Tran</div></div><div class="when">Yesterday</div></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="previewbar"><span class="serif">SiteProof</span> — Direction C · <b>Editorial</b> (light)</div>
+
+</body>
+</html>

@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SiteProof — Know what's claim-ready before claim day</title>
+<meta name="description" content="SiteProof connects lots, ITPs, hold points, dockets, photos and test results so Australian civil teams can see what evidence is missing before a claim or handover stalls." />
+<style>
+/* ============================================================
+   SiteProof — LANDING (early access) · "QUIET AUTHORITY"
+   ------------------------------------------------------------
+   SYSTEM DECLARATION
+   · Canvas: warm greige #f7f6f3 · cards pure white · ink #1b1714
+   · Hairlines (#e9e5de) define structure — shadows felt, not seen
+   · ONE accent: deep amber #b45309 — rationed to real signals
+   · Status colour never alone: always paired with a label (INV-4)
+   · Type: IBM Plex Sans (display 600/650/700, tight tracking)
+           IBM Plex Mono + tabular-nums for every number/code/label
+   · Layout: 1180px editorial column · numbered sections in mono
+   · COPY LAW: every claim grounded in dogfooded product truth.
+     No fabricated stats, logos, or testimonials — by design.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600;700&display=swap');
+
+:root {
+  --ink:        #1b1714;
+  --ink-2:      #57514b;
+  --ink-faint:  #7a726a;
+  --paper:      #f7f6f3;
+  --paper-2:    #f1efe9;
+  --card:       #ffffff;
+  --hair:       #e9e5de;
+  --hair-2:     #f0ede7;
+  --hair-strong:#d9d3ca;
+
+  --red:#b42318;  --red-ink:#912018;
+  --amber:#d97706; --amber-ink:#92400e;
+  --green:#15803d; --green-ink:#166534;
+  --accent:#b45309;
+  --accent-soft:#fbeee0;
+
+  --sh-card: 0 1px 2px rgba(40,34,28,.045), 0 1px 3px rgba(40,34,28,.025);
+  --sh-pop:  0 4px 12px rgba(40,34,28,.10), 0 1px 3px rgba(40,34,28,.06);
+  --sh-btn:  0 1px 1.5px rgba(40,34,28,.12), inset 0 1px 0 rgba(255,255,255,.08);
+
+  --radius:7px;
+}
+
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+html, body { margin:0; }
+body {
+  background:var(--paper); color:var(--ink);
+  font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size:16px; line-height:1.6; letter-spacing:-0.011em;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+.mono { font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+.micro { font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); }
+a { color:inherit; text-decoration:none; }
+::selection { background:var(--ink); color:#fff; }
+p { text-wrap:pretty; }
+h1,h2,h3 { text-wrap:balance; }
+
+.wrap { max-width:1180px; margin:0 auto; padding:0 28px; }
+
+/* ---------- reveal on scroll ---------- */
+.rv { opacity:0; transform:translateY(14px); transition:opacity .6s cubic-bezier(.2,.6,.2,1), transform .6s cubic-bezier(.2,.6,.2,1); }
+.rv.in { opacity:1; transform:none; }
+@media (prefers-reduced-motion: reduce) {
+  .rv { opacity:1; transform:none; transition:none; }
+  html { scroll-behavior:auto; }
+}
+
+/* ---------- buttons ---------- */
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:44px; padding:0 20px; border-radius:var(--radius); font:inherit; font-size:15px; font-weight:500; cursor:pointer; border:1px solid var(--hair); background:var(--card); color:var(--ink); white-space:nowrap; box-shadow:var(--sh-card); transition:border-color .12s, background .12s, transform .12s; }
+.btn:hover { border-color:var(--hair-strong); background:var(--paper); }
+.btn.primary { background:var(--ink); color:#fff; border-color:var(--ink); box-shadow:var(--sh-btn); }
+.btn.primary:hover { background:#2b2520; border-color:#2b2520; transform:translateY(-1px); }
+.btn.lg { height:50px; padding:0 26px; font-size:16px; }
+
+/* ---------- nav ---------- */
+.nav-outer { position:sticky; top:0; z-index:50; background:rgba(247,246,243,.86); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-bottom:1px solid var(--hair); }
+.nav { display:flex; align-items:center; gap:26px; height:64px; }
+.brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:17px; letter-spacing:-.02em; margin-right:auto; }
+.brand svg { width:28px; height:28px; display:block; }
+.nav a.lnk { font-size:14.5px; font-weight:450; color:var(--ink-2); transition:color .12s; }
+.nav a.lnk:hover { color:var(--ink); }
+.nav .btn { height:38px; padding:0 16px; font-size:14px; }
+@media (max-width:760px){ .nav a.lnk { display:none; } }
+
+/* ---------- hero ---------- */
+.hero { padding:84px 0 0; }
+.hero-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:56px; align-items:center; }
+.hero-grid > * { min-width:0; }
+@media (max-width:980px){ .hero-grid { grid-template-columns:1fr; gap:44px; } }
+@media (max-width:480px){
+  .board-h { flex-wrap:wrap; row-gap:6px; }
+  .board-h .claim { margin-left:0; order:3; flex-basis:100%; }
+}
+.kicker { display:inline-flex; align-items:center; gap:9px; }
+.kicker .d { width:7px; height:7px; border-radius:50%; background:var(--accent); }
+.hero h1 { margin:22px 0 0; font-size:clamp(40px, 5.4vw, 72px); line-height:1.04; font-weight:650; letter-spacing:-0.035em; }
+.hero .sub { margin:24px 0 0; max-width:560px; font-size:18.5px; line-height:1.6; color:var(--ink-2); font-weight:425; }
+.hero .sub strong { color:var(--ink); font-weight:550; }
+.hero-ctas { margin-top:34px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.hero-note { margin-top:16px; font-size:13px; color:var(--ink-faint); }
+.hero-note .mono { font-size:12px; }
+
+/* ---------- readiness board (the signature artifact) ---------- */
+.board { border:1px solid var(--hair); border-radius:10px; background:var(--card); box-shadow:var(--sh-pop); overflow:hidden; }
+.board-h { display:flex; align-items:center; gap:10px; padding:15px 18px; border-bottom:1px solid var(--hair); }
+.board-h .t { font-weight:600; font-size:14.5px; letter-spacing:-.01em; }
+.board-h .claim { margin-left:auto; }
+.live { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:500; color:var(--ink-2); padding:3px 10px 3px 8px; border:1px solid var(--hair); border-radius:999px; background:var(--card); }
+.live .d { width:6px; height:6px; border-radius:50%; background:var(--green); }
+
+.lot { border-bottom:1px solid var(--hair-2); }
+.lot:last-of-type { border-bottom:0; }
+.lot-r { display:flex; align-items:center; gap:13px; padding:13px 18px; }
+.lot-r .code { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; flex:none; }
+.lot-r .desc { font-size:13.5px; color:var(--ink-2); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lot-r .st { margin-left:auto; flex:none; display:inline-flex; align-items:center; gap:7px; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; padding:3px 10px; border-radius:999px; border:1px solid var(--hair); }
+.lot-r .st .d { width:6px; height:6px; border-radius:50%; }
+.st.ready { color:var(--green-ink); background:#f0f7f1; border-color:#d8e9dc; }
+.st.ready .d { background:var(--green); }
+.st.block { color:var(--amber-ink); background:#fdf6ec; border-color:#f3e3c8; }
+.st.block .d { background:var(--amber); }
+.st.prog { color:var(--ink-faint); background:var(--paper); }
+.st.prog .d { background:var(--hair-strong); }
+
+.blockers { padding:0 18px 12px 18px; display:flex; flex-direction:column; gap:6px; }
+.bk { display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--ink-2); padding:7px 11px; border:1px solid var(--hair-2); border-radius:6px; background:var(--paper); transition:background .5s, border-color .5s; }
+.bk .ic { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; color:var(--amber-ink); flex:none; }
+.bk.done { background:#f0f7f1; border-color:#d8e9dc; color:var(--green-ink); }
+.bk.done .ic { color:var(--green-ink); }
+.bk .when { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-faint); flex:none; }
+.board-f { display:flex; align-items:center; gap:8px; padding:13px 18px; border-top:1px solid var(--hair); background:var(--paper); font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-2); }
+.board-f b { color:var(--ink); font-weight:600; }
+.board-cap { margin-top:12px; text-align:right; }
+
+/* ---------- sections ---------- */
+section { padding:108px 0 0; }
+.sec-head { display:flex; align-items:baseline; gap:18px; border-top:1px solid var(--hair); padding-top:26px; }
+.sec-head .num { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:var(--accent); flex:none; }
+.sec-head h2 { margin:0; font-size:clamp(28px, 3.4vw, 44px); font-weight:650; letter-spacing:-0.03em; line-height:1.1; }
+.sec-lead { margin:20px 0 0; max-width:680px; font-size:17.5px; color:var(--ink-2); }
+.sec-lead strong { color:var(--ink); font-weight:550; }
+
+/* problem list */
+.plist { margin-top:44px; border-top:1px solid var(--hair); }
+.prow { display:grid; grid-template-columns:64px 1fr; gap:20px; padding:24px 0; border-bottom:1px solid var(--hair); align-items:baseline; }
+.prow .n { font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600; color:var(--ink-faint); }
+.prow p { margin:0; font-size:19px; font-weight:450; letter-spacing:-.015em; max-width:760px; }
+.prow p em { font-style:normal; color:var(--ink-faint); }
+.pivot { margin-top:44px; padding:26px 28px; background:var(--ink); color:#fff; border-radius:10px; font-size:18.5px; font-weight:450; line-height:1.55; letter-spacing:-.013em; box-shadow:var(--sh-pop); }
+.pivot b { font-weight:600; }
+.pivot .mono { color:#d9d3ca; font-size:12px; display:block; margin-bottom:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:600; }
+
+/* workflows */
+.flows { margin-top:48px; display:grid; gap:16px; }
+.flow { display:grid; grid-template-columns:.92fr 1.08fr; border:1px solid var(--hair); border-radius:10px; background:var(--card); box-shadow:var(--sh-card); overflow:hidden; }
+@media (max-width:880px){ .flow { grid-template-columns:1fr; } }
+.flow-copy { padding:30px 32px 32px; }
+.flow-copy .micro { color:var(--accent); }
+.flow-copy h3 { margin:12px 0 0; font-size:23px; font-weight:600; letter-spacing:-.022em; line-height:1.2; }
+.flow-copy p { margin:13px 0 0; font-size:15px; color:var(--ink-2); }
+.flow-viz { border-left:1px solid var(--hair-2); background:var(--paper); padding:30px 32px; display:flex; flex-direction:column; gap:10px; justify-content:center; }
+@media (max-width:880px){ .flow-viz { border-left:0; border-top:1px solid var(--hair-2); } }
+.chipline { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.chip { font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:500; padding:5px 11px; border:1px solid var(--hair); border-radius:6px; background:var(--card); color:var(--ink-2); box-shadow:var(--sh-card); }
+.chip.hot { color:var(--accent); border-color:#ecd9bd; background:var(--accent-soft); font-weight:600; }
+.chip.ok { color:var(--green-ink); border-color:#d8e9dc; background:#f0f7f1; font-weight:600; }
+.arr { color:var(--hair-strong); font-size:13px; flex:none; }
+.viz-note { font-size:12.5px; color:var(--ink-faint); margin-top:4px; }
+
+/* templates */
+.tgrid { margin-top:48px; display:grid; grid-template-columns:repeat(5, 1fr); border:1px solid var(--hair); border-radius:10px; overflow:hidden; background:var(--hair); gap:1px; box-shadow:var(--sh-card); }
+@media (max-width:880px){ .tgrid { grid-template-columns:repeat(2, 1fr); } .tgrid .tcell:last-child { grid-column:span 2; } }
+.tcell { background:var(--card); padding:26px 24px 24px; }
+.tcell .auth { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.06em; }
+.tcell .st8 { margin-top:3px; font-size:12.5px; color:var(--ink-faint); }
+.tcell .n { margin-top:18px; font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:600; letter-spacing:-.02em; line-height:1; }
+.tcell .lbl { font-size:12px; color:var(--ink-faint); margin-top:5px; }
+.tfoot { margin-top:14px; font-size:13px; color:var(--ink-faint); max-width:680px; }
+
+/* field section */
+.fgrid { margin-top:48px; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media (max-width:880px){ .fgrid { grid-template-columns:1fr; } }
+.fcard { border:1px solid var(--hair); border-radius:10px; background:var(--card); box-shadow:var(--sh-card); padding:28px 28px 30px; }
+.fcard .micro { color:var(--accent); }
+.fcard h3 { margin:12px 0 0; font-size:19px; font-weight:600; letter-spacing:-.018em; line-height:1.25; }
+.fcard p { margin:11px 0 0; font-size:14.5px; color:var(--ink-2); }
+
+/* early access */
+.ea { margin-top:48px; display:grid; grid-template-columns:1.05fr .95fr; gap:16px; align-items:stretch; }
+@media (max-width:920px){ .ea { grid-template-columns:1fr; } }
+.ea-copy { border:1px solid var(--hair); border-radius:10px; background:var(--ink); color:#fff; padding:38px 40px; box-shadow:var(--sh-pop); display:flex; flex-direction:column; }
+.ea-copy .micro { color:#c4a87e; }
+.ea-copy h3 { margin:14px 0 0; font-size:clamp(24px,2.6vw,32px); font-weight:650; letter-spacing:-.025em; line-height:1.15; color:#fff; }
+.ea-copy p { margin:16px 0 0; font-size:15.5px; line-height:1.65; color:#cfc8bf; }
+.ea-copy p b { color:#fff; font-weight:550; }
+.ea-list { margin:26px 0 0; padding:0; list-style:none; border-top:1px solid #3a332c; }
+.ea-list li { display:flex; gap:12px; padding:13px 0; border-bottom:1px solid #3a332c; font-size:14.5px; color:#cfc8bf; align-items:baseline; }
+.ea-list .tick { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:#e8b269; flex:none; }
+.ea-form { border:1px solid var(--hair); border-radius:10px; background:var(--card); box-shadow:var(--sh-card); padding:34px 36px 36px; }
+.ea-form h3 { margin:0; font-size:21px; font-weight:600; letter-spacing:-.02em; }
+.ea-form .fs { margin:4px 0 0; font-size:13.5px; color:var(--ink-faint); }
+.frow { margin-top:16px; display:grid; gap:6px; }
+.frow label { font-size:13px; font-weight:550; }
+.frow input, .frow select {
+  font:inherit; font-size:14.5px; height:44px; padding:0 13px; border-radius:var(--radius);
+  border:1px solid var(--hair-strong); background:var(--card); color:var(--ink); width:100%;
+}
+.frow select { appearance:none; background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a726a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 13px center; padding-right:36px; }
+.frow input:focus, .frow select:focus { outline:2px solid var(--ink); outline-offset:-1px; border-color:var(--ink); }
+.ea-form .btn { width:100%; margin-top:22px; }
+.form-ok { display:none; margin-top:22px; padding:16px 18px; border:1px solid #d8e9dc; background:#f0f7f1; color:var(--green-ink); border-radius:var(--radius); font-size:14.5px; }
+.form-ok.show { display:block; }
+.form-fine { margin-top:14px; font-size:12.5px; color:var(--ink-faint); }
+
+/* faq */
+.faq { margin-top:48px; border-top:1px solid var(--hair); max-width:840px; }
+.faq details { border-bottom:1px solid var(--hair); }
+.faq summary { cursor:pointer; list-style:none; display:flex; align-items:baseline; gap:16px; padding:22px 0; font-size:18px; font-weight:550; letter-spacing:-.015em; }
+.faq summary::-webkit-details-marker { display:none; }
+.faq summary .q { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--ink-faint); flex:none; transition:color .12s; }
+.faq details[open] summary .q { color:var(--accent); }
+.faq .a { padding:0 0 24px 44px; max-width:720px; font-size:15.5px; color:var(--ink-2); }
+.faq .a p { margin:0 0 10px; } .faq .a p:last-child { margin-bottom:0; }
+
+/* footer */
+footer { margin-top:120px; border-top:1px solid var(--hair); background:var(--card); }
+.foot { display:flex; align-items:center; gap:22px; padding:34px 0; flex-wrap:wrap; }
+.foot .brand { margin-right:auto; font-size:15px; }
+.foot .brand svg { width:24px; height:24px; }
+.foot a { font-size:13.5px; color:var(--ink-2); } .foot a:hover { color:var(--ink); }
+.foot .fine { width:100%; font-size:12.5px; color:var(--ink-faint); border-top:1px solid var(--hair-2); padding-top:18px; }
+
+/* hero variant switcher (design exploration control — discreet) */
+.vsw { position:fixed; right:16px; bottom:16px; z-index:60; display:flex; align-items:center; gap:6px; padding:7px 9px; border:1px solid var(--hair); background:var(--card); border-radius:999px; box-shadow:var(--sh-pop); font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-faint); }
+.vsw button { font:inherit; font-weight:600; width:26px; height:26px; border-radius:50%; border:1px solid var(--hair); background:var(--card); color:var(--ink-2); cursor:pointer; }
+.vsw button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+.vsw .x { border:0; background:none; width:auto; padding:0 4px; cursor:pointer; color:var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<!-- ======================= NAV ======================= -->
+<div class="nav-outer">
+  <div class="wrap nav">
+    <a class="brand" href="#top" aria-label="SiteProof home">
+      <svg viewBox="0 0 192 192" role="img" aria-hidden="true">
+        <rect width="192" height="192" rx="40" fill="#1b1714"/>
+        <path d="M52 118c11 11 24 17 39 17 28 0 49-21 49-49 0-11-3-21-9-30" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+        <path d="M55 78c10-13 24-20 41-20 13 0 25 5 34 14" fill="none" stroke="#d97706" stroke-width="16" stroke-linecap="round"/>
+        <path d="M67 100l19 19 43-52" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      SiteProof
+    </a>
+    <a class="lnk" href="#problem">The problem</a>
+    <a class="lnk" href="#how">How it works</a>
+    <a class="lnk" href="#templates">Templates</a>
+    <a class="lnk" href="#faq">FAQ</a>
+    <a class="btn primary" href="#early-access">Request early access</a>
+  </div>
+</div>
+
+<!-- ======================= HERO ======================= -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="kicker rv"><span class="d"></span><span class="micro" style="color:var(--accent)">Early access — Australian civil contractors</span></span>
+      <h1 class="rv" id="hero-h1">Know what's claim-ready before claim day.</h1>
+      <p class="sub rv" id="hero-sub">SiteProof connects <strong>lots, ITPs, hold points, dockets, photos and test results</strong> — so your team sees exactly what evidence is missing before a claim or handover stalls.</p>
+      <div class="hero-ctas rv">
+        <a class="btn primary lg" href="#early-access">Request early access</a>
+        <a class="btn lg" href="#how">See how it works</a>
+      </div>
+      <p class="hero-note rv">No pricing published yet — the first crews on board help set it. No credit card, no sales pitch.</p>
+    </div>
+    <div class="rv">
+      <div class="board" id="board" aria-label="Evidence readiness board — illustrative sample data">
+        <div class="board-h">
+          <span class="t">Evidence readiness</span>
+          <span class="claim mono micro">Claim 04 · period ending 30 Jun</span>
+          <span class="live"><span class="d"></span>Live</span>
+        </div>
+
+        <div class="lot">
+          <div class="lot-r">
+            <span class="code">LOT-012</span>
+            <span class="desc">Bulk earthworks CH 2400–2600</span>
+            <span class="st ready"><span class="d"></span>Claim ready</span>
+          </div>
+        </div>
+
+        <div class="lot">
+          <div class="lot-r">
+            <span class="code">LOT-014</span>
+            <span class="desc">Subgrade preparation CH 2600–2800</span>
+            <span class="st ready"><span class="d"></span>Claim ready</span>
+          </div>
+        </div>
+
+        <div class="lot" id="lot-15">
+          <div class="lot-r">
+            <span class="code">LOT-015</span>
+            <span class="desc">Select fill &amp; box-out CH 2800–3000</span>
+            <span class="st block" id="lot15-st"><span class="d"></span><span id="lot15-stx">2 blockers</span></span>
+          </div>
+          <div class="blockers">
+            <div class="bk" id="bk-hp">
+              <span class="ic" id="bk-hp-ic">HP-07</span>
+              <span id="bk-hp-tx">Subgrade inspection — awaiting superintendent release</span>
+              <span class="when" id="bk-hp-when">sent 9:02 am</span>
+            </div>
+            <div class="bk">
+              <span class="ic">TEST</span>
+              <span>Compaction test CH 2850 — result not yet recorded</span>
+              <span class="when">due today</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lot">
+          <div class="lot-r">
+            <span class="code">LOT-018</span>
+            <span class="desc">Stormwater RCP Ø600 — install &amp; backfill</span>
+            <span class="st block"><span class="d"></span>1 blocker</span>
+          </div>
+          <div class="blockers">
+            <div class="bk">
+              <span class="ic">DKT</span>
+              <span>Docket #341 — pending foreman approval</span>
+              <span class="when">today</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lot">
+          <div class="lot-r">
+            <span class="code">LOT-019</span>
+            <span class="desc">Kerb &amp; channel CH 2400–2700</span>
+            <span class="st prog"><span class="d"></span>In progress</span>
+          </div>
+        </div>
+
+        <div class="board-f"><b id="ready-n">2</b>&nbsp;of 5 lots claim-ready&nbsp;·&nbsp;<b id="block-n">3</b>&nbsp;open blockers</div>
+      </div>
+      <div class="board-cap micro">Illustrative data — this is the product's evidence readiness view</div>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= PROBLEM ======================= -->
+<section id="problem">
+  <div class="wrap">
+    <div class="sec-head rv"><span class="num">01</span><h2>The evidence exists.<br/>It's just everywhere.</h2></div>
+    <p class="sec-lead rv">Civil teams don't lose claim arguments because the work wasn't done. They lose because the proof is scattered across utes, inboxes and site sheds when someone finally asks for it.</p>
+    <div class="plist">
+      <div class="prow rv"><span class="n">1.1</span><p>ITP sign-offs live in ute consoles, email chains and whoever's notebook was closest. <em>Finding them later is someone's whole afternoon.</em></p></div>
+      <div class="prow rv"><span class="n">1.2</span><p>Hold points sit in a superintendent's inbox, and nobody on site can see where they're stuck. <em>The job waits either way.</em></p></div>
+      <div class="prow rv"><span class="n">1.3</span><p>Dockets and the daily diary get reconciled days later, from memory and crumpled carbon copies.</p></div>
+      <div class="prow rv"><span class="n">1.4</span><p>Claims get assembled at month end from whatever can be found — and disputed over whatever can't.</p></div>
+    </div>
+    <div class="pivot rv">
+      <span class="mono">The SiteProof answer</span>
+      One screen per claim: <b>which lots are evidence-complete, and exactly what's blocking the rest</b> — the missing test, the unreleased hold point, the unapproved docket — while there's still time to fix it.
+    </div>
+  </div>
+</section>
+
+<!-- ======================= HOW IT WORKS ======================= -->
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head rv"><span class="num">02</span><h2>Three loops. One spine.</h2></div>
+    <p class="sec-lead rv">Compliance, daily operations and the commercial cycle each feed evidence onto the lot. Readiness is just the truth of what's landed.</p>
+
+    <div class="flows">
+      <div class="flow rv">
+        <div class="flow-copy">
+          <span class="micro">Compliance</span>
+          <h3>ITPs and hold points, lot by lot</h3>
+          <p>Build lots against ITP templates, capture inspection evidence in the field, and run hold points with a full trail.</p>
+          <p>When a hold point needs release, SiteProof emails the superintendent a secure 48-hour link. They review the evidence in the page and release — <strong style="color:var(--ink); font-weight:550;">no login, no PDF attachments, no chasing</strong>.</p>
+        </div>
+        <div class="flow-viz">
+          <div class="chipline">
+            <span class="chip">ITP item signed</span><span class="arr">→</span>
+            <span class="chip">evidence attached</span><span class="arr">→</span>
+            <span class="chip hot">hold point</span>
+          </div>
+          <div class="chipline">
+            <span class="chip">secure link → superintendent</span><span class="arr">→</span>
+            <span class="chip ok">released</span>
+          </div>
+          <p class="viz-note">The superintendent never needs an account.</p>
+        </div>
+      </div>
+
+      <div class="flow rv">
+        <div class="flow-copy">
+          <span class="micro">Daily operations</span>
+          <h3>Dockets your foreman actually approves</h3>
+          <p>Subbies submit labour and plant dockets from their own portal; foremen approve, query, reject or adjust them before the hours flow into the project diary and commercial record.</p>
+          <p>Approved labour and plant land in the daily diary automatically — weather, delays and site notes stay in your foreman's hands.</p>
+        </div>
+        <div class="flow-viz">
+          <div class="chipline">
+            <span class="chip">subbie submits</span><span class="arr">→</span>
+            <span class="chip hot">foreman approves · queries · adjusts</span>
+          </div>
+          <div class="chipline">
+            <span class="chip ok">diary auto-fills labour + plant</span><span class="arr">→</span>
+            <span class="chip">commercial record</span>
+          </div>
+          <p class="viz-note">Every adjustment carries a recorded reason.</p>
+        </div>
+      </div>
+
+      <div class="flow rv">
+        <div class="flow-copy">
+          <span class="micro">Commercial</span>
+          <h3>Claims built on evidence, not optimism</h3>
+          <p>Run the claim cycle with per-lot evidence readiness in view the whole way. Before you claim a lot, you can see whether its ITPs, hold points, tests and dockets actually back it up.</p>
+          <p>What's missing shows up as a named blocker weeks before claim day — not as a dispute after it.</p>
+        </div>
+        <div class="flow-viz">
+          <div class="chipline">
+            <span class="chip">draft</span><span class="arr">→</span>
+            <span class="chip">submitted</span><span class="arr">→</span>
+            <span class="chip">certified</span><span class="arr">→</span>
+            <span class="chip ok">paid</span>
+          </div>
+          <div class="chipline">
+            <span class="chip hot">blockers visible per lot, per claim line</span>
+          </div>
+          <p class="viz-note">Readiness pulls from ITPs, hold points, tests, dockets and photos.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= TEMPLATES ======================= -->
+<section id="templates">
+  <div class="wrap">
+    <div class="sec-head rv"><span class="num">03</span><h2>Start from the specs you already work to.</h2></div>
+    <p class="sec-lead rv">ITP template libraries built from Austroads and state authority specifications — seeded into your project, then yours to adapt. Not a blank form builder.</p>
+    <div class="tgrid rv">
+      <div class="tcell"><div class="auth">AUSTROADS</div><div class="st8">National baseline</div><div class="n">6</div><div class="lbl">ITP templates</div></div>
+      <div class="tcell"><div class="auth">TfNSW</div><div class="st8">New South Wales</div><div class="n">14</div><div class="lbl">ITP templates</div></div>
+      <div class="tcell"><div class="auth">TMR</div><div class="st8">Queensland</div><div class="n">32</div><div class="lbl">ITP templates</div></div>
+      <div class="tcell"><div class="auth">DIT</div><div class="st8">South Australia</div><div class="n">32</div><div class="lbl">ITP templates</div></div>
+      <div class="tcell"><div class="auth">VicRoads</div><div class="st8">Victoria</div><div class="n">32</div><div class="lbl">ITP templates</div></div>
+    </div>
+    <p class="tfoot rv">Templates reference the relevant Australian Standards inside the checklist content. They're starting points to review against your project specification — not a compliance guarantee.</p>
+  </div>
+</section>
+
+<!-- ======================= FIELD-FIRST ======================= -->
+<section id="field">
+  <div class="wrap">
+    <div class="sec-head rv"><span class="num">04</span><h2>Built for the ute, not the office.</h2></div>
+    <div class="fgrid">
+      <div class="fcard rv">
+        <span class="micro">Any phone</span>
+        <h3>Runs in the browser. Nothing to install.</h3>
+        <p>Foremen and subbies work from whatever phone is in their pocket. No app store, no IT rollout, no version mismatch between the shed and the office.</p>
+      </div>
+      <div class="fcard rv">
+        <span class="micro">Patchy signal</span>
+        <h3>Key field workflows keep working offline.</h3>
+        <p>ITP completions, photos, diary entries and dockets queue locally when coverage drops and sync when it returns — with conflict handling when two people touched the same lot.</p>
+      </div>
+      <div class="fcard rv">
+        <span class="micro">Zero friction</span>
+        <h3>Superintendents never need an account.</h3>
+        <p>Hold point releases run on secure, expiring links. The person you need a signature from doesn't have to learn your software — they open the link and act on the evidence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= EARLY ACCESS ======================= -->
+<section id="early-access">
+  <div class="wrap">
+    <div class="sec-head rv"><span class="num">05</span><h2>No logos. No invented stats.<br/>Just the product.</h2></div>
+    <div class="ea">
+      <div class="ea-copy rv">
+        <span class="micro">Why there's no proof wall on this page</span>
+        <h3>You'd be among the first crews. We're not pretending otherwise.</h3>
+        <p>Most software pages this early are padded with stock photos of hard hats and statistics nobody can source. We'd rather show you the real product and earn the case studies.</p>
+        <p>SiteProof is <b>founder-built out of the paperwork pain of running real crews</b> — built in Australia, for Australian civil work, dogfooded on the workflows on this page.</p>
+        <ul class="ea-list">
+          <li><span class="tick">01</span>A working product — the docket, hold point, diary and claim flows above are built and in daily use, not a roadmap.</li>
+          <li><span class="tick">02</span>A direct line to the founder. What's missing for your crew gets built or answered fast.</li>
+          <li><span class="tick">03</span>A say in pricing before it exists. Early crews help set it — you won't be surprised by it.</li>
+        </ul>
+        <p style="margin-top:26px; font-size:14px; color:#a89f94;">— Jayson, founder · SiteProof</p>
+      </div>
+      <form class="ea-form rv" id="ea-form" novalidate>
+        <h3>Request early access</h3>
+        <p class="fs">Tell us where it hurts. Takes 30 seconds — and a real person replies, not a sequence.</p>
+        <div class="frow">
+          <label for="f-name">Name</label>
+          <input id="f-name" name="name" type="text" autocomplete="name" required />
+        </div>
+        <div class="frow">
+          <label for="f-email">Work email</label>
+          <input id="f-email" name="email" type="email" autocomplete="email" required />
+        </div>
+        <div class="frow">
+          <label for="f-company">Company</label>
+          <input id="f-company" name="company" type="text" autocomplete="organization" required />
+        </div>
+        <div class="frow">
+          <label for="f-state">State</label>
+          <select id="f-state" name="state" required>
+            <option value="" selected disabled>Select…</option>
+            <option>NSW</option><option>QLD</option><option>SA</option><option>VIC</option><option>WA</option><option>TAS</option><option>NT</option><option>ACT</option>
+          </select>
+        </div>
+        <div class="frow">
+          <label for="f-pain">What hurts most right now?</label>
+          <select id="f-pain" name="pain" required>
+            <option value="" selected disabled>Select…</option>
+            <option>ITPs &amp; hold points</option>
+            <option>Dockets &amp; daily diary</option>
+            <option>Progress claims &amp; evidence</option>
+            <option>NCRs &amp; test results</option>
+            <option>All of it</option>
+          </select>
+        </div>
+        <button class="btn primary lg" type="submit">Request early access</button>
+        <div class="form-ok" id="form-ok">Thanks — you're on the list. We'll be in touch directly, usually within a day or two.</div>
+        <p class="form-fine">We'll only use this to contact you about SiteProof early access. No mailing-list spam.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FAQ ======================= -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head rv"><span class="num">06</span><h2>Fair questions.</h2></div>
+    <div class="faq rv">
+      <details>
+        <summary><span class="q">Q.1</span>Is this another do-everything construction management suite?</summary>
+        <div class="a"><p>No — deliberately not. SiteProof is narrower: lots, ITPs, hold points, dockets, diaries, NCRs, test results and progress claims for Australian civil work. If you need scheduling, estimating and accounting in one giant system, that's not us. If you need the evidence side of your projects under control, it is.</p></div>
+      </details>
+      <details>
+        <summary><span class="q">Q.2</span>What does it cost?</summary>
+        <div class="a"><p>There's no published pricing yet, and we won't pretend there is. Early crews get in first and help shape it — that's part of the deal.</p></div>
+      </details>
+      <details>
+        <summary><span class="q">Q.3</span>Will our subbies actually use it?</summary>
+        <div class="a"><p>Subbies get their own portal scoped to what's theirs: dockets, assigned work, the ITPs and hold points that concern them, and documents. They submit dockets from their own phone; your foreman approves, queries or adjusts from theirs. One subbie login works across the projects they're invited to.</p></div>
+      </details>
+      <details>
+        <summary><span class="q">Q.4</span>Can we use our own ITP templates?</summary>
+        <div class="a"><p>Yes. Start from the Austroads and state authority libraries and adapt them per project, or build your own. Templates are editable — they're a head start, not a cage.</p></div>
+      </details>
+      <details>
+        <summary><span class="q">Q.5</span>Does it work where there's no signal?</summary>
+        <div class="a"><p>The field workflows that matter keep working offline — ITP completions, photos, diary entries, docket create and submit. Work queues on the device and syncs when coverage returns, and if two people touched the same lot you choose how to merge. Admin and reporting need a connection.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FOOTER ======================= -->
+<footer>
+  <div class="wrap foot">
+    <span class="brand">
+      <svg viewBox="0 0 192 192" role="img" aria-hidden="true">
+        <rect width="192" height="192" rx="40" fill="#1b1714"/>
+        <path d="M52 118c11 11 24 17 39 17 28 0 49-21 49-49 0-11-3-21-9-30" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+        <path d="M55 78c10-13 24-20 41-20 13 0 25 5 34 14" fill="none" stroke="#d97706" stroke-width="16" stroke-linecap="round"/>
+        <path d="M67 100l19 19 43-52" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      SiteProof
+    </span>
+    <a href="#problem">The problem</a>
+    <a href="#how">How it works</a>
+    <a href="#templates">Templates</a>
+    <a href="#early-access">Early access</a>
+    <div class="fine">© 2026 SiteProof · Built in Australia for civil crews · Evidence, lot by lot.</div>
+  </div>
+</footer>
+
+<!-- hero copy variant switcher (exploration control) -->
+<div class="vsw" id="vsw" role="group" aria-label="Hero copy variants">
+  <span>HERO</span>
+  <button class="on" data-v="a" aria-label="Hero variant A">A</button>
+  <button data-v="b" aria-label="Hero variant B">B</button>
+  <button data-v="c" aria-label="Hero variant C">C</button>
+  <button class="x" id="vsw-x" aria-label="Hide variant switcher">✕</button>
+</div>
+
+<script>
+/* ---------- reveal on scroll ---------- */
+const io = new IntersectionObserver((es) => {
+  es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll('.rv').forEach(el => io.observe(el));
+
+/* ---------- readiness board: hold point releases, lot flips ready ---------- */
+const board = document.getElementById('board');
+let played = false;
+const bio = new IntersectionObserver((es) => {
+  es.forEach(e => {
+    if (e.isIntersecting && !played) {
+      played = true;
+      setTimeout(() => {
+        const bk = document.getElementById('bk-hp');
+        document.getElementById('bk-hp-ic').textContent = '✓ HP-07';
+        document.getElementById('bk-hp-tx').textContent = 'Subgrade inspection — released by superintendent via secure link';
+        document.getElementById('bk-hp-when').textContent = 'just now';
+        bk.classList.add('done');
+        document.getElementById('lot15-stx').textContent = '1 blocker';
+        document.getElementById('block-n').textContent = '2';
+      }, 2200);
+      bio.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.5 });
+if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) bio.observe(board);
+
+/* ---------- early-access form (front-end only; wire to backend later) ---------- */
+document.getElementById('ea-form').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  if (!f.checkValidity()) { f.reportValidity(); return; }
+  f.querySelectorAll('input, select, button[type="submit"]').forEach(el => el.disabled = true);
+  document.getElementById('form-ok').classList.add('show');
+});
+
+/* ---------- hero copy variants (exploration only — remove for production) ---------- */
+const variants = {
+  a: { h: "Know what's claim-ready before claim day.",
+       s: "SiteProof connects <strong>lots, ITPs, hold points, dockets, photos and test results</strong> — so your team sees exactly what evidence is missing before a claim or handover stalls." },
+  b: { h: "Stop discovering missing evidence on claim day.",
+       s: "Every lot in SiteProof shows what's proven and what's blocking it — <strong>the unsigned ITP, the unreleased hold point, the unapproved docket</strong> — while there's still time to fix it." },
+  c: { h: "Every lot. Every ITP. Every docket. One answer: claim-ready or not.",
+       s: "SiteProof pulls <strong>ITPs, hold points, tests, dockets and photos</strong> onto the lot, so Australian civil teams can claim on evidence instead of optimism." }
+};
+document.querySelectorAll('#vsw button[data-v]').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#vsw button[data-v]').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    const v = variants[b.dataset.v];
+    document.getElementById('hero-h1').textContent = v.h;
+    document.getElementById('hero-sub').innerHTML = v.s;
+  });
+});
+document.getElementById('vsw-x').addEventListener('click', () => document.getElementById('vsw').remove());
+</script>
+</body>
+</html>

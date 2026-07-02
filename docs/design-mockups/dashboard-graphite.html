@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en-AU" data-theme="graphite">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SiteProof — Dashboard (Direction A · Graphite)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+  /* ============================================================
+     SiteProof v3 — DIRECTION A · "GRAPHITE"
+     Premium dark command-centre (Linear-grade).
+     Layered graphite surfaces · sharp amber accent ·
+     engineering texture · Geist + Geist Mono.
+     Inherently dark — doubles as the worksite-shed view.
+     ============================================================ */
+  :root {
+    /* layered graphite canvas — never flat */
+    --bg:        #0a0a0b;   /* page */
+    --surface:   #111113;   /* cards / panels */
+    --raised:    #18181b;   /* hover / inputs / raised */
+    --raised-2:  #1f1f23;   /* deepest lift */
+
+    /* hairlines + materiality */
+    --border:        #232327;
+    --border-strong: #2e2e34;
+    --hi:            rgba(255,255,255,.05);  /* top "light from above" */
+    --hi-strong:     rgba(255,255,255,.08);
+
+    /* text */
+    --fg:        #fafafa;
+    --fg-2:      #a1a1aa;
+    --fg-faint:  #71717a;
+
+    /* accent = amber, used sharply + sparingly */
+    --accent:     #fbbf24;
+    --accent-dim: rgba(251,191,36,.14);
+    --accent-fg:  #0a0a0b;
+
+    /* status — tuned for dark (translucent bg + bright 300-level text) */
+    --success:#34d399; --success-bg:rgba(16,80,40,.40);  --success-bd:rgba(52,211,153,.22);
+    --warning:#fbbf24; --warning-bg:rgba(120,80,10,.38);  --warning-bd:rgba(251,191,36,.24);
+    --danger: #f87171; --danger-bg:rgba(110,30,30,.40);   --danger-bd:rgba(248,113,113,.24);
+    --info:   #60a5fa; --info-bg:rgba(30,55,120,.40);     --info-bd:rgba(96,165,250,.24);
+    --neutral-bg:#202024; --neutral-fg:#d4d4d8; --neutral-bd:#2e2e34;
+
+    --radius: 8px;
+    --shadow: 0 1px 2px rgba(0,0,0,.5);
+    --shadow-lift: 0 4px 14px rgba(0,0,0,.45);
+  }
+
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background:var(--bg); color:var(--fg);
+    font-family:'Geist','Geist Fallback',sans-serif;
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .tnum { font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; }
+  .mono { font-family:'Geist Mono',ui-monospace,monospace; }
+  .micro { font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; }
+  a { color:inherit; text-decoration:none; }
+  .ico { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .ico.sm{ width:14px; height:14px; } .ico.lg{ width:20px; height:20px; }
+
+  /* signature: faint engineering dot-grid texture (reusable) */
+  .dotgrid {
+    background-image:radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px);
+    background-size:14px 14px;
+    background-position:-1px -1px;
+  }
+
+  /* ---------- App shell ---------- */
+  .app { display:grid; grid-template-columns:236px 1fr; height:100vh; }
+
+  .sidebar {
+    border-right:1px solid var(--border);
+    background:linear-gradient(180deg, #102 0%, transparent 0) , var(--surface);
+    background:var(--surface);
+    display:flex; flex-direction:column; min-height:0;
+    box-shadow:inset -1px 0 0 var(--hi);
+  }
+  .brand { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); position:relative; }
+  .brand::after{ content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px; background:linear-gradient(90deg, var(--hi-strong), transparent); }
+  .brand .logo {
+    width:28px; height:28px; border-radius:7px;
+    background:linear-gradient(180deg, #2a2a2f, #161618);
+    border:1px solid var(--border-strong);
+    box-shadow:inset 0 1px 0 var(--hi-strong), var(--shadow);
+    color:var(--accent);
+    display:grid; place-items:center; font-weight:700; font-size:15px;
+    font-family:'Geist Mono',monospace;
+  }
+  .brand .name { font-weight:600; letter-spacing:-.01em; font-size:15px; }
+  .brand .name b { color:var(--accent); font-weight:600; }
+
+  .nav { padding:8px; overflow-y:auto; flex:1; }
+  .nav .group { padding:16px 10px 6px; color:var(--fg-faint); font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.14em; }
+  .nav a {
+    display:flex; align-items:center; gap:11px; height:34px; padding:0 11px; border-radius:7px;
+    color:var(--fg-2); font-weight:500; position:relative; transition:background .12s, color .12s;
+  }
+  .nav a:hover { background:var(--raised); color:var(--fg); }
+  .nav a.active { background:var(--raised); color:var(--fg); font-weight:600; box-shadow:inset 0 1px 0 var(--hi); }
+  /* signature: amber left-bar on active section */
+  .nav a.active::before { content:""; position:absolute; left:-1px; top:6px; bottom:6px; width:3px; border-radius:0 3px 3px 0; background:var(--accent); box-shadow:0 0 10px rgba(251,191,36,.55); }
+  .nav a .badge { margin-left:auto; min-width:18px; height:18px; padding:0 5px; border-radius:9px; display:grid; place-items:center;
+    font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+    background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-bd); }
+  .sidebar .foot { border-top:1px solid var(--border); padding:8px; box-shadow:inset 0 1px 0 var(--hi); }
+  .sidebar .foot a { display:flex; align-items:center; gap:11px; height:34px; padding:0 11px; border-radius:7px; color:var(--fg-2); font-weight:500; }
+  .sidebar .foot a:hover{ background:var(--raised); color:var(--fg); }
+
+  /* ---------- Topbar ---------- */
+  .main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .topbar {
+    height:56px; flex:none; border-bottom:1px solid var(--border);
+    background:var(--surface);
+    display:flex; align-items:center; gap:14px; padding:0 20px; position:relative;
+  }
+  /* signature: faint dot-grid + bottom highlight in topbar band */
+  .topbar::before{ content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size:14px 14px; }
+  .topbar::after{ content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px; background:linear-gradient(90deg, transparent, var(--hi), transparent); }
+
+  .switcher { display:flex; align-items:center; gap:8px; padding:7px 11px; border:1px solid var(--border); border-radius:7px;
+    font-weight:600; cursor:pointer; background:var(--raised); box-shadow:inset 0 1px 0 var(--hi); position:relative; z-index:1; transition:border-color .12s; }
+  .switcher:hover{ border-color:var(--border-strong); }
+  .switcher .ctx { font-size:10px; font-weight:500; color:var(--fg-faint); letter-spacing:.12em; text-transform:uppercase; margin-right:3px; font-family:'Geist Mono',monospace; }
+  .search { margin-left:4px; flex:1; max-width:340px; display:flex; align-items:center; gap:8px; height:36px; padding:0 11px;
+    border:1px solid var(--border); border-radius:7px; color:var(--fg-faint); background:var(--raised); box-shadow:inset 0 1px 0 var(--hi); position:relative; z-index:1; }
+  .search input{ border:0; background:transparent; outline:none; color:var(--fg); font:inherit; width:100%; }
+  .search input::placeholder{ color:var(--fg-faint); }
+  .top-actions{ margin-left:auto; display:flex; align-items:center; gap:10px; position:relative; z-index:1; }
+  .iconbtn{ width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--border); border-radius:7px;
+    background:var(--raised); color:var(--fg-2); cursor:pointer; position:relative; box-shadow:inset 0 1px 0 var(--hi); transition:color .12s,border-color .12s; }
+  .iconbtn:hover{ color:var(--fg); border-color:var(--border-strong); }
+  .iconbtn .dot{ position:absolute; top:7px; right:8px; width:7px; height:7px; border-radius:50%; background:var(--accent); border:1.5px solid var(--surface); box-shadow:0 0 6px rgba(251,191,36,.6); }
+  .avatar{ width:34px; height:34px; border-radius:50%;
+    background:linear-gradient(180deg, #2a2a2f, #161618); border:1px solid var(--border-strong);
+    color:var(--fg); display:grid; place-items:center; font-weight:600; font-size:13px; box-shadow:inset 0 1px 0 var(--hi-strong); font-family:'Geist Mono',monospace; }
+
+  /* ---------- Content ---------- */
+  .content { padding:24px 26px 48px; overflow-y:auto; position:relative; }
+  /* signature: faint radial atmosphere behind header/attention area */
+  .content::before{ content:""; position:absolute; top:-40px; left:-10%; right:-10%; height:420px; pointer-events:none;
+    background:
+      radial-gradient(620px 280px at 22% 0%, rgba(251,191,36,.06), transparent 70%),
+      radial-gradient(700px 300px at 80% 6%, rgba(255,255,255,.045), transparent 70%);
+  }
+  .content > *{ position:relative; }
+
+  .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
+  .fig { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.16em; color:var(--fg-faint); margin:0 0 8px; display:flex; align-items:center; gap:8px; }
+  .fig .live{ display:inline-flex; align-items:center; gap:6px; color:var(--success); }
+  .fig .live .ld{ width:6px; height:6px; border-radius:50%; background:var(--success); box-shadow:0 0 8px rgba(52,211,153,.8); animation:pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:1 } 50%{ opacity:.35 } }
+  .page-head h1 { font-size:24px; font-weight:700; letter-spacing:-.025em; margin:0; display:flex; align-items:center; gap:11px; }
+  .page-head .sub { color:var(--fg-2); margin:6px 0 0; font-size:13px; font-family:'Geist Mono',monospace; letter-spacing:.01em; }
+  .page-head .sub .code{ color:var(--fg); }
+  .head-actions{ display:flex; gap:9px; }
+
+  /* buttons */
+  .btn{ display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 14px; border-radius:7px; font:inherit; font-weight:500;
+    cursor:pointer; border:1px solid var(--border); background:var(--raised); color:var(--fg); white-space:nowrap;
+    box-shadow:inset 0 1px 0 var(--hi), var(--shadow); transition:border-color .12s, background .12s; }
+  .btn:hover{ border-color:var(--border-strong); background:var(--raised-2); }
+  .btn.primary{ background:var(--accent); color:var(--accent-fg); border-color:var(--accent); box-shadow:0 0 0 1px rgba(251,191,36,.25), 0 2px 10px rgba(251,191,36,.18); }
+  .btn.primary:hover{ filter:brightness(1.05); }
+  .btn.sm{ height:30px; padding:0 11px; font-size:13px; }
+
+  /* status pills */
+  .pill{ display:inline-flex; align-items:center; gap:5px; height:21px; padding:0 9px; border-radius:999px;
+    font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; font-family:'Geist Mono',monospace; }
+  .pill.success{ background:var(--success-bg); color:var(--success); border:1px solid var(--success-bd); }
+  .pill.warning{ background:var(--warning-bg); color:var(--warning); border:1px solid var(--warning-bd); }
+  .pill.danger { background:var(--danger-bg);  color:var(--danger);  border:1px solid var(--danger-bd); }
+  .pill.info   { background:var(--info-bg);    color:var(--info);    border:1px solid var(--info-bd); }
+  .pill.neutral{ background:var(--neutral-bg); color:var(--neutral-fg); border:1px solid var(--neutral-bd); }
+
+  /* cards — materiality: top highlight + hairline + soft shadow */
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:inset 0 1px 0 var(--hi), var(--shadow); }
+  .card .ch{ padding:15px 17px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .card .ch h2{ font-size:11px; font-weight:600; margin:0; display:flex; align-items:center; gap:8px;
+    text-transform:uppercase; letter-spacing:.1em; color:var(--fg-2); font-family:'Geist Mono',monospace; }
+  .card .ch h2 .ico{ color:var(--fg-faint); }
+  .card .ch .link{ font-size:12px; color:var(--fg-faint); display:flex; align-items:center; gap:4px; transition:color .12s; }
+  .card .ch .link:hover{ color:var(--accent); }
+  .card .cb{ padding:18px; }
+  .muted{ color:var(--fg-2); }
+
+  /* attention banner */
+  .attn{ border:1px solid var(--warning-bd); background:var(--warning-bg); border-radius:var(--radius); padding:15px 17px;
+    box-shadow:inset 0 1px 0 var(--hi), var(--shadow-lift); }
+  .attn.crit{ border-color:var(--danger-bd); background:linear-gradient(180deg, rgba(110,30,30,.32), rgba(110,30,30,.18)); }
+  .attn .ah{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:12px; color:var(--warning); margin-bottom:11px;
+    text-transform:uppercase; letter-spacing:.08em; font-family:'Geist Mono',monospace; }
+  .attn.crit .ah{ color:var(--danger); }
+  .attn .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 11px; border-radius:7px;
+    background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.04); margin-top:7px; transition:background .12s, border-color .12s; }
+  .attn .row:hover{ background:rgba(0,0,0,.45); border-color:rgba(255,255,255,.08); }
+  .attn .row .l{ display:flex; align-items:center; gap:10px; min-width:0; font-weight:500; color:var(--fg); }
+  .attn .row .l .code{ font-family:'Geist Mono',monospace; color:var(--fg); }
+  .attn .row .late{ font-size:11px; white-space:nowrap; font-family:'Geist Mono',monospace; font-weight:600; letter-spacing:.04em; }
+  .c-danger{ color:var(--danger); } .c-warning{ color:var(--warning); } .c-success{ color:var(--success); }
+  .c-info{ color:var(--info); } .c-muted{ color:var(--fg-2); }
+
+  /* stat ribbon */
+  .ribbon{ display:grid; grid-template-columns:repeat(8,1fr); gap:1px; background:var(--border); border:1px solid var(--border);
+    border-radius:var(--radius); overflow:hidden; margin:20px 0; box-shadow:inset 0 1px 0 var(--hi), var(--shadow); }
+  .stat{ background:var(--surface); padding:14px 15px; min-height:78px; transition:background .12s; }
+  .stat:hover{ background:var(--raised); }
+  .stat .top{ display:flex; align-items:center; gap:6px; color:var(--fg-faint); }
+  .stat .v{ font-size:23px; font-weight:700; letter-spacing:-.02em; margin-top:9px; line-height:1; font-family:'Geist Mono',monospace; }
+  .stat .lbl{ margin-top:6px; color:var(--fg-2); }
+  .stat .sub{ font-size:11px; margin-top:4px; font-family:'Geist Mono',monospace; }
+  @media (max-width:1100px){ .ribbon{ grid-template-columns:repeat(4,1fr);} }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:1000px){ .grid2{ grid-template-columns:1fr; } .app{ grid-template-columns:64px 1fr; } .brand .name,.nav a span,.nav .group{ display:none;} }
+
+  /* progress */
+  .bigval{ font-size:28px; font-weight:700; letter-spacing:-.025em; font-family:'Geist Mono',monospace; }
+  .progress{ height:10px; background:var(--raised); border-radius:999px; overflow:hidden; display:flex; margin:11px 0 18px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.6); }
+  .progress i{ display:block; height:100%; }
+  .seg-success{ background:var(--success);} .seg-info{ background:var(--info);} .seg-warning{ background:var(--warning);}
+  .scount{ text-align:center; }
+  .scount .dot{ width:9px; height:9px; border-radius:50%; margin:0 auto 7px; box-shadow:0 0 0 3px rgba(255,255,255,.03); }
+  .scount .n{ font-size:19px; font-weight:700; font-family:'Geist Mono',monospace; }
+  .scount .t{ font-size:11px; color:var(--fg-2); margin-top:3px; }
+
+  .ncrbar{ margin-top:11px; }
+  .ncrbar .top{ display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; }
+  .ncrbar .top .tnum{ font-family:'Geist Mono',monospace; }
+  .ncrbar .track{ height:7px; background:var(--raised); border-radius:999px; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,.55); }
+  .ncrbar .track i{ display:block; height:100%; }
+
+  /* activity */
+  .act{ display:flex; gap:12px; padding:13px 17px; border-bottom:1px solid var(--border); transition:background .12s; }
+  .act:hover{ background:var(--raised); }
+  .act:last-child{ border-bottom:0; }
+  .act .ai{ width:30px; height:30px; border-radius:7px; display:grid; place-items:center; flex:none; box-shadow:inset 0 1px 0 var(--hi); }
+  .act .at{ font-weight:500; } .act .am{ font-size:12px; color:var(--fg-2); margin-top:3px; font-family:'Geist Mono',monospace; }
+  .act .when{ margin-left:auto; font-size:11px; color:var(--fg-faint); white-space:nowrap; font-family:'Geist Mono',monospace; }
+  .ai.success{ background:var(--success-bg); color:var(--success); border:1px solid var(--success-bd);} .ai.danger{ background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-bd);}
+  .ai.info{ background:var(--info-bg); color:var(--info); border:1px solid var(--info-bd);} .ai.warning{ background:var(--warning-bg); color:var(--warning); border:1px solid var(--warning-bd);}
+  .ai.neutral{ background:var(--neutral-bg); color:var(--neutral-fg); border:1px solid var(--neutral-bd);}
+
+  .previewbar{ position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:50; display:flex; align-items:center; gap:8px;
+    background:var(--surface); color:var(--fg-2); padding:8px 15px; border-radius:999px; font-size:11px;
+    border:1px solid var(--border-strong); box-shadow:inset 0 1px 0 var(--hi), 0 8px 28px rgba(0,0,0,.6);
+    font-family:'Geist Mono',monospace; letter-spacing:.04em; }
+  .previewbar .pd{ width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px rgba(251,191,36,.7); }
+  .previewbar b{ color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></symbol>
+  <symbol id="i-filecheck" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-act" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div class="name">Site<b>Proof</b></div>
+    </div>
+    <nav class="nav">
+      <a class="active" href="#"><svg class="ico"><use href="#i-dash"/></svg><span>Dashboard</span></a>
+      <a href="#"><svg class="ico"><use href="#i-folder"/></svg><span>Projects</span></a>
+      <a href="#"><svg class="ico"><use href="#i-pin"/></svg><span>Lots</span></a>
+      <div class="group micro">Quality</div>
+      <a href="#"><svg class="ico"><use href="#i-clip"/></svg><span>ITPs</span></a>
+      <a href="#"><svg class="ico"><use href="#i-clock"/></svg><span>Hold Points</span><span class="badge" style="background:var(--warning-bg);color:var(--warning);border-color:var(--warning-bd)">3</span></a>
+      <a href="#"><svg class="ico"><use href="#i-flask"/></svg><span>Tests</span></a>
+      <a href="#"><svg class="ico"><use href="#i-alert"/></svg><span>NCRs</span><span class="badge">4</span></a>
+      <div class="group micro">Daily</div>
+      <a href="#"><svg class="ico"><use href="#i-cal"/></svg><span>Diary</span></a>
+      <a href="#"><svg class="ico"><use href="#i-filecheck"/></svg><span>Dockets</span><span class="badge" style="background:var(--warning-bg);color:var(--warning);border-color:var(--warning-bd)">6</span></a>
+      <div class="group micro">Commercial</div>
+      <a href="#"><svg class="ico"><use href="#i-file"/></svg><span>Claims</span></a>
+      <a href="#"><svg class="ico"><use href="#i-file"/></svg><span>Documents</span></a>
+      <a href="#"><svg class="ico"><use href="#i-trend"/></svg><span>Reports</span></a>
+      <a href="#"><svg class="ico"><use href="#i-users"/></svg><span>Subcontractors</span></a>
+    </nav>
+    <div class="foot">
+      <a href="#"><svg class="ico"><use href="#i-settings"/></svg><span>Settings</span></a>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="switcher"><span class="ctx">Project</span> Northern Connector — Stage 3 <svg class="ico sm muted"><use href="#i-chev"/></svg></div>
+      <div class="search"><svg class="ico sm"><use href="#i-search"/></svg><input placeholder="Search lots, ITPs, NCRs…" /></div>
+      <div class="top-actions">
+        <button class="iconbtn" title="Notifications"><svg class="ico"><use href="#i-bell"/></svg><span class="dot"></span></button>
+        <div class="avatar">JR</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- header -->
+      <div class="page-head">
+        <div>
+          <!-- signature: mono technical annotation + live dot -->
+          <p class="fig">FIG. 01 / PROJECT OVERVIEW <span class="live"><span class="ld"></span>LIVE</span></p>
+          <h1>Northern Connector — Stage 3 <span class="pill success">Active</span></h1>
+          <p class="sub"><span class="code">PRJ-2041</span> &bull; Transport for NSW &bull; NSW</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn"><svg class="ico"><use href="#i-refresh"/></svg> Refresh</button>
+          <button class="btn"><svg class="ico"><use href="#i-settings"/></svg> Settings</button>
+        </div>
+      </div>
+
+      <!-- attention banner (critical) -->
+      <div class="attn crit">
+        <div class="ah"><svg class="ico"><use href="#i-alert"/></svg> 3 items need attention</div>
+        <a class="row" href="#">
+          <span class="l"><svg class="ico sm c-danger"><use href="#i-x"/></svg> <span class="code">NCR-0042</span> — Subgrade compaction below spec, awaiting close-out</span>
+          <span class="late c-danger tnum">5d overdue</span>
+        </a>
+        <a class="row" href="#">
+          <span class="l"><svg class="ico sm c-warning"><use href="#i-alert"/></svg> Hold Point <span class="code">HP-12</span> — Pre-pour reinforcement, awaiting Superintendent</span>
+          <span class="late c-warning tnum">3d waiting</span>
+        </a>
+        <a class="row" href="#">
+          <span class="l"><svg class="ico sm c-warning"><use href="#i-alert"/></svg> <span class="code">Docket #318</span> — J. Mason Plant Hire, pending approval</span>
+          <span class="late c-warning tnum">2d waiting</span>
+        </a>
+      </div>
+
+      <!-- stat ribbon -->
+      <div class="ribbon">
+        <div class="stat"><div class="top"><svg class="ico sm"><use href="#i-pin"/></svg></div><div class="v tnum">62%</div><div class="lbl micro">lots complete</div><div class="sub muted tnum">28 of 45 lots</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-danger"><use href="#i-alert"/></svg></div><div class="v tnum">4</div><div class="lbl micro">open NCRs</div><div class="sub c-danger tnum">2 late</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-warning"><use href="#i-clock"/></svg></div><div class="v tnum">3</div><div class="lbl micro">hold points</div><div class="sub muted">pending</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-success"><use href="#i-clip"/></svg></div><div class="v tnum">117</div><div class="lbl micro">ITPs complete</div><div class="sub muted tnum">9 in progress</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-warning"><use href="#i-filecheck"/></svg></div><div class="v tnum">6</div><div class="lbl micro">dockets pending</div><div class="sub muted">approval</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-info"><use href="#i-flask"/></svg></div><div class="v tnum">84</div><div class="lbl micro">test results</div><div class="sub muted">recorded</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm muted"><use href="#i-file"/></svg></div><div class="v tnum">213</div><div class="lbl micro">documents</div><div class="sub muted">on file</div></div>
+        <div class="stat"><div class="top"><svg class="ico sm c-warning"><use href="#i-cal"/></svg></div><div class="v" style="font-size:18px">Draft</div><div class="lbl micro">diary today</div><div class="sub muted">8 Jun 2026</div></div>
+      </div>
+
+      <!-- main grid -->
+      <div class="grid2">
+        <!-- left column -->
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <!-- lot progress -->
+          <section class="card">
+            <div class="ch"><h2><svg class="ico sm"><use href="#i-trend"/></svg> Lot Progress</h2><a class="link" href="#">View all <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+            <div class="cb">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <span class="bigval tnum">62%</span>
+                <span class="micro muted tnum">28 of 45 lots completed</span>
+              </div>
+              <div class="progress">
+                <i class="seg-success" style="width:62%"></i>
+                <i class="seg-info" style="width:20%"></i>
+                <i class="seg-warning" style="width:4%"></i>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+                <div class="scount"><div class="dot" style="background:var(--border-strong)"></div><div class="n tnum">6</div><div class="t">Not Started</div></div>
+                <div class="scount"><div class="dot" style="background:var(--info)"></div><div class="n tnum">9</div><div class="t">In Progress</div></div>
+                <div class="scount"><div class="dot" style="background:var(--warning)"></div><div class="n tnum">2</div><div class="t">On Hold</div></div>
+                <div class="scount"><div class="dot" style="background:var(--success)"></div><div class="n tnum">28</div><div class="t">Complete</div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- quality overview -->
+          <section class="card">
+            <div class="ch"><h2><svg class="ico sm"><use href="#i-alert"/></svg> Quality Overview</h2><a class="link" href="#">View NCRs <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+            <div class="cb">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+                <span class="bigval tnum">4</span>
+                <span class="micro muted tnum">open of 9 total</span>
+              </div>
+              <div class="ncrbar"><div class="top"><span>Major</span><span class="muted tnum">1</span></div><div class="track"><i style="width:25%;background:var(--danger)"></i></div></div>
+              <div class="ncrbar"><div class="top"><span>Minor</span><span class="muted tnum">2</span></div><div class="track"><i style="width:50%;background:var(--warning)"></i></div></div>
+              <div class="ncrbar"><div class="top"><span>Observation</span><span class="muted tnum">1</span></div><div class="track"><i style="width:25%;background:var(--info)"></i></div></div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:13px;font-size:12px" class="c-danger">
+                <svg class="ico sm"><use href="#i-x"/></svg> 2 overdue NCRs
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- right column: activity -->
+        <section class="card">
+          <div class="ch"><h2><svg class="ico sm"><use href="#i-act"/></svg> Recent Activity</h2></div>
+          <div>
+            <div class="act"><div class="ai success"><svg class="ico sm"><use href="#i-check"/></svg></div><div><div class="at">ITP-204 witness point signed off — Lot 31</div><div class="am">Quality Manager · Dean Whitfield</div></div><div class="when">12m ago</div></div>
+            <div class="act"><div class="ai danger"><svg class="ico sm"><use href="#i-alert"/></svg></div><div><div class="at">NCR-0042 raised — subgrade compaction</div><div class="am">Site Engineer · Priya Nair</div></div><div class="when">1h ago</div></div>
+            <div class="act"><div class="ai success"><svg class="ico sm"><use href="#i-filecheck"/></svg></div><div><div class="at">Docket #316 approved — 4 labour, 2 plant</div><div class="am">Foreman · Jayson Ryan</div></div><div class="when">2h ago</div></div>
+            <div class="act"><div class="ai info"><svg class="ico sm"><use href="#i-clock"/></svg></div><div><div class="at">Hold Point HP-11 released — base course</div><div class="am">Superintendent · via secure link</div></div><div class="when">3h ago</div></div>
+            <div class="act"><div class="ai info"><svg class="ico sm"><use href="#i-flask"/></svg></div><div><div class="at">Test result added — MDD/OMC, Lot 33</div><div class="am">Construction Sciences · cert attached</div></div><div class="when">5h ago</div></div>
+            <div class="act"><div class="ai warning"><svg class="ico sm"><use href="#i-cal"/></svg></div><div><div class="at">Daily diary started (draft)</div><div class="am">Foreman · Jayson Ryan</div></div><div class="when">7h ago</div></div>
+            <div class="act"><div class="ai neutral"><svg class="ico sm"><use href="#i-file"/></svg></div><div><div class="at">Drawing C-204 Rev D superseded Rev C</div><div class="am">Project Manager · Alex Tran</div></div><div class="when">Yesterday</div></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="previewbar"><span class="pd"></span>SiteProof — Direction A · <b>Graphite</b> (dark)</div>
+
+</body>
+</html>
