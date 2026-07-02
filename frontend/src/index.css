@@ -1082,6 +1082,25 @@
     }
   }
 
+  /* Dark mode — the standout shell surfaces (hero + bottom-bar buttons) flip
+     their BACKGROUND to a cream tint via hsl(var(--foreground)), but their text
+     was hardcoded cream (hsl(40 33% 98%)) so it went invisible on the flipped
+     surface (INV-1). Flip the ink to hsl(var(--background)) so it reads on the
+     cream surface. Amber accents (text-warning / --warning: hero kicker,
+     shell-hero-money, progress fill + badge) set their own color and stay
+     amber; light mode is untouched. */
+  .dark .shell-hero,
+  .dark .shell-cambar-btn,
+  .dark .shell-primary-btn,
+  .dark .shell-sheetbtn {
+    color: hsl(var(--background));
+  }
+  /* Progress track sits on the cream hero surface in dark mode — flip its tint
+     dark so the unfilled portion stays visible behind the amber fill. */
+  .dark .shell-prog-track {
+    background: hsl(var(--background) / 0.18);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .stagger-rise > * {
       animation-duration: 0.01ms !important;

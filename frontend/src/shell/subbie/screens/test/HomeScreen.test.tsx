@@ -9,8 +9,10 @@
  *
  * Pins:
  *   - hero states: none / draft-with-total / queried
- *   - NCR tile hidden by default, shown when ncrs module enabled
- *   - demoted destinations render as secondary links, not daily-work cards
+ *   - default home = exactly My Dockets / My Work / My Company hub tiles
+ *   - NCRs / Documents live inside My Work when lots is on; module-gated home
+ *     fallback tiles only when lots is off
+ *   - My Company always present, "Setup needed" chip until prerequisites met
  *   - role chip text (SUBCONTRACTOR)
  *   - bottom bar navigation target (/p/docket)
  */
@@ -191,40 +193,81 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.queryByRole('button', { name: 'NCRs' })).toBeNull();
   });
 
-  it('shows the NCRs tile when the ncrs module is enabled', () => {
+  it('keeps NCRs off the home when lots is on, even with the ncrs module enabled', () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
-    expect(screen.getByRole('button', { name: 'NCRs' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'NCRs' })).toBeNull();
   });
 
-  it('NCRs tile navigates to /p/ncrs (not the classic page)', () => {
-    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true };
+  it('falls back to a home NCRs tile (→ /p/ncrs) when the lots module is off', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true, lots: false };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: 'NCRs' }));
     expect(screen.getByText('ncrs screen')).toBeInTheDocument();
   });
 
-  it('demotes Documents and My Company out of daily-work card buttons', () => {
+  it('default home shows exactly the My Dockets / My Work / My Company hub tiles', () => {
     renderHome();
-    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'My Company' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /My Company/i })).toBeInTheDocument();
-  });
-
-  it('hides the secondary Documents link when its module is disabled', () => {
-    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, documents: false };
-    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
-    renderHome();
+    expect(screen.getByRole('button', { name: /My Dockets/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /My Work/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    // NCRs / Documents moved inside My Work; no fallback tiles, no chip links.
+    ['NCRs', 'Documents', 'Inspections', 'Holds and Tests'].forEach((name) => {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    });
     expect(screen.queryByRole('link', { name: 'Documents' })).toBeNull();
   });
 
-  it('Documents secondary link preserves the selected project query', () => {
-    _ctx = makeCtx({ projectId: 'project-2', projectName: 'Second Project' });
+  it('hides the fallback Documents tile when its module is disabled', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false, documents: false };
+    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
-    fireEvent.click(screen.getByRole('link', { name: 'Documents' }));
+    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+  });
+
+  it('My Company tile shows a "Setup needed" chip while prerequisites are unmet', () => {
+    // Default ctx has no approved crew/plant → prerequisites unmet → chip on,
+    // but the tile itself is still there (new subbies need it most).
+    renderHome();
+    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    expect(screen.getByText('Setup needed')).toBeInTheDocument();
+  });
+
+  it('My Company tile drops the chip once prerequisites are met', async () => {
+    _ctx = makeCtx({
+      company: {
+        ...makeCtx().company!,
+        employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
+      },
+    });
+    // A lot must come back so docket prerequisites are met.
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.startsWith('/api/lots'))
+        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+    renderHome();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
+    );
+    await waitFor(() => expect(screen.queryByText('Setup needed')).toBeNull());
+    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+  });
+
+  it('fallback Documents tile preserves the selected project query', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false };
+    _ctx = makeCtx({
+      projectId: 'project-2',
+      projectName: 'Second Project',
+      isModuleEnabled: (m) => portalAccess[m],
+    });
+    renderHome();
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=project-2');
   });
 
@@ -241,10 +284,85 @@ describe('subbie shell HomeScreen', () => {
     );
   });
 
-  it('bottom bar "Add today\'s hours" navigates to /p/docket', () => {
+  it('no longer renders the duplicate "Add today\'s hours" cambar', () => {
     renderHome();
-    fireEvent.click(screen.getByRole('button', { name: "Add today's hours" }));
-    expect(screen.getByText('docket editor')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Add today's hours" })).toBeNull();
+  });
+
+  it('hides the Inspections and Holds & Tests top-level tiles when the lots module is on', () => {
+    renderHome();
+    expect(screen.queryByRole('button', { name: 'Inspections' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Holds and Tests' })).toBeNull();
+  });
+
+  it('keeps Inspections + Holds & Tests + Documents tiles as a fallback when the lots module is off', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false };
+    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
+    setApi();
+    renderHome();
+    expect(screen.getByRole('button', { name: 'Inspections' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Holds and Tests' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Documents' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /My Work/ })).toBeNull();
+  });
+
+  it('My Work chip shows the actionable "N checks to do" count from ITP data', async () => {
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.includes('includeITP=true')) {
+        return Promise.resolve({
+          lots: [
+            {
+              id: 'l1',
+              itpInstances: [{ status: 'in_progress' }],
+              subcontractorAssignments: [{ canCompleteITP: true }],
+            },
+            {
+              id: 'l2',
+              itpInstances: [{ status: 'completed' }],
+              subcontractorAssignments: [{ canCompleteITP: true }],
+            },
+            {
+              id: 'l3',
+              itpInstances: [{ status: 'not_started' }],
+              subcontractorAssignments: [{ canCompleteITP: false }],
+            },
+          ],
+        });
+      }
+      if (url.startsWith('/api/lots')) {
+        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
+      }
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+    renderHome();
+    expect(await screen.findByText('1 check to do')).toBeInTheDocument();
+  });
+
+  it('does not flash the My Work chip while ITP checks are still loading', async () => {
+    const itpsDeferred = createDeferred<{ lots: [] }>();
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.includes('includeITP=true')) return itpsDeferred.promise;
+      if (url.startsWith('/api/lots')) return Promise.resolve({ lots: [] });
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+
+    renderHome();
+
+    // While the ITP query is pending, no chip text at all (avoid the green
+    // "0 checks to do" flash).
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringContaining('includeITP=true')),
+    );
+    expect(screen.queryByText(/checks? to do/)).toBeNull();
+
+    itpsDeferred.resolve({ lots: [] });
+    expect(await screen.findByText('0 checks to do')).toBeInTheDocument();
   });
 
   it('does not show the no-lots warning before assigned lots finish loading', async () => {

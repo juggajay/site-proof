@@ -18,6 +18,7 @@
  * points; the subbie only sees status).
  */
 import { Flag, FlaskConical, ShieldOff } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { apiFetch } from '@/lib/api';
@@ -40,6 +41,7 @@ import { ModuleAccessChangedNotice } from '../ModuleAccessChangedNotice';
 
 interface TestResult {
   id: string;
+  lotId: string | null;
   lotNumber: string;
   testType: string;
   result: 'pass' | 'fail' | 'pending';
@@ -73,6 +75,7 @@ function normalizeTestResult(test: ApiTestResult): TestResult & { requirement?: 
 
   return {
     id: test.id,
+    lotId: test.lotId ?? null,
     lotNumber: test.lot?.lotNumber || 'Unassigned lot',
     testType: test.testType,
     result,
@@ -203,6 +206,8 @@ function TestResultCard({ test }: { test: TestResult & { requirement?: string } 
 
 export function QualityScreen() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const lotFilter = searchParams.get('lotId');
   const { projectId, subcontractorCompanyId, isModuleEnabled } = useSubbieShellContext();
 
   const holdsEnabled = isModuleEnabled('holdPoints');
@@ -235,8 +240,20 @@ export function QualityScreen() {
     enabled: !!user?.id && !!projectId && testsEnabled,
   });
 
-  const holdPoints = holdPointsQuery.data ?? [];
-  const tests = testsQuery.data ?? [];
+  const allHoldPoints = holdPointsQuery.data ?? [];
+  const allTests = testsQuery.data ?? [];
+
+  // Optional lotId scope (from the lot hub) — client-side filter, no re-fetch.
+  const holdPoints = lotFilter
+    ? allHoldPoints.filter((hp) => hp.lotId === lotFilter)
+    : allHoldPoints;
+  const tests = lotFilter ? allTests.filter((t) => t.lotId === lotFilter) : allTests;
+
+  // Label the scoped lot from whatever matched (payload carries lot number).
+  const scopedLotNumber = lotFilter
+    ? (holdPoints[0]?.lotNumber ?? tests[0]?.lotNumber ?? null)
+    : null;
+  const viewAllPath = `/p/quality${projectQuery}`;
 
   // Hold points: WAITING (pending+notified) first, then released, then rejected.
   const waiting = holdPoints.filter((hp) => hp.status === 'pending' || hp.status === 'notified');
@@ -286,6 +303,19 @@ export function QualityScreen() {
       }
     >
       {accessRevoked && <ModuleAccessChangedNotice />}
+
+      {/* Lot-scope banner — when the lot hub deep-links here with ?lotId= */}
+      {lotFilter && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-[13px]">
+          <span className="text-muted-foreground">
+            Showing{' '}
+            <span className="font-semibold text-foreground">{scopedLotNumber ?? 'this lot'}</span>
+          </span>
+          <Link to={viewAllPath} className="font-semibold text-foreground underline">
+            View all
+          </Link>
+        </div>
+      )}
 
       {/* HOLD POINTS section (holdPoints module) */}
       {!accessRevoked && holdsEnabled && (
