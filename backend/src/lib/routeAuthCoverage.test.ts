@@ -39,6 +39,7 @@ const parentProtectedRoutePrefixes = new Set([
   'claims/evidenceRoutes.ts',
   'claims/workflowRoutes.ts',
   'claims/postEvidenceWorkflowRoutes.ts',
+  'claims/xeroExport.ts',
   'subcontractors/directoryRoutes.ts',
   'subcontractors/myCompanyRoutes.ts',
   'subcontractors/portalAccessRoutes.ts',

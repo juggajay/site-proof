@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
+import { readLocalStorageItem } from '@/lib/storagePreferences';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
@@ -513,7 +514,7 @@ export function ClaimsPage() {
       // imports as an editable Xero draft, and the readiness guardrail forbids
       // blocking prompts. Moves to a per-company setting with the live Xero
       // integration (see docs/plans/2026-07-02-xero-export-v0-design.md).
-      const accountCode = (localStorage.getItem('xeroExport.accountCode') ?? '').trim() || '200';
+      const accountCode = (readLocalStorageItem('xeroExport.accountCode') ?? '').trim() || '200';
       try {
         const { filename, rows } = await apiFetch<{
           filename: string;
