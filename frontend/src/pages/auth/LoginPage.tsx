@@ -47,32 +47,27 @@ function getLoginErrorMessage(error: string | null): string | null {
   return null;
 }
 
+// CIVOS layered-stack mark — must stay in sync with /public/brand/civos-mark.svg
 function BrandMark() {
   return (
     <svg viewBox="0 0 192 192" role="img" aria-hidden="true">
-      <rect width="192" height="192" rx="40" fill="#f3efe8" />
-      <path
-        d="M52 118c11 11 24 17 39 17 28 0 49-21 49-49 0-11-3-21-9-30"
-        fill="none"
-        stroke="#14100d"
-        strokeWidth="16"
-        strokeLinecap="round"
-      />
-      <path
-        d="M55 78c10-13 24-20 41-20 13 0 25 5 34 14"
-        fill="none"
-        stroke="#d97706"
-        strokeWidth="16"
-        strokeLinecap="round"
-      />
-      <path
-        d="M67 100l19 19 43-52"
-        fill="none"
-        stroke="#14100d"
-        strokeWidth="14"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <rect width="192" height="192" rx="40" fill="#18181B" />
+      <g transform="translate(96,96) scale(0.85) translate(-96,-90.5)">
+        <path d="M96 28 L142 51 L96 74 L50 51 Z" fill="none" stroke="#ffffff" strokeWidth="12" />
+        <path
+          d="M50 86 L88 105 M142 86 L104 105 M50 134 L88 153 M142 134 L104 153"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="12"
+        />
+        <path d="M50 110 L88 129 M142 110 L104 129" fill="none" stroke="#2563EB" strokeWidth="12" />
+        <path
+          d="M96 90 L96 104 M96 114 L96 128 M96 138 L96 152"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="12"
+        />
+      </g>
     </svg>
   );
 }

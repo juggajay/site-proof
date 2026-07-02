@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="108" fill="#18181B"/>
+  <g transform="translate(51.19999999999999,68.26666666666665) scale(2.1333333333333333)">
+    <path d="M96 28 L142 51 L96 74 L50 51 Z" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linejoin="miter"/>
+    
+    <path d="M50 86 L88 105" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M142 86 L104 105" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M50 110 L88 129" stroke="#2563EB" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M142 110 L104 129" stroke="#2563EB" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M50 134 L88 153" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M142 134 L104 153" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/>
+    
+    <path d="M96 90 L96 104" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M96 114 L96 128" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M96 138 L96 152" stroke="#FFFFFF" stroke-width="12" stroke-linecap="butt"/></g>
+</svg>

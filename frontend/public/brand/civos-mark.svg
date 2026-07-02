@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+    <path d="M96 28 L142 51 L96 74 L50 51 Z" fill="none" stroke="#18181B" stroke-width="11" stroke-linejoin="miter"/>
+    
+    <path d="M50 86 L88 105" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M142 86 L104 105" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M50 110 L88 129" stroke="#2563EB" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M142 110 L104 129" stroke="#2563EB" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M50 134 L88 153" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M142 134 L104 153" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    
+    <path d="M96 90 L96 104" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M96 114 L96 128" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M96 138 L96 152" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/></svg>

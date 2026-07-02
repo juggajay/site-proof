@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 583 192">
+  <g>
+    <path d="M96 28 L142 51 L96 74 L50 51 Z" fill="none" stroke="#18181B" stroke-width="11" stroke-linejoin="miter"/>
+    
+    <path d="M50 86 L88 105" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M142 86 L104 105" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M50 110 L88 129" stroke="#2563EB" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M142 110 L104 129" stroke="#2563EB" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M50 134 L88 153" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M142 134 L104 153" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    
+    <path d="M96 90 L96 104" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M96 114 L96 128" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/>
+    <path d="M96 138 L96 152" stroke="#18181B" stroke-width="11" stroke-linecap="butt"/></g>
+  <g transform="translate(204,49) scale(0.8)"><g transform="translate(0,0)"><path d="M70 10 L24 10 Q10 10 10 24 L10 76 Q10 90 24 90 L70 90" fill="none" stroke="#18181B" stroke-width="20" stroke-linejoin="round" stroke-linecap="butt"/></g>
+<g transform="translate(106,0)"><path d="M10 0 L10 100" stroke="#18181B" stroke-width="20" stroke-linecap="butt" fill="none"/></g>
+<g transform="translate(152,0)"><path d="M2 0 L36 90 L70 0" fill="none" stroke="#18181B" stroke-width="20" stroke-linejoin="round" stroke-linecap="butt"/></g>
+<g transform="translate(250,0)"><rect x="10" y="10" width="60" height="80" rx="16" fill="none" stroke="#18181B" stroke-width="20" stroke-linejoin="round" stroke-linecap="butt"/></g>
+<g transform="translate(356,0)"><path d="M70 10 L27 10 Q10 10 10 27 Q10 44 27 44 L53 44 Q70 44 70 61 L70 73 Q70 90 53 90 L10 90" fill="none" stroke="#18181B" stroke-width="20" stroke-linejoin="round" stroke-linecap="butt"/></g></g>
+</svg>
