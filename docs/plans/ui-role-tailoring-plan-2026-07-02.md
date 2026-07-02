@@ -22,17 +22,22 @@ evidence). This is the build plan, sequenced and decision-locked with Jayson.
 
 Design settled in the review doc §2 + recommendation 3.
 
-- **1a. Subbie lot hub** (new screen, mirrors foreman `LotHubScreen`):
-  `/p/lots/:lotId` with tiles Inspection (canCompleteITP pill), Holds & Tests
-  on this lot, NCRs on this lot (module), Docs on this lot (module); bottom
-  primary "Continue inspection" when actionable. Reuses existing portal
-  queries filtered by lotId — no new endpoints. `WorkScreen` lot tap →
+- **1a. Subbie lot hub** (new screen, mirrors foreman `LotHubScreen`) —
+  **LOCKED DESIGN (2026-07-03):** My Work (`/p/work`) = lots only, nothing
+  below the lot groups. `/p/lots/:lotId` cards are exactly Inspection
+  (canCompleteITP pill), NCRs (ncrs module; deep-links `/p/ncrs?lotId=` —
+  the portal NCR endpoint filters lotId server-side), Documents (documents
+  module; unscoped — portal docs aren't lot-scoped). **Holds & Tests is
+  removed from the subbie portal entirely** (subbies never act on hold
+  points; HC surfaces unaffected — classic portal holdpoints/tests pages die
+  in 1c). Card anatomy: icon + label + optional chip + chevron, no
+  description text. Bottom primary "Continue inspection" when actionable.
+  Reuses existing portal queries — no new endpoints. `WorkScreen` lot tap →
   hub (not straight into the ITP run).
 - **1b. Home slim-down:** remove the "Add today's hours" cambar (duplicates
-  hero); remove Inspections / Holds & Tests / NCRs top-level tiles; My Work
-  chip becomes the actionable "N checks to do". Edge cases: lots OFF +
-  itps ON keeps an Inspections tile as fallback; `/p/quality` stays reachable
-  from the Work screen ("view all holds & tests") for un-lotted items.
+  hero); home = hero → My Dockets → My Work → My Company only; My Work
+  chip becomes the actionable "N checks to do". Edge case: lots OFF keeps
+  module-gated Inspections / NCRs / Documents tiles as home fallbacks.
 - **1c. Desktop retirement:** desktop subbies get `/p` (shellFlag + redirect);
   delete `SubcontractorDashboard` + `PortalQuickLinks` grid once nothing
   routes to them. Classic deep routes 301 into `/p` equivalents.

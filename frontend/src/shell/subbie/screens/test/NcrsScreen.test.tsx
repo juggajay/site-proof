@@ -6,6 +6,8 @@
  * Pins:
  *   - ncrs module gating (default OFF → access notice, no query)
  *   - exact query URL incl. subcontractorView=true
+ *   - ?lotId= scope: passed to the endpoint SERVER-SIDE + "Showing <lot> —
+ *     View all" banner (deep link from the lot hub)
  *   - severity pill + status grouping (Open / In Progress / Closed)
  *   - lot numbers from ncrLots
  */
@@ -97,11 +99,11 @@ function setApi({ ncrs = [] as unknown[] } = {}) {
   });
 }
 
-function renderScreen() {
+function renderScreen(path = '/p/ncrs') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/p/ncrs']}>
+      <MemoryRouter initialEntries={[path]}>
         <NcrsScreen />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -134,6 +136,41 @@ describe('subbie shell NcrsScreen', () => {
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/api/ncrs?projectId=proj-1%26subcontractorView%3Dfalse&subcontractorView=true',
     );
+  });
+
+  it('passes the ?lotId= scope to the endpoint server-side and shows the lot banner', async () => {
+    _ctx = makeCtx({ ncrs: true });
+    setApi({
+      ncrs: [
+        {
+          id: 'ncr-1',
+          ncrNumber: 'NCR-014',
+          description: 'Bedding out of spec',
+          status: 'open',
+          severity: 'minor',
+          raisedAt: '2026-06-01T00:00:00.000Z',
+          ncrLots: [{ lotId: 'l1', lot: { lotNumber: 'LOT-014' } }],
+        },
+      ],
+    });
+    renderScreen('/p/ncrs?lotId=l1');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ncrs?projectId=proj-1&subcontractorView=true&lotId=l1',
+    );
+    // Banner labels the scoped lot from the matching ncrLots row and offers
+    // an unscoped "View all" escape.
+    expect(await screen.findByText('LOT-014')).toBeInTheDocument();
+    expect(screen.getByText(/Showing/)).toBeInTheDocument();
+    const viewAll = screen.getByRole('link', { name: 'View all' });
+    expect(viewAll.getAttribute('href')).toBe('/p/ncrs?projectId=proj-1');
+  });
+
+  it('does not send lotId or render the banner when unscoped', () => {
+    _ctx = makeCtx({ ncrs: true });
+    renderScreen();
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?projectId=proj-1&subcontractorView=true');
+    expect(screen.queryByText(/Showing/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View all' })).toBeNull();
   });
 
   it('groups by Open / In Progress / Closed and shows severity + lot', async () => {

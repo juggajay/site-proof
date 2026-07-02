@@ -14,10 +14,13 @@
  *   /p/dockets               → DocketsListScreen       (PR B — real)
  *   /p/work                  → WorkScreen              (PR C — real)
  *   /p/itps                  → ItpsScreen              (PR C — real)
- *   /p/lots/:lotId           → SubbieLotHubScreen      — per-lot hub (Inspection / Holds & Tests)
+ *   /p/lots/:lotId           → SubbieLotHubScreen      — per-lot hub (Inspection / NCRs / Documents)
  *   /p/lots/:lotId/itp       → SubbieItpRunScreen      (PR C — real)
- *   /p/quality               → Holds & Tests (real)    — holdPoints + testResults
- *   /p/ncrs                  → NCRs (real)             — ncrs module (default OFF)
+ *   /p/ncrs                  → NCRs (real)             — ncrs module (default OFF); ?lotId= scope
+ *
+ * Holds & Tests is REMOVED from the subbie shell (no /p/quality): subbies never
+ * act on hold points — the HC releases them. Classic portal holdpoints/tests
+ * pages are untouched here (they retire in slice 1c).
  *   /p/docs                  → Documents (real)        — documents module
  *   /p/company               → My Company (real)       — crew/plant roster
  *   *                        → /p
@@ -29,7 +32,6 @@
 import { useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
-import { QualityScreen } from './screens/QualityScreen';
 import { DocsScreen } from './screens/DocsScreen';
 import { NcrsScreen } from './screens/NcrsScreen';
 import { CompanyScreen } from './screens/CompanyScreen';
@@ -87,10 +89,7 @@ export function SubbieShellRoutes() {
         <Route path="lots/:lotId" element={<SubbieLotHubScreen />} />
         <Route path="lots/:lotId/itp" element={<SubbieItpRunScreen />} />
 
-        {/* Holds & Tests — read-only QA visibility (holdPoints + testResults) */}
-        <Route path="quality" element={<QualityScreen />} />
-
-        {/* NCRs — module-conditional (ncrs defaults OFF) */}
+        {/* NCRs — module-conditional (ncrs defaults OFF); optional ?lotId= scope */}
         <Route path="ncrs" element={<NcrsScreen />} />
 
         {/* Documents — view-only (documents module) */}

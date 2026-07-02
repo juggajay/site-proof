@@ -483,7 +483,6 @@ test.describe('Subbie mobile shell direct routes', () => {
           heading: 'Inspection',
           text: 'Confirm pipe bedding is compacted',
         },
-        { path: `/p/quality${projectQuery}`, heading: 'Holds & Tests', text: 'Compaction' },
         { path: `/p/ncrs${projectQuery}`, heading: 'NCRs', text: 'NCR-SUB-001' },
         { path: `/p/docs${projectQuery}`, heading: 'Documents', text: 'SWMS-drainage.pdf' },
         { path: `/p/company${projectQuery}`, heading: 'My Company', text: 'Worker One' },
@@ -522,20 +521,20 @@ test.describe('Subbie mobile shell direct routes', () => {
     const classicRoutes: Array<{
       from: string;
       to: string;
-      heading: string;
+      heading?: string;
       text?: string | RegExp;
     }> = [
+      // Holds & Tests has no shell surface (removed from the subbie UI) —
+      // classic deep links land on the shell home.
       {
         from: `/subcontractor-portal/tests${projectQuery}`,
-        to: '/p/quality',
-        heading: 'Holds & Tests',
-        text: 'Compaction',
+        to: '/p',
+        text: 'Mobile Shell Civil',
       },
       {
         from: `/subcontractor-portal/holdpoints${projectQuery}`,
-        to: '/p/quality',
-        heading: 'Holds & Tests',
-        text: 'Superintendent release before backfill',
+        to: '/p',
+        text: 'Mobile Shell Civil',
       },
       {
         from: `/subcontractor-portal/ncrs${projectQuery}`,
@@ -570,7 +569,9 @@ test.describe('Subbie mobile shell direct routes', () => {
       expect(new URL(page.url()).searchParams.get('subcontractorCompanyId')).toBe(
         SUBCONTRACTOR_COMPANY_ID,
       );
-      await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      if (route.heading) {
+        await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+      }
       if (route.text) {
         await expect(page.getByText(route.text).first()).toBeVisible();
       }

@@ -501,10 +501,13 @@ test.describe.serial('seeded real-backend role journeys', () => {
     ).toBeVisible();
     await expect(page.getByText('E2E Subcontractors')).toBeVisible();
     await expect(page.getByText('E2E Highway Upgrade')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'My Work — 2 lots' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Inspections' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Holds and Tests' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Documents' })).toBeVisible();
+    // Locked home structure (role-tailoring slice 1): My Dockets / My Work /
+    // My Company only — Inspections/NCRs/Documents live behind the lot hub and
+    // Holds & Tests is gone from the subbie UI entirely.
+    await expect(page.getByRole('button', { name: /My Work/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'My Company' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Inspections' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Holds and Tests' })).toHaveCount(0);
 
     await page.goto(`/p/work?${query}`);
     await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible();
@@ -525,11 +528,10 @@ test.describe.serial('seeded real-backend role journeys', () => {
       await expect(page.getByText('Awaiting hold point release').first()).toBeVisible();
     }
 
-    await page.goto(`/p/quality?${query}`);
-    await expect(page.getByRole('heading', { name: 'Holds & Tests' })).toBeVisible();
-    await expect(page.getByText('HOLD POINTS', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Verify formation is ready for inspection/i)).toBeVisible();
-    await expect(page.getByText('LOT-001').first()).toBeVisible();
+    // The lot hub replaces the deleted /p/quality surface behind My Work.
+    await page.goto(`/p/lots/e2e-lot?${query}`);
+    await expect(page.getByRole('heading', { name: 'LOT-001' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Inspection — / })).toBeVisible();
 
     await page.goto(`/p/dockets?${query}`);
     await expect(page.getByRole('heading', { name: 'My Dockets' })).toBeVisible();

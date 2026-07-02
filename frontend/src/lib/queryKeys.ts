@@ -121,12 +121,14 @@ export const queryKeys = {
     userId: string | null | undefined,
     projectId: string | null | undefined,
     subcontractorCompanyId?: string | null | undefined,
+    lotId?: string | null | undefined,
   ) =>
     [
       'portal-ncrs',
       userId ?? 'anonymous',
       projectId ?? 'no-project',
       subcontractorCompanyId ?? 'default-company',
+      lotId ?? 'all-lots',
     ] as const,
   portalTestResults: (
     userId: string | null | undefined,

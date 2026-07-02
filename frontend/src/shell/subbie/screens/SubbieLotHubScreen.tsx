@@ -3,27 +3,24 @@
  *
  * Mirrors the foreman `LotHubScreen` anatomy (ShellScreen variant="inner", lot
  * number title, a few HubTile rows, a bottom primary action) but on the subbie's
- * world: Inspection (with the load-bearing canCompleteITP permission signal) and
- * Holds & Tests on THIS lot. Per-lot detail lives behind the lot, not as
- * top-level tiles.
+ * world. Cards are exactly: Inspection (with the load-bearing canCompleteITP
+ * permission signal), NCRs, Documents. Holds & Tests is gone from the subbie
+ * UI entirely — subbies never act on hold points (the HC releases them).
  *
  * NEW PRESENTATION over EXISTING LOGIC — every read reuses an EXISTING portal
- * query key (cache shared with WorkScreen / ItpsScreen / QualityScreen, no new
- * endpoints). Lot-scoping is client-side:
+ * query key (cache shared with WorkScreen / ItpsScreen, no new endpoints):
  *   - lot identity/status: queryKeys.portalAssignedWork (portalModule=lots)
  *   - inspection + permission: queryKeys.portalITPs (includeITP=true)
- *   - hold-point count: queryKeys.portalHoldPoints (subcontractorView=true)
  *
- * NCRs tile is deliberately omitted: the portal NCR payload carries lot NUMBER
- * but not lot id, so a lotId-scoped filter can't match client-side (see the
- * WorkScreen, which keeps a project-wide NCRs hub card below the lot groups).
- * The "Docs on this lot" tile from the plan is deferred for the same class of
- * reason: portal documents aren't lot-scoped in the payload, so they can't be
- * filtered down to this lot client-side.
+ * NCRs card deep-links to /p/ncrs?lotId= — the portal NCR list endpoint
+ * accepts lotId server-side (ncrLots.some.lotId), so NcrsScreen fetches a
+ * lot-scoped list. Documents card navigates UNSCOPED to /p/docs: portal
+ * documents aren't lot-scoped in the payload or the endpoint, so a per-lot
+ * docs filter can't exist yet.
  */
 import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, ClipboardCheck, Eye, FlaskConical, Inbox } from 'lucide-react';
+import { ChevronRight, ClipboardCheck, Eye, Flag, FolderOpen, Inbox } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { HubTile } from '../components/HubTile';
@@ -32,10 +29,6 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
-import {
-  normalizeSubcontractorHoldPoint,
-  type ApiSubcontractorHoldPoint,
-} from '@/pages/subcontractor-portal/subcontractorHoldPointData';
 import { useSubbieShellContext } from '../subbieShellContext';
 
 // ── Minimal response shapes (existing portal contracts) ───────────────────────
@@ -83,7 +76,7 @@ function InspectionTile({
   return (
     <button
       type="button"
-      className="shell-hub items-start"
+      className="shell-hub"
       onClick={onPress}
       aria-label={`Inspection — ${templateName}, ${statusLabel}, ${
         canComplete ? 'you can complete' : 'view only'
@@ -92,27 +85,27 @@ function InspectionTile({
       <span className="shell-hub-ico" aria-hidden="true">
         <ClipboardCheck size={22} strokeWidth={1.8} />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="shell-tile-title block">Inspection</span>
-        {/* Uniform card anatomy: no text description line — the template name
-            stays in the aria-label; status + permission are pills. */}
-        <span className="mt-[8px] flex flex-wrap gap-[7px]">
-          <span className={status === 'completed' ? 'shell-pill shell-pill-good' : 'shell-pill'}>
-            {statusLabel.toUpperCase()}
-          </span>
-          {canComplete ? (
-            <span className="shell-pill shell-pill-good">YOU CAN COMPLETE</span>
-          ) : (
-            <span className="shell-pill inline-flex items-center gap-1">
-              <Eye size={11} aria-hidden="true" />
-              VIEW ONLY — ASK YOUR PM
-            </span>
-          )}
+      {/* Uniform card height: title + pills share ONE horizontal row (wrapping
+          only when genuinely too narrow), so this card matches its
+          icon+label+chevron siblings. No description line — the template name
+          stays in the aria-label. */}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-[7px] gap-y-1">
+        <span className="shell-tile-title">Inspection</span>
+        <span className={status === 'completed' ? 'shell-pill shell-pill-good' : 'shell-pill'}>
+          {statusLabel.toUpperCase()}
         </span>
+        {canComplete ? (
+          <span className="shell-pill shell-pill-good">YOU CAN COMPLETE</span>
+        ) : (
+          <span className="shell-pill inline-flex items-center gap-1">
+            <Eye size={11} aria-hidden="true" />
+            VIEW ONLY — ASK YOUR PM
+          </span>
+        )}
       </span>
       <ChevronRight
         size={18}
-        className="mt-1 flex-shrink-0 text-muted-foreground/50"
+        className="flex-shrink-0 text-muted-foreground/50"
         aria-hidden="true"
       />
     </button>
@@ -127,12 +120,10 @@ export function SubbieLotHubScreen() {
 
   const lotsEnabled = isModuleEnabled('lots');
   const itpsEnabled = isModuleEnabled('itps');
-  const holdsEnabled = isModuleEnabled('holdPoints');
-  const testsEnabled = isModuleEnabled('testResults');
-  const holdsOrTests = holdsEnabled || testsEnabled;
+  const ncrsEnabled = isModuleEnabled('ncrs');
+  const documentsEnabled = isModuleEnabled('documents');
 
   const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
-  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
   const encodedLotId = encodeURIComponent(lotId);
 
   // Lot identity/status — shared portalAssignedWork cache.
@@ -159,30 +150,17 @@ export function SubbieLotHubScreen() {
     enabled: !!user?.id && !!projectId && itpsEnabled,
   });
 
-  // Hold-point count on this lot — shared portalHoldPoints cache.
-  const { data: holdPoints = [] } = useQuery({
-    queryKey: queryKeys.portalHoldPoints(user?.id, projectId, subcontractorCompanyId),
-    queryFn: async () => {
-      const scopeQuery = buildPortalCompanyQuery({ subcontractorCompanyId });
-      const res = await apiFetch<{ holdPoints: ApiSubcontractorHoldPoint[] }>(
-        `/api/holdpoints/project/${encodedProjectId}${scopeQuery ? `${scopeQuery}&` : '?'}subcontractorView=true`,
-      );
-      return (res.holdPoints || []).map(normalizeSubcontractorHoldPoint);
-    },
-    enabled: !!user?.id && !!projectId && holdsEnabled,
-  });
-
   const workLot = useMemo(() => workLots.find((l) => l.id === lotId), [workLots, lotId]);
   const itpLot = useMemo(() => itpLots.find((l) => l.id === lotId), [itpLots, lotId]);
   const itp = itpLot?.itpInstances?.[0];
   const canComplete = itpLot?.subcontractorAssignments?.some((a) => a.canCompleteITP) ?? false;
-  const holdCount = holdPoints.filter((hp) => hp.lotId === lotId).length;
 
   const lotNumber = workLot?.lotNumber ?? itpLot?.lotNumber ?? 'Lot';
   const status = workLot?.status ?? '';
 
   const itpPath = `/p/lots/${encodedLotId}/itp${projectQuery}`;
-  const qualityPath = `/p/quality${projectQuery}${projectQuery ? '&' : '?'}lotId=${encodedLotId}`;
+  // Server-side lot scope — GET /api/ncrs accepts lotId (ncrLots.some.lotId).
+  const ncrsPath = `/p/ncrs${projectQuery}${projectQuery ? '&' : '?'}lotId=${encodedLotId}`;
 
   // Bottom primary only when the subbie can actually action the ITP and it is not
   // already done — mirrors the foreman "Continue inspections" affordance.
@@ -224,26 +202,34 @@ export function SubbieLotHubScreen() {
         <InspectionTile itp={itp} canComplete={canComplete} onPress={() => navigate(itpPath)} />
       )}
 
-      {holdsOrTests && (
+      {/* NCRs on this lot — server-side lotId scope on the portal NCR list. */}
+      {ncrsEnabled && (
         <HubTile
-          icon={FlaskConical}
-          title="Holds & Tests"
-          chip={holdsEnabled && holdCount > 0 ? `${holdCount}` : undefined}
-          onPress={() => navigate(qualityPath)}
-          ariaLabel={`Holds and Tests on this lot${
-            holdsEnabled && holdCount > 0 ? ` — ${holdCount} hold points` : ''
-          }`}
+          icon={Flag}
+          title="NCRs"
+          onPress={() => navigate(ncrsPath)}
+          ariaLabel="NCRs on this lot"
         />
       )}
 
-      {/* Nothing enabled for this lot (itps, holds, and tests all off) — an
+      {/* Documents — UNSCOPED (portal docs aren't lot-scoped; see header). */}
+      {documentsEnabled && (
+        <HubTile
+          icon={FolderOpen}
+          title="Documents"
+          onPress={() => navigate(`/p/docs${projectQuery}`)}
+          ariaLabel="Documents"
+        />
+      )}
+
+      {/* Nothing enabled for this lot (itps, ncrs, and documents all off) — an
           honest empty state rather than a blank screen. */}
-      {!itpsEnabled && !holdsOrTests && (
+      {!itpsEnabled && !ncrsEnabled && !documentsEnabled && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <Inbox size={32} className="text-muted-foreground/60" aria-hidden />
           <p className="text-[14px] text-muted-foreground">Nothing enabled for this lot yet.</p>
           <p className="max-w-[280px] text-[13px] text-muted-foreground">
-            No inspections, hold points, or tests are turned on for your crew here. Check with your
+            No inspections, NCRs, or documents are turned on for your crew here. Check with your
             project manager.
           </p>
         </div>

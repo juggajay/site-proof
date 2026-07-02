@@ -11,8 +11,9 @@ describe('subbie shell route mapping', () => {
     ['/subcontractor-portal/dockets', '/p/dockets'],
     ['/subcontractor-portal/work', '/p/work'],
     ['/subcontractor-portal/itps', '/p/itps'],
-    ['/subcontractor-portal/holdpoints', '/p/quality'],
-    ['/subcontractor-portal/tests', '/p/quality'],
+    // Holds & Tests has no shell surface — classic deep links land on home.
+    ['/subcontractor-portal/holdpoints', '/p'],
+    ['/subcontractor-portal/tests', '/p'],
     ['/subcontractor-portal/ncrs', '/p/ncrs'],
     ['/subcontractor-portal/documents', '/p/docs'],
     ['/my-company', '/p/company'],
@@ -29,7 +30,6 @@ describe('subbie shell route mapping', () => {
     ['/p/dockets', '/subcontractor-portal/dockets'],
     ['/p/work', '/subcontractor-portal/work'],
     ['/p/itps', '/subcontractor-portal/itps'],
-    ['/p/quality', '/subcontractor-portal/holdpoints'],
     ['/p/ncrs', '/subcontractor-portal/ncrs'],
     ['/p/docs', '/subcontractor-portal/documents'],
     ['/p/company', '/my-company'],
@@ -42,5 +42,7 @@ describe('subbie shell route mapping', () => {
   it('returns null for unknown paths', () => {
     expect(getSubbieShellPathForClassicPath('/subcontractor-portal/unknown')).toBeNull();
     expect(getClassicPortalPathForSubbieShellPath('/p/unknown')).toBeNull();
+    // /p/quality no longer exists in the shell.
+    expect(getClassicPortalPathForSubbieShellPath('/p/quality')).toBeNull();
   });
 });

@@ -9,8 +9,9 @@
  *   - Inspection tile: template name in the aria-label (no visible description
  *     line — uniform card anatomy) + canCompleteITP permission signal both ways
  *   - continue-inspection primary visibility (actionable vs completed vs view-only)
- *   - Holds & Tests tile: per-lot hold count chip + lotId-scoped navigation
- *   - per-module tile gating (itps off / holds+tests off)
+ *   - cards are exactly Inspection / NCRs / Documents (Holds & Tests removed)
+ *   - NCRs card: lotId-scoped navigation (server-side filter on /p/ncrs)
+ *   - Documents card: unscoped navigation; per-module gating + empty state
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -61,13 +62,11 @@ interface ItpLotSeed {
 function setApi({
   workLots = [{ id: 'l1', lotNumber: 'LOT-014', status: 'in_progress' }],
   itpLots = [] as ItpLotSeed[],
-  holdPoints = [] as unknown[],
 } = {}) {
   apiFetchMock.mockReset();
   apiFetchMock.mockImplementation((url: string) => {
     if (url.includes('includeITP=true')) return Promise.resolve({ lots: itpLots });
     if (url.startsWith('/api/lots')) return Promise.resolve({ lots: workLots });
-    if (url.startsWith('/api/holdpoints')) return Promise.resolve({ holdPoints });
     return Promise.resolve({});
   });
 }
@@ -85,7 +84,8 @@ function renderHub(path = '/p/lots/l1') {
         <Routes>
           <Route path="/p/lots/:lotId" element={<SubbieLotHubScreen />} />
           <Route path="/p/lots/:lotId/itp" element={<LocationProbe />} />
-          <Route path="/p/quality" element={<LocationProbe />} />
+          <Route path="/p/ncrs" element={<LocationProbe />} />
+          <Route path="/p/docs" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -165,22 +165,39 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
     expect(screen.queryByRole('button', { name: 'Continue inspection' })).toBeNull();
   });
 
-  it('Holds & Tests tile shows the per-lot hold count and deep-links with lotId', async () => {
-    setApi({
-      holdPoints: [
-        { id: 'h1', lotId: 'l1', lotNumber: 'LOT-014', description: 'Bedding', status: 'notified' },
-        { id: 'h2', lotId: 'l2', lotNumber: 'LOT-099', description: 'Other', status: 'notified' },
-      ],
-    });
+  it('never renders a Holds & Tests card (removed from the subbie UI)', async () => {
     renderHub();
-    // Waits for the async hold-point query — chip counts only THIS lot's hold point.
-    const tile = await screen.findByRole('button', {
-      name: /Holds and Tests on this lot — 1 hold points/,
-    });
-    fireEvent.click(tile);
-    expect(screen.getByTestId('location')).toHaveTextContent(
-      '/p/quality?projectId=proj-1&lotId=l1',
-    );
+    await screen.findByRole('heading', { name: 'LOT-014' });
+    expect(screen.queryByRole('button', { name: /Holds and Tests/ })).toBeNull();
+  });
+
+  it('NCRs card deep-links to /p/ncrs with the lotId scope when the ncrs module is on', async () => {
+    _ctx = makeCtx({ ncrs: true });
+    setApi();
+    renderHub();
+    fireEvent.click(await screen.findByRole('button', { name: 'NCRs on this lot' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/p/ncrs?projectId=proj-1&lotId=l1');
+  });
+
+  it('hides the NCRs card when the ncrs module is off (default)', async () => {
+    renderHub();
+    await screen.findByRole('heading', { name: 'LOT-014' });
+    expect(screen.queryByRole('button', { name: /NCRs/ })).toBeNull();
+  });
+
+  it('Documents card navigates unscoped to /p/docs (portal docs are not lot-scoped)', async () => {
+    renderHub();
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=proj-1');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('lotId');
+  });
+
+  it('hides the Documents card when the documents module is off', async () => {
+    _ctx = makeCtx({ documents: false });
+    setApi();
+    renderHub();
+    await screen.findByRole('heading', { name: 'LOT-014' });
+    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
   });
 
   it('hides the Inspection tile when the itps module is off', () => {
@@ -190,15 +207,8 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
     expect(screen.queryByText(/Inspection/)).toBeNull();
   });
 
-  it('hides the Holds & Tests tile when both holds and tests are off', () => {
-    _ctx = makeCtx({ holdPoints: false, testResults: false });
-    setApi();
-    renderHub();
-    expect(screen.queryByRole('button', { name: /Holds and Tests/ })).toBeNull();
-  });
-
-  it('shows an honest empty state when no lot modules are enabled (no tiles, no action)', () => {
-    _ctx = makeCtx({ itps: false, holdPoints: false, testResults: false });
+  it('shows an honest empty state when itps, ncrs, and documents are all off', () => {
+    _ctx = makeCtx({ itps: false, ncrs: false, documents: false });
     setApi();
     renderHub();
     expect(screen.getByText(/nothing enabled for this lot/i)).toBeInTheDocument();

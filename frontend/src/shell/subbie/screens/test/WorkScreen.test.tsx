@@ -4,8 +4,8 @@
  * MOCKS @/lib/useOfflineStatus (ShellScreen → SyncChip → Dexie) for CI coverage.
  * Pins: the exact data URL (portalModule=lots), module-gate denial, status
  * grouping (In Progress / Not Started / On Hold / Completed), lot-tap
- * navigation, and the module-gated Holds & Tests / NCRs / Documents hub tiles
- * below the lot groups (the old "View all holds & tests" text link is gone).
+ * navigation, and LOTS ONLY — no hub tiles below the groups (locked design:
+ * NCRs/Documents live behind the lot in SubbieLotHubScreen).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -78,9 +78,6 @@ function renderWork() {
         <Routes>
           <Route path="/p/work" element={<WorkScreen />} />
           <Route path="/p/lots/:lotId" element={<div>lot hub</div>} />
-          <Route path="/p/quality" element={<div>quality</div>} />
-          <Route path="/p/ncrs" element={<div>ncrs</div>} />
-          <Route path="/p/docs" element={<div>docs</div>} />
           <Route path="/p" element={<div>home</div>} />
         </Routes>
       </MemoryRouter>
@@ -171,53 +168,15 @@ describe('subbie shell WorkScreen', () => {
     expect(await screen.findByText('lot hub')).toBeInTheDocument();
   });
 
-  it('shows Holds & Tests + Documents hub tiles below the lot groups (ncrs off by default)', async () => {
-    setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
-    renderWork();
-    const tile = await screen.findByRole('button', { name: 'Holds and Tests' });
-    expect(screen.getByRole('button', { name: 'Documents' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'NCRs' })).toBeNull();
-    // The old text link is gone — one uniform card hierarchy.
-    expect(screen.queryByRole('link', { name: /View all holds & tests/i })).toBeNull();
-    fireEvent.click(tile);
-    expect(await screen.findByText('quality')).toBeInTheDocument();
-  });
-
-  it('shows the NCRs tile when the ncrs module is on and navigates to /p/ncrs', async () => {
+  it('renders lots only — no hub tiles or links below the groups (even with all modules on)', async () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true };
     _ctx = makeCtx({ isModuleEnabled: (m: keyof PortalAccess) => portalAccess[m] });
     setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
     renderWork();
-    fireEvent.click(await screen.findByRole('button', { name: 'NCRs' }));
-    expect(await screen.findByText('ncrs')).toBeInTheDocument();
-  });
-
-  it('Documents tile navigates to /p/docs', async () => {
-    setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
-    renderWork();
-    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }));
-    expect(await screen.findByText('docs')).toBeInTheDocument();
-  });
-
-  it('hides the Holds & Tests tile when neither module is on', async () => {
-    const portalAccess: PortalAccess = {
-      ...DEFAULT_PORTAL_ACCESS,
-      holdPoints: false,
-      testResults: false,
-    };
-    _ctx = makeCtx({ isModuleEnabled: (m: keyof PortalAccess) => portalAccess[m] });
-    setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
-    renderWork();
     await screen.findByText('LOT-001');
-    expect(screen.queryByRole('button', { name: 'Holds and Tests' })).toBeNull();
-  });
-
-  it('hides the Documents tile when the documents module is off', async () => {
-    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, documents: false };
-    _ctx = makeCtx({ isModuleEnabled: (m: keyof PortalAccess) => portalAccess[m] });
-    setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
-    renderWork();
-    await screen.findByText('LOT-001');
-    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+    ['Holds and Tests', 'NCRs', 'Documents'].forEach((name) => {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    });
+    expect(screen.queryByRole('link', { name: /View all holds & tests/i })).toBeNull();
   });
 });
