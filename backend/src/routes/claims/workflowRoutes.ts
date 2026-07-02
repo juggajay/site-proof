@@ -23,6 +23,7 @@ import {
   CLAIM_AMOUNT_EPSILON,
   CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
   CLAIM_NUMBER_RETRY_LIMIT,
+  assertCertifiedAmountCoversPaid,
   assertCertifiedAmountWithinClaimTotal,
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
@@ -418,6 +419,7 @@ export function createClaimWorkflowRouter({
 
         if (status === 'certified' && roundedCertifiedAmount !== undefined) {
           assertCertifiedAmountWithinClaimTotal(roundedCertifiedAmount, claim.totalClaimedAmount);
+          assertCertifiedAmountCoversPaid(roundedCertifiedAmount, claim.paidAmount);
           assertReducedCertifiedAmountHasVariationNotes(
             roundedCertifiedAmount,
             claim.totalClaimedAmount,

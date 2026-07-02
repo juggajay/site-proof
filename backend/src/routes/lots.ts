@@ -134,6 +134,19 @@ lotsRouter.patch(
       );
     }
 
+    // Claim line amounts snapshot the budget at time of claiming, and the
+    // over-claim guard caps on cumulative percentage — changing the budget
+    // after a partial claim would make the billed dollars reconcile to no
+    // coherent budget (under- or over-billing the remainder).
+    if (isConformedBudgetOnlyUpdate) {
+      const claimLineCount = await prisma.claimedLot.count({ where: { lotId: id } });
+      if (claimLineCount > 0) {
+        throw AppError.badRequest(
+          'Cannot edit the budget of a lot that has already been included in a progress claim',
+        );
+      }
+    }
+
     // Feature #853 & #854: Validate area zone and structure ID for respective lot types
     const existingLot = await prisma.lot.findUnique({
       where: { id },
