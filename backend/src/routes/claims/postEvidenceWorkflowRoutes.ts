@@ -15,6 +15,7 @@ import {
   CLAIM_AMOUNT_EPSILON,
   CLAIM_VARIATION_NOTES_MAX_LENGTH,
   MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
+  assertCertifiedAmountCoversPaid,
   assertCertifiedAmountWithinClaimTotal,
   assertReducedCertifiedAmountHasVariationNotes,
   buildClaimCertificationSettlement,
@@ -151,6 +152,7 @@ export function createClaimPostEvidenceWorkflowRouter({
           claim.totalClaimedAmount,
           variationNotes,
         );
+        assertCertifiedAmountCoversPaid(roundedCertifiedAmount, claim.paidAmount);
 
         const previousStatus = claim.status;
 

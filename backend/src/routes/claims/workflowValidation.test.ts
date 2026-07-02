@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
+  assertCertifiedAmountCoversPaid,
   assertCertifiedAmountWithinClaimTotal,
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
@@ -158,6 +159,23 @@ describe('claims workflow validation', () => {
       certifiedBy: 'user-1',
       disputeNotes: 'Certified quantity now disputed',
     });
+  });
+});
+
+describe('assertCertifiedAmountCoversPaid', () => {
+  it('does not throw when there is no prior payment', () => {
+    expect(() => assertCertifiedAmountCoversPaid(5000, null)).not.toThrow();
+    expect(() => assertCertifiedAmountCoversPaid(5000, undefined)).not.toThrow();
+    expect(() => assertCertifiedAmountCoversPaid(5000, 0)).not.toThrow();
+  });
+
+  it('does not throw when certified amount covers the paid amount', () => {
+    expect(() => assertCertifiedAmountCoversPaid(6000, 6000)).not.toThrow();
+    expect(() => assertCertifiedAmountCoversPaid(7000, 6000)).not.toThrow();
+  });
+
+  it('throws when certified amount is below the paid amount', () => {
+    expect(() => assertCertifiedAmountCoversPaid(5000, 6000)).toThrow(/already paid/i);
   });
 });
 

@@ -84,12 +84,16 @@ async function ensureQmApprovalClaimed(ncrId: string, updateCount: number) {
   throw AppError.badRequest('QM approval state changed. Please retry.');
 }
 
-async function ensureCloseClaimed(ncrId: string, updateCount: number) {
+async function ensureCloseClaimed(
+  ncrId: string,
+  updateCount: number,
+  client: Pick<typeof prisma, 'nCR'> = prisma,
+) {
   if (updateCount === 1) {
     return;
   }
 
-  const currentNcr = await prisma.nCR.findUnique({
+  const currentNcr = await client.nCR.findUnique({
     where: { id: ncrId },
     select: { status: true },
   });
@@ -275,60 +279,64 @@ ncrClosureWorkflowRouter.post(
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
     const closedAt = new Date();
 
-    const closeUpdate = await prisma.nCR.updateMany({
-      where: { id, status: 'verification' },
-      data: {
-        status: closeStatus,
-        verifiedById: user.userId,
-        verifiedAt: closedAt,
-        verificationNotes,
-        closedById: user.userId,
-        closedAt,
-        lessonsLearned,
-        concessionJustification: withConcession ? concessionJustification : null,
-        concessionRiskAssessment: withConcession ? concessionRiskAssessment : null,
-        clientApprovalReference: withConcession ? (clientApprovalReference ?? null) : null,
-      },
-    });
-    await ensureCloseClaimed(id, closeUpdate.count);
+    const updatedNcr = await prisma.$transaction(async (tx) => {
+      const closeUpdate = await tx.nCR.updateMany({
+        where: { id, status: 'verification' },
+        data: {
+          status: closeStatus,
+          verifiedById: user.userId,
+          verifiedAt: closedAt,
+          verificationNotes,
+          closedById: user.userId,
+          closedAt,
+          lessonsLearned,
+          concessionJustification: withConcession ? concessionJustification : null,
+          concessionRiskAssessment: withConcession ? concessionRiskAssessment : null,
+          clientApprovalReference: withConcession ? (clientApprovalReference ?? null) : null,
+        },
+      });
+      await ensureCloseClaimed(id, closeUpdate.count, tx);
 
-    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
-      where: { id },
-      include: {
-        closedBy: { select: { fullName: true, email: true } },
-        qmApprovedBy: { select: { id: true, fullName: true, email: true } },
-      },
-    });
+      const closedNcr = await tx.nCR.findUniqueOrThrow({
+        where: { id },
+        include: {
+          closedBy: { select: { fullName: true, email: true } },
+          qmApprovedBy: { select: { id: true, fullName: true, email: true } },
+        },
+      });
 
-    // Update affected lots - revert status from ncr_raised
-    if (ncr.ncrLots.length > 0) {
-      const lotIds = ncr.ncrLots.map((nl) => nl.lotId);
+      // Update affected lots - revert status from ncr_raised
+      if (ncr.ncrLots.length > 0) {
+        const lotIds = ncr.ncrLots.map((nl) => nl.lotId);
 
-      // Check if any other open NCRs exist for these lots
-      for (const lotId of lotIds) {
-        const otherOpenNcrs = await prisma.nCRLot.count({
-          where: {
-            lotId,
-            ncr: {
-              id: { not: ncr.id },
-              status: { notIn: ['closed', 'closed_concession'] },
+        // Check if any other open NCRs exist for these lots
+        for (const lotId of lotIds) {
+          const otherOpenNcrs = await tx.nCRLot.count({
+            where: {
+              lotId,
+              ncr: {
+                id: { not: ncr.id },
+                status: { notIn: ['closed', 'closed_concession'] },
+              },
             },
-          },
-        });
+          });
 
-        if (otherOpenNcrs === 0) {
-          const currentLot = ncr.ncrLots.find((nl) => nl.lotId === lotId)?.lot;
-          const nextStatus = currentLot ? getLotStatusAfterNcrClosure(currentLot.status) : null;
-          if (nextStatus) {
-            // No other open NCRs, clear the NCR-raised state without reopening terminal lots.
-            await prisma.lot.update({
-              where: { id: lotId },
-              data: { status: nextStatus },
-            });
+          if (otherOpenNcrs === 0) {
+            const currentLot = ncr.ncrLots.find((nl) => nl.lotId === lotId)?.lot;
+            const nextStatus = currentLot ? getLotStatusAfterNcrClosure(currentLot.status) : null;
+            if (nextStatus) {
+              // No other open NCRs, clear the NCR-raised state without reopening terminal lots.
+              await tx.lot.update({
+                where: { id: lotId },
+                data: { status: nextStatus },
+              });
+            }
           }
         }
       }
-    }
+
+      return closedNcr;
+    });
 
     await createAuditLog({
       projectId: ncr.projectId,
