@@ -26,11 +26,11 @@ describe('dashboard PDF characterization', () => {
     const text = renderedText(doc);
 
     expect(doc.constructorArgs).toEqual(['portrait', 'mm', 'a4']);
-    expect(doc.savedFilename).toBe('siteproof-dashboard-2026-05-28.pdf');
+    expect(doc.savedFilename).toBe('civos-dashboard-2026-05-28.pdf');
     expect(text).toEqual(
       expect.arrayContaining([
         'Dashboard Summary',
-        'SiteProof Civil Execution and Conformance Platform',
+        'CIVOS Civil Execution and Conformance Platform',
         'Report Details',
         'Date range',
         'Last 30 days',

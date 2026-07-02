@@ -23,7 +23,7 @@ export function renderSubcontractorInvitationEmail(
   { escapeEmailHtml, sanitizeSupportEmailLine }: SubcontractorInvitationTemplateDependencies,
 ): RenderedSubcontractorInvitationEmail {
   const subjectProjectName = sanitizeSupportEmailLine(data.projectName, 'Project');
-  const subject = `[SiteProof] Invitation to join ${subjectProjectName}`;
+  const subject = `[CIVOS] Invitation to join ${subjectProjectName}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeContactName = escapeEmailHtml(data.contactName);
   const safeCompanyName = escapeEmailHtml(data.companyName);
@@ -54,14 +54,14 @@ export function renderSubcontractorInvitationEmail(
 <body>
   <div class="container">
     <div class="header">
-      <h1>🏗️ SiteProof</h1>
+      <h1>🏗️ CIVOS</h1>
       <p style="margin: 5px 0 0 0;">Subcontractor Portal Invitation</p>
     </div>
     <div class="content">
       <h2 style="margin-top: 0;">Hi ${safeContactName},</h2>
       <div class="message-box">
-        <p>You have been invited to join the project <strong>"${safeProjectName}"</strong> on SiteProof as a subcontractor for <strong>${safeCompanyName}</strong>.</p>
-        <p>SiteProof is a quality management platform that helps civil construction teams track lots, manage ITPs, and submit daily dockets.</p>
+        <p>You have been invited to join the project <strong>"${safeProjectName}"</strong> on CIVOS as a subcontractor for <strong>${safeCompanyName}</strong>.</p>
+        <p>CIVOS is a quality management platform that helps civil construction teams track lots, manage ITPs, and submit daily dockets.</p>
       </div>
       <div class="highlight">
         <strong>📋 What you'll be able to do:</strong>
@@ -82,7 +82,7 @@ export function renderSubcontractorInvitationEmail(
       </p>
     </div>
     <div class="footer">
-      <p>This invitation was sent from SiteProof Quality Management System.</p>
+      <p>This invitation was sent from CIVOS Quality Management System.</p>
       <p>If you were not expecting this invitation, please contact the sender.</p>
     </div>
   </div>
@@ -93,9 +93,9 @@ export function renderSubcontractorInvitationEmail(
   const text = `
 Hi ${data.contactName},
 
-You have been invited to join the project "${data.projectName}" on SiteProof as a subcontractor for ${data.companyName}.
+You have been invited to join the project "${data.projectName}" on CIVOS as a subcontractor for ${data.companyName}.
 
-SiteProof is a quality management platform that helps civil construction teams track lots, manage ITPs, and submit daily dockets.
+CIVOS is a quality management platform that helps civil construction teams track lots, manage ITPs, and submit daily dockets.
 
 What you'll be able to do:
 - View lots assigned to your company

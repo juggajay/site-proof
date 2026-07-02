@@ -697,11 +697,11 @@ test.describe('Company settings seeded owner contract', () => {
     await expect(page.getByRole('heading', { name: 'Transfer Ownership' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Contact Us to Add Capacity' })).toHaveAttribute(
       'href',
-      'mailto:configured-support@example.com?subject=Add%20SiteProof%20capacity',
+      'mailto:configured-support@example.com?subject=Add%20CIVOS%20capacity',
     );
     await expect(page.getByRole('link', { name: 'Manage Payment Method' })).toHaveAttribute(
       'href',
-      'mailto:configured-support@example.com?subject=SiteProof%20billing%20inquiry',
+      'mailto:configured-support@example.com?subject=CIVOS%20billing%20inquiry',
     );
 
     await page.getByLabel(/Company Name/).fill('');

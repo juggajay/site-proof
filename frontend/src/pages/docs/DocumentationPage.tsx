@@ -16,7 +16,7 @@ export function DocumentationPage() {
         <div className="max-w-3xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground">
             <BookOpen className="h-4 w-4 text-muted-foreground" />
-            SiteProof documentation
+            CIVOS documentation
           </div>
           <h1 className="text-3xl font-bold tracking-tight">User guide and workflow reference</h1>
           <p className="mt-2 text-muted-foreground">
@@ -41,7 +41,7 @@ export function DocumentationPage() {
         <CardHeader>
           <h2 className="font-semibold leading-none tracking-tight">Start here</h2>
           <CardDescription>
-            SiteProof works best when the project is treated as one evidence pipeline.
+            CIVOS works best when the project is treated as one evidence pipeline.
           </CardDescription>
         </CardHeader>
         <CardContent>

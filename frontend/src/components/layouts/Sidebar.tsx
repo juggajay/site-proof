@@ -305,7 +305,7 @@ export function Sidebar() {
           <span className="text-lg font-semibold tracking-tight text-foreground">SP</span>
         ) : (
           <span className="text-lg font-semibold tracking-tight text-foreground whitespace-nowrap overflow-hidden">
-            SiteProof
+            CIVOS
             <span className="font-mono text-sm font-normal text-muted-foreground">·v3</span>
           </span>
         )}

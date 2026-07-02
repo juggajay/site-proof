@@ -23,7 +23,7 @@ const CHANGELOG: ChangelogEntry[] = [
   {
     version: '1.3.0',
     date: '2026-01-18',
-    title: "What's New in SiteProof",
+    title: "What's New in CIVOS",
     highlights: [
       { icon: 'feature', text: 'Onboarding tour for new users' },
       { icon: 'feature', text: 'Context-sensitive help on all pages' },

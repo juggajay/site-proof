@@ -164,14 +164,12 @@ export function LotsPage() {
             minute: '2-digit',
           })}
         </div>
-        <div className="text-xs text-muted-foreground mt-2">
-          SiteProof - Quality Management System
-        </div>
+        <div className="text-xs text-muted-foreground mt-2">CIVOS - Quality Management System</div>
       </div>
 
       {/* Print-only Footer */}
       <div className="hidden print:block report-footer fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground py-2 bg-card border-t">
-        &copy; {new Date().getFullYear()} SiteProof - Confidential
+        &copy; {new Date().getFullYear()} CIVOS - Confidential
       </div>
 
       {/* Page Header */}

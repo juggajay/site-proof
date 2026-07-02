@@ -10,7 +10,7 @@ import { buildClientErrorReportResponse, buildSupportRequestResponse } from './s
 
 export const supportRouter = Router();
 
-const DEFAULT_SUPPORT_EMAIL = 'support@siteproof.com.au';
+const DEFAULT_SUPPORT_EMAIL = 'support@civos.com.au';
 const SUPPORT_CATEGORIES = ['general', 'technical', 'billing', 'feature', 'bug'] as const;
 
 const optionalTrimmedString = (maxLength: number, fieldName: string) =>

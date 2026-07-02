@@ -21,9 +21,9 @@ interface TourStep {
 
 const TOUR_STEPS: TourStep[] = [
   {
-    title: 'Welcome to SiteProof!',
+    title: 'Welcome to CIVOS!',
     content:
-      "SiteProof helps you manage construction quality, track lots, inspections, and maintain compliance. Let's take a quick tour of the key features.",
+      "CIVOS helps you manage construction quality, track lots, inspections, and maintain compliance. Let's take a quick tour of the key features.",
   },
   {
     title: 'Dashboard Overview',
@@ -40,7 +40,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: 'Lot Register',
     content:
-      'The Lot Register is the heart of SiteProof. Create and track work lots through their lifecycle from Not Started to Conformed and Claimed.',
+      'The Lot Register is the heart of CIVOS. Create and track work lots through their lifecycle from Not Started to Conformed and Claimed.',
   },
   {
     title: 'Quality Management',

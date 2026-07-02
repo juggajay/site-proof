@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  /* SiteProof "Quiet Authority" — warm greige + near-black + amber signature.
+  /* CIVOS "Quiet Authority" — warm greige + near-black + amber signature.
      Monochrome by default; colour = status only. See docs/DESIGN.md. */
   :root {
     --background: 40 14% 96%; /* warm canvas */
@@ -1129,7 +1129,7 @@
   margin: 20mm 15mm 25mm 15mm;
 
   @top-center {
-    content: 'SiteProof Report';
+    content: 'CIVOS Report';
     font-size: 10pt;
     color: #666;
   }
@@ -1147,7 +1147,7 @@
   }
 
   @bottom-right {
-    content: 'SiteProof';
+    content: 'CIVOS';
     font-size: 9pt;
     color: #888;
   }

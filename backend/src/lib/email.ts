@@ -71,7 +71,7 @@ const emailQueue: EmailOptions[] = [];
 
 // Configuration
 const EMAIL_CONFIG = {
-  from: process.env.EMAIL_FROM || 'noreply@siteproof.app',
+  from: process.env.EMAIL_FROM || 'noreply@civos.com.au',
   enabled: process.env.EMAIL_ENABLED !== 'false',
   resendApiKey: process.env.RESEND_API_KEY,
 };
@@ -281,7 +281,7 @@ export async function sendSupportRequestEmail(data: {
   userName?: string;
   to?: string;
 }): Promise<EmailResult> {
-  const supportInbox = data.to || process.env.SUPPORT_EMAIL || 'support@siteproof.com.au';
+  const supportInbox = data.to || process.env.SUPPORT_EMAIL || 'support@civos.com.au';
   const { subject, text } = renderSupportRequestEmail(data);
 
   return sendEmail({

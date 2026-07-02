@@ -97,7 +97,7 @@ export function CookieConsentBanner() {
           <Cookie className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground sm:h-6 sm:w-6" />
           <div>
             <p className="text-xs leading-snug text-foreground sm:hidden">
-              We use cookies to improve SiteProof. See our{' '}
+              We use cookies to improve CIVOS. See our{' '}
               <Link to="/privacy-policy" className="font-medium text-primary hover:underline">
                 Privacy Policy
               </Link>
@@ -105,7 +105,7 @@ export function CookieConsentBanner() {
             </p>
             <p className="hidden text-sm text-foreground sm:block">
               We use cookies to enhance your experience and analyze site usage. By continuing to use
-              SiteProof, you agree to our{' '}
+              CIVOS, you agree to our{' '}
               <Link to="/privacy-policy" className="text-primary hover:underline font-medium">
                 Privacy Policy
               </Link>

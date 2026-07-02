@@ -25,7 +25,7 @@ export function PrivacyPolicyPage() {
             className="inline-flex items-center gap-2 text-primary-foreground/80 hover:text-primary-foreground mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to SiteProof
+            Back to CIVOS
           </Link>
           <div className="flex items-center gap-3">
             <Shield className="h-10 w-10" />
@@ -47,13 +47,13 @@ export function PrivacyPolicyPage() {
               Introduction
             </div>
             <p className="text-muted-foreground">
-              SiteProof ("we", "our", or "us") is committed to protecting your privacy. This Privacy
+              CIVOS ("we", "our", or "us") is committed to protecting your privacy. This Privacy
               Policy explains how we collect, use, disclose, and safeguard your information when you
               use our civil construction quality management platform.
             </p>
             <p className="text-muted-foreground">
-              Please read this privacy policy carefully. By using SiteProof, you agree to the
-              collection and use of information in accordance with this policy.
+              Please read this privacy policy carefully. By using CIVOS, you agree to the collection
+              and use of information in accordance with this policy.
             </p>
           </section>
 
@@ -90,7 +90,7 @@ export function PrivacyPolicyPage() {
 
             <h3 className="font-medium mt-4 mb-2">Usage Data</h3>
             <p className="text-muted-foreground">
-              We automatically collect certain information when you use SiteProof, including your IP
+              We automatically collect certain information when you use CIVOS, including your IP
               address, browser type, device information, pages visited, and actions taken within the
               application.
             </p>
@@ -106,7 +106,7 @@ export function PrivacyPolicyPage() {
               We use the information we collect for the following purposes:
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-1">
-              <li>Providing and maintaining the SiteProof platform</li>
+              <li>Providing and maintaining the CIVOS platform</li>
               <li>Processing your transactions and managing your account</li>
               <li>Communicating with you about updates, security alerts, and support</li>
               <li>Improving our services and developing new features</li>
@@ -184,7 +184,7 @@ export function PrivacyPolicyPage() {
             </ul>
             <p className="text-muted-foreground mt-2">
               To exercise these rights, please visit your account Settings or contact us at
-              privacy@siteproof.com.au.
+              privacy@civos.com.au.
             </p>
           </section>
 
@@ -198,7 +198,7 @@ export function PrivacyPolicyPage() {
               If you have any questions about this Privacy Policy or our data practices, please
               contact us at:
             </p>
-            <LegalContactCard teamName="SiteProof Privacy Team" email="privacy@siteproof.com.au" />
+            <LegalContactCard teamName="CIVOS Privacy Team" email="privacy@civos.com.au" />
           </section>
 
           {/* Related Links */}
@@ -227,7 +227,7 @@ export function PrivacyPolicyPage() {
       {/* Footer */}
       <div className="border-t py-6">
         <div className="container mx-auto px-4 max-w-4xl text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} SiteProof. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} CIVOS. All rights reserved.</p>
         </div>
       </div>
     </div>

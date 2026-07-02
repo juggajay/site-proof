@@ -291,7 +291,7 @@ export function CompanyWebhooksSection() {
                   id="webhook-url"
                   value={createUrl}
                   onChange={(event) => setCreateUrl(event.target.value)}
-                  placeholder="https://example.com/webhooks/siteproof"
+                  placeholder="https://example.com/webhooks/civos"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Subscribes to all supported lot, hold point, and NCR events. We sign every
@@ -357,7 +357,7 @@ export function CompanyWebhooksSection() {
         >
           <AlertModalHeader>Delete webhook</AlertModalHeader>
           <AlertModalDescription>
-            Delete webhook {deleteTarget.url}? SiteProof will stop sending events to this endpoint.
+            Delete webhook {deleteTarget.url}? CIVOS will stop sending events to this endpoint.
           </AlertModalDescription>
           <AlertModalFooter>
             <Button

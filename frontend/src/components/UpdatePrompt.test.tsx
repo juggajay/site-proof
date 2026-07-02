@@ -52,7 +52,7 @@ describe('UpdatePrompt', () => {
     mockNeedRefresh.current = true;
     render(<UpdatePrompt />);
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.getByText(/A new version of SiteProof is available/i)).toBeInTheDocument();
+    expect(screen.getByText(/A new version of CIVOS is available/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply update and reload/i })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /Dismiss update notification/i }),

@@ -305,7 +305,7 @@ export function AcceptInvitePage() {
       <div className="max-w-md w-full space-y-6">
         {/* Logo */}
         <div className="text-center">
-          <span className="text-2xl font-bold text-primary">SiteProof</span>
+          <span className="text-2xl font-bold text-primary">CIVOS</span>
         </div>
 
         <InvitationSummaryCard invitation={invitation} />

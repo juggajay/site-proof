@@ -4,7 +4,7 @@ import { renderChainageTicks } from '@/lib/chainageTicks';
 import './landing.css';
 
 /* ============================================================
-   SiteProof — early-access landing page.
+   CIVOS — early-access landing page.
    A faithful port of docs/design-mockups/landing-early-access-v2.html
    ("Quiet Authority / survey plan at night"). All styling lives in
    landing.css, namespaced under .sp-lp so it never touches the app
@@ -65,7 +65,7 @@ const FAQ_ITEMS = [
     q: 'Q.1',
     summary: 'Is this another do-everything construction management suite?',
     answer: [
-      'No — deliberately not. SiteProof is narrower: lots, ITPs, hold points, dockets, diaries, NCRs, test results and progress claims for Australian civil work. If you need scheduling, estimating and accounting in one giant system, that’s not us. If you need the evidence side of your projects under control, it is.',
+      'No — deliberately not. CIVOS is narrower: lots, ITPs, hold points, dockets, diaries, NCRs, test results and progress claims for Australian civil work. If you need scheduling, estimating and accounting in one giant system, that’s not us. If you need the evidence side of your projects under control, it is.',
     ],
   },
   {
@@ -150,7 +150,7 @@ export function LandingPage() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const prevTitle = document.title;
-    document.title = 'SiteProof — Every lot. Every ITP. Every docket. Claim-ready or not.';
+    document.title = 'CIVOS — Every lot. Every ITP. Every docket. Claim-ready or not.';
 
     const prevScrollBehavior = document.documentElement.style.scrollBehavior;
     if (!prefersReduced) document.documentElement.style.scrollBehavior = 'smooth';
@@ -291,12 +291,12 @@ export function LandingPage() {
       {/* NAV */}
       <div className={'nav-outer' + (navLite ? ' lite' : '')}>
         <div className="wrap nav">
-          <a className="brand" href="#top" aria-label="SiteProof home">
+          <a className="brand" href="#top" aria-label="CIVOS home">
             <BrandMark
               bg={navLite ? '#1b1714' : '#f3efe8'}
               stroke={navLite ? '#ffffff' : '#14100d'}
             />
-            SiteProof
+            CIVOS
           </a>
           <a className="lnk" href="#problem">
             The problem
@@ -354,8 +354,8 @@ export function LandingPage() {
           </div>
 
           <p className="hero-sub">
-            SiteProof pulls <strong>ITPs, hold points, tests, dockets and photos</strong> onto the
-            lot, so Australian civil teams can claim on evidence instead of optimism.
+            CIVOS pulls <strong>ITPs, hold points, tests, dockets and photos</strong> onto the lot,
+            so Australian civil teams can claim on evidence instead of optimism.
           </p>
 
           <div className="hero-ctas">
@@ -597,8 +597,8 @@ export function LandingPage() {
                   run hold points with a full trail.
                 </p>
                 <p>
-                  When a hold point needs release, SiteProof emails the superintendent a secure
-                  48-hour link. They review the evidence in the page and release —{' '}
+                  When a hold point needs release, CIVOS emails the superintendent a secure 48-hour
+                  link. They review the evidence in the page and release —{' '}
                   <strong>no login, no PDF attachments, no chasing</strong>.
                 </p>
               </div>
@@ -760,7 +760,7 @@ export function LandingPage() {
                 the case studies.
               </p>
               <p>
-                SiteProof is <b>founder-built out of the paperwork pain of running real crews</b> —
+                CIVOS is <b>founder-built out of the paperwork pain of running real crews</b> —
                 built in Australia, for Australian civil work, dogfooded on the workflows on this
                 page.
               </p>
@@ -778,7 +778,7 @@ export function LandingPage() {
                   help set it — you won&rsquo;t be surprised by it.
                 </li>
               </ul>
-              <p className="ea-sign">— Jayson, founder · SiteProof</p>
+              <p className="ea-sign">— Jayson, founder · CIVOS</p>
             </div>
 
             <form
@@ -794,7 +794,7 @@ export function LandingPage() {
                 Tell us where it hurts. Takes 30 seconds — and a real person replies, not a
                 sequence.
               </p>
-              <input type="hidden" name="_subject" value="SiteProof early access — new request" />
+              <input type="hidden" name="_subject" value="CIVOS early access — new request" />
               <input
                 type="text"
                 name="_gotcha"
@@ -881,8 +881,8 @@ export function LandingPage() {
                 sort it.
               </div>
               <p className="form-fine">
-                We&rsquo;ll only use this to contact you about SiteProof early access. No
-                mailing-list spam.
+                We&rsquo;ll only use this to contact you about CIVOS early access. No mailing-list
+                spam.
               </p>
             </form>
           </div>
@@ -922,16 +922,14 @@ export function LandingPage() {
         <div className="wrap foot">
           <span className="brand">
             <BrandMark bg="#1b1714" stroke="#ffffff" />
-            SiteProof
+            CIVOS
           </span>
           <a href="#problem">The problem</a>
           <a href="#how">How it works</a>
           <a href="#templates">Templates</a>
           <a href="#early-access">Early access</a>
           <div className="fine">
-            <span>
-              © 2026 SiteProof · Built in Australia for civil crews · Evidence, lot by lot.
-            </span>
+            <span>© 2026 CIVOS · Built in Australia for civil crews · Evidence, lot by lot.</span>
             <span className="mono">CH 2800 — END OF JOB</span>
           </div>
         </div>

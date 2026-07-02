@@ -363,7 +363,7 @@ export function ITPPage() {
               <div className="text-4xl mb-4">📚</div>
               <h3 className="text-lg font-semibold mb-2">Start from the state spec ITP library</h3>
               <p className="text-muted-foreground mb-4 max-w-xl mx-auto">
-                SiteProof includes ready-made ITP templates for each state road specification.
+                CIVOS includes ready-made ITP templates for each state road specification.
                 {canOpenProjectSettings
                   ? " Choose this project's specification standard to unlock the matching library templates, or build a template from scratch."
                   : " Ask a project admin to choose this project's specification standard in project settings to unlock the matching library templates, or build a template from scratch."}

@@ -160,9 +160,7 @@ describe('getSafeDataExportFilename', () => {
       new Date('2026-01-02T03:04:05.000Z'),
     );
 
-    expect(filename).toBe(
-      'siteproof-data-export-bad_user__name_.._.._x@example.com-2026-01-02.json',
-    );
+    expect(filename).toBe('civos-data-export-bad_user__name_.._.._x@example.com-2026-01-02.json');
     for (const unsafeChar of ['<', '>', ':', '"', '/', '\\', '|', '?', '*', '\r', '\n']) {
       expect(filename).not.toContain(unsafeChar);
     }

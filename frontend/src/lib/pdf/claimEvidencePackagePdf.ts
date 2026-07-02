@@ -174,7 +174,7 @@ export async function generateClaimEvidencePackagePDF(
   const generatedDate = new Date(data.generatedAt).toLocaleString('en-AU');
   doc.text(`Generated: ${generatedDate}`, margin, pageHeight - 15);
   doc.text(
-    'SiteProof - Civil Execution and Conformance Platform',
+    'CIVOS - Civil Execution and Conformance Platform',
     pageWidth - margin,
     pageHeight - 15,
     { align: 'right' },
@@ -497,7 +497,7 @@ export async function generateClaimEvidencePackagePDF(
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.text(
-        'Document evidence recorded against claimed lots. Use SiteProof document IDs to retrieve controlled originals.',
+        'Document evidence recorded against claimed lots. Use CIVOS document IDs to retrieve controlled originals.',
         margin,
         yPos,
       );
@@ -609,7 +609,7 @@ export async function generateClaimEvidencePackagePDF(
       margin,
       pageHeight - 20,
     );
-    doc.text('SiteProof - Civil Execution and Conformance Platform', margin, pageHeight - 15);
+    doc.text('CIVOS - Civil Execution and Conformance Platform', margin, pageHeight - 15);
   }
 
   // Save the PDF

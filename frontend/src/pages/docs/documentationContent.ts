@@ -51,7 +51,7 @@ export const workflowSteps: DocumentationStep[] = [
   {
     title: 'Break work into lots',
     description:
-      'Create lots that match the way work is inspected, tested, conformed, and claimed. Lots are the backbone of SiteProof.',
+      'Create lots that match the way work is inspected, tested, conformed, and claimed. Lots are the backbone of CIVOS.',
   },
   {
     title: 'Collect evidence as work happens',

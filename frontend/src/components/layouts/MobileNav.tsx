@@ -239,7 +239,7 @@ export function MobileNav() {
           {/* Menu Panel */}
           <div className="md:hidden fixed inset-y-0 left-0 w-64 bg-card border-r z-50 flex flex-col">
             <div className="flex h-16 items-center justify-between border-b px-6">
-              <span className="text-xl font-bold text-primary">SiteProof</span>
+              <span className="text-xl font-bold text-primary">CIVOS</span>
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-2 rounded-lg hover:bg-muted"

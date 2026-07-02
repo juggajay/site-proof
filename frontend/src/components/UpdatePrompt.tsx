@@ -72,7 +72,7 @@ export function UpdatePrompt() {
       className="fixed right-4 z-50 above-bottom-nav flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-lg shadow-lg border border-primary/20"
     >
       <RefreshCw className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-      <span className="text-sm font-medium">A new version of SiteProof is available</span>
+      <span className="text-sm font-medium">A new version of CIVOS is available</span>
       <button
         onClick={() => void updateServiceWorker(true)}
         className="ml-1 text-xs bg-primary/20 hover:bg-primary/30 transition-colors px-2 py-0.5 rounded font-medium"

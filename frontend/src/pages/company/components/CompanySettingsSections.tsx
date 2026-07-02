@@ -255,7 +255,7 @@ export function CompanyBillingSection({ company, supportEmail }: CompanyBillingS
 
         <div className="p-4 rounded-lg bg-muted/50 border">
           <Label>Billing Support</Label>
-          <p className="text-lg font-semibold mt-1">Managed with SiteProof</p>
+          <p className="text-lg font-semibold mt-1">Managed with CIVOS</p>
           <p className="text-xs text-muted-foreground mt-1">
             Contact billing for invoices or payment method changes.
           </p>
@@ -286,12 +286,12 @@ export function CompanyBillingSection({ company, supportEmail }: CompanyBillingS
 
       <div className="flex gap-3 pt-2">
         <Button asChild>
-          <a href={supportMailtoHref(supportEmail, 'Add SiteProof capacity')}>
+          <a href={supportMailtoHref(supportEmail, 'Add CIVOS capacity')}>
             Contact Us to Add Capacity
           </a>
         </Button>
         <Button asChild variant="outline">
-          <a href={supportMailtoHref(supportEmail, 'SiteProof billing inquiry')}>
+          <a href={supportMailtoHref(supportEmail, 'CIVOS billing inquiry')}>
             Manage Payment Method
           </a>
         </Button>

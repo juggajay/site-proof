@@ -43,7 +43,7 @@ export async function sendDailyDigestEmail(
     return { success: false, error: 'No items in digest' };
   }
 
-  const subject = `[SiteProof] Daily Digest - ${items.length} notification${items.length > 1 ? 's' : ''}`;
+  const subject = `[CIVOS] Daily Digest - ${items.length} notification${items.length > 1 ? 's' : ''}`;
   const safeSubject = escapeEmailHtml(subject);
   const today = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
@@ -130,12 +130,12 @@ export async function sendDailyDigestEmail(
       <div style="text-align: center; margin-top: 24px;">
         <a href="${safeDashboardUrl}"
            style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
-          View All in SiteProof
+          View All in CIVOS
         </a>
       </div>
     </div>
     <div style="text-align: center; padding: 20px; color: #6b7280; font-size: 12px; background: #f3f4f6; border-radius: 0 0 8px 8px;">
-      <p style="margin: 0;">This is your daily digest from SiteProof Quality Management System.</p>
+      <p style="margin: 0;">This is your daily digest from CIVOS Quality Management System.</p>
       <p style="margin: 8px 0 0 0;">
         To manage your notification preferences, visit your
         <a href="${safeSettingsUrl}" style="color: #2563eb;">Settings</a>.
@@ -161,7 +161,7 @@ You have ${items.length} notification${items.length > 1 ? 's' : ''} from today:
 ${itemsList}
 
 ---
-View all in SiteProof: ${dashboardUrl}
+View all in CIVOS: ${dashboardUrl}
 To manage your notification preferences, visit: ${settingsUrl}
   `;
 

@@ -12,7 +12,7 @@ import { getPostLoginRedirect, getRequestedPostLoginRedirect } from './postLogin
 import './authSurvey.css';
 
 /* ============================================================
-   SiteProof — sign in.
+   CIVOS — sign in.
    Survey-night ("Quiet Authority") skin ported from
    docs/design-mockups/login.html. The auth logic, validation,
    redirect rules, magic-link, MFA and Google OAuth wiring are
@@ -167,7 +167,7 @@ export function LoginPage() {
 
   useEffect(() => {
     const prevTitle = document.title;
-    document.title = 'Sign in — SiteProof';
+    document.title = 'Sign in — CIVOS';
 
     // chainage ticks along the page bottom
     if (chainRef.current) renderChainageTicks(chainRef.current);
@@ -532,7 +532,7 @@ export function LoginPage() {
           </div>
 
           <p className="swap">
-            New to SiteProof? <Link to="/register">Create account</Link>
+            New to CIVOS? <Link to="/register">Create account</Link>
           </p>
         </div>
       </>
@@ -543,9 +543,9 @@ export function LoginPage() {
     <div className="sp-auth">
       <div className="top">
         <div className="wrap">
-          <Link className="brand" to="/landing" aria-label="SiteProof home">
+          <Link className="brand" to="/landing" aria-label="CIVOS home">
             <BrandMark />
-            SiteProof
+            CIVOS
           </Link>
           <Link className="back" to="/landing">
             <span className="mono">←</span> Back to site

@@ -69,7 +69,7 @@ export function AccountDangerModals({
             </div>
           </AlertModalHeader>
           <AlertModalDescription>
-            Confirm your account email before permanently deleting your SiteProof account.
+            Confirm your account email before permanently deleting your CIVOS account.
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">

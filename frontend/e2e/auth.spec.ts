@@ -231,8 +231,8 @@ test.describe('Authentication', () => {
     await page.goto('/login');
     await page.waitForTimeout(1000);
 
-    await expect(page.getByText('Welcome to SiteProof!')).toHaveCount(0);
-    await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
+    await expect(page.getByText('Welcome to CIVOS!')).toHaveCount(0);
+    await expect(page.getByText("What's New in CIVOS")).toHaveCount(0);
 
     await page.keyboard.press('Shift+/');
     await expect(page.getByText('Keyboard Shortcuts')).toHaveCount(0);
@@ -247,23 +247,23 @@ test.describe('Authentication', () => {
     await page.waitForTimeout(1200);
 
     // The changelog modal stays retired; the tour is the single launch overlay.
-    await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toBeVisible();
+    await expect(page.getByText("What's New in CIVOS")).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to CIVOS!' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Skip tour' }).last().click();
-    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to CIVOS!' })).toHaveCount(0);
 
     // The per-user seen marker survives a reload: no recurring launch modal.
     await page.reload();
     await page.waitForTimeout(1200);
 
-    await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
+    await expect(page.getByText("What's New in CIVOS")).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to CIVOS!' })).toHaveCount(0);
 
     // Deliberate replay stays available from the header user menu.
     await page.getByRole('button', { name: 'User menu' }).click();
     await page.getByRole('menuitem', { name: 'Take the tour' }).click();
-    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to CIVOS!' })).toBeVisible();
   });
 
   test('applies dev role override to protected route access checks', async ({ page }) => {

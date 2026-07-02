@@ -17,7 +17,7 @@ describe('hold point email templates', () => {
       lotUrl: 'https://site-proof.vercel.app/projects/project-1/lots/lot-1',
     });
 
-    expect(rendered.subject).toBe('[SiteProof] Hold Point Released - LOT-001');
+    expect(rendered.subject).toBe('[CIVOS] Hold Point Released - LOT-001');
     expect(rendered.html).toContain('Hold Point Released');
     expect(rendered.html).toContain('Concrete pour release');
     expect(rendered.text).toContain('Release Method: Email confirmation');

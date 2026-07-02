@@ -800,7 +800,7 @@ test.describe('Public hold point secure release page', () => {
 
     await page.goto('/hp-release/e2e-public-token');
 
-    await expect(page.getByText('Secure SiteProof Release')).toBeVisible();
+    await expect(page.getByText('Secure CIVOS Release')).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'External superintendent release before concrete pour' }),
     ).toBeVisible();
@@ -933,7 +933,7 @@ test.describe('Public hold point secure release page', () => {
 
     await expect(page.getByRole('heading', { name: 'Release Link Unavailable' })).toBeVisible();
     await expect(page.getByRole('alert')).toContainText('secure release link has expired');
-    await expect(page.getByRole('link', { name: 'Go to SiteProof' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go to CIVOS' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
   });
 

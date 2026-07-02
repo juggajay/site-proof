@@ -24,7 +24,7 @@ export function TermsOfServicePage() {
             className="inline-flex items-center gap-2 text-primary-foreground/80 hover:text-primary-foreground mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to SiteProof
+            Back to CIVOS
           </Link>
           <div className="flex items-center gap-3">
             <Scale className="h-10 w-10" />
@@ -46,13 +46,13 @@ export function TermsOfServicePage() {
               Agreement to Terms
             </div>
             <p className="text-muted-foreground">
-              These Terms of Service ("Terms") govern your access to and use of SiteProof, a civil
+              These Terms of Service ("Terms") govern your access to and use of CIVOS, a civil
               construction quality management platform. By creating an account or using our
               services, you agree to be bound by these Terms.
             </p>
             <p className="text-muted-foreground">
-              SiteProof is operated by SiteProof Pty Ltd, an Australian company. These Terms are
-              governed by the laws of New South Wales, Australia.
+              CIVOS is operated by CIVOS Pty Ltd, an Australian company. These Terms are governed by
+              the laws of New South Wales, Australia.
             </p>
           </section>
 
@@ -63,7 +63,7 @@ export function TermsOfServicePage() {
               Service Description
             </div>
             <p className="text-muted-foreground mb-2">
-              SiteProof provides a cloud-based platform for civil construction quality management,
+              CIVOS provides a cloud-based platform for civil construction quality management,
               including:
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-1">
@@ -93,9 +93,9 @@ export function TermsOfServicePage() {
               <li>Not share your account with others</li>
             </ul>
             <p className="text-muted-foreground mt-2">
-              You must be at least 18 years old to use SiteProof. If you are using the service on
-              behalf of an organization, you represent that you have authority to bind that
-              organization to these Terms.
+              You must be at least 18 years old to use CIVOS. If you are using the service on behalf
+              of an organization, you represent that you have authority to bind that organization to
+              these Terms.
             </p>
           </section>
 
@@ -105,7 +105,7 @@ export function TermsOfServicePage() {
               <Ban className="h-5 w-5 text-primary" />
               Acceptable Use
             </div>
-            <p className="text-muted-foreground mb-2">You agree not to use SiteProof to:</p>
+            <p className="text-muted-foreground mb-2">You agree not to use CIVOS to:</p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-1">
               <li>Violate any applicable laws or regulations</li>
               <li>Upload false, misleading, or fraudulent information</li>
@@ -127,9 +127,9 @@ export function TermsOfServicePage() {
               Data Ownership & License
             </div>
             <p className="text-muted-foreground">
-              You retain ownership of all data and content you upload to SiteProof ("Your Content").
-              By using our service, you grant us a limited license to store, process, and display
-              Your Content solely for the purpose of providing the service to you.
+              You retain ownership of all data and content you upload to CIVOS ("Your Content"). By
+              using our service, you grant us a limited license to store, process, and display Your
+              Content solely for the purpose of providing the service to you.
             </p>
             <p className="text-muted-foreground mt-2">
               You are responsible for ensuring you have the right to upload any content, including
@@ -145,8 +145,8 @@ export function TermsOfServicePage() {
               Subscription & Payment
             </div>
             <p className="text-muted-foreground">
-              SiteProof offers various subscription tiers with different features and usage limits.
-              By subscribing, you agree to pay the applicable fees as described in your chosen plan.
+              CIVOS offers various subscription tiers with different features and usage limits. By
+              subscribing, you agree to pay the applicable fees as described in your chosen plan.
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-1 mt-2">
               <li>Subscriptions automatically renew unless cancelled before the renewal date</li>
@@ -163,16 +163,16 @@ export function TermsOfServicePage() {
               Limitation of Liability
             </div>
             <p className="text-muted-foreground">
-              To the maximum extent permitted by law, SiteProof and its affiliates shall not be
-              liable for any indirect, incidental, special, consequential, or punitive damages
-              arising from your use of the service.
+              To the maximum extent permitted by law, CIVOS and its affiliates shall not be liable
+              for any indirect, incidental, special, consequential, or punitive damages arising from
+              your use of the service.
             </p>
             <p className="text-muted-foreground mt-2">
-              Our total liability for any claims arising from these Terms or your use of SiteProof
-              shall not exceed the amount you paid to us in the 12 months preceding the claim.
+              Our total liability for any claims arising from these Terms or your use of CIVOS shall
+              not exceed the amount you paid to us in the 12 months preceding the claim.
             </p>
             <p className="text-muted-foreground mt-2">
-              SiteProof is provided "as is" without warranties of any kind, except as required by
+              CIVOS is provided "as is" without warranties of any kind, except as required by
               Australian Consumer Law. We do not warrant that the service will be uninterrupted,
               secure, or error-free.
             </p>
@@ -187,7 +187,7 @@ export function TermsOfServicePage() {
             <p className="text-muted-foreground">
               We may update these Terms from time to time. If we make material changes, we will
               notify you via email or through the service at least 30 days before the changes take
-              effect. Your continued use of SiteProof after the changes become effective constitutes
+              effect. Your continued use of CIVOS after the changes become effective constitutes
               acceptance of the updated Terms.
             </p>
           </section>
@@ -201,7 +201,7 @@ export function TermsOfServicePage() {
             <p className="text-muted-foreground">
               For questions about these Terms of Service, please contact us:
             </p>
-            <LegalContactCard teamName="SiteProof Legal" email="legal@siteproof.com.au" />
+            <LegalContactCard teamName="CIVOS Legal" email="legal@civos.com.au" />
           </section>
 
           {/* Related Links */}
@@ -230,7 +230,7 @@ export function TermsOfServicePage() {
       {/* Footer */}
       <div className="border-t py-6">
         <div className="container mx-auto px-4 max-w-4xl text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} SiteProof. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} CIVOS. All rights reserved.</p>
         </div>
       </div>
     </div>

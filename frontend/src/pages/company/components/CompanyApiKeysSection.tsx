@@ -133,7 +133,7 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
           <div>
             <h2 className="text-lg font-semibold">API keys</h2>
             <p className="text-sm text-muted-foreground">
-              Programmatic access to the SiteProof REST API for this company.
+              Programmatic access to the CIVOS REST API for this company.
             </p>
           </div>
         </div>
@@ -156,7 +156,7 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
         </div>
       ) : keys.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No API keys yet. Create one to integrate external systems with SiteProof.
+          No API keys yet. Create one to integrate external systems with CIVOS.
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border">

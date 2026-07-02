@@ -461,7 +461,7 @@ describe('hold point request-release delivery failure', () => {
     expect(mocks.createAuditLog).toHaveBeenCalledTimes(2);
     expect(mocks.sendEmail.mock.calls[0][0]).toMatchObject({
       to: 'reviewer@example.com',
-      subject: '[SiteProof] Batch Hold Point Release Request - LOT-1',
+      subject: '[CIVOS] Batch Hold Point Release Request - LOT-1',
     });
     expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
   });
