@@ -114,12 +114,13 @@ export { router as exampleRouter }
 
 ### Backend
 ```typescript
-// Errors bubble to global errorHandler middleware
-// Throw with statusCode and code for proper handling
-const error = new Error('Resource not found') as any
-error.statusCode = 404
-error.code = 'NOT_FOUND'
-throw error
+import { AppError } from '../lib/AppError.js'
+
+// Throw typed errors; they bubble to the global errorHandler middleware.
+throw AppError.notFound('Lot')
+throw AppError.badRequest('Cannot edit a claimed lot', { code: 'LOT_CLAIMED' })
+throw AppError.forbidden('You do not have permission to edit lots')
+throw AppError.fromZodError(validation.error)
 
 // Response format: { error: { message, code, stack? } }
 ```
@@ -161,7 +162,7 @@ Core models (see `backend/prisma/schema.prisma`):
 ## Testing
 
 ```bash
-# Backend unit tests
+# Backend unit tests (many are DB-backed — see local test DB below)
 cd backend && npm test
 
 # Frontend unit tests
@@ -175,36 +176,35 @@ cd backend && npm run type-check
 cd frontend && npm run type-check
 ```
 
-As of 2026-06-19, the repo has roughly 530 test/spec files and 5,800+
-`it`/`test` declarations. Re-measure before publishing exact counts.
+DB-backed backend tests run against a **local disposable Postgres**:
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/siteproof_test
+```
+
+`src/test/databaseSafety.ts` refuses to run tests against non-local hosts or
+databases whose name lacks a `test`/`e2e`/`ci` marker — never point tests at
+Railway. Apply pending migrations to the test DB with
+`DATABASE_URL=... npx prisma migrate deploy`.
 
 ### Code intelligence audit (fallow)
 
-Every refactor/feature PR should also run the advisory quality audit before
-opening (from the repo root):
+Every refactor/feature PR should run the advisory quality audit before opening
+(from the repo root) and include the pass/warn/fail verdict in the PR body:
 
 ```bash
 npm run fallow:audit    # audits only files changed vs origin/master
+# scripting: fallow audit --base origin/master --format json --quiet || true
 ```
 
-- Requires the `fallow` CLI on PATH (`npm install -g fallow`). If it is not
-  installed, say so in the PR body instead of skipping silently.
-- The audit reports a pass/warn/fail verdict for dead code, complexity, and
-  duplication **introduced by the change**. Include the verdict in the PR body.
-- The audit is advisory, not a hard gate. A `warn` on extraction PRs is often
-  expected (moved complexity counts as "new" in the new file) — explain it.
-  Investigate `fail` verdicts and any new dead-code finding before opening
-  the PR; do not "fix" them by weakening `.fallowrc.json`.
-- Repo config lives in `.fallowrc.json`. The ITP template seeders are loaded
-  dynamically by `backend/scripts/seeds/itp-templates/index.mjs` (filenames in
-  a manifest array), so they are marked `dynamicallyLoaded` there — they are
-  not dead code, and static analysis cannot see that without the config.
-- Agent rules when scripting fallow: prefer
-  `fallow audit --base origin/master --format json --quiet 2>/dev/null`, and
-  append `|| true` in shells where exit 1 would stop the run (exit 1 means
-  "issues found", not an infrastructure error). If you must pass flags through
-  npm, use the extra separator:
-  `npm run fallow:audit -- -- --format json --quiet`.
+- Advisory, not a hard gate. `warn` on extraction PRs is often expected (moved
+  complexity counts as "new"); investigate `fail` verdicts and new dead-code
+  findings — do not "fix" them by weakening `.fallowrc.json`.
+- If the `fallow` CLI is not installed (`npm install -g fallow`), say so in the
+  PR body instead of skipping silently.
+- The ITP template seeders are loaded dynamically via a manifest in
+  `backend/scripts/seeds/itp-templates/index.mjs` and are marked
+  `dynamicallyLoaded` in `.fallowrc.json` — they are not dead code.
 
 ## User Roles
 
@@ -325,54 +325,35 @@ The seeders are additive and idempotent, but production runs still require an op
 - [ ] Keep `.env` files out of git (check `.gitignore`)
 - [ ] Use different JWT_SECRET per environment
 - [ ] Rotate Supabase service keys periodically
-- [ ] Review Supabase RLS policies when adding tables
+- [ ] Keep the Supabase `documents` bucket private; all browser access goes through backend routes (app tables live in Railway Postgres — Supabase RLS is not involved)
 
 ## File Size Guidelines
 
-Keep files under 500 lines. Large files should be split:
-- Extract reusable components
-- Move data fetching to custom hooks
-- Separate form logic from display
+Keep files under 500 lines. Large files should be split: extract reusable
+components, move data fetching to custom hooks, separate form logic from
+display.
 
-## Known Large Files (Refactoring Targets)
+Size lists in docs go stale fast — measure fresh before choosing a refactor
+target:
 
-Large-file pressure has moved away from the old top-level backend route files:
-most of those routes have been split into focused folders. Re-measure before
-choosing a refactor target, and keep changes behavior-preserving with
-characterization coverage.
+```bash
+git ls-files '*.ts' '*.tsx' | grep -vE '\.(test|spec)\.' | xargs wc -l | grep -v ' total$' | sort -rn | head -20
+```
 
-Largest current files measured on 2026-06-23:
-
-- `frontend/src/shell/subbie/screens/dockets/DocketScreen.tsx` (~971 lines)
-- `frontend/src/pages/LandingPage.tsx` (~943 lines)
-- `frontend/src/lib/offline/syncWorker.ts` (~932 lines)
-- `frontend/src/pages/tests/TestResultsPage.tsx` (~734 lines)
-- `backend/src/routes/company/memberRoutes.ts` (~726 lines)
-- `backend/src/routes/holdpoints/actionRoutes.ts` (~723 lines)
-- `frontend/src/shell/subbie/screens/CompanyScreen.tsx` (~713 lines)
-- `backend/src/routes/ncrs/ncrCore.ts` (~703 lines)
-- `frontend/src/components/foreman/DiaryFinishFlow.tsx` (~695 lines)
-- `backend/src/routes/projects/writeRoutes.ts` (~683 lines)
-- `backend/src/routes/claims/workflowRoutes.ts` (~658 lines)
-- `backend/src/routes/dockets/review.ts` (~655 lines)
-- `backend/src/lib/scheduledReports.ts` (~645 lines)
-- `frontend/src/pages/holdpoints/PublicHoldPointReleasePage.tsx` (~631 lines)
-- `frontend/src/pages/subcontractor-portal/SubcontractorDashboard.tsx` (~622 lines)
-
-Current top-level backend route files are comparatively small
-(`oauth.ts`, `holdpoints.ts`, `auth.ts`, `dockets.ts`, `subcontractors.ts`, and
-`projects.ts` are all under ~500 lines). Prefer extracting from the files above
-only when a feature or bug fix already touches that area.
+Prefer extracting from a large file only when a feature or bug fix already
+touches that area, and keep changes behavior-preserving with characterization
+coverage.
 
 ---
 
 ## Workflow Orchestration
 
-### 1. Plan Mode Default
+### 1. Plan First
 - Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan immediately – don't keep pushing
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
+- Write the plan to `tasks/todo.md` with checkable items and check in before
+  starting implementation; mark items complete as you go and add a review
+  section when done
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
 
 ### 2. Subagent Strategy
 - Use subagents liberally to keep main context window clean
@@ -382,9 +363,11 @@ only when a feature or bug fix already touches that area.
 
 #### Model routing (defaults, not limits)
 
-Rankings (higher = better). Cost = what we actually pay, not list price.
-Intelligence = how hard a problem it can take unsupervised. Taste = UI/UX,
-code quality, API design, copy.
+Applies when an expensive orchestrator (e.g. Fable) is dispatching work —
+route subagent work to the cheapest model that meets the bar. Rankings
+(higher = better). Cost = what we actually pay, not list price. Intelligence =
+how hard a problem it can take unsupervised. Taste = UI/UX, code quality, API
+design, copy.
 
 | model | cost | intelligence | taste |
 |-------|------|--------------|-------|
@@ -409,17 +392,15 @@ How to apply:
 - **Mechanics:** gpt-5.5 is reachable only through the Codex CLI (`codex exec` /
   `codex review`; here via the `gstack-codex` skill / `codex exec -s read-only`
   with a self-contained prompt). Claude models (sonnet-5, opus-4.8, fable-5) run
-  via the Agent/Workflow `model` parameter.
-- To use gpt-5.5 inside a workflow/subagent (the `model` param only takes Claude
-  models): spawn a thin Claude wrapper (`model: 'sonnet', effort: 'low'`) whose
-  prompt tells it to write a self-contained codex prompt, run `codex exec` via
-  Bash, and return the output.
+  via the Agent/Workflow `model` parameter. To use gpt-5.5 inside a
+  workflow/subagent, spawn a thin Claude wrapper (`model: 'sonnet'`,
+  `effort: 'low'`) whose prompt tells it to write a self-contained codex prompt,
+  run `codex exec` via Bash, and return the output.
 
 ### 3. Self-Improvement Loop
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+- After ANY correction from the user: update `tasks/lessons.md` with the
+  pattern and a rule that prevents the same mistake
+- Review lessons at session start
 
 ### 4. Verification Before Done
 - Never mark a task complete without proving it works
@@ -430,20 +411,9 @@ How to apply:
 ### 5. Demand Elegance (Balanced)
 - For non-trivial changes: pause and ask "is there a more elegant way?"
 - If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for simple, obvious fixes – don't over-engineer
-- Challenge your own work before presenting it
+- Skip this for simple, obvious fixes — don't over-engineer
 
 ### 6. Autonomous Bug Fixing
 - When given a bug report: just fix it. Don't ask for hand-holding
-- Point at logs, errors, failing tests – then resolve them
-- Zero context switching required from the user
+- Point at logs, errors, failing tests — then resolve them
 - Go fix failing CI tests without being told how
-
-## Task Management
-
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` with patterns learned
