@@ -376,6 +376,14 @@ design, copy.
 | opus-4.8 | 4 | 7 | 8 |
 | fable-5 | 2 | 9 | 9 |
 
+Cost scores are **per task, not per token**. Sonnet 5's list price is 40%
+below Opus 4.8's, but on agentic work it burns more tokens per task (more
+tool calls, adaptive thinking on by default, verbose output) and measures
+~15% more expensive per completed task (~$2.29 vs ~$2.00, Artificial
+Analysis, mid-2026). That's why opus-4.8 outranks sonnet-5 on cost above —
+default delegable subagent work to `model: 'opus'`. Re-measure if pricing
+or model behavior changes.
+
 How to apply:
 - **These are defaults, not limits.** Standing permission to override: if a
   cheaper model's output doesn't meet the bar, rerun with a smarter one without
