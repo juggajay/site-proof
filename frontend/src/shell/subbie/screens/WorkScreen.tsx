@@ -13,11 +13,12 @@
  * classic page groups them. Cards show lot number + activity, area (m²), a status
  * pill and a conservative progress bar (status-derived, never a fabricated
  * ratio — the lots-module payload carries no completion count). Tapping a card
- * opens the shell ITP run when the `itps` module is on; otherwise the card is a
- * non-navigating presentation (matching the classic read-only surface).
+ * opens the per-lot hub (`/p/lots/:lotId`), which surfaces the inspection run and
+ * this lot's holds & tests behind the lot. A "view all holds & tests" link keeps
+ * un-lotted QA items reachable.
  */
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, MapPin } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
@@ -151,7 +152,7 @@ export function WorkScreen() {
     useSubbieShellContext();
 
   const lotsEnabled = isModuleEnabled('lots');
-  const itpsEnabled = isModuleEnabled('itps');
+  const holdsOrTests = isModuleEnabled('holdPoints') || isModuleEnabled('testResults');
   const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
 
   const {
@@ -183,10 +184,11 @@ export function WorkScreen() {
     return <ShellAccessDenied title="My Work" moduleName="Assigned work" />;
   }
 
-  // Tapping a lot opens the ITP run only when the itps module is enabled.
-  const onPressLot = itpsEnabled
-    ? (lotId: string) => navigate(`/p/lots/${encodeURIComponent(lotId)}/itp${projectQuery}`)
-    : undefined;
+  // Tapping a lot opens the per-lot hub (which degrades to whatever modules are
+  // enabled). The lots module is on here (screen is gated on it), so cards are
+  // always tappable.
+  const onPressLot = (lotId: string) =>
+    navigate(`/p/lots/${encodeURIComponent(lotId)}${projectQuery}`);
 
   if (isLoading) {
     return (
@@ -233,6 +235,18 @@ export function WorkScreen() {
       <LotGroup title="On Hold" lots={groups.onHold} onPressLot={onPressLot} />
       <LotGroup title="Completed" lots={groups.completed} onPressLot={onPressLot} />
       <LotGroup title="Other" lots={groups.other} onPressLot={onPressLot} />
+
+      {/* Un-lotted QA still reachable — holds/tests not tied to a lot live here. */}
+      {holdsOrTests && (
+        <div className="mt-1 flex flex-wrap gap-2" aria-label="Secondary navigation">
+          <Link
+            to={`/p/quality${projectQuery}`}
+            className="inline-flex min-h-[38px] items-center rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-muted-foreground"
+          >
+            View all holds &amp; tests
+          </Link>
+        </div>
+      )}
     </ShellScreen>
   );
 }

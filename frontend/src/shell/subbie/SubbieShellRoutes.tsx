@@ -14,6 +14,7 @@
  *   /p/dockets               → DocketsListScreen       (PR B — real)
  *   /p/work                  → WorkScreen              (PR C — real)
  *   /p/itps                  → ItpsScreen              (PR C — real)
+ *   /p/lots/:lotId           → SubbieLotHubScreen      — per-lot hub (Inspection / Holds & Tests)
  *   /p/lots/:lotId/itp       → SubbieItpRunScreen      (PR C — real)
  *   /p/quality               → Holds & Tests (real)    — holdPoints + testResults
  *   /p/ncrs                  → NCRs (real)             — ncrs module (default OFF)
@@ -34,6 +35,7 @@ import { NcrsScreen } from './screens/NcrsScreen';
 import { CompanyScreen } from './screens/CompanyScreen';
 import { WorkScreen } from './screens/WorkScreen';
 import { ItpsScreen } from './screens/ItpsScreen';
+import { SubbieLotHubScreen } from './screens/SubbieLotHubScreen';
 import { SubbieItpRunScreen } from './screens/SubbieItpRunScreen';
 import { DocketScreen } from './screens/dockets/DocketScreen';
 import { DocketsListScreen } from './screens/dockets/DocketsListScreen';
@@ -81,6 +83,8 @@ export function SubbieShellRoutes() {
 
         {/* Inspections (ITPs) */}
         <Route path="itps" element={<ItpsScreen />} />
+        {/* Per-lot hub — behind My Work; the ITP run lives one level deeper */}
+        <Route path="lots/:lotId" element={<SubbieLotHubScreen />} />
         <Route path="lots/:lotId/itp" element={<SubbieItpRunScreen />} />
 
         {/* Holds & Tests — read-only QA visibility (holdPoints + testResults) */}

@@ -241,10 +241,84 @@ describe('subbie shell HomeScreen', () => {
     );
   });
 
-  it('bottom bar "Add today\'s hours" navigates to /p/docket', () => {
+  it('no longer renders the duplicate "Add today\'s hours" cambar', () => {
     renderHome();
-    fireEvent.click(screen.getByRole('button', { name: "Add today's hours" }));
-    expect(screen.getByText('docket editor')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Add today's hours" })).toBeNull();
+  });
+
+  it('hides the Inspections and Holds & Tests top-level tiles when the lots module is on', () => {
+    renderHome();
+    expect(screen.queryByRole('button', { name: 'Inspections' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Holds and Tests' })).toBeNull();
+  });
+
+  it('keeps Inspections + Holds & Tests tiles as a fallback when the lots module is off', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false };
+    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
+    setApi();
+    renderHome();
+    expect(screen.getByRole('button', { name: 'Inspections' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Holds and Tests' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /My Work/ })).toBeNull();
+  });
+
+  it('My Work chip shows the actionable "N checks to do" count from ITP data', async () => {
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.includes('includeITP=true')) {
+        return Promise.resolve({
+          lots: [
+            {
+              id: 'l1',
+              itpInstances: [{ status: 'in_progress' }],
+              subcontractorAssignments: [{ canCompleteITP: true }],
+            },
+            {
+              id: 'l2',
+              itpInstances: [{ status: 'completed' }],
+              subcontractorAssignments: [{ canCompleteITP: true }],
+            },
+            {
+              id: 'l3',
+              itpInstances: [{ status: 'not_started' }],
+              subcontractorAssignments: [{ canCompleteITP: false }],
+            },
+          ],
+        });
+      }
+      if (url.startsWith('/api/lots')) {
+        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
+      }
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+    renderHome();
+    expect(await screen.findByText('1 check to do')).toBeInTheDocument();
+  });
+
+  it('does not flash the My Work chip while ITP checks are still loading', async () => {
+    const itpsDeferred = createDeferred<{ lots: [] }>();
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.includes('includeITP=true')) return itpsDeferred.promise;
+      if (url.startsWith('/api/lots')) return Promise.resolve({ lots: [] });
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+
+    renderHome();
+
+    // While the ITP query is pending, no chip text at all (avoid the green
+    // "0 checks to do" flash).
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringContaining('includeITP=true')),
+    );
+    expect(screen.queryByText(/checks? to do/)).toBeNull();
+
+    itpsDeferred.resolve({ lots: [] });
+    expect(await screen.findByText('0 checks to do')).toBeInTheDocument();
   });
 
   it('does not show the no-lots warning before assigned lots finish loading', async () => {

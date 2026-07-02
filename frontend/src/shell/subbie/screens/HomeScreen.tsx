@@ -22,7 +22,6 @@
 import {
   AlertTriangle,
   ChevronRight,
-  Clock,
   FileText,
   Flag,
   FlaskConical,
@@ -39,13 +38,13 @@ import { cn } from '@/lib/utils';
 import {
   buildNeedsAttentionItems,
   getDocketPrerequisiteState,
-  formatCurrency,
   getToday,
   LOTS_MODULE_DISABLED_DOCKET_MESSAGE,
   type DocketPrerequisiteState,
   type NeedsAttentionItem,
 } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
+import { DocketHero, type Docket, type HeroState } from './HomeScreenHero';
 import {
   buildPortalCompanyQuery,
   findPortalCompanyOptionByValue,
@@ -57,21 +56,16 @@ import { useSubbieShellContext } from '../subbieShellContext';
 
 // ── Minimal response shapes (existing portal contracts) ───────────────────────
 
-interface Docket {
-  id: string;
-  date: string;
-  status: string;
-  totalLabourSubmitted: number;
-  totalPlantSubmitted: number;
-  totalLabourApprovedCost?: number | null;
-  totalPlantApprovedCost?: number | null;
-  foremanNotes?: string;
-}
-
 interface Lot {
   id: string;
   lotNumber: string;
   status: string;
+}
+
+interface ItpLot {
+  id: string;
+  itpInstances?: Array<{ status: string }>;
+  subcontractorAssignments?: Array<{ canCompleteITP: boolean }>;
 }
 
 interface Notification {
@@ -83,48 +77,7 @@ interface Notification {
   createdAt: string;
 }
 
-// ── Hero state ────────────────────────────────────────────────────────────────
-
-type HeroState =
-  | { kind: 'none' }
-  | {
-      kind: 'draft' | 'pending_approval' | 'approved' | 'queried' | 'rejected';
-      docketId: string;
-      total: number;
-      entryHint: string;
-    };
-
-const HERO_COPY: Record<
-  Exclude<HeroState['kind'], 'none'>,
-  { kicker: string; big: string; small: string }
-> = {
-  draft: {
-    kicker: "TODAY'S DOCKET — DRAFT",
-    big: 'Keep adding hours',
-    small: "Submit when the day's done.",
-  },
-  pending_approval: {
-    kicker: "TODAY'S DOCKET — SENT",
-    big: 'Sent — waiting on approval',
-    small: "You'll be notified when it's approved.",
-  },
-  approved: {
-    kicker: "TODAY'S DOCKET — APPROVED",
-    big: 'Approved',
-    small: "Today's docket is approved.",
-  },
-  queried: {
-    kicker: "TODAY'S DOCKET — QUERIED",
-    big: 'Answer the foreman',
-    small: 'There’s a question to answer before this can be approved.',
-  },
-  rejected: {
-    kicker: "TODAY'S DOCKET — REJECTED",
-    big: 'Fix & resubmit',
-    small: 'The foreman sent this back — fix it and resubmit.',
-  },
-};
-
+// Derive the docket hero state from today's docket (or none).
 function computeHero(todaysDocket: Docket | null): HeroState {
   if (!todaysDocket) return { kind: 'none' };
   const total = getDocketDisplayTotalCost(todaysDocket);
@@ -133,59 +86,7 @@ function computeHero(todaysDocket: Docket | null): HeroState {
       ? todaysDocket.status
       : 'draft'
   ) as Exclude<HeroState['kind'], 'none'>;
-  return {
-    kind,
-    docketId: todaysDocket.id,
-    total,
-    entryHint: '',
-  };
-}
-
-// ── Hero tile ─────────────────────────────────────────────────────────────────
-
-function DocketHero({ state, onPress }: { state: HeroState; onPress: () => void }) {
-  if (state.kind === 'none') {
-    return (
-      <button
-        type="button"
-        className="shell-hero"
-        onClick={onPress}
-        aria-label="Start today's docket"
-      >
-        <span className="shell-hazard-stripe" aria-hidden="true" />
-        <div className="relative font-mono text-[11.5px] font-semibold tracking-[0.14em] text-warning">
-          TODAY'S DOCKET
-        </div>
-        <div className="shell-hero-big relative mt-2">Start today's docket</div>
-        <div className="relative mt-[5px] text-[13.5px] opacity-80">
-          Log crew & plant hours, then submit at knock-off.
-        </div>
-      </button>
-    );
-  }
-
-  const copy = HERO_COPY[state.kind];
-  return (
-    <button
-      type="button"
-      className="shell-hero"
-      onClick={onPress}
-      aria-label={`Today's docket — ${copy.big}`}
-    >
-      <span className="shell-hazard-stripe" aria-hidden="true" />
-      <div className="relative font-mono text-[11.5px] font-semibold tracking-[0.14em] text-warning">
-        {copy.kicker}
-      </div>
-      <div className="shell-hero-big relative mt-2">{copy.big}</div>
-      <div className="relative mt-[5px] text-[13.5px] opacity-80">{copy.small}</div>
-      <div className="relative mt-4 flex items-baseline gap-2.5">
-        <span className="shell-hero-money">{formatCurrency(state.total)}</span>
-        <span className="text-[12px] opacity-65">
-          {state.kind === 'approved' ? 'approved today' : 'so far today'}
-        </span>
-      </div>
-    </button>
-  );
+  return { kind, docketId: todaysDocket.id, total, entryHint: '' };
 }
 
 // ── Notice card (needs-attention) ─────────────────────────────────────────────
@@ -379,6 +280,27 @@ export function HomeScreen() {
   const assignedLots = assignedLotsData ?? [];
   const hasAssignedLotsResponse = assignedLotsData !== undefined;
 
+  // ITP checks — existing portal key (shared with ItpsScreen). Drives the My Work
+  // chip's actionable "N checks to do" count (lots the crew can complete and has
+  // not yet finished). Only fetched when the itps module is on.
+  const { data: itpLotsData } = useQuery({
+    queryKey: queryKeys.portalITPs(user?.id, projectId, subcontractorCompanyId),
+    queryFn: async () => {
+      const res = await apiFetch<{ lots: ItpLot[] }>(
+        `/api/lots${currentProjectQuery}${currentProjectQuery ? '&' : '?'}includeITP=true&portalModule=itps`,
+      );
+      return (res.lots ?? []).filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
+    },
+    enabled: !!user?.id && !!projectId && itpsEnabled,
+  });
+  const hasItpResponse = itpLotsData !== undefined;
+  const checksToDo = (itpLotsData ?? []).filter((lot) => {
+    const canComplete = lot.subcontractorAssignments?.some((a) => a.canCompleteITP) ?? false;
+    const itp = lot.itpInstances?.[0];
+    return canComplete && !!itp && itp.status !== 'completed';
+  }).length;
+  const checksToDoLabel = `${checksToDo} check${checksToDo === 1 ? '' : 's'} to do`;
+
   // Notifications — existing portal key; feeds needs-attention.
   const { data: notifData } = useQuery({
     queryKey: queryKeys.portalDashboard(user?.id),
@@ -446,19 +368,6 @@ export function HomeScreen() {
           />
         ) : undefined
       }
-      bottom={
-        <div className="shell-cambar">
-          <button
-            type="button"
-            className="shell-cambar-btn"
-            aria-label="Add today's hours"
-            onClick={() => navigate(docketPath)}
-          >
-            <Clock size={22} aria-hidden="true" />
-            Add today's hours
-          </button>
-        </div>
-      }
     >
       {/* Today's docket hero */}
       <DocketHero state={hero} onPress={() => navigate(docketPath)} />
@@ -481,21 +390,40 @@ export function HomeScreen() {
         ariaLabel={`My Dockets${queriedCount > 0 ? ` — ${queriedCount} queried` : ''}`}
       />
 
-      {/* My Work (lots module) */}
+      {/* My Work (lots module) — chip is the actionable "N checks to do" when the
+          itps module is on, else the plain lot count. While the ITP query is still
+          loading we render no chip at all (avoid a transient green "0 checks to do"
+          flash). Per-lot detail (inspection, holds & tests) now lives behind the
+          lot in SubbieLotHubScreen. */}
       {lotsEnabled && (
         <HubTile
           icon={MapPin}
           title="My Work"
           description="Lots assigned to your crew"
-          chip={assignedLots.length > 0 ? `${assignedLots.length} lots` : undefined}
-          chipOk={assignedLots.length > 0}
+          chip={
+            itpsEnabled
+              ? hasItpResponse
+                ? checksToDoLabel
+                : undefined
+              : assignedLots.length > 0
+                ? `${assignedLots.length} lots`
+                : undefined
+          }
+          chipOk={itpsEnabled ? checksToDo === 0 : assignedLots.length > 0}
           onPress={() => navigate(`/p/work${currentProjectQuery}`)}
-          ariaLabel={`My Work${assignedLots.length > 0 ? ` — ${assignedLots.length} lots` : ''}`}
+          ariaLabel={
+            itpsEnabled
+              ? hasItpResponse
+                ? `My Work — ${checksToDoLabel}`
+                : 'My Work'
+              : `My Work${assignedLots.length > 0 ? ` — ${assignedLots.length} lots` : ''}`
+          }
         />
       )}
 
-      {/* Inspections (itps module) */}
-      {itpsEnabled && (
+      {/* Fallback Inspections tile — ONLY when lots is off (no lot hub to host
+          the inspection run), so inspections stay reachable. */}
+      {itpsEnabled && !lotsEnabled && (
         <HubTile
           icon={ClipboardCheck}
           title="Inspections"
@@ -505,8 +433,9 @@ export function HomeScreen() {
         />
       )}
 
-      {/* Holds & Tests (holdPoints OR testResults) */}
-      {holdsOrTests && (
+      {/* Fallback Holds & Tests tile — ONLY when lots is off. When lots is on,
+          reach these via the lot hub or the Work screen "view all" link. */}
+      {holdsOrTests && !lotsEnabled && (
         <HubTile
           icon={FlaskConical}
           title="Holds & Tests"
@@ -516,7 +445,9 @@ export function HomeScreen() {
         />
       )}
 
-      {/* NCRs — only when the ncrs module is enabled (defaults OFF) */}
+      {/* NCRs — stays top-level when the module is on (defaults OFF). The portal
+          NCR payload carries lot NUMBER but not lot id, so NCRs can't be lot-scoped
+          client-side into the lot hub; keeping this tile keeps them reachable. */}
       {ncrsEnabled && (
         <HubTile
           icon={Flag}

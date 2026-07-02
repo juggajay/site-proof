@@ -17,6 +17,12 @@
  * The list endpoint returns a derived instance `status` plus completionPercentage
  * from the server-side completion rows. The full per-check breakdown lives one
  * tap deeper, on the run screen.
+ *
+ * With the lots module ON this list screen has no nav entry point anymore: the
+ * Home "Inspections" tile only renders as the lots-OFF fallback, and the lot hub
+ * deep-links straight to the run screen (/p/lots/:lotId/itp). It is kept as the
+ * lots-OFF fallback surface; retiring it belongs to the desktop-retirement slice
+ * (1c).
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';

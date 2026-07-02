@@ -59,11 +59,11 @@ function setApi({ holdPoints = [] as unknown[], testResults = [] as unknown[] } 
   });
 }
 
-function renderScreen() {
+function renderScreen(path = '/p/quality') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/p/quality']}>
+      <MemoryRouter initialEntries={[path]}>
         <QualityScreen />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -184,5 +184,49 @@ describe('subbie shell QualityScreen', () => {
     renderScreen();
     expect(await screen.findByText('PASS')).toBeInTheDocument();
     expect(screen.getByText(/98\.2 % standard · req ≥ 98%/)).toBeInTheDocument();
+  });
+
+  it('scopes hold points and tests to ?lotId and offers a view-all link', async () => {
+    setApi({
+      holdPoints: [
+        { id: 'h1', lotId: 'l1', lotNumber: 'LOT-1', description: 'HP one', status: 'notified' },
+        { id: 'h2', lotId: 'l2', lotNumber: 'LOT-2', description: 'HP two', status: 'notified' },
+      ],
+      testResults: [
+        {
+          id: 't1',
+          lotId: 'l1',
+          lot: { lotNumber: 'LOT-1' },
+          testType: 'Compaction',
+          passFail: 'pass',
+          createdAt: '2026-06-09T00:00:00.000Z',
+        },
+        {
+          id: 't2',
+          lotId: 'l2',
+          lot: { lotNumber: 'LOT-2' },
+          testType: 'Slump',
+          passFail: 'fail',
+          createdAt: '2026-06-09T00:00:00.000Z',
+        },
+      ],
+    });
+    renderScreen('/p/quality?lotId=l1');
+
+    expect(await screen.findByText(/HP one — LOT-1/)).toBeInTheDocument();
+    expect(screen.queryByText(/HP two — LOT-2/)).toBeNull();
+    expect(screen.getByText('Compaction — LOT-1')).toBeInTheDocument();
+    expect(screen.queryByText('Slump — LOT-2')).toBeNull();
+
+    // Scope banner + view-all escape hatch back to the unfiltered surface.
+    expect(screen.getByText(/Showing/)).toBeInTheDocument();
+    const viewAll = screen.getByRole('link', { name: 'View all' });
+    expect(viewAll.getAttribute('href')).toBe('/p/quality?projectId=proj-1');
+  });
+
+  it('shows no scope banner without a lotId param', () => {
+    renderScreen();
+    expect(screen.queryByText(/Showing/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View all' })).toBeNull();
   });
 });

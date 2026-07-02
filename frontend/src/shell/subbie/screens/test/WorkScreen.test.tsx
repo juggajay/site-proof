@@ -76,7 +76,8 @@ function renderWork() {
       <MemoryRouter initialEntries={['/p/work']}>
         <Routes>
           <Route path="/p/work" element={<WorkScreen />} />
-          <Route path="/p/lots/:lotId/itp" element={<div>itp run</div>} />
+          <Route path="/p/lots/:lotId" element={<div>lot hub</div>} />
+          <Route path="/p/quality" element={<div>quality</div>} />
           <Route path="/p" element={<div>home</div>} />
         </Routes>
       </MemoryRouter>
@@ -149,21 +150,42 @@ describe('subbie shell WorkScreen', () => {
     });
   });
 
-  it('navigates to the ITP run on tap when the itps module is enabled', async () => {
+  it('navigates to the lot hub on tap', async () => {
     setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
     renderWork();
     const card = await screen.findByRole('button', { name: /Lot LOT-001/ });
     fireEvent.click(card);
-    expect(await screen.findByText('itp run')).toBeInTheDocument();
+    expect(await screen.findByText('lot hub')).toBeInTheDocument();
   });
 
-  it('lot cards do not navigate when the itps module is disabled', async () => {
+  it('lot cards still navigate to the hub even when the itps module is off', async () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, itps: false };
     _ctx = makeCtx({ isModuleEnabled: (m: keyof PortalAccess) => portalAccess[m] });
     setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
     renderWork();
-    // Rendered as a non-button presentation card (no role=button), so no nav.
+    const card = await screen.findByRole('button', { name: /Lot LOT-001/ });
+    fireEvent.click(card);
+    expect(await screen.findByText('lot hub')).toBeInTheDocument();
+  });
+
+  it('offers a "View all holds & tests" link when holds or tests are on', async () => {
+    setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
+    renderWork();
+    const link = await screen.findByRole('link', { name: /View all holds & tests/i });
+    fireEvent.click(link);
+    expect(await screen.findByText('quality')).toBeInTheDocument();
+  });
+
+  it('hides the holds & tests link when neither module is on', async () => {
+    const portalAccess: PortalAccess = {
+      ...DEFAULT_PORTAL_ACCESS,
+      holdPoints: false,
+      testResults: false,
+    };
+    _ctx = makeCtx({ isModuleEnabled: (m: keyof PortalAccess) => portalAccess[m] });
+    setLots([{ id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' }]);
+    renderWork();
     await screen.findByText('LOT-001');
-    expect(screen.queryByRole('button', { name: /Lot LOT-001/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /View all holds & tests/i })).toBeNull();
   });
 });
