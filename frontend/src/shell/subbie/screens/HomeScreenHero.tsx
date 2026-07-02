@@ -20,6 +20,10 @@ export interface Docket {
 
 export type HeroState =
   | { kind: 'none' }
+  // Docket prerequisites unmet (no approved crew/plant, or no lots) — the hero
+  // carries the setup call-to-action instead of contradicting it with "Start
+  // today's docket"; tap goes to My Company.
+  | { kind: 'setup' }
   | {
       kind: 'draft' | 'pending_approval' | 'approved' | 'queried' | 'rejected';
       docketId: string;
@@ -28,7 +32,7 @@ export type HeroState =
     };
 
 const HERO_COPY: Record<
-  Exclude<HeroState['kind'], 'none'>,
+  Exclude<HeroState['kind'], 'none' | 'setup'>,
   { kicker: string; big: string; small: string }
 > = {
   draft: {
@@ -59,6 +63,26 @@ const HERO_COPY: Record<
 };
 
 export function DocketHero({ state, onPress }: { state: HeroState; onPress: () => void }) {
+  if (state.kind === 'setup') {
+    return (
+      <button
+        type="button"
+        className="shell-hero"
+        onClick={onPress}
+        aria-label="Set up your company"
+      >
+        <span className="shell-hazard-stripe" aria-hidden="true" />
+        <div className="relative font-mono text-[11.5px] font-semibold tracking-[0.14em] text-warning">
+          GET SET UP
+        </div>
+        <div className="shell-hero-big relative mt-2">Set up your company</div>
+        <div className="relative mt-[5px] text-[13.5px] opacity-80">
+          Add your crew & plant in My Company and wait for rate approval — then dockets unlock.
+        </div>
+      </button>
+    );
+  }
+
   if (state.kind === 'none') {
     return (
       <button

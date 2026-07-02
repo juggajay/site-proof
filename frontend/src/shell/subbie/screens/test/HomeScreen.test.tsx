@@ -8,10 +8,12 @@
  * The subbie context is mocked so each test pins company / module flags.
  *
  * Pins:
- *   - hero states: none / draft-with-total / queried
+ *   - hero states: setup (prerequisites unmet → taps to My Company; replaces
+ *     the deleted FinishSetupNotice) / none / draft-with-total / queried
  *   - default home = exactly My Dockets / My Work / My Company hub tiles
- *   - NCRs / Documents live inside My Work when lots is on; module-gated home
- *     fallback tiles only when lots is off
+ *   - NCRs / Documents live behind the lot (SubbieLotHubScreen) when lots is
+ *     on; module-gated home fallback tiles only when lots is off; Holds &
+ *     Tests is removed from the subbie UI entirely
  *   - My Company always present, "Setup needed" chip until prerequisites met
  *   - role chip text (SUBCONTRACTOR)
  *   - bottom bar navigation target (/p/docket)
@@ -45,8 +47,7 @@ vi.mock('../../subbieShellContext', () => ({
   useSubbieShellContext: () => _ctx,
 }));
 
-import { HomeScreen, FinishSetupNotice } from '../HomeScreen';
-import type { DocketPrerequisiteState } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
+import { HomeScreen } from '../HomeScreen';
 
 interface DocketSeed {
   id: string;
@@ -95,13 +96,27 @@ function makeCtx(over: Partial<SubbieShellData> = {}): SubbieShellData {
   };
 }
 
-function setApi({ dockets = [] as DocketSeed[] } = {}) {
+function setApi({ dockets = [] as DocketSeed[], lots = [] as unknown[] } = {}) {
   apiFetchMock.mockReset();
   apiFetchMock.mockImplementation((url: string) => {
     if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets });
-    if (url.startsWith('/api/lots')) return Promise.resolve({ lots: [] });
+    if (url.startsWith('/api/lots')) return Promise.resolve({ lots });
     if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
     return Promise.resolve({});
+  });
+}
+
+// Docket-prerequisites-met fixtures: an approved employee + an assigned lot,
+// so the hero shows docket states instead of the setup call-to-action.
+const READY_LOT = { id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' };
+
+function makeReadyCtx(over: Partial<SubbieShellData> = {}): SubbieShellData {
+  return makeCtx({
+    company: {
+      ...makeCtx().company!,
+      employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
+    },
+    ...over,
   });
 }
 
@@ -123,6 +138,7 @@ function renderHome() {
           <Route path="/p/docket" element={<div>docket editor</div>} />
           <Route path="/p/ncrs" element={<div>ncrs screen</div>} />
           <Route path="/p/docs" element={<LocationProbe />} />
+          <Route path="/p/company" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -147,13 +163,15 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.getByText(/Hargraves Earthmoving — Demo Project/)).toBeInTheDocument();
   });
 
-  it('hero "none" state when there is no docket today', () => {
-    setApi({ dockets: [] });
+  it('hero "none" state when there is no docket today (prerequisites met)', () => {
+    _ctx = makeReadyCtx();
+    setApi({ dockets: [], lots: [READY_LOT] });
     renderHome();
     expect(screen.getByText("Start today's docket")).toBeInTheDocument();
   });
 
   it('hero "draft" state shows running total', async () => {
+    _ctx = makeReadyCtx();
     setApi({
       dockets: [
         {
@@ -164,6 +182,7 @@ describe('subbie shell HomeScreen', () => {
           totalPlantSubmitted: 1170,
         },
       ],
+      lots: [READY_LOT],
     });
     renderHome();
     expect(await screen.findByText('Keep adding hours')).toBeInTheDocument();
@@ -172,6 +191,7 @@ describe('subbie shell HomeScreen', () => {
   });
 
   it('hero "queried" state routes attention to the docket', async () => {
+    _ctx = makeReadyCtx();
     setApi({
       dockets: [
         {
@@ -183,9 +203,26 @@ describe('subbie shell HomeScreen', () => {
           foremanNotes: 'Confirm water cart hours',
         },
       ],
+      lots: [READY_LOT],
     });
     renderHome();
     expect(await screen.findByText('Answer the foreman')).toBeInTheDocument();
+  });
+
+  it('renders the setup hero instead of the docket hero while prerequisites are unmet', () => {
+    // Default ctx: no approved crew/plant → the hero IS the setup CTA, and the
+    // old finish-setup notice is gone (the hero carries it now).
+    renderHome();
+    expect(screen.getByRole('button', { name: 'Set up your company' })).toBeInTheDocument();
+    expect(screen.getByText('GET SET UP')).toBeInTheDocument();
+    expect(screen.queryByText("Start today's docket")).toBeNull();
+    expect(screen.queryByText(/finish setup before filling out a docket/i)).toBeNull();
+  });
+
+  it('setup hero taps through to My Company with the project query', () => {
+    renderHome();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up your company' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/p/company?projectId=proj-1');
   });
 
   it('hides the NCRs tile by default (ncrs module off)', () => {
@@ -213,7 +250,7 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.getByRole('button', { name: /My Dockets/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /My Work/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
-    // NCRs / Documents moved inside My Work; no fallback tiles, no chip links.
+    // NCRs / Documents live behind the lot hub; no fallback tiles, no chip links.
     ['NCRs', 'Documents', 'Inspections', 'Holds and Tests'].forEach((name) => {
       expect(screen.queryByRole('button', { name })).toBeNull();
     });
@@ -289,20 +326,20 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.queryByRole('button', { name: "Add today's hours" })).toBeNull();
   });
 
-  it('hides the Inspections and Holds & Tests top-level tiles when the lots module is on', () => {
+  it('hides the Inspections top-level tile when the lots module is on', () => {
     renderHome();
     expect(screen.queryByRole('button', { name: 'Inspections' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Holds and Tests' })).toBeNull();
   });
 
-  it('keeps Inspections + Holds & Tests + Documents tiles as a fallback when the lots module is off', () => {
+  it('keeps Inspections + Documents tiles as a fallback when the lots module is off (no Holds & Tests — removed)', () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     setApi();
     renderHome();
     expect(screen.getByRole('button', { name: 'Inspections' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Holds and Tests' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Documents' })).toBeInTheDocument();
+    // Holds & Tests is gone from the subbie UI entirely.
+    expect(screen.queryByRole('button', { name: 'Holds and Tests' })).toBeNull();
     expect(screen.queryByRole('button', { name: /My Work/ })).toBeNull();
   });
 
@@ -365,14 +402,9 @@ describe('subbie shell HomeScreen', () => {
     expect(await screen.findByText('0 checks to do')).toBeInTheDocument();
   });
 
-  it('does not show the no-lots warning before assigned lots finish loading', async () => {
+  it('does not flash the setup hero before assigned lots finish loading', async () => {
     const lotsDeferred = createDeferred<{ lots: [] }>();
-    _ctx = makeCtx({
-      company: {
-        ...makeCtx().company!,
-        employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
-      },
-    });
+    _ctx = makeReadyCtx();
     apiFetchMock.mockReset();
     apiFetchMock.mockImplementation((url: string) => {
       if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
@@ -383,45 +415,16 @@ describe('subbie shell HomeScreen', () => {
 
     renderHome();
 
+    // While assigned lots are loading, prerequisites are treated as met — the
+    // docket hero shows, not a transient setup flash.
     expect(screen.getByText("Start today's docket")).toBeInTheDocument();
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
     );
-    expect(screen.queryByText(/no lots assigned yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set up your company' })).toBeNull();
 
+    // No lots assigned → prerequisites unmet → the hero flips to setup.
     lotsDeferred.resolve({ lots: [] });
-    expect(await screen.findByText(/no lots assigned yet/i)).toBeInTheDocument();
-  });
-});
-
-describe('FinishSetupNotice (M78)', () => {
-  const renderNotice = (state: DocketPrerequisiteState) =>
-    render(
-      <MemoryRouter>
-        <FinishSetupNotice state={state} myCompanyLink="/p/company?projectId=p1" />
-      </MemoryRouter>,
-    );
-
-  it('shows the finish-setup notice with a My Company link when there are no approved resources', () => {
-    renderNotice({
-      hasDocketResources: false,
-      needsLotAssignment: false,
-      lotsModuleDisabled: false,
-      prerequisitesMet: false,
-    });
-
-    expect(screen.getByText(/finish setup before filling out a docket/i)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: /my company/i });
-    expect(link.getAttribute('href')).toBe('/p/company?projectId=p1');
-  });
-
-  it('renders nothing once prerequisites are met', () => {
-    const { container } = renderNotice({
-      hasDocketResources: true,
-      needsLotAssignment: false,
-      lotsModuleDisabled: false,
-      prerequisitesMet: true,
-    });
-    expect(container).toBeEmptyDOMElement();
+    expect(await screen.findByRole('button', { name: 'Set up your company' })).toBeInTheDocument();
   });
 });

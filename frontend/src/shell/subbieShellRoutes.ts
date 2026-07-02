@@ -4,8 +4,10 @@ const CLASSIC_TO_SHELL_PATH: Record<string, string> = {
   '/subcontractor-portal/dockets': '/p/dockets',
   '/subcontractor-portal/work': '/p/work',
   '/subcontractor-portal/itps': '/p/itps',
-  '/subcontractor-portal/holdpoints': '/p/quality',
-  '/subcontractor-portal/tests': '/p/quality',
+  // Holds & Tests has no shell surface (removed — subbies never act on hold
+  // points); classic deep links land on the shell home.
+  '/subcontractor-portal/holdpoints': '/p',
+  '/subcontractor-portal/tests': '/p',
   '/subcontractor-portal/ncrs': '/p/ncrs',
   '/subcontractor-portal/documents': '/p/docs',
   '/my-company': '/p/company',
@@ -18,7 +20,6 @@ const SHELL_TO_CLASSIC_PATH: Record<string, string> = {
   '/p/dockets': '/subcontractor-portal/dockets',
   '/p/work': '/subcontractor-portal/work',
   '/p/itps': '/subcontractor-portal/itps',
-  '/p/quality': '/subcontractor-portal/holdpoints',
   '/p/ncrs': '/subcontractor-portal/ncrs',
   '/p/docs': '/subcontractor-portal/documents',
   '/p/company': '/my-company',

@@ -24,7 +24,6 @@ import {
   Building2,
   FileText,
   Flag,
-  FlaskConical,
   FolderOpen,
   MapPin,
   ClipboardCheck,
@@ -40,8 +39,6 @@ import {
   buildNeedsAttentionItems,
   getDocketPrerequisiteState,
   getToday,
-  LOTS_MODULE_DISABLED_DOCKET_MESSAGE,
-  type DocketPrerequisiteState,
   type NeedsAttentionItem,
 } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
@@ -104,47 +101,6 @@ function NoticeCard({ item }: { item: NeedsAttentionItem }) {
   );
 }
 
-// Surfaces the already-computed docket prerequisite state on the home screen so a
-// subbie who can't yet raise a docket sees why (no approved crew/plant, no lots,
-// or the lots module is off) instead of a dead-end (M78). Renders nothing once
-// prerequisites are met.
-export function FinishSetupNotice({
-  state,
-  myCompanyLink,
-}: {
-  state: DocketPrerequisiteState;
-  myCompanyLink: string;
-}) {
-  if (state.prerequisitesMet) {
-    return null;
-  }
-  return (
-    <div className="shell-notice shell-notice-warn" role="status">
-      <AlertTriangle size={19} aria-hidden="true" className="mt-px shrink-0 text-warning" />
-      <div className="min-w-0 space-y-1">
-        <b className="block text-[13.5px]">Finish setup before filling out a docket</b>
-        {!state.hasDocketResources && (
-          <span className="block text-[13.5px]">
-            Add approved employees or plant in{' '}
-            <Link to={myCompanyLink} className="underline">
-              My Company
-            </Link>{' '}
-            and wait for rate approval.
-          </span>
-        )}
-        {state.needsLotAssignment && (
-          <span className="block text-[13.5px]">
-            No lots assigned yet. Contact your project manager to get lot assignments.
-          </span>
-        )}
-        {state.lotsModuleDisabled && (
-          <span className="block text-[13.5px]">{LOTS_MODULE_DISABLED_DOCKET_MESSAGE}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Project switcher (headerExtra) ────────────────────────────────────────────
 
 function ProjectSwitcher({ value, options }: { value: string; options: PortalCompanyOption[] }) {
@@ -199,7 +155,6 @@ export function HomeScreen() {
 
   const lotsEnabled = isModuleEnabled('lots');
   const ncrsEnabled = isModuleEnabled('ncrs');
-  const holdsOrTests = isModuleEnabled('holdPoints') || isModuleEnabled('testResults');
   const documentsEnabled = isModuleEnabled('documents');
   const itpsEnabled = isModuleEnabled('itps');
   const currentProjectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
@@ -286,8 +241,10 @@ export function HomeScreen() {
       : item,
   );
 
-  // Prerequisite state — reused from the shared helper and surfaced as a
-  // "finish setup" notice below when a docket can't yet be raised (M78).
+  // Prerequisite state — reused from the shared helper. When unmet it flips the
+  // hero into its setup state and puts the "Setup needed" chip on My Company
+  // (M78 — no dead-end, no contradiction). Gated on the loaded company
+  // bootstrap so we don't flash setup before the real prerequisite state.
   const approvedEmployees = company?.employees?.filter((e) => e.status === 'approved') ?? [];
   const approvedPlant = company?.plant?.filter((p) => p.status === 'approved') ?? [];
   const docketPrerequisites = getDocketPrerequisiteState({
@@ -296,18 +253,15 @@ export function HomeScreen() {
     lotsModuleEnabled: lotsEnabled,
     assignedLotCount: hasAssignedLotsResponse ? assignedLots.length : 1,
   });
-  // New subbies need My Company most — the tile is always rendered; this only
-  // drives its "Setup needed" chip. Gated on the loaded company bootstrap so we
-  // don't flash the chip before we know the real prerequisite state.
   const companyNeedsSetup = !!company && !docketPrerequisites.prerequisitesMet;
 
-  const hero = computeHero(todaysDocket);
-  const docketPath =
-    hero.kind === 'none'
-      ? `/p/docket${currentProjectQuery}`
-      : `/p/docket/${encodeURIComponent(
-          (hero as { docketId: string }).docketId,
-        )}${currentProjectQuery}`;
+  const hero: HeroState = companyNeedsSetup ? { kind: 'setup' } : computeHero(todaysDocket);
+  const heroPath =
+    hero.kind === 'setup'
+      ? myCompanyLink
+      : hero.kind === 'none'
+        ? `/p/docket${currentProjectQuery}`
+        : `/p/docket/${encodeURIComponent(hero.docketId)}${currentProjectQuery}`;
   const docketsPath = `/p/dockets${currentProjectQuery}`;
 
   const projectLabel = companyName
@@ -328,11 +282,9 @@ export function HomeScreen() {
         ) : undefined
       }
     >
-      {/* Today's docket hero */}
-      <DocketHero state={hero} onPress={() => navigate(docketPath)} />
-
-      {/* Finish-setup notice (shown until a docket can actually be raised) */}
-      <FinishSetupNotice state={docketPrerequisites} myCompanyLink={myCompanyLink} />
+      {/* Today's docket hero — or the setup call-to-action while prerequisites
+          are unmet (the hero carries the setup state; no separate notice). */}
+      <DocketHero state={hero} onPress={() => navigate(heroPath)} />
 
       {/* Needs-attention notices */}
       {needsAttention.slice(0, 3).map((item) => (
@@ -389,19 +341,8 @@ export function HomeScreen() {
         />
       )}
 
-      {/* Fallback Holds & Tests tile — ONLY when lots is off. When lots is on,
-          reach these via the lot hub or the Work screen "view all" link. */}
-      {holdsOrTests && !lotsEnabled && (
-        <HubTile
-          icon={FlaskConical}
-          title="Holds & Tests"
-          onPress={() => navigate(`/p/quality${currentProjectQuery}`)}
-          ariaLabel="Holds and Tests"
-        />
-      )}
-
       {/* Fallback NCRs tile — ONLY when lots is off. When lots is on, NCRs live
-          inside My Work (WorkScreen hub cards below the lot groups). */}
+          behind the lot (SubbieLotHubScreen). */}
       {ncrsEnabled && !lotsEnabled && (
         <HubTile
           icon={Flag}
@@ -412,7 +353,7 @@ export function HomeScreen() {
       )}
 
       {/* Fallback Documents tile — ONLY when lots is off. When lots is on,
-          Documents lives inside My Work. */}
+          Documents lives behind the lot (SubbieLotHubScreen). */}
       {documentsEnabled && !lotsEnabled && (
         <HubTile
           icon={FolderOpen}

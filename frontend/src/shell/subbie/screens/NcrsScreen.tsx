@@ -11,8 +11,14 @@
  *   GET /api/ncrs?projectId=&subcontractorView=true
  * Responsible subcontractors can respond and submit rectification; lot-linked
  * non-responsible NCRs remain read-only.
+ *
+ * Optional ?lotId= scope (from the lot hub): passed through to the endpoint
+ * SERVER-SIDE (GET /api/ncrs accepts lotId → ncrLots.some.lotId) under a
+ * lot-scoped query key, with a "Showing <lot> — View all" banner like the
+ * lot-scoped screens elsewhere in the shell.
  */
 import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Flag, ShieldOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
@@ -48,7 +54,9 @@ interface NCR {
   revisionRequested?: boolean | null;
   qmReviewComments?: string | null;
   verificationNotes?: string | null;
-  ncrLots?: Array<{ lot?: { lotNumber?: string; description?: string | null } }>;
+  // ncrLots rows carry the scalar lotId alongside the included lot (Prisma
+  // include) — used to label the ?lotId= scope banner.
+  ncrLots?: Array<{ lotId?: string; lot?: { lotNumber?: string; description?: string | null } }>;
   ncrEvidence?: Array<{
     id: string;
     evidenceType: string;
@@ -237,6 +245,8 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count: n
 
 export function NcrsScreen() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const lotFilter = searchParams.get('lotId');
   const { projectId, subcontractorCompanyId, projectName, isModuleEnabled } =
     useSubbieShellContext();
   const [respondingNcr, setRespondingNcr] = useState<NCR | null>(null);
@@ -252,16 +262,26 @@ export function NcrsScreen() {
     error,
     refetch: refetchNcrs,
   } = useQuery({
-    queryKey: queryKeys.portalNCRs(user?.id, projectId, subcontractorCompanyId),
+    queryKey: queryKeys.portalNCRs(user?.id, projectId, subcontractorCompanyId, lotFilter),
     queryFn: async () => {
+      // Optional lot scope from the lot hub — filtered SERVER-SIDE (the portal
+      // NCR payload's top level carries no lotId to filter on client-side).
+      const lotParam = lotFilter ? `&lotId=${encodeURIComponent(lotFilter)}` : '';
       const res = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs${projectQuery}${projectQuery ? '&' : '?'}subcontractorView=true`,
+        `/api/ncrs${projectQuery}${projectQuery ? '&' : '?'}subcontractorView=true${lotParam}`,
       );
       return res.ncrs || [];
     },
     enabled: !!user?.id && !!projectId && canViewNCRs,
   });
   const accessRevoked = useModuleAccessRevoked(error);
+
+  // Label the scoped lot from any returned NCR's matching ncrLots row.
+  const scopedLotNumber = lotFilter
+    ? (ncrs.flatMap((n) => n.ncrLots ?? []).find((ncrLot) => ncrLot.lotId === lotFilter)?.lot
+        ?.lotNumber ?? null)
+    : null;
+  const viewAllPath = `/p/ncrs${projectQuery}`;
 
   const sub = <span className="text-muted-foreground">Non-conformances shared with you</span>;
 
@@ -325,6 +345,19 @@ export function NcrsScreen() {
 
   return (
     <ShellScreen variant="inner" title="NCRs" parent={parentPath} sub={sub}>
+      {/* Lot-scope banner — when the lot hub deep-links here with ?lotId= */}
+      {lotFilter && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-[13px]">
+          <span className="text-muted-foreground">
+            Showing{' '}
+            <span className="font-semibold text-foreground">{scopedLotNumber ?? 'this lot'}</span>
+          </span>
+          <Link to={viewAllPath} className="font-semibold text-foreground underline">
+            View all
+          </Link>
+        </div>
+      )}
+
       {accessRevoked ? (
         <ModuleAccessChangedNotice />
       ) : error ? (
