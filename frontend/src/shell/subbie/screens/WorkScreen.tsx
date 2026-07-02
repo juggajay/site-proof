@@ -14,14 +14,16 @@
  * pill and a conservative progress bar (status-derived, never a fabricated
  * ratio — the lots-module payload carries no completion count). Tapping a card
  * opens the per-lot hub (`/p/lots/:lotId`), which surfaces the inspection run and
- * this lot's holds & tests behind the lot. A "view all holds & tests" link keeps
- * un-lotted QA items reachable.
+ * this lot's holds & tests behind the lot. Below the lot groups, standard hub
+ * cards (same style as home) keep project-wide Holds & Tests, NCRs, and
+ * Documents reachable — one uniform card hierarchy, no mixed link/card styles.
  */
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, MapPin } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight, Flag, FlaskConical, FolderOpen, MapPin } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
+import { HubTile } from '../components/HubTile';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
@@ -153,6 +155,8 @@ export function WorkScreen() {
 
   const lotsEnabled = isModuleEnabled('lots');
   const holdsOrTests = isModuleEnabled('holdPoints') || isModuleEnabled('testResults');
+  const ncrsEnabled = isModuleEnabled('ncrs');
+  const documentsEnabled = isModuleEnabled('documents');
   const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
 
   const {
@@ -236,16 +240,34 @@ export function WorkScreen() {
       <LotGroup title="Completed" lots={groups.completed} onPressLot={onPressLot} />
       <LotGroup title="Other" lots={groups.other} onPressLot={onPressLot} />
 
-      {/* Un-lotted QA still reachable — holds/tests not tied to a lot live here. */}
+      {/* Project-wide QA & references below the lot groups — same standard hub
+          cards as home (one uniform hierarchy). Holds & Tests also keeps
+          un-lotted QA items reachable. */}
       {holdsOrTests && (
-        <div className="mt-1 flex flex-wrap gap-2" aria-label="Secondary navigation">
-          <Link
-            to={`/p/quality${projectQuery}`}
-            className="inline-flex min-h-[38px] items-center rounded-xl border border-border bg-card px-3 text-[13px] font-semibold text-muted-foreground"
-          >
-            View all holds &amp; tests
-          </Link>
-        </div>
+        <HubTile
+          icon={FlaskConical}
+          title="Holds & Tests"
+          onPress={() => navigate(`/p/quality${projectQuery}`)}
+          ariaLabel="Holds and Tests"
+        />
+      )}
+
+      {ncrsEnabled && (
+        <HubTile
+          icon={Flag}
+          title="NCRs"
+          onPress={() => navigate(`/p/ncrs${projectQuery}`)}
+          ariaLabel="NCRs"
+        />
+      )}
+
+      {documentsEnabled && (
+        <HubTile
+          icon={FolderOpen}
+          title="Documents"
+          onPress={() => navigate(`/p/docs${projectQuery}`)}
+          ariaLabel="Documents"
+        />
       )}
     </ShellScreen>
   );

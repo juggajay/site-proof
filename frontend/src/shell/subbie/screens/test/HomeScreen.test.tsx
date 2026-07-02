@@ -9,8 +9,10 @@
  *
  * Pins:
  *   - hero states: none / draft-with-total / queried
- *   - NCR tile hidden by default, shown when ncrs module enabled
- *   - Documents / My Company render as standard hub tiles (same gating)
+ *   - default home = exactly My Dockets / My Work / My Company hub tiles
+ *   - NCRs / Documents live inside My Work when lots is on; module-gated home
+ *     fallback tiles only when lots is off
+ *   - My Company always present, "Setup needed" chip until prerequisites met
  *   - role chip text (SUBCONTRACTOR)
  *   - bottom bar navigation target (/p/docket)
  */
@@ -191,29 +193,56 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.queryByRole('button', { name: 'NCRs' })).toBeNull();
   });
 
-  it('shows the NCRs tile when the ncrs module is enabled', () => {
+  it('keeps NCRs off the home when lots is on, even with the ncrs module enabled', () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
-    expect(screen.getByRole('button', { name: 'NCRs' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'NCRs' })).toBeNull();
   });
 
-  it('NCRs tile navigates to /p/ncrs (not the classic page)', () => {
-    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true };
+  it('falls back to a home NCRs tile (→ /p/ncrs) when the lots module is off', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true, lots: false };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: 'NCRs' }));
     expect(screen.getByText('ncrs screen')).toBeInTheDocument();
   });
 
-  it('renders Documents and My Company as standard hub tiles', async () => {
+  it('default home shows exactly the My Dockets / My Work / My Company hub tiles', () => {
+    renderHome();
+    expect(screen.getByRole('button', { name: /My Dockets/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /My Work/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    // NCRs / Documents moved inside My Work; no fallback tiles, no chip links.
+    ['NCRs', 'Documents', 'Inspections', 'Holds and Tests'].forEach((name) => {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    });
+    expect(screen.queryByRole('link', { name: 'Documents' })).toBeNull();
+  });
+
+  it('hides the fallback Documents tile when its module is disabled', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false, documents: false };
+    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
+    renderHome();
+    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+  });
+
+  it('My Company tile shows a "Setup needed" chip while prerequisites are unmet', () => {
+    // Default ctx has no approved crew/plant → prerequisites unmet → chip on,
+    // but the tile itself is still there (new subbies need it most).
+    renderHome();
+    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    expect(screen.getByText('Setup needed')).toBeInTheDocument();
+  });
+
+  it('My Company tile drops the chip once prerequisites are met', async () => {
     _ctx = makeCtx({
       company: {
         ...makeCtx().company!,
         employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
       },
     });
-    // A lot must come back so docket prerequisites are met (My Company gating).
+    // A lot must come back so docket prerequisites are met.
     apiFetchMock.mockReset();
     apiFetchMock.mockImplementation((url: string) => {
       if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
@@ -223,27 +252,20 @@ describe('subbie shell HomeScreen', () => {
       return Promise.resolve({});
     });
     renderHome();
-    expect(screen.getByRole('button', { name: 'Documents' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'My Company' })).toBeInTheDocument();
-    // No small chip links any more — one uniform card style.
-    expect(screen.queryByRole('link', { name: 'Documents' })).toBeNull();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
+    );
+    await waitFor(() => expect(screen.queryByText('Setup needed')).toBeNull());
+    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
   });
 
-  it('hides the Documents tile when its module is disabled', () => {
-    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, documents: false };
-    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
-    renderHome();
-    expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
-  });
-
-  it('hides the My Company tile until docket prerequisites are met', () => {
-    // Default ctx has no approved crew/plant → prerequisites unmet → no tile.
-    renderHome();
-    expect(screen.queryByRole('button', { name: 'My Company' })).toBeNull();
-  });
-
-  it('Documents tile preserves the selected project query', () => {
-    _ctx = makeCtx({ projectId: 'project-2', projectName: 'Second Project' });
+  it('fallback Documents tile preserves the selected project query', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false };
+    _ctx = makeCtx({
+      projectId: 'project-2',
+      projectName: 'Second Project',
+      isModuleEnabled: (m) => portalAccess[m],
+    });
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=project-2');
@@ -273,13 +295,14 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.queryByRole('button', { name: 'Holds and Tests' })).toBeNull();
   });
 
-  it('keeps Inspections + Holds & Tests tiles as a fallback when the lots module is off', () => {
+  it('keeps Inspections + Holds & Tests + Documents tiles as a fallback when the lots module is off', () => {
     const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, lots: false };
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     setApi();
     renderHome();
     expect(screen.getByRole('button', { name: 'Inspections' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Holds and Tests' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Documents' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /My Work/ })).toBeNull();
   });
 

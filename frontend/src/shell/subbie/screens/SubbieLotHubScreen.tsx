@@ -16,8 +16,8 @@
  *
  * NCRs tile is deliberately omitted: the portal NCR payload carries lot NUMBER
  * but not lot id, so a lotId-scoped filter can't match client-side (see the
- * Home screen, which keeps the NCRs tile top-level when the module is on). The
- * "Docs on this lot" tile from the plan is deferred for the same class of
+ * WorkScreen, which keeps a project-wide NCRs hub card below the lot groups).
+ * The "Docs on this lot" tile from the plan is deferred for the same class of
  * reason: portal documents aren't lot-scoped in the payload, so they can't be
  * filtered down to this lot client-side.
  */
@@ -26,6 +26,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, ClipboardCheck, Eye, FlaskConical, Inbox } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
+import { HubTile } from '../components/HubTile';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
@@ -64,46 +65,6 @@ const ITP_STATUS_LABEL: Record<string, string> = {
   completed: 'Complete',
 };
 
-// ── Plain hub tile (chevron row) — matches the foreman/Home HubTile ───────────
-
-function HubTile({
-  icon: Icon,
-  title,
-  description,
-  chip,
-  onPress,
-  ariaLabel,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  chip?: string;
-  onPress: () => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button type="button" className="shell-hub" onClick={onPress} aria-label={ariaLabel}>
-      <span className="shell-hub-ico" aria-hidden="true">
-        <Icon size={22} strokeWidth={1.8} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="shell-tile-title block">{title}</span>
-        <span className="mt-[1px] block text-[13px] text-muted-foreground">{description}</span>
-      </span>
-      {chip !== undefined && (
-        <span className="shell-count-chip" aria-hidden="true">
-          {chip}
-        </span>
-      )}
-      <ChevronRight
-        size={18}
-        className="flex-shrink-0 text-muted-foreground/50"
-        aria-hidden="true"
-      />
-    </button>
-  );
-}
-
 // ── Inspection tile — richer, carries the canCompleteITP permission signal ────
 
 function InspectionTile({
@@ -133,9 +94,8 @@ function InspectionTile({
       </span>
       <span className="min-w-0 flex-1">
         <span className="shell-tile-title block">Inspection</span>
-        <span className="mt-[1px] block truncate text-[13px] text-muted-foreground">
-          {templateName}
-        </span>
+        {/* Uniform card anatomy: no text description line — the template name
+            stays in the aria-label; status + permission are pills. */}
         <span className="mt-[8px] flex flex-wrap gap-[7px]">
           <span className={status === 'completed' ? 'shell-pill shell-pill-good' : 'shell-pill'}>
             {statusLabel.toUpperCase()}
@@ -268,7 +228,6 @@ export function SubbieLotHubScreen() {
         <HubTile
           icon={FlaskConical}
           title="Holds & Tests"
-          description="Hold points & test results on this lot"
           chip={holdsEnabled && holdCount > 0 ? `${holdCount}` : undefined}
           onPress={() => navigate(qualityPath)}
           ariaLabel={`Holds and Tests on this lot${

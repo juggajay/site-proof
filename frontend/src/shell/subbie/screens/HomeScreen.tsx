@@ -22,7 +22,6 @@
 import {
   AlertTriangle,
   Building2,
-  ChevronRight,
   FileText,
   Flag,
   FlaskConical,
@@ -33,10 +32,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShellScreen } from '@/shell/components/ShellScreen';
+import { HubTile } from '../components/HubTile';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
-import { cn } from '@/lib/utils';
 import {
   buildNeedsAttentionItems,
   getDocketPrerequisiteState,
@@ -143,51 +142,6 @@ export function FinishSetupNotice({
         )}
       </div>
     </div>
-  );
-}
-
-// ── Hub tile ──────────────────────────────────────────────────────────────────
-
-function HubTile({
-  icon: Icon,
-  title,
-  description,
-  chip,
-  chipOk,
-  onPress,
-  ariaLabel,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  chip?: string;
-  chipOk?: boolean;
-  onPress: () => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button type="button" className="shell-hub" onClick={onPress} aria-label={ariaLabel}>
-      <span className="shell-hub-ico" aria-hidden="true">
-        <Icon size={22} strokeWidth={1.8} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="shell-tile-title block">{title}</span>
-        <span className="mt-[1px] block text-[13px] text-muted-foreground">{description}</span>
-      </span>
-      {chip !== undefined && (
-        <span
-          className={cn('shell-count-chip', chipOk && 'shell-count-chip-ok')}
-          aria-hidden="true"
-        >
-          {chip}
-        </span>
-      )}
-      <ChevronRight
-        size={18}
-        className="flex-shrink-0 text-muted-foreground/50"
-        aria-hidden="true"
-      />
-    </button>
   );
 }
 
@@ -342,7 +296,10 @@ export function HomeScreen() {
     lotsModuleEnabled: lotsEnabled,
     assignedLotCount: hasAssignedLotsResponse ? assignedLots.length : 1,
   });
-  const showCompanySecondaryLink = docketPrerequisites.prerequisitesMet;
+  // New subbies need My Company most — the tile is always rendered; this only
+  // drives its "Setup needed" chip. Gated on the loaded company bootstrap so we
+  // don't flash the chip before we know the real prerequisite state.
+  const companyNeedsSetup = !!company && !docketPrerequisites.prerequisitesMet;
 
   const hero = computeHero(todaysDocket);
   const docketPath =
@@ -386,7 +343,6 @@ export function HomeScreen() {
       <HubTile
         icon={FileText}
         title="My Dockets"
-        description="Drafts, approvals & payment trail"
         chip={queriedCount > 0 ? `${queriedCount} queried` : undefined}
         onPress={() => navigate(docketsPath)}
         ariaLabel={`My Dockets${queriedCount > 0 ? ` — ${queriedCount} queried` : ''}`}
@@ -401,7 +357,6 @@ export function HomeScreen() {
         <HubTile
           icon={MapPin}
           title="My Work"
-          description="Lots assigned to your crew"
           chip={
             itpsEnabled
               ? hasItpResponse
@@ -429,7 +384,6 @@ export function HomeScreen() {
         <HubTile
           icon={ClipboardCheck}
           title="Inspections"
-          description="ITP checks on your lots"
           onPress={() => navigate(`/p/itps${currentProjectQuery}`)}
           ariaLabel="Inspections"
         />
@@ -441,46 +395,42 @@ export function HomeScreen() {
         <HubTile
           icon={FlaskConical}
           title="Holds & Tests"
-          description="Hold points, test results"
           onPress={() => navigate(`/p/quality${currentProjectQuery}`)}
           ariaLabel="Holds and Tests"
         />
       )}
 
-      {/* NCRs — stays top-level when the module is on (defaults OFF). The portal
-          NCR payload carries lot NUMBER but not lot id, so NCRs can't be lot-scoped
-          client-side into the lot hub; keeping this tile keeps them reachable. */}
-      {ncrsEnabled && (
+      {/* Fallback NCRs tile — ONLY when lots is off. When lots is on, NCRs live
+          inside My Work (WorkScreen hub cards below the lot groups). */}
+      {ncrsEnabled && !lotsEnabled && (
         <HubTile
           icon={Flag}
           title="NCRs"
-          description="Non-conformances on your lots"
           onPress={() => navigate(`/p/ncrs${currentProjectQuery}`)}
           ariaLabel="NCRs"
         />
       )}
 
-      {/* Documents */}
-      {documentsEnabled && (
+      {/* Fallback Documents tile — ONLY when lots is off. When lots is on,
+          Documents lives inside My Work. */}
+      {documentsEnabled && !lotsEnabled && (
         <HubTile
           icon={FolderOpen}
           title="Documents"
-          description="Specs & files shared with you"
           onPress={() => navigate(`/p/docs${currentProjectQuery}`)}
           ariaLabel="Documents"
         />
       )}
 
-      {/* My Company */}
-      {showCompanySecondaryLink && (
-        <HubTile
-          icon={Building2}
-          title="My Company"
-          description="Crew & plant roster"
-          onPress={() => navigate(myCompanyLink)}
-          ariaLabel="My Company"
-        />
-      )}
+      {/* My Company — always present (new subbies need it most); chip flags
+          outstanding setup until docket prerequisites are met. */}
+      <HubTile
+        icon={Building2}
+        title="My Company"
+        chip={companyNeedsSetup ? 'Setup needed' : undefined}
+        onPress={() => navigate(myCompanyLink)}
+        ariaLabel="My Company"
+      />
     </ShellScreen>
   );
 }

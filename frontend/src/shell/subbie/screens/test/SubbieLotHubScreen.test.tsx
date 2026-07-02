@@ -6,7 +6,8 @@
  *
  * Pins:
  *   - lot number title from the shared portalAssignedWork cache
- *   - Inspection tile: template name + canCompleteITP permission signal both ways
+ *   - Inspection tile: template name in the aria-label (no visible description
+ *     line — uniform card anatomy) + canCompleteITP permission signal both ways
  *   - continue-inspection primary visibility (actionable vs completed vs view-only)
  *   - Holds & Tests tile: per-lot hold count chip + lotId-scoped navigation
  *   - per-module tile gating (itps off / holds+tests off)
@@ -113,10 +114,15 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
     expect(await screen.findByRole('heading', { name: 'LOT-014' })).toBeInTheDocument();
   });
 
-  it('renders the Inspection tile with template name and "YOU CAN COMPLETE" when the crew can complete', async () => {
+  it('renders the Inspection tile with the template name in its aria-label and "YOU CAN COMPLETE" when the crew can complete', async () => {
     setApi({ itpLots: [completableItp] });
     renderHub();
-    expect(await screen.findByText('Concrete Pour ITP')).toBeInTheDocument();
+    // Uniform card anatomy: no visible description line — the template name
+    // lives in the accessible name only.
+    expect(
+      await screen.findByRole('button', { name: /Inspection — Concrete Pour ITP/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Concrete Pour ITP')).toBeNull();
     expect(screen.getByText('YOU CAN COMPLETE')).toBeInTheDocument();
   });
 
@@ -146,7 +152,7 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
       ],
     });
     renderHub();
-    await screen.findByText('Concrete Pour ITP');
+    await screen.findByRole('button', { name: /Inspection — Concrete Pour ITP/ });
     expect(screen.queryByRole('button', { name: 'Continue inspection' })).toBeNull();
   });
 
@@ -155,7 +161,7 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
       itpLots: [{ ...completableItp, subcontractorAssignments: [{ canCompleteITP: false }] }],
     });
     renderHub();
-    await screen.findByText('Concrete Pour ITP');
+    await screen.findByRole('button', { name: /Inspection — Concrete Pour ITP/ });
     expect(screen.queryByRole('button', { name: 'Continue inspection' })).toBeNull();
   });
 
