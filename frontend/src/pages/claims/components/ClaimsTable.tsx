@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Plus,
   Trash2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { Claim } from '../types';
 import {
@@ -38,6 +39,7 @@ interface ClaimsTableProps {
   onRecordPayment: (claimId: string) => void;
   onCompletenessCheck: (claimId: string) => void;
   onEvidencePackage: (claimId: string) => void;
+  onExportXero?: (claim: Claim) => void;
 }
 
 function getStatusBadge(status: string) {
@@ -180,6 +182,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
   onRecordPayment,
   onCompletenessCheck,
   onEvidencePackage,
+  onExportXero,
 }: ClaimsTableProps) {
   if (claims.length === 0) {
     return (
@@ -357,6 +360,16 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                       >
                         <Download className="h-4 w-4" />
                       </button>
+                      {onExportXero && (
+                        <button
+                          onClick={() => onExportXero(claim)}
+                          className="p-2 hover:bg-muted rounded-lg"
+                          aria-label="Export to Xero"
+                          title="Export to Xero (draft invoice CSV)"
+                        >
+                          <FileSpreadsheet className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

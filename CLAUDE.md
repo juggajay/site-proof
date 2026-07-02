@@ -380,6 +380,41 @@ only when a feature or bug fix already touches that area.
 - For complex problems, throw more compute at it via subagents
 - One task per subagent for focused execution
 
+#### Model routing (defaults, not limits)
+
+Rankings (higher = better). Cost = what we actually pay, not list price.
+Intelligence = how hard a problem it can take unsupervised. Taste = UI/UX,
+code quality, API design, copy.
+
+| model | cost | intelligence | taste |
+|-------|------|--------------|-------|
+| gpt-5.5 | 9 | 8 | 5 |
+| sonnet-5 | 5 | 5 | 7 |
+| opus-4.8 | 4 | 7 | 8 |
+| fable-5 | 2 | 9 | 9 |
+
+How to apply:
+- **These are defaults, not limits.** Standing permission to override: if a
+  cheaper model's output doesn't meet the bar, rerun with a smarter one without
+  asking. Judge the output, not the price tag — escalating costs less than
+  shipping mediocre work.
+- **Cost is a tie-breaker only.** When axes conflict for anything that ships:
+  intelligence > taste > cost.
+- **Bulk / mechanical work** (clear-spec implementation, data analysis,
+  migrations): gpt-5.5 — effectively free.
+- **Anything user-facing** (UI, copy, API design) needs taste ≥ 7.
+- **Reviews of plans / implementations:** fable-5 or opus-4.8, optionally gpt-5.5
+  as an extra independent perspective.
+- **Never use Haiku.**
+- **Mechanics:** gpt-5.5 is reachable only through the Codex CLI (`codex exec` /
+  `codex review`; here via the `gstack-codex` skill / `codex exec -s read-only`
+  with a self-contained prompt). Claude models (sonnet-5, opus-4.8, fable-5) run
+  via the Agent/Workflow `model` parameter.
+- To use gpt-5.5 inside a workflow/subagent (the `model` param only takes Claude
+  models): spawn a thin Claude wrapper (`model: 'sonnet', effort: 'low'`) whose
+  prompt tells it to write a self-contained codex prompt, run `codex exec` via
+  Bash, and return the output.
+
 ### 3. Self-Improvement Loop
 - After ANY correction from the user: update `tasks/lessons.md` with the pattern
 - Write rules for yourself that prevent the same mistake
