@@ -2248,6 +2248,57 @@ describe('Lots API', () => {
       }
     });
 
+    it('should reject budget edits on conformed lots that are partially claimed', async () => {
+      const partiallyClaimedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-PARTIAL-CLAIM-BUDGET-${Date.now()}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 100000,
+        },
+      });
+      const claim = await prisma.progressClaim.create({
+        data: {
+          projectId,
+          claimNumber: 900000 + (Date.now() % 100000),
+          claimPeriodStart: new Date('2025-04-01'),
+          claimPeriodEnd: new Date('2025-04-30'),
+          status: 'submitted',
+          preparedById: userId,
+          preparedAt: new Date(),
+          totalClaimedAmount: 50000,
+          claimedLots: {
+            create: {
+              lotId: partiallyClaimedLot.id,
+              amountClaimed: 50000,
+              percentageComplete: 50,
+            },
+          },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${partiallyClaimedLot.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ budgetAmount: 200000 });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('progress claim');
+
+        const unchangedLot = await prisma.lot.findUnique({
+          where: { id: partiallyClaimedLot.id },
+          select: { budgetAmount: true },
+        });
+        expect(Number(unchangedLot?.budgetAmount)).toBe(100000);
+      } finally {
+        await prisma.progressClaim.delete({ where: { id: claim.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: partiallyClaimedLot.id } }).catch(() => {});
+      }
+    });
+
     it('should reject non-budget edits to conformed lots', async () => {
       const conformedLot = await prisma.lot.create({
         data: {

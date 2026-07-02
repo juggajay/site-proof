@@ -1486,6 +1486,38 @@ describe('Progress Claims API', () => {
       expect(unchangedClaim?.disputeNotes).toBeNull();
     });
 
+    it('should reject re-certifying below the amount already paid through the generic update route', async () => {
+      const claim = await createDraftWorkflowClaim(1000);
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'disputed',
+          submittedAt: new Date('2025-05-01T00:00:00.000Z'),
+          certifiedAmount: 1000,
+          certifiedAt: new Date('2025-05-02T00:00:00.000Z'),
+          paidAmount: 500,
+          disputedAt: new Date('2025-05-03T00:00:00.000Z'),
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'certified',
+          certifiedAmount: 100,
+          disputeNotes: 'Re-certified lower after dispute review',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/already paid/i);
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('disputed');
+      expect(Number(unchangedClaim?.paidAmount)).toBe(500);
+      expect(Number(unchangedClaim?.certifiedAmount)).toBe(1000);
+    });
+
     it('should round generic certification amounts to cents before validation and storage', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
 
