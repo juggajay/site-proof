@@ -504,6 +504,47 @@ export function ClaimsPage() {
     [projectId],
   );
 
+  const handleExportXero = useCallback(
+    async (claim: Claim) => {
+      if (!projectId) return;
+      // Account code is a per-Xero-org constant (their income/Sales account),
+      // not per-claim. Default to Xero's standard Sales code; a localStorage
+      // override is the v0 escape hatch. ponytail: no dialog in v0 — the invoice
+      // imports as an editable Xero draft, and the readiness guardrail forbids
+      // blocking prompts. Moves to a per-company setting with the live Xero
+      // integration (see docs/plans/2026-07-02-xero-export-v0-design.md).
+      const accountCode = (localStorage.getItem('xeroExport.accountCode') ?? '').trim() || '200';
+      try {
+        const { filename, rows } = await apiFetch<{
+          filename: string;
+          rows: (string | number)[][];
+        }>(
+          `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(
+            claim.id,
+          )}/xero-export?accountCode=${encodeURIComponent(accountCode)}`,
+        );
+        downloadCsv(filename, rows);
+        toast({
+          title: 'Xero invoice CSV downloaded',
+          description:
+            'Import it in Xero (Business > Invoices > Import). It lands as a draft invoice for review.',
+          variant: 'success',
+        });
+      } catch (error) {
+        logError('Error exporting claim to Xero:', error);
+        toast({
+          title: 'Xero export failed',
+          description: extractErrorMessage(
+            error,
+            'Failed to export this claim to Xero. Please try again.',
+          ),
+          variant: 'error',
+        });
+      }
+    },
+    [projectId],
+  );
+
   const handleGenerateEvidencePackage = useCallback(
     async (claimId: string, options: ClaimPackageOptions) => {
       if (!projectId || evidenceRef.current === claimId) return;
@@ -602,6 +643,7 @@ export function ClaimsPage() {
           setEvidencePackageError(null);
           setShowPackageModal(claimId);
         }}
+        onExportXero={handleExportXero}
       />
 
       {showCreateModal && projectId && (

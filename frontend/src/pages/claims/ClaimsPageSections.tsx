@@ -119,6 +119,7 @@ interface ClaimsMainContentProps {
   onRecordPayment: (claimId: string) => void;
   onCompletenessCheck: (claimId: string) => void;
   onEvidencePackage: (claimId: string) => void;
+  onExportXero?: (claim: Claim) => void;
 }
 
 export function ClaimsMainContent({
@@ -140,6 +141,7 @@ export function ClaimsMainContent({
   onRecordPayment,
   onCompletenessCheck,
   onEvidencePackage,
+  onExportXero,
 }: ClaimsMainContentProps) {
   if (loadError) return null;
 
@@ -174,6 +176,7 @@ export function ClaimsMainContent({
         onRecordPayment={onRecordPayment}
         onCompletenessCheck={onCompletenessCheck}
         onEvidencePackage={onEvidencePackage}
+        onExportXero={onExportXero}
       />
     </>
   );
