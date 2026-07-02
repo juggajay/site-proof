@@ -179,7 +179,7 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
           claimedLots: {
             include: {
               lot: {
-                select: { id: true, lotNumber: true, activityType: true, budgetAmount: true },
+                select: { lotNumber: true, activityType: true },
               },
             },
           },
