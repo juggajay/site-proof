@@ -198,6 +198,33 @@ export function buildClaimCertificationSettlement(
 }
 
 /**
+ * Reject a certification whose certified amount is below what has already
+ * been paid on the claim - that would leave paidAmount > certifiedAmount
+ * (impossible negative outstanding). previousPaidAmount is the claim's
+ * current paidAmount (Prisma Decimal | number | null | undefined).
+ */
+export function assertCertifiedAmountCoversPaid(
+  roundedCertifiedAmount: number,
+  previousPaidAmount: unknown,
+): void {
+  const paid = Number(previousPaidAmount ?? 0);
+  if (!Number.isFinite(paid) || paid <= 0) {
+    return;
+  }
+  if (roundedCertifiedAmount + CLAIM_AMOUNT_EPSILON < paid) {
+    throw AppError.badRequest(
+      `Certified amount cannot be less than the amount already paid on this claim ` +
+        `(paid ${paid.toFixed(2)}, certified ${roundedCertifiedAmount.toFixed(2)}).`,
+      {
+        code: 'CERTIFIED_BELOW_PAID',
+        certifiedAmount: roundedCertifiedAmount,
+        paidAmount: paid,
+      },
+    );
+  }
+}
+
+/**
  * Sum a lot's already-claimed percentage from its existing claim line items.
  * Deleting/voiding a draft claim cascades its ClaimedLot rows, so any rows that
  * remain are the authoritative record of what has already been claimed.
