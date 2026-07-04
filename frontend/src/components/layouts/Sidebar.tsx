@@ -63,6 +63,11 @@ const FOREMAN_MENU_ITEMS = [
 
 const VIEWER_PROJECT_MENU_ITEMS = ['Lots', 'Reports'];
 
+// Office roles (owner/admin/PM/QM = ROLE_GROUPS.QUALITY) get a grouped project
+// menu with these section labels, in this order. Field roles keep the flat list.
+const OFFICE_SECTION_ORDER = ['Quality', 'Commercial', 'Records', 'Admin'] as const;
+type NavSection = (typeof OFFICE_SECTION_ORDER)[number];
+
 interface NavigationItem {
   name: string;
   href: string;
@@ -75,6 +80,7 @@ interface NavigationItem {
   requiresProjectSettingsAccess?: boolean;
   allowedRoles?: readonly string[];
   excludeRoles?: readonly string[];
+  section?: NavSection;
 }
 
 const navigation: NavigationItem[] = [
@@ -102,23 +108,42 @@ const navigation: NavigationItem[] = [
 ];
 
 const projectNavigation: NavigationItem[] = [
-  { name: 'Lots', href: 'lots', icon: MapPin },
-  { name: 'ITPs', href: 'itp', icon: ClipboardCheck },
-  { name: 'Hold Points', href: 'hold-points', icon: AlertTriangle },
-  { name: 'Test Results', href: 'tests', icon: TestTube },
-  { name: 'NCRs', href: 'ncr', icon: FileWarning },
+  { name: 'Lots', href: 'lots', icon: MapPin, section: 'Quality' },
+  { name: 'ITPs', href: 'itp', icon: ClipboardCheck, section: 'Quality' },
+  { name: 'Hold Points', href: 'hold-points', icon: AlertTriangle, section: 'Quality' },
+  { name: 'Test Results', href: 'tests', icon: TestTube, section: 'Quality' },
+  { name: 'NCRs', href: 'ncr', icon: FileWarning, section: 'Quality' },
   { name: 'Daily Diary', href: 'diary', icon: Calendar },
-  { name: 'Docket Approvals', href: 'dockets', icon: FileCheck },
-  { name: 'Progress Claims', href: 'claims', icon: DollarSign, requiresCommercialAccess: true },
-  { name: 'Costs', href: 'costs', icon: DollarSign, requiresCommercialAccess: true },
-  { name: 'Documents', href: 'documents', icon: FileText },
-  { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
-  { name: 'Reports', href: 'reports', icon: BarChart3 },
+  {
+    name: 'Progress Claims',
+    href: 'claims',
+    icon: DollarSign,
+    requiresCommercialAccess: true,
+    section: 'Commercial',
+  },
+  {
+    name: 'Costs',
+    href: 'costs',
+    icon: DollarSign,
+    requiresCommercialAccess: true,
+    section: 'Commercial',
+  },
+  { name: 'Docket Approvals', href: 'dockets', icon: FileCheck, section: 'Commercial' },
+  { name: 'Documents', href: 'documents', icon: FileText, section: 'Records' },
+  {
+    name: 'Subcontractors',
+    href: 'subcontractors',
+    icon: Users,
+    requiresManagement: true,
+    section: 'Records',
+  },
+  { name: 'Reports', href: 'reports', icon: BarChart3, section: 'Records' },
   {
     name: 'Project Settings',
     href: 'settings',
     icon: Settings,
     requiresProjectSettingsAccess: true,
+    section: 'Admin',
   },
 ];
 
@@ -215,6 +240,9 @@ export function Sidebar() {
   const isForeman = projectScopedRole === 'foreman';
   const isSubcontractor = isSubcontractorRole(userRole);
   const isViewer = isViewerRole(projectScopedRole);
+  // Office roles = owner/admin/PM/QM (ROLE_GROUPS.QUALITY). They get a grouped,
+  // pruned project menu; field roles keep the current flat list.
+  const isOfficeRole = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.QUALITY);
 
   // Helper function to check if a menu item should be visible
   const shouldShowItem = (item: NavigationItem): boolean => {
@@ -279,6 +307,21 @@ export function Sidebar() {
     isProjectModuleNavigationItemEnabled(item.name, enabledModules),
   );
 
+  // Owner decision 2026-07-05: office roles drop Daily Diary from nav (diary
+  // records still readable via Reports → Diary; this is nav-only).
+  if (isOfficeRole) {
+    filteredProjectNavigation = filteredProjectNavigation.filter(
+      (item) => item.name !== 'Daily Diary',
+    );
+  }
+  // Docket amounts are for owner/admin/PM only; QM and site_engineer lose the
+  // Docket Approvals menu item (route gates unchanged).
+  if (projectScopedRole === 'quality_manager' || projectScopedRole === 'site_engineer') {
+    filteredProjectNavigation = filteredProjectNavigation.filter(
+      (item) => item.name !== 'Docket Approvals',
+    );
+  }
+
   // Filter settings navigation
   const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem);
 
@@ -286,6 +329,22 @@ export function Sidebar() {
   const filteredSubcontractorNavigation = hasPortalIdentity
     ? subcontractorNavigation.filter(shouldShowItem)
     : [];
+
+  const renderProjectNavLink = (item: NavigationItem) => (
+    <NavLink
+      key={item.name}
+      to={`/projects/${projectId}/${item.href}`}
+      title={isCollapsed ? item.name : undefined}
+      className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
+    >
+      {({ isActive }) => (
+        <>
+          <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+          {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
+        </>
+      )}
+    </NavLink>
+  );
 
   return (
     <aside
@@ -365,29 +424,30 @@ export function Sidebar() {
         {projectId && !isSubcontractor && !hasPortalIdentity && (
           <>
             <div className="my-4 border-t pt-4">
-              {!isCollapsed && (
+              {!isCollapsed && !isOfficeRole && (
                 <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
                   Project
                 </p>
               )}
             </div>
-            {filteredProjectNavigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={`/projects/${projectId}/${item.href}`}
-                title={isCollapsed ? item.name : undefined}
-                className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon className={navIconClass(isActive)} aria-hidden="true" />
-                    {!isCollapsed && (
-                      <span className="transition-opacity duration-200">{item.name}</span>
-                    )}
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {isOfficeRole
+              ? OFFICE_SECTION_ORDER.map((section) => {
+                  const items = filteredProjectNavigation.filter(
+                    (item) => item.section === section,
+                  );
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={section} className="mt-4 first:mt-0 space-y-1">
+                      {!isCollapsed && (
+                        <p className="mb-1 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                          {section}
+                        </p>
+                      )}
+                      {items.map(renderProjectNavLink)}
+                    </div>
+                  );
+                })
+              : filteredProjectNavigation.map(renderProjectNavLink)}
           </>
         )}
       </nav>

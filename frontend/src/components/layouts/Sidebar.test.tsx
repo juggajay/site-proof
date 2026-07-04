@@ -205,6 +205,94 @@ describe('Sidebar project navigation', () => {
     expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
   });
 
+  it('groups the office menu into sections and drops Daily Diary for owners', async () => {
+    mockProjectDetail('owner');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'owner-1',
+        email: 'owner@example.com',
+        role: 'owner',
+        roleInCompany: 'owner',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByText('Quality')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Commercial')).toBeInTheDocument();
+    expect(screen.getByText('Records')).toBeInTheDocument();
+    expect(screen.getByText('Admin')).toBeInTheDocument();
+    // Owner is a docket-amount viewer, so Docket Approvals stays.
+    expect(screen.getByRole('link', { name: /Docket Approvals/i })).toBeInTheDocument();
+    // Daily Diary is nav-removed for office roles.
+    expect(screen.queryByRole('link', { name: /Daily Diary/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the flat menu with Daily Diary and no section labels for foremen', async () => {
+    mockProjectDetail('foreman');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'foreman-diary-1',
+        email: 'foreman-diary@example.com',
+        role: 'foreman',
+        roleInCompany: 'foreman',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Daily Diary/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Quality')).not.toBeInTheDocument();
+    expect(screen.queryByText('Commercial')).not.toBeInTheDocument();
+  });
+
+  it('hides Docket Approvals from quality managers but keeps it for project managers', async () => {
+    mockProjectDetail('quality_manager');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'qm-dockets-1',
+        email: 'qm-dockets@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'quality_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    const { unmount } = renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByText('Quality')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /Docket Approvals/i })).not.toBeInTheDocument();
+
+    unmount();
+
+    mockProjectDetail('project_manager');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'pm-dockets-1',
+        email: 'pm-dockets@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'project_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Docket Approvals/i })).toBeInTheDocument();
+    });
+  });
+
   it('shows audit log but not company settings for project-scoped quality managers', async () => {
     mockProjectDetail('quality_manager');
     useAuthMock.mockReturnValue({

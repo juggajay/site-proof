@@ -60,6 +60,11 @@ const FOREMAN_MENU_ITEMS = [
 
 const VIEWER_PROJECT_MENU_ITEMS = ['Lots', 'Reports'];
 
+// Office roles (owner/admin/PM/QM = ROLE_GROUPS.QUALITY) get a grouped project
+// menu with these section labels, in this order. Field roles keep the flat list.
+const OFFICE_SECTION_ORDER = ['Quality', 'Commercial', 'Records', 'Admin'] as const;
+type NavSection = (typeof OFFICE_SECTION_ORDER)[number];
+
 // Subcontractor-specific navigation
 const subcontractorNavigation = [
   { name: 'Docket', href: '/subcontractor-portal/docket/new', icon: ClipboardList },
@@ -79,6 +84,7 @@ interface NavigationItem {
   requiresProjectSettingsAccess?: boolean;
   allowedRoles?: readonly string[];
   excludeRoles?: readonly string[];
+  section?: NavSection;
 }
 
 const navigation: NavigationItem[] = [
@@ -99,23 +105,42 @@ const navigation: NavigationItem[] = [
 ];
 
 const projectNavigation: NavigationItem[] = [
-  { name: 'Lots', href: 'lots', icon: MapPin },
-  { name: 'ITPs', href: 'itp', icon: ClipboardCheck },
-  { name: 'Hold Points', href: 'hold-points', icon: AlertTriangle },
-  { name: 'Test Results', href: 'tests', icon: TestTube },
-  { name: 'NCRs', href: 'ncr', icon: FileWarning },
+  { name: 'Lots', href: 'lots', icon: MapPin, section: 'Quality' },
+  { name: 'ITPs', href: 'itp', icon: ClipboardCheck, section: 'Quality' },
+  { name: 'Hold Points', href: 'hold-points', icon: AlertTriangle, section: 'Quality' },
+  { name: 'Test Results', href: 'tests', icon: TestTube, section: 'Quality' },
+  { name: 'NCRs', href: 'ncr', icon: FileWarning, section: 'Quality' },
   { name: 'Daily Diary', href: 'diary', icon: Calendar },
-  { name: 'Docket Approvals', href: 'dockets', icon: FileCheck },
-  { name: 'Progress Claims', href: 'claims', icon: DollarSign, requiresCommercialAccess: true },
-  { name: 'Costs', href: 'costs', icon: DollarSign, requiresCommercialAccess: true },
-  { name: 'Documents', href: 'documents', icon: FileText },
-  { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
-  { name: 'Reports', href: 'reports', icon: BarChart3 },
+  {
+    name: 'Progress Claims',
+    href: 'claims',
+    icon: DollarSign,
+    requiresCommercialAccess: true,
+    section: 'Commercial',
+  },
+  {
+    name: 'Costs',
+    href: 'costs',
+    icon: DollarSign,
+    requiresCommercialAccess: true,
+    section: 'Commercial',
+  },
+  { name: 'Docket Approvals', href: 'dockets', icon: FileCheck, section: 'Commercial' },
+  { name: 'Documents', href: 'documents', icon: FileText, section: 'Records' },
+  {
+    name: 'Subcontractors',
+    href: 'subcontractors',
+    icon: Users,
+    requiresManagement: true,
+    section: 'Records',
+  },
+  { name: 'Reports', href: 'reports', icon: BarChart3, section: 'Records' },
   {
     name: 'Project Settings',
     href: 'settings',
     icon: Settings,
     requiresProjectSettingsAccess: true,
+    section: 'Admin',
   },
 ];
 
@@ -183,6 +208,8 @@ export function MobileNav() {
   const isForeman = projectScopedRole === 'foreman';
   const isSubcontractor = isSubcontractorRole(userRole) || hasPortalIdentity;
   const isViewer = isViewerRole(projectScopedRole);
+  // Office roles = owner/admin/PM/QM (ROLE_GROUPS.QUALITY): grouped, pruned menu.
+  const isOfficeRole = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.QUALITY);
 
   const shouldShowItem = (item: NavigationItem): boolean => {
     if (item.requiresCommercialAccess && !hasCommercial) return false;
@@ -220,11 +247,44 @@ export function MobileNav() {
   filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
     isProjectModuleNavigationItemEnabled(item.name, enabledModules),
   );
+  // Owner decision 2026-07-05: office roles drop Daily Diary from nav (records
+  // still readable via Reports → Diary; nav-only).
+  if (isOfficeRole) {
+    filteredProjectNavigation = filteredProjectNavigation.filter(
+      (item) => item.name !== 'Daily Diary',
+    );
+  }
+  // Docket amounts are for owner/admin/PM only; QM and site_engineer lose the
+  // Docket Approvals menu item (route gates unchanged).
+  if (projectScopedRole === 'quality_manager' || projectScopedRole === 'site_engineer') {
+    filteredProjectNavigation = filteredProjectNavigation.filter(
+      (item) => item.name !== 'Docket Approvals',
+    );
+  }
 
   // Foreman uses research-backed 5-tab nav: Capture, Today, Approve, Diary, Lots
   if (isForeman) {
     return <ForemanBottomNavV2 onCapturePress={() => setIsCameraOpen(true)} />;
   }
+
+  const renderProjectNavLink = (item: NavigationItem) => (
+    <NavLink
+      key={item.name}
+      to={`/projects/${projectId}/${item.href}`}
+      onClick={() => setIsOpen(false)}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+          isActive
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        )
+      }
+    >
+      <item.icon className="h-5 w-5" />
+      {item.name}
+    </NavLink>
+  );
 
   return (
     <>
@@ -301,28 +361,28 @@ export function MobileNav() {
               {projectId && !isSubcontractor && (
                 <>
                   <div className="my-4 border-t pt-4">
-                    <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
-                      Project
-                    </p>
+                    {!isOfficeRole && (
+                      <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                        Project
+                      </p>
+                    )}
                   </div>
-                  {filteredProjectNavigation.map((item) => (
-                    <NavLink
-                      key={item.name}
-                      to={`/projects/${projectId}/${item.href}`}
-                      onClick={() => setIsOpen(false)}
-                      className={({ isActive }) =>
-                        cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                          isActive
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                        )
-                      }
-                    >
-                      <item.icon className="h-5 w-5" />
-                      {item.name}
-                    </NavLink>
-                  ))}
+                  {isOfficeRole
+                    ? OFFICE_SECTION_ORDER.map((section) => {
+                        const items = filteredProjectNavigation.filter(
+                          (item) => item.section === section,
+                        );
+                        if (items.length === 0) return null;
+                        return (
+                          <div key={section} className="mt-4 first:mt-0 space-y-1">
+                            <p className="mb-1 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                              {section}
+                            </p>
+                            {items.map(renderProjectNavLink)}
+                          </div>
+                        );
+                      })
+                    : filteredProjectNavigation.map(renderProjectNavLink)}
                 </>
               )}
             </nav>
