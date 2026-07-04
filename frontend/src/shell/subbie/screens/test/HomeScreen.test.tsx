@@ -14,12 +14,13 @@
  *   - NCRs / Documents live behind the lot (SubbieLotHubScreen) when lots is
  *     on; module-gated home fallback tiles only when lots is off; Holds &
  *     Tests is removed from the subbie UI entirely
- *   - My Company always present, "Setup needed" chip until prerequisites met
+ *   - My Company always present as a plain tile: company name as title, no
+ *     chips; falls back to the "My Company" label when no company is loaded
  *   - role chip text (SUBCONTRACTOR)
  *   - bottom bar navigation target (/p/docket)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { SubbieShellData } from '../../subbieShellData';
@@ -249,7 +250,7 @@ describe('subbie shell HomeScreen', () => {
     renderHome();
     expect(screen.getByRole('button', { name: /My Dockets/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /My Work/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /My Company/ })).toBeInTheDocument();
     // NCRs / Documents live behind the lot hub; no fallback tiles, no chip links.
     ['NCRs', 'Documents', 'Inspections', 'Holds and Tests'].forEach((name) => {
       expect(screen.queryByRole('button', { name })).toBeNull();
@@ -264,77 +265,23 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
   });
 
-  it('My Company tile shows a "Setup needed" chip while prerequisites are unmet', () => {
-    // Default ctx has no approved crew/plant → prerequisites unmet → chip on,
-    // but the tile itself is still there (new subbies need it most).
+  it('My Company tile shows the company name as its title with no chips', () => {
+    // Owner FINAL 2026-07-05: plain uniform tile — company name only, no chips
+    // in any state (default ctx is setup-incomplete; the hero carries setup).
     renderHome();
-    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
-    expect(screen.getByText('Setup needed')).toBeInTheDocument();
+    const companyBtn = screen.getByRole('button', { name: 'My Company — Hargraves Earthmoving' });
+    expect(within(companyBtn).getByText('Hargraves Earthmoving')).toBeInTheDocument();
+    expect(within(companyBtn).queryByText('Setup needed')).toBeNull();
+    expect(within(companyBtn).queryByText(/crew/)).toBeNull();
+    expect(within(companyBtn).queryByText(/plant/)).toBeNull();
   });
 
-  it('once prerequisites are met, My Company becomes the established block with name + crew/plant chips', async () => {
-    _ctx = makeCtx({
-      company: {
-        ...makeCtx().company!,
-        employees: [
-          { id: 'e1', name: 'Mick Hargraves', status: 'approved' },
-          { id: 'e2', name: 'Dave', status: 'approved' },
-        ],
-        plant: [{ id: 'p1', type: 'Excavator', status: 'approved' }],
-      },
-    });
-    // A lot must come back so docket prerequisites are met.
-    apiFetchMock.mockReset();
-    apiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
-      if (url.startsWith('/api/lots'))
-        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
-      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
-      return Promise.resolve({});
-    });
+  it('My Company tile falls back to the "My Company" label when no company is loaded', () => {
+    _ctx = makeCtx({ company: null });
     renderHome();
-    await waitFor(() =>
-      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
-    );
-    // Setup chip gone; the richer block shows the company name + counts.
-    await waitFor(() => expect(screen.queryByText('Setup needed')).toBeNull());
-    expect(
-      screen.getByRole('button', { name: /My Company — Hargraves Earthmoving/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Hargraves Earthmoving')).toBeInTheDocument();
-    expect(screen.getByText('2 crew')).toBeInTheDocument();
-    expect(screen.getByText('1 plant')).toBeInTheDocument();
-    // No pending approvals → no pending chip.
-    expect(screen.queryByText(/pending/)).toBeNull();
-  });
-
-  it('the established My Company block shows a pending chip only when there are pending approvals', async () => {
-    _ctx = makeCtx({
-      company: {
-        ...makeCtx().company!,
-        employees: [
-          { id: 'e1', name: 'Mick Hargraves', status: 'approved' },
-          { id: 'e2', name: 'Dave', status: 'pending' },
-        ],
-        plant: [{ id: 'p1', type: 'Excavator', status: 'pending' }],
-      },
-    });
-    apiFetchMock.mockReset();
-    apiFetchMock.mockImplementation((url: string) => {
-      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
-      if (url.startsWith('/api/lots'))
-        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
-      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
-      return Promise.resolve({});
-    });
-    renderHome();
-    await waitFor(() =>
-      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
-    );
-    // 1 approved employee → prerequisites met (established block); 1 pending
-    // employee + 1 pending plant → "2 pending".
-    expect(await screen.findByText('2 pending')).toBeInTheDocument();
-    expect(screen.getByText('1 crew')).toBeInTheDocument();
+    const companyBtn = screen.getByRole('button', { name: 'My Company' });
+    expect(within(companyBtn).getByText('My Company')).toBeInTheDocument();
+    expect(within(companyBtn).queryByText('Setup needed')).toBeNull();
   });
 
   it('fallback Documents tile preserves the selected project query', () => {
