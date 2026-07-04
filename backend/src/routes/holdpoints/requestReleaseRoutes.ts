@@ -18,6 +18,7 @@ import {
   parseHPProjectSettings,
   getHoldPointMinimumNoticeDays,
   emailAddressSchema,
+  MAX_BATCH_RELEASE_ITEMS,
   MAX_EVIDENCE_DOCUMENT_IDS,
   MAX_NAME_LENGTH,
   nullableScheduledDateSchema,
@@ -72,8 +73,6 @@ type HoldPointRequestStateData = {
 };
 
 export const holdPointRequestReleaseRouter = Router();
-
-const MAX_BATCH_RELEASE_ITEMS = 25;
 
 const batchRequestReleaseItemSchema = z.object({
   itpChecklistItemId: requiredIdSchema('itpChecklistItemId'),
@@ -337,7 +336,10 @@ holdPointRequestReleaseRouter.post(
     });
     const requestedBy = requestingUser?.fullName || requestingUser?.email || 'Unknown';
     const formattedScheduledDate = formatScheduledDateForEmail(scheduledDateValue);
-    const releaseUrl = buildFrontendUrl(`/projects/${lot.project.id}/lots/${lot.id}?tab=itp`);
+    // One secure batch link ("review room") groups all per-hold-point tokens.
+    // Same expiry policy and hashed-token storage as the per-HP tokens.
+    const batchToken = buildReleaseRecipientToken(recipient.email, recipient.fullName);
+    const batchReviewUrl = buildFrontendUrl(`/hp-release/batch/${batchToken.secureToken}`);
 
     const savedBatchItems = await prisma.$transaction(async (tx) => {
       const savedItems = [];
@@ -348,6 +350,19 @@ holdPointRequestReleaseRouter.post(
         scheduledDate: scheduledDateValue,
         scheduledTime: scheduledTime || null,
       };
+
+      const batch = await tx.holdPointReleaseBatch.create({
+        data: {
+          lotId,
+          recipientEmail: batchToken.email,
+          recipientName: batchToken.fullName,
+          token: hashHoldPointReleaseToken(batchToken.secureToken),
+          expiresAt: batchToken.tokenExpiry,
+          scheduledDate: scheduledDateValue,
+          scheduledTime: scheduledTime || null,
+          requestedByUserId: req.user!.userId,
+        },
+      });
 
       for (const preparedItem of preparedItems) {
         let savedHoldPoint;
@@ -384,6 +399,7 @@ holdPointRequestReleaseRouter.post(
           data: [
             {
               holdPointId: savedHoldPoint.id,
+              batchId: batch.id,
               recipientEmail: releaseToken.email,
               recipientName: releaseToken.fullName,
               token: hashHoldPointReleaseToken(releaseToken.secureToken),
@@ -417,16 +433,11 @@ holdPointRequestReleaseRouter.post(
       return savedItems;
     });
 
-    const emailHoldPoints = savedBatchItems.map((item) => {
-      const secureReleaseUrl = buildFrontendUrl(`/hp-release/${item.releaseToken.secureToken}`);
-      return {
-        sequenceNumber: item.checklistItem.sequenceNumber,
-        description:
-          item.holdPoint.description || item.checklistItem.description || 'Hold point release',
-        secureReleaseUrl,
-        evidencePackageUrl: `${secureReleaseUrl}#evidence-package`,
-      };
-    });
+    const emailHoldPoints = savedBatchItems.map((item) => ({
+      sequenceNumber: item.checklistItem.sequenceNumber,
+      description:
+        item.holdPoint.description || item.checklistItem.description || 'Hold point release',
+    }));
 
     let emailDelivery = { sent: 0, failed: 0 };
     const renderedEmail = renderHoldPointBatchReleaseRequestEmail({
@@ -436,7 +447,7 @@ holdPointRequestReleaseRouter.post(
       holdPoints: emailHoldPoints,
       scheduledDate: formattedScheduledDate,
       scheduledTime: scheduledTime || undefined,
-      releaseUrl,
+      batchReviewUrl,
       requestedBy,
       noticeHours,
     });

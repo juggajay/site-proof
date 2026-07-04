@@ -476,6 +476,7 @@ model Lot {
 
   itpInstance              ITPInstance?
   holdPoints               HoldPoint[]
+  holdPointReleaseBatches  HoldPointReleaseBatch[]
   testResults              TestResult[]
   ncrLots                  NCRLot[]
   documents                Document[]
@@ -656,6 +657,7 @@ model HoldPoint {
 model HoldPointReleaseToken {
   id                  String    @id @default(uuid())
   holdPointId         String    @map("hold_point_id")
+  batchId             String?   @map("batch_id")
   recipientEmail      String    @map("recipient_email")
   recipientName       String?   @map("recipient_name")
   /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
@@ -668,9 +670,34 @@ model HoldPointReleaseToken {
   releaseNotes        String?   @map("release_notes")
   createdAt           DateTime  @default(now()) @map("created_at")
 
-  holdPoint HoldPoint @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
+  holdPoint HoldPoint              @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
+  batch     HoldPointReleaseBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
+  @@index([batchId])
   @@map("hold_point_release_tokens")
+}
+
+// A batch release request groups the per-hold-point tokens above under a single
+// "review room" secure link. Its own token is a sha256:-prefixed hash, exactly
+// like HoldPointReleaseToken.token (a DB leak never exposes usable links).
+model HoldPointReleaseBatch {
+  id                String    @id @default(uuid())
+  lotId             String    @map("lot_id")
+  recipientEmail    String    @map("recipient_email")
+  recipientName     String?   @map("recipient_name")
+  /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
+  token             String    @unique
+  expiresAt         DateTime  @map("expires_at")
+  scheduledDate     DateTime? @map("scheduled_date")
+  scheduledTime     String?   @map("scheduled_time")
+  requestedByUserId String?   @map("requested_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  lot           Lot                     @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  releaseTokens HoldPointReleaseToken[]
+
+  @@index([lotId])
+  @@map("hold_point_release_batches")
 }
 
 // ============================================================================

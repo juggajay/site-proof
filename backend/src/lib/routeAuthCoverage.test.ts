@@ -21,6 +21,7 @@ const allowedPublicRouteFiles = new Set([
   'support.ts',
   'documents.ts',
   'holdpoints.ts',
+  'holdpoints/publicBatchRoutes.ts',
   'subcontractors.ts',
   'subcontractors/invitationRoutes.ts',
   'webhooks.ts',
@@ -312,6 +313,10 @@ describe('route authentication coverage', () => {
     );
     const companySource = await readFile(path.join(routesDir, 'company.ts'), 'utf8');
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
+    const holdpointsPublicBatchRoutesSource = await readFile(
+      path.join(routesDir, 'holdpoints/publicBatchRoutes.ts'),
+      'utf8',
+    );
     const mfaSource = await readFile(path.join(routesDir, 'mfa.ts'), 'utf8');
     const subcontractorsSource = await readFile(path.join(routesDir, 'subcontractors.ts'), 'utf8');
     const subcontractorInvitationRoutesSource = await readFile(
@@ -746,6 +751,25 @@ describe('route authentication coverage', () => {
       'GET /public/:token',
       'POST /public/:token/release',
     ]);
+
+    // The batch review-room public routes are mounted (before any auth) via
+    // holdPointPublicBatchRouter. They are intentionally public (secure hashed
+    // batch token); document the exact surface here.
+    expect(
+      Array.from(
+        holdpointsPublicBatchRoutesSource.matchAll(
+          /\bholdPointPublicBatchRouter\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g,
+        ),
+      ).map((match) => `${match[1].toUpperCase()} ${match[3]}`),
+    ).toEqual([
+      'GET /public/batch/:batchToken',
+      'GET /public/batch/:batchToken/holdpoints/:holdPointId',
+      'GET /public/batch/:batchToken/holdpoints/:holdPointId/documents/:documentId',
+      'POST /public/batch/:batchToken/release',
+    ]);
+    expect(
+      holdpointsSource.indexOf('holdpointsRouter.use(holdPointPublicBatchRouter)'),
+    ).toBeGreaterThan(holdpointsSource.indexOf("'/public/:token/release'"));
 
     // M6: the public /verify login endpoint was removed; every MFA route now requires auth.
     expect(unprotectedRouteDescriptors(mfaSource)).toEqual([]);

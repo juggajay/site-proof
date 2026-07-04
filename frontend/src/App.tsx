@@ -64,6 +64,7 @@ import {
   ProjectsPage,
   ProjectSettingsPage,
   ProjectUsersPage,
+  PublicHoldPointBatchReleasePage,
   PublicHoldPointReleasePage,
   RegisterPage,
   ReportsPage,
@@ -233,6 +234,11 @@ function App() {
 
             {/* Public secure hold-point release link */}
             <Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />
+
+            {/* Public secure batch review-room link (one link, many hold
+                points). React Router ranks this above /hp-release/:token by
+                specificity regardless of declaration order. */}
+            <Route path="/hp-release/batch/:token" element={<PublicHoldPointBatchReleasePage />} />
 
             {/* Foreman shell v2 — /m/* subtree (lazy-loaded, flag-gated).
                 Must be OUTSIDE ProtectedAppShell so the shell can use its own

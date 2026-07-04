@@ -267,6 +267,25 @@ export const publicReleaseSchema = z.object({
   signatureDataUrl: requiredSignatureDataUrlSchema,
 });
 
+export const MAX_BATCH_RELEASE_ITEMS = 25;
+
+// Public batch review-room release: one signed identity releases the selected
+// hold points of a batch. Mirrors publicReleaseSchema (signature required) plus
+// the list of hold-point ids to release.
+export const publicBatchReleaseSchema = z.object({
+  holdPointIds: z
+    .array(requiredIdSchema('holdPointIds'))
+    .min(1, 'At least one hold point is required')
+    .max(
+      MAX_BATCH_RELEASE_ITEMS,
+      `A batch release cannot exceed ${MAX_BATCH_RELEASE_ITEMS} hold points`,
+    ),
+  releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
+  releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
+  releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
+  signatureDataUrl: requiredSignatureDataUrlSchema,
+});
+
 // =============================================================================
 // Route parameter parsing
 // =============================================================================

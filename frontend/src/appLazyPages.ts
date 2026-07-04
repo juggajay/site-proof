@@ -69,6 +69,11 @@ export const PublicHoldPointReleasePage = lazy(() =>
     default: m.PublicHoldPointReleasePage,
   })),
 );
+export const PublicHoldPointBatchReleasePage = lazy(() =>
+  import('@/pages/holdpoints/PublicHoldPointBatchReleasePage').then((m) => ({
+    default: m.PublicHoldPointBatchReleasePage,
+  })),
+);
 export const TestResultsPage = lazy(() =>
   import('@/pages/tests/TestResultsPage').then((m) => ({ default: m.TestResultsPage })),
 );

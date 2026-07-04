@@ -1,12 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { sendHPReleaseConfirmationEmail } from '../lib/email.js';
-import { sendNotificationIfEnabled } from './notifications.js';
-import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { buildFrontendUrl } from '../lib/runtimeConfig.js';
-import { logError } from '../lib/serverLogger.js';
 import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
   MAX_RELEASE_TOKEN_LENGTH,
@@ -16,177 +11,26 @@ import {
 } from './holdpoints/validation.js';
 import { holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
 import { requireSuperintendentApprovalRecipients } from './holdpoints/superintendentRecipients.js';
-import {
-  buildHoldPointEvidencePackage,
-  buildPublicHoldPointEvidencePackageResponse,
-} from './holdpoints/evidencePackage.js';
+import { buildPublicHoldPointEvidencePackageResponse } from './holdpoints/evidencePackage.js';
 import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionResponses.js';
-import {
-  buildHoldPointReleaseEmailNotification,
-  buildHoldPointReleaseNotifications,
-} from './holdpoints/releaseNotifications.js';
-import {
-  buildHoldPointReleaseConfirmationEmail,
-  selectImmediateHoldPointReleaseConfirmationRecipients,
-  selectHoldPointReleaseContractors,
-  selectHoldPointReleaseSuperintendents,
-} from './holdpoints/releaseConfirmationEmails.js';
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
-import { updateLotStatusFromITP } from './itp/helpers/lotProgression.js';
-import { isProjectNotificationEnabled } from '../lib/projectNotificationPreferences.js';
+import { holdPointPublicBatchRouter } from './holdpoints/publicBatchRoutes.js';
 import { parseDocumentContentDisposition, sendDocumentFile } from './documents/fileHelpers.js';
-import { resolveHoldPointEvidenceInputs } from './holdpoints/evidencePackageInputs.js';
-import { emitHoldPointWebhookEvent } from './holdpoints/webhookEvents.js';
-import { assertHoldPointCompletionCanBeReleased } from './holdpoints/releaseCompletionGuard.js';
-import { projectTimeZoneFromState } from '../lib/projectTimeZone.js';
+import {
+  assertPublicHoldPointTokenAvailable,
+  buildPublicHoldPointReleasePayload,
+  getPublicEvidenceDocumentIds,
+  loadPublicHoldPointReleaseToken,
+} from './holdpoints/publicReleasePayload.js';
+import {
+  executeHoldPointTokenRelease,
+  rejectTerminalPublicHoldPointRelease,
+  runHoldPointReleasePostCommit,
+} from './holdpoints/publicReleaseExecution.js';
 
 const holdpointsRouter = Router();
-
-async function loadPublicHoldPointReleaseToken(rawToken: string) {
-  return prisma.holdPointReleaseToken.findFirst({
-    where: holdPointReleaseTokenLookup(rawToken),
-    include: {
-      holdPoint: {
-        include: {
-          itpChecklistItem: true,
-          lot: {
-            include: {
-              project: true,
-              itpInstance: {
-                include: {
-                  template: {
-                    include: {
-                      checklistItems: {
-                        orderBy: { sequenceNumber: 'asc' },
-                      },
-                    },
-                  },
-                  completions: {
-                    include: {
-                      completedBy: {
-                        select: { id: true, fullName: true, email: true },
-                      },
-                      verifiedBy: {
-                        select: { id: true, fullName: true, email: true },
-                      },
-                      attachments: {
-                        include: {
-                          document: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-              testResults: {
-                include: {
-                  verifiedBy: {
-                    select: { id: true, fullName: true, email: true },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-type PublicHoldPointReleaseToken = NonNullable<
-  Awaited<ReturnType<typeof loadPublicHoldPointReleaseToken>>
->;
-
-function assertPublicHoldPointTokenAvailable(
-  releaseToken: PublicHoldPointReleaseToken | null,
-): asserts releaseToken is PublicHoldPointReleaseToken {
-  if (!releaseToken) {
-    throw AppError.notFound('Invalid or expired link');
-  }
-
-  if (new Date() > releaseToken.expiresAt) {
-    throw new AppError(
-      410,
-      'This secure release link has expired. Please contact the site team for a new link.',
-      'TOKEN_EXPIRED',
-    );
-  }
-}
-
-function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPointReleaseToken) {
-  const holdPoint = releaseToken.holdPoint;
-  const lot = holdPoint.lot;
-  const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
-    resolveHoldPointEvidenceInputs({
-      itpInstance: lot.itpInstance,
-      checklistItemId: holdPoint.itpChecklistItemId,
-      liveFallback: holdPoint.itpChecklistItem,
-    });
-
-  const evidencePackage = buildHoldPointEvidencePackage({
-    holdPoint: {
-      id: holdPoint.id,
-      description: holdPoint.description,
-      itpChecklistItemId: holdPoint.itpChecklistItemId,
-      status: holdPoint.status,
-      notificationSentAt: holdPoint.notificationSentAt,
-      scheduledDate: holdPoint.scheduledDate,
-      scheduledTime: holdPoint.scheduledTime,
-      releasedAt: holdPoint.releasedAt,
-      releasedByName: holdPoint.releasedByName,
-      releasedByOrg: holdPoint.releasedByOrg,
-      releaseMethod: holdPoint.releaseMethod,
-      releaseNotes: holdPoint.releaseNotes,
-    },
-    lot,
-    itpTemplate,
-    checklistItems,
-    completions: itpInstance.completions,
-    holdPointSequenceNumber: holdPointItem.sequenceNumber,
-  });
-
-  return {
-    evidencePackage,
-    tokenInfo: {
-      recipientEmail: releaseToken.recipientEmail,
-      recipientName: releaseToken.recipientName,
-      expiresAt: releaseToken.expiresAt,
-      canRelease: !['released', 'completed'].includes(holdPoint.status) && !releaseToken.usedAt,
-    },
-  };
-}
-
-function rejectTerminalPublicHoldPointRelease(status: string | null | undefined): void {
-  if (status === 'released') {
-    throw AppError.badRequest('This hold point has already been released.');
-  }
-
-  if (status === 'completed') {
-    throw AppError.badRequest('This hold point has already been completed.');
-  }
-}
-
-function getPublicEvidenceDocumentIds(
-  evidencePackage: ReturnType<typeof buildPublicHoldPointReleasePayload>['evidencePackage'],
-): Set<string> {
-  const documentIds = new Set<string>();
-
-  for (const item of evidencePackage.checklist) {
-    for (const attachment of item.attachments) {
-      if (attachment.documentId) {
-        documentIds.add(attachment.documentId);
-      }
-    }
-  }
-
-  for (const photo of evidencePackage.photos) {
-    documentIds.add(photo.id);
-  }
-
-  return documentIds;
-}
 
 // Authenticated read/detail/evidence routes (project list, lot/item detail,
 // evidence package + preview, working hours, notification-time calculation).
@@ -336,305 +180,41 @@ holdpointsRouter.post(
     );
 
     const releasedAt = new Date();
-    let releasedItpInstanceId: string | null = null;
-    const holdPoint = await prisma.$transaction(async (tx) => {
-      const tokenUpdate = await tx.holdPointReleaseToken.updateMany({
-        where: {
-          id: releaseToken.id,
-          usedAt: null,
-          expiresAt: { gt: releasedAt },
-        },
-        data: {
-          usedAt: releasedAt,
-          releasedByName: effectiveReleasedByName,
-          releasedByOrg: releasedByOrg || null,
-          releaseSignatureUrl: signatureDataUrl || null,
-          releaseNotes: releaseNotes || null,
-        },
-      });
-
-      if (tokenUpdate.count !== 1) {
-        const currentToken = await tx.holdPointReleaseToken.findUnique({
-          where: { id: releaseToken.id },
-          select: { usedAt: true, expiresAt: true, releasedByName: true },
-        });
-
-        if (!currentToken || currentToken.expiresAt <= releasedAt) {
-          throw new AppError(
-            410,
-            'This secure release link has expired. Please contact the site team for a new link.',
-            'TOKEN_EXPIRED',
-          );
-        }
-
-        throw new AppError(
-          410,
-          'This hold point has already been released using this link.',
-          'TOKEN_USED',
-          currentToken.usedAt
-            ? {
-                releasedAt: currentToken.usedAt as unknown as Record<string, unknown>,
-                releasedByName: currentToken.releasedByName as unknown as Record<string, unknown>,
-              }
-            : undefined,
-        );
-      }
-
-      const holdPointUpdate = await tx.holdPoint.updateMany({
-        where: {
-          id: releaseToken.holdPoint.id,
-          status: { notIn: ['released', 'completed'] },
-        },
-        data: {
-          status: 'released',
-          releasedAt,
-          releasedByName: effectiveReleasedByName,
-          releasedByOrg: releasedByOrg || null,
-          releaseMethod: 'secure_link',
-          releaseSignatureUrl: signatureDataUrl || null,
-          releaseNotes: releaseNotes || null,
-        },
-      });
-
-      if (holdPointUpdate.count !== 1) {
-        const currentHoldPoint = await tx.holdPoint.findUnique({
-          where: { id: releaseToken.holdPoint.id },
-          select: { status: true },
-        });
-        rejectTerminalPublicHoldPointRelease(currentHoldPoint?.status);
-        throw AppError.badRequest('This hold point can no longer be released.');
-      }
-
-      const updatedHoldPoint = await tx.holdPoint.findUnique({
-        where: { id: releaseToken.holdPoint.id },
-        include: {
-          lot: true,
-          itpChecklistItem: true,
-        },
-      });
-
-      if (!updatedHoldPoint) {
-        throw AppError.notFound('Hold point');
-      }
-
-      // Also mark the ITP completion as verified in the same transaction.
-      const itpInstance = await tx.iTPInstance.findUnique({
-        where: { lotId: updatedHoldPoint.lotId },
-        select: { id: true },
-      });
-
-      if (itpInstance) {
-        releasedItpInstanceId = itpInstance.id;
-        const completionKey = {
-          itpInstanceId: itpInstance.id,
-          checklistItemId: updatedHoldPoint.itpChecklistItemId,
-        };
-        const existingCompletion = await tx.iTPCompletion.findUnique({
-          where: { itpInstanceId_checklistItemId: completionKey },
-          select: { status: true },
-        });
-        assertHoldPointCompletionCanBeReleased(existingCompletion);
-
-        // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
-        // Set status='completed' + completedAt (releasedAt) alongside the
-        // verification fields, and CREATE the completion row if the hold point
-        // was never ticked. This is a public release (no authenticated user), so
-        // completedById / verifiedById stay null — attribution lives on the
-        // HoldPoint (releasedByName/Org/Method) and is surfaced via the GET
-        // serializer. ITPCompletion has a compound unique key on
-        // [itpInstanceId, checklistItemId], so a single upsert handles the
-        // never-ticked and previously-ticked cases atomically.
-        const completionData = {
-          status: 'completed',
-          completedAt: releasedAt,
-          verificationStatus: 'verified',
-          verifiedAt: releasedAt,
-        };
-        await tx.iTPCompletion.upsert({
-          where: {
-            itpInstanceId_checklistItemId: completionKey,
-          },
-          update: completionData,
-          create: {
-            ...completionKey,
-            ...completionData,
-          },
-        });
-      }
-
-      return updatedHoldPoint;
-    });
-
-    if (releasedItpInstanceId) {
-      try {
-        await updateLotStatusFromITP(releasedItpInstanceId);
-      } catch (progressionError) {
-        logError('[HP Secure Release] Failed to update lot status after public release:', {
-          holdPointId: holdPoint.id,
-          lotId: holdPoint.lotId,
-          itpInstanceId: releasedItpInstanceId,
-          error: progressionError instanceof Error ? progressionError.message : progressionError,
-        });
-      }
-    }
-
-    // Create in-app notifications for project team members
-    const projectUsers = await prisma.projectUser.findMany({
-      where: {
-        projectId: releaseToken.holdPoint.lot.projectId,
-        status: 'active',
-      },
-      include: {
-        user: {
-          select: { id: true, email: true, fullName: true },
-        },
-      },
-    });
-
-    if (
-      isProjectNotificationEnabled(releaseToken.holdPoint.lot.project.settings, 'holdPointReleases')
-    ) {
-      const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
-        projectId: releaseToken.holdPoint.lot.projectId,
-        holdPointDescription: holdPoint.description,
-        lotNumber: holdPoint.lot.lotNumber,
-        releasedByName: effectiveReleasedByName,
-      });
-
-      if (notificationsToCreate.length > 0) {
-        try {
-          await prisma.notification.createMany({
-            data: notificationsToCreate,
-          });
-        } catch (notificationError) {
-          logError('[HP Secure Release] Failed to create in-app notifications:', notificationError);
-          // The release already committed above; don't fail the request if the
-          // post-commit notification insert throws.
-        }
-      }
-
-      const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
-        projectId: releaseToken.holdPoint.lot.projectId,
-        holdPointDescription: holdPoint.description,
-        lotNumber: holdPoint.lot.lotNumber,
-        releasedByName: effectiveReleasedByName,
-        projectName: releaseToken.holdPoint.lot.project.name,
-        releaseMethod: 'secure_link',
-        releaseNotes,
-      });
-
-      const immediateHoldPointReleaseEmailUserIds = new Set<string>();
-      for (const pu of projectUsers) {
-        try {
-          const delivery = await sendNotificationIfEnabled(
-            pu.userId,
-            'holdPointRelease',
-            releaseEmailNotification,
-          );
-          if (delivery.sent) {
-            immediateHoldPointReleaseEmailUserIds.add(pu.userId);
-          }
-        } catch (emailError) {
-          logError(`[HP Secure Release] Failed to send email to user ${pu.userId}:`, emailError);
-        }
-      }
-
-      // Send confirmation emails
-      try {
-        const lotUrl = buildFrontendUrl(
-          `/projects/${releaseToken.holdPoint.lot.projectId}/lots/${releaseToken.holdPoint.lot.id}`,
-        );
-        // Format the instant we actually recorded on the hold point (above),
-        // not a fresh new Date(), so the confirmation email always matches the
-        // stored release time.
-        const projectTimeZone = projectTimeZoneFromState(releaseToken.holdPoint.lot.project.state);
-        const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
-          timeZone: projectTimeZone,
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-        const confirmationContext = {
-          projectName: releaseToken.holdPoint.lot.project.name,
-          lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description,
-          releasedByName: effectiveReleasedByName,
-          releasedByOrg,
-          releaseMethod: 'secure_link',
-          releaseNotes,
-          releasedAt: releasedAtDisplay,
-          lotUrl,
-        };
-
-        const contractors = selectImmediateHoldPointReleaseConfirmationRecipients(
-          selectHoldPointReleaseContractors(projectUsers),
-          immediateHoldPointReleaseEmailUserIds,
-        );
-        for (const contractor of contractors) {
-          await sendHPReleaseConfirmationEmail(
-            buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
-          );
-        }
-
-        const superintendents = selectImmediateHoldPointReleaseConfirmationRecipients(
-          selectHoldPointReleaseSuperintendents(projectUsers),
-          immediateHoldPointReleaseEmailUserIds,
-        );
-        for (const superintendent of superintendents) {
-          await sendHPReleaseConfirmationEmail(
-            buildHoldPointReleaseConfirmationEmail(
-              superintendent,
-              'superintendent',
-              confirmationContext,
-            ),
-          );
-        }
-      } catch (emailError) {
-        logError('[HP Secure Release] Failed to send confirmation emails:', emailError);
-        // Don't fail the main request
-      }
-    }
-
-    // Audit log for public HP release (no userId - public endpoint)
-    await createAuditLog({
-      projectId: releaseToken.holdPoint.lot.projectId,
-      entityType: 'hold_point',
-      entityId: holdPoint.id,
-      action: AuditAction.HP_PUBLIC_RELEASED,
-      changes: {
-        releasedByName: effectiveReleasedByName,
-        submittedReleasedByName: releasedByName,
+    const { holdPoint, releasedItpInstanceId } = await prisma.$transaction((tx) =>
+      executeHoldPointTokenRelease(tx, {
+        tokenId: releaseToken.id,
+        holdPointId: releaseToken.holdPoint.id,
+        releasedAt,
+        effectiveReleasedByName,
         releasedByOrg,
-        releaseMethod: 'secure_link',
-        tokenRecipient: releaseToken.recipientEmail,
-        tokenRecipientName: releaseToken.recipientName,
-      },
-      req,
-    });
+        releaseNotes,
+        signatureDataUrl,
+      }),
+    );
 
-    emitHoldPointWebhookEvent(releaseToken.holdPoint.lot.projectId, 'hold_point.released', {
-      holdPointId: holdPoint.id,
-      projectId: releaseToken.holdPoint.lot.projectId,
-      lotId: holdPoint.lotId,
-      lotNumber: holdPoint.lot.lotNumber,
-      itpChecklistItemId: holdPoint.itpChecklistItemId,
-      description: holdPoint.description,
-      status: holdPoint.status,
-      actorUserId: null,
-      action: 'released',
-      releaseSource: 'public_secure_link',
-      releaseMethod: 'secure_link',
-      releasedByName: effectiveReleasedByName || null,
-      releasedByOrg: releasedByOrg || null,
-      releaseEvidenceDocumentId: null,
-      hasReleaseNotes: Boolean(releaseNotes?.trim()),
+    await runHoldPointReleasePostCommit({
+      holdPoint,
+      project: releaseToken.holdPoint.lot.project,
+      releasedItpInstanceId,
+      releasedAt,
+      effectiveReleasedByName,
+      submittedReleasedByName: releasedByName,
+      releasedByOrg,
+      releaseNotes,
+      tokenRecipientEmail: releaseToken.recipientEmail,
+      tokenRecipientName: releaseToken.recipientName,
+      req,
     });
 
     res.json(buildPublicHoldPointReleasedResponse(holdPoint));
   }),
 );
+
+// Public batch review-room endpoints (summary, per-hold-point evidence + file
+// download, and batch release). Same hashed-token validation and reused
+// evidence/release logic as the single /public/:token routes; mounted here
+// alongside them, before any route-wide auth. Their /public/batch/... paths do
+// not collide with the single /public/:token routes above.
+holdpointsRouter.use(holdPointPublicBatchRouter);
 
 export { holdpointsRouter };

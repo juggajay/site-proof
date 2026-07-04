@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    holdPointReleaseBatch: {
+      create: vi.fn(),
+    },
     document: {
       findMany: vi.fn(),
     },
@@ -190,6 +193,10 @@ function expectSuccessfulTwoItemBatchResponse(res: {
     expect.objectContaining({ id: 'hp-created-2' }),
   ]);
   expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledTimes(2);
+  // Every per-hold-point token is linked to the batch it belongs to.
+  for (const call of mocks.tx.holdPointReleaseToken.createMany.mock.calls) {
+    expect(call[0].data[0]).toMatchObject({ batchId: 'batch-1' });
+  }
   expect(mocks.sendEmail).toHaveBeenCalledOnce();
   expect(mocks.sendEmail.mock.calls[0][0].text).toContain('Footing inspection');
   expect(mocks.sendEmail.mock.calls[0][0].text).toContain('Deck pour inspection');
@@ -226,6 +233,7 @@ describe('hold point request-release delivery failure', () => {
     });
     mocks.tx.holdPointReleaseToken.deleteMany.mockResolvedValue({ count: 1 });
     mocks.tx.holdPointReleaseToken.createMany.mockResolvedValue({ count: 1 });
+    mocks.tx.holdPointReleaseBatch.create.mockResolvedValue({ id: 'batch-1' });
     mocks.tx.document.findMany.mockResolvedValue([]);
     mocks.tx.iTPCompletion.upsert.mockResolvedValue({ id: 'completion-1' });
     mocks.tx.iTPCompletionAttachment.createMany.mockResolvedValue({ count: 0 });
@@ -461,8 +469,17 @@ describe('hold point request-release delivery failure', () => {
     expect(mocks.createAuditLog).toHaveBeenCalledTimes(2);
     expect(mocks.sendEmail.mock.calls[0][0]).toMatchObject({
       to: 'reviewer@example.com',
-      subject: '[CIVOS] Batch Hold Point Release Request - LOT-1',
+      subject: '[CIVOS] Bridge Upgrade: 2 hold points ready for release review — Lot LOT-1',
     });
+    // One secure batch link, no per-hold-point secure links.
+    expect(mocks.tx.holdPointReleaseBatch.create).toHaveBeenCalledOnce();
+    const batchEmailText = mocks.sendEmail.mock.calls[0][0].text as string;
+    const batchEmailHtml = mocks.sendEmail.mock.calls[0][0].html as string;
+    expect(batchEmailText).toContain('/hp-release/batch/');
+    // No per-hold-point /hp-release/<64hex> secure links (batch links are
+    // /hp-release/batch/<hex> and do not match this pattern).
+    expect(batchEmailHtml.match(/\/hp-release\/[a-f0-9]{64}/g)).toBeNull();
+    expect(batchEmailText.match(/\/hp-release\/[a-f0-9]{64}/g)).toBeNull();
     expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
   });
 
