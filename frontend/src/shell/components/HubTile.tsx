@@ -1,11 +1,15 @@
 /**
- * HubTile — the standard full-width hub card for the subbie shell.
+ * HubTile — the standard full-width hub card, shared by the foreman (/m) and
+ * subbie (/p) shells.
  *
  * ONE uniform card anatomy for every destination (owner-rejected mixed
  * link/card hierarchies and description lines): icon + title + optional
- * status chip + chevron. Nothing else — uneven description lengths made
- * card heights uneven. Consumers: HomeScreen, WorkScreen,
- * SubbieLotHubScreen. Do not touch the foreman /m shell tile.
+ * status chip + chevron. Nothing else — uneven description lengths made card
+ * heights uneven. Information that used to live in a description line moves
+ * into the chip (a count) or into the destination screen (prose).
+ *
+ * Consumers: foreman HomeScreen + LotHubScreen, subbie HomeScreen +
+ * WorkScreen + SubbieLotHubScreen.
  */
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';

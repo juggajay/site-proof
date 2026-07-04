@@ -124,6 +124,13 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Concrete Pour ITP')).toBeNull();
     expect(screen.getByText('YOU CAN COMPLETE')).toBeInTheDocument();
+    // The ITP status pill is dropped — only the permission pill remains, so the
+    // card matches its icon+label+chevron siblings (status stays in aria-label).
+    // (The lot-status header still shows IN PROGRESS as a .shell-mono line — the
+    // assertion targets the dropped .shell-pill specifically.)
+    expect(
+      screen.queryAllByText('IN PROGRESS').some((el) => el.className.includes('shell-pill')),
+    ).toBe(false);
   });
 
   it('shows the view-only permission signal when the crew cannot complete', async () => {
@@ -131,7 +138,37 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
       itpLots: [{ ...completableItp, subcontractorAssignments: [{ canCompleteITP: false }] }],
     });
     renderHub();
-    expect(await screen.findByText(/VIEW ONLY — ASK YOUR PM/)).toBeInTheDocument();
+    // Visible pill is the short "VIEW ONLY" (one row at 390px); the fuller
+    // "view only — ask your PM" guidance lives in the aria-label.
+    expect(await screen.findByText('VIEW ONLY')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /view only — ask your PM/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders no permission pill while the ITP query is still loading', async () => {
+    let resolveItps!: (v: { lots: ItpLotSeed[] }) => void;
+    const itpsPromise = new Promise<{ lots: ItpLotSeed[] }>((r) => {
+      resolveItps = r;
+    });
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('includeITP=true')) return itpsPromise;
+      if (url.startsWith('/api/lots'))
+        return Promise.resolve({
+          lots: [{ id: 'l1', lotNumber: 'LOT-014', status: 'in_progress' }],
+        });
+      return Promise.resolve({});
+    });
+    renderHub();
+
+    await screen.findByRole('heading', { name: 'LOT-014' });
+    // canComplete defaults falsy while loading — but no pill must show yet.
+    expect(screen.queryByText('VIEW ONLY')).toBeNull();
+    expect(screen.queryByText('YOU CAN COMPLETE')).toBeNull();
+
+    resolveItps({ lots: [completableItp] });
+    expect(await screen.findByText('YOU CAN COMPLETE')).toBeInTheDocument();
   });
 
   it('shows the Continue inspection primary when actionable', async () => {
