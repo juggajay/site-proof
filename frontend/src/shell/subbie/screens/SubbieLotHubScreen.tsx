@@ -63,10 +63,14 @@ const ITP_STATUS_LABEL: Record<string, string> = {
 function InspectionTile({
   itp,
   canComplete,
+  resolved,
   onPress,
 }: {
   itp: ITPInstanceSummary | undefined;
   canComplete: boolean;
+  // False while the portalITPs query is still loading — render no pill until it
+  // resolves, so the card doesn't flash "VIEW ONLY" before canComplete lands.
+  resolved: boolean;
   onPress: () => void;
 }) {
   const status = itp?.status ?? 'not_started';
@@ -79,7 +83,7 @@ function InspectionTile({
       className="shell-hub"
       onClick={onPress}
       aria-label={`Inspection — ${templateName}, ${statusLabel}, ${
-        canComplete ? 'you can complete' : 'view only'
+        canComplete ? 'you can complete' : 'view only — ask your PM'
       }`}
     >
       <span className="shell-hub-ico" aria-hidden="true">
@@ -88,17 +92,20 @@ function InspectionTile({
       {/* Uniform card height: title + the single permission pill share ONE
           horizontal row (wrapping only when genuinely too narrow), so this card
           matches its icon+label+chevron siblings. No ITP status pill and no
-          description line — status + template name stay in the aria-label. */}
+          description line — status + template name stay in the aria-label. The
+          short "VIEW ONLY" keeps the pill on one row at 390px; the full "ask
+          your PM" guidance lives in the aria-label. */}
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-[7px] gap-y-1">
         <span className="shell-tile-title">Inspection</span>
-        {canComplete ? (
-          <span className="shell-pill shell-pill-good">YOU CAN COMPLETE</span>
-        ) : (
-          <span className="shell-pill inline-flex items-center gap-1">
-            <Eye size={11} aria-hidden="true" />
-            VIEW ONLY — ASK YOUR PM
-          </span>
-        )}
+        {resolved &&
+          (canComplete ? (
+            <span className="shell-pill shell-pill-good">YOU CAN COMPLETE</span>
+          ) : (
+            <span className="shell-pill inline-flex items-center gap-1">
+              <Eye size={11} aria-hidden="true" />
+              VIEW ONLY
+            </span>
+          ))}
       </span>
       <ChevronRight
         size={18}
@@ -136,7 +143,7 @@ export function SubbieLotHubScreen() {
   });
 
   // Inspection + permission — shared portalITPs cache (same query as ItpsScreen).
-  const { data: itpLots = [] } = useQuery({
+  const { data: itpLotsData } = useQuery({
     queryKey: queryKeys.portalITPs(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: ItpLot[] }>(
@@ -146,6 +153,11 @@ export function SubbieLotHubScreen() {
     },
     enabled: !!user?.id && !!projectId && itpsEnabled,
   });
+
+  // undefined until the query resolves — gates the permission pill so it doesn't
+  // flash VIEW ONLY (canComplete defaults falsy) before the data lands.
+  const itpResolved = itpLotsData !== undefined;
+  const itpLots = itpLotsData ?? [];
 
   const workLot = useMemo(() => workLots.find((l) => l.id === lotId), [workLots, lotId]);
   const itpLot = useMemo(() => itpLots.find((l) => l.id === lotId), [itpLots, lotId]);
@@ -196,7 +208,12 @@ export function SubbieLotHubScreen() {
       }
     >
       {itpsEnabled && (
-        <InspectionTile itp={itp} canComplete={canComplete} onPress={() => navigate(itpPath)} />
+        <InspectionTile
+          itp={itp}
+          canComplete={canComplete}
+          resolved={itpResolved}
+          onPress={() => navigate(itpPath)}
+        />
       )}
 
       {/* NCRs on this lot — server-side lotId scope on the portal NCR list. */}
