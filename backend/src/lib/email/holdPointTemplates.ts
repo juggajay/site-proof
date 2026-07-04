@@ -132,9 +132,9 @@ export function renderHoldPointBatchReleaseRequestEmail(
         <div class="detail-row"><strong>Hold points:</strong> ${holdPointCount}</div>
       </div>
 
-      <ol style="padding-left: 22px; margin: 20px 0;">
+      <ul style="list-style: none; padding-left: 0; margin: 20px 0;">
         ${holdPointRows}
-      </ol>
+      </ul>
 
       <div style="text-align: center; margin: 28px 0;">
         <a href="${safeBatchReviewUrl}" class="button">Review &amp; release — ${holdPointCount} hold points</a>
