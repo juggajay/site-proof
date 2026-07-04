@@ -31,11 +31,11 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '../components/ShellScreen';
+import { HubTile } from '../components/HubTile';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
-import { cn } from '@/lib/utils';
 import { withProjectQuery } from '../shellPaths';
 import { deriveDiaryStepState } from './diary/diaryStepState';
 import type { DailyDiary } from '@/pages/diary/types';
@@ -179,58 +179,6 @@ function DiaryHero({ state, onPress }: { state: DiaryHeroState; onPress: () => v
   );
 }
 
-// ── Hub tile ──────────────────────────────────────────────────────────────────
-
-function HubTile({
-  icon: Icon,
-  title,
-  description,
-  chip,
-  chipOk,
-  onPress,
-  ariaLabel,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  chip?: string;
-  chipOk?: boolean;
-  onPress: () => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button type="button" className="shell-hub" onClick={onPress} aria-label={ariaLabel}>
-      {/* Icon */}
-      <span className="shell-hub-ico" aria-hidden="true">
-        <Icon size={22} strokeWidth={1.8} />
-      </span>
-
-      {/* Text block */}
-      <span className="min-w-0 flex-1">
-        <span className="shell-tile-title block">{title}</span>
-        <span className="mt-[1px] block text-[13px] text-muted-foreground">{description}</span>
-      </span>
-
-      {/* Count chip */}
-      {chip !== undefined && (
-        <span
-          className={cn('shell-count-chip', chipOk && 'shell-count-chip-ok')}
-          aria-hidden="true"
-        >
-          {chip}
-        </span>
-      )}
-
-      {/* Chevron */}
-      <ChevronRight
-        size={18}
-        className="flex-shrink-0 text-muted-foreground/50"
-        aria-hidden="true"
-      />
-    </button>
-  );
-}
-
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 
 export function HomeScreen() {
@@ -367,7 +315,6 @@ export function HomeScreen() {
         <HubTile
           icon={MapPin}
           title="Lots"
-          description="ITP checks &amp; hold points"
           chip={itpChecksDue > 0 ? `${itpChecksDue} due` : undefined}
           onPress={() => navTo('lots')}
           ariaLabel={`Lots${itpChecksDue > 0 ? ` — ${itpChecksDue} checks due` : ''}`}
@@ -377,7 +324,6 @@ export function HomeScreen() {
         <HubTile
           icon={FileText}
           title="Dockets"
-          description="Subbie hours for approval"
           chip={pendingDockets !== undefined ? `${pendingDockets} waiting` : undefined}
           onPress={() => navTo('dockets')}
           ariaLabel={`Dockets${pendingDockets !== undefined ? ` — ${pendingDockets} waiting for approval` : ''}`}
@@ -387,7 +333,6 @@ export function HomeScreen() {
         <HubTile
           icon={AlertTriangle}
           title="Issues"
-          description="NCRs &amp; defects"
           chip={openNcrCount !== undefined ? `${openNcrCount} open` : undefined}
           chipOk={openNcrCount === 0}
           onPress={() => navTo('issues')}

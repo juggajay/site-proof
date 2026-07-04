@@ -18,52 +18,14 @@
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ClipboardCheck, Camera, Ruler, Info } from 'lucide-react';
+import { ClipboardCheck, Camera, Ruler, Info } from 'lucide-react';
 import { ShellScreen } from '../../components/ShellScreen';
+import { HubTile } from '../../components/HubTile';
 import { useLotsShellContext } from './lotsShellContext';
 import { useShellItpRun } from './useShellItpRun';
 import { formatItpOutcomeSummary, itpHubSummary, lotStatusTone } from './lotsShellState';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { useShellLotParam } from './useShellLotParam';
-
-function HubTile({
-  icon: Icon,
-  title,
-  description,
-  chip,
-  chipOk,
-  onPress,
-  ariaLabel,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  chip?: string;
-  chipOk?: boolean;
-  onPress: () => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button type="button" className="shell-hub" onClick={onPress} aria-label={ariaLabel}>
-      <span className="shell-hub-ico" aria-hidden>
-        <Icon size={22} strokeWidth={1.8} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="shell-tile-title block">{title}</span>
-        <span className="mt-[1px] block text-[13px] text-muted-foreground">{description}</span>
-      </span>
-      {chip !== undefined && (
-        <span
-          className={chipOk ? 'shell-count-chip shell-count-chip-ok' : 'shell-count-chip'}
-          aria-hidden
-        >
-          {chip}
-        </span>
-      )}
-      <ChevronRight size={18} className="flex-shrink-0 text-muted-foreground/50" aria-hidden />
-    </button>
-  );
-}
 
 export function LotHubScreen() {
   const navigate = useNavigate();
@@ -140,7 +102,6 @@ export function LotHubScreen() {
       <HubTile
         icon={ClipboardCheck}
         title="Inspections"
-        description={inspectionsDesc}
         chip={
           due > 0
             ? `${due} due`
@@ -158,7 +119,7 @@ export function LotHubScreen() {
       <HubTile
         icon={Camera}
         title="Photos"
-        description={documentCount > 0 ? `${documentCount} on this lot` : 'No documents yet'}
+        chip={documentCount > 0 ? `${documentCount}` : undefined}
         onPress={() => navigate(withProject('/m/photos', { lotId }))}
         ariaLabel={`Photos${documentCount > 0 ? ` — ${documentCount} on this lot` : ''}`}
       />
@@ -166,7 +127,6 @@ export function LotHubScreen() {
       <HubTile
         icon={Ruler}
         title="Drawings"
-        description="Current revisions for this lot"
         onPress={() => navigate(withProject('/m/docs', { lotId }))}
         ariaLabel="Drawings for this lot"
       />
@@ -174,7 +134,6 @@ export function LotHubScreen() {
       <HubTile
         icon={Info}
         title="Details & status"
-        description="Read-only — conformance is the office’s call"
         onPress={() => navigate(withProject(`/m/lots/${lotId}/details`))}
         ariaLabel="Lot details and status, read only"
       />

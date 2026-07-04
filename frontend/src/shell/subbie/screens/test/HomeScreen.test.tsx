@@ -272,11 +272,15 @@ describe('subbie shell HomeScreen', () => {
     expect(screen.getByText('Setup needed')).toBeInTheDocument();
   });
 
-  it('My Company tile drops the chip once prerequisites are met', async () => {
+  it('once prerequisites are met, My Company becomes the established block with name + crew/plant chips', async () => {
     _ctx = makeCtx({
       company: {
         ...makeCtx().company!,
-        employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
+        employees: [
+          { id: 'e1', name: 'Mick Hargraves', status: 'approved' },
+          { id: 'e2', name: 'Dave', status: 'approved' },
+        ],
+        plant: [{ id: 'p1', type: 'Excavator', status: 'approved' }],
       },
     });
     // A lot must come back so docket prerequisites are met.
@@ -292,8 +296,45 @@ describe('subbie shell HomeScreen', () => {
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
     );
+    // Setup chip gone; the richer block shows the company name + counts.
     await waitFor(() => expect(screen.queryByText('Setup needed')).toBeNull());
-    expect(screen.getByRole('button', { name: 'My Company' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /My Company — Hargraves Earthmoving/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Hargraves Earthmoving')).toBeInTheDocument();
+    expect(screen.getByText('2 crew')).toBeInTheDocument();
+    expect(screen.getByText('1 plant')).toBeInTheDocument();
+    // No pending approvals → no pending chip.
+    expect(screen.queryByText(/pending/)).toBeNull();
+  });
+
+  it('the established My Company block shows a pending chip only when there are pending approvals', async () => {
+    _ctx = makeCtx({
+      company: {
+        ...makeCtx().company!,
+        employees: [
+          { id: 'e1', name: 'Mick Hargraves', status: 'approved' },
+          { id: 'e2', name: 'Dave', status: 'pending' },
+        ],
+        plant: [{ id: 'p1', type: 'Excavator', status: 'pending' }],
+      },
+    });
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.startsWith('/api/lots'))
+        return Promise.resolve({ lots: [{ id: 'l1', lotNumber: 'LOT-1', status: 'in_progress' }] });
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+    renderHome();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
+    );
+    // 1 approved employee → prerequisites met (established block); 1 pending
+    // employee + 1 pending plant → "2 pending".
+    expect(await screen.findByText('2 pending')).toBeInTheDocument();
+    expect(screen.getByText('1 crew')).toBeInTheDocument();
   });
 
   it('fallback Documents tile preserves the selected project query', () => {

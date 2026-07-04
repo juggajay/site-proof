@@ -23,7 +23,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, ClipboardCheck, Eye, Flag, FolderOpen, Inbox } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
-import { HubTile } from '../components/HubTile';
+import { HubTile } from '@/shell/components/HubTile';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
@@ -85,15 +85,12 @@ function InspectionTile({
       <span className="shell-hub-ico" aria-hidden="true">
         <ClipboardCheck size={22} strokeWidth={1.8} />
       </span>
-      {/* Uniform card height: title + pills share ONE horizontal row (wrapping
-          only when genuinely too narrow), so this card matches its
-          icon+label+chevron siblings. No description line — the template name
-          stays in the aria-label. */}
+      {/* Uniform card height: title + the single permission pill share ONE
+          horizontal row (wrapping only when genuinely too narrow), so this card
+          matches its icon+label+chevron siblings. No ITP status pill and no
+          description line — status + template name stay in the aria-label. */}
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-[7px] gap-y-1">
         <span className="shell-tile-title">Inspection</span>
-        <span className={status === 'completed' ? 'shell-pill shell-pill-good' : 'shell-pill'}>
-          {statusLabel.toUpperCase()}
-        </span>
         {canComplete ? (
           <span className="shell-pill shell-pill-good">YOU CAN COMPLETE</span>
         ) : (

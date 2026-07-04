@@ -124,6 +124,13 @@ describe('subbie lot hub (SubbieLotHubScreen)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Concrete Pour ITP')).toBeNull();
     expect(screen.getByText('YOU CAN COMPLETE')).toBeInTheDocument();
+    // The ITP status pill is dropped — only the permission pill remains, so the
+    // card matches its icon+label+chevron siblings (status stays in aria-label).
+    // (The lot-status header still shows IN PROGRESS as a .shell-mono line — the
+    // assertion targets the dropped .shell-pill specifically.)
+    expect(
+      screen.queryAllByText('IN PROGRESS').some((el) => el.className.includes('shell-pill')),
+    ).toBe(false);
   });
 
   it('shows the view-only permission signal when the crew cannot complete', async () => {
