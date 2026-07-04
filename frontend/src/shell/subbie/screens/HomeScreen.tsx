@@ -22,7 +22,6 @@
 import {
   AlertTriangle,
   Building2,
-  ChevronRight,
   FileText,
   Flag,
   FolderOpen,
@@ -99,57 +98,6 @@ function NoticeCard({ item }: { item: NeedsAttentionItem }) {
         <span className="block truncate text-[13.5px]">{item.message}</span>
       </div>
     </Link>
-  );
-}
-
-// ── My Company card ───────────────────────────────────────────────────────────
-// Setup-incomplete keeps the uniform HubTile (handled at the call site). Once the
-// company is established (docket prerequisites met) it gets a richer block in the
-// same card visual family (shell-hub): name + crew / plant / pending chips.
-function CompanyCard({
-  companyName,
-  crewCount,
-  plantCount,
-  pendingCount,
-  onPress,
-}: {
-  companyName: string;
-  crewCount: number;
-  plantCount: number;
-  pendingCount: number;
-  onPress: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="shell-hub"
-      onClick={onPress}
-      aria-label={`My Company — ${companyName}, ${crewCount} crew, ${plantCount} plant${
-        pendingCount > 0 ? `, ${pendingCount} pending approval` : ''
-      }`}
-    >
-      <span className="shell-hub-ico" aria-hidden="true">
-        <Building2 size={22} strokeWidth={1.8} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          My Company
-        </span>
-        <span className="shell-tile-title mt-0.5 block truncate">{companyName}</span>
-        <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="shell-count-chip">{crewCount} crew</span>
-          <span className="shell-count-chip">{plantCount} plant</span>
-          {pendingCount > 0 && (
-            <span className="shell-count-chip text-warning">{pendingCount} pending</span>
-          )}
-        </span>
-      </span>
-      <ChevronRight
-        size={18}
-        className="flex-shrink-0 text-muted-foreground/50"
-        aria-hidden="true"
-      />
-    </button>
   );
 }
 
@@ -299,9 +247,6 @@ export function HomeScreen() {
   // bootstrap so we don't flash setup before the real prerequisite state.
   const approvedEmployees = company?.employees?.filter((e) => e.status === 'approved') ?? [];
   const approvedPlant = company?.plant?.filter((p) => p.status === 'approved') ?? [];
-  const pendingApprovals =
-    (company?.employees?.filter((e) => e.status === 'pending').length ?? 0) +
-    (company?.plant?.filter((p) => p.status === 'pending').length ?? 0);
   const docketPrerequisites = getDocketPrerequisiteState({
     approvedEmployeeCount: approvedEmployees.length,
     approvedPlantCount: approvedPlant.length,
@@ -418,27 +363,16 @@ export function HomeScreen() {
         />
       )}
 
-      {/* My Company — always present (new subbies need it most). Setup-incomplete
-          (or company not yet loaded) shows the uniform tile with a "Setup needed"
-          chip; once established it becomes a richer block with crew/plant/pending
-          chips. */}
-      {company && !companyNeedsSetup ? (
-        <CompanyCard
-          companyName={company.companyName}
-          crewCount={approvedEmployees.length}
-          plantCount={company.plant?.length ?? 0}
-          pendingCount={pendingApprovals}
-          onPress={() => navigate(myCompanyLink)}
-        />
-      ) : (
-        <HubTile
-          icon={Building2}
-          title="My Company"
-          chip={companyNeedsSetup ? 'Setup needed' : undefined}
-          onPress={() => navigate(myCompanyLink)}
-          ariaLabel="My Company"
-        />
-      )}
+      {/* My Company — plain uniform tile (owner FINAL 2026-07-05): just the
+          company name as the title, no chips in any state. The hero's setup
+          state carries the "set up your company" signal. Falls back to the
+          "My Company" label when the bootstrap has no company. */}
+      <HubTile
+        icon={Building2}
+        title={company?.companyName ?? 'My Company'}
+        onPress={() => navigate(myCompanyLink)}
+        ariaLabel={company?.companyName ? `My Company — ${company.companyName}` : 'My Company'}
+      />
     </ShellScreen>
   );
 }
