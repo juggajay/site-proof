@@ -15,6 +15,7 @@ export class JsPdfRecorder {
     },
   };
   savedFilename: string | null = null;
+  private pageCount = 1;
 
   constructor(...args: unknown[]) {
     this.constructorArgs = args;
@@ -26,7 +27,16 @@ export class JsPdfRecorder {
   }
 
   addPage() {
+    this.pageCount += 1;
     this.operations.push({ name: 'addPage', args: [] });
+  }
+
+  getNumberOfPages() {
+    return this.pageCount;
+  }
+
+  setPage(...args: unknown[]) {
+    this.operations.push({ name: 'setPage', args });
   }
 
   getTextWidth(text: string) {

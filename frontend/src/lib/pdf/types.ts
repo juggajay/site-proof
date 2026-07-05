@@ -191,11 +191,13 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     itpChecklistItemId?: string | null;
     status: string;
     notificationSentAt: string | null;
+    notificationSentTo?: string | null;
     scheduledDate: string | null;
     releasedAt: string | null;
     releasedByName: string | null;
     releasedByOrg?: string | null;
     releaseMethod?: string | null;
+    releaseSignatureUrl?: string | null;
     releaseNotes: string | null;
   };
   lot: {
@@ -210,6 +212,7 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     id: string;
     name: string;
     projectNumber: string | null;
+    company?: PDFCompanyBranding | null;
   };
   itpTemplate: {
     id: string;

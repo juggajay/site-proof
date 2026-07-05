@@ -1,5 +1,5 @@
 import { formatDateKey } from '../localDate';
-import { drawPdfBrandingHeader } from './branding';
+import { drawPdfBrandingHeader, resolvePdfBranding } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
@@ -7,6 +7,10 @@ import type { HPEvidencePackageData, HPPackageOptions } from './types';
 
 function formatReleaseMethod(method: string): string {
   return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function shortDate(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleDateString('en-AU') : '';
 }
 
 function getReleaseDetailRows(data: HPEvidencePackageData['holdPoint']): string[] {
@@ -21,6 +25,10 @@ function getReleaseDetailRows(data: HPEvidencePackageData['holdPoint']): string[
 
   if (data.releaseMethod) {
     rows.push(`Release Method: ${formatReleaseMethod(data.releaseMethod)}`);
+  }
+
+  if (data.notificationSentTo) {
+    rows.push(`Recipient of Record: ${data.notificationSentTo}`);
   }
 
   return rows;
@@ -61,17 +69,28 @@ export async function generateHPEvidencePackagePDF(
   };
 
   // ========== HEADER ==========
+  // Reserve a header band so the logo and company name never overlap each other
+  // or the title: logo pinned top-right, name right-aligned to the LEFT of it
+  // (or top-right when there is no logo), and the title pushed below the band.
+  const branding = resolvePdfBranding(data);
+  const logoWidth = 28;
+  const logoHeight = 14;
+  const logoX = pageWidth - margin - logoWidth;
+  const logoY = 8;
   await drawPdfBrandingHeader(doc, data, {
-    logoX: pageWidth - margin - 28,
-    logoY: 5,
-    logoWidth: 28,
-    logoHeight: 16,
-    companyNameX: pageWidth - margin,
-    companyNameY: 10,
+    logoX,
+    logoY,
+    logoWidth,
+    logoHeight,
+    companyNameX: branding?.logoUrl ? logoX - 3 : pageWidth - margin,
+    companyNameY: branding?.logoUrl ? logoY + logoHeight / 2 + 1 : 12,
     companyNameAlign: 'right',
     companyNameColor: [75, 85, 99],
     companyNameFontSize: 8,
   });
+  if (branding) {
+    yPos = Math.max(yPos, logoY + logoHeight + 6);
+  }
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
@@ -143,6 +162,32 @@ export async function generateHPEvidencePackagePDF(
     doc.text(`Release Notes: ${data.holdPoint.releaseNotes}`, margin, yPos);
     yPos += 6;
   }
+
+  // Release Authorisation: the signature that authorised the release.
+  if (data.holdPoint.status === 'released' && data.holdPoint.releaseSignatureUrl) {
+    checkPageBreak(32);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Release Signature:', margin, yPos);
+    yPos += 4;
+    try {
+      doc.addImage(data.holdPoint.releaseSignatureUrl, 'PNG', margin, yPos, 60, 20);
+      yPos += 22;
+    } catch {
+      // ponytail: an undecodable signature dataURL just loses the image; the
+      // "signed electronically by" caption below still records the authoriser.
+    }
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text(
+      `Signed electronically by ${data.holdPoint.releasedByName ?? 'the reviewer'}`,
+      margin,
+      yPos,
+    );
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    yPos += 6;
+  }
+
   yPos += 5;
   drawLine();
 
@@ -214,7 +259,7 @@ export async function generateHPEvidencePackagePDF(
   // Checklist rows
   doc.setFont('helvetica', 'normal');
   data.checklist.forEach((item) => {
-    checkPageBreak(8);
+    checkPageBreak(12);
     xPos = margin + 2;
 
     doc.text(item.sequenceNumber.toString(), xPos, yPos + 4);
@@ -241,6 +286,26 @@ export async function generateHPEvidencePackagePDF(
     }
 
     yPos += 6;
+
+    // Second line: completed/verified accountability (who + when) — the actual
+    // evidence a reviewer needs. Only when there is something to show.
+    const accountability: string[] = [];
+    if (item.completedAt) {
+      accountability.push(`Completed ${shortDate(item.completedAt)}`);
+    }
+    if (item.verifiedBy || item.verifiedAt) {
+      accountability.push(
+        `Verified${item.verifiedBy ? ` by ${item.verifiedBy}` : ''}${
+          item.verifiedAt ? ` ${shortDate(item.verifiedAt)}` : ''
+        }`,
+      );
+    }
+    if (accountability.length > 0) {
+      doc.setTextColor(120, 120, 120);
+      doc.text(accountability.join('  ·  '), margin + colWidths[0] + 2, yPos + 2);
+      doc.setTextColor(0, 0, 0);
+      yPos += 5;
+    }
   });
   yPos += 8;
 
@@ -348,12 +413,12 @@ export async function generateHPEvidencePackagePDF(
       doc.text(`... and ${data.photos.length - 10} more photos`, margin + 5, yPos);
       yPos += 5;
     }
+  } else if (data.summary.totalAttachments === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.text('None recorded for this lot.', margin, yPos);
+    yPos += 5;
   }
-
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.text('(Full photo images available in CIVOS system)', margin, yPos);
-  yPos += 10;
+  yPos += 5;
 
   drawLine();
 
@@ -373,10 +438,12 @@ export async function generateHPEvidencePackagePDF(
       yPos,
     );
     yPos += 5;
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.text('None recorded for this lot.', margin, yPos);
+    yPos += 5;
   }
-  doc.setFont('helvetica', 'italic');
-  doc.text('(Survey coordinates and as-built data available in CIVOS system)', margin, yPos);
-  yPos += 10;
+  yPos += 5;
 
   drawLine();
 
@@ -419,17 +486,31 @@ export async function generateHPEvidencePackagePDF(
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(128, 128, 128);
-  const generatedDate = new Date(data.generatedAt).toLocaleString('en-AU', {
-    dateStyle: 'full',
-    timeStyle: 'medium',
-  });
-  doc.text(`Generated: ${generatedDate}`, margin, yPos);
-  yPos += 4;
   doc.text(
     'This evidence package was generated by CIVOS - Civil Execution and Conformance Platform',
     margin,
     yPos,
   );
+
+  // Document identity on every page: page X of Y, generated timestamp, and the
+  // project / lot this record belongs to.
+  const generatedFooter = new Date(data.generatedAt).toLocaleString('en-AU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(128, 128, 128);
+    doc.text(
+      `Page ${page} of ${pageCount}  ·  Generated ${generatedFooter}  ·  ${data.project.name} / Lot ${data.lot.lotNumber}`,
+      margin,
+      pageHeight - 8,
+    );
+  }
+  doc.setTextColor(0, 0, 0);
 
   // Save the PDF
   const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${formatDateKey()}.pdf`;

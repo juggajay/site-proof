@@ -20,7 +20,11 @@ const publicHoldPointReleaseTokenInclude = {
       itpChecklistItem: true,
       lot: {
         include: {
-          project: true,
+          project: {
+            include: {
+              company: { select: { id: true, name: true, logoUrl: true } },
+            },
+          },
           itpInstance: {
             include: {
               template: {
@@ -124,7 +128,9 @@ export function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPoint
       releasedByName: holdPoint.releasedByName,
       releasedByOrg: holdPoint.releasedByOrg,
       releaseMethod: holdPoint.releaseMethod,
+      releaseSignatureUrl: holdPoint.releaseSignatureUrl,
       releaseNotes: holdPoint.releaseNotes,
+      notificationSentTo: holdPoint.notificationSentTo,
     },
     lot,
     itpTemplate,

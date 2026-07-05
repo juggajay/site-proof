@@ -684,7 +684,18 @@ describe('pdfGenerator characterization', () => {
   });
 
   it('preserves released hold point evidence package sections, checklist, tests, photos, and filename', async () => {
-    await generateHPEvidencePackagePDF(releasedHpEvidencePackageFixture);
+    // Local variant carrying the release signature + recipient of record so the
+    // Release Authorisation block renders. The shared fixture stays
+    // signature-free so the branding test can still assert no addImage.
+    const signedFixture: typeof releasedHpEvidencePackageFixture = {
+      ...releasedHpEvidencePackageFixture,
+      holdPoint: {
+        ...releasedHpEvidencePackageFixture.holdPoint,
+        releaseSignatureUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+        notificationSentTo: 'super@client.example',
+      },
+    };
+    await generateHPEvidencePackagePDF(signedFixture);
 
     const doc = latestPdf();
     const text = renderedText(doc);
@@ -703,12 +714,21 @@ describe('pdfGenerator characterization', () => {
         'Hold Point Description: Subgrade proof roll prior to pavement layer',
         'Released By: Sam Supervisor, Client Superintendent Org',
         'Release Method: Secure Link',
+        'Recipient of Record: super@client.example',
         'Release Notes: Released after surveyor confirmed level tolerance.',
+        'Release Signature:',
+        'Signed electronically by Sam Supervisor',
       ]),
     );
+    // The signature image is embedded.
+    expect(doc.operations.some((operation) => operation.name === 'addImage')).toBe(true);
     // Date labels render (locale-formatted values intentionally not asserted)
     expect(textContent).toContain('Scheduled Date:');
     expect(textContent).toContain('Released:');
+    // Per-page document footer identity.
+    expect(textContent).toContain('Page 1 of');
+    // Checklist accountability second line (who verified).
+    expect(textContent).toContain('Verified by Sam Supervisor');
 
     // Lot details (all optional fields populated)
     expect(text).toEqual(
@@ -777,10 +797,8 @@ describe('pdfGenerator characterization', () => {
         'Photos: 2',
         'Checklist Attachments: 1',
         'Photo List:',
-        '(Full photo images available in CIVOS system)',
         '6. Survey Data',
         'Chainage Range: 100 - 350',
-        '(Survey coordinates and as-built data available in CIVOS system)',
         '7. Evidence Summary',
         'Checklist Items Completed: 2 / 3',
         'Items Verified: 1',
@@ -795,6 +813,32 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).toContain('level-check.jpg');
 
     expect(textContent).not.toContain('SiteProof v2');
+    // Placeholder noise is gone.
+    expect(textContent).not.toContain('available in CIVOS system');
+  });
+
+  it('reserves a header band so the logo and title do not collide', async () => {
+    await generateHPEvidencePackagePDF({
+      ...releasedHpEvidencePackageFixture,
+      project: {
+        ...releasedHpEvidencePackageFixture.project,
+        company: { name: 'RYOX Carpentry', logoUrl: 'data:image/png;base64,iVBORw0KGgo=' },
+      },
+    });
+
+    const doc = latestPdf();
+    // Logo embedded top-right.
+    expect(doc.operations.some((operation) => operation.name === 'addImage')).toBe(true);
+    // Title is pushed below the logo band (band bottom 8+14=22, +6 gap = 28).
+    const titleOp = doc.operations.find(
+      (operation) =>
+        operation.name === 'text' &&
+        Array.isArray(operation.args[0]) &&
+        (operation.args[0] as string[])[0] === 'HOLD POINT EVIDENCE PACKAGE',
+    );
+    expect(titleOp).toBeDefined();
+    expect(titleOp!.args[2]).toBeGreaterThanOrEqual(28);
+    expect(renderedText(doc)).toContain('RYOX Carpentry');
   });
 
   it('omits empty hold point sections and renders fallbacks for a not-yet-released hold point', async () => {
@@ -817,8 +861,7 @@ describe('pdfGenerator characterization', () => {
         'ITP Template: Structures ITP - Headwall',
         'Completion Status: 0 / 0 items completed',
         'No test results recorded for this lot.',
-        '(Full photo images available in CIVOS system)',
-        '(Survey coordinates and as-built data available in CIVOS system)',
+        'None recorded for this lot.',
         'Checklist Items Completed: 0 / 0',
       ]),
     );
@@ -826,11 +869,15 @@ describe('pdfGenerator characterization', () => {
     // Optional lines for absent data are not emitted
     expect(textContent).not.toContain('Released By:');
     expect(textContent).not.toContain('Release Notes:');
+    expect(textContent).not.toContain('Release Signature:');
     expect(textContent).not.toContain('Scheduled Date:');
     expect(textContent).not.toContain('Project Number:');
     expect(textContent).not.toContain('Activity Type:');
     expect(textContent).not.toContain('Photo List:');
     expect(textContent).not.toContain('Chainage');
     expect(textContent).not.toContain('SiteProof v2');
+    expect(textContent).not.toContain('available in CIVOS system');
+    // Per-page document footer identity still stamps the (single) page.
+    expect(textContent).toContain('Page 1 of');
   });
 });
