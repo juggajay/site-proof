@@ -1,5 +1,5 @@
 import { formatDateKey } from '../localDate';
-import { drawPdfBrandingHeader } from './branding';
+import { drawPdfBrandingHeader, resolvePdfBranding } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
@@ -69,17 +69,28 @@ export async function generateHPEvidencePackagePDF(
   };
 
   // ========== HEADER ==========
+  // Reserve a header band so the logo and company name never overlap each other
+  // or the title: logo pinned top-right, name right-aligned to the LEFT of it
+  // (or top-right when there is no logo), and the title pushed below the band.
+  const branding = resolvePdfBranding(data);
+  const logoWidth = 28;
+  const logoHeight = 14;
+  const logoX = pageWidth - margin - logoWidth;
+  const logoY = 8;
   await drawPdfBrandingHeader(doc, data, {
-    logoX: pageWidth - margin - 28,
-    logoY: 5,
-    logoWidth: 28,
-    logoHeight: 16,
-    companyNameX: pageWidth - margin,
-    companyNameY: 10,
+    logoX,
+    logoY,
+    logoWidth,
+    logoHeight,
+    companyNameX: branding?.logoUrl ? logoX - 3 : pageWidth - margin,
+    companyNameY: branding?.logoUrl ? logoY + logoHeight / 2 + 1 : 12,
     companyNameAlign: 'right',
     companyNameColor: [75, 85, 99],
     companyNameFontSize: 8,
   });
+  if (branding) {
+    yPos = Math.max(yPos, logoY + logoHeight + 6);
+  }
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);

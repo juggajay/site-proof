@@ -817,6 +817,30 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).not.toContain('available in CIVOS system');
   });
 
+  it('reserves a header band so the logo and title do not collide', async () => {
+    await generateHPEvidencePackagePDF({
+      ...releasedHpEvidencePackageFixture,
+      project: {
+        ...releasedHpEvidencePackageFixture.project,
+        company: { name: 'RYOX Carpentry', logoUrl: 'data:image/png;base64,iVBORw0KGgo=' },
+      },
+    });
+
+    const doc = latestPdf();
+    // Logo embedded top-right.
+    expect(doc.operations.some((operation) => operation.name === 'addImage')).toBe(true);
+    // Title is pushed below the logo band (band bottom 8+14=22, +6 gap = 28).
+    const titleOp = doc.operations.find(
+      (operation) =>
+        operation.name === 'text' &&
+        Array.isArray(operation.args[0]) &&
+        (operation.args[0] as string[])[0] === 'HOLD POINT EVIDENCE PACKAGE',
+    );
+    expect(titleOp).toBeDefined();
+    expect(titleOp!.args[2]).toBeGreaterThanOrEqual(28);
+    expect(renderedText(doc)).toContain('RYOX Carpentry');
+  });
+
   it('omits empty hold point sections and renders fallbacks for a not-yet-released hold point', async () => {
     await generateHPEvidencePackagePDF(notifiedHpEvidencePackageFixture);
 
