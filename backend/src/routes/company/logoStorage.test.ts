@@ -6,14 +6,21 @@ vi.mock('../../lib/supabase.js', async () => {
   return {
     ...actual,
     isSupabaseConfigured: vi.fn(() => true),
+    getSupabaseClient: vi.fn(),
   };
 });
 
-import { isSupabaseConfigured } from '../../lib/supabase.js';
+import {
+  isSupabaseConfigured,
+  getSupabaseClient,
+  getSupabaseStorageReference,
+  DOCUMENTS_BUCKET,
+} from '../../lib/supabase.js';
 import {
   buildCompanyLogoDisplayUrl,
   buildCompanyLogoStorageFilename,
   createCompanyLogoAccessToken,
+  getCompanyLogoDataUrl,
   getCompanyLogoDisplayUrlCompanyId,
   getOwnedCompanyLogoStoragePath,
   shouldRemovePreviousLogoOnPatch,
@@ -21,6 +28,13 @@ import {
 } from './logoStorage.js';
 
 const mockIsSupabaseConfigured = vi.mocked(isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(getSupabaseClient);
+
+function storageClientWithDownload(download: () => Promise<unknown>) {
+  return { storage: { from: () => ({ download }) } } as unknown as ReturnType<
+    typeof getSupabaseClient
+  >;
+}
 const previousSupabaseUrl = process.env.SUPABASE_URL;
 
 function restoreLogoStorageTestEnvironment() {
@@ -35,6 +49,46 @@ function restoreLogoStorageTestEnvironment() {
 }
 
 afterEach(restoreLogoStorageTestEnvironment);
+
+describe('getCompanyLogoDataUrl (PDF embedding)', () => {
+  const ownedRef = getSupabaseStorageReference(
+    DOCUMENTS_BUCKET,
+    'company-logos/company-1/company-logo-company-1-a.png',
+  );
+
+  it('embeds a small owned logo as a base64 data URL', async () => {
+    const bytes = Buffer.from('PNGDATA');
+    mockGetSupabaseClient.mockReturnValue(
+      storageClientWithDownload(async () => ({
+        data: { arrayBuffer: async () => bytes },
+        error: null,
+      })),
+    );
+
+    expect(await getCompanyLogoDataUrl('company-1', ownedRef)).toBe(
+      `data:image/png;base64,${bytes.toString('base64')}`,
+    );
+  });
+
+  it('skips embedding when the logo exceeds the 200KB cap (falls back to URL)', async () => {
+    mockGetSupabaseClient.mockReturnValue(
+      storageClientWithDownload(async () => ({
+        data: { arrayBuffer: async () => Buffer.alloc(200 * 1024 + 1) },
+        error: null,
+      })),
+    );
+
+    expect(await getCompanyLogoDataUrl('company-1', ownedRef)).toBeNull();
+  });
+
+  it('returns null when Supabase is not configured or the logo is not owned', async () => {
+    mockIsSupabaseConfigured.mockReturnValue(false);
+    expect(await getCompanyLogoDataUrl('company-1', ownedRef)).toBeNull();
+
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    expect(await getCompanyLogoDataUrl('company-1', 'https://cdn.example.com/logo.png')).toBeNull();
+  });
+});
 
 describe('company logo storage helpers', () => {
   it('builds owned logo filenames only for supported image mime types', () => {

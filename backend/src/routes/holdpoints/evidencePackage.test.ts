@@ -581,15 +581,15 @@ describe('header mappers', () => {
     expect(mapped.chainageStart).toBe(chainageStart); // Decimal passed through
   });
 
-  it('mapHoldPointEvidenceProject selects id/name/projectNumber', () => {
+  it('mapHoldPointEvidenceProject selects id/name/projectNumber', async () => {
     expect(
-      mapHoldPointEvidenceProject({ id: 'p1', name: 'Highway', projectNumber: 'PRJ-9' }),
+      await mapHoldPointEvidenceProject({ id: 'p1', name: 'Highway', projectNumber: 'PRJ-9' }),
     ).toEqual({ id: 'p1', name: 'Highway', projectNumber: 'PRJ-9' });
   });
 
-  it('mapHoldPointEvidenceProject includes display-safe company branding when present', () => {
+  it('mapHoldPointEvidenceProject includes display-safe company branding when present', async () => {
     expect(
-      mapHoldPointEvidenceProject({
+      await mapHoldPointEvidenceProject({
         id: 'p1',
         name: 'Highway',
         projectNumber: 'PRJ-9',

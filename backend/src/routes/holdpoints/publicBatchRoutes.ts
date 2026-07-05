@@ -166,7 +166,7 @@ holdPointPublicBatchRouter.get(
     }
     assertPublicHoldPointTokenAvailable(releaseToken);
 
-    const { evidencePackage, tokenInfo } = buildPublicHoldPointReleasePayload(releaseToken);
+    const { evidencePackage, tokenInfo } = await buildPublicHoldPointReleasePayload(releaseToken);
     res.json(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo));
   }),
 );
@@ -193,7 +193,7 @@ holdPointPublicBatchRouter.get(
     }
     assertPublicHoldPointTokenAvailable(releaseToken);
 
-    const { evidencePackage } = buildPublicHoldPointReleasePayload(releaseToken);
+    const { evidencePackage } = await buildPublicHoldPointReleasePayload(releaseToken);
     const scopedDocumentIds = getPublicEvidenceDocumentIds(evidencePackage);
 
     if (!scopedDocumentIds.has(documentId)) {
