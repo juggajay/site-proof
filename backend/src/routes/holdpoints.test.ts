@@ -304,6 +304,11 @@ describe('Hold Points API', () => {
       expect(evidenceRes.body.evidencePackage.itpTemplate.name).toBe(
         'Snapshot Hold Point Template',
       );
+      // Company branding + release-authorisation fields are plumbed on the
+      // authed evidence-package payload (PR A).
+      expect(evidenceRes.body.evidencePackage.project.company?.name).toBeTruthy();
+      expect(evidenceRes.body.evidencePackage.holdPoint).toHaveProperty('releaseSignatureUrl');
+      expect(evidenceRes.body.evidencePackage.holdPoint).toHaveProperty('notificationSentTo');
       expect(evidenceRes.body.evidencePackage.checklist).toEqual(
         expect.arrayContaining([expect.objectContaining({ description: 'Snapshot hold point' })]),
       );
@@ -2510,6 +2515,11 @@ describe('Hold Point Token Release', () => {
     });
     expect(JSON.stringify(res.body.evidencePackage)).not.toContain('/uploads/documents/');
     expect(res.body.tokenInfo).toBeDefined();
+    // Company branding + release-authorisation fields are plumbed on the public
+    // token payload (PR A).
+    expect(res.body.evidencePackage.project.company?.name).toBeTruthy();
+    expect(res.body.evidencePackage.holdPoint).toHaveProperty('releaseSignatureUrl');
+    expect(res.body.evidencePackage.holdPoint).toHaveProperty('notificationSentTo');
   });
 
   it('should download only documents scoped to the public evidence package', async () => {

@@ -296,6 +296,8 @@ describe('Hold Point batch review-room public routes', () => {
     expect(res.body.isPublicAccess).toBe(true);
     expect(res.body.evidencePackage.holdPoint).toBeDefined();
     expect(res.body.tokenInfo.canRelease).toBe(true);
+    // Company branding is plumbed on the batch evidence payload (PR A).
+    expect(res.body.evidencePackage.project.company?.name).toBeTruthy();
     // Backend-mediated only — no raw storage URLs leak.
     expect(JSON.stringify(res.body.evidencePackage)).not.toContain('/uploads/documents/');
   });
@@ -381,6 +383,13 @@ describe('Hold Point batch review-room public routes', () => {
     // The matching ITP completions are reconciled to verified/completed.
     const completions = await prisma.iTPCompletion.findMany({ where: { itpInstanceId } });
     expect(completions.every((c) => c.verificationStatus === 'verified')).toBe(true);
+
+    // The stored release signature is now surfaced on the evidence payload (PR A).
+    const evidence = await request(app).get(
+      `/api/holdpoints/public/batch/${batchRawToken}/holdpoints/${holdPoint1Id}`,
+    );
+    expect(evidence.status).toBe(200);
+    expect(evidence.body.evidencePackage.holdPoint.releaseSignatureUrl).toBe(SIGNATURE_DATA_URL);
   });
 
   it('rejects re-releasing an already-released batch hold point without a second audit', async () => {

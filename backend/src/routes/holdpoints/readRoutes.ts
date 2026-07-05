@@ -286,7 +286,11 @@ holdPointReadRouter.get(
         itpChecklistItem: true,
         lot: {
           include: {
-            project: true,
+            project: {
+              include: {
+                company: { select: { id: true, name: true, logoUrl: true } },
+              },
+            },
             itpInstance: {
               include: {
                 template: {
@@ -350,11 +354,13 @@ holdPointReadRouter.get(
         description: holdPoint.description,
         status: holdPoint.status,
         notificationSentAt: holdPoint.notificationSentAt,
+        notificationSentTo: holdPoint.notificationSentTo,
         scheduledDate: holdPoint.scheduledDate,
         releasedAt: holdPoint.releasedAt,
         releasedByName: holdPoint.releasedByName,
         releasedByOrg: holdPoint.releasedByOrg,
         releaseMethod: holdPoint.releaseMethod,
+        releaseSignatureUrl: holdPoint.releaseSignatureUrl,
         releaseNotes: holdPoint.releaseNotes,
       },
       lot,
@@ -457,7 +463,11 @@ holdPointReadRouter.post(
     const lot = await prisma.lot.findUnique({
       where: { id: lotId },
       include: {
-        project: true,
+        project: {
+          include: {
+            company: { select: { id: true, name: true, logoUrl: true } },
+          },
+        },
         itpInstance: {
           include: {
             template: {
@@ -518,11 +528,13 @@ holdPointReadRouter.post(
         description: holdPointItem.description,
         status: 'pending',
         notificationSentAt: null,
+        notificationSentTo: null,
         scheduledDate: null,
         releasedAt: null,
         releasedByName: null,
         releasedByOrg: null,
         releaseMethod: null,
+        releaseSignatureUrl: null,
         releaseNotes: null,
       },
       lot,
