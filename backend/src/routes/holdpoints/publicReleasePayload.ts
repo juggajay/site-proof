@@ -105,7 +105,9 @@ export function assertPublicHoldPointTokenAvailable(
   }
 }
 
-export function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPointReleaseToken) {
+export async function buildPublicHoldPointReleasePayload(
+  releaseToken: PublicHoldPointReleaseToken,
+) {
   const holdPoint = releaseToken.holdPoint;
   const lot = holdPoint.lot;
   const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
@@ -115,7 +117,7 @@ export function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPoint
       liveFallback: holdPoint.itpChecklistItem,
     });
 
-  const evidencePackage = buildHoldPointEvidencePackage({
+  const evidencePackage = await buildHoldPointEvidencePackage({
     holdPoint: {
       id: holdPoint.id,
       description: holdPoint.description,
@@ -151,7 +153,9 @@ export function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPoint
 }
 
 export function getPublicEvidenceDocumentIds(
-  evidencePackage: ReturnType<typeof buildPublicHoldPointReleasePayload>['evidencePackage'],
+  evidencePackage: Awaited<
+    ReturnType<typeof buildPublicHoldPointReleasePayload>
+  >['evidencePackage'],
 ): Set<string> {
   const documentIds = new Set<string>();
 

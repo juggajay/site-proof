@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
+import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
 
 /**
  * Hold-point evidence-package presentation helpers, extracted verbatim from
@@ -259,7 +259,7 @@ export function mapHoldPointEvidenceLot(lot: EvidenceLotInput) {
   };
 }
 
-export function mapHoldPointEvidenceProject(project: EvidenceProjectInput) {
+export async function mapHoldPointEvidenceProject(project: EvidenceProjectInput) {
   const mappedProject = {
     id: project.id,
     name: project.name,
@@ -270,11 +270,16 @@ export function mapHoldPointEvidenceProject(project: EvidenceProjectInput) {
     return mappedProject;
   }
 
+  // Embed the logo as a data URL so client-side/public PDF generation needs no
+  // live fetch; fall back to the signed display URL when embedding isn't possible.
+  const embeddedLogo = await getCompanyLogoDataUrl(project.company.id, project.company.logoUrl);
+
   return {
     ...mappedProject,
     company: {
       name: project.company.name,
-      logoUrl: buildCompanyLogoDisplayUrl(project.company.id, project.company.logoUrl),
+      logoUrl:
+        embeddedLogo ?? buildCompanyLogoDisplayUrl(project.company.id, project.company.logoUrl),
     },
   };
 }
@@ -300,7 +305,7 @@ type BuildHoldPointEvidencePackageParams<THoldPoint extends Record<string, unkno
   extraFields?: Record<string, unknown>;
 };
 
-export function buildHoldPointEvidencePackage<THoldPoint extends Record<string, unknown>>({
+export async function buildHoldPointEvidencePackage<THoldPoint extends Record<string, unknown>>({
   holdPoint,
   lot,
   itpTemplate,
@@ -328,7 +333,7 @@ export function buildHoldPointEvidencePackage<THoldPoint extends Record<string, 
   return {
     holdPoint,
     lot: mapHoldPointEvidenceLot(lot),
-    project: mapHoldPointEvidenceProject(lot.project),
+    project: await mapHoldPointEvidenceProject(lot.project),
     itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
     checklist,
     testResults,

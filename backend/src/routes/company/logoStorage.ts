@@ -207,6 +207,40 @@ export function getCompanyLogoContentType(storagePath: string): string {
   return COMPANY_LOGO_MIME_BY_EXTENSION.get(path.extname(storagePath).toLowerCase()) || 'image/png';
 }
 
+// Logos are small; larger than this we skip embedding and fall back to the URL.
+const MAX_EMBEDDED_LOGO_BYTES = 200 * 1024;
+
+// Fetch a company logo as a base64 data URL for embedding directly into a
+// generated PDF. Removes the client-side cross-origin fetch (important on the
+// public release page, an external viewer on a flaky connection). Best-effort:
+// any failure (missing object, oversized, Supabase unset) returns null so the
+// caller falls back to the signed display URL. ponytail: Supabase-only — a dev
+// disk fallback would render the logo locally too, add it if dev ever needs it.
+export async function getCompanyLogoDataUrl(
+  companyId: string,
+  logoUrl: string | null | undefined,
+): Promise<string | null> {
+  if (!logoUrl || !isSupabaseConfigured()) return null;
+
+  const storagePath = getOwnedCompanyLogoStoragePath(logoUrl, companyId);
+  if (!storagePath) return null;
+
+  try {
+    const { data, error } = await getSupabaseClient()
+      .storage.from(DOCUMENTS_BUCKET)
+      .download(storagePath);
+    if (error || !data) return null;
+
+    const buffer = Buffer.from(await data.arrayBuffer());
+    if (buffer.byteLength === 0 || buffer.byteLength > MAX_EMBEDDED_LOGO_BYTES) return null;
+
+    return `data:${getCompanyLogoContentType(storagePath)};base64,${buffer.toString('base64')}`;
+  } catch (error) {
+    logError('Company logo embed failed:', error);
+    return null;
+  }
+}
+
 export function assertCompanyLogoUrlOwnedByCompany(
   logoUrl: string | null | undefined,
   companyId: string,

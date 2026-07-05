@@ -348,7 +348,7 @@ holdPointReadRouter.get(
         liveFallback: holdPoint.itpChecklistItem,
       });
 
-    const evidencePackage = buildHoldPointEvidencePackage({
+    const evidencePackage = await buildHoldPointEvidencePackage({
       holdPoint: {
         id: holdPoint.id,
         description: holdPoint.description,
@@ -522,7 +522,7 @@ holdPointReadRouter.post(
         checklistItemId: itpChecklistItemId,
       });
 
-    const evidencePackage = buildHoldPointEvidencePackage({
+    const evidencePackage = await buildHoldPointEvidencePackage({
       holdPoint: {
         id: 'preview', // Placeholder for preview
         description: holdPointItem.description,
