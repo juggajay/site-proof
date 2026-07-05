@@ -1,7 +1,9 @@
 // Feature #832: Enhanced signature pad styling
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Eraser, Check, PenTool } from 'lucide-react';
+import { Eraser, Check, PenTool, Type } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+type SignatureMode = 'draw' | 'type';
 
 interface SignaturePadProps {
   onChange: (dataUrl: string | null) => void;
@@ -48,6 +50,8 @@ export function SignaturePad({
   const hasSignatureRef = useRef(false);
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [mode, setMode] = useState<SignatureMode>('draw');
+  const [typedName, setTypedName] = useState('');
 
   // Resolved height — used for inline style on the canvas element.
   // Width is handled by fullWidth ? '100%' : fixed pixels; no JS needed.
@@ -127,7 +131,7 @@ export function SignaturePad({
 
   const startDrawing = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
-      if (!ctx || disabled) return;
+      if (!ctx || disabled || mode !== 'draw') return;
       e.preventDefault();
 
       const { x, y } = getCoordinates(e);
@@ -138,7 +142,7 @@ export function SignaturePad({
       setHasSignature(true);
       setIsFocused(true);
     },
-    [ctx, disabled, getCoordinates],
+    [ctx, disabled, mode, getCoordinates],
   );
 
   const draw = useCallback(
@@ -197,8 +201,60 @@ export function SignaturePad({
 
     hasSignatureRef.current = false;
     setHasSignature(false);
+    setTypedName('');
     onChange(null);
   }, [ctx, disabled, width, height, fullWidth, mobileHeight, onChange]);
+
+  // Type mode: render the typed full name onto the SAME canvas in a script font
+  // so the output dataURL contract is identical to a drawn signature.
+  const renderTypedSignature = useCallback(
+    (name: string) => {
+      if (!ctx || !canvasRef.current || disabled) return;
+
+      const drawWidth = fullWidth ? (containerRef.current?.clientWidth ?? width) : width;
+      const drawHeight = fullWidth ? Math.max(mobileHeight, height) : height;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, drawWidth, drawHeight);
+
+      const trimmed = name.trim();
+      if (!trimmed) {
+        hasSignatureRef.current = false;
+        setHasSignature(false);
+        onChange(null);
+        return;
+      }
+
+      const fontSize = Math.min(48, Math.max(24, Math.floor(drawHeight / 3)));
+      ctx.fillStyle = '#1a1a2e';
+      ctx.font = `italic ${fontSize}px "Segoe Script", "Brush Script MT", "Snell Roundhand", cursive`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(trimmed, drawWidth / 2, drawHeight / 2);
+      ctx.textAlign = 'start';
+      ctx.textBaseline = 'alphabetic';
+
+      hasSignatureRef.current = true;
+      setHasSignature(true);
+      onChange(canvasRef.current.toDataURL('image/png'));
+    },
+    [ctx, disabled, fullWidth, width, height, mobileHeight, onChange],
+  );
+
+  const handleTypedNameChange = useCallback(
+    (value: string) => {
+      setTypedName(value);
+      renderTypedSignature(value);
+    },
+    [renderTypedSignature],
+  );
+
+  // Switching modes starts a fresh signature so drawn and typed input never mix.
+  useEffect(() => {
+    clearSignature();
+    // Depend on mode only; clearSignature is stable for a given canvas config.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   return (
     <div className={cn('space-y-2', disabled && 'opacity-60', className)}>
@@ -208,6 +264,56 @@ export function SignaturePad({
           {label}
           {required && <span className="text-destructive ml-1">*</span>}
         </label>
+      )}
+
+      {/* Draw | Type mode toggle */}
+      <div
+        role="group"
+        aria-label="Signature input mode"
+        className="inline-flex rounded-md border border-border p-0.5"
+      >
+        {(['draw', 'type'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setMode(option)}
+            disabled={disabled}
+            aria-pressed={mode === option}
+            className={cn(
+              'flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors',
+              'min-h-[36px] disabled:cursor-not-allowed disabled:opacity-50',
+              mode === option
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {option === 'draw' ? (
+              <PenTool className="h-3.5 w-3.5" />
+            ) : (
+              <Type className="h-3.5 w-3.5" />
+            )}
+            {option === 'draw' ? 'Draw' : 'Type'}
+          </button>
+        ))}
+      </div>
+
+      {/* Type mode: full-name input rendered as a script signature on the canvas */}
+      {mode === 'type' && (
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground">
+            Full name
+            <input
+              type="text"
+              value={typedName}
+              onChange={(event) => handleTypedNameChange(event.target.value)}
+              disabled={disabled}
+              maxLength={120}
+              autoComplete="name"
+              placeholder="Type your full name"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            />
+          </label>
+        </div>
       )}
 
       {/*
@@ -257,7 +363,10 @@ export function SignaturePad({
             onTouchStart={startDrawing}
             onTouchMove={draw}
             onTouchEnd={stopDrawing}
-            className="cursor-crosshair touch-none bg-white"
+            className={cn(
+              'touch-none bg-white',
+              mode === 'draw' ? 'cursor-crosshair' : 'cursor-default',
+            )}
             aria-disabled={disabled}
             style={
               fullWidth
@@ -267,7 +376,7 @@ export function SignaturePad({
           />
 
           {/* Placeholder - Feature #832: Improved placeholder styling */}
-          {!hasSignature && (
+          {!hasSignature && mode === 'draw' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <PenTool className="h-8 w-8 text-muted-foreground/30 mb-2" />
               <span className="text-sm text-muted-foreground/50 font-medium">Sign here</span>
@@ -282,6 +391,9 @@ export function SignaturePad({
             </div>
           )}
         </div>
+        {mode === 'type' && (
+          <p className="mt-1 text-xs italic text-muted-foreground">Signed electronically</p>
+        )}
       </div>
 
       {/* Controls - Feature #832: Styled clear button */}
@@ -294,8 +406,17 @@ export function SignaturePad({
             </span>
           ) : (
             <span className="flex items-center gap-1.5">
-              <PenTool className="h-3.5 w-3.5" />
-              Draw your signature above
+              {mode === 'draw' ? (
+                <>
+                  <PenTool className="h-3.5 w-3.5" />
+                  Draw your signature above
+                </>
+              ) : (
+                <>
+                  <Type className="h-3.5 w-3.5" />
+                  Type your full name above
+                </>
+              )}
             </span>
           )}
         </span>
