@@ -343,9 +343,7 @@ export function RecordReleaseModal({
               disabled={!canSubmitRelease || recording}
               className={isMobile ? 'w-full' : 'mx-auto'}
             />
-            <p className="text-xs text-muted-foreground">
-              Draw your signature above to authorize this release
-            </p>
+            <p className="text-xs text-muted-foreground">Sign above to authorize this release</p>
           </div>
         ) : releaseMethod === 'email' ? (
           <div className="space-y-2">
