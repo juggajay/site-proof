@@ -1,6 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
-import { drawPdfBrandingHeader } from './branding';
+import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { TestCertificateData } from './types';
@@ -232,14 +232,11 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   doc.line(margin + 100, yPos - 5, margin + 160, yPos - 5);
 
   // ========== FOOTER ==========
-  const footerY = pageHeight - 15;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
-
-  doc.setFontSize(7);
-  doc.setTextColor(128, 128, 128);
-  doc.text(`Generated from CIVOS on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
-  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
+  drawPdfFooters(doc, {
+    margin,
+    generatedAt: new Date(),
+    docRef: `${data.project.name} / Test ${data.test.testRequestNumber || data.test.id}`,
+  });
 
   // Save the PDF
   const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${formatDateKey()}.pdf`;

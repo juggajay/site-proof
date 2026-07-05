@@ -51,8 +51,11 @@ describe('test certificate PDF characterization', () => {
         '98 %',
         'Specification: 95 - 100 %',
         'Verified By:',
-        'Civil Execution and Conformance Platform',
       ]),
     );
+    // Shared per-page document footer identity (replaces the old CIVOS platform line).
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Pacific Highway Upgrade / Test TR-001');
+    expect(textContent).not.toContain('Civil Execution and Conformance Platform');
   });
 });

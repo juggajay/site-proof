@@ -1,6 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
-import { drawPdfBrandingHeader, resolvePdfBranding } from './branding';
+import { drawPdfBrandingHeader, drawPdfFooters, resolvePdfBranding } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DashboardPDFAttentionItem, DashboardPDFData } from './types';
@@ -179,12 +179,11 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
     }
   }
 
-  const footerY = pageHeight - 15;
-  doc.setDrawColor(226, 232, 240);
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Generated from CIVOS on ${formatDateTime(data.generatedAt)}`, margin, footerY);
+  drawPdfFooters(doc, {
+    margin,
+    generatedAt: data.generatedAt,
+    docRef: `Dashboard · ${data.dateRange.label}`,
+  });
 
   const filenameDate = formatDateKey(new Date(data.generatedAt));
   savePdf(doc, `civos-dashboard-${filenameDate}.pdf`, 'civos-dashboard.pdf');

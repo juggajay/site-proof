@@ -10,6 +10,7 @@ type PdfBrandingDocument = {
     width: number,
     height: number,
   ) => unknown;
+  getImageProperties?: (imageData: string) => { width: number; height: number } | undefined;
   setFont: (fontName: string, fontStyle?: string) => unknown;
   setFontSize: (size: number) => unknown;
   setTextColor: (ch1: number, ch2?: number, ch3?: number, ch4?: number) => unknown;
@@ -20,6 +21,25 @@ type PdfBrandingDocument = {
     options?: { align?: 'left' | 'center' | 'right' },
   ) => unknown;
 };
+
+// Fit width×height into the box preserving aspect ratio; returns the drawn size
+// and a right-aligned x so the logo stays pinned to the box's right edge.
+function fitLogoBox(
+  doc: PdfBrandingDocument,
+  imageData: string,
+  boxX: number,
+  boxWidth: number,
+  boxHeight: number,
+): { x: number; width: number; height: number } {
+  const props = doc.getImageProperties?.(imageData);
+  if (!props?.width || !props?.height) {
+    return { x: boxX, width: boxWidth, height: boxHeight };
+  }
+  const scale = Math.min(boxWidth / props.width, boxHeight / props.height);
+  const width = props.width * scale;
+  const height = props.height * scale;
+  return { x: boxX + (boxWidth - width), width, height };
+}
 
 type DrawPdfBrandingOptions = {
   logoX: number;
@@ -158,13 +178,20 @@ export async function drawPdfBrandingHeader(
 
   if (logoDataUrl && doc.addImage) {
     try {
+      const fit = fitLogoBox(
+        doc,
+        logoDataUrl,
+        options.logoX,
+        options.logoWidth,
+        options.logoHeight,
+      );
       doc.addImage(
         logoDataUrl,
         inferImageFormat(logoDataUrl),
-        options.logoX,
+        fit.x,
         options.logoY,
-        options.logoWidth,
-        options.logoHeight,
+        fit.width,
+        fit.height,
       );
     } catch {
       // Keep PDF generation best-effort when a browser cannot decode a logo.
@@ -180,4 +207,89 @@ export async function drawPdfBrandingHeader(
       align: options.companyNameAlign ?? 'right',
     });
   }
+}
+
+// Shared empty-section copy — replaces per-generator "(… available in CIVOS)"
+// placeholder noise so an unpopulated section reads as a finished record.
+export const PDF_NONE_RECORDED = 'None recorded for this lot.';
+
+// Collision-safe branded header band for simple text-header generators: logo
+// pinned top-right (aspect-fit), company name right-aligned to its left (or
+// top-right when logo-only), returning the Y where body content must start so
+// nothing collides with the band. Generalized from holdPointEvidencePdf (#1330).
+// Generators with a full-width coloured header bar keep their own layout — they
+// still get the aspect-fit logo via drawPdfBrandingHeader.
+export async function drawPdfHeaderBand(
+  doc: PdfBrandingDocument,
+  data: PDFBrandableData | PDFBrandingData | null | undefined,
+  opts: {
+    pageWidth: number;
+    margin: number;
+    topY?: number;
+    logoWidth?: number;
+    logoHeight?: number;
+  },
+): Promise<number> {
+  const branding = resolvePdfBranding(data);
+  if (!branding) {
+    return opts.margin;
+  }
+
+  const logoWidth = opts.logoWidth ?? 28;
+  const logoHeight = opts.logoHeight ?? 14;
+  const logoY = opts.topY ?? 8;
+  const logoX = opts.pageWidth - opts.margin - logoWidth;
+  await drawPdfBrandingHeader(doc, data, {
+    logoX,
+    logoY,
+    logoWidth,
+    logoHeight,
+    companyNameX: branding.logoUrl ? logoX - 3 : opts.pageWidth - opts.margin,
+    companyNameY: branding.logoUrl ? logoY + logoHeight / 2 + 1 : logoY + 4,
+    companyNameAlign: 'right',
+    companyNameColor: [75, 85, 99],
+    companyNameFontSize: 8,
+  });
+  return Math.max(opts.margin, logoY + logoHeight + 6);
+}
+
+type PdfFooterDocument = {
+  getNumberOfPages: () => number;
+  setPage: (page: number) => unknown;
+  setFont: (fontName: string, fontStyle?: string) => unknown;
+  setFontSize: (size: number) => unknown;
+  setTextColor: (ch1: number, ch2?: number, ch3?: number, ch4?: number) => unknown;
+  text: (
+    text: string,
+    x: number,
+    y: number,
+    options?: { align?: 'left' | 'center' | 'right' | 'justify' },
+  ) => unknown;
+  internal: { pageSize: { getHeight: () => number } };
+};
+
+// Stamp "Page X of Y · Generated {ts} · {docRef}" on every page. One shared
+// footer so every downloadable file carries the same document identity.
+export function drawPdfFooters(
+  doc: PdfFooterDocument,
+  opts: { margin: number; generatedAt: string | number | Date; docRef: string },
+): void {
+  const generated = new Date(opts.generatedAt).toLocaleString('en-AU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(128, 128, 128);
+    doc.text(
+      `Page ${page} of ${pageCount}  ·  Generated ${generated}  ·  ${opts.docRef}`,
+      opts.margin,
+      pageHeight - 8,
+    );
+  }
+  doc.setTextColor(0, 0, 0);
 }

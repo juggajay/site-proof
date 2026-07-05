@@ -1,5 +1,5 @@
 import { formatDateKey } from '../localDate';
-import { drawPdfBrandingHeader, resolvePdfBranding } from './branding';
+import { drawPdfHeaderBand, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
@@ -69,28 +69,9 @@ export async function generateHPEvidencePackagePDF(
   };
 
   // ========== HEADER ==========
-  // Reserve a header band so the logo and company name never overlap each other
-  // or the title: logo pinned top-right, name right-aligned to the LEFT of it
-  // (or top-right when there is no logo), and the title pushed below the band.
-  const branding = resolvePdfBranding(data);
-  const logoWidth = 28;
-  const logoHeight = 14;
-  const logoX = pageWidth - margin - logoWidth;
-  const logoY = 8;
-  await drawPdfBrandingHeader(doc, data, {
-    logoX,
-    logoY,
-    logoWidth,
-    logoHeight,
-    companyNameX: branding?.logoUrl ? logoX - 3 : pageWidth - margin,
-    companyNameY: branding?.logoUrl ? logoY + logoHeight / 2 + 1 : 12,
-    companyNameAlign: 'right',
-    companyNameColor: [75, 85, 99],
-    companyNameFontSize: 8,
-  });
-  if (branding) {
-    yPos = Math.max(yPos, logoY + logoHeight + 6);
-  }
+  // Shared collision-safe branded header band (logo top-right, name to its left,
+  // body pushed below); returns the Y where content must start.
+  yPos = await drawPdfHeaderBand(doc, data, { pageWidth, margin });
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
@@ -492,25 +473,12 @@ export async function generateHPEvidencePackagePDF(
     yPos,
   );
 
-  // Document identity on every page: page X of Y, generated timestamp, and the
-  // project / lot this record belongs to.
-  const generatedFooter = new Date(data.generatedAt).toLocaleString('en-AU', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+  // Document identity on every page (shared chrome).
+  drawPdfFooters(doc, {
+    margin,
+    generatedAt: data.generatedAt,
+    docRef: `${data.project.name} / Lot ${data.lot.lotNumber}`,
   });
-  const pageCount = doc.getNumberOfPages();
-  for (let page = 1; page <= pageCount; page += 1) {
-    doc.setPage(page);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(128, 128, 128);
-    doc.text(
-      `Page ${page} of ${pageCount}  ·  Generated ${generatedFooter}  ·  ${data.project.name} / Lot ${data.lot.lotNumber}`,
-      margin,
-      pageHeight - 8,
-    );
-  }
-  doc.setTextColor(0, 0, 0);
 
   // Save the PDF
   const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${formatDateKey()}.pdf`;

@@ -68,7 +68,7 @@ import {
 } from './components/BatchRequestReleaseModal';
 import { downloadCsv } from '@/lib/csv';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { getReleaseIdentityText, getReleaseMethodLabel } from './holdPointReleaseIdentity';
+import { getReleaseMethodLabel } from './holdPointReleaseIdentity';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 
@@ -628,6 +628,8 @@ export function HoldPointsPage() {
       'Scheduled Date',
       'Released At',
       'Released By',
+      'Released By Org',
+      'Recipient',
       'Release Method',
       'Release Notes',
     ];
@@ -638,7 +640,9 @@ export function HoldPointsPage() {
       getStatusLabel(hp.status),
       formatHoldPointDate(hp.scheduledDate),
       formatHoldPointDate(hp.releasedAt),
-      hp.releasedAt ? getReleaseIdentityText(hp) : '-',
+      hp.releasedByName || '-',
+      hp.releasedByOrg || '-',
+      hp.releaseRecipientEmail || '-',
       getReleaseMethodLabel(hp.releaseMethod) || '-',
       hp.releaseNotes || '-',
     ]);

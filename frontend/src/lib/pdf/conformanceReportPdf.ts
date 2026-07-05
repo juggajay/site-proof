@@ -1,6 +1,6 @@
 import { formatDateKey } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
-import { drawPdfBrandingHeader } from './branding';
+import { drawPdfBrandingHeader, drawPdfFooters, PDF_NONE_RECORDED } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultConformanceOptions } from './types';
@@ -545,12 +545,15 @@ export async function generateConformanceReportPDF(
   yPos += 7;
 
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${data.photoCount} photos attached to ITP checklist items.`, margin, yPos);
-  yPos += 5;
-  doc.setFont('helvetica', 'italic');
-  doc.text('(Photo images available in the CIVOS system)', margin, yPos);
-  yPos += 10;
+  if (data.photoCount > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${data.photoCount} photos attached to ITP checklist items.`, margin, yPos);
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.text(PDF_NONE_RECORDED, margin, yPos);
+    doc.setFont('helvetica', 'normal');
+  }
+  yPos += 15;
 
   // ========== SIGNATURE BLOCK (Road Authority Formats) ==========
   if (formatConfig.requiresSignature) {
@@ -607,20 +610,14 @@ export async function generateConformanceReportPDF(
     }
   }
 
-  // ========== FOOTER ==========
+  // ========== CERTIFICATION FOOTNOTE (jurisdictional) ==========
+  // Format-specific compliance statement stays as body content; per-page
+  // document identity (page/generated/ref) comes from the shared footer below.
   checkPageBreak(20);
   drawLine();
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(128, 128, 128);
-  const generatedDate = new Date().toLocaleString('en-AU', {
-    dateStyle: 'full',
-    timeStyle: 'medium',
-  });
-  doc.text(`Generated: ${generatedDate}`, margin, yPos);
-  yPos += 4;
-
-  // Format-specific footer text
   if (options.format === 'tmr') {
     doc.text('Prepared in accordance with TMR MRTS Standards - CIVOS', margin, yPos);
   } else if (options.format === 'tfnsw') {
@@ -638,6 +635,13 @@ export async function generateConformanceReportPDF(
       yPos,
     );
   }
+
+  // Document identity on every page (shared chrome).
+  drawPdfFooters(doc, {
+    margin,
+    generatedAt: new Date(),
+    docRef: `${data.project.name} / Lot ${data.lot.lotNumber}`,
+  });
 
   // Save the PDF with format-specific filename
   const formatSuffix = options.format !== 'standard' ? `-${options.format.toUpperCase()}` : '';

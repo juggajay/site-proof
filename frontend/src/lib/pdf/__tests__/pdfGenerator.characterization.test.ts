@@ -61,6 +61,11 @@ describe('pdfGenerator characterization', () => {
     expect(text).toEqual(expect.arrayContaining(['Dashboard Summary', 'Gateway Civil Pty Ltd']));
     expect(doc.operations.some((operation) => operation.name === 'addImage')).toBe(false);
     expect(doc.savedFilename).toBe('civos-dashboard-2026-05-28.pdf');
+    // Shared per-page document footer identity (replaces the old CIVOS footer line).
+    const textContent = text.join('\n');
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Dashboard · Last 30 days');
+    expect(textContent).not.toContain('Generated from CIVOS on');
   });
 
   it('renders a bounded dashboard logo when branding provides an image data URL', async () => {
@@ -77,7 +82,9 @@ describe('pdfGenerator characterization', () => {
     const doc = latestPdf();
     const logo = doc.operations.find((operation) => operation.name === 'addImage');
 
-    expect(logo?.args).toEqual([logoDataUrl, 'PNG', 160, 8, 30, 18]);
+    // Aspect-fit: a 2:1 logo (recorder getImageProperties → 200×100) fits the
+    // 30×18 box to 30×15, right-aligned within it.
+    expect(logo?.args).toEqual([logoDataUrl, 'PNG', 160, 8, 30, 15]);
     expect(renderedText(doc)).toContain('Gateway Civil Pty Ltd');
   });
 
@@ -230,9 +237,12 @@ describe('pdfGenerator characterization', () => {
         '1. headwall-repair-photo.jpg',
         'Activity Timeline',
         '1. NCR raised',
-        'Civil Execution and Conformance Platform',
       ]),
     );
+    // Shared per-page document footer identity (replaces the old CIVOS platform line).
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Pacific Highway Upgrade / NCR-0009');
+    expect(textContent).not.toContain('Civil Execution and Conformance Platform');
     expect(textContent).toContain('Type: Rectification Photo | MIME: image/jpeg');
     expect(textContent).not.toContain('4200 hrs');
     expect(textContent).not.toContain('1800 hrs');
@@ -349,9 +359,12 @@ describe('pdfGenerator characterization', () => {
         'I certify that the hours claimed in this docket have been verified and approved.',
         'Approved By:',
         'Signature',
-        'Civil Execution and Conformance Platform',
       ]),
     );
+    // Shared per-page document footer identity.
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Pacific Highway Upgrade / Docket SD-0042');
+    expect(textContent).not.toContain('Civil Execution and Conformance Platform');
     expect(textContent).not.toContain('SiteProof v2');
   });
 
@@ -438,9 +451,12 @@ describe('pdfGenerator characterization', () => {
         'Plant: 1 items (7.0 hrs)',
         'Activities: 1',
         'Delays: 1 (0.8 hrs)',
-        'Civil Execution and Conformance Platform',
       ]),
     );
+    // Shared per-page document footer identity.
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Pacific Highway Upgrade / Diary 2026-05-28');
+    expect(textContent).not.toContain('Civil Execution and Conformance Platform');
     expect(textContent).not.toContain('SiteProof v2');
   });
 
@@ -564,9 +580,12 @@ describe('pdfGenerator characterization', () => {
         'Signature',
         'Name',
         'Date',
-        'CIVOS - Civil Execution and Conformance Platform',
       ]),
     );
+    // Shared per-page document footer identity (replaces the cover + declaration CIVOS lines).
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Pacific Highway Upgrade / Claim #7');
+    expect(textContent).not.toContain('CIVOS - Civil Execution and Conformance Platform');
     expect(textContent).not.toContain('All lots included have been completed');
     expect(textContent).not.toContain('SiteProof v2');
   });
@@ -879,5 +898,67 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).not.toContain('available in CIVOS system');
     // Per-page document footer identity still stamps the (single) page.
     expect(textContent).toContain('Page 1 of');
+  });
+
+  it('preserves standard conformance report sections, empty-state fallbacks, and filename', async () => {
+    const conformanceFixture: ConformanceReportData = {
+      lot: {
+        lotNumber: 'EW-001',
+        description: 'Bulk earthworks to subgrade level',
+        status: 'conformed',
+        activityType: 'Earthworks',
+        chainageStart: 100,
+        chainageEnd: 350,
+        layer: 'Subgrade',
+        areaZone: null,
+        conformedAt: '2026-05-28T01:00:00.000Z',
+        conformedBy: { fullName: 'Jordan Surveyor', email: 'jordan@example.com' },
+      },
+      project: {
+        name: 'Pacific Highway Upgrade',
+        projectNumber: 'PHU-001',
+      },
+      itp: null,
+      testResults: [],
+      ncrs: [],
+      holdPointReleases: [],
+      photoCount: 0,
+    };
+
+    await generateConformanceReportPDF(conformanceFixture, {
+      ...defaultConformanceOptions,
+      format: 'standard',
+    });
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+    const textContent = text.join('\n');
+
+    expect(doc.savedFilename).toBe('Conformance-Report-EW-001-2026-05-28.pdf');
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'LOT CONFORMANCE REPORT',
+        'Project Information',
+        'Project: Pacific Highway Upgrade',
+        'Lot Information',
+        'Lot Number: EW-001',
+        'STATUS: CONFORMED',
+        'ITP Checklist Summary',
+        'No ITP assigned to this lot.',
+        'Test Results Summary',
+        'No test results recorded for this lot.',
+        'Hold Point Releases',
+        'NCR Summary',
+        'No NCRs raised for this lot.',
+        'Photo Evidence',
+        // Photo placeholder noise replaced by the shared empty-section copy.
+        'None recorded for this lot.',
+        'This report was generated by CIVOS - Construction Quality Management System',
+      ]),
+    );
+    // Shared per-page document footer identity.
+    expect(textContent).toContain('Page 1 of');
+    expect(textContent).toContain('Pacific Highway Upgrade / Lot EW-001');
+    expect(textContent).not.toContain('available in the CIVOS system');
   });
 });

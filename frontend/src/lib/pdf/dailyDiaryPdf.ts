@@ -1,5 +1,5 @@
 import { devLog } from '../logger';
-import { drawPdfBrandingHeader } from './branding';
+import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DailyDiaryPDFData } from './types';
@@ -467,17 +467,14 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   yPos += 35;
 
   // ========== FOOTER ==========
-  const footerY = pageHeight - 15;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
-
-  doc.setFontSize(7);
-  doc.setTextColor(128, 128, 128);
-  doc.text(`Generated from CIVOS on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
-  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
+  const diaryDate = data.diary.date.split('T')[0];
+  drawPdfFooters(doc, {
+    margin,
+    generatedAt: new Date(),
+    docRef: `${data.project.name} / Diary ${diaryDate}`,
+  });
 
   // Save the PDF
-  const diaryDate = data.diary.date.split('T')[0];
   const filename = `Daily-Diary-${diaryDate}-${data.diary.status}.pdf`;
   savePdf(doc, filename, 'daily-diary.pdf');
 
