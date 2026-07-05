@@ -60,6 +60,7 @@ export function RecordReleaseModal({
   const [paperEvidenceFile, setPaperEvidenceFile] = useState<File | null>(null);
   // Feature #884: Signature capture state
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [signatureMode, setSignatureMode] = useState<'draw' | 'type'>('draw');
 
   const {
     register,
@@ -342,9 +343,12 @@ export function RecordReleaseModal({
               mobileHeight={160}
               disabled={!canSubmitRelease || recording}
               className={isMobile ? 'w-full' : 'mx-auto'}
+              onModeChange={setSignatureMode}
             />
             <p className="text-xs text-muted-foreground">
-              Draw your signature above to authorize this release
+              {signatureMode === 'type'
+                ? 'Type your full name above to sign electronically'
+                : 'Draw your signature above to authorize this release'}
             </p>
           </div>
         ) : releaseMethod === 'email' ? (
