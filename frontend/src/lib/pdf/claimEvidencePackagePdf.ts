@@ -1,7 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
-import { drawPdfBrandingHeader } from './branding';
+import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
@@ -167,18 +167,6 @@ export async function generateClaimEvidencePackagePDF(
     { align: 'center' },
   );
   doc.text(`State: ${data.project.state || 'NSW'}`, pageWidth / 2, 248, { align: 'center' });
-
-  // Footer
-  doc.setFontSize(8);
-  doc.setTextColor(128, 128, 128);
-  const generatedDate = new Date(data.generatedAt).toLocaleString('en-AU');
-  doc.text(`Generated: ${generatedDate}`, margin, pageHeight - 15);
-  doc.text(
-    'CIVOS - Civil Execution and Conformance Platform',
-    pageWidth - margin,
-    pageHeight - 15,
-    { align: 'right' },
-  );
 
   // ========== LOT SUMMARY TABLE (Page 2) ==========
   if (options.includeLotSummary) {
@@ -595,22 +583,14 @@ export async function generateClaimEvidencePackagePDF(
     yPos += 5;
     doc.text('Date', margin, yPos);
     yPos += 25;
-
-    // Footer with generation info
-    doc.setFontSize(8);
-    doc.setTextColor(128, 128, 128);
-    doc.text(
-      `Evidence package generated: ${new Date(data.generatedAt).toLocaleString('en-AU')}`,
-      margin,
-      pageHeight - 25,
-    );
-    doc.text(
-      `Generation time: ${data.generationTimeMs}ms (data fetch) + ${Date.now() - startTime}ms (PDF)`,
-      margin,
-      pageHeight - 20,
-    );
-    doc.text('CIVOS - Civil Execution and Conformance Platform', margin, pageHeight - 15);
   }
+
+  // Document identity on every page (shared chrome).
+  drawPdfFooters(doc, {
+    margin,
+    generatedAt: data.generatedAt,
+    docRef: `${data.project.name} / Claim #${data.claim.claimNumber}`,
+  });
 
   // Save the PDF
   const filename = `Claim-${data.claim.claimNumber}-Evidence-Package-${formatDateKey()}.pdf`;

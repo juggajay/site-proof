@@ -26,6 +26,11 @@ export class JsPdfRecorder {
     this.operations.push({ name: 'addImage', args });
   }
 
+  // Landscape 2:1 so aspect-fit logic is exercised (a square box → half height).
+  getImageProperties(_imageData: string) {
+    return { width: 200, height: 100 };
+  }
+
   addPage() {
     this.pageCount += 1;
     this.operations.push({ name: 'addPage', args: [] });
