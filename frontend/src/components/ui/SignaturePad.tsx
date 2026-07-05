@@ -7,6 +7,8 @@ type SignatureMode = 'draw' | 'type';
 
 interface SignaturePadProps {
   onChange: (dataUrl: string | null) => void;
+  /** Notifies the consumer when the Draw|Type mode changes (for mode-aware copy). */
+  onModeChange?: (mode: SignatureMode) => void;
   width?: number;
   height?: number;
   className?: string;
@@ -34,6 +36,7 @@ interface SignaturePadProps {
 
 export function SignaturePad({
   onChange,
+  onModeChange,
   width = 400,
   height = 200,
   className = '',
@@ -276,7 +279,10 @@ export function SignaturePad({
           <button
             key={option}
             type="button"
-            onClick={() => setMode(option)}
+            onClick={() => {
+              setMode(option);
+              onModeChange?.(option);
+            }}
             disabled={disabled}
             aria-pressed={mode === option}
             className={cn(

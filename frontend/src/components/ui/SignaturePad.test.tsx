@@ -56,6 +56,17 @@ describe('SignaturePad typed mode', () => {
     expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
+  it('notifies onModeChange when the mode toggle is used', () => {
+    const onModeChange = vi.fn();
+    render(<SignaturePad onChange={vi.fn()} onModeChange={onModeChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /type/i }));
+    expect(onModeChange).toHaveBeenLastCalledWith('type');
+
+    fireEvent.click(screen.getByRole('button', { name: /draw/i }));
+    expect(onModeChange).toHaveBeenLastCalledWith('draw');
+  });
+
   it('disables the mode toggle when disabled', () => {
     render(<SignaturePad onChange={vi.fn()} disabled />);
     expect(screen.getByRole('button', { name: /draw/i })).toBeDisabled();
