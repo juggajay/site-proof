@@ -87,7 +87,9 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
 
   if (
     lot.status === 'conformed' &&
-    getClaimBlockingReasonsForConformedLot(conformStatus).length === 0
+    getClaimBlockingReasonsForConformedLot(conformStatus, {
+      conformanceOverridden: lot.conformanceOverriddenAt != null,
+    }).length === 0
   ) {
     return [
       item({
@@ -254,7 +256,10 @@ function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
       }),
     );
   } else {
-    const currentConformanceBlockers = getClaimBlockingReasonsForConformedLot(conformStatus);
+    const overridden = lot.conformanceOverriddenAt != null;
+    const currentConformanceBlockers = getClaimBlockingReasonsForConformedLot(conformStatus, {
+      conformanceOverridden: overridden,
+    });
     if (currentConformanceBlockers.length > 0) {
       items.push(
         item({
@@ -265,6 +270,21 @@ function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
           detail: 'Conformance is no longer current — see the Conformance card.',
           blocksAction: true,
           actionLabel: 'Review conformance',
+        }),
+      );
+    } else if (overridden) {
+      // Force-conformance accepted the outstanding quality prerequisites. Surface
+      // it as a support item so the override is visible on the claim card rather
+      // than the lot silently looking fully compliant.
+      const overriddenOn = lot.conformanceOverriddenAt!.slice(0, 10);
+      items.push(
+        item({
+          code: 'conformance_overridden',
+          severity: 'support',
+          area: 'conformance',
+          title: 'Conformance accepted by override',
+          detail: `An owner or admin force-conformed this lot on ${overriddenOn}.`,
+          blocksAction: false,
         }),
       );
     }
@@ -495,7 +515,9 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
     input.lot.status === 'claimed'
       ? 'already_claimed'
       : input.lot.status === 'conformed' &&
-          getClaimBlockingReasonsForConformedLot(input.conformStatus).length === 0
+          getClaimBlockingReasonsForConformedLot(input.conformStatus, {
+            conformanceOverridden: input.lot.conformanceOverriddenAt != null,
+          }).length === 0
         ? 'already_conformed'
         : bucketState(conformanceItems);
 

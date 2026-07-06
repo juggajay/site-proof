@@ -64,6 +64,7 @@ model User {
   projectUsers                ProjectUser[]
   createdLots                 Lot[]                        @relation("CreatedByUser")
   conformedLots               Lot[]                        @relation("ConformedByUser")
+  conformanceOverriddenLots   Lot[]                        @relation("ConformanceOverriddenByUser")
   raisedNCRs                  NCR[]                        @relation("RaisedByUser")
   responsibleNCRs             NCR[]                        @relation("ResponsibleUser")
   verifiedNCRs                NCR[]                        @relation("VerifiedByUser")
@@ -462,6 +463,13 @@ model Lot {
   createdById             String?   @map("created_by")
   conformedAt             DateTime? @map("conformed_at")
   conformedById           String?   @map("conformed_by")
+  // Force-conformance override marker (owner/admin). Persisted so the claim
+  // gate can distinguish a deliberate override from a later regression; kept
+  // in sync with conformedAt/ById (set on force-conform, cleared on override
+  // back to an operational status).
+  conformanceOverriddenAt   DateTime? @map("conformance_overridden_at")
+  conformanceOverriddenById String?   @map("conformance_overridden_by")
+  conformanceOverrideReason String?   @map("conformance_override_reason")
   claimedInId             String?   @map("claimed_in_id")
   notes                   String?
   createdAt               DateTime  @default(now()) @map("created_at")
@@ -472,6 +480,7 @@ model Lot {
   assignedSubcontractor SubcontractorCompany? @relation(fields: [assignedSubcontractorId], references: [id], onDelete: SetNull)
   createdBy             User?                 @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: SetNull)
   conformedBy           User?                 @relation("ConformedByUser", fields: [conformedById], references: [id], onDelete: SetNull)
+  conformanceOverriddenBy User?               @relation("ConformanceOverriddenByUser", fields: [conformanceOverriddenById], references: [id], onDelete: SetNull)
   claimedIn             ProgressClaim?        @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
 
   itpInstance              ITPInstance?

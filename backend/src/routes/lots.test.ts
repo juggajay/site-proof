@@ -144,6 +144,67 @@ describe('Lots API', () => {
     vi.restoreAllMocks();
   });
 
+  describe('POST /api/lots/:id/conform — force-conformance override marker', () => {
+    it('persists the override columns when force-conformed, and clears them on override-status back-transition', async () => {
+      // A lot with no ITP cannot conform normally, so force is required.
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `FORCE-CONF-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+        },
+      });
+
+      const forceRes = await request(app)
+        .post(`/api/lots/${lot.id}/conform`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ force: true, reason: 'Client accepted as-built deviation' });
+
+      expect(forceRes.status).toBe(200);
+
+      const overridden = await prisma.lot.findUnique({
+        where: { id: lot.id },
+        select: {
+          status: true,
+          conformanceOverriddenAt: true,
+          conformanceOverriddenById: true,
+          conformanceOverrideReason: true,
+        },
+      });
+      expect(overridden?.status).toBe('conformed');
+      expect(overridden?.conformanceOverriddenAt).toBeInstanceOf(Date);
+      expect(overridden?.conformanceOverriddenById).toBe(userId);
+      expect(overridden?.conformanceOverrideReason).toBe('Client accepted as-built deviation');
+
+      // Overriding the conformed lot back to an operational status clears the
+      // marker (and the conformance stamp).
+      const backRes = await request(app)
+        .post(`/api/lots/${lot.id}/override-status`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'in_progress', reason: 'Reopened for rework' });
+
+      expect(backRes.status).toBe(200);
+
+      const cleared = await prisma.lot.findUnique({
+        where: { id: lot.id },
+        select: {
+          status: true,
+          conformedAt: true,
+          conformanceOverriddenAt: true,
+          conformanceOverriddenById: true,
+          conformanceOverrideReason: true,
+        },
+      });
+      expect(cleared?.status).toBe('in_progress');
+      expect(cleared?.conformedAt).toBeNull();
+      expect(cleared?.conformanceOverriddenAt).toBeNull();
+      expect(cleared?.conformanceOverriddenById).toBeNull();
+      expect(cleared?.conformanceOverrideReason).toBeNull();
+    });
+  });
+
   describe('POST /api/lots', () => {
     it('should create a new lot', async () => {
       const res = await request(app)

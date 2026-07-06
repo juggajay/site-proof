@@ -181,6 +181,7 @@ export function createClaimReadRouter({
           activityType: true,
           budgetAmount: true,
           claimedInId: true,
+          conformanceOverriddenAt: true,
           holdPoints: {
             select: {
               id: true,
@@ -230,6 +231,9 @@ export function createClaimReadRouter({
             budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
             claimedInId: lot.claimedInId,
             claimedPercentage: cumulativeClaimedByLotId.get(lot.id) ?? 0,
+            conformanceOverriddenAt: lot.conformanceOverriddenAt
+              ? lot.conformanceOverriddenAt.toISOString()
+              : null,
           },
           canViewCommercial: true,
           conformStatus: {

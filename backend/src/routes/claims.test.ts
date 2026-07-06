@@ -713,6 +713,140 @@ describe('Progress Claims API', () => {
       }
     });
 
+    // A conformed lot with an incomplete ITP, but carrying a persisted
+    // force-conformance override marker. Without the marker this lot is
+    // CONFORMANCE_STALE (ITP incomplete); with it, the ITP/test reasons are
+    // suppressed so the deliberate override is honoured.
+    async function createForceConformedLotWithIncompleteItp(prefix: string) {
+      const lot = await createClaimableLot(prefix, 4200);
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Override ITP template ${Date.now()}`,
+          activityType: 'Earthworks',
+        },
+      });
+      const checklistItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Uncompleted checklist item',
+          pointType: 'standard',
+          responsibleParty: 'contractor',
+          evidenceRequired: 'none',
+        },
+      });
+      // ITP instance assigned but with NO completion → itpCompleted is false.
+      await prisma.iTPInstance.create({
+        data: {
+          lotId: lot.id,
+          templateId: template.id,
+          status: 'in_progress',
+          templateSnapshot: JSON.stringify({
+            id: template.id,
+            name: template.name,
+            checklistItems: [
+              {
+                id: checklistItem.id,
+                sequenceNumber: 1,
+                description: 'Uncompleted checklist item',
+                pointType: 'standard',
+                responsibleParty: 'contractor',
+                evidenceRequired: 'none',
+              },
+            ],
+          }),
+        },
+      });
+      await prisma.lot.update({
+        where: { id: lot.id },
+        data: {
+          conformanceOverriddenAt: new Date(),
+          conformanceOverriddenById: userId,
+          conformanceOverrideReason: 'Client accepted as-built deviation',
+        },
+      });
+      return lot;
+    }
+
+    it('should allow claiming a force-conformed lot whose ITP is incomplete (override honoured)', async () => {
+      const lot = await createForceConformedLotWithIncompleteItp(`CLAIM-OVERRIDE-${Date.now()}`);
+      let createdClaimId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2026-06-01',
+            periodEnd: '2026-06-30',
+            lots: [{ lotId: lot.id, percentageComplete: 100 }],
+          });
+
+        expect(res.status).toBe(201);
+        createdClaimId = res.body.claim?.id;
+        const claimedLot = await prisma.claimedLot.findFirst({ where: { lotId: lot.id } });
+        expect(claimedLot).not.toBeNull();
+      } finally {
+        // Remove the created claim too so the project's claim-number sequence is
+        // unperturbed for later order-dependent tests.
+        await prisma.claimedLot.deleteMany({ where: { lotId: lot.id } });
+        if (createdClaimId) {
+          await prisma.progressClaim.delete({ where: { id: createdClaimId } }).catch(() => {});
+        }
+        await prisma.iTPCompletion.deleteMany({
+          where: { itpInstance: { lotId: lot.id } },
+        });
+        await prisma.iTPInstance.deleteMany({ where: { lotId: lot.id } });
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
+    it('should still reject a force-conformed lot when a NEW open NCR regresses it', async () => {
+      const lot = await createForceConformedLotWithIncompleteItp(
+        `CLAIM-OVERRIDE-NCR-${Date.now()}`,
+      );
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-OVERRIDE-${Date.now()}`,
+          description: 'Defect raised after the override',
+          category: 'Workmanship',
+          severity: 'minor',
+          status: 'open',
+          raisedById: userId,
+          ncrLots: { create: { lotId: lot.id } },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2026-06-01',
+            periodEnd: '2026-06-30',
+            lots: [{ lotId: lot.id, percentageComplete: 100 }],
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.details).toMatchObject({
+          code: 'CONFORMANCE_STALE',
+          lots: [
+            {
+              id: lot.id,
+              blockingReasons: ['1 open NCR(s) must be closed'],
+            },
+          ],
+        });
+      } finally {
+        await prisma.nCRLot.deleteMany({ where: { ncrId: ncr.id } });
+        await prisma.nCR.delete({ where: { id: ncr.id } }).catch(() => {});
+        await prisma.iTPInstance.deleteMany({ where: { lotId: lot.id } });
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
     it('should reject mixed valid and out-of-project lots without mutating either lot', async () => {
       const otherCompany = await prisma.company.create({
         data: { name: `Claims Other Company ${Date.now()}` },

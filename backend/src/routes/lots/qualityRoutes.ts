@@ -60,6 +60,7 @@ async function fetchLotReadinessRecord(id: string) {
       projectId: true,
       budgetAmount: true,
       claimedInId: true,
+      conformanceOverriddenAt: true,
       project: {
         select: {
           settings: true,
@@ -273,6 +274,9 @@ lotQualityRouter.get(
         status: lot.status,
         budgetAmount: lot.budgetAmount === null ? null : Number(lot.budgetAmount),
         claimedInId: lot.claimedInId,
+        conformanceOverriddenAt: lot.conformanceOverriddenAt
+          ? lot.conformanceOverriddenAt.toISOString()
+          : null,
       },
       canViewCommercial,
       conformStatus: {
@@ -385,15 +389,26 @@ lotQualityRouter.post(
       });
     }
 
-    // Update lot status to conformed
+    // Update lot status to conformed. A forced conform also persists the
+    // override marker (reason validated >= 5 chars above) so the claim gate can
+    // later distinguish a deliberate override from a regression. The normal
+    // path never sets these columns (a not-yet-conformed lot has them null).
+    const now = new Date();
     const updatedLot = await prisma.lot.update({
       where: { id },
       data: {
         status: 'conformed',
-        conformedAt: new Date(),
+        conformedAt: now,
         conformedBy: {
           connect: { id: user.id },
         },
+        ...(force
+          ? {
+              conformanceOverriddenAt: now,
+              conformanceOverriddenBy: { connect: { id: user.id } },
+              conformanceOverrideReason: forceReason,
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -482,12 +497,22 @@ lotQualityRouter.post(
     // (stale audit/compliance data) while no longer conformed.
     const clearsConformance = previousStatus === 'conformed';
 
-    // Update the lot status
+    // Update the lot status. Moving a conformed lot back to an operational
+    // status also clears any force-conformance override marker, so a later
+    // re-conform starts clean instead of silently inheriting the old override.
     const updatedLot = await prisma.lot.update({
       where: { id },
       data: {
         status,
-        ...(clearsConformance ? { conformedAt: null, conformedById: null } : {}),
+        ...(clearsConformance
+          ? {
+              conformedAt: null,
+              conformedById: null,
+              conformanceOverriddenAt: null,
+              conformanceOverriddenById: null,
+              conformanceOverrideReason: null,
+            }
+          : {}),
       },
       select: {
         id: true,

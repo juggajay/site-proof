@@ -164,6 +164,7 @@ interface ConformanceCheckResult {
 
 export function getClaimBlockingReasonsForConformedLot(
   conformance: { prerequisites?: ClaimConformancePrerequisites } | null | undefined,
+  options?: { conformanceOverridden?: boolean },
 ): string[] {
   const prerequisites = conformance?.prerequisites;
   if (!prerequisites) {
@@ -174,7 +175,14 @@ export function getClaimBlockingReasonsForConformedLot(
   // A stored conformed lot without an ITP may be a legacy/imported or
   // deliberately force-conformed record. Do not retroactively block claims for
   // that historical state alone, but still enforce regressions like open NCRs.
-  if (prerequisites.itpAssigned) {
+  //
+  // A persisted force-conformance override extends the same accommodation to
+  // the ITP-incomplete + test-outstanding checks: an owner/admin already
+  // accepted those at conform time, so re-raising them would re-block a
+  // deliberately overridden lot. Regressions that arise AFTER conformance —
+  // open NCRs and unreleased N/A hold points — are still enforced below.
+  const overridden = options?.conformanceOverridden ?? false;
+  if (prerequisites.itpAssigned && !overridden) {
     if (!prerequisites.itpCompleted) {
       reasons.push(
         `ITP checklist incomplete (${prerequisites.itpCompletedCount}/${prerequisites.itpTotalCount} items completed)`,

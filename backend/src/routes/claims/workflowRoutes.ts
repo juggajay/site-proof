@@ -189,7 +189,9 @@ export function createClaimWorkflowRouter({
               }))
               .map(({ lot, conformance }) => ({
                 lot,
-                blockingReasons: getClaimBlockingReasonsForConformedLot(conformance),
+                blockingReasons: getClaimBlockingReasonsForConformedLot(conformance, {
+                  conformanceOverridden: lot.conformanceOverriddenAt != null,
+                }),
               }))
               .filter(({ blockingReasons }) => blockingReasons.length > 0);
 
