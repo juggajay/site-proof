@@ -253,15 +253,16 @@ describe('TestResultsPage header — mobile', () => {
     });
   });
 
-  it('shows "Add Test Result" primary button and "More" overflow button on mobile, hiding secondary buttons', async () => {
+  it('shows "Upload Certificate" primary button and "More" overflow button on mobile, hiding secondary buttons', async () => {
     renderPage();
     await waitForPageLoad();
 
-    expect(screen.getByRole('button', { name: 'Add Test Result' })).toBeInTheDocument();
+    // Cert-first: Upload Certificate is the mobile primary action
+    expect(screen.getByRole('button', { name: /Upload Certificate/i })).toBeInTheDocument();
     expect(screen.getByTestId('tests-header-more-button')).toBeInTheDocument();
 
-    // Secondary buttons are NOT directly in the header
-    expect(screen.queryByRole('button', { name: /Upload Certificate/i })).not.toBeInTheDocument();
+    // Secondary actions are NOT directly in the header (they live in the overflow sheet)
+    expect(screen.queryByRole('button', { name: 'Add Test Result' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Batch Upload/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Export CSV/i })).not.toBeInTheDocument();
   });
@@ -278,9 +279,9 @@ describe('TestResultsPage header — mobile', () => {
     });
     // Sheet is labelled "More actions"
     expect(screen.getByRole('dialog', { name: 'More actions' })).toBeInTheDocument();
-    // All three secondary actions appear as rows in the sheet
+    // Secondary actions appear as rows in the sheet (Upload Certificate is now the primary)
     expect(screen.getByRole('button', { name: /Export CSV/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Upload Certificate/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Test Result' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Batch Upload/i })).toBeInTheDocument();
   });
 
@@ -303,13 +304,10 @@ describe('TestResultsPage header — mobile', () => {
     });
   });
 
-  it('opens UploadCertificateModal from the overflow sheet', async () => {
+  it('opens UploadCertificateModal from the primary header button', async () => {
     const user = userEvent.setup();
     renderPage();
     await waitForPageLoad();
-
-    await user.click(screen.getByTestId('tests-header-more-button'));
-    await waitFor(() => screen.getByTestId('bottom-sheet'));
 
     await user.click(screen.getByRole('button', { name: /Upload Certificate/i }));
 
@@ -333,10 +331,13 @@ describe('TestResultsPage header — mobile', () => {
     });
   });
 
-  it('opens CreateTestModal when primary "Add Test Result" is clicked on mobile', async () => {
+  it('opens CreateTestModal from the "Add Test Result" row in the overflow sheet on mobile', async () => {
     const user = userEvent.setup();
     renderPage();
     await waitForPageLoad();
+
+    await user.click(screen.getByTestId('tests-header-more-button'));
+    await waitFor(() => screen.getByTestId('bottom-sheet'));
 
     await user.click(screen.getByRole('button', { name: 'Add Test Result' }));
 

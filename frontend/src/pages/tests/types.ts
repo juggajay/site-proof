@@ -81,4 +81,7 @@ export interface CreateTestFormData {
   specificationMax: string;
   specificationRef: string;
   passFail: string;
+  // Optional link to the ITP checklist item this test satisfies. Set from the
+  // Test Type picker / satisfiesItem flow; backend validates it against the lot.
+  itpChecklistItemId?: string;
 }
