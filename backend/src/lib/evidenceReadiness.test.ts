@@ -88,6 +88,43 @@ describe('evidence readiness helpers', () => {
     expect(readiness.summary.actionBlockerCount).toBe(3);
   });
 
+  it('distinguishes a passing-but-unverified test from a missing test in the blocker copy', () => {
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        conformStatus: {
+          canConform: false,
+          blockingReasons: ['ITP requires a matching passing verified test result'],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true,
+            itpCompletedCount: 1,
+            itpTotalCount: 1,
+            itpIncompleteItems: [],
+            testRequired: true,
+            hasPassingTest: false,
+            // Passing result exists but a QM has not verified it yet.
+            testResults: [
+              {
+                id: 'test-1',
+                testType: 'Compaction',
+                passFail: 'pass',
+                status: 'results_received',
+              },
+            ],
+            noOpenNcrs: true,
+            openNcrs: [],
+          },
+        },
+      }),
+    );
+
+    const testBlocker = readiness.conformance.blockers.find(
+      (readinessItem) => readinessItem.code === 'no_passing_verified_test',
+    );
+    expect(testBlocker?.title).toBe('Test result awaiting verification');
+    expect(testBlocker?.detail).toContain('quality manager must verify it');
+  });
+
   it('does not raise the test blocker for a no-test-point lot and reports prerequisites met', () => {
     // A lot whose ITP has no test point: the conform gate allows conformance
     // (testRequired false), so the readiness layer must NOT surface a

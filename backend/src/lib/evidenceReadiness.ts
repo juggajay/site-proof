@@ -89,13 +89,22 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
   // lot whose ITP has no test points must not be shown a blocker the conform
   // gate (which now uses testRequired) would never raise.
   if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
+    // A passing result may already exist and only await QM verification — say so,
+    // rather than implying the field team still needs to add or re-run a test.
+    const hasPassingUnverifiedTest = prerequisites.testResults.some(
+      (testResult) => testResult.passFail === 'pass' && testResult.status !== 'verified',
+    );
     items.push(
       item({
         code: 'no_passing_verified_test',
         severity: 'blocker',
         area: 'test',
-        title: 'No passing verified test result',
-        detail: 'Add or verify a passing test result before conformance.',
+        title: hasPassingUnverifiedTest
+          ? 'Test result awaiting verification'
+          : 'No passing verified test result',
+        detail: hasPassingUnverifiedTest
+          ? 'Test result awaiting verification — a quality manager must verify it before conformance.'
+          : 'Add or verify a passing test result before conformance.',
         blocksAction: true,
         actionLabel: 'Review tests',
       }),
