@@ -17,8 +17,18 @@ import {
 import { formatActivityTypeLabel, type NewChecklistItem } from './itpTemplateFormData';
 import { CreateTemplateModal } from './components/CreateTemplateModal';
 import { EditTemplateModal } from './components/EditTemplateModal';
+import { PropagateTemplateModal } from './components/PropagateTemplateModal';
 import { ImportFromProjectModal } from './components/ImportFromProjectModal';
 import { PendingItpVerificationsSection } from './components/PendingItpVerificationsSection';
+import { queryKeys } from '@/lib/queryKeys';
+
+// A lot the edited template is assigned to (GET /templates/:id/lots), used to
+// offer applying the edit to those lots via the propagate endpoint.
+interface TemplateUsageLot {
+  instanceId: string;
+  lotId: string;
+  lotNumber: string;
+}
 
 export function ITPPage() {
   const { projectId } = useParams();
@@ -33,6 +43,13 @@ export function ITPPage() {
   const [editingTemplate, setEditingTemplate] = useState<ITPTemplate | null>(null); // Feature #128
   const [editError, setEditError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Propagation prompt shown after a successful edit when the template is
+  // assigned to in-progress lots (see PropagateTemplateModal for semantics).
+  const [propagateTarget, setPropagateTarget] = useState<{
+    templateId: string;
+    lots: TemplateUsageLot[];
+  } | null>(null);
+  const [propagating, setPropagating] = useState(false);
   const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null);
   const [cloningTemplateId, setCloningTemplateId] = useState<string | null>(null);
   const [includeGlobalTemplates, setIncludeGlobalTemplates] = useState(true);
@@ -191,6 +208,22 @@ export function ITPPage() {
       setTemplatesCache((prev) => prev.map((t) => (t.id === templateId ? result.template : t)));
       setShowEditModal(false);
       setEditingTemplate(null);
+
+      // Offer to apply the edit to the lots this template is already assigned to.
+      // The lots endpoint returns only in-progress (non-conformed) instances; if
+      // none exist there is nothing to propagate to and the save just closes.
+      try {
+        const usage = await apiFetch<{ lots: TemplateUsageLot[] }>(
+          `/api/itp/templates/${encodeURIComponent(templateId)}/lots`,
+        );
+        if (usage.lots.length > 0) {
+          setPropagateTarget({ templateId, lots: usage.lots });
+        }
+      } catch (err) {
+        // A failed usage lookup must not make the successful save look broken —
+        // the edit is saved; we just can't offer propagation this time.
+        logError('Failed to load template usage for propagation:', err);
+      }
     } catch (err) {
       logError('Failed to update template:', err);
       // Keep the explanation inside the open modal so the admin can read why the
@@ -199,6 +232,51 @@ export function ITPPage() {
       setEditError(extractErrorMessage(err, 'Failed to update template. Please try again.'));
     } finally {
       setCreating(false);
+    }
+  };
+
+  // Apply the just-saved template edit to its assigned lots via the existing
+  // propagate endpoint, then refresh the affected lots' ITP/readiness caches so
+  // their inspection views reflect the new checklist immediately.
+  const handleConfirmPropagate = async () => {
+    if (!propagateTarget || propagating) return;
+
+    setPropagating(true);
+    try {
+      const { templateId, lots } = propagateTarget;
+      const result = await apiFetch<{ updatedCount: number }>(
+        `/api/itp/templates/${encodeURIComponent(templateId)}/propagate`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ instanceIds: lots.map((lot) => lot.instanceId) }),
+        },
+      );
+
+      await Promise.all([
+        ...(projectId
+          ? [queryClient.invalidateQueries({ queryKey: queryKeys.itps(projectId) })]
+          : []),
+        ...lots.flatMap((lot) => [
+          queryClient.invalidateQueries({ queryKey: queryKeys.itpInstanceByLot(lot.lotId) }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.lot(lot.lotId) }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.lotReadiness(lot.lotId) }),
+        ]),
+      ]);
+
+      toast({
+        title: 'Template changes applied',
+        description: `Updated ${result.updatedCount} lot(s) with the latest template.`,
+        variant: 'success',
+      });
+      setPropagateTarget(null);
+    } catch (err) {
+      toast({
+        title: 'Failed to apply template changes',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
+    } finally {
+      setPropagating(false);
     }
   };
 
@@ -624,6 +702,15 @@ export function ITPPage() {
           errorMessage={editError}
         />
       )}
+
+      {/* Offer to apply a saved template edit to its assigned in-progress lots. */}
+      <PropagateTemplateModal
+        isOpen={propagateTarget !== null}
+        lotNumbers={propagateTarget?.lots.map((lot) => lot.lotNumber) ?? []}
+        loading={propagating}
+        onConfirm={handleConfirmPropagate}
+        onSkip={() => setPropagateTarget(null)}
+      />
     </div>
   );
 }
