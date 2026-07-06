@@ -125,8 +125,13 @@ describe('ItpRunScreen — active item', () => {
   });
 
   it('PASS fires the reused completion mutation and shows a pass-flash', async () => {
+    // evidenceRequired 'none' so the pass is direct (the photo-required guard has
+    // its own suite below).
     _run = makeRun(
-      makeInstance([makeItem({ id: 'a' }), makeItem({ id: 'b', description: 'Second' })]),
+      makeInstance([
+        makeItem({ id: 'a', evidenceRequired: 'none' }),
+        makeItem({ id: 'b', description: 'Second' }),
+      ]),
     );
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
@@ -217,6 +222,80 @@ describe('ItpRunScreen — active item', () => {
   });
 });
 
+describe('ItpRunScreen — photo evidence guard', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('confirms before passing a photo-required check with no photo (does not pass yet)', () => {
+    // Default item is evidenceRequired 'photo' with no attachments.
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+
+    // The guard replaces the tri-state; the direct pass has NOT fired.
+    expect(pass).not.toHaveBeenCalled();
+    expect(screen.getByText(/requires photo evidence/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Pass without photo$/i })).toBeInTheDocument();
+  });
+
+  it('"Pass without photo" proceeds with the pass', async () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Pass without photo$/i }));
+
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+  });
+
+  it('"Add photo" from the guard opens the picker so a photo can be attached', () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    const { container } = renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+    // Add photo is offered as the primary action; selecting a file routes to the
+    // reused upload and no pass is fired.
+    expect(screen.getByRole('button', { name: /^Add photo$/i })).toBeInTheDocument();
+
+    const file = new File(['x'], 'p.jpg', { type: 'image/jpeg' });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(addPhoto).toHaveBeenCalledWith('a', file);
+    expect(pass).not.toHaveBeenCalled();
+  });
+
+  it('does NOT guard when the photo-required check already has a photo', async () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          makeCompletion({
+            checklistItemId: 'a',
+            attachments: [{ id: 'att-1' }] as ITPCompletion['attachments'],
+          }),
+        ],
+      ),
+    );
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+    expect(screen.queryByText(/requires photo evidence/i)).not.toBeInTheDocument();
+  });
+
+  it('does NOT guard a check that does not require a photo', async () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a', evidenceRequired: 'none' })]));
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+    expect(screen.queryByText(/requires photo evidence/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('ItpRunScreen — hold-point gating', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -270,7 +349,14 @@ describe('ItpRunScreen — hold-point gating', () => {
     };
     _run = makeRun(
       makeInstance(
-        [makeItem({ id: 'hp', pointType: 'hold_point', isHoldPoint: true })],
+        [
+          makeItem({
+            id: 'hp',
+            pointType: 'hold_point',
+            isHoldPoint: true,
+            evidenceRequired: 'none',
+          }),
+        ],
         [released],
       ),
     );

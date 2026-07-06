@@ -115,6 +115,9 @@ export function ItpRunScreen() {
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Confirm-before-pass when a photo-required check has no photo yet (mirrors the
+  // desktop EvidenceWarningModal decision so an evidence gap is deliberate).
+  const [evidencePrompt, setEvidencePrompt] = useState(false);
 
   // Once the instance loads, land on the first incomplete item.
   const landedRef = useRef(false);
@@ -165,6 +168,7 @@ export function ItpRunScreen() {
     setReasonMode(null);
     setReason('');
     setReasonError(null);
+    setEvidencePrompt(false);
     setCurrentIndex(index);
   };
 
@@ -200,14 +204,30 @@ export function ItpRunScreen() {
     setCurrentIndex(next);
   };
 
-  const handlePass = async () => {
-    if (!currentItem || submitting) return;
-    if (awaitingVerification || superintendentSignoffOnly) return;
-    if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
+  // The actual pass write, shared by the direct tap and the "Pass without photo"
+  // confirmation. Clears the evidence prompt first so it never lingers.
+  const doPass = async () => {
+    if (!currentItem) return;
+    setEvidencePrompt(false);
     setSubmitting(true);
     const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
     setSubmitting(false);
     if (ok) advance(`Check ${progress.checkNumber} passed — saved`);
+  };
+
+  const handlePass = () => {
+    if (!currentItem || submitting) return;
+    if (awaitingVerification || superintendentSignoffOnly) return;
+    if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
+    // Evidence guard: a photo-required check with no photo attached must confirm
+    // before passing, exactly like the desktop EvidenceWarningModal — so passing
+    // without evidence is an explicit choice, not a silent one.
+    const attachedPhotos = currentCompletion?.attachments?.length ?? 0;
+    if (currentItem.evidenceRequired === 'photo' && attachedPhotos === 0) {
+      setEvidencePrompt(true);
+      return;
+    }
+    void doPass();
   };
 
   const handleSubmitReason = async () => {
@@ -237,7 +257,11 @@ export function ItpRunScreen() {
 
   const onPhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && currentItem && !superintendentSignoffOnly) void run.addPhoto(currentItem.id, file);
+    if (file && currentItem && !superintendentSignoffOnly) {
+      // A photo is being attached, so the evidence prompt no longer applies.
+      setEvidencePrompt(false);
+      void run.addPhoto(currentItem.id, file);
+    }
     e.target.value = '';
   };
 
@@ -505,6 +529,45 @@ export function ItpRunScreen() {
       </div>
     );
 
+  // Evidence guard confirmation — replaces the tri-state while active. Copy
+  // mirrors the desktop EvidenceWarningModal; "Add photo" is the primary action,
+  // "Pass without photo" the explicit secondary.
+  const evidencePromptCluster = (
+    <div
+      className="rounded-2xl border border-warning/40 bg-warning/10 p-4"
+      role="alertdialog"
+      aria-label="Photo evidence recommended"
+    >
+      <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+        <AlertTriangle size={16} strokeWidth={2.2} aria-hidden />
+        This check requires photo evidence
+      </div>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+        No photo has been attached to this item yet. You can still pass without one, but it is
+        recommended to attach a photo for quality assurance.
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        <button
+          type="button"
+          className="shell-photobtn min-h-[52px] w-full"
+          disabled={busy}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Camera size={19} aria-hidden />
+          Add photo
+        </button>
+        <button
+          type="button"
+          className="w-full rounded-xl border border-border py-3 text-[14px] font-semibold disabled:opacity-60"
+          disabled={busy}
+          onClick={() => void doPass()}
+        >
+          Pass without photo
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <ShellScreen
       variant="inner"
@@ -661,7 +724,7 @@ export function ItpRunScreen() {
               Showing cached checklist — changes sync when you’re back online.
             </p>
           )}
-          {triStateCluster}
+          {evidencePrompt ? evidencePromptCluster : triStateCluster}
         </div>
       </div>
 
