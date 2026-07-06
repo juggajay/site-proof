@@ -441,6 +441,69 @@ describe('ITPChecklistTab verify/reject actions (H4)', () => {
   });
 });
 
+describe('ITPChecklistTab requirement-first test entry', () => {
+  function makeTestItemInstance(itemOverrides: Partial<ITPChecklistItem> = {}): ITPInstance {
+    return {
+      id: 'instance-test-entry',
+      template: {
+        id: 'template-1',
+        name: 'Earthworks ITP',
+        checklistItems: [
+          makeChecklistItem({
+            id: 'test-item',
+            description: 'Compaction density',
+            category: 'Field checks',
+            order: 1,
+            evidenceRequired: 'test',
+            testType: 'Density Ratio',
+            ...itemOverrides,
+          }),
+        ],
+      },
+      completions: [],
+    };
+  }
+
+  it('offers Add test result for a test-required unsatisfied item and forwards the item', async () => {
+    const onAddTestResult = vi.fn();
+    renderChecklist({
+      itpInstance: makeTestItemInstance(),
+      canCreateTests: true,
+      onAddTestResult,
+    });
+
+    const button = await screen.findByRole('button', { name: 'Add test result' });
+    fireEvent.click(button);
+    expect(onAddTestResult).toHaveBeenCalledWith({
+      id: 'test-item',
+      description: 'Compaction density',
+      testType: 'Density Ratio',
+    });
+  });
+
+  it('hides Add test result when the user cannot create tests', async () => {
+    renderChecklist({
+      itpInstance: makeTestItemInstance(),
+      canCreateTests: false,
+      onAddTestResult: vi.fn(),
+    });
+
+    expect(await screen.findByText(/Compaction density/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add test result' })).not.toBeInTheDocument();
+  });
+
+  it('hides Add test result when the item is not test-required', async () => {
+    renderChecklist({
+      itpInstance: makeTestItemInstance({ evidenceRequired: 'none', testType: null }),
+      canCreateTests: true,
+      onAddTestResult: vi.fn(),
+    });
+
+    expect(await screen.findByText(/Compaction density/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add test result' })).not.toBeInTheDocument();
+  });
+});
+
 describe('ITPChecklistTab no-assignment state', () => {
   it('shows assignment controls when the user can manage ITP templates', () => {
     renderChecklist();

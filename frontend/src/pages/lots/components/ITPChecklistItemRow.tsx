@@ -52,6 +52,9 @@ export interface ITPChecklistItemRowProps {
   reviewingCompletionId?: string | null;
   onVerifyCompletion?: (completionId: string) => void;
   onRequestReject?: (completionId: string, itemDescription: string) => void;
+  // Requirement-first test entry: offered on test-required, unsatisfied items.
+  canCreateTests?: boolean;
+  onAddTestResult?: (item: { id: string; description: string; testType?: string | null }) => void;
 }
 
 export function ITPChecklistItemRow({
@@ -71,8 +74,12 @@ export function ITPChecklistItemRow({
   reviewingCompletionId = null,
   onVerifyCompletion,
   onRequestReject,
+  canCreateTests = false,
+  onAddTestResult,
 }: ITPChecklistItemRowProps) {
   const isAcceptedCompletion = isItpCompletionAcceptedForProgress(completion);
+  const isTestRequired = item.evidenceRequired === 'test' || Boolean(item.testType);
+  const isSatisfied = isItpCompletionAcceptedForProgress(completion);
   const isCompleted = isAcceptedCompletion && (completion?.isCompleted || false);
   const isNotApplicable = isAcceptedCompletion && (completion?.isNotApplicable || false);
   const isFailed = completion?.isFailed || false;
@@ -345,6 +352,23 @@ export function ITPChecklistItemRow({
               onFail={() => onMarkAsFailed(item.id, item.description)}
               onMarkNotApplicable={() => onMarkAsNA(item.id, item.description)}
             />
+          )}
+          {isTestRequired && !isSatisfied && canCreateTests && onAddTestResult && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onAddTestResult({
+                    id: item.id,
+                    description: item.description,
+                    testType: item.testType,
+                  })
+                }
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Add test result
+              </button>
+            </div>
           )}
           {isHoldPoint && completion?.holdPointRelease?.releasedByName ? (
             <p className="text-xs text-muted-foreground mt-1">

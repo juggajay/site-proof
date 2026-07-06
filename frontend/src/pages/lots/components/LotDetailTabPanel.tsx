@@ -58,6 +58,8 @@ interface LotDetailTabPanelProps {
   // Tests tab
   testResults: TestResult[];
   loadingTests: boolean;
+  canCreateTests?: boolean;
+  onAddTestResult?: (item?: { id: string; description: string; testType?: string | null }) => void;
   // NCRs tab
   ncrs: NCR[];
   loadingNcrs: boolean;
@@ -107,6 +109,8 @@ export function LotDetailTabPanel({
   rejectCompletion,
   testResults,
   loadingTests,
+  canCreateTests,
+  onAddTestResult,
   ncrs,
   loadingNcrs,
   handleTabChange,
@@ -176,6 +180,8 @@ export function LotDetailTabPanel({
             currentUserId={currentUserId}
             onVerifyCompletion={verifyCompletion}
             onRejectCompletion={rejectCompletion}
+            canCreateTests={canCreateTests}
+            onAddTestResult={onAddTestResult}
           />
         </div>
       )}
@@ -185,12 +191,22 @@ export function LotDetailTabPanel({
         <div className="space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Test Results</h2>
-            <button
-              onClick={() => navigate(`/projects/${encodeURIComponent(projectId || '')}/tests`)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-            >
-              View All Tests
-            </button>
+            <div className="flex items-center gap-2">
+              {canCreateTests && (
+                <button
+                  onClick={() => onAddTestResult?.()}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+                >
+                  Add test result
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/projects/${encodeURIComponent(projectId || '')}/tests`)}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              >
+                View All Tests
+              </button>
+            </div>
           </div>
           <TestsTabContent
             projectId={projectId!}

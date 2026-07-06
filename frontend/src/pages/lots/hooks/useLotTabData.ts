@@ -74,6 +74,19 @@ export function useLotTabData({ projectId, lotId, currentTab }: UseLotTabDataPar
     void fetchTestResults();
   }, [projectId, lotId, currentTab]);
 
+  const refreshTests = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ testResults: TestResult[] }>(
+        buildLotTestResultsPath(projectId || '', lotId || ''),
+      );
+      const list = normalizeTestResults(data);
+      setTestResults(list);
+      setTestsCount(list.length);
+    } catch {
+      /* ignore */
+    }
+  }, [projectId, lotId]);
+
   const refreshNcrsAfterFailure = useCallback(async () => {
     try {
       const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
@@ -143,5 +156,6 @@ export function useLotTabData({ projectId, lotId, currentTab }: UseLotTabDataPar
     loadingHistory,
     refreshNcrsAfterFailure,
     refreshActivityHistory,
+    refreshTests,
   };
 }
