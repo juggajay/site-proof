@@ -98,6 +98,14 @@ export function itpRequiresTest(
   return checklistItems.some((item) => item.evidenceRequired === 'test' || Boolean(item.testType));
 }
 
+type OutstandingTestState = 'no_result' | 'awaiting_verification' | 'failing';
+
+interface OutstandingTestItem {
+  description: string;
+  testType: string | null;
+  state: OutstandingTestState;
+}
+
 interface ConformancePrerequisites {
   itpAssigned: boolean;
   itpCompleted: boolean;
@@ -106,6 +114,7 @@ interface ConformancePrerequisites {
   itpIncompleteItems: { id: string; description: string; pointType: string }[];
   testRequired: boolean;
   hasPassingTest: boolean;
+  outstandingTestItems: OutstandingTestItem[];
   testResults: {
     id: string;
     itpChecklistItemId: string | null;
@@ -236,6 +245,17 @@ function isRequiredTestItem(item: {
   return item.evidenceRequired === 'test' || Boolean(item.testType);
 }
 
+function testResultMatchesItem(
+  item: { id: string; testType?: string | null },
+  testResult: { itpChecklistItemId?: string | null; testType: string },
+): boolean {
+  if (testResult.itpChecklistItemId === item.id) {
+    return true;
+  }
+  const requiredTestType = normalizeTestType(item.testType);
+  return Boolean(requiredTestType) && normalizeTestType(testResult.testType) === requiredTestType;
+}
+
 function hasVerifiedPassingTestForItem(
   item: { id: string; testType?: string | null },
   testResults: {
@@ -245,18 +265,41 @@ function hasVerifiedPassingTestForItem(
     status: string;
   }[],
 ): boolean {
-  const requiredTestType = normalizeTestType(item.testType);
+  return testResults.some(
+    (testResult) =>
+      testResult.passFail === 'pass' &&
+      testResult.status === 'verified' &&
+      testResultMatchesItem(item, testResult),
+  );
+}
 
-  return testResults.some((testResult) => {
-    if (testResult.passFail !== 'pass' || testResult.status !== 'verified') {
-      return false;
+// Presentation-only breakdown of the test-required checklist items that are NOT
+// yet satisfied, so the conformance blocker can name them instead of a dead-end
+// "no passing verified test". Uses the same match logic as the gate; does not
+// change what satisfies conformance.
+function buildOutstandingTestItems(
+  checklistItems: NormalizedChecklistItem[],
+  testResults: {
+    itpChecklistItemId?: string | null;
+    testType: string;
+    passFail: string;
+    status: string;
+  }[],
+): OutstandingTestItem[] {
+  return checklistItems.filter(isRequiredTestItem).flatMap((item) => {
+    if (hasVerifiedPassingTestForItem(item, testResults)) {
+      return [];
     }
-
-    if (testResult.itpChecklistItemId === item.id) {
-      return true;
+    const matches = testResults.filter((testResult) => testResultMatchesItem(item, testResult));
+    let state: OutstandingTestState;
+    if (matches.length === 0) {
+      state = 'no_result';
+    } else if (matches.some((testResult) => testResult.passFail === 'pass')) {
+      state = 'awaiting_verification';
+    } else {
+      state = 'failing';
     }
-
-    return Boolean(requiredTestType) && normalizeTestType(testResult.testType) === requiredTestType;
+    return [{ description: item.description, testType: item.testType ?? null, state }];
   });
 }
 
@@ -339,6 +382,7 @@ export function computeConformanceResult(
     itpIncompleteItems: [],
     testRequired: false,
     hasPassingTest: false,
+    outstandingTestItems: [],
     testResults: [],
     noOpenNcrs: true,
     openNcrs: [],
@@ -387,6 +431,7 @@ export function computeConformanceResult(
   prerequisites.hasPassingTest =
     requiredTestItems.length > 0 &&
     requiredTestItems.every((item) => hasVerifiedPassingTestForItem(item, lot.testResults));
+  prerequisites.outstandingTestItems = buildOutstandingTestItems(checklistItems, lot.testResults);
 
   // Check for open NCRs (any NCR that isn't closed). The Prisma query already
   // filters closed NCR links so large historical NCR lists do not get hydrated.

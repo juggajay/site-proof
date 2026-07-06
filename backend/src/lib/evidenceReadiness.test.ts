@@ -88,7 +88,7 @@ describe('evidence readiness helpers', () => {
     expect(readiness.summary.actionBlockerCount).toBe(3);
   });
 
-  it('distinguishes a passing-but-unverified test from a missing test in the blocker copy', () => {
+  it('names the outstanding tests and their state in the test blocker detail', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({
         conformStatus: {
@@ -102,15 +102,16 @@ describe('evidence readiness helpers', () => {
             itpIncompleteItems: [],
             testRequired: true,
             hasPassingTest: false,
-            // Passing result exists but a QM has not verified it yet.
-            testResults: [
+            outstandingTestItems: [
               {
-                id: 'test-1',
+                description: 'Compaction — density ratio',
                 testType: 'Compaction',
-                passFail: 'pass',
-                status: 'results_received',
+                state: 'no_result',
               },
+              { description: 'CBR', testType: 'CBR', state: 'awaiting_verification' },
+              { description: 'Moisture', testType: 'Moisture', state: 'failing' },
             ],
+            testResults: [],
             noOpenNcrs: true,
             openNcrs: [],
           },
@@ -121,8 +122,49 @@ describe('evidence readiness helpers', () => {
     const testBlocker = readiness.conformance.blockers.find(
       (readinessItem) => readinessItem.code === 'no_passing_verified_test',
     );
-    expect(testBlocker?.title).toBe('Test result awaiting verification');
-    expect(testBlocker?.detail).toContain('quality manager must verify it');
+    expect(testBlocker?.title).toBe('Required tests outstanding');
+    expect(testBlocker?.detail).toBe(
+      '3 required tests outstanding: "Compaction — density ratio" — no result yet; ' +
+        '"CBR" — result awaiting verification; "Moisture" — result failed — re-test needed.',
+    );
+  });
+
+  it('truncates the outstanding-test list to three with an "and N more" suffix', () => {
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        conformStatus: {
+          canConform: false,
+          blockingReasons: ['ITP requires a matching passing verified test result'],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true,
+            itpCompletedCount: 1,
+            itpTotalCount: 1,
+            itpIncompleteItems: [],
+            testRequired: true,
+            hasPassingTest: false,
+            outstandingTestItems: [
+              { description: 'Test A', testType: null, state: 'no_result' },
+              { description: 'Test B', testType: null, state: 'no_result' },
+              { description: 'Test C', testType: null, state: 'no_result' },
+              { description: 'Test D', testType: null, state: 'no_result' },
+              { description: 'Test E', testType: null, state: 'no_result' },
+            ],
+            testResults: [],
+            noOpenNcrs: true,
+            openNcrs: [],
+          },
+        },
+      }),
+    );
+
+    const testBlocker = readiness.conformance.blockers.find(
+      (readinessItem) => readinessItem.code === 'no_passing_verified_test',
+    );
+    expect(testBlocker?.detail).toBe(
+      '5 required tests outstanding: "Test A" — no result yet; "Test B" — no result yet; ' +
+        '"Test C" — no result yet; and 2 more.',
+    );
   });
 
   it('does not raise the test blocker for a no-test-point lot and reports prerequisites met', () => {

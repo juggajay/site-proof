@@ -21,6 +21,32 @@ export type {
   ReadinessBucket,
 } from './evidenceReadiness/core.js';
 export { buildClaimEvidenceReviewFromInputs } from './evidenceReadiness/claimReview.js';
+
+const OUTSTANDING_TEST_STATE_PHRASE = {
+  no_result: 'no result yet',
+  awaiting_verification: 'result awaiting verification',
+  failing: 'result failed — re-test needed',
+} as const;
+
+// Turn the per-item outstanding-test breakdown into the blocker detail so the
+// card names which tests conformance is waiting on. Lists up to 3, then "and N
+// more". Falls back to the generic line when no breakdown is available.
+function buildOutstandingTestDetail(
+  outstanding: NonNullable<
+    LotReadinessInput['conformStatus']['prerequisites']['outstandingTestItems']
+  >,
+): string {
+  if (outstanding.length === 0) {
+    return 'Add or verify a passing test result before conformance.';
+  }
+  const shown = outstanding
+    .slice(0, 3)
+    .map((test) => `"${test.description}" — ${OUTSTANDING_TEST_STATE_PHRASE[test.state]}`);
+  const remaining = outstanding.length - shown.length;
+  const list = remaining > 0 ? `${shown.join('; ')}; and ${remaining} more` : shown.join('; ');
+  return `${outstanding.length} required test${outstanding.length === 1 ? '' : 's'} outstanding: ${list}.`;
+}
+
 function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[] {
   const { lot, conformStatus } = input;
   const { prerequisites } = conformStatus;
@@ -89,22 +115,13 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
   // lot whose ITP has no test points must not be shown a blocker the conform
   // gate (which now uses testRequired) would never raise.
   if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
-    // A passing result may already exist and only await QM verification — say so,
-    // rather than implying the field team still needs to add or re-run a test.
-    const hasPassingUnverifiedTest = prerequisites.testResults.some(
-      (testResult) => testResult.passFail === 'pass' && testResult.status !== 'verified',
-    );
     items.push(
       item({
         code: 'no_passing_verified_test',
         severity: 'blocker',
         area: 'test',
-        title: hasPassingUnverifiedTest
-          ? 'Test result awaiting verification'
-          : 'No passing verified test result',
-        detail: hasPassingUnverifiedTest
-          ? 'Test result awaiting verification — a quality manager must verify it before conformance.'
-          : 'Add or verify a passing test result before conformance.',
+        title: 'Required tests outstanding',
+        detail: buildOutstandingTestDetail(prerequisites.outstandingTestItems ?? []),
         blocksAction: true,
         actionLabel: 'Review tests',
       }),
