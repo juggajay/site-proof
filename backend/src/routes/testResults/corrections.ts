@@ -36,6 +36,9 @@ export type TestResultCorrections = {
   sampleDate?: unknown;
   sampleLocation?: unknown;
   lotId?: unknown;
+  // Validated + persisted separately from the pure mapper (needs a lot+project
+  // DB lookup): see applyConfirmedLinkCorrections in extractionConfirmation.ts.
+  itpChecklistItemId?: unknown;
   testDate?: unknown;
   resultDate?: unknown;
   resultValue?: unknown;

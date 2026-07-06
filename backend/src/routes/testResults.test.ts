@@ -3987,4 +3987,195 @@ describe('Test Results API', () => {
       expect(res.status).toBe(401);
     });
   });
+
+  // Wiring TestResult.itpChecklistItemId (2026-07-06): the conformance gate has
+  // always checked this link first, but nothing wrote it. These cover the trust
+  // boundary — the submitted item must belong to the linked lot's ITP.
+  describe('itpChecklistItemId link (POST / PATCH)', () => {
+    let templateId: string;
+    let checklistItemId: string;
+    let otherTemplateItemId: string;
+    let itpLotId: string;
+
+    beforeAll(async () => {
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Link Template ${Date.now()}`,
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [
+              {
+                sequenceNumber: 1,
+                description: 'Compaction density',
+                pointType: 'standard',
+                evidenceRequired: 'test',
+                testType: 'Compaction',
+              },
+            ],
+          },
+        },
+        include: { checklistItems: true },
+      });
+      templateId = template.id;
+      checklistItemId = template.checklistItems[0]!.id;
+
+      // A checklist item on a DIFFERENT template — a real id that does not
+      // belong to itpLot's ITP, so linking it must be rejected.
+      const otherTemplate = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Other Template ${Date.now()}`,
+          checklistItems: {
+            create: [
+              {
+                sequenceNumber: 1,
+                description: 'Unrelated item',
+                pointType: 'standard',
+                evidenceRequired: 'test',
+                testType: 'CBR',
+              },
+            ],
+          },
+        },
+        include: { checklistItems: true },
+      });
+      otherTemplateItemId = otherTemplate.checklistItems[0]!.id;
+
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LINK-LOT-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          itpInstance: { create: { templateId } },
+        },
+      });
+      itpLotId = lot.id;
+    });
+
+    afterAll(async () => {
+      await prisma.testResult.deleteMany({ where: { lotId: itpLotId } });
+      await prisma.lot.delete({ where: { id: itpLotId } }).catch(() => {});
+      await prisma.iTPTemplate.delete({ where: { id: templateId } }).catch(() => {});
+      await prisma.iTPTemplate
+        .deleteMany({ where: { checklistItems: { some: { id: otherTemplateItemId } } } })
+        .catch(() => {});
+    });
+
+    it('persists a valid itpChecklistItemId on create', async () => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId: itpLotId,
+          itpChecklistItemId: checklistItemId,
+          testType: 'Compaction',
+        });
+
+      expect(res.status).toBe(201);
+      const stored = await prisma.testResult.findUniqueOrThrow({
+        where: { id: res.body.testResult.id },
+        select: { itpChecklistItemId: true },
+      });
+      expect(stored.itpChecklistItemId).toBe(checklistItemId);
+    });
+
+    it('rejects an itpChecklistItemId with no linked lot', async () => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, itpChecklistItemId: checklistItemId, testType: 'Compaction' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('before linking it to an ITP checklist item');
+    });
+
+    it('rejects an item that does not belong to the linked lot ITP', async () => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId: itpLotId,
+          itpChecklistItemId: otherTemplateItemId,
+          testType: 'Compaction',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain("does not belong to this lot's ITP");
+    });
+
+    it('links an existing test via PATCH and clears it with null', async () => {
+      const created = await prisma.testResult.create({
+        data: { projectId, lotId: itpLotId, testType: 'Compaction', status: 'requested' },
+      });
+
+      try {
+        const linkRes = await request(app)
+          .patch(`/api/test-results/${created.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ itpChecklistItemId: checklistItemId });
+        expect(linkRes.status).toBe(200);
+        expect(
+          (
+            await prisma.testResult.findUniqueOrThrow({
+              where: { id: created.id },
+              select: { itpChecklistItemId: true },
+            })
+          ).itpChecklistItemId,
+        ).toBe(checklistItemId);
+
+        const clearRes = await request(app)
+          .patch(`/api/test-results/${created.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ itpChecklistItemId: null });
+        expect(clearRes.status).toBe(200);
+        expect(
+          (
+            await prisma.testResult.findUniqueOrThrow({
+              where: { id: created.id },
+              select: { itpChecklistItemId: true },
+            })
+          ).itpChecklistItemId,
+        ).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: created.id } });
+      }
+    });
+
+    it('does not un-verify a verified test when only linking its ITP item', async () => {
+      const verified = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: itpLotId,
+          testType: 'Compaction',
+          status: 'verified',
+          resultValue: 98,
+          passFail: 'pass',
+          verifiedById: userId,
+          verifiedAt: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${verified.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ itpChecklistItemId: checklistItemId });
+
+        expect(res.status).toBe(200);
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: verified.id },
+          select: { status: true, itpChecklistItemId: true },
+        });
+        expect(stored.status).toBe('verified');
+        expect(stored.itpChecklistItemId).toBe(checklistItemId);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: verified.id } });
+      }
+    });
+  });
 });

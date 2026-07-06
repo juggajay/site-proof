@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { applyTestResultCorrections, type TestResultCorrections } from './corrections.js';
-import { requireLotInProject } from './accessControl.js';
+import { assertItpChecklistItemLink, requireLotInProject } from './accessControl.js';
 import { derivePassFail } from './certificateExtraction.js';
 import { MAX_TEST_ID_LENGTH, normalizeOptionalString } from './validation.js';
 import {
@@ -114,20 +114,42 @@ export function buildConfirmationUpdateData(
   return updateData;
 }
 
-async function applyConfirmedLotCorrection(
+async function applyConfirmedLinkCorrections(
   updateData: Prisma.TestResultUncheckedUpdateInput,
   corrections: TestResultCorrections | undefined,
-  projectId: string,
+  testResult: { projectId: string; lotId: string | null },
 ) {
-  if (!corrections || corrections.lotId === undefined) {
+  if (!corrections) {
     return;
   }
 
-  const lotId = normalizeOptionalString(corrections.lotId, 'lotId', MAX_TEST_ID_LENGTH);
-  if (lotId) {
-    await requireLotInProject(lotId, projectId);
+  if (corrections.lotId !== undefined) {
+    const lotId = normalizeOptionalString(corrections.lotId, 'lotId', MAX_TEST_ID_LENGTH);
+    if (lotId) {
+      await requireLotInProject(lotId, testResult.projectId);
+    }
+    updateData.lotId = lotId || null;
   }
-  updateData.lotId = lotId || null;
+
+  // ITP checklist item link so the cert review screen can associate the
+  // confirmed result with a requirement. Validated against the effective lot
+  // (the corrected lot when present, otherwise the stored one).
+  if (corrections.itpChecklistItemId !== undefined) {
+    const itemId = normalizeOptionalString(
+      corrections.itpChecklistItemId,
+      'itpChecklistItemId',
+      MAX_TEST_ID_LENGTH,
+    );
+    if (itemId) {
+      const effectiveLotId = ('lotId' in updateData ? updateData.lotId : testResult.lotId) as
+        | string
+        | null;
+      await assertItpChecklistItemLink(itemId, effectiveLotId, testResult.projectId);
+      updateData.itpChecklistItemId = itemId;
+    } else {
+      updateData.itpChecklistItemId = null;
+    }
+  }
 }
 
 export interface ConfirmExtractionInput {
@@ -166,7 +188,7 @@ export async function confirmExtraction({
   }
 
   const updateData = buildConfirmationUpdateData(corrections, userId);
-  await applyConfirmedLotCorrection(updateData, corrections, testResult.projectId);
+  await applyConfirmedLinkCorrections(updateData, corrections, testResult);
 
   // H13: recompute pass/fail server-side from the effective value + spec before
   // the row is recorded, so a confirmed result can't claim a pass the data
@@ -279,7 +301,7 @@ export async function processBatchConfirm({ confirmations, userId, authorize }: 
       }
 
       const updateData = buildConfirmationUpdateData(corrections, userId);
-      await applyConfirmedLotCorrection(updateData, corrections, testResult.projectId);
+      await applyConfirmedLinkCorrections(updateData, corrections, testResult);
 
       // H13: same server-side pass/fail backstop as the single-confirm path.
       applyConfirmedPassFailBackstop(updateData, testResult);

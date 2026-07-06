@@ -836,6 +836,51 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
       { description: 'Moisture', testType: 'Moisture', state: 'failing' },
     ]);
   });
+
+  it('satisfies the test gate via itpChecklistItemId link even when testType does not match', () => {
+    // The item requires "Compaction" but the passing verified result is typed
+    // "Slump" — the free-text fallback would never match. The explicit link
+    // (itpChecklistItemId === item id) is what makes the gate reachable.
+    const result = computeConformanceResult(
+      makeLot({
+        checklistItems: [TEST_ITEM], // id 'i2', testType 'Compaction'
+        completionStatuses: { i2: 'completed' },
+        testResults: [
+          {
+            id: 'r-link',
+            testType: 'Slump',
+            passFail: 'pass',
+            status: 'verified',
+            itpChecklistItemId: 'i2',
+          },
+        ],
+      }),
+      new Set(),
+    );
+
+    expect(result.prerequisites?.hasPassingTest).toBe(true);
+    expect(result.prerequisites?.outstandingTestItems).toEqual([]);
+    expect(result.canConform).toBe(true);
+  });
+
+  it('reports unmatched_result_exists when a lot has a result that matches no required item', () => {
+    // A result exists on the lot but matches the required item neither by link
+    // nor by testType — the honest state is "there is a result, link it",
+    // not "no result yet" (the #1336 misclassification).
+    const result = computeConformanceResult(
+      makeLot({
+        checklistItems: [TEST_ITEM], // requires 'Compaction'
+        completionStatuses: { i2: 'completed' },
+        testResults: [{ id: 'r-orphan', testType: 'Slump', passFail: 'pass', status: 'verified' }],
+      }),
+      new Set(),
+    );
+
+    expect(result.prerequisites?.hasPassingTest).toBe(false);
+    expect(result.prerequisites?.outstandingTestItems).toEqual([
+      { description: 'Compaction test', testType: 'Compaction', state: 'unmatched_result_exists' },
+    ]);
+  });
 });
 
 /**

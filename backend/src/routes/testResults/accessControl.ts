@@ -12,6 +12,7 @@ import {
   isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
+import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 
 /**
  * Test-result access-control helpers, extracted verbatim from
@@ -212,5 +213,55 @@ export async function requireLotInProject(lotId: string, projectId: string) {
 
   if (!lot) {
     throw AppError.badRequest('Lot not found or does not belong to this project');
+  }
+}
+
+// A submitted itpChecklistItemId is only valid when it belongs to the ITP
+// instance assigned to the given lot (and that lot to the project). Snapshot
+// item ids preserve the ITPChecklistItem id (buildTemplateSnapshot), so
+// membership in the instance's checklist is exactly the authority scope the
+// conformance gate later matches against. DB-backed, no auth — the caller has
+// already gated project write access.
+export async function itpChecklistItemBelongsToLot(
+  itpChecklistItemId: string,
+  lotId: string,
+  projectId: string,
+): Promise<boolean> {
+  const lot = await prisma.lot.findFirst({
+    where: { id: lotId, projectId },
+    select: {
+      itpInstance: {
+        select: {
+          templateSnapshot: true,
+          template: { select: { checklistItems: { select: { id: true } } } },
+        },
+      },
+    },
+  });
+
+  if (!lot?.itpInstance) {
+    return false;
+  }
+
+  return getChecklistItemsForInstance(lot.itpInstance).some(
+    (item) => item.id === itpChecklistItemId,
+  );
+}
+
+// Trust boundary for linking a test result to an ITP checklist item: reject a
+// link with no lot, and reject an item that does not belong to the lot's ITP.
+// Never trust the client-supplied id. Throws AppError.badRequest on violation.
+export async function assertItpChecklistItemLink(
+  itpChecklistItemId: string,
+  lotId: string | null,
+  projectId: string,
+): Promise<void> {
+  if (!lotId) {
+    throw AppError.badRequest(
+      'Link the test result to a lot before linking it to an ITP checklist item',
+    );
+  }
+  if (!(await itpChecklistItemBelongsToLot(itpChecklistItemId, lotId, projectId))) {
+    throw AppError.badRequest("ITP checklist item does not belong to this lot's ITP");
   }
 }
