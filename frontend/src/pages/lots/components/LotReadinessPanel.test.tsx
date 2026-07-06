@@ -167,18 +167,25 @@ describe('LotReadinessPanel', () => {
           blocksAction: true,
           actionLabel: 'Review tests',
           outstandingTests: [
-            { itemId: 'chk-1', description: 'Compaction density', testType: 'Compaction' },
+            {
+              itemId: 'chk-1',
+              description: 'Compaction density',
+              testType: 'Compaction',
+              state: 'no_result',
+            },
           ],
         },
       ],
     },
   } as LotEvidenceReadiness;
 
-  it('offers a per-requirement "Add result" action when onAddTestForItem is provided', () => {
+  it('offers a per-requirement "Add" action next to each named test when onAddTestForItem is provided', () => {
     const onAddTestForItem = vi.fn();
     renderPanel({ readiness: readinessWithOutstandingTests, onAddTestForItem });
 
-    const addButton = screen.getByRole('button', { name: 'Add result: Compaction density' });
+    // The test name is shown as a row, with a compact "Add" button beside it.
+    expect(screen.getByText('Compaction density')).toBeInTheDocument();
+    const addButton = screen.getByRole('button', { name: 'Add' });
     fireEvent.click(addButton);
     expect(onAddTestForItem).toHaveBeenCalledWith({
       id: 'chk-1',
@@ -187,8 +194,52 @@ describe('LotReadinessPanel', () => {
     });
   });
 
-  it('hides the "Add result" action when onAddTestForItem is omitted (non-creator roles)', () => {
+  it('shows outstanding-test names but no "Add" action when onAddTestForItem is omitted (non-creator roles)', () => {
     renderPanel({ readiness: readinessWithOutstandingTests });
-    expect(screen.queryByRole('button', { name: /Add result:/i })).not.toBeInTheDocument();
+    // Non-creators still see which tests are outstanding (the prose no longer names them)...
+    expect(screen.getByText('Compaction density')).toBeInTheDocument();
+    // ...but get no Add affordance.
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+  });
+
+  it('collapses long outstanding-test lists behind a "Show all" toggle', () => {
+    const manyTests = Array.from({ length: 5 }, (_, index) => ({
+      itemId: `chk-${index}`,
+      description: `Test ${index}`,
+      testType: null,
+      state: 'no_result' as const,
+    }));
+    const readinessWithManyTests = {
+      ...readiness,
+      conformance: {
+        ...readiness.conformance,
+        blockers: [
+          {
+            code: 'no_passing_verified_test',
+            severity: 'blocker',
+            area: 'test',
+            title: 'Required tests outstanding',
+            detail: '5 required tests outstanding (5 without results).',
+            blocksAction: true,
+            actionLabel: 'Review tests',
+            outstandingTests: manyTests,
+          },
+        ],
+      },
+    } as LotEvidenceReadiness;
+
+    renderPanel({ readiness: readinessWithManyTests });
+
+    // Only the first three render until expanded.
+    expect(screen.getByText('Test 0')).toBeInTheDocument();
+    expect(screen.getByText('Test 2')).toBeInTheDocument();
+    expect(screen.queryByText('Test 3')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 5' }));
+    expect(screen.getByText('Test 3')).toBeInTheDocument();
+    expect(screen.getByText('Test 4')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(screen.queryByText('Test 3')).not.toBeInTheDocument();
   });
 });

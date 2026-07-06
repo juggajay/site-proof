@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlertTriangle, CheckCircle2, CircleDot, RefreshCw, ShieldCheck } from 'lucide-react';
 import type {
   EvidenceReadinessItem,
@@ -5,6 +6,73 @@ import type {
   ReadinessBucket,
 } from '@/types/evidenceReadiness';
 import type { LotTab } from '../types';
+
+type OutstandingTest = NonNullable<EvidenceReadinessItem['outstandingTests']>[number];
+
+// Short muted suffix describing a test's state. no_result is the default
+// "nothing recorded yet" case and needs no suffix.
+const OUTSTANDING_TEST_STATE_SUFFIX: Record<OutstandingTest['state'], string> = {
+  no_result: '',
+  awaiting_verification: 'awaiting verification',
+  failing: 'failing',
+  unmatched_result_exists: 'result not linked',
+};
+
+const OUTSTANDING_TEST_PREVIEW_COUNT = 3;
+
+// Compact, left-aligned list of the outstanding tests behind the test blocker.
+// Names render for every role (the blocker prose only states counts); the "Add"
+// button appears only when onAddTestForItem is provided (test-creator roles).
+function OutstandingTestList({
+  tests,
+  onAddTestForItem,
+}: {
+  tests: OutstandingTest[];
+  onAddTestForItem?: (item: { id: string; description: string; testType: string | null }) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? tests : tests.slice(0, OUTSTANDING_TEST_PREVIEW_COUNT);
+
+  return (
+    <span className="mt-1.5 block space-y-1">
+      {shown.map((test) => {
+        const suffix = OUTSTANDING_TEST_STATE_SUFFIX[test.state];
+        return (
+          <span key={test.itemId} className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              {test.description}
+              {suffix ? <span className="text-muted-foreground/70"> — {suffix}</span> : null}
+            </span>
+            {onAddTestForItem ? (
+              <button
+                type="button"
+                className="flex-shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                onClick={() =>
+                  onAddTestForItem({
+                    id: test.itemId,
+                    description: test.description,
+                    testType: test.testType,
+                  })
+                }
+              >
+                Add
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
+      {tests.length > OUTSTANDING_TEST_PREVIEW_COUNT ? (
+        <button
+          type="button"
+          className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show less' : `Show all ${tests.length}`}
+        </button>
+      ) : null}
+    </span>
+  );
+}
 
 interface LotReadinessPanelProps {
   readiness: LotEvidenceReadiness | null;
@@ -151,25 +219,11 @@ function ItemList({
                   {item.actionLabel}
                 </button>
               ) : null}
-              {onAddTestForItem && item.outstandingTests && item.outstandingTests.length > 0 && (
-                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                  {item.outstandingTests.map((test) => (
-                    <button
-                      key={test.itemId}
-                      type="button"
-                      className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                      onClick={() =>
-                        onAddTestForItem({
-                          id: test.itemId,
-                          description: test.description,
-                          testType: test.testType,
-                        })
-                      }
-                    >
-                      Add result: {test.description}
-                    </button>
-                  ))}
-                </span>
+              {item.outstandingTests && item.outstandingTests.length > 0 && (
+                <OutstandingTestList
+                  tests={item.outstandingTests}
+                  onAddTestForItem={onAddTestForItem}
+                />
               )}
             </span>
           </li>
