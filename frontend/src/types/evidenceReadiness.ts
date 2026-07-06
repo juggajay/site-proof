@@ -24,6 +24,9 @@ export interface EvidenceReadinessItem {
   actionHref?: string;
   count?: number;
   relatedIds?: string[];
+  // Named outstanding tests behind the test blocker, so the readiness card can
+  // offer a per-requirement "Add result" action that pre-links the ITP item.
+  outstandingTests?: { itemId: string; description: string; testType: string | null }[];
 }
 
 export interface ReadinessBucket {

@@ -831,9 +831,14 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
     );
 
     expect(result.prerequisites?.outstandingTestItems).toEqual([
-      { description: 'Compaction — density ratio', testType: 'Compaction', state: 'no_result' },
-      { description: 'CBR', testType: 'CBR', state: 'awaiting_verification' },
-      { description: 'Moisture', testType: 'Moisture', state: 'failing' },
+      {
+        itemId: 'tr-none',
+        description: 'Compaction — density ratio',
+        testType: 'Compaction',
+        state: 'no_result',
+      },
+      { itemId: 'tr-await', description: 'CBR', testType: 'CBR', state: 'awaiting_verification' },
+      { itemId: 'tr-fail', description: 'Moisture', testType: 'Moisture', state: 'failing' },
     ]);
   });
 
@@ -878,7 +883,12 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
 
     expect(result.prerequisites?.hasPassingTest).toBe(false);
     expect(result.prerequisites?.outstandingTestItems).toEqual([
-      { description: 'Compaction test', testType: 'Compaction', state: 'unmatched_result_exists' },
+      {
+        itemId: 'i2',
+        description: 'Compaction test',
+        testType: 'Compaction',
+        state: 'unmatched_result_exists',
+      },
     ]);
   });
 });

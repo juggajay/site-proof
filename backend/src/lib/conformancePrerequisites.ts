@@ -105,6 +105,7 @@ type OutstandingTestState =
   | 'unmatched_result_exists';
 
 interface OutstandingTestItem {
+  itemId: string;
   description: string;
   testType: string | null;
   state: OutstandingTestState;
@@ -312,7 +313,9 @@ function buildOutstandingTestItems(
     } else {
       state = 'failing';
     }
-    return [{ description: item.description, testType: item.testType ?? null, state }];
+    return [
+      { itemId: item.id, description: item.description, testType: item.testType ?? null, state },
+    ];
   });
 }
 

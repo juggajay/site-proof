@@ -126,6 +126,11 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
         detail: buildOutstandingTestDetail(prerequisites.outstandingTestItems ?? []),
         blocksAction: true,
         actionLabel: 'Review tests',
+        outstandingTests: (prerequisites.outstandingTestItems ?? []).map((test) => ({
+          itemId: test.itemId,
+          description: test.description,
+          testType: test.testType,
+        })),
       }),
     );
   }

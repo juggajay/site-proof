@@ -445,6 +445,7 @@ export function LotDetailPage() {
         error={readinessError ? 'Could not load evidence readiness.' : null}
         onRetry={() => void refetchReadiness()}
         onTabChange={handleReadinessTabChange}
+        onAddTestForItem={canCreateTests ? handleAddTestResult : undefined}
       />
 
       {/* Tab Navigation */}

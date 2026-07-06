@@ -104,12 +104,23 @@ describe('evidence readiness helpers', () => {
             hasPassingTest: false,
             outstandingTestItems: [
               {
+                itemId: 'i-comp',
                 description: 'Compaction — density ratio',
                 testType: 'Compaction',
                 state: 'no_result',
               },
-              { description: 'CBR', testType: 'CBR', state: 'awaiting_verification' },
-              { description: 'Moisture', testType: 'Moisture', state: 'failing' },
+              {
+                itemId: 'i-cbr',
+                description: 'CBR',
+                testType: 'CBR',
+                state: 'awaiting_verification',
+              },
+              {
+                itemId: 'i-moist',
+                description: 'Moisture',
+                testType: 'Moisture',
+                state: 'failing',
+              },
             ],
             testResults: [],
             noOpenNcrs: true,
@@ -144,11 +155,11 @@ describe('evidence readiness helpers', () => {
             testRequired: true,
             hasPassingTest: false,
             outstandingTestItems: [
-              { description: 'Test A', testType: null, state: 'no_result' },
-              { description: 'Test B', testType: null, state: 'no_result' },
-              { description: 'Test C', testType: null, state: 'no_result' },
-              { description: 'Test D', testType: null, state: 'no_result' },
-              { description: 'Test E', testType: null, state: 'no_result' },
+              { itemId: 'a', description: 'Test A', testType: null, state: 'no_result' },
+              { itemId: 'b', description: 'Test B', testType: null, state: 'no_result' },
+              { itemId: 'c', description: 'Test C', testType: null, state: 'no_result' },
+              { itemId: 'd', description: 'Test D', testType: null, state: 'no_result' },
+              { itemId: 'e', description: 'Test E', testType: null, state: 'no_result' },
             ],
             testResults: [],
             noOpenNcrs: true,
@@ -183,6 +194,7 @@ describe('evidence readiness helpers', () => {
             hasPassingTest: false,
             outstandingTestItems: [
               {
+                itemId: 'i-comp',
                 description: 'Compaction — density ratio',
                 testType: 'Compaction',
                 state: 'unmatched_result_exists',
