@@ -2046,6 +2046,85 @@ describe('Lots API', () => {
       }
     }, 30000);
 
+    it('excludes released hold points from the management-only count', async () => {
+      const suffix = Date.now();
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Readiness released hold point ${suffix}`,
+          activityType: 'Earthworks',
+        },
+      });
+      const releasedHoldPointItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Superintendent release',
+          pointType: 'hold_point',
+          responsibleParty: 'contractor',
+        },
+      });
+      const outstandingHoldPointItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 2,
+          description: 'Second superintendent release',
+          pointType: 'hold_point',
+          responsibleParty: 'contractor',
+        },
+      });
+      const readinessLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-READY-RELEASED-${suffix}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          itpTemplateId: template.id,
+        },
+      });
+      await prisma.iTPInstance.create({
+        data: {
+          lotId: readinessLot.id,
+          templateId: template.id,
+        },
+      });
+      await prisma.holdPoint.create({
+        data: {
+          lotId: readinessLot.id,
+          itpChecklistItemId: releasedHoldPointItem.id,
+          pointType: 'hold_point',
+          description: 'Superintendent release',
+          status: 'released',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/lots/${readinessLot.id}/readiness`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        const counts = res.body.readiness.managementPrep.counts;
+        // Both items are release-gated, but the released one is no longer
+        // outstanding management work — only the un-released one counts.
+        expect(counts.releaseGatedHoldPoints).toBe(2);
+        expect(counts.managementOnlyItems).toBe(1);
+        expect(res.body.readiness.managementPrep.warnings).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              code: 'management_only_items',
+              count: 1,
+              relatedIds: [outstandingHoldPointItem.id],
+            }),
+          ]),
+        );
+      } finally {
+        await prisma.lot.delete({ where: { id: readinessLot.id } }).catch(() => {});
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    }, 30000);
+
     it('should omit commercial fields and enforce lot assignment for subcontractor readiness', async () => {
       const assignedLot = await prisma.lot.create({
         data: {

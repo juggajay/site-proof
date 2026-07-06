@@ -778,6 +778,64 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
       'ITP requires a matching passing verified test result',
     );
   });
+
+  it('classifies each unsatisfied test item as no_result, awaiting_verification, or failing', () => {
+    const noResultItem: ChecklistItemFixture = {
+      id: 'tr-none',
+      description: 'Compaction — density ratio',
+      pointType: 'standard',
+      evidenceRequired: 'test',
+      testType: 'Compaction',
+    };
+    const awaitingItem: ChecklistItemFixture = {
+      id: 'tr-await',
+      description: 'CBR',
+      pointType: 'standard',
+      evidenceRequired: 'test',
+      testType: 'CBR',
+    };
+    const failingItem: ChecklistItemFixture = {
+      id: 'tr-fail',
+      description: 'Moisture',
+      pointType: 'standard',
+      evidenceRequired: 'test',
+      testType: 'Moisture',
+    };
+    const satisfiedItem: ChecklistItemFixture = {
+      id: 'tr-ok',
+      description: 'Slump',
+      pointType: 'standard',
+      evidenceRequired: 'test',
+      testType: 'Slump',
+    };
+
+    const result = computeConformanceResult(
+      makeLot({
+        checklistItems: [noResultItem, awaitingItem, failingItem, satisfiedItem],
+        completionStatuses: {
+          'tr-none': 'completed',
+          'tr-await': 'completed',
+          'tr-fail': 'completed',
+          'tr-ok': 'completed',
+        },
+        testResults: [
+          // CBR passed but not yet verified.
+          { id: 'r-cbr', testType: 'CBR', passFail: 'pass', status: 'results_received' },
+          // Moisture recorded but failing.
+          { id: 'r-moist', testType: 'Moisture', passFail: 'fail', status: 'verified' },
+          // Slump satisfied (passing + verified) — excluded from the breakdown.
+          { id: 'r-slump', testType: 'Slump', passFail: 'pass', status: 'verified' },
+        ],
+      }),
+      new Set(),
+    );
+
+    expect(result.prerequisites?.outstandingTestItems).toEqual([
+      { description: 'Compaction — density ratio', testType: 'Compaction', state: 'no_result' },
+      { description: 'CBR', testType: 'CBR', state: 'awaiting_verification' },
+      { description: 'Moisture', testType: 'Moisture', state: 'failing' },
+    ]);
+  });
 });
 
 /**

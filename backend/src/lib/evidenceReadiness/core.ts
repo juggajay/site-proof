@@ -94,6 +94,14 @@ interface ConformancePrerequisiteSnapshot {
   // lot is not shown a contradictory test blocker that the conform gate allows.
   testRequired: boolean;
   hasPassingTest: boolean;
+  // Per-item breakdown of unsatisfied test-required items, so the readiness
+  // blocker can name the outstanding tests. Optional for back-compat with
+  // callers/tests that predate the field.
+  outstandingTestItems?: {
+    description: string;
+    testType: string | null;
+    state: 'no_result' | 'awaiting_verification' | 'failing';
+  }[];
   testResults: { id: string; testType: string; passFail: string; status: string }[];
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];

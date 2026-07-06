@@ -144,6 +144,14 @@ function buildManagementPrepSnapshot(lot: LotForManagementPrep, fallbackRecipien
     return !hasDefaultRecipients && (!holdPoint || !holdPointHasRequestedRecipient(holdPoint));
   });
 
+  // The management-prep count is the work still outstanding, so exclude
+  // hold points already released/completed — otherwise the UI shows
+  // "N hold points need release" beside "N hold points released".
+  const outstandingManagementIds = releaseGatedIds.filter((itemId) => {
+    const holdPoint = holdPointByItemId.get(itemId);
+    return !(holdPoint && TERMINAL_HOLD_POINT_STATUSES.has(holdPoint.status));
+  });
+
   const holdPointsHref = `/projects/${encodeURIComponent(lot.projectId)}/hold-points?lotId=${encodeURIComponent(lot.id)}`;
 
   return {
@@ -151,12 +159,12 @@ function buildManagementPrepSnapshot(lot: LotForManagementPrep, fallbackRecipien
     missingRequestEvidence: missingRequestEvidenceIds.length,
     missingRecipients: missingRecipientIds.length,
     fieldActionableItems: fieldActionableItemIds.length,
-    managementOnlyItems: releaseGatedIds.length,
+    managementOnlyItems: outstandingManagementIds.length,
     releaseGatedHoldPointIds: releaseGatedIds,
     missingRequestEvidenceIds,
     missingRecipientIds,
     fieldActionableItemIds,
-    managementOnlyItemIds: releaseGatedIds,
+    managementOnlyItemIds: outstandingManagementIds,
     holdPointsHref,
   };
 }
