@@ -21,6 +21,7 @@ import {
   checkConformancePrerequisites,
   checkConformancePrerequisitesBatch,
   computeConformanceResult,
+  getClaimBlockingReasonsForConformedLot,
   isItpCompletionFinished,
   itpRequiresTest,
 } from './conformancePrerequisites.js';
@@ -217,6 +218,58 @@ describe('itpRequiresTest', () => {
 
   it('treats missing fields (undefined) as no test', () => {
     expect(itpRequiresTest([{}, { evidenceRequired: undefined, testType: undefined }])).toBe(false);
+  });
+});
+
+describe('getClaimBlockingReasonsForConformedLot — force-conformance override', () => {
+  // A conformed lot whose ITP is incomplete AND missing a required test, plus an
+  // open NCR: without the override, all three block; with the override, only the
+  // NCR (a post-conformance regression) still blocks.
+  const conformance = {
+    prerequisites: {
+      itpAssigned: true,
+      itpCompleted: false,
+      itpCompletedCount: 1,
+      itpTotalCount: 3,
+      testRequired: true,
+      hasPassingTest: false,
+      noOpenNcrs: false,
+      openNcrs: [{ id: 'ncr-1', ncrNumber: 'NCR-001', description: 'Reopened', status: 'open' }],
+    },
+  };
+
+  it('blocks on ITP + test + NCR when not overridden', () => {
+    expect(getClaimBlockingReasonsForConformedLot(conformance)).toEqual([
+      'ITP checklist incomplete (1/3 items completed)',
+      'ITP requires a matching passing verified test result',
+      '1 open NCR(s) must be closed',
+    ]);
+  });
+
+  it('suppresses ITP-incomplete + test-outstanding but keeps the open-NCR regression when overridden', () => {
+    expect(
+      getClaimBlockingReasonsForConformedLot(conformance, { conformanceOverridden: true }),
+    ).toEqual(['1 open NCR(s) must be closed']);
+  });
+
+  it('keeps the N/A hold-point regression enforced even when overridden', () => {
+    const withNaHoldPoint = {
+      prerequisites: {
+        itpAssigned: true,
+        itpCompleted: false,
+        itpCompletedCount: 0,
+        itpTotalCount: 1,
+        testRequired: false,
+        hasPassingTest: false,
+        noOpenNcrs: true,
+        openNcrs: [],
+        noNaHoldPointBypass: false,
+        naHoldPointBlockerCount: 2,
+      },
+    };
+    expect(
+      getClaimBlockingReasonsForConformedLot(withNaHoldPoint, { conformanceOverridden: true }),
+    ).toEqual(['2 hold point items marked N/A but not released']);
   });
 });
 

@@ -126,6 +126,11 @@ export interface LotReadinessInput {
     // Cumulative percentage already claimed across all prior claims (0-100).
     // Defaults to 0 when omitted, preserving legacy single-claim behaviour.
     claimedPercentage?: number;
+    // ISO timestamp of a persisted force-conformance override, or null. When
+    // set, the claim gate suppresses ITP-incomplete + test-outstanding reasons
+    // (an owner/admin accepted them at conform time) while still enforcing
+    // post-conformance regressions (open NCRs, N/A hold points).
+    conformanceOverriddenAt?: string | null;
   };
   canViewCommercial: boolean;
   conformStatus: {
