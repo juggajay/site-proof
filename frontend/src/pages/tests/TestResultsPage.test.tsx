@@ -88,10 +88,18 @@ vi.mock('./components/NcrModals', () => ({
 vi.mock('./components/TestResultsTable', () => ({
   TestResultsTable: ({
     onUpdateStatus,
+    filteredTestResults,
+    highlightedTestId,
   }: {
     onUpdateStatus: (testId: string, newStatus: string) => Promise<void>;
+    filteredTestResults: Array<{ id: string }>;
+    highlightedTestId?: string | null;
   }) => (
-    <div data-testid="test-results-table">
+    <div
+      data-testid="test-results-table"
+      data-row-count={filteredTestResults.length}
+      data-highlighted={highlightedTestId ?? ''}
+    >
       <button type="button" onClick={() => void onUpdateStatus('t1', 'verified')}>
         Verify density
       </button>
@@ -343,6 +351,91 @@ describe('TestResultsPage header — mobile', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Add Test Result' })).toBeInTheDocument();
+    });
+  });
+});
+
+describe('TestResultsPage register — full pagination + deep link', () => {
+  beforeEach(() => {
+    useIsMobileMock.mockReturnValue(false);
+  });
+
+  function makeTest(id: string) {
+    return {
+      id,
+      testType: 'Density',
+      status: 'entered',
+      passFail: 'pass',
+      resultValue: 98,
+      resultUnit: '%',
+      specificationMin: 95,
+      specificationMax: 100,
+      lotId: null,
+      lot: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  it('aggregates every page of test results instead of only the first', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('/api/test-results')) {
+        const page = new URL(`http://x/${url}`).searchParams.get('page');
+        if (page === '1') {
+          return Promise.resolve({
+            testResults: [makeTest('t1'), makeTest('t2')],
+            pagination: { hasNextPage: true, totalPages: 2 },
+          });
+        }
+        return Promise.resolve({
+          testResults: [makeTest('t3')],
+          pagination: { hasNextPage: false, totalPages: 2 },
+        });
+      }
+      if (url.includes('/api/lots')) return Promise.resolve({ lots: [] });
+      if (url.includes('/api/projects/'))
+        return Promise.resolve({ project: { id: PROJECT_ID, state: 'NSW' } });
+      return Promise.resolve({});
+    });
+
+    renderPage();
+    await waitForPageLoad();
+
+    // Both pages requested, and all three rows reach the table (not just page 1).
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringContaining('page=2'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('test-results-table')).toHaveAttribute('data-row-count', '3');
+    });
+  });
+
+  it('highlights the deep-linked test from ?test=<id>', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('/api/test-results'))
+        return Promise.resolve({
+          testResults: [makeTest('t1'), makeTest('t2')],
+          pagination: { hasNextPage: false, totalPages: 1 },
+        });
+      if (url.includes('/api/lots')) return Promise.resolve({ lots: [] });
+      if (url.includes('/api/projects/'))
+        return Promise.resolve({ project: { id: PROJECT_ID, state: 'NSW' } });
+      return Promise.resolve({});
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/projects/${PROJECT_ID}/tests?test=t2`]}>
+          <Routes>
+            <Route path="/projects/:projectId/tests" element={<TestResultsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitForPageLoad();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('test-results-table')).toHaveAttribute('data-highlighted', 't2');
     });
   });
 });
