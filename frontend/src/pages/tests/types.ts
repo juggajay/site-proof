@@ -81,4 +81,5 @@ export interface CreateTestFormData {
   specificationMax: string;
   specificationRef: string;
   passFail: string;
+  itpChecklistItemId?: string;
 }

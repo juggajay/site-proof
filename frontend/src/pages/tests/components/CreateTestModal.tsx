@@ -55,6 +55,8 @@ interface CreateTestModalProps {
   onSuccess: (formData: CreateTestFormData) => Promise<void>;
   lots: Lot[];
   projectState: string;
+  initialValues?: Partial<CreateTestFormData>;
+  satisfiesItem?: { id: string; description: string } | null;
 }
 
 export const CreateTestModal = React.memo(function CreateTestModal({
@@ -63,6 +65,8 @@ export const CreateTestModal = React.memo(function CreateTestModal({
   onSuccess,
   lots,
   projectState,
+  initialValues,
+  satisfiesItem = null,
 }: CreateTestModalProps) {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -89,10 +93,10 @@ export const CreateTestModal = React.memo(function CreateTestModal({
 
   useEffect(() => {
     if (isOpen) {
-      reset({ ...INITIAL_FORM_DATA });
+      reset({ ...INITIAL_FORM_DATA, ...initialValues });
       setFormError(null);
     }
-  }, [isOpen, reset]);
+  }, [isOpen, reset, initialValues]);
 
   // Feature #198: Auto-populate spec values when test type changes
   useEffect(() => {
@@ -123,7 +127,10 @@ export const CreateTestModal = React.memo(function CreateTestModal({
       setCreating(true);
       setFormError(null);
       try {
-        await onSuccess(data as CreateTestFormData);
+        await onSuccess({
+          ...(data as CreateTestFormData),
+          ...(satisfiesItem ? { itpChecklistItemId: satisfiesItem.id } : {}),
+        });
         reset({ ...INITIAL_FORM_DATA });
       } catch (err) {
         setFormError(extractErrorMessage(err, 'Failed to create test result.'));
@@ -132,7 +139,7 @@ export const CreateTestModal = React.memo(function CreateTestModal({
         setCreating(false);
       }
     },
-    [onSuccess, reset],
+    [onSuccess, reset, satisfiesItem],
   );
 
   const handleClose = useCallback(() => {
@@ -156,6 +163,11 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             role="alert"
           >
             {formError}
+          </div>
+        )}
+        {satisfiesItem && (
+          <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm">
+            <span className="font-medium">Satisfies ITP item:</span> {satisfiesItem.description}
           </div>
         )}
         <form id="create-test-form" onSubmit={handleSubmit(onFormSubmit)}>
