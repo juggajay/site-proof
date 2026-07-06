@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Printer, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
@@ -31,6 +32,8 @@ interface TestResultsMobileListProps {
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
+  // Deep-linked test (?test=<id>) to scroll to and highlight.
+  highlightedTestId?: string | null;
 }
 
 // Mobile (<768px) card layout for the test results register. Mirrors the desktop
@@ -49,6 +52,7 @@ export function TestResultsMobileList({
   onAttachCertificate,
   onClearFilters,
   onOpenCreateModal,
+  highlightedTestId,
 }: TestResultsMobileListProps) {
   if (filteredTestResults.length === 0 && !hasActiveFilters) {
     return (
@@ -97,6 +101,7 @@ export function TestResultsMobileList({
           onOpenEnterResults={onOpenEnterResults}
           onRejectTest={onRejectTest}
           onAttachCertificate={onAttachCertificate}
+          isHighlighted={test.id === highlightedTestId}
         />
       ))}
     </div>
@@ -111,6 +116,7 @@ interface TestResultMobileCardProps {
   onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
+  isHighlighted?: boolean;
 }
 
 // Maps the test workflow status to a MobileDataCard badge variant. Mirrors the
@@ -134,8 +140,16 @@ function TestResultMobileCard({
   onOpenEnterResults,
   onRejectTest,
   onAttachCertificate,
+  isHighlighted,
 }: TestResultMobileCardProps) {
   const navigate = useNavigate();
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the deep-linked card into view while its highlight pulse is active.
+  useEffect(() => {
+    if (isHighlighted) cardRef.current?.scrollIntoView({ block: 'center' });
+  }, [isHighlighted]);
+
   const overdue = isTestOverdue(test);
   const daysSince = getDaysSince(test.sampleDate, test.createdAt);
   const draft = isAiExtractionReviewDraft(test);
@@ -149,137 +163,147 @@ function TestResultMobileCard({
   const canAdvance = canAdvanceTestStatus(test);
 
   return (
-    <MobileDataCard
-      title={test.testType}
-      subtitle={test.testRequestNumber ? `Request ${test.testRequestNumber}` : undefined}
-      status={{ label: statusLabel, variant: statusVariant }}
-      className={overdue ? 'border-destructive' : undefined}
-      fields={[
-        {
-          label: 'Result',
-          value: (
-            <span className="inline-flex items-center gap-1.5">
-              {resultDisplay}
-              {test.aiExtracted && (
-                <span
-                  className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded font-bold"
-                  title="AI Extracted from certificate"
-                >
-                  AI
-                </span>
-              )}
-            </span>
-          ),
-          priority: 'primary',
-        },
-        {
-          label: 'Pass / Fail',
-          value: (
-            <span
-              className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}
-            >
-              {test.passFail}
-            </span>
-          ),
-          priority: 'primary',
-        },
-        {
-          label: 'Linked Lot',
-          value: test.lot ? (
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(test.lot?.id || test.lotId || '')}`,
-                )
-              }
-              className="text-primary hover:underline"
-            >
-              {test.lot.lotNumber}
-            </button>
-          ) : (
-            '—'
-          ),
-          priority: 'primary',
-        },
-        {
-          label: test.sampleDate ? 'Since sample' : 'Since request',
-          value: overdue ? (
-            <span className="text-destructive font-medium">{daysSince} days &middot; Overdue</span>
-          ) : (
-            `${daysSince} days`
-          ),
-          priority: 'primary',
-        },
-        {
-          label: 'Laboratory',
-          value: test.laboratoryName || '—',
-          priority: 'secondary',
-        },
-      ]}
-      actions={
-        <div className="flex w-full flex-col gap-2">
-          {nextStatus &&
-            canAdvance &&
-            (isEnterResultsStep(test.status) ? (
-              // Ticket T2: record the result before entering.
-              <Button size="lg" className="w-full" onClick={() => onOpenEnterResults(test)}>
-                {nextStatusButtonLabels[test.status]}
-              </Button>
+    <div ref={cardRef} data-deep-linked={isHighlighted ? 'true' : undefined}>
+      <MobileDataCard
+        title={test.testType}
+        subtitle={test.testRequestNumber ? `Request ${test.testRequestNumber}` : undefined}
+        status={{ label: statusLabel, variant: statusVariant }}
+        className={
+          [overdue ? 'border-destructive' : '', isHighlighted ? 'ring-2 ring-primary/50' : '']
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
+        fields={[
+          {
+            label: 'Result',
+            value: (
+              <span className="inline-flex items-center gap-1.5">
+                {resultDisplay}
+                {test.aiExtracted && (
+                  <span
+                    className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded font-bold"
+                    title="AI Extracted from certificate"
+                  >
+                    AI
+                  </span>
+                )}
+              </span>
+            ),
+            priority: 'primary',
+          },
+          {
+            label: 'Pass / Fail',
+            value: (
+              <span
+                className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}
+              >
+                {test.passFail}
+              </span>
+            ),
+            priority: 'primary',
+          },
+          {
+            label: 'Linked Lot',
+            value: test.lot ? (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(test.lot?.id || test.lotId || '')}`,
+                  )
+                }
+                className="text-primary hover:underline"
+              >
+                {test.lot.lotNumber}
+              </button>
             ) : (
+              '—'
+            ),
+            priority: 'primary',
+          },
+          {
+            label: test.sampleDate ? 'Since sample' : 'Since request',
+            value: overdue ? (
+              <span className="text-destructive font-medium">
+                {daysSince} days &middot; Overdue
+              </span>
+            ) : (
+              `${daysSince} days`
+            ),
+            priority: 'primary',
+          },
+          {
+            label: 'Laboratory',
+            value: test.laboratoryName || '—',
+            priority: 'secondary',
+          },
+        ]}
+        actions={
+          <div className="flex w-full flex-col gap-2">
+            {nextStatus &&
+              canAdvance &&
+              (isEnterResultsStep(test.status) ? (
+                // Ticket T2: record the result before entering.
+                <Button size="lg" className="w-full" onClick={() => onOpenEnterResults(test)}>
+                  {nextStatusButtonLabels[test.status]}
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  className="w-full"
+                  disabled={updatingStatusId === test.id}
+                  onClick={() => onUpdateStatus(test.id, nextStatus)}
+                >
+                  {updatingStatusId === test.id
+                    ? 'Updating...'
+                    : nextStatusButtonLabels[test.status]}
+                </Button>
+              ))}
+
+            {/* Feature B2: attach/replace a certificate so a manual test can
+              reach 'verified'. */}
+            {test.status !== 'verified' && (
+              <AttachCertificateButton
+                testId={test.id}
+                hasCertificate={!!test.certificateDocId}
+                onAttachCertificate={onAttachCertificate}
+                variant="mobile"
+              />
+            )}
+
+            {test.status === 'entered' && (
               <Button
+                variant="destructive"
                 size="lg"
                 className="w-full"
-                disabled={updatingStatusId === test.id}
-                onClick={() => onUpdateStatus(test.id, nextStatus)}
+                onClick={() => onRejectTest(test.id)}
               >
-                {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
+                Reject
               </Button>
-            ))}
+            )}
 
-          {/* Feature B2: attach/replace a certificate so a manual test can
-              reach 'verified'. */}
-          {test.status !== 'verified' && (
-            <AttachCertificateButton
-              testId={test.id}
-              hasCertificate={!!test.certificateDocId}
-              onAttachCertificate={onAttachCertificate}
-              variant="mobile"
-            />
-          )}
+            {test.status === 'verified' && (
+              <p className="flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground">
+                <Check className="h-4 w-4" />
+                Complete
+              </p>
+            )}
 
-          {test.status === 'entered' && (
-            <Button
-              variant="destructive"
-              size="lg"
-              className="w-full"
-              onClick={() => onRejectTest(test.id)}
-            >
-              Reject
-            </Button>
-          )}
-
-          {test.status === 'verified' && (
-            <p className="flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground">
-              <Check className="h-4 w-4" />
-              Complete
-            </p>
-          )}
-
-          {canGenerateTestResultCertificate(test) && (
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full"
-              onClick={() => generateTestResultCertificate(test, projectId)}
-              aria-label={`Print test certificate for ${test.testType}`}
-            >
-              <Printer className="h-4 w-4" />
-              Print Certificate
-            </Button>
-          )}
-        </div>
-      }
-    />
+            {canGenerateTestResultCertificate(test) && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => generateTestResultCertificate(test, projectId)}
+                aria-label={`Print test certificate for ${test.testType}`}
+              >
+                <Printer className="h-4 w-4" />
+                Print Certificate
+              </Button>
+            )}
+          </div>
+        }
+      />
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { MoreVertical, FileDown, FolderOpen, FlaskConical } from 'lucide-react';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { getResponseErrorMessage } from './utils';
 import type { TestResult, Lot, FailedTestForNcr, NcrFormData, CreateTestFormData } from './types';
 import { TestFilters } from './components/TestFilters';
@@ -34,6 +35,49 @@ import {
   TEST_RESULTS_CSV_HEADERS,
   type TestResultFilterState,
 } from './testResultsPageHelpers';
+
+// Register APIs default to 20 rows per page (backend lib/pagination.ts); pull
+// every page so the register shows all tests, not just the newest 20. Mirrors
+// fetchAllLotPages in pages/lots/hooks/useLotsData.ts.
+const TESTS_API_PAGE_LIMIT = 100;
+const TESTS_API_MAX_PAGES = 100;
+
+interface TestResultsApiResponse {
+  testResults?: TestResult[];
+  pagination?: {
+    hasNextPage?: boolean;
+    totalPages?: number;
+  };
+}
+
+async function fetchAllTestResultPages(projectId: string): Promise<TestResult[]> {
+  const allResults: TestResult[] = [];
+  let page = 1;
+
+  while (page <= TESTS_API_MAX_PAGES) {
+    const data = await apiFetch<TestResultsApiResponse>(
+      `/api/test-results?projectId=${encodeURIComponent(projectId)}&page=${page}&limit=${TESTS_API_PAGE_LIMIT}`,
+    );
+
+    allResults.push(...(data.testResults ?? []));
+
+    if (!data.pagination?.hasNextPage || page >= (data.pagination.totalPages ?? page)) {
+      return allResults;
+    }
+
+    page += 1;
+  }
+
+  throw new Error('Test results register exceeded the maximum page count');
+}
+
+// Read side of GlobalSearch's test links (?test=<id>): stable references so the
+// deep-link effect doesn't re-run on every render.
+const getTestId = (test: TestResult) => test.id;
+const TEST_LINK_NOT_FOUND = {
+  title: "Couldn't find that test result",
+  description: 'The link may belong to another project, or the test may have been deleted.',
+};
 
 export function TestResultsPage() {
   const { projectId } = useParams();
@@ -106,12 +150,12 @@ export function TestResultsPage() {
     try {
       const encodedProjectId = encodeURIComponent(projectId);
       const [testsData, lotsData, projectData] = await Promise.all([
-        apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${encodedProjectId}`),
+        fetchAllTestResultPages(projectId),
         apiFetch<{ lots: Lot[] }>(`/api/lots?projectId=${encodedProjectId}`),
         apiFetch<{ project?: { state?: string } }>(`/api/projects/${encodedProjectId}`),
       ]);
 
-      setTestResults(testsData.testResults || []);
+      setTestResults(testsData);
       setLots(lotsData.lots || []);
       setProjectState(projectData.project?.state || 'NSW');
     } catch (err) {
@@ -126,6 +170,16 @@ export function TestResultsPage() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  // Deep link from a GlobalSearch test result (?test=<id>): scroll to + highlight
+  // the linked test once the register has loaded, or toast if it isn't here.
+  const { highlightedId: deepLinkedTestId } = useRegisterDeepLink({
+    param: 'test',
+    loading: loading || Boolean(error),
+    records: testResults,
+    getRecordId: getTestId,
+    notFound: TEST_LINK_NOT_FOUND,
+  });
 
   const invalidateTestResultCaches = useCallback(
     async (lotIds: Array<string | null | undefined> = []) => {
@@ -169,10 +223,8 @@ export function TestResultsPage() {
     async (lotIds: Array<string | null | undefined> = []) => {
       if (!projectId) return;
 
-      const testsData = await apiFetch<{ testResults: TestResult[] }>(
-        `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
-      );
-      setTestResults(testsData.testResults || []);
+      const testsData = await fetchAllTestResultPages(projectId);
+      setTestResults(testsData);
       await invalidateTestResultCaches(lotIds);
     },
     [projectId, invalidateTestResultCaches],
@@ -695,6 +747,7 @@ export function TestResultsPage() {
           onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
           onOpenCreateModal={() => setShowCreateModal(true)}
+          highlightedTestId={deepLinkedTestId}
         />
       ) : (
         <TestResultsTable
@@ -709,6 +762,7 @@ export function TestResultsPage() {
           onClearFilters={clearFilters}
           onOpenCreateModal={() => setShowCreateModal(true)}
           onLinkItpItem={openLinkItpModal}
+          highlightedTestId={deepLinkedTestId}
         />
       )}
 

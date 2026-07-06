@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate } from 'react-router-dom';
 import type { TestResult } from '../types';
@@ -37,6 +37,8 @@ interface TestResultsTableProps {
   // Migration action: link an existing test to one of its lot's ITP items.
   // Only offered for tests that have a linked lot (so an ITP can exist).
   onLinkItpItem?: (test: TestResult) => void;
+  // Deep-linked test (?test=<id>) to scroll to and highlight.
+  highlightedTestId?: string | null;
 }
 
 export const TestResultsTable = React.memo(function TestResultsTable({
@@ -51,6 +53,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   onClearFilters,
   onOpenCreateModal,
   onLinkItpItem,
+  highlightedTestId,
 }: TestResultsTableProps) {
   const navigate = useNavigate();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -61,6 +64,13 @@ export const TestResultsTable = React.memo(function TestResultsTable({
     estimateSize: () => 64,
     overscan: 5,
   });
+
+  // Scroll the deep-linked test into view while its highlight pulse is active.
+  useEffect(() => {
+    if (!highlightedTestId) return;
+    const index = filteredTestResults.findIndex((test) => test.id === highlightedTestId);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'center' });
+  }, [highlightedTestId, filteredTestResults, virtualizer]);
 
   if (filteredTestResults.length === 0 && !hasActiveFilters) {
     return (
@@ -153,7 +163,8 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                     key={virtualRow.key}
                     ref={virtualizer.measureElement}
                     data-index={virtualRow.index}
-                    className={`hover:bg-muted/30 border-b ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''}`}
+                    data-deep-linked={test.id === highlightedTestId ? 'true' : undefined}
+                    className={`hover:bg-muted/30 border-b ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${test.id === highlightedTestId ? 'bg-primary/10' : ''}`}
                   >
                     <td className="px-4 py-3 text-sm font-medium">
                       <div className="flex items-center gap-2">
