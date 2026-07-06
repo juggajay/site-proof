@@ -249,6 +249,14 @@ export function NCRPage() {
               ? 'Great! No non-conformances have been raised.'
               : 'Try adjusting your filter criteria.'}
           </p>
+          {/* Same create affordance as the header, so an empty register is not a
+              dead end. Gated on projectId exactly like the header button. */}
+          {ncrs.length === 0 && projectId && (
+            <Button variant="destructive" className="mt-4" onClick={() => openModal('create')}>
+              <Plus className="h-4 w-4" />
+              Raise NCR
+            </Button>
+          )}
         </div>
       ) : !error && isMobile ? (
         <NCRMobileList

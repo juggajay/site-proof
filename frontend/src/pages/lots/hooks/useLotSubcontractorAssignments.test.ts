@@ -10,11 +10,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ logError: vi.fn(), devLog: vi.fn(), devWarn: vi.fn() }));
 
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
 import { useLotSubcontractorAssignments } from './useLotSubcontractorAssignments';
 import type { Lot } from '../types';
 
 const apiFetchMock = vi.mocked(apiFetch);
+const toastMock = vi.mocked(toast);
 type HookParams = Parameters<typeof useLotSubcontractorAssignments>[0];
 
 const lotFixture: Lot = {
@@ -95,5 +97,24 @@ describe('useLotSubcontractorAssignments', () => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/lots/lot-1/subcontractors/mine');
     });
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/lots/lot-1/subcontractors');
+  });
+
+  it('surfaces a parsed API error message (not the raw blob) when a remove fails', async () => {
+    apiFetchMock.mockRejectedValue(
+      new ApiError(500, JSON.stringify({ error: { message: 'Subcontractor has open dockets' } })),
+    );
+
+    const { result } = renderAssignmentsHook();
+    result.current.removeAssignment('assignment-1');
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Error',
+          description: 'Subcontractor has open dockets',
+          variant: 'error',
+        }),
+      );
+    });
   });
 });

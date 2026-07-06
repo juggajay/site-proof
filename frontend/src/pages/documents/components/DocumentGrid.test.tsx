@@ -100,4 +100,71 @@ describe('DocumentGrid empty states', () => {
       screen.getByText('Clear the favourites filter to view all documents.'),
     ).toBeInTheDocument();
   });
+
+  it('offers an Upload Document CTA in the empty state when the user can manage documents', () => {
+    const onUpload = vi.fn();
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[]}
+        showFavouritesOnly={false}
+        canManageDocuments
+        documentUrls={{}}
+        onToggleFavourite={vi.fn()}
+        onOpenViewer={vi.fn()}
+        onDownload={vi.fn()}
+        onViewVersions={vi.fn()}
+        onMarkPendingDelete={vi.fn()}
+        onUpload={onUpload}
+      />,
+    );
+
+    const uploadButton = screen.getByRole('button', { name: /Upload Document/i });
+    fireEvent.click(uploadButton);
+    expect(onUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the empty-state Upload CTA when the user cannot manage documents', () => {
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[]}
+        showFavouritesOnly={false}
+        canManageDocuments={false}
+        documentUrls={{}}
+        onToggleFavourite={vi.fn()}
+        onOpenViewer={vi.fn()}
+        onDownload={vi.fn()}
+        onViewVersions={vi.fn()}
+        onMarkPendingDelete={vi.fn()}
+        onUpload={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('No documents found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Upload Document/i })).not.toBeInTheDocument();
+  });
+
+  it('does not show the Upload CTA in the favourites empty state', () => {
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[]}
+        showFavouritesOnly
+        canManageDocuments
+        documentUrls={{}}
+        onToggleFavourite={vi.fn()}
+        onOpenViewer={vi.fn()}
+        onDownload={vi.fn()}
+        onViewVersions={vi.fn()}
+        onMarkPendingDelete={vi.fn()}
+        onUpload={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Upload Document/i })).not.toBeInTheDocument();
+  });
 });

@@ -77,10 +77,10 @@ export function useLotSubcontractorAssignments({
       queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] });
       toast({ title: 'Subcontractor removed from lot' });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to remove subcontractor',
+        description: extractErrorMessage(error, 'Failed to remove subcontractor'),
         variant: 'error',
       });
     },
