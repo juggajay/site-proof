@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ITPTemplate } from './itpPageData';
-import { renderWithProviders, screen, fireEvent } from '@/test/renderWithProviders';
+import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/renderWithProviders';
 
 // Mutable auth role + a controllable bootstrap query, hoisted so the vi.mock
 // factories below (which run before the imports) can close over them.
@@ -369,5 +369,99 @@ describe('ITPPage template edit error handling', () => {
     // The modal stays open so the admin can read the next step.
     expect(screen.getByRole('heading', { name: 'Edit ITP Template' })).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ITPPage propagate-after-edit', () => {
+  const USAGE_LOTS = [
+    { instanceId: 'i1', lotId: 'l1', lotNumber: 'L-001' },
+    { instanceId: 'i2', lotId: 'l2', lotNumber: 'L-002' },
+  ];
+
+  // Routes the shared apiFetch mock across the three requests a save can make:
+  // PATCH the template, GET its assigned lots, then POST the propagate.
+  function mockSaveFlow(lots: typeof USAGE_LOTS) {
+    apiFetchMock.mockImplementation((url: string, options?: { method?: string }) => {
+      if (url.includes('/propagate')) return Promise.resolve({ updatedCount: lots.length });
+      if (url.endsWith('/lots')) return Promise.resolve({ lots });
+      if (options?.method === 'PATCH') return Promise.resolve({ template: LOCAL_TEMPLATE });
+      return Promise.resolve({});
+    });
+  }
+
+  async function saveTemplateEdit() {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+  }
+
+  it('offers the propagate dialog only when the template is assigned to lots', async () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE]);
+    mockSaveFlow(USAGE_LOTS);
+
+    renderWithProviders(<ITPPage />);
+    await saveTemplateEdit();
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Apply template changes to assigned lots',
+    });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText('L-001')).toBeInTheDocument();
+    expect(screen.getByText('L-002')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply to 2 lots' })).toBeInTheDocument();
+  });
+
+  it('does not offer the propagate dialog when no lots use the template', async () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE]);
+    mockSaveFlow([]);
+
+    renderWithProviders(<ITPPage />);
+    await saveTemplateEdit();
+
+    // The edit modal closes on a successful save; wait for that, then confirm no
+    // propagate dialog appeared.
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Edit ITP Template' })).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole('dialog', { name: 'Apply template changes to assigned lots' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('calls propagate with the assigned instance ids on confirm', async () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE]);
+    mockSaveFlow(USAGE_LOTS);
+
+    renderWithProviders(<ITPPage />);
+    await saveTemplateEdit();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply to 2 lots' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/itp/templates/t1/propagate', {
+        method: 'POST',
+        body: JSON.stringify({ instanceIds: ['i1', 'i2'] }),
+      });
+    });
+  });
+
+  it('does not call propagate when the user skips', async () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE]);
+    mockSaveFlow(USAGE_LOTS);
+
+    renderWithProviders(<ITPPage />);
+    await saveTemplateEdit();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Apply template changes to assigned lots' }),
+      ).not.toBeInTheDocument();
+    });
+    expect(apiFetchMock.mock.calls.some(([url]) => String(url).includes('/propagate'))).toBe(false);
   });
 });
