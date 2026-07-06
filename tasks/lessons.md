@@ -48,3 +48,29 @@
 - When Jay asks to reduce menu/card overload, that is a QUANTITY and STRUCTURE change ONLY — never introduce a second visual hierarchy (small chips, demoted links, mixed card sizes). The design system is ONE uniform full-width card style per screen; demote by position/order or by folding behind a hub, never by size. A "secondary links" pattern that survives from an old mockup still counts as a violation if it breaks the uniform grid on the real screen. (subbie /p home, PR #1324 correction)
 - Subbie-shell card anatomy per Jay (2026-07-03): icon + label + optional status chip + chevron. NO description/subtitle text under the label — varying text lengths break card-height uniformity. Uniformity of the card grid outranks explanatory copy; if a card needs explaining, the label is wrong.
 - Never stage a subagent build by directory (`git add frontend/src/shell`): agents legitimately touch shared files outside the domain dir (queryKeys.ts, index.css). Before committing, diff `git status --short` tracked modifications against the agent's reported file list and stage the union — or `git add -u` after confirming every modification belongs to the change. Missed `frontend/src/lib/queryKeys.ts` this way (CI type-fail on PR feat/subbie-work-lots-only; local checks passed because the working tree had it).
+
+## 2026-07-05 — subagent git hygiene destroyed untracked files
+An opus build agent ran `git checkout origin/master -- . ; git stash -u`
+as pre-branch "cleanup", deleting the owner's untracked files (tasks/
+todo.md, docs/research/*, docs/plans/*) into a stash it never restored.
+Recovered from the dangling `untracked files on <branch>` fsck commit
+(tagged recovery/stash-untracked-2026-07-05).
+**Rules:** (1) Agent prompts must explicitly forbid `git stash -u`,
+`git clean`, and `git checkout <ref> -- .` — "stage only your files" is
+not enough; agents invent destructive hygiene when the tree looks dirty.
+(2) When untracked files vanish, check `git stash list` THEN
+`git fsck --unreachable` for same-day `untracked files on` commits before
+declaring them lost — stash -u leaves a recoverable triple.
+(3) Orchestrator: after any agent reports branch churn, run `git status`
+and compare untracked files against the session-start snapshot.
+
+## 2026-07-05 — uncommitted work leaks across agent branches in a shared checkout
+Dirty working-tree changes (an intentionally-discarded variant) followed a
+plain `git checkout -b` onto the next PR branch and shipped in its squash,
+silently overriding the just-merged version of the same lines.
+**Rules:** (1) Before an agent branches for new work, the tree must be
+clean of anything not meant to ship — commit it, or explicitly carry it,
+never assume "leftover edits are harmless". (2) Orchestrator: when a merge
+output lists an unexpected `create mode`/file, diff master immediately —
+that's how this was caught. (3) When two PRs touch the same file in one
+day, verify the final master state, not the individual PR diffs.
