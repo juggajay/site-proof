@@ -26,6 +26,8 @@ const OUTSTANDING_TEST_STATE_PHRASE = {
   no_result: 'no result yet',
   awaiting_verification: 'result awaiting verification',
   failing: 'result failed — re-test needed',
+  unmatched_result_exists:
+    "a test result exists for this lot but isn't linked to this requirement — open the test and link it",
 } as const;
 
 // Turn the per-item outstanding-test breakdown into the blocker detail so the

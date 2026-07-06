@@ -167,6 +167,44 @@ describe('evidence readiness helpers', () => {
     );
   });
 
+  it('phrases an unmatched_result_exists item as "a result exists, link it"', () => {
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        conformStatus: {
+          canConform: false,
+          blockingReasons: ['ITP requires a matching passing verified test result'],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true,
+            itpCompletedCount: 1,
+            itpTotalCount: 1,
+            itpIncompleteItems: [],
+            testRequired: true,
+            hasPassingTest: false,
+            outstandingTestItems: [
+              {
+                description: 'Compaction — density ratio',
+                testType: 'Compaction',
+                state: 'unmatched_result_exists',
+              },
+            ],
+            testResults: [],
+            noOpenNcrs: true,
+            openNcrs: [],
+          },
+        },
+      }),
+    );
+
+    const testBlocker = readiness.conformance.blockers.find(
+      (readinessItem) => readinessItem.code === 'no_passing_verified_test',
+    );
+    expect(testBlocker?.detail).toBe(
+      '1 required test outstanding: "Compaction — density ratio" — a test result exists for ' +
+        "this lot but isn't linked to this requirement — open the test and link it.",
+    );
+  });
+
   it('does not raise the test blocker for a no-test-point lot and reports prerequisites met', () => {
     // A lot whose ITP has no test point: the conform gate allows conformance
     // (testRequired false), so the readiness layer must NOT surface a

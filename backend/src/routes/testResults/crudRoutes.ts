@@ -9,6 +9,8 @@ import {
   TEST_CREATORS,
   TEST_DELETERS,
   TEST_VERIFIERS,
+  assertItpChecklistItemLink,
+  itpChecklistItemBelongsToLot,
   requireLotInProject,
   requireTestProjectRole,
   requireTestResultReadAccess,
@@ -93,6 +95,7 @@ crudRoutes.post(
     const {
       projectId,
       lotId,
+      itpChecklistItemId,
       testType,
       testRequestNumber,
       laboratoryName,
@@ -110,6 +113,8 @@ crudRoutes.post(
 
     const projectIdValue = normalizeRequiredString(projectId, 'projectId', MAX_TEST_ID_LENGTH);
     const lotIdValue = normalizeOptionalString(lotId, 'lotId', MAX_TEST_ID_LENGTH) ?? null;
+    const itpChecklistItemIdValue =
+      normalizeOptionalString(itpChecklistItemId, 'itpChecklistItemId', MAX_TEST_ID_LENGTH) ?? null;
     const testTypeValue = normalizeRequiredString(testType, 'testType', MAX_TEST_TYPE_LENGTH);
     const testRequestNumberValue = toNullableString(
       testRequestNumber,
@@ -159,10 +164,17 @@ crudRoutes.post(
       await requireLotInProject(lotIdValue, projectIdValue);
     }
 
+    // If an ITP checklist item link is supplied, it must belong to the linked
+    // lot's ITP (rejects no-lot links and cross-lot / cross-project items).
+    if (itpChecklistItemIdValue) {
+      await assertItpChecklistItemLink(itpChecklistItemIdValue, lotIdValue, projectIdValue);
+    }
+
     const testResult = await prisma.testResult.create({
       data: {
         projectId: projectIdValue,
         lotId: lotIdValue,
+        itpChecklistItemId: itpChecklistItemIdValue,
         testType: testTypeValue,
         testRequestNumber: testRequestNumberValue,
         laboratoryName: laboratoryNameValue,
@@ -240,6 +252,7 @@ crudRoutes.patch(
 
     const {
       lotId,
+      itpChecklistItemId,
       testType,
       testRequestNumber,
       laboratoryName,
@@ -264,6 +277,36 @@ crudRoutes.patch(
     // Build update data
     const updateData: Prisma.TestResultUncheckedUpdateInput = {};
     if (lotId !== undefined) updateData.lotId = lotIdValue || null;
+
+    // ITP checklist item link. The effective lot is the one being set in this
+    // PATCH when lotId is present, otherwise the stored lot.
+    const effectiveLotId = lotId !== undefined ? lotIdValue || null : testResult.lotId;
+    if (itpChecklistItemId !== undefined) {
+      const itemIdValue = normalizeOptionalString(
+        itpChecklistItemId,
+        'itpChecklistItemId',
+        MAX_TEST_ID_LENGTH,
+      );
+      if (itemIdValue) {
+        await assertItpChecklistItemLink(itemIdValue, effectiveLotId, testResult.projectId);
+        updateData.itpChecklistItemId = itemIdValue;
+      } else {
+        updateData.itpChecklistItemId = null;
+      }
+    } else if (lotId !== undefined && testResult.itpChecklistItemId) {
+      // The lot changed/cleared without re-linking. Drop a now-stale ITP link so
+      // the conformance gate can't match a link that belongs to a different
+      // lot's ITP.
+      const stillValid =
+        effectiveLotId !== null &&
+        (await itpChecklistItemBelongsToLot(
+          testResult.itpChecklistItemId,
+          effectiveLotId,
+          testResult.projectId,
+        ));
+      if (!stillValid) updateData.itpChecklistItemId = null;
+    }
+
     applyTestResultCorrections(updateData, {
       testType,
       testRequestNumber,
@@ -292,7 +335,12 @@ crudRoutes.patch(
       applyConfirmedPassFailBackstop(updateData, testResult);
     }
 
-    if (testResult.status === 'verified' && Object.keys(updateData).length > 0) {
+    // Linking an existing (possibly verified) test to its ITP item is metadata,
+    // not a result change — it must not reset verification, or the "Link to ITP
+    // item" migration path would un-verify passing tests. Only substantive
+    // field edits reopen a verified row.
+    const hasSubstantiveEdit = Object.keys(updateData).some((key) => key !== 'itpChecklistItemId');
+    if (testResult.status === 'verified' && hasSubstantiveEdit) {
       updateData.status = 'entered';
       updateData.enteredById = user.id;
       updateData.enteredAt = new Date();

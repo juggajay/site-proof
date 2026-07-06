@@ -98,7 +98,11 @@ export function itpRequiresTest(
   return checklistItems.some((item) => item.evidenceRequired === 'test' || Boolean(item.testType));
 }
 
-type OutstandingTestState = 'no_result' | 'awaiting_verification' | 'failing';
+type OutstandingTestState =
+  | 'no_result'
+  | 'awaiting_verification'
+  | 'failing'
+  | 'unmatched_result_exists';
 
 interface OutstandingTestItem {
   description: string;
@@ -286,14 +290,23 @@ function buildOutstandingTestItems(
     status: string;
   }[],
 ): OutstandingTestItem[] {
-  return checklistItems.filter(isRequiredTestItem).flatMap((item) => {
+  const requiredItems = checklistItems.filter(isRequiredTestItem);
+
+  // A lot-level orphan: a recorded test result that matches no required item.
+  // When one exists, an unsatisfied item with no direct match is more honestly
+  // "a result exists, link it" than "no result yet" — the #1336 misclassification.
+  const hasUnmatchedResult = testResults.some(
+    (testResult) => !requiredItems.some((item) => testResultMatchesItem(item, testResult)),
+  );
+
+  return requiredItems.flatMap((item) => {
     if (hasVerifiedPassingTestForItem(item, testResults)) {
       return [];
     }
     const matches = testResults.filter((testResult) => testResultMatchesItem(item, testResult));
     let state: OutstandingTestState;
     if (matches.length === 0) {
-      state = 'no_result';
+      state = hasUnmatchedResult ? 'unmatched_result_exists' : 'no_result';
     } else if (matches.some((testResult) => testResult.passFail === 'pass')) {
       state = 'awaiting_verification';
     } else {

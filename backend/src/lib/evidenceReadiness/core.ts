@@ -100,7 +100,7 @@ interface ConformancePrerequisiteSnapshot {
   outstandingTestItems?: {
     description: string;
     testType: string | null;
-    state: 'no_result' | 'awaiting_verification' | 'failing';
+    state: 'no_result' | 'awaiting_verification' | 'failing' | 'unmatched_result_exists';
   }[];
   testResults: { id: string; testType: string; passFail: string; status: string }[];
   noOpenNcrs: boolean;
