@@ -12,39 +12,24 @@ interface ShortcutCategory {
   shortcuts: { keys: string[]; description: string }[];
 }
 
+// Only the shortcuts that are actually wired up are listed — advertising
+// unbound keys is worse than listing none. Global search open lives in
+// Header.tsx (⌘/Ctrl+K); this dialog's own ? trigger and the modal Esc handlers
+// are the rest; ↑/↓/Enter navigate the open search (GlobalSearch.tsx).
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Global',
     shortcuts: [
-      { keys: ['⌘', 'K'], description: 'Open quick search' },
+      { keys: ['⌘', 'K'], description: 'Open quick search (Ctrl+K on Windows)' },
       { keys: ['?'], description: 'Show keyboard shortcuts' },
-      { keys: ['Esc'], description: 'Close modal/dialog' },
+      { keys: ['Esc'], description: 'Close the search or a dialog' },
     ],
   },
   {
-    title: 'Navigation',
+    title: 'Quick search',
     shortcuts: [
-      { keys: ['G', 'D'], description: 'Go to Dashboard' },
-      { keys: ['G', 'P'], description: 'Go to Projects' },
-      { keys: ['G', 'L'], description: 'Go to Lots' },
-      { keys: ['G', 'N'], description: 'Go to NCRs' },
-      { keys: ['G', 'T'], description: 'Go to Tests' },
-    ],
-  },
-  {
-    title: 'Actions',
-    shortcuts: [
-      { keys: ['N'], description: 'Create new item (context-dependent)' },
-      { keys: ['E'], description: 'Edit selected item' },
-      { keys: ['Delete'], description: 'Delete selected item' },
-    ],
-  },
-  {
-    title: 'Search & Filter',
-    shortcuts: [
-      { keys: ['/'], description: 'Focus search input' },
-      { keys: ['↑', '↓'], description: 'Navigate search results' },
-      { keys: ['Enter'], description: 'Select search result' },
+      { keys: ['↑', '↓'], description: 'Move between results' },
+      { keys: ['Enter'], description: 'Open the highlighted result' },
     ],
   },
 ];

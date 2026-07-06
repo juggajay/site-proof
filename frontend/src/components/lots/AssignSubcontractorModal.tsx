@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { toast } from '@/components/ui/toaster';
 import { Loader2 } from 'lucide-react';
@@ -156,10 +157,10 @@ export function AssignSubcontractorModal({
       onSuccess?.();
       onClose();
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to save assignment',
+        description: extractErrorMessage(error, 'Failed to save assignment'),
         variant: 'error',
       });
     },

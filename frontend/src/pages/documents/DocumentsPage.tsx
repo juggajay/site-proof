@@ -528,6 +528,7 @@ export function DocumentsPage() {
         onDownload={(doc) => void handleDownload(doc)}
         onViewVersions={(doc) => setVersionsDoc(doc)}
         onMarkPendingDelete={(doc) => setDocumentPendingDelete(doc)}
+        onUpload={openUploadForCurrentLot}
       />
 
       <DocumentsPagination

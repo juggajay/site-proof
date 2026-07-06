@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { History } from 'lucide-react';
+import { History, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { DocumentAccessUrl } from '@/lib/documentAccess';
 import {
@@ -42,6 +42,9 @@ interface DocumentGridProps<TDoc extends DocumentGridDoc> {
   onDownload: (doc: TDoc) => void;
   onViewVersions: (doc: TDoc) => void;
   onMarkPendingDelete: (doc: TDoc) => void;
+  // Open the upload flow from the empty state; only offered to users who can
+  // manage documents (same gate as the page header's upload button).
+  onUpload?: () => void;
 }
 
 function ImageDocumentIcon() {
@@ -92,6 +95,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
   onDownload,
   onViewVersions,
   onMarkPendingDelete,
+  onUpload,
 }: DocumentGridProps<TDoc>) {
   return (
     <div className="rounded-lg border bg-card">
@@ -120,6 +124,14 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
               ? 'Clear the favourites filter to view all documents.'
               : 'Drag and drop files here or click "Upload Document" to get started'}
           </p>
+          {/* Upload affordance in the empty state, gated the same way the page
+              header's upload button is (only when the user can manage docs). */}
+          {!showFavouritesOnly && canManageDocuments && onUpload && (
+            <Button className="mt-4" onClick={onUpload}>
+              <Upload className="h-4 w-4" />
+              Upload Document
+            </Button>
+          )}
         </div>
       ) : (
         <div className="divide-y">
