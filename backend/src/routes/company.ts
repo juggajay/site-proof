@@ -104,6 +104,7 @@ companyRouter.get(
     res.setHeader('Content-Type', getCompanyLogoContentType(storagePath));
     res.setHeader('Content-Length', String(buffer.length));
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.send(buffer);
   }),
 );
