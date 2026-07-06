@@ -74,6 +74,10 @@ export interface ITPChecklistTabProps {
   currentUserId?: string;
   onVerifyCompletion?: (completionId: string) => Promise<boolean> | void;
   onRejectCompletion?: (completionId: string, reason: string) => Promise<boolean>;
+  // Requirement-first test entry: per-row "Add test result" for test-required,
+  // unsatisfied items. Backend enforces the role; canCreateTests gates the UI.
+  canCreateTests?: boolean;
+  onAddTestResult?: (item: { id: string; description: string; testType?: string | null }) => void;
 }
 
 export function ITPChecklistTab({
@@ -108,6 +112,8 @@ export function ITPChecklistTab({
   currentUserId,
   onVerifyCompletion,
   onRejectCompletion,
+  canCreateTests = false,
+  onAddTestResult,
 }: ITPChecklistTabProps) {
   const navigate = useNavigate();
   const assignTemplateCardRef = useRef<HTMLDivElement>(null);
@@ -461,6 +467,8 @@ export function ITPChecklistTab({
                           reviewingCompletionId={reviewingCompletionId}
                           onVerifyCompletion={handleVerifyCompletion}
                           onRequestReject={handleRequestReject}
+                          canCreateTests={canCreateTests}
+                          onAddTestResult={onAddTestResult}
                         />
                       );
                     })}

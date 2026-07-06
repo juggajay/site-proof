@@ -21,6 +21,7 @@ import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
 import { useLotLinkCopy } from './hooks/useLotLinkCopy';
 import { useLotTabData } from './hooks/useLotTabData';
+import { useLotTestCreation, buildAddTestPrefillForItem } from './hooks/useLotTestCreation';
 import { useLotConformanceActions } from './hooks/useLotConformanceActions';
 import { useLotSubcontractorAssignments } from './hooks/useLotSubcontractorAssignments';
 import { useItpActionModals, type ItpActionModalHandlers } from './hooks/useItpActionModals';
@@ -30,6 +31,7 @@ import { LotTabNavigation } from './components/LotTabNavigation';
 import { LotReadinessPanel } from './components/LotReadinessPanel';
 import { LotDetailTabPanel } from './components/LotDetailTabPanel';
 import { LotDetailModals } from './components/LotDetailModals';
+import { CreateTestModal } from '@/pages/tests/components/CreateTestModal';
 import {
   LotDetailEmptyState,
   LotDetailErrorState,
@@ -98,7 +100,11 @@ export function LotDetailPage() {
     loadingHistory,
     refreshNcrsAfterFailure,
     refreshActivityHistory,
+    refreshTests,
   } = useLotTabData({ projectId, lotId, currentTab });
+
+  const { isAddTestOpen, addTestPrefill, openAddTest, closeAddTest, createTestResult } =
+    useLotTestCreation({ projectId, lotId, refreshTests });
 
   const {
     data: readinessData,
@@ -307,6 +313,24 @@ export function LotDetailPage() {
   const canAssignITPTemplate = qualityAccess?.canManageITPTemplates || false;
 
   const effectiveRole = qualityAccess?.role || '';
+  // Mirrors the backend TEST_CREATORS set. effectiveRole is the trusted
+  // server-derived project role (not user.role, which RoleSwitcher can override).
+  const canCreateTests = [
+    'owner',
+    'admin',
+    'project_manager',
+    'site_engineer',
+    'quality_manager',
+    'foreman',
+  ].includes(effectiveRole);
+  // Requirement-first test entry: prefill from an ITP checklist item when given.
+  const handleAddTestResult = useCallback(
+    (item?: { id: string; description: string; testType?: string | null }) => {
+      if (item) openAddTest(buildAddTestPrefillForItem(item, lotId));
+      else openAddTest({ initialValues: { lotId: lotId ?? '' } });
+    },
+    [openAddTest, lotId],
+  );
   // H4: head-contractor verify/reject affordance gate (backend enforces too).
   const canReviewITP = canReviewItpByRole(effectiveRole);
   const canEditLot = [
@@ -471,6 +495,8 @@ export function LotDetailPage() {
         rejectCompletion={rejectCompletion}
         testResults={testResults}
         loadingTests={loadingTests}
+        canCreateTests={canCreateTests}
+        onAddTestResult={handleAddTestResult}
         ncrs={ncrs}
         loadingNcrs={loadingNcrs}
         handleTabChange={handleTabChange}
@@ -547,6 +573,16 @@ export function LotDetailPage() {
         setShowForceConformConfirm={setShowForceConformConfirm}
         setForceConformReason={setForceConformReason}
         handleConformLot={handleConformLot}
+      />
+
+      <CreateTestModal
+        isOpen={isAddTestOpen}
+        onClose={closeAddTest}
+        onSuccess={createTestResult}
+        lots={lot ? [{ id: lot.id, lotNumber: lot.lotNumber }] : []}
+        projectState=""
+        initialValues={addTestPrefill.initialValues}
+        satisfiesItem={addTestPrefill.satisfiesItem}
       />
     </div>
   );
