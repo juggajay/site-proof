@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import { getAuthToken, useAuth } from '@/lib/auth';
 import { AlertTriangle } from 'lucide-react';
 import { apiFetch, authFetch } from '@/lib/api';
@@ -37,6 +39,7 @@ interface SupportContactInfo {
 
 export function CompanySettingsPage() {
   const { user, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
   const companyQuery = useCompanySettingsQuery();
   const [company, setCompany] = useState<Company | null>(null);
   const [supportEmail, setSupportEmail] = useState(DEFAULT_SUPPORT_EMAIL);
@@ -227,6 +230,9 @@ export function CompanySettingsPage() {
       const nextCompany = { ...data.company, logoUrl: data.logoUrl };
       setCompany(nextCompany);
       setFormData(toCompanyFormData(nextCompany));
+      // Other consumers of the company-settings query (e.g. the app header logo)
+      // read from cache, so refetch them to pick up the new signed logo URL.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.companySettings });
       showStatusMessage('Company logo uploaded successfully!');
     } catch (err) {
       setSaveError(extractErrorMessage(err, 'Failed to upload company logo'));

@@ -1292,6 +1292,9 @@ describe('Company API', () => {
 
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toContain('image/png');
+        // The cross-origin resource policy header lets the Vercel frontend render
+        // this Railway-served <img> instead of helmet's same-origin default blocking it.
+        expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
         expect(Buffer.from(res.body)).toEqual(Buffer.from(logoBytes));
         expect(mockDownload).toHaveBeenCalledWith(storagePath);
       });
