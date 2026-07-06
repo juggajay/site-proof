@@ -79,7 +79,11 @@ export function ResponsiveSheet({
     <Modal onClose={onClose} className={className}>
       <ModalHeader>{title}</ModalHeader>
       {children}
-      {footer && <div className="flex justify-end gap-2 pt-4 border-t">{footer}</div>}
+      {footer && (
+        <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-background pt-4 pb-1">
+          {footer}
+        </div>
+      )}
     </Modal>
   );
 }
