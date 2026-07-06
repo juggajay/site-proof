@@ -1,5 +1,5 @@
 import { type ComponentProps } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LotReadinessPanel } from './LotReadinessPanel';
 import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
@@ -151,5 +151,44 @@ describe('LotReadinessPanel', () => {
       'href',
       '/projects/project-1/hold-points?lotId=lot-1',
     );
+  });
+
+  const readinessWithOutstandingTests = {
+    ...readiness,
+    conformance: {
+      ...readiness.conformance,
+      blockers: [
+        {
+          code: 'no_passing_verified_test',
+          severity: 'blocker',
+          area: 'test',
+          title: 'Required tests outstanding',
+          detail: '1 required test outstanding',
+          blocksAction: true,
+          actionLabel: 'Review tests',
+          outstandingTests: [
+            { itemId: 'chk-1', description: 'Compaction density', testType: 'Compaction' },
+          ],
+        },
+      ],
+    },
+  } as LotEvidenceReadiness;
+
+  it('offers a per-requirement "Add result" action when onAddTestForItem is provided', () => {
+    const onAddTestForItem = vi.fn();
+    renderPanel({ readiness: readinessWithOutstandingTests, onAddTestForItem });
+
+    const addButton = screen.getByRole('button', { name: 'Add result: Compaction density' });
+    fireEvent.click(addButton);
+    expect(onAddTestForItem).toHaveBeenCalledWith({
+      id: 'chk-1',
+      description: 'Compaction density',
+      testType: 'Compaction',
+    });
+  });
+
+  it('hides the "Add result" action when onAddTestForItem is omitted (non-creator roles)', () => {
+    renderPanel({ readiness: readinessWithOutstandingTests });
+    expect(screen.queryByRole('button', { name: /Add result:/i })).not.toBeInTheDocument();
   });
 });

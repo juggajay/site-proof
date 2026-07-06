@@ -24,6 +24,9 @@ export interface EvidenceReadinessItem {
   actionHref?: string;
   count?: number;
   relatedIds?: string[];
+  // Named outstanding tests behind this item (the test blocker), so the UI can
+  // offer a per-requirement "Add result" action that pre-links the ITP item.
+  outstandingTests?: { itemId: string; description: string; testType: string | null }[];
 }
 
 export interface ReadinessBucket {
@@ -98,6 +101,7 @@ interface ConformancePrerequisiteSnapshot {
   // blocker can name the outstanding tests. Optional for back-compat with
   // callers/tests that predate the field.
   outstandingTestItems?: {
+    itemId: string;
     description: string;
     testType: string | null;
     state: 'no_result' | 'awaiting_verification' | 'failing' | 'unmatched_result_exists';

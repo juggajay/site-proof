@@ -12,6 +12,10 @@ interface LotReadinessPanelProps {
   error: string | null;
   onRetry: () => void;
   onTabChange: (tab: LotTab, actionCode?: string) => void;
+  // When provided (test-creator roles), the named outstanding tests each get an
+  // "Add result" action that opens the pre-linked create-test modal. Omitted
+  // for roles that can't create tests, which hides the affordance.
+  onAddTestForItem?: (item: { id: string; description: string; testType: string | null }) => void;
   // When true, render a field-first view (foreman/field roles): no commercial
   // "Claim" bucket and no claim-readiness language. Quality/conformance work is
   // preserved, but framed as outstanding field work rather than a claims workflow.
@@ -104,10 +108,12 @@ function itemIcon(item: EvidenceReadinessItem) {
 function ItemList({
   items,
   onTabChange,
+  onAddTestForItem,
   maxItems = 4,
 }: {
   items: EvidenceReadinessItem[];
   onTabChange: (tab: LotTab, actionCode?: string) => void;
+  onAddTestForItem?: (item: { id: string; description: string; testType: string | null }) => void;
   maxItems?: number;
 }) {
   if (items.length === 0) {
@@ -145,6 +151,26 @@ function ItemList({
                   {item.actionLabel}
                 </button>
               ) : null}
+              {onAddTestForItem && item.outstandingTests && item.outstandingTests.length > 0 && (
+                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                  {item.outstandingTests.map((test) => (
+                    <button
+                      key={test.itemId}
+                      type="button"
+                      className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                      onClick={() =>
+                        onAddTestForItem({
+                          id: test.itemId,
+                          description: test.description,
+                          testType: test.testType,
+                        })
+                      }
+                    >
+                      Add result: {test.description}
+                    </button>
+                  ))}
+                </span>
+              )}
             </span>
           </li>
         );
@@ -157,11 +183,13 @@ function ReadinessBucketView({
   bucket,
   kind,
   onTabChange,
+  onAddTestForItem,
   fieldView = false,
 }: {
   bucket: ReadinessBucket;
   kind: ReadinessBucketKind;
   onTabChange: (tab: LotTab, actionCode?: string) => void;
+  onAddTestForItem?: (item: { id: string; description: string; testType: string | null }) => void;
   fieldView?: boolean;
 }) {
   const items = [...bucket.blockers, ...bucket.warnings, ...bucket.support];
@@ -172,7 +200,12 @@ function ReadinessBucketView({
       <h3 className="text-sm font-semibold">
         {fieldView ? conformanceFieldLabel(bucket) : stateLabel(bucket, kind)}
       </h3>
-      <ItemList items={items} onTabChange={onTabChange} maxItems={maxItems} />
+      <ItemList
+        items={items}
+        onTabChange={onTabChange}
+        onAddTestForItem={onAddTestForItem}
+        maxItems={maxItems}
+      />
     </div>
   );
 }
@@ -183,6 +216,7 @@ export function LotReadinessPanel({
   error,
   onRetry,
   onTabChange,
+  onAddTestForItem,
   fieldView = false,
 }: LotReadinessPanelProps) {
   if (loading) {
@@ -242,6 +276,7 @@ export function LotReadinessPanel({
             bucket={bucket}
             kind="conformance"
             onTabChange={onTabChange}
+            onAddTestForItem={onAddTestForItem}
             fieldView
           />
         </div>
@@ -271,6 +306,7 @@ export function LotReadinessPanel({
           bucket={readiness.conformance}
           kind="conformance"
           onTabChange={onTabChange}
+          onAddTestForItem={onAddTestForItem}
         />
         <ReadinessBucketView bucket={readiness.claim} kind="claim" onTabChange={onTabChange} />
         {readiness.managementPrep && (

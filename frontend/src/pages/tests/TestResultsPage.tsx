@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { MoreVertical, FileDown, Upload, FolderOpen } from 'lucide-react';
+import { MoreVertical, FileDown, FolderOpen, FlaskConical } from 'lucide-react';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -12,6 +12,7 @@ import { TestResultsTable } from './components/TestResultsTable';
 import { TestResultsMobileList } from './components/TestResultsMobileList';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { CreateTestModal } from './components/CreateTestModal';
+import { LinkItpItemModal } from './components/LinkItpItemModal';
 import { EnterResultsModal, type EnterResultsValues } from './components/EnterResultsModal';
 import { UploadCertificateModal } from './components/UploadCertificateModal';
 import { BatchUploadModal } from './components/BatchUploadModal';
@@ -52,6 +53,7 @@ export function TestResultsPage() {
 
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [linkItpTest, setLinkItpTest] = useState<TestResult | null>(null);
   const [enterResultsTest, setEnterResultsTest] = useState<TestResult | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBatchUploadModal, setShowBatchUploadModal] = useState(false);
@@ -249,6 +251,11 @@ export function TestResultsPage() {
   // "Enter Results" status click).
   const openEnterResultsModal = useCallback((test: TestResult) => {
     setEnterResultsTest(test);
+  }, []);
+
+  // Migration: open the "link to ITP item" picker for an existing test.
+  const openLinkItpModal = useCallback((test: TestResult) => {
+    setLinkItpTest(test);
   }, []);
 
   // Ticket T2: record the actual result value + pass/fail on the test (PATCH),
@@ -545,10 +552,10 @@ export function TestResultsPage() {
           /* PR-L: Mobile \u2014 one primary action + More overflow BottomSheet */
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => setShowUploadModal(true)}
               className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-primary-foreground hover:bg-primary/90 min-h-[44px]"
             >
-              Add Test Result
+              {'📄'} Upload Certificate
             </button>
             <button
               type="button"
@@ -561,8 +568,14 @@ export function TestResultsPage() {
             </button>
           </div>
         ) : (
-          /* Desktop \u2014 all buttons visible */
+          /* Desktop \u2014 all buttons visible; Upload Certificate is the primary action */
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+            >
+              {'\uD83D\uDCC4'} Upload Certificate
+            </button>
             {testResults.length > 0 && (
               <button
                 onClick={handleExportCSV}
@@ -572,12 +585,6 @@ export function TestResultsPage() {
               </button>
             )}
             <button
-              onClick={() => setShowUploadModal(true)}
-              className="rounded-lg border border-primary px-4 py-2 text-primary hover:bg-primary/10"
-            >
-              {'\uD83D\uDCC4'} Upload Certificate
-            </button>
-            <button
               onClick={() => setShowBatchUploadModal(true)}
               className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
             >
@@ -585,7 +592,7 @@ export function TestResultsPage() {
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+              className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
             >
               Add Test Result
             </button>
@@ -619,15 +626,15 @@ export function TestResultsPage() {
             <button
               type="button"
               onClick={() => {
-                setShowUploadModal(true);
+                setShowCreateModal(true);
                 setMoreSheetOpen(false);
               }}
               className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50 active:bg-muted/70 transition-colors rounded-lg min-h-[48px]"
             >
               <span className="flex-shrink-0 text-muted-foreground">
-                <Upload className="h-5 w-5" />
+                <FlaskConical className="h-5 w-5" />
               </span>
-              <span>Upload Certificate</span>
+              <span>Add Test Result</span>
             </button>
             <button
               type="button"
@@ -701,6 +708,7 @@ export function TestResultsPage() {
           onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
           onOpenCreateModal={() => setShowCreateModal(true)}
+          onLinkItpItem={openLinkItpModal}
         />
       )}
 
@@ -711,6 +719,13 @@ export function TestResultsPage() {
         onSuccess={handleCreateTestResult}
         lots={lots}
         projectState={projectState}
+      />
+
+      <LinkItpItemModal
+        isOpen={linkItpTest !== null}
+        test={linkItpTest}
+        onClose={() => setLinkItpTest(null)}
+        onLinked={(lotId) => refreshTestResults([lotId])}
       />
 
       <EnterResultsModal

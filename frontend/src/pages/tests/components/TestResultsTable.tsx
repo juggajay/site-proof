@@ -34,6 +34,9 @@ interface TestResultsTableProps {
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
+  // Migration action: link an existing test to one of its lot's ITP items.
+  // Only offered for tests that have a linked lot (so an ITP can exist).
+  onLinkItpItem?: (test: TestResult) => void;
 }
 
 export const TestResultsTable = React.memo(function TestResultsTable({
@@ -47,6 +50,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   onAttachCertificate,
   onClearFilters,
   onOpenCreateModal,
+  onLinkItpItem,
 }: TestResultsTableProps) {
   const navigate = useNavigate();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -260,6 +264,15 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             hasCertificate={!!test.certificateDocId}
                             onAttachCertificate={onAttachCertificate}
                           />
+                        )}
+                        {/* Migration: link this test to one of its lot's ITP items. */}
+                        {onLinkItpItem && test.lotId && (
+                          <button
+                            onClick={() => onLinkItpItem(test)}
+                            className="px-3 py-1 text-xs rounded border hover:bg-muted/50 transition-colors"
+                          >
+                            Link to ITP item
+                          </button>
                         )}
                         {/* Feature #204: Reject button for tests in "entered" status */}
                         {test.status === 'entered' && (
