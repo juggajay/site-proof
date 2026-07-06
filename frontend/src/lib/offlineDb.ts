@@ -35,8 +35,14 @@ export {
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
+  relinkOfflineNcrPhotos,
   updateOfflinePhotoMeta,
 } from './offline/photos';
+
+// Offline NCR creation (queue a defect raised without a connection). Re-exported
+// for the same reason: callers keep importing from '@/lib/offlineDb'.
+export { queueOfflineNcrCreate } from './offline/ncrs';
+export type { NcrCreateSyncData } from './offline/core';
 
 // The offline daily diary persistence (save/submit drafts, queries,
 // sync-status markers, server cache) lives in ./offline/diaries. Re-exported

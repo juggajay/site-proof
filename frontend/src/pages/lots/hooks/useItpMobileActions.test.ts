@@ -92,6 +92,7 @@ describe('useItpMobileActions offline fallback', () => {
       'na',
       expect.any(String),
       expect.any(String),
+      undefined,
     );
     // Optimistic local state is applied so the field shows the N/A immediately.
     expect(setItpInstance).toHaveBeenCalled();
@@ -109,12 +110,15 @@ describe('useItpMobileActions offline fallback', () => {
     });
 
     expect(returned).toBe(true);
+    // The queued FAIL carries the NCR details so it raises its NCR on sync,
+    // matching the online path (backend requires ncrDescription for a fail).
     expect(updateChecklistItemOfflineMock).toHaveBeenCalledWith(
       'lot-1',
       'item-1',
       'failed',
       expect.any(String),
       expect.any(String),
+      { description: 'Crack found', category: 'workmanship', severity: 'minor' },
     );
     expect(setItpInstance).toHaveBeenCalled();
     expect(handleApiErrorMock).not.toHaveBeenCalled();

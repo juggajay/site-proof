@@ -54,6 +54,14 @@ export async function getCachedITPChecklist(
   return offlineDb.itpChecklists.where('lotId').equals(lotId).first();
 }
 
+// NCR context carried on a queued FAIL so the completion POST can raise the NCR
+// server-side (see OfflineITPCompletion). Only set for the 'failed' path.
+export interface OfflineNcrDetails {
+  description: string;
+  category: string;
+  severity: string;
+}
+
 function buildCompletionRecord(
   lotId: string,
   checklistItemId: string,
@@ -63,6 +71,7 @@ function buildCompletionRecord(
   completedBy?: string,
   completedAt?: string | null,
   serverCompletionBase?: ItpCompletionServerBase,
+  ncrDetails?: OfflineNcrDetails,
 ): OfflineITPCompletion {
   return {
     id: `${lotId}-${checklistItemId}`,
@@ -80,6 +89,13 @@ function buildCompletionRecord(
     syncStatus,
     localUpdatedAt: new Date().toISOString(),
     ...(serverCompletionBase !== undefined ? { serverCompletionBase } : {}),
+    ...(ncrDetails
+      ? {
+          ncrDescription: ncrDetails.description,
+          ncrCategory: ncrDetails.category,
+          ncrSeverity: ncrDetails.severity,
+        }
+      : {}),
   };
 }
 
@@ -187,6 +203,7 @@ export async function updateChecklistItemOffline(
   status: 'pending' | 'completed' | 'na' | 'failed',
   notes?: string,
   completedBy?: string,
+  ncrDetails?: OfflineNcrDetails,
 ): Promise<void> {
   const cachedChecklist = await getCachedITPChecklist(lotId);
   const cachedItem = cachedChecklist?.items.find((item) => item.id === checklistItemId);
@@ -199,6 +216,7 @@ export async function updateChecklistItemOffline(
     completedBy,
     undefined,
     cachedItem?.serverCompletionBase,
+    ncrDetails,
   );
 
   // Store the completion

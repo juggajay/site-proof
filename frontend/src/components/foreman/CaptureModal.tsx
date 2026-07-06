@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGeoLocation } from '@/hooks/useGeoLocation';
-import { capturePhotoOffline } from '@/lib/offlineDb';
+import { capturePhotoOffline, queueOfflineNcrCreate } from '@/lib/offlineDb';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/ui/toaster';
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
@@ -144,21 +144,23 @@ export function CaptureModal({
 
       // For a defect, try to raise a real NCR first (online only) so the issue
       // actually lands in the NCR register. If that succeeds we link the photo to
-      // the new NCR; otherwise we still keep the photo and tell the foreman the
-      // truth - they need to raise the NCR from the register when back online.
+      // the new NCR. Offline, we queue the NCR create so it still lands in the
+      // register on reconnect (the photo is captured against the queued id and
+      // relinked to the real id on sync).
       let raisedNcr: { id: string; ncrNumber: string } | null = null;
+      let queuedOfflineNcrId: string | null = null;
       let attachedNcrEvidenceDocumentId: string | null = null;
       let uploadedNcrEvidenceDocumentId: string | null = null;
+      const ncrBody = {
+        description: description.trim() || 'Defect captured on site - details pending',
+        category: 'general',
+        lotIds: linkedLot ? [linkedLot] : undefined,
+      };
       if (captureType === 'ncr' && navigator.onLine) {
         try {
           const response = await apiFetch<{ ncr: { id: string; ncrNumber: string } }>('/api/ncrs', {
             method: 'POST',
-            body: JSON.stringify({
-              projectId,
-              description: description.trim() || 'Defect captured on site - details pending',
-              category: 'general',
-              lotIds: linkedLot ? [linkedLot] : undefined,
-            }),
+            body: JSON.stringify({ projectId, ...ncrBody }),
           });
           raisedNcr = response.ncr;
         } catch (error) {
@@ -166,6 +168,18 @@ export function CaptureModal({
           // so we never claim an NCR was raised when it wasn't.
           logError('Failed to raise NCR from capture:', error);
         }
+      } else if (captureType === 'ncr') {
+        // Offline: queue the NCR create so the defect is not lost. The photo below
+        // is captured against this placeholder id; syncNcrCreate rewrites it to
+        // the real NCR id once created.
+        queuedOfflineNcrId = (
+          await queueOfflineNcrCreate({
+            projectId,
+            description: ncrBody.description,
+            category: ncrBody.category,
+            lotIds: ncrBody.lotIds,
+          })
+        ).ncrId;
       }
 
       const caption = description.trim() || undefined;
@@ -220,7 +234,8 @@ export function CaptureModal({
           : await capturePhotoOffline(projectId, capturedFile, {
               lotId: linkedLot || undefined,
               entityType,
-              entityId: raisedNcr ? raisedNcr.id : linkedItp || undefined,
+              entityId: raisedNcr?.id ?? queuedOfflineNcrId ?? linkedItp ?? undefined,
+              attachAs: captureType === 'ncr' ? 'ncr_evidence' : undefined,
               documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
               category: captureType === 'ncr' ? 'ncr_evidence' : undefined,
               caption,
@@ -236,11 +251,17 @@ export function CaptureModal({
             description: `NCR ${raisedNcr.ncrNumber} raised - add details from the NCR register.`,
             variant: 'success',
           });
+        } else if (queuedOfflineNcrId) {
+          // Offline: the NCR is queued and will be raised on reconnect.
+          toast({
+            description: "NCR queued - it will sync and raise when you're back online.",
+            variant: 'success',
+          });
         } else {
-          // Offline (or creation failed): the photo is saved, but no NCR exists yet.
+          // Online but creation failed: the photo is saved, but no NCR exists yet.
           toast({
             description:
-              "Photo saved offline - raise the NCR from the NCR register when you're back online.",
+              "Photo saved - raise the NCR from the NCR register when you're back online.",
             variant: 'success',
           });
         }
@@ -250,7 +271,7 @@ export function CaptureModal({
 
       onCapture?.({
         type: captureType,
-        id: raisedNcr?.id ?? attachedNcrEvidenceDocumentId ?? photo?.id ?? '',
+        id: raisedNcr?.id ?? queuedOfflineNcrId ?? attachedNcrEvidenceDocumentId ?? photo?.id ?? '',
       });
       onClose();
     } catch (error) {

@@ -225,6 +225,34 @@ describe('updateChecklistItemOffline', () => {
     expect(offlineDb.itpChecklists.update).not.toHaveBeenCalled();
   });
 
+  it('persists the NCR details on a queued FAIL so the sync can raise its NCR', async () => {
+    mockChecklistLookup(undefined);
+
+    await updateChecklistItemOffline('lot-1', 'item-1', 'failed', 'Failed: cracked slab', 'You', {
+      description: 'cracked slab',
+      category: 'workmanship',
+      severity: 'minor',
+    });
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        ncrDescription: 'cracked slab',
+        ncrCategory: 'workmanship',
+        ncrSeverity: 'minor',
+      }),
+    );
+    expect(offlineDb.syncQueue.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ncrDescription: 'cracked slab',
+          ncrCategory: 'workmanship',
+          ncrSeverity: 'minor',
+        }),
+      }),
+    );
+  });
+
   it('replaces a still-queued entry for the same item instead of appending (last-write-wins)', async () => {
     mockChecklistLookup(undefined);
     mockSyncQueueLookup([

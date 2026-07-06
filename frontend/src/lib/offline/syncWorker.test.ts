@@ -29,6 +29,7 @@ vi.mock('../offlineDb', () => ({
   markPhotoSynced: vi.fn(),
   markPhotoUploadedAwaitingAttach: vi.fn(),
   markPhotoSyncError: vi.fn(),
+  relinkOfflineNcrPhotos: vi.fn(),
   getOfflineLot: vi.fn(),
   detectLotSyncConflict: vi.fn(),
   markLotSynced: vi.fn(),
@@ -79,6 +80,7 @@ import {
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
+  relinkOfflineNcrPhotos,
   getOfflineLot,
   detectLotSyncConflict,
   markLotSynced,
@@ -110,6 +112,7 @@ const getOfflinePhotoMock = getOfflinePhoto as Mock;
 const markPhotoSyncedMock = markPhotoSynced as Mock;
 const markPhotoUploadedAwaitingAttachMock = markPhotoUploadedAwaitingAttach as Mock;
 const markPhotoSyncErrorMock = markPhotoSyncError as Mock;
+const relinkOfflineNcrPhotosMock = relinkOfflineNcrPhotos as Mock;
 const getOfflineLotMock = getOfflineLot as Mock;
 const detectLotSyncConflictMock = detectLotSyncConflict as Mock;
 const markLotSyncedMock = markLotSynced as Mock;
@@ -272,6 +275,36 @@ describe('syncSingleItem — itp_completion', () => {
     });
   });
 
+  it('carries the queued NCR fields through so an offline FAIL raises its NCR on sync', async () => {
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'inst-1' } }))
+      .mockResolvedValueOnce(okJson({ ok: true }));
+
+    const result = await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: {
+          lotId: 'lot-1',
+          checklistItemId: 'ci-1',
+          status: 'failed',
+          notes: 'Failed: cracked slab',
+          ncrDescription: 'cracked slab',
+          ncrCategory: 'workmanship',
+          ncrSeverity: 'minor',
+        },
+      }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(JSON.parse(authFetchMock.mock.calls[1][1].body)).toMatchObject({
+      status: 'failed',
+      ncrDescription: 'cracked slab',
+      ncrCategory: 'workmanship',
+      ncrSeverity: 'minor',
+    });
+  });
+
   it('returns "handled" and error-marks (no removal) when the instance lookup fails', async () => {
     authFetchMock.mockResolvedValueOnce(errorResponse(500, 'boom'));
 
@@ -349,6 +382,60 @@ describe('syncSingleItem — itp_completion', () => {
 
     expect(result).toEqual({ status: 'handled' });
     expect(markSyncItemErrorMock).toHaveBeenCalledWith(11, 'network down');
+  });
+});
+
+describe('syncSingleItem — ncr_create', () => {
+  const ncrData = {
+    ncrId: 'offline-ncr-abc',
+    projectId: 'proj-1',
+    description: 'Cracked kerb',
+    category: 'general',
+    lotIds: ['lot-1'],
+  };
+
+  it('POSTs the NCR, relinks its evidence photo, removes the item, returns "synced"', async () => {
+    authFetchMock.mockResolvedValueOnce(okJson({ ncr: { id: 'ncr-server-1' } }));
+
+    const result = await syncSingleItem(queueItem({ id: 21, type: 'ncr_create', data: ncrData }));
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledWith(
+      '/api/ncrs',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(JSON.parse(authFetchMock.mock.calls[0][1].body)).toEqual({
+      projectId: 'proj-1',
+      description: 'Cracked kerb',
+      category: 'general',
+      lotIds: ['lot-1'],
+    });
+    // The queued placeholder id is rewritten to the real NCR id so the photo
+    // attach step targets the NCR that now exists.
+    expect(relinkOfflineNcrPhotosMock).toHaveBeenCalledWith('offline-ncr-abc', 'ncr-server-1');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(21);
+  });
+
+  it('dead-letters a 4xx rejection (bad body) without relinking', async () => {
+    authFetchMock.mockResolvedValueOnce(errorResponse(400, 'invalid'));
+
+    const result = await syncSingleItem(queueItem({ id: 21, type: 'ncr_create', data: ncrData }));
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(21, 'invalid');
+    expect(relinkOfflineNcrPhotosMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a retriable 5xx failure on the normal retry path', async () => {
+    authFetchMock.mockResolvedValueOnce(errorResponse(503, 'unavailable'));
+
+    const result = await syncSingleItem(queueItem({ id: 21, type: 'ncr_create', data: ncrData }));
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'unavailable');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 });
 
