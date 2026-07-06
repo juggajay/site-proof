@@ -22,31 +22,50 @@ export type {
 } from './evidenceReadiness/core.js';
 export { buildClaimEvidenceReviewFromInputs } from './evidenceReadiness/claimReview.js';
 
-const OUTSTANDING_TEST_STATE_PHRASE = {
-  no_result: 'no result yet',
-  awaiting_verification: 'result awaiting verification',
-  failing: 'result failed — re-test needed',
-  unmatched_result_exists:
-    "a test result exists for this lot but isn't linked to this requirement — open the test and link it",
-} as const;
+type OutstandingTestState = NonNullable<
+  LotReadinessInput['conformStatus']['prerequisites']['outstandingTestItems']
+>[number]['state'];
 
-// Turn the per-item outstanding-test breakdown into the blocker detail so the
-// card names which tests conformance is waiting on. Lists up to 3, then "and N
-// more". Falls back to the generic line when no breakdown is available.
+// Count-summary phrase for each state (the structured outstandingTests list
+// carries the per-test names, so the prose only states how many are in each
+// state). Ordered for a stable, readable summary.
+const OUTSTANDING_TEST_STATE_COUNT_PHRASE: Record<OutstandingTestState, (n: number) => string> = {
+  no_result: (n) => `${n} without ${n === 1 ? 'result' : 'results'}`,
+  awaiting_verification: (n) => `${n} awaiting verification`,
+  failing: (n) => `${n} failing`,
+  unmatched_result_exists: (n) =>
+    `${n} with ${n === 1 ? 'an unlinked result' : 'unlinked results'}`,
+};
+
+const OUTSTANDING_TEST_STATE_ORDER: OutstandingTestState[] = [
+  'no_result',
+  'awaiting_verification',
+  'failing',
+  'unmatched_result_exists',
+];
+
+// Turn the per-item outstanding-test breakdown into the blocker detail. The
+// structured list on the item names the tests, so the prose is a count summary
+// only (no per-item enumeration) — e.g. "12 required tests outstanding (10
+// without results, 1 awaiting verification, 1 failing)." Falls back to the
+// generic line when no structured breakdown is available (back-compat).
 function buildOutstandingTestDetail(
-  outstanding: NonNullable<
-    LotReadinessInput['conformStatus']['prerequisites']['outstandingTestItems']
-  >,
+  outstanding:
+    | LotReadinessInput['conformStatus']['prerequisites']['outstandingTestItems']
+    | undefined,
 ): string {
-  if (outstanding.length === 0) {
+  if (!outstanding || outstanding.length === 0) {
     return 'Add or verify a passing test result before conformance.';
   }
-  const shown = outstanding
-    .slice(0, 3)
-    .map((test) => `"${test.description}" — ${OUTSTANDING_TEST_STATE_PHRASE[test.state]}`);
-  const remaining = outstanding.length - shown.length;
-  const list = remaining > 0 ? `${shown.join('; ')}; and ${remaining} more` : shown.join('; ');
-  return `${outstanding.length} required test${outstanding.length === 1 ? '' : 's'} outstanding: ${list}.`;
+  const counts = new Map<OutstandingTestState, number>();
+  for (const test of outstanding) {
+    counts.set(test.state, (counts.get(test.state) ?? 0) + 1);
+  }
+  const segments = OUTSTANDING_TEST_STATE_ORDER.filter((state) => counts.has(state)).map((state) =>
+    OUTSTANDING_TEST_STATE_COUNT_PHRASE[state](counts.get(state)!),
+  );
+  const total = outstanding.length;
+  return `${total} required test${total === 1 ? '' : 's'} outstanding (${segments.join(', ')}).`;
 }
 
 function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[] {
@@ -123,13 +142,14 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
         severity: 'blocker',
         area: 'test',
         title: 'Required tests outstanding',
-        detail: buildOutstandingTestDetail(prerequisites.outstandingTestItems ?? []),
+        detail: buildOutstandingTestDetail(prerequisites.outstandingTestItems),
         blocksAction: true,
         actionLabel: 'Review tests',
         outstandingTests: (prerequisites.outstandingTestItems ?? []).map((test) => ({
           itemId: test.itemId,
           description: test.description,
           testType: test.testType,
+          state: test.state,
         })),
       }),
     );
@@ -242,7 +262,7 @@ function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
           severity: 'blocker',
           area: 'conformance',
           title: 'Conformance needs review',
-          detail: currentConformanceBlockers.join('; '),
+          detail: 'Conformance is no longer current — see the Conformance card.',
           blocksAction: true,
           actionLabel: 'Review conformance',
         }),

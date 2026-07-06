@@ -25,8 +25,14 @@ export interface EvidenceReadinessItem {
   count?: number;
   relatedIds?: string[];
   // Named outstanding tests behind this item (the test blocker), so the UI can
-  // offer a per-requirement "Add result" action that pre-links the ITP item.
-  outstandingTests?: { itemId: string; description: string; testType: string | null }[];
+  // offer a per-requirement "Add result" action that pre-links the ITP item and
+  // show each test's state (the prose only states counts).
+  outstandingTests?: {
+    itemId: string;
+    description: string;
+    testType: string | null;
+    state: 'no_result' | 'awaiting_verification' | 'failing' | 'unmatched_result_exists';
+  }[];
 }
 
 export interface ReadinessBucket {

@@ -88,7 +88,7 @@ describe('evidence readiness helpers', () => {
     expect(readiness.summary.actionBlockerCount).toBe(3);
   });
 
-  it('names the outstanding tests and their state in the test blocker detail', () => {
+  it('summarises outstanding-test counts by state in the test blocker detail', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({
         conformStatus: {
@@ -135,12 +135,22 @@ describe('evidence readiness helpers', () => {
     );
     expect(testBlocker?.title).toBe('Required tests outstanding');
     expect(testBlocker?.detail).toBe(
-      '3 required tests outstanding: "Compaction — density ratio" — no result yet; ' +
-        '"CBR" — result awaiting verification; "Moisture" — result failed — re-test needed.',
+      '3 required tests outstanding (1 without result, 1 awaiting verification, 1 failing).',
     );
+    // The structured list still carries the per-test names + state for the UI.
+    expect(testBlocker?.outstandingTests).toEqual([
+      {
+        itemId: 'i-comp',
+        description: 'Compaction — density ratio',
+        testType: 'Compaction',
+        state: 'no_result',
+      },
+      { itemId: 'i-cbr', description: 'CBR', testType: 'CBR', state: 'awaiting_verification' },
+      { itemId: 'i-moist', description: 'Moisture', testType: 'Moisture', state: 'failing' },
+    ]);
   });
 
-  it('truncates the outstanding-test list to three with an "and N more" suffix', () => {
+  it('states a plural count without enumerating each test', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({
         conformStatus: {
@@ -172,13 +182,10 @@ describe('evidence readiness helpers', () => {
     const testBlocker = readiness.conformance.blockers.find(
       (readinessItem) => readinessItem.code === 'no_passing_verified_test',
     );
-    expect(testBlocker?.detail).toBe(
-      '5 required tests outstanding: "Test A" — no result yet; "Test B" — no result yet; ' +
-        '"Test C" — no result yet; and 2 more.',
-    );
+    expect(testBlocker?.detail).toBe('5 required tests outstanding (5 without results).');
   });
 
-  it('phrases an unmatched_result_exists item as "a result exists, link it"', () => {
+  it('phrases a single unmatched_result_exists item as an unlinked result count', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({
         conformStatus: {
@@ -211,10 +218,7 @@ describe('evidence readiness helpers', () => {
     const testBlocker = readiness.conformance.blockers.find(
       (readinessItem) => readinessItem.code === 'no_passing_verified_test',
     );
-    expect(testBlocker?.detail).toBe(
-      '1 required test outstanding: "Compaction — density ratio" — a test result exists for ' +
-        "this lot but isn't linked to this requirement — open the test and link it.",
-    );
+    expect(testBlocker?.detail).toBe('1 required test outstanding (1 with an unlinked result).');
   });
 
   it('does not raise the test blocker for a no-test-point lot and reports prerequisites met', () => {
