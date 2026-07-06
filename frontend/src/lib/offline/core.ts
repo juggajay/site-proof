@@ -36,6 +36,14 @@ export interface OfflineITPCompletion {
   syncStatus: 'synced' | 'pending' | 'error';
   localUpdatedAt: string;
   serverCompletionBase?: ItpCompletionServerBase;
+  // A FAIL raises an NCR server-side, but only when the completion POST carries
+  // these fields (the backend rejects `status: 'failed'` without an
+  // ncrDescription). Persist them on the queued completion so an offline FAIL
+  // creates its NCR on sync identically to the online path. Plain nested fields,
+  // not Dexie indexes, so adding them needs no schema version bump.
+  ncrDescription?: string;
+  ncrCategory?: string;
+  ncrSeverity?: string;
 }
 
 export interface OfflineITPChecklist {
@@ -84,9 +92,22 @@ type LotConflictSyncData = {
   message: string;
 };
 
+// A defect (NCR) raised from CaptureModal while offline. The full create body
+// lives in the queue item (there is no offline NCR register to show, so no
+// separate Dexie table is needed); on sync the worker POSTs it and relinks any
+// queued evidence photo from `ncrId` (the local placeholder) to the real id.
+export type NcrCreateSyncData = {
+  ncrId: string;
+  projectId: string;
+  description: string;
+  category: string;
+  lotIds?: string[];
+};
+
 export type SyncQueueItem =
   | SyncQueueBase<'itp_completion', 'update', OfflineITPCompletion>
   | SyncQueueBase<'photo_upload', 'create', SyncQueueIdData<'photoId'>>
+  | SyncQueueBase<'ncr_create', 'create', NcrCreateSyncData>
   | SyncQueueBase<'diary_save', 'update', SyncQueueIdData<'diaryId'>>
   | SyncQueueBase<'diary_submit', 'update', SyncQueueIdData<'diaryId'>>
   | SyncQueueBase<'docket_create', 'create' | 'update', SyncQueueIdData<'docketId'>>

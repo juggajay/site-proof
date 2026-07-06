@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
 
-// CaptureModal's "Defect" mode now raises a REAL NCR via POST /api/ncrs when the
-// device is online, then keeps the photo (linked to the new NCR). When offline -
-// or if NCR creation fails - it keeps the photo but tells the truth: no NCR was
-// raised. Boundary modules are mocked so the test is about wording + payload.
+// CaptureModal's "Defect" mode raises a REAL NCR via POST /api/ncrs when the
+// device is online, then keeps the photo (linked to the new NCR). When offline
+// it QUEUES the NCR create (queueOfflineNcrCreate) so the defect still lands in
+// the register on reconnect, and captures the photo against the queued id. If an
+// online create fails it keeps the photo but never claims an NCR was raised.
+// Boundary modules are mocked so the test is about wording + payload.
 vi.mock('@/hooks/useGeoLocation', () => ({
   useGeoLocation: () => ({
     latitude: null,
@@ -16,7 +18,10 @@ vi.mock('@/hooks/useGeoLocation', () => ({
     isSupported: false,
   }),
 }));
-vi.mock('@/lib/offlineDb', () => ({ capturePhotoOffline: vi.fn() }));
+vi.mock('@/lib/offlineDb', () => ({
+  capturePhotoOffline: vi.fn(),
+  queueOfflineNcrCreate: vi.fn(),
+}));
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 vi.mock('@/components/ui/VoiceInputButton', () => ({ VoiceInputButton: () => null }));
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
@@ -26,12 +31,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 import { CaptureModal } from './CaptureModal';
-import { capturePhotoOffline } from '@/lib/offlineDb';
+import { capturePhotoOffline, queueOfflineNcrCreate } from '@/lib/offlineDb';
 import { toast } from '@/components/ui/toaster';
 import { useAuth } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 
 const capturePhotoOfflineMock = vi.mocked(capturePhotoOffline);
+const queueOfflineNcrCreateMock = vi.mocked(queueOfflineNcrCreate);
 const toastMock = vi.mocked(toast);
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
@@ -81,6 +87,7 @@ beforeEach(() => {
   capturePhotoOfflineMock.mockResolvedValue({ id: 'photo-1' } as unknown as Awaited<
     ReturnType<typeof capturePhotoOffline>
   >);
+  queueOfflineNcrCreateMock.mockResolvedValue({ ncrId: 'offline-ncr-x' });
 });
 
 afterEach(() => {
@@ -197,7 +204,7 @@ describe('CaptureModal defect mode', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
-  it('offline: keeps the photo but never claims an NCR was raised (no API call)', async () => {
+  it('offline: queues the NCR create (no API call) and captures the photo against the queued id', async () => {
     setOnline(false);
     const onClose = vi.fn();
     const { container } = renderWithProviders(
@@ -206,20 +213,40 @@ describe('CaptureModal defect mode', () => {
     await captureAPhoto(container);
 
     fireEvent.click(screen.getByText('Defect'));
+    fireEvent.change(screen.getByPlaceholderText('Brief defect description'), {
+      target: { value: 'Cracked kerb face' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save Defect Photo' }));
 
-    // The photo is still saved offline-first.
-    await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
-
-    // No NCR create is attempted while offline.
+    // No NCR create is attempted over the network while offline; it is queued.
+    await waitFor(() => expect(queueOfflineNcrCreateMock).toHaveBeenCalledTimes(1));
+    expect(queueOfflineNcrCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'p1',
+        description: 'Cracked kerb face',
+        category: 'general',
+      }),
+    );
     expect(apiFetchMock.mock.calls.some(([path]) => path === '/api/ncrs')).toBe(false);
 
-    // Honest toast: no false "NCR raised".
+    // The photo is captured against the queued placeholder id so the sync worker
+    // can relink it to the real NCR once created.
+    await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
+    expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
+      'p1',
+      expect.any(File),
+      expect.objectContaining({
+        entityType: 'ncr',
+        entityId: 'offline-ncr-x',
+        attachAs: 'ncr_evidence',
+      }),
+    );
+
+    // Honest toast: the NCR is queued, not silently lost, and no false "raised".
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        description:
-          "Photo saved offline - raise the NCR from the NCR register when you're back online.",
+        description: "NCR queued - it will sync and raise when you're back online.",
         variant: 'success',
       }),
     );
@@ -242,6 +269,10 @@ describe('CaptureModal defect mode', () => {
     await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
     expect(apiFetchMock.mock.calls.some(([path]) => path === '/api/ncrs')).toBe(true);
 
+    // Still online, so we do NOT queue an offline create (that would risk a
+    // duplicate once the network recovers) - the failure was a real rejection.
+    expect(queueOfflineNcrCreateMock).not.toHaveBeenCalled();
+
     // Not linked to a non-existent NCR; falls back to optional ITP linkage (none here).
     expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
       'p1',
@@ -258,8 +289,7 @@ describe('CaptureModal defect mode', () => {
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        description:
-          "Photo saved offline - raise the NCR from the NCR register when you're back online.",
+        description: "Photo saved - raise the NCR from the NCR register when you're back online.",
         variant: 'success',
       }),
     );

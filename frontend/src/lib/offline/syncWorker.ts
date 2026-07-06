@@ -37,6 +37,7 @@ import {
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
+  relinkOfflineNcrPhotos,
   getOfflineLot,
   detectLotSyncConflict,
   markLotSynced,
@@ -73,6 +74,7 @@ const HANDLED: SyncItemResult = { status: 'handled' };
 const KNOWN_TYPES = [
   'itp_completion',
   'photo_upload',
+  'ncr_create',
   'diary_save',
   'diary_submit',
   'delivery_save',
@@ -110,6 +112,7 @@ type DeliveryItem = Extract<SyncQueueItem, { type: 'delivery_save' }>;
 type EventItem = Extract<SyncQueueItem, { type: 'event_save' }>;
 type DocketItem = Extract<SyncQueueItem, { type: 'docket_create' | 'docket_submit' }>;
 type PhotoUploadItem = Extract<SyncQueueItem, { type: 'photo_upload' }>;
+type NcrCreateItem = Extract<SyncQueueItem, { type: 'ncr_create' }>;
 type LotEditItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
 
 function isOfflineCompletionId(completionId: string): boolean {
@@ -315,6 +318,13 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
         isCompleted,
         status: directStatus,
         notes: completion.notes,
+        // A FAIL only raises its NCR when these accompany the failed status
+        // (the backend rejects `status: 'failed'` without an ncrDescription).
+        // Carry through whatever the offline capture recorded so the queued
+        // FAIL creates its NCR on sync, exactly like the online path.
+        ...(completion.ncrDescription ? { ncrDescription: completion.ncrDescription } : {}),
+        ...(completion.ncrCategory ? { ncrCategory: completion.ncrCategory } : {}),
+        ...(completion.ncrSeverity ? { ncrSeverity: completion.ncrSeverity } : {}),
         ...(completion.serverCompletionBase
           ? { expectedPreviousCompletion: completion.serverCompletionBase }
           : {}),
@@ -750,6 +760,52 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
   );
 }
 
+// Create an NCR that was raised from CaptureModal while offline, then repoint
+// any queued evidence photo from the local placeholder id to the real NCR id so
+// the photo_upload attach step targets the NCR that now exists. This item is
+// enqueued before its photo, so on a normal in-order pass the relink lands
+// before photo_upload runs; if the order is ever reversed, the photo's attach
+// step simply 404s and retries after this relink (eventual consistency).
+async function syncNcrCreate(item: NcrCreateItem, itemId: number): Promise<SyncItemResult> {
+  return runSyncStep(item, async () => {
+    const { ncrId, projectId, description, category, lotIds } = item.data;
+
+    const response = await authFetch(apiUrl('/api/ncrs'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        projectId,
+        description,
+        category,
+        ...(lotIds && lotIds.length > 0 ? { lotIds } : {}),
+      }),
+    });
+
+    if (response.ok) {
+      const result = (await response.json()) as { ncr?: { id?: string } };
+      const serverNcrId = result.ncr?.id;
+      if (serverNcrId) {
+        await relinkOfflineNcrPhotos(ncrId, serverNcrId);
+      }
+      await removeSyncQueueItem(itemId);
+      return SYNCED;
+    }
+
+    const errorText = await response.text();
+    if (isTerminalItpSyncRejection(response.status)) {
+      // A 4xx (bad body, deleted project) will never succeed on retry — dead-letter
+      // it so the foreman can see it failed rather than retrying forever.
+      await markSyncItemTerminalError(itemId, errorText);
+      return HANDLED;
+    }
+
+    await markSyncItemError(itemId, errorText);
+    return HANDLED;
+  });
+}
+
 // Feature #314: Sync offline lot edits with conflict detection
 async function syncLotEdit(
   item: LotEditItem,
@@ -905,6 +961,11 @@ export async function syncSingleItem(
   // Feature #311: Sync offline photos
   if (item.type === 'photo_upload' && item.id) {
     return syncPhoto(item, item.id);
+  }
+
+  // Offline defect capture: create the NCR raised without a connection
+  if (item.type === 'ncr_create' && item.id) {
+    return syncNcrCreate(item, item.id);
   }
 
   // Feature #314: Sync offline lot edits with conflict detection

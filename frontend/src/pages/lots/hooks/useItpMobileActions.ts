@@ -40,10 +40,18 @@ export function useItpMobileActions({
     checklistItemId: string,
     offlineStatus: 'na' | 'failed',
     notes: string,
+    ncrDetails?: { description: string; category: string; severity: string },
   ): Promise<boolean> => {
     if (!lotId) return false;
 
-    await updateChecklistItemOffline(lotId, checklistItemId, offlineStatus, notes, 'You (Offline)');
+    await updateChecklistItemOffline(
+      lotId,
+      checklistItemId,
+      offlineStatus,
+      notes,
+      'You (Offline)',
+      ncrDetails,
+    );
 
     const optimistic: ITPCompletion = {
       id: `offline-${checklistItemId}-${Date.now()}`,
@@ -166,7 +174,15 @@ export function useItpMobileActions({
       // the queued notes).
       if (isRetriableNetworkFailure(err)) {
         try {
-          if (await queueOfflineMark(checklistItemId, 'failed', notes)) {
+          // Match the online FAIL body so the queued completion raises the same
+          // NCR on sync (the backend needs a non-blank ncrDescription for a
+          // failed status).
+          const ncrDetails = {
+            description: reason.trim() || 'Item failed ITP inspection',
+            category: 'workmanship',
+            severity: 'minor',
+          };
+          if (await queueOfflineMark(checklistItemId, 'failed', notes, ncrDetails)) {
             toast({
               title: 'Saved offline',
               description: "This failed item will sync and raise an NCR when you're back online.",
