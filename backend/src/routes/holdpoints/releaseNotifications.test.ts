@@ -17,6 +17,7 @@ import {
 
 const baseContext: HoldPointReleaseNotificationContext = {
   projectId: 'proj-1',
+  holdPointId: 'hp-1',
   holdPointDescription: 'Footing inspection',
   lotNumber: 'LOT-7',
   releasedByName: 'Jane Foreman',
@@ -43,7 +44,7 @@ describe('buildHoldPointReleaseNotifications', () => {
         type: 'hold_point_release',
         title: 'Hold Point Released',
         message: 'Hold point "Footing inspection" on lot LOT-7 has been released by Jane Foreman.',
-        linkUrl: '/projects/proj-1/hold-points',
+        linkUrl: '/projects/proj-1/hold-points?holdPoint=hp-1',
       },
       {
         userId: 'u2',
@@ -51,7 +52,7 @@ describe('buildHoldPointReleaseNotifications', () => {
         type: 'hold_point_release',
         title: 'Hold Point Released',
         message: 'Hold point "Footing inspection" on lot LOT-7 has been released by Jane Foreman.',
-        linkUrl: '/projects/proj-1/hold-points',
+        linkUrl: '/projects/proj-1/hold-points?holdPoint=hp-1',
       },
       {
         userId: 'u3',
@@ -59,7 +60,7 @@ describe('buildHoldPointReleaseNotifications', () => {
         type: 'hold_point_release',
         title: 'Hold Point Released',
         message: 'Hold point "Footing inspection" on lot LOT-7 has been released by Jane Foreman.',
-        linkUrl: '/projects/proj-1/hold-points',
+        linkUrl: '/projects/proj-1/hold-points?holdPoint=hp-1',
       },
     ]);
   });
@@ -98,7 +99,7 @@ describe('buildHoldPointReleaseEmailNotification', () => {
         'Hold point "Footing inspection" on lot LOT-7 has been released by Jane Foreman.\n\n' +
         'Project: Riverside Upgrade\nRelease Method: physical_signoff\nNotes: Cleared on site',
       projectName: 'Riverside Upgrade',
-      linkUrl: '/projects/proj-1/hold-points',
+      linkUrl: '/projects/proj-1/hold-points?holdPoint=hp-1',
     });
   });
 
@@ -117,7 +118,7 @@ describe('buildHoldPointReleaseEmailNotification', () => {
     // title / projectName / linkUrl are unaffected by the missing optional fields
     expect(payload.title).toBe('Hold Point Released');
     expect(payload.projectName).toBe('Riverside Upgrade');
-    expect(payload.linkUrl).toBe('/projects/proj-1/hold-points');
+    expect(payload.linkUrl).toBe('/projects/proj-1/hold-points?holdPoint=hp-1');
   });
 
   it('shares the same headline as the in-app notification record', () => {

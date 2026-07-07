@@ -17,6 +17,9 @@ const {
     subcontractorUser: {
       findMany: vi.fn(),
     },
+    notification: {
+      create: vi.fn(),
+    },
   },
   sendNotificationIfEnabledMock: vi.fn(),
 }));
@@ -47,7 +50,7 @@ vi.mock('../notifications.js', () => ({
   sendNotificationIfEnabled: sendNotificationIfEnabledMock,
 }));
 
-const { getNcrEmailNotificationType, notifySubcontractorNcrPortalUsers } =
+const { getNcrEmailNotificationType, notifyInternalNcrUser, notifySubcontractorNcrPortalUsers } =
   await import('./ncrNotifications.js');
 
 const baseNotification = {
@@ -69,6 +72,80 @@ describe('getNcrEmailNotificationType', () => {
     expect(getNcrEmailNotificationType('ncr_response_accepted')).toBe('ncrStatusChange');
     expect(getNcrEmailNotificationType('ncr_revision_requested')).toBe('ncrStatusChange');
     expect(getNcrEmailNotificationType('ncr_rectification_rejected')).toBe('ncrStatusChange');
+  });
+});
+
+describe('notifyInternalNcrUser', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.notification.create.mockResolvedValue({ id: 'notif-1' });
+    sendNotificationIfEnabledMock.mockResolvedValue({ sent: true, queued: false });
+  });
+
+  it('creates a deep-linked in-app notification and sends the matching email', async () => {
+    await notifyInternalNcrUser({
+      userId: 'user-9',
+      projectId: 'project-1',
+      ncrId: 'ncr-1',
+      type: 'ncr_assigned',
+      title: 'NCR Assigned to You',
+      message: 'NCR-001 assigned to you.',
+    });
+
+    const linkUrl = '/projects/project-1/ncr?ncr=ncr-1';
+    expect(prismaMock.notification.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user-9',
+        projectId: 'project-1',
+        type: 'ncr_assigned',
+        title: 'NCR Assigned to You',
+        message: 'NCR-001 assigned to you.',
+        linkUrl,
+      },
+    });
+    expect(sendNotificationIfEnabledMock).toHaveBeenCalledWith('user-9', 'ncrAssigned', {
+      title: 'NCR Assigned to You',
+      message: 'NCR-001 assigned to you.',
+      linkUrl,
+    });
+  });
+
+  it('uses the status-change email preference for workflow notifications', async () => {
+    await notifyInternalNcrUser({
+      userId: 'user-9',
+      projectId: 'project-1',
+      ncrId: 'ncr-1',
+      type: 'ncr_rectification_rejected',
+      title: 'Rectification Rejected',
+      message: 'Fix and resubmit.',
+    });
+
+    expect(sendNotificationIfEnabledMock).toHaveBeenCalledWith(
+      'user-9',
+      'ncrStatusChange',
+      expect.objectContaining({ title: 'Rectification Rejected' }),
+    );
+  });
+
+  it('keeps the in-app notification when the email attempt fails', async () => {
+    sendNotificationIfEnabledMock.mockRejectedValueOnce(new Error('email down'));
+
+    await expect(
+      notifyInternalNcrUser({
+        userId: 'user-9',
+        projectId: 'project-1',
+        ncrId: 'ncr-1',
+        type: 'ncr_assigned',
+        title: 'NCR Assigned to You',
+        message: 'NCR-001 assigned to you.',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(prismaMock.notification.create).toHaveBeenCalledOnce();
+    expect(logErrorMock).toHaveBeenCalledWith(
+      'Failed to send internal NCR notification email:',
+      expect.any(Error),
+    );
   });
 });
 

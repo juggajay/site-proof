@@ -8,7 +8,10 @@ import {
   hasPortalModuleEnabled,
 } from '../../lib/projectAccess.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
-import { buildSubcontractorPortalEntityLink } from '../notifications/links.js';
+import {
+  buildProjectEntityLink,
+  buildSubcontractorPortalEntityLink,
+} from '../notifications/links.js';
 
 type NcrNotificationType =
   | 'ncr_assigned'
@@ -57,6 +60,39 @@ export async function enableSubcontractorNcrPortalAccessOnAssignment(
     }
   } catch (err) {
     logError('Failed to auto-enable subcontractor NCR portal access:', err);
+  }
+}
+
+/**
+ * Notify a single internal (office) user about an NCR: creates the in-app
+ * notification with a deep link straight to the record (?ncr=<id>) and, mirroring
+ * the subcontractor path, sends the matching email when the recipient's
+ * preferences allow it (email prefs default ON). Email failures are logged, never
+ * thrown — the in-app notification is the source of truth.
+ */
+export async function notifyInternalNcrUser(options: {
+  userId: string;
+  projectId: string;
+  ncrId: string;
+  type: NcrNotificationType;
+  title: string;
+  message: string;
+}): Promise<void> {
+  const { userId, projectId, ncrId, type, title, message } = options;
+  const linkUrl = buildProjectEntityLink('ncr', ncrId, projectId);
+
+  await prisma.notification.create({
+    data: { userId, projectId, type, title, message, linkUrl },
+  });
+
+  try {
+    await sendNotificationIfEnabled(userId, getNcrEmailNotificationType(type), {
+      title,
+      message,
+      linkUrl,
+    });
+  } catch (err) {
+    logError('Failed to send internal NCR notification email:', err);
   }
 }
 

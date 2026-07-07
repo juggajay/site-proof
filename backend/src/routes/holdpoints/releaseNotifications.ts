@@ -25,6 +25,7 @@
  */
 
 import { Prisma } from '@prisma/client';
+import { buildProjectEntityLink } from '../notifications/links.js';
 
 // One project user to notify (only the id is read here).
 export type HoldPointReleaseNotificationRecipient = {
@@ -34,6 +35,7 @@ export type HoldPointReleaseNotificationRecipient = {
 // The shared context for the in-app notification headline.
 export type HoldPointReleaseNotificationContext = {
   projectId: string;
+  holdPointId: string;
   holdPointDescription: string | null;
   lotNumber: string;
   releasedByName: string | null | undefined;
@@ -70,7 +72,7 @@ export function buildHoldPointReleaseNotifications(
     type: 'hold_point_release',
     title: 'Hold Point Released',
     message: buildHoldPointReleaseHeadline(context),
-    linkUrl: `/projects/${context.projectId}/hold-points`,
+    linkUrl: buildProjectEntityLink('hold_point', context.holdPointId, context.projectId),
   }));
 }
 
@@ -83,6 +85,6 @@ export function buildHoldPointReleaseEmailNotification(
     title: 'Hold Point Released',
     message: `${buildHoldPointReleaseHeadline(context)}\n\nProject: ${context.projectName}\nRelease Method: ${context.releaseMethod || 'Digital'}\nNotes: ${context.releaseNotes || 'None'}`,
     projectName: context.projectName,
-    linkUrl: `/projects/${context.projectId}/hold-points`,
+    linkUrl: buildProjectEntityLink('hold_point', context.holdPointId, context.projectId),
   };
 }

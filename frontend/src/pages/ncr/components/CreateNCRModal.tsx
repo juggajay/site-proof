@@ -54,6 +54,8 @@ interface CreateNCRModalProps {
   }) => void;
   loading: boolean;
   projectId?: string;
+  /** Preselect this lot when the modal opens (from a lot's "Raise NCR" deep link). */
+  initialLotId?: string;
 }
 
 function CreateNCRModalInner({
@@ -62,6 +64,7 @@ function CreateNCRModalInner({
   onSubmit,
   loading,
   projectId,
+  initialLotId,
 }: CreateNCRModalProps) {
   const [selectedLotIds, setSelectedLotIds] = useState<string[]>([]);
   const [lots, setLots] = useState<Array<{ id: string; lotNumber: string; description: string }>>(
@@ -142,6 +145,14 @@ function CreateNCRModalInner({
       cancelled = true;
     };
   }, [isOpen, projectId, token, reset, lotLookupRetryKey]);
+
+  // Preselect the deep-linked lot when the modal opens (from a lot's "Raise NCR"
+  // button). Runs only on open/initialLotId change, so a manual deselect sticks.
+  useEffect(() => {
+    if (isOpen && initialLotId) {
+      setSelectedLotIds([initialLotId]);
+    }
+  }, [isOpen, initialLotId]);
 
   const handleLotSelectionChange = (lotId: string, checked: boolean) => {
     setSelectedLotIds((prev) => {

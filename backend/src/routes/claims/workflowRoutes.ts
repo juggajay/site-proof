@@ -7,6 +7,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
+import { buildProjectEntityLink } from '../notifications/links.js';
 import {
   checkConformancePrerequisitesBatch,
   getClaimBlockingReasonsForConformedLot,
@@ -589,7 +590,7 @@ export function createClaimWorkflowRouter({
             type: 'claim_certified',
             title: 'Claim Certified',
             message: `Claim #${claim.claimNumber} has been certified by ${certifierName}. Certified amount: ${formattedAmount}.`,
-            linkUrl: `/projects/${projectId}/claims`,
+            linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
           }));
 
           if (notificationsToCreate.length > 0) {
@@ -605,7 +606,7 @@ export function createClaimWorkflowRouter({
                 title: 'Claim Certified',
                 message: `Claim #${claim.claimNumber} has been certified by ${certifierName}.\n\nProject: ${claim.project.name}\nCertified Amount: ${formattedAmount}\n\nPlease review the claim details in the system.`,
                 projectName: claim.project.name,
-                linkUrl: `/projects/${projectId}/claims`,
+                linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
               });
             } catch (emailError) {
               logError(`[Claim Certification] Failed to send email to PM ${pm.id}:`, emailError);
@@ -652,7 +653,7 @@ export function createClaimWorkflowRouter({
             type: 'claim_paid',
             title: 'Claim Payment Received',
             message: `Claim #${claim.claimNumber} payment of ${formattedAmount} has been recorded${paymentReference ? ` (Ref: ${paymentReference})` : ''}.`,
-            linkUrl: `/projects/${projectId}/claims`,
+            linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
           }));
 
           if (notificationsToCreate.length > 0) {
@@ -668,7 +669,7 @@ export function createClaimWorkflowRouter({
                 title: 'Claim Payment Received',
                 message: `Claim #${claim.claimNumber} payment has been recorded.\n\nProject: ${claim.project.name}\nPaid Amount: ${formattedAmount}${paymentReference ? `\nPayment Reference: ${paymentReference}` : ''}\n\nPlease review the payment details in the system.`,
                 projectName: claim.project.name,
-                linkUrl: `/projects/${projectId}/claims`,
+                linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
               });
             } catch (emailError) {
               logError(`[Claim Payment] Failed to send email to PM ${pm.id}:`, emailError);

@@ -220,17 +220,32 @@ export function LotDetailTabPanel({
       {/* NCRs Tab */}
       {currentTab === 'ncrs' && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
-            <button
-              onClick={() => navigate(`/projects/${encodeURIComponent(projectId || '')}/ncr`)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-            >
-              View All NCRs
-            </button>
+            <div className="flex gap-2">
+              {lotId && (
+                <button
+                  onClick={() =>
+                    navigate(
+                      `/projects/${encodeURIComponent(projectId || '')}/ncr?create=1&lot=${encodeURIComponent(lotId)}`,
+                    )
+                  }
+                  className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+                >
+                  Raise NCR
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/projects/${encodeURIComponent(projectId || '')}/ncr`)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                View All NCRs
+              </button>
+            </div>
           </div>
           <NCRsTabContent
             projectId={projectId!}
+            lotId={lotId}
             ncrs={ncrs}
             loading={loadingNcrs}
             isMobile={isMobile}

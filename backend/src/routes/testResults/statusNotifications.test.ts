@@ -11,6 +11,7 @@ describe('test result status notification helpers', () => {
       buildTestResultReceivedNotification({
         userId: 'user-1',
         projectId: 'project-1',
+        testResultId: 'test-1',
         testType: 'Compaction Test',
         requestNumber: 'TR-42',
         labName: 'ACME Labs',
@@ -22,7 +23,7 @@ describe('test result status notification helpers', () => {
       title: 'Test Result Received',
       message:
         'Test result for Compaction Test (TR-42) has been received from ACME Labs. Pending verification.',
-      linkUrl: '/projects/project-1/tests',
+      linkUrl: '/projects/project-1/tests?test=test-1',
     });
   });
 
@@ -30,6 +31,7 @@ describe('test result status notification helpers', () => {
     expect(
       buildTestResultReceivedEmail({
         projectId: 'project-2',
+        testResultId: 'test-2',
         projectName: 'Northern Bypass',
         testType: 'CBR Test',
         requestNumber: 'TR-99',
@@ -38,7 +40,7 @@ describe('test result status notification helpers', () => {
     ).toEqual({
       title: 'Test Result Received',
       message: 'Test result for CBR Test (TR-99) from Road Lab is pending verification.',
-      linkUrl: '/projects/project-2/tests',
+      linkUrl: '/projects/project-2/tests?test=test-2',
       projectName: 'Northern Bypass',
     });
   });
@@ -47,6 +49,7 @@ describe('test result status notification helpers', () => {
     expect(
       buildTestResultReceivedEmail({
         projectId: 'project-3',
+        testResultId: 'test-3',
         projectName: undefined,
         testType: 'Concrete Strength',
         requestNumber: 'ABCDEF12',
@@ -56,7 +59,7 @@ describe('test result status notification helpers', () => {
       title: 'Test Result Received',
       message:
         'Test result for Concrete Strength (ABCDEF12) from laboratory is pending verification.',
-      linkUrl: '/projects/project-3/tests',
+      linkUrl: '/projects/project-3/tests?test=test-3',
       projectName: undefined,
     });
   });

@@ -15,6 +15,7 @@ import {
 } from './ncrAccess.js';
 import { logError } from '../../lib/serverLogger.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
+import { buildProjectEntityLink } from '../notifications/links.js';
 import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
@@ -27,6 +28,7 @@ import { assertNcrLinkableLots } from './ncrLotStatus.js';
 import { emitNcrWebhookEvent } from './webhookEvents.js';
 import {
   enableSubcontractorNcrPortalAccessOnAssignment,
+  notifyInternalNcrUser,
   notifySubcontractorNcrPortalUsers,
 } from './ncrNotifications.js';
 
@@ -331,15 +333,13 @@ ncrCoreRouter.post(
         });
         const raisedByName = raisedByUser?.fullName || raisedByUser?.email || 'Someone';
 
-        await prisma.notification.create({
-          data: {
-            userId: responsibleUserId,
-            projectId,
-            type: 'ncr_assigned',
-            title: `NCR Assigned to You`,
-            message: `${raisedByName} assigned ${ncr.ncrNumber} to you: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
-            linkUrl: `/projects/${projectId}/ncr`,
-          },
+        await notifyInternalNcrUser({
+          userId: responsibleUserId,
+          projectId,
+          ncrId: ncr.id,
+          type: 'ncr_assigned',
+          title: `NCR Assigned to You`,
+          message: `${raisedByName} assigned ${ncr.ncrNumber} to you: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
         });
       }
     }
@@ -413,7 +413,7 @@ ncrCoreRouter.post(
             type: 'ncr_raised',
             title: `NCR Raised by Subcontractor`,
             message: `${raisedByName} raised ${ncr.ncrNumber} for ${lotNumbers}: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
-            linkUrl: `/projects/${projectId}/ncr`,
+            linkUrl: buildProjectEntityLink('ncr', ncr.id, projectId),
           })),
         });
       }
@@ -530,15 +530,13 @@ ncrCoreRouter.patch(
       // assignment): when off, suppress it. Absent/missing settings default on.
       if (responsibleUserId && notificationsEnabled) {
         try {
-          await prisma.notification.create({
-            data: {
-              userId: responsibleUserId,
-              projectId: ncr.projectId,
-              type: 'ncr_redirect',
-              title: 'NCR Redirected to You',
-              message: `NCR #${ncr.ncrNumber} "${ncr.description.substring(0, 50)}..." has been redirected to you for response`,
-              linkUrl: `/projects/${ncr.projectId}/ncr`,
-            },
+          await notifyInternalNcrUser({
+            userId: responsibleUserId,
+            projectId: ncr.projectId,
+            ncrId: ncr.id,
+            type: 'ncr_redirect',
+            title: 'NCR Redirected to You',
+            message: `NCR #${ncr.ncrNumber} "${ncr.description.substring(0, 50)}..." has been redirected to you for response`,
           });
         } catch (notifError) {
           logError('Failed to create redirect notification:', notifError);

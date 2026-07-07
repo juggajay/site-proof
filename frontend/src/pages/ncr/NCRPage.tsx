@@ -70,12 +70,19 @@ export function NCRPage() {
     notFound: NCR_LINK_NOT_FOUND,
   });
 
+  // Lot to preselect in the create modal (from a lot's "Raise NCR" deep link,
+  // ?create=1&lot=<id>). Captured before the params are stripped so the modal
+  // seeds even after the URL is cleaned up.
+  const [createLotId, setCreateLotId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!projectId || searchParams.get('create') !== '1') return;
 
+    setCreateLotId(searchParams.get('lot'));
     openModal('create');
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('create');
+    nextSearchParams.delete('lot');
     navigate(
       {
         search: nextSearchParams.toString(),
@@ -296,10 +303,14 @@ export function NCRPage() {
       {/* Modals */}
       <CreateNCRModal
         isOpen={activeModal === 'create'}
-        onClose={closeModal}
+        onClose={() => {
+          setCreateLotId(null);
+          closeModal();
+        }}
         onSubmit={handleCreateNcr}
         loading={actionLoading}
         projectId={projectId}
+        initialLotId={createLotId ?? undefined}
       />
 
       <AssignNCRModal

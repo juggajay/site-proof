@@ -13,6 +13,8 @@ import { MobileDataCard } from '@/components/ui/MobileDataCard';
 
 interface NCRsTabContentProps {
   projectId: string;
+  /** Lot this tab belongs to — enables the pre-filled "Raise NCR" deep link. */
+  lotId?: string;
   ncrs: NCR[];
   loading: boolean;
   /** When true, renders mobile card layout instead of the desktop table. */
@@ -21,11 +23,18 @@ interface NCRsTabContentProps {
 
 export function NCRsTabContent({
   projectId,
+  lotId,
   ncrs,
   loading,
   isMobile = false,
 }: NCRsTabContentProps) {
   const navigate = useNavigate();
+
+  // Deep-link a single NCR open in the register (?ncr=<id> scrolls to + highlights
+  // it). Used by both desktop rows and mobile cards so a lot's NCR is one tap from
+  // its full record.
+  const openNcr = (ncrId: string) =>
+    navigate(`/projects/${encodeURIComponent(projectId)}/ncr?ncr=${encodeURIComponent(ncrId)}`);
 
   if (loading) {
     return (
@@ -44,10 +53,16 @@ export function NCRsTabContent({
           No non-conformance reports have been raised for this lot.
         </p>
         <button
-          onClick={() => navigate(`/projects/${projectId}/ncr`)}
+          onClick={() =>
+            navigate(
+              lotId
+                ? `/projects/${encodeURIComponent(projectId)}/ncr?create=1&lot=${encodeURIComponent(lotId)}`
+                : `/projects/${encodeURIComponent(projectId)}/ncr`,
+            )
+          }
           className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
         >
-          Go to NCR Register
+          {lotId ? 'Raise NCR' : 'Go to NCR Register'}
         </button>
       </div>
     );
@@ -95,7 +110,7 @@ export function NCRsTabContent({
                   priority: 'secondary',
                 },
               ]}
-              onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/ncr`)}
+              onClick={() => openNcr(ncr.id)}
               data-testid={`ncr-card-${ncr.id}`}
             />
           );
@@ -119,7 +134,11 @@ export function NCRsTabContent({
         </thead>
         <tbody className="divide-y">
           {ncrs.map((ncr) => (
-            <tr key={ncr.id} className="hover:bg-muted/30">
+            <tr
+              key={ncr.id}
+              className="cursor-pointer hover:bg-muted/30"
+              onClick={() => openNcr(ncr.id)}
+            >
               <td className="px-4 py-3 text-sm font-mono">{ncr.ncrNumber}</td>
               <td className="px-4 py-3 text-sm max-w-xs truncate">{ncr.description}</td>
               <td className="px-4 py-3 text-sm capitalize">{ncr.category}</td>

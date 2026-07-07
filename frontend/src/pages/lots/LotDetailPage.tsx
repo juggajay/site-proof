@@ -448,6 +448,34 @@ export function LotDetailPage() {
         onAddTestForItem={canCreateTests ? handleAddTestResult : undefined}
       />
 
+      {/* Conform CTA next to the readiness panel — the full checklist + force
+          conform stay in the Quality Management section below the tabs; this
+          surfaces the actionable "Conform lot" the moment prerequisites are met
+          so conformers don't have to scroll past every tab to find it. Reuses
+          the same conform flow (setShowConformConfirm) and the canConformLots
+          gate (owner/admin/project_manager/quality_manager). */}
+      {canConformLots &&
+        conformStatus?.canConform &&
+        lot.status !== 'conformed' &&
+        lot.status !== 'claimed' && (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-success/30 bg-success/10 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Ready to conform</h3>
+              <p className="text-sm text-muted-foreground">
+                All conformance prerequisites are met for this lot.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowConformConfirm(true)}
+              disabled={conforming}
+              className="shrink-0 rounded-lg bg-success px-4 py-2 text-sm font-medium text-success-foreground hover:bg-success/90 disabled:opacity-50"
+            >
+              {conforming ? 'Conforming...' : 'Conform lot'}
+            </button>
+          </div>
+        )}
+
       {/* Tab Navigation */}
       <LotTabNavigation
         tabs={lotTabs}

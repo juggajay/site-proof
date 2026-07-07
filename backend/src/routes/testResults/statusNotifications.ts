@@ -1,6 +1,9 @@
+import { buildProjectEntityLink } from '../notifications/links.js';
+
 type ReceivedNotificationInput = {
   userId: string;
   projectId: string;
+  testResultId: string;
   testType: string;
   requestNumber: string;
   labName: string;
@@ -8,6 +11,7 @@ type ReceivedNotificationInput = {
 
 type ReceivedEmailInput = {
   projectId: string;
+  testResultId: string;
   projectName: string | undefined;
   testType: string;
   requestNumber: string;
@@ -17,6 +21,7 @@ type ReceivedEmailInput = {
 export function buildTestResultReceivedNotification({
   userId,
   projectId,
+  testResultId,
   testType,
   requestNumber,
   labName,
@@ -27,12 +32,13 @@ export function buildTestResultReceivedNotification({
     type: 'test_result_received',
     title: 'Test Result Received',
     message: `Test result for ${testType} (${requestNumber}) has been received from ${labName}. Pending verification.`,
-    linkUrl: `/projects/${projectId}/tests`,
+    linkUrl: buildProjectEntityLink('test', testResultId, projectId),
   };
 }
 
 export function buildTestResultReceivedEmail({
   projectId,
+  testResultId,
   projectName,
   testType,
   requestNumber,
@@ -41,7 +47,7 @@ export function buildTestResultReceivedEmail({
   return {
     title: 'Test Result Received',
     message: `Test result for ${testType} (${requestNumber}) from ${labName} is pending verification.`,
-    linkUrl: `/projects/${projectId}/tests`,
+    linkUrl: buildProjectEntityLink('test', testResultId, projectId),
     projectName,
   };
 }

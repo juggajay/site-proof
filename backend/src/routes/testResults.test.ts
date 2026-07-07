@@ -2926,7 +2926,7 @@ describe('Test Results API', () => {
 
         expect(notification).toMatchObject({
           title: 'Test Result Received',
-          linkUrl: `/projects/${projectId}/tests`,
+          linkUrl: `/projects/${projectId}/tests?test=${testResult.id}`,
         });
         expect(notification?.message).toContain('Compaction Test');
         expect(notification?.message).toContain('TRN-1001');
@@ -2937,7 +2937,7 @@ describe('Test Results API', () => {
           title: 'Test Result Received',
           message:
             'Test result for Compaction Test (TRN-1001) from Geo Lab is pending verification.',
-          linkUrl: `/projects/${projectId}/tests`,
+          linkUrl: `/projects/${projectId}/tests?test=${testResult.id}`,
           projectName: expect.any(String),
         });
       } finally {

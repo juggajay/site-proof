@@ -389,6 +389,7 @@ workflowRoutes.post(
             buildTestResultReceivedNotification({
               userId: eng.id,
               projectId: testResult.projectId,
+              testResultId: id,
               testType: testResult.testType,
               requestNumber: requestNum,
               labName,
@@ -408,6 +409,7 @@ workflowRoutes.post(
               'enabled',
               buildTestResultReceivedEmail({
                 projectId: testResult.projectId,
+                testResultId: id,
                 projectName: project?.name,
                 testType: testResult.testType,
                 requestNumber: requestNum,
