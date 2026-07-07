@@ -10,9 +10,11 @@ import { getClaimBlockingReasonsForConformedLot } from './conformancePrerequisit
 export type {
   ClaimEvidenceReview,
   ClaimEvidenceReviewInput,
+  ConformancePrerequisiteSnapshot,
   EvidenceReadinessArea,
   EvidenceReadinessItem,
   EvidenceReadinessSeverity,
+  LotConformStatusReadiness,
   LotEvidenceReadiness,
   LotReadinessInput,
   ManagementPrepBucket,
@@ -540,6 +542,7 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
     lotId: input.lot.id,
     lotNumber: input.lot.lotNumber,
     status: input.lot.status,
+    conformStatus: input.conformStatus,
     conformance: {
       state: conformanceState,
       ...conformanceSplit,

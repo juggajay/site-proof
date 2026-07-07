@@ -50,7 +50,6 @@ function setup(lotId: string | undefined = 'lot-1') {
   const updatingCompletionRef = { current: null as string | null };
   const setUpdatingCompletion = vi.fn();
   const refetchReadiness = vi.fn();
-  const refetchConformStatus = vi.fn();
   const refreshNcrsAfterFailure = vi.fn().mockResolvedValue(undefined);
 
   const { result } = renderHook(() =>
@@ -61,7 +60,6 @@ function setup(lotId: string | undefined = 'lot-1') {
       updatingCompletionRef,
       setUpdatingCompletion,
       refetchReadiness,
-      refetchConformStatus,
       refreshNcrsAfterFailure,
     }),
   );

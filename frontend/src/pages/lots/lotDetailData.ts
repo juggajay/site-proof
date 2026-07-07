@@ -1,6 +1,6 @@
 /**
- * Read-data layer for the Lot Detail page's side reads (quality access,
- * conformance status, test results, NCRs, and activity history).
+ * Read-data layer for the Lot Detail page's side reads (quality access, test
+ * results, NCRs, and activity history).
  *
  * This module owns the *representation* of those reads — the request paths and
  * the response normalizers — so the page no longer hand-builds URL strings or
@@ -21,10 +21,6 @@ import type { ActivityLog, NCR, QualityAccess, TestResult } from './types';
 
 export function buildQualityAccessPath(projectId: string): string {
   return `/api/lots/check-role/${encodeURIComponent(projectId)}`;
-}
-
-export function buildConformanceStatusPath(lotId: string): string {
-  return `/api/lots/${encodeURIComponent(lotId)}/conform-status`;
 }
 
 export function buildLotTestResultsPath(projectId: string, lotId: string): string {

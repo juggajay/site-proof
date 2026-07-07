@@ -46,6 +46,33 @@ function baseInput(overrides: Partial<LotReadinessInput> = {}): LotReadinessInpu
 }
 
 describe('evidence readiness helpers', () => {
+  it('embeds the conform-status snapshot in the lot readiness payload', () => {
+    const input = baseInput({
+      conformStatus: {
+        canConform: false,
+        blockingReasons: ['1 hold point item marked N/A but not released'],
+        prerequisites: {
+          itpAssigned: true,
+          itpCompleted: true,
+          itpCompletedCount: 1,
+          itpTotalCount: 1,
+          itpIncompleteItems: [],
+          testRequired: false,
+          hasPassingTest: false,
+          testResults: [],
+          noOpenNcrs: true,
+          openNcrs: [],
+          noNaHoldPointBypass: false,
+          naHoldPointBlockerCount: 1,
+        },
+      },
+    });
+
+    const readiness = buildLotReadinessFromInputs(input);
+
+    expect(readiness.conformStatus).toEqual(input.conformStatus);
+  });
+
   it('turns existing conformance prerequisites into action blockers', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({

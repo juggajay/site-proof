@@ -101,7 +101,6 @@ const baseParams = {
   currentTab: 'itp' as LotTab,
   isOnline: true,
   refetchReadiness: vi.fn(),
-  refetchConformStatus: vi.fn(),
   onRequestWitness: vi.fn(),
   onRequestEvidenceWarning: vi.fn(),
   onToggleSettled: vi.fn(),
@@ -372,18 +371,15 @@ describe('useItpInstance — fetch + offline', () => {
 });
 
 describe('useItpInstance — assignTemplate', () => {
-  it('posts the template, sets the instance, and refreshes readiness + conform status', async () => {
+  it('posts the template, sets the instance, and refreshes readiness', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     routeApiFetch({
       getInstance: () => ({ instance: null }),
       getTemplates: () => ({ templates: templatesFixture }),
       postInstance: () => ({ instance: instanceFixture }),
     });
 
-    const { result } = renderHook(() =>
-      useItpInstance({ ...baseParams, refetchReadiness, refetchConformStatus }),
-    );
+    const { result } = renderHook(() => useItpInstance({ ...baseParams, refetchReadiness }));
     await waitFor(() => expect(result.current.templates).toEqual(templatesFixture));
 
     let returned: boolean | undefined;
@@ -394,7 +390,6 @@ describe('useItpInstance — assignTemplate', () => {
     expect(returned).toBe(true);
     expect(result.current.itpInstance).toEqual(instanceFixture);
     expect(refetchReadiness).toHaveBeenCalledTimes(1);
-    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
   });
 
   it('returns false and toasts an error when the assignment request fails', async () => {
@@ -424,7 +419,6 @@ describe('useItpInstance — assignTemplate', () => {
 describe('useItpInstance — completion mutations', () => {
   it('toggleCompletion posts, merges, refreshes closeout state, and writes through to the offline cache without queueing', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     let body: Record<string, unknown> | undefined;
     const merged = completionResponse({ id: 'completion-1', checklistItemId: 'item-1' });
     const { result } = await mountMutationHook(
@@ -434,7 +428,7 @@ describe('useItpInstance — completion mutations', () => {
           return { completion: merged };
         },
       },
-      { refetchReadiness, refetchConformStatus },
+      { refetchReadiness },
     );
 
     await act(async () => {
@@ -450,7 +444,6 @@ describe('useItpInstance — completion mutations', () => {
     });
     expect(result.current.itpInstance?.completions[0]).toEqual(merged);
     expect(refetchReadiness).toHaveBeenCalledTimes(1);
-    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(recordSyncedChecklistItem).toHaveBeenCalledWith(
       'lot-1',
       'item-1',
@@ -745,7 +738,6 @@ describe('useItpInstance — completion mutations', () => {
 
   it('markAsNA trims the reason, posts not_applicable, refreshes closeout state, toasts, and returns true', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     let body: Record<string, unknown> | undefined;
     const na = completionResponse({
       id: 'completion-1',
@@ -760,7 +752,7 @@ describe('useItpInstance — completion mutations', () => {
           return { completion: na };
         },
       },
-      { refetchReadiness, refetchConformStatus },
+      { refetchReadiness },
     );
 
     let returned: boolean | undefined;
@@ -777,7 +769,6 @@ describe('useItpInstance — completion mutations', () => {
     });
     expect(result.current.itpInstance?.completions[0]).toEqual(na);
     expect(refetchReadiness).toHaveBeenCalledTimes(1);
-    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
   });
 
@@ -848,7 +839,6 @@ describe('useItpInstance — completion mutations', () => {
 
   it('mobileMarkNA posts not_applicable with the default note, refreshes closeout state, toasts, and resolves true', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     let body: Record<string, unknown> | undefined;
     const na = completionResponse({
       id: 'completion-1',
@@ -862,7 +852,7 @@ describe('useItpInstance — completion mutations', () => {
           return { completion: na };
         },
       },
-      { refetchReadiness, refetchConformStatus },
+      { refetchReadiness },
     );
 
     let returned: boolean | undefined;
@@ -873,20 +863,18 @@ describe('useItpInstance — completion mutations', () => {
     expect(returned).toBe(true);
     expect(body).toMatchObject({ status: 'not_applicable', notes: 'Marked as N/A' });
     expect(refetchReadiness).toHaveBeenCalledTimes(1);
-    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
   });
 
   it('mobileMarkNA resolves false when the write fails, so the sheet can stay open', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     const { result } = await mountMutationHook(
       {
         postCompletion: () => {
           throw new Error('network down');
         },
       },
-      { refetchReadiness, refetchConformStatus },
+      { refetchReadiness },
     );
 
     let returned: boolean | undefined;
@@ -896,13 +884,11 @@ describe('useItpInstance — completion mutations', () => {
 
     expect(returned).toBe(false);
     expect(refetchReadiness).not.toHaveBeenCalled();
-    expect(refetchConformStatus).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
   });
 
   it('mobileMarkFailed posts failed, refreshes closeout state and NCRs, and toasts without the NCR-created title', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     const refreshLotAfterFailure = vi.fn(async () => {});
     const refreshNcrsAfterFailure = vi.fn(async () => {});
     let body: Record<string, unknown> | undefined;
@@ -918,7 +904,7 @@ describe('useItpInstance — completion mutations', () => {
           return { completion: failed, ncr: { ncrNumber: 'NCR-9' } };
         },
       },
-      { refetchReadiness, refetchConformStatus, refreshLotAfterFailure, refreshNcrsAfterFailure },
+      { refetchReadiness, refreshLotAfterFailure, refreshNcrsAfterFailure },
     );
 
     let returned: boolean | undefined;
@@ -935,7 +921,6 @@ describe('useItpInstance — completion mutations', () => {
       ncrSeverity: 'minor',
     });
     expect(refetchReadiness).toHaveBeenCalledTimes(1);
-    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(refreshNcrsAfterFailure).toHaveBeenCalledTimes(1);
     expect(refreshLotAfterFailure).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as Failed' }));

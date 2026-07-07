@@ -98,7 +98,6 @@ export function useShellItpRun(
     updatingCompletionRef: updatingRef,
     setUpdatingCompletion: setUpdatingItemId,
     refetchReadiness: refreshShellCloseoutReaders,
-    refetchConformStatus: refreshShellCloseoutReaders,
     refreshNcrsAfterFailure: noopRefresh,
   });
 

@@ -204,10 +204,26 @@ export interface ConformStatus {
     itpCompleted: boolean;
     itpCompletedCount: number;
     itpTotalCount: number;
+    itpIncompleteItems?: { id: string; description: string; pointType: string }[];
     testRequired: boolean;
     hasPassingTest: boolean;
+    outstandingTestItems?: {
+      itemId: string;
+      description: string;
+      testType: string | null;
+      state: 'no_result' | 'awaiting_verification' | 'failing' | 'unmatched_result_exists';
+    }[];
+    testResults?: {
+      id: string;
+      itpChecklistItemId?: string | null;
+      testType: string;
+      passFail: string;
+      status: string;
+    }[];
     noOpenNcrs: boolean;
-    openNcrs: { id: string; ncrNumber: string; status: string }[];
+    openNcrs: { id: string; ncrNumber: string; description?: string; status: string }[];
+    noNaHoldPointBypass?: boolean;
+    naHoldPointBlockerCount?: number;
   };
 }
 

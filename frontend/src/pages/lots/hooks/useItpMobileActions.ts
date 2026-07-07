@@ -17,7 +17,6 @@ interface UseItpMobileActionsParams {
   updatingCompletionRef: MutableRefObject<string | null>;
   setUpdatingCompletion: Dispatch<SetStateAction<string | null>>;
   refetchReadiness: () => void;
-  refetchConformStatus: () => void;
   refreshNcrsAfterFailure: () => Promise<void>;
 }
 
@@ -28,7 +27,6 @@ export function useItpMobileActions({
   updatingCompletionRef,
   setUpdatingCompletion,
   refetchReadiness,
-  refetchConformStatus,
   refreshNcrsAfterFailure,
 }: UseItpMobileActionsParams) {
   // Queue an N/A or FAIL mark to the offline pipeline and apply optimistic local
@@ -70,7 +68,6 @@ export function useItpMobileActions({
 
     setItpInstance((prev) => mergeCompletionIntoInstance(prev, optimistic));
     refetchReadiness();
-    refetchConformStatus();
     return true;
   };
 
@@ -97,7 +94,6 @@ export function useItpMobileActions({
 
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
       refetchReadiness();
-      refetchConformStatus();
       toast({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
@@ -155,7 +151,6 @@ export function useItpMobileActions({
 
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
       refetchReadiness();
-      refetchConformStatus();
 
       // Refresh page-owned NCR state.
       await refreshNcrsAfterFailure();

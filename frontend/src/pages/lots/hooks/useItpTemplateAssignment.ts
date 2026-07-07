@@ -10,7 +10,6 @@ interface UseItpTemplateAssignmentParams {
   setItpInstance: Dispatch<SetStateAction<ITPInstance | null>>;
   setItpLoadError: Dispatch<SetStateAction<string | null>>;
   refetchReadiness: () => void;
-  refetchConformStatus: () => void;
 }
 
 export function useItpTemplateAssignment({
@@ -18,7 +17,6 @@ export function useItpTemplateAssignment({
   setItpInstance,
   setItpLoadError,
   refetchReadiness,
-  refetchConformStatus,
 }: UseItpTemplateAssignmentParams) {
   const [assigningTemplate, setAssigningTemplate] = useState(false);
 
@@ -35,7 +33,6 @@ export function useItpTemplateAssignment({
       });
       setItpInstance(data.instance);
       void refetchReadiness();
-      void refetchConformStatus();
       // Modal closing is handled by the ITPChecklistTab component.
       return true;
     } catch (err) {

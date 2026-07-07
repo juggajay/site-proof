@@ -70,10 +70,17 @@ export type ManagementPrepBucket = ReadinessBucket & {
   counts: ManagementPrepCounts;
 };
 
+export interface LotConformStatusReadiness {
+  canConform: boolean;
+  blockingReasons: string[];
+  prerequisites: ConformancePrerequisiteSnapshot;
+}
+
 export interface LotEvidenceReadiness {
   lotId: string;
   lotNumber: string;
   status: string;
+  conformStatus: LotConformStatusReadiness;
   conformance: ReadinessBucket;
   claim: ReadinessBucket & {
     budgetAmount?: number | null;
@@ -92,7 +99,7 @@ export interface LotEvidenceReadiness {
   };
 }
 
-interface ConformancePrerequisiteSnapshot {
+export interface ConformancePrerequisiteSnapshot {
   itpAssigned: boolean;
   itpCompleted: boolean;
   itpCompletedCount: number;
@@ -112,7 +119,13 @@ interface ConformancePrerequisiteSnapshot {
     testType: string | null;
     state: 'no_result' | 'awaiting_verification' | 'failing' | 'unmatched_result_exists';
   }[];
-  testResults: { id: string; testType: string; passFail: string; status: string }[];
+  testResults: {
+    id: string;
+    itpChecklistItemId?: string | null;
+    testType: string;
+    passFail: string;
+    status: string;
+  }[];
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
   // N/A hold-point bypass guard — optional for backward compatibility with
@@ -139,11 +152,7 @@ export interface LotReadinessInput {
     conformanceOverriddenAt?: string | null;
   };
   canViewCommercial: boolean;
-  conformStatus: {
-    canConform: boolean;
-    blockingReasons: string[];
-    prerequisites: ConformancePrerequisiteSnapshot;
-  };
+  conformStatus: LotConformStatusReadiness;
   evidenceCounts: {
     unreleasedHoldPoints: number;
     releasedHoldPoints: number;

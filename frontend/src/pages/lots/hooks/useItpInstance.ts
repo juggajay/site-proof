@@ -69,8 +69,6 @@ interface UseItpInstanceParams {
   isOnline: boolean;
   /** Page-owned readiness query refetch, run after a successful assignment. */
   refetchReadiness: () => void;
-  /** Page-owned conform-status fetch, run after a successful assignment. */
-  refetchConformStatus: () => void;
   /** Open the page's witness-point modal when a witness item is being completed. */
   onRequestWitness: (prompt: WitnessPrompt) => void;
   /** Open the page's evidence-warning modal when required evidence is missing. */
@@ -89,7 +87,6 @@ export function useItpInstance({
   currentTab,
   isOnline,
   refetchReadiness,
-  refetchConformStatus,
   onRequestWitness,
   onRequestEvidenceWarning,
   onToggleSettled,
@@ -203,7 +200,6 @@ export function useItpInstance({
     setItpInstance,
     setItpLoadError,
     refetchReadiness,
-    refetchConformStatus,
   });
 
   const { mobileMarkNA, mobileMarkFailed } = useItpMobileActions({
@@ -213,7 +209,6 @@ export function useItpInstance({
     updatingCompletionRef,
     setUpdatingCompletion,
     refetchReadiness,
-    refetchConformStatus,
     refreshNcrsAfterFailure,
   });
 
@@ -286,7 +281,6 @@ export function useItpInstance({
 
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, result.completion));
       refetchReadiness();
-      refetchConformStatus();
 
       if (result.status === 'queued') {
         // Update offline pending count, then surface the honest offline toast.
@@ -365,7 +359,6 @@ export function useItpInstance({
       // Update the completions in state
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
       refetchReadiness();
-      refetchConformStatus();
       toast({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
@@ -436,7 +429,6 @@ export function useItpInstance({
       });
       await fetchItpInstance();
       refetchReadiness();
-      refetchConformStatus();
       toast({
         title: 'Item verified',
         description: 'The ITP item has been verified.',
@@ -468,7 +460,6 @@ export function useItpInstance({
       });
       await fetchItpInstance();
       refetchReadiness();
-      refetchConformStatus();
       toast({
         title: 'Item rejected',
         description: 'The subcontractor has been notified to correct and resubmit it.',

@@ -47,6 +47,9 @@ export function QualityManagementSection({
     canConformLots && lot.status !== 'conformed' && lot.status !== 'claimed';
   const canForceConformBlockedLot =
     canForceConformLots && conformStatus !== null && !conformStatus.canConform;
+  const naHoldPointBlockerCount = conformStatus?.prerequisites.naHoldPointBlockerCount ?? 0;
+  const noNaHoldPointBypass = conformStatus?.prerequisites.noNaHoldPointBypass ?? true;
+  const noUnreleasedNaHoldPoints = noNaHoldPointBypass && naHoldPointBlockerCount === 0;
 
   return (
     <>
@@ -155,6 +158,23 @@ export function QualityManagementSection({
                           )
                         </span>
                       )}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={noUnreleasedNaHoldPoints ? 'text-success' : 'text-destructive'}>
+                    {noUnreleasedNaHoldPoints ? '\u2713' : '\u2717'}
+                  </span>
+                  <span
+                    className={
+                      noUnreleasedNaHoldPoints ? 'text-muted-foreground' : 'text-destructive'
+                    }
+                  >
+                    N/A hold-point releases
+                    {!noUnreleasedNaHoldPoints && (
+                      <span className="text-destructive ml-1">
+                        ({naHoldPointBlockerCount} unreleased)
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
