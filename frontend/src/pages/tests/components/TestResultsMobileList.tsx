@@ -32,6 +32,9 @@ interface TestResultsMobileListProps {
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
+  // Migration action: link an existing test to one of its lot's ITP items.
+  // Only offered for tests that have a linked lot (so an ITP can exist).
+  onLinkItpItem?: (test: TestResult) => void;
   // Deep-linked test (?test=<id>) to scroll to and highlight.
   highlightedTestId?: string | null;
 }
@@ -52,6 +55,7 @@ export function TestResultsMobileList({
   onAttachCertificate,
   onClearFilters,
   onOpenCreateModal,
+  onLinkItpItem,
   highlightedTestId,
 }: TestResultsMobileListProps) {
   if (filteredTestResults.length === 0 && !hasActiveFilters) {
@@ -101,6 +105,7 @@ export function TestResultsMobileList({
           onOpenEnterResults={onOpenEnterResults}
           onRejectTest={onRejectTest}
           onAttachCertificate={onAttachCertificate}
+          onLinkItpItem={onLinkItpItem}
           isHighlighted={test.id === highlightedTestId}
         />
       ))}
@@ -116,6 +121,7 @@ interface TestResultMobileCardProps {
   onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
+  onLinkItpItem?: (test: TestResult) => void;
   isHighlighted?: boolean;
 }
 
@@ -140,6 +146,7 @@ function TestResultMobileCard({
   onOpenEnterResults,
   onRejectTest,
   onAttachCertificate,
+  onLinkItpItem,
   isHighlighted,
 }: TestResultMobileCardProps) {
   const navigate = useNavigate();
@@ -269,6 +276,18 @@ function TestResultMobileCard({
                 onAttachCertificate={onAttachCertificate}
                 variant="mobile"
               />
+            )}
+
+            {/* Migration: link this test to one of its lot's ITP items. */}
+            {onLinkItpItem && test.lotId && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => onLinkItpItem(test)}
+              >
+                Link to ITP item
+              </Button>
             )}
 
             {test.status === 'entered' && (

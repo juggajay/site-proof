@@ -747,6 +747,7 @@ export function TestResultsPage() {
           onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
           onOpenCreateModal={() => setShowCreateModal(true)}
+          onLinkItpItem={openLinkItpModal}
           highlightedTestId={deepLinkedTestId}
         />
       ) : (

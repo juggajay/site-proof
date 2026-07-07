@@ -56,6 +56,22 @@ vi.mock('./components/CreateTestModal', () => ({
     ) : null,
 }));
 
+vi.mock('./components/LinkItpItemModal', () => ({
+  LinkItpItemModal: ({
+    isOpen,
+    test,
+  }: {
+    isOpen: boolean;
+    test: { id: string; testType: string } | null;
+  }) =>
+    isOpen ? (
+      <div role="dialog" aria-label="Link to ITP item">
+        <span data-testid="link-itp-modal-test-id">{test?.id}</span>
+        <span data-testid="link-itp-modal-test-type">{test?.testType}</span>
+      </div>
+    ) : null,
+}));
+
 vi.mock('./components/EnterResultsModal', () => ({
   EnterResultsModal: () => null,
 }));
@@ -108,7 +124,26 @@ vi.mock('./components/TestResultsTable', () => ({
 }));
 
 vi.mock('./components/TestResultsMobileList', () => ({
-  TestResultsMobileList: () => <div data-testid="test-results-mobile-list" />,
+  TestResultsMobileList: ({
+    filteredTestResults,
+    onLinkItpItem,
+  }: {
+    filteredTestResults: Array<{ id: string; lotId: string | null; testType: string }>;
+    onLinkItpItem?: (test: { id: string; lotId: string | null; testType: string }) => void;
+  }) => (
+    <div data-testid="test-results-mobile-list">
+      {filteredTestResults.map((test) => (
+        <div key={test.id}>
+          <span>{test.testType}</span>
+          {onLinkItpItem && test.lotId && (
+            <button type="button" onClick={() => onLinkItpItem(test)}>
+              Link to ITP item
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('./components/TestFilters', () => ({
@@ -352,6 +387,44 @@ describe('TestResultsPage header — mobile', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Add Test Result' })).toBeInTheDocument();
     });
+  });
+
+  it('opens the LinkItpItemModal from a mobile card action with the selected test', async () => {
+    const user = userEvent.setup();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('/api/test-results'))
+        return Promise.resolve({
+          testResults: [
+            {
+              id: 't-mobile-link',
+              testType: 'CBR Laboratory',
+              status: 'entered',
+              passFail: 'pass',
+              resultValue: 98,
+              resultUnit: '%',
+              specificationMin: 95,
+              specificationMax: 100,
+              lotId: 'lot-1',
+              lot: { id: 'lot-1', lotNumber: 'L-001' },
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        });
+      if (url.includes('/api/lots')) return Promise.resolve({ lots: [] });
+      if (url.includes('/api/projects/'))
+        return Promise.resolve({ project: { id: PROJECT_ID, state: 'NSW' } });
+      return Promise.resolve({});
+    });
+
+    renderPage();
+    await waitForPageLoad();
+
+    await user.click(screen.getByRole('button', { name: 'Link to ITP item' }));
+
+    expect(screen.getByRole('dialog', { name: 'Link to ITP item' })).toBeInTheDocument();
+    expect(screen.getByTestId('link-itp-modal-test-id')).toHaveTextContent('t-mobile-link');
+    expect(screen.getByTestId('link-itp-modal-test-type')).toHaveTextContent('CBR Laboratory');
   });
 });
 
