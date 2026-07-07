@@ -471,6 +471,8 @@ export interface TestCertificateData extends PDFBrandableData {
     passFail: string;
     status: string;
     aiExtracted?: boolean;
+    verifiedBy?: { fullName: string | null; email: string } | null;
+    verifiedAt?: string | null;
     createdAt: string;
   };
   lot: {
@@ -569,6 +571,8 @@ export interface DocketDetailPDFData extends PDFBrandableData {
     foremanNotes: string | null;
     rejectionReason?: string | null;
     adjustmentReason?: string | null;
+    submittedBy?: { fullName: string | null; email: string } | null;
+    approvedBy?: { fullName: string | null; email: string } | null;
   };
   subcontractor: {
     name: string;

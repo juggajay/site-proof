@@ -19,7 +19,14 @@ describe('test certificate PDF characterization', () => {
   });
 
   it('preserves test certificate PDF labels, compliance wording, and filename', async () => {
-    await generateTestCertificatePDF(passingTestCertificateFixture);
+    await generateTestCertificatePDF({
+      ...passingTestCertificateFixture,
+      test: {
+        ...passingTestCertificateFixture.test,
+        verifiedBy: { fullName: 'Quinn Manager', email: 'quinn@example.com' },
+        verifiedAt: '2026-05-23T02:00:00.000Z',
+      },
+    } as typeof passingTestCertificateFixture);
 
     const doc = latestPdf();
     const text = renderedText(doc);
@@ -51,6 +58,7 @@ describe('test certificate PDF characterization', () => {
         '98 %',
         'Specification: 95 - 100 %',
         'Verified By:',
+        'Quinn Manager',
       ]),
     );
     // Shared per-page document footer identity (replaces the old CIVOS platform line).

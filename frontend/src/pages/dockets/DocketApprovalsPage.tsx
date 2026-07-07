@@ -403,7 +403,9 @@ export function DocketApprovalsPage() {
           totalLabourApprovedCost: docket.totalLabourApprovedCost,
           totalPlantApprovedCost: docket.totalPlantApprovedCost,
           submittedAt: docket.submittedAt,
+          submittedBy: docket.submittedBy ?? null,
           approvedAt: docket.approvedAt,
+          approvedBy: docket.approvedBy ?? null,
           foremanNotes: docket.foremanNotes,
         },
         subcontractor: {

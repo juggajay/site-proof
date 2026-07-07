@@ -130,8 +130,34 @@ docketsRouter.get(
     ]);
 
     const includeCommercialAmounts = await canViewDocketAmounts(user, projectId);
+    const docketUserIds = [
+      ...new Set(
+        dockets
+          .flatMap((docket) => [docket.submittedById, docket.approvedById])
+          .filter((id): id is string => typeof id === 'string'),
+      ),
+    ];
+    const docketUsers =
+      docketUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: docketUserIds } },
+            select: { id: true, fullName: true, email: true },
+          })
+        : [];
+    const docketUserById = new Map(docketUsers.map((docketUser) => [docketUser.id, docketUser]));
     const formattedDockets = dockets.map((docket) =>
-      mapDocketListItem(docket, { includeCommercialAmounts }),
+      mapDocketListItem(
+        {
+          ...docket,
+          submittedBy: docket.submittedById
+            ? (docketUserById.get(docket.submittedById) ?? null)
+            : null,
+          approvedBy: docket.approvedById
+            ? (docketUserById.get(docket.approvedById) ?? null)
+            : null,
+        },
+        { includeCommercialAmounts },
+      ),
     );
 
     res.json(buildDocketListResponse(formattedDockets, getPaginationMeta(total, page, limit)));

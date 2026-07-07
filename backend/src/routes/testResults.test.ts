@@ -849,6 +849,44 @@ describe('Test Results API', () => {
       expect(res.body.testResults).toBeDefined();
     });
 
+    it('includes verifier identity and timestamp for certificate PDF accountability', async () => {
+      const verifiedAt = new Date('2026-06-01T02:03:04.000Z');
+      const verifiedTestResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Verified Certificate Test ${Date.now()}`,
+          status: 'verified',
+          passFail: 'pass',
+          verifiedById: userId,
+          verifiedAt,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/test-results?projectId=${projectId}&limit=100`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        const listed = (
+          res.body.testResults as Array<{
+            id: string;
+            verifiedAt?: string | null;
+            verifiedBy?: { id: string; fullName: string; email: string } | null;
+          }>
+        ).find((item) => item.id === verifiedTestResult.id);
+
+        expect(listed?.verifiedAt).toBe(verifiedAt.toISOString());
+        expect(listed?.verifiedBy).toMatchObject({
+          id: userId,
+          fullName: 'Test Results User',
+        });
+      } finally {
+        await prisma.testResult.delete({ where: { id: verifiedTestResult.id } }).catch(() => {});
+      }
+    });
+
     it('should search test results server-side across request and lab fields', async () => {
       const searchToken = `test-search-${Date.now()}`;
       const matchingTest = await prisma.testResult.create({

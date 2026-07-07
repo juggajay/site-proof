@@ -613,6 +613,48 @@ describe('Dockets API', () => {
       expect(res.body.dockets).toBeDefined();
     });
 
+    it('includes submitted and approved user identities for docket PDF accountability', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date('2031-07-03T00:00:00.000Z'),
+          status: 'approved',
+          submittedById: userId,
+          submittedAt: new Date('2031-07-03T04:00:00.000Z'),
+          approvedById: userId,
+          approvedAt: new Date('2031-07-03T06:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/dockets?projectId=${projectId}&status=approved&limit=100`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        const listed = (res.body.dockets as Array<{ id: string }>).find(
+          (item) => item.id === docket.id,
+        ) as
+          | {
+              submittedBy?: { id: string; fullName: string; email: string };
+              approvedBy?: { id: string; fullName: string; email: string };
+            }
+          | undefined;
+
+        expect(listed?.submittedBy).toMatchObject({
+          id: userId,
+          fullName: 'Dockets Admin',
+        });
+        expect(listed?.approvedBy).toMatchObject({
+          id: userId,
+          fullName: 'Dockets Admin',
+        });
+      } finally {
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+      }
+    });
+
     it('lists dockets for every linked subcontractor company in the project', async () => {
       const suffix = Date.now();
       const otherSubcontractorCompany = await prisma.subcontractorCompany.create({

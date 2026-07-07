@@ -380,7 +380,11 @@ describe('dockets presentation helpers (pure)', () => {
 
   describe('mapDocketListItem', () => {
     it('maps a docket row into the GET /api/dockets list shape (fields + order)', () => {
-      const result = mapDocketListItem(listSource);
+      const result = mapDocketListItem({
+        ...listSource,
+        submittedBy: { id: 'u-1', fullName: 'Sam Submit', email: 'sam@example.com' },
+        approvedBy: { id: 'u-2', fullName: 'Amy Approve', email: 'amy@example.com' },
+      } as DocketListItemSource);
       expect(result).toStrictEqual({
         id: 'abc123def456',
         docketNumber: 'DKT-ABC123', // DKT- + first 6 chars uppercased
@@ -400,7 +404,9 @@ describe('dockets presentation helpers (pure)', () => {
         totalLabourApprovedCost: 520,
         totalPlantApprovedCost: 760,
         submittedAt: listSource.submittedAt, // Date passed through unchanged
+        submittedBy: { id: 'u-1', fullName: 'Sam Submit', email: 'sam@example.com' },
         approvedAt: listSource.approvedAt,
+        approvedBy: { id: 'u-2', fullName: 'Amy Approve', email: 'amy@example.com' },
         foremanNotes: 'approved with notes',
       });
       // Lock the response key order to the route's original object literal.
@@ -423,7 +429,9 @@ describe('dockets presentation helpers (pure)', () => {
         'totalLabourApprovedCost',
         'totalPlantApprovedCost',
         'submittedAt',
+        'submittedBy',
         'approvedAt',
+        'approvedBy',
         'foremanNotes',
       ]);
     });
