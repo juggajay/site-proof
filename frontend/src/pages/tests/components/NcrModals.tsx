@@ -17,6 +17,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { useResponsiblePartyOptions } from '../../ncr/hooks/useResponsiblePartyOptions';
+import {
+  ResponsiblePartyPicker,
+  type ResponsibleParty,
+} from '../../ncr/components/ResponsiblePartyPicker';
 
 // Feature #210: NCR Prompt Modal for Failed Test
 interface NcrPromptModalProps {
@@ -98,6 +103,7 @@ interface NcrCreateModalProps {
   onSubmit: (ncrFormData: NcrFormData) => Promise<void>;
   failedTestForNcr: FailedTestForNcr | null;
   initialDescription: string;
+  projectId?: string;
 }
 
 export const NcrCreateModal = React.memo(function NcrCreateModal({
@@ -106,10 +112,23 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
   onSubmit,
   failedTestForNcr,
   initialDescription,
+  projectId,
 }: NcrCreateModalProps) {
   const [creatingNcr, setCreatingNcr] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [responsibleParty, setResponsibleParty] = useState<ResponsibleParty>({
+    type: 'unassigned',
+  });
   const creatingNcrRef = useRef(false);
+
+  const {
+    users: responsibleUsers,
+    subcontractors: responsibleSubcontractors,
+    subcontractorsUnavailable: responsibleSubcontractorsUnavailable,
+    loading: responsibleLoading,
+    error: responsibleError,
+    retry: retryResponsibleOptions,
+  } = useResponsiblePartyOptions(projectId, isOpen);
 
   const {
     register,
@@ -138,6 +157,7 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
       severity: INITIAL_NCR_FORM_DATA.severity,
       specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
     });
+    setResponsibleParty({ type: 'unassigned' });
     setFormError(null);
   }, [initialDescription, reset]);
 
@@ -148,6 +168,7 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
       severity: INITIAL_NCR_FORM_DATA.severity,
       specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
     });
+    setResponsibleParty({ type: 'unassigned' });
     setFormError(null);
     onClose();
   }, [onClose, reset]);
@@ -161,13 +182,28 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
       setFormError(null);
 
       try {
-        await onSubmit(data as NcrFormData);
+        const responsibleFields: Pick<
+          NcrFormData,
+          'responsibleUserId' | 'responsibleSubcontractorId'
+        > = {};
+
+        if (responsibleParty.type === 'user') {
+          responsibleFields.responsibleUserId = responsibleParty.userId;
+        } else if (responsibleParty.type === 'subcontractor') {
+          responsibleFields.responsibleSubcontractorId = responsibleParty.subcontractorId;
+        }
+
+        await onSubmit({
+          ...data,
+          ...responsibleFields,
+        });
         reset({
           description: '',
           category: INITIAL_NCR_FORM_DATA.category,
           severity: INITIAL_NCR_FORM_DATA.severity,
           specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
         });
+        setResponsibleParty({ type: 'unassigned' });
       } catch (err) {
         setFormError(extractErrorMessage(err, 'Failed to raise NCR.'));
       } finally {
@@ -175,7 +211,7 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
         setCreatingNcr(false);
       }
     },
-    [onSubmit, reset],
+    [onSubmit, reset, responsibleParty],
   );
 
   if (!isOpen) return null;
@@ -256,6 +292,18 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
                 placeholder="e.g., MRTS05, AS 1289"
               />
             </div>
+
+            <ResponsiblePartyPicker
+              id="test-ncr-responsible-party"
+              value={responsibleParty}
+              onChange={setResponsibleParty}
+              users={responsibleUsers}
+              subcontractors={responsibleSubcontractors}
+              subcontractorsUnavailable={responsibleSubcontractorsUnavailable}
+              loading={responsibleLoading}
+              error={responsibleError}
+              onRetry={retryResponsibleOptions}
+            />
 
             {failedTestForNcr?.lotId && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">

@@ -48,10 +48,46 @@ vi.mock('@/components/foreman/sheets/BottomSheet', () => ({
 
 // ── Stub heavy modals so we don't need their full dependency graphs ──
 vi.mock('./components/CreateTestModal', () => ({
-  CreateTestModal: ({ isOpen }: { isOpen: boolean }) =>
+  CreateTestModal: ({
+    isOpen,
+    onSuccess,
+  }: {
+    isOpen: boolean;
+    onSuccess: (formData: Record<string, string>) => Promise<void>;
+  }) =>
     isOpen ? (
       <div role="dialog" aria-label="Add Test Result">
         create-test-modal-stub
+        <button
+          type="button"
+          onClick={() =>
+            void onSuccess({
+              testType: 'Density Ratio',
+              testMethod: '',
+              testRequestNumber: '',
+              laboratoryName: '',
+              laboratoryReportNumber: '',
+              nataSiteNumber: '',
+              sampleLocation: '',
+              sampleDepth: '',
+              materialType: '',
+              layerLift: '',
+              sampledBy: '',
+              sampleDate: '',
+              testDate: '',
+              resultDate: '',
+              lotId: 'lot-1',
+              resultValue: '91',
+              resultUnit: '%',
+              specificationMin: '95',
+              specificationMax: '',
+              specificationRef: 'MRTS05',
+              passFail: 'fail',
+            })
+          }
+        >
+          Create failing test
+        </button>
       </div>
     ) : null,
 }));
@@ -96,8 +132,48 @@ vi.mock('./components/BatchUploadModal', () => ({
 
 vi.mock('./components/RejectTestModal', () => ({ RejectTestModal: () => null }));
 vi.mock('./components/NcrModals', () => ({
-  NcrPromptModal: () => null,
-  NcrCreateModal: () => null,
+  NcrPromptModal: ({ isOpen, onRaiseNcr }: { isOpen: boolean; onRaiseNcr: () => void }) =>
+    isOpen ? (
+      <div role="dialog" aria-label="NCR prompt">
+        <button type="button" onClick={onRaiseNcr}>
+          Raise prompted NCR
+        </button>
+      </div>
+    ) : null,
+  NcrCreateModal: ({
+    isOpen,
+    onSubmit,
+    projectId,
+  }: {
+    isOpen: boolean;
+    onSubmit: (formData: {
+      description: string;
+      category: string;
+      severity: string;
+      specificationReference: string;
+      responsibleSubcontractorId?: string;
+    }) => Promise<void>;
+    projectId?: string;
+  }) =>
+    isOpen ? (
+      <div role="dialog" aria-label="Raise NCR from Test Failure">
+        <span data-testid="ncr-create-project-id">{projectId}</span>
+        <button
+          type="button"
+          onClick={() =>
+            void onSubmit({
+              description: 'Failed Density Ratio result of 91',
+              category: 'materials',
+              severity: 'minor',
+              specificationReference: 'MRTS05',
+              responsibleSubcontractorId: 'sub-1',
+            })
+          }
+        >
+          Submit assigned NCR
+        </button>
+      </div>
+    ) : null,
 }));
 
 // ── Stub table / mobile list so they don't need DOM table environment ──
@@ -263,6 +339,64 @@ describe('TestResultsPage header — desktop (unchanged)', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claimReadiness(PROJECT_ID) });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lot('lot-1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lotReadiness('lot-1') });
+  });
+
+  it('passes responsible-party assignment into NCRs raised from failed tests', async () => {
+    const user = userEvent.setup();
+    apiFetchMock.mockImplementation((url: string, options?: { method?: string; body?: string }) => {
+      if (url === '/api/test-results' && options?.method === 'POST') {
+        return Promise.resolve({ testResult: { id: 'test-new' } });
+      }
+      if (url === '/api/ncrs') {
+        return Promise.resolve({ ncr: { ncrNumber: 'NCR-001' } });
+      }
+      if (url.includes('/api/test-results')) {
+        return Promise.resolve({
+          testResults: [],
+          pagination: { hasNextPage: false, totalPages: 1 },
+        });
+      }
+      if (url.includes('/api/lots')) {
+        return Promise.resolve({ lots: [{ id: 'lot-1', lotNumber: 'L-001' }] });
+      }
+      if (url.includes('/api/projects/')) {
+        return Promise.resolve({ project: { id: PROJECT_ID, state: 'NSW' } });
+      }
+      return Promise.resolve({});
+    });
+
+    renderPage();
+    await waitForPageLoad();
+
+    await user.click(screen.getByRole('button', { name: 'Add Test Result' }));
+    await user.click(screen.getByRole('button', { name: 'Create failing test' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'NCR prompt' })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: 'Raise prompted NCR' }));
+
+    expect(screen.getByTestId('ncr-create-project-id')).toHaveTextContent(PROJECT_ID);
+
+    await user.click(screen.getByRole('button', { name: 'Submit assigned NCR' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/ncrs')).toBe(true);
+    });
+    const ncrCall = apiFetchMock.mock.calls.find(([url]) => url === '/api/ncrs');
+    const body = JSON.parse(String((ncrCall?.[1] as { body?: string })?.body));
+
+    expect(body).toMatchObject({
+      projectId: PROJECT_ID,
+      description: 'Failed Density Ratio result of 91',
+      category: 'materials',
+      severity: 'minor',
+      specificationReference: 'MRTS05',
+      responsibleSubcontractorId: 'sub-1',
+      lotIds: ['lot-1'],
+      linkedTestResultId: 'test-new',
+    });
+    expect(body).not.toHaveProperty('responsibleUserId');
   });
 });
 
