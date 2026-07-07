@@ -1,3 +1,80 @@
+# UX audit Batch 3 (LEAN) — Jay-approved scope 2026-07-07/08 — COMPLETE
+
+Jay decisions: offline dockets = NO (block stays deliberate); all polish
+items PARKED (Create-Lot diet, diary order, claims vocab, autosave,
+GlobalSearch, toasts, pull-to-refresh, hold-point in-shell). Approved =
+only the lies/data-loss/dead-ends. Builds on codex gpt-5.5 xhigh.
+Scope note: "subbie NCR list unreachable" was STALE (post-#1325 it lives
+in the lot hub); replaced by the actualRole roster-gate fix found by the
+investigator.
+
+- [x] PR A #1355 merged `291cab01` — project-switcher module-only rewrite
+      (buildProjectSwitchPath helper + tests), dashboard tiles → plain
+      /projects (params were never read), subbie non-admin setup hero
+      "ask your <company> admin" + CompanyScreen footer, roster gates on
+      actualRole (CompanyScreen + MyCompanyPage)
+- [x] PR B #1356 merged `934ecd7a` — honest submit modal (evidence
+      package PDF offered, Mark-as-submitted decoupled, 5-row CSV
+      deleted, submissionOptions.ts removed), DisputeReadBack; guardrail
+      'only implemented methods' REPOINTED to SubmitMethod type + no-send
+      copy; claims E2E smoke rewritten to the new flow (1 CI round-trip)
+- [x] PR C #1357 merged `8d9e8ac8` — from-test NCR modal gets
+      ResponsiblePartyPicker; POST body carries responsible ids
+- [x] PR D #1358 merged `1b9ed197` — DELETE /api/itp/instances/:id,
+      block-never-cascade guard (completions/holdpoints/testresults,
+      lot-scoped; hold points have NO FK to instance — guard is the
+      boundary), transaction also nulls lot.itpTemplateId; frontend
+      Unassign w/ ConfirmDialog, clears local itpInstance state
+- [x] PR E #1359 merged `f01e652e` — /readiness embeds conformStatus; LotDetailPage
+      single polled query; conform-status imperative fetch deleted; QMS
+      N/A-hold-point checklist row; post-merge reconcile with #1358
+      (unassign refetch collapsed into readiness refetch)
+
+Codex-lane gotchas added this run: cmd-wrapper launch HANGS (interactive
+cmd banner, codex parked on stdin) — launch via plain Git Bash with
+</dev/null and absolute-path redirect; killing wrapper tasks can leave a
+codex zombie whose child shells all die 0xC0000142 — Stop-Process codex
+and relaunch; background watchers can be killed externally — poll gh in
+foreground instead.
+
+# Codex lane (gpt-5.5 xhigh) — deferred follow-ups — COMPLETE 2026-07-07
+
+Jay directive: opus finished Batch 2; remaining builds on codex gpt-5.5
+xhigh (recipe + gotchas in memory feedback_use_cheaper_subagent_models).
+Pipeline: I branch → codex edits tree → I verify (tests/tsc/prettier) →
+I commit/push/PR/CI/merge.
+
+- [x] #1351 merged `e3b383f4` — subbie-shell photo-required guard
+      (mirror of #1345)
+- [x] #1352 merged `9a69b0c9` — test-cert verifiedBy/At + docket
+      submittedBy/approvedBy payload fills (blank PDF blocks fixed)
+- [x] #1353 merged `028e08d3` — mobile "Link to ITP item" card action
+- [x] #1354 merged `7e02a91f` — cert-review ITP-item picker (single +
+      batch confirmation)
+
+Deferred follow-up queue now EMPTY. Remaining work = UX audit Batch 3
+judgment items (docs/research/ux-audit-2026-07-06.md) — need Jay
+decisions, offline dockets first.
+
+# UX audit Batch 2 — daily grind — COMPLETE 2026-07-07
+
+- [x] PR 1 #1348 merged `0153b140` — bulk docket approval, save-and-add-
+      another crew entry, ONE formatAud (cents; CSV full cents), draft-
+      docket visibility (subbie nudge + office count)
+- [x] PR 2 #1349 merged `ab1ea01a` — conform CTA at readiness panel,
+      lot↔NCR context both ways, buildProjectEntityLink deep links for
+      NCR/claim/HP/test notifications, internal NCR emails
+      (notifyInternalNcrUser); one CI round-trip: productionReadiness
+      guard repointed (5db95404) to the new link helper, intent kept
+- [x] PR 3 #1350 merged `089a1079` — SyncChip honest Offline state +
+      tappable failed-retry, photo grid Retry real button + error-state
+      prose, diary edit (/m/diary/work/:type?edit=) + two-tap delete
+      (new useDiaryEntryEdit hook)
+
+NEXT builds go to Codex gpt-5.5 xhigh per Jay (2026-07-07): batch 3
+clear-spec items + deferred follow-ups; judgment items still need Jay
+decisions first.
+
 # UX audit Batch 1 — data honesty — COMPLETE 2026-07-07
 
 From the 4-agent UX sweep (48 findings; batches 2-3 pending Jay).
