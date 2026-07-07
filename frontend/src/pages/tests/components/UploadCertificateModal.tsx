@@ -12,6 +12,7 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
 import { recomputeReviewPassFail } from '../certificateReview';
 import type { FailedTestNcrInput } from '../failedTestNcr';
+import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
 
 interface UploadCertificateModalProps {
   isOpen: boolean;
@@ -31,6 +32,11 @@ interface SuggestedLot {
   matchScore: number;
 }
 
+const buildExtractionCorrections = (data: Record<string, string>): Record<string, string> => {
+  const { itpChecklistItemId, ...rest } = data;
+  return itpChecklistItemId ? { ...rest, itpChecklistItemId } : rest;
+};
+
 export const UploadCertificateModal = React.memo(function UploadCertificateModal({
   isOpen,
   onClose,
@@ -47,6 +53,9 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
   const [suggestedLots, setSuggestedLots] = useState<SuggestedLot[]>([]);
   const [confirmingExtraction, setConfirmingExtraction] = useState(false);
   const pdfUrlRef = useRef<string | null>(null);
+  const selectedLotId = reviewFormData.lotId || null;
+  const { items: itpTestItems } = useLotItpTestItems(selectedLotId);
+  const showItpItemPicker = Boolean(selectedLotId) && itpTestItems.length > 0;
 
   const updatePdfUrl = useCallback((nextUrl: string | null) => {
     if (pdfUrlRef.current) {
@@ -176,7 +185,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
         `/api/test-results/${encodeURIComponent(extractedTestId)}/confirm-extraction`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ corrections: reviewFormData }),
+          body: JSON.stringify({ corrections: buildExtractionCorrections(reviewFormData) }),
         },
       );
 
@@ -436,7 +445,11 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         id="upload-lot-id"
                         value={reviewFormData.lotId || ''}
                         onChange={(e) =>
-                          setReviewFormData({ ...reviewFormData, lotId: e.target.value })
+                          setReviewFormData({
+                            ...reviewFormData,
+                            lotId: e.target.value,
+                            itpChecklistItemId: '',
+                          })
                         }
                       >
                         <option value="">No lot</option>
@@ -448,6 +461,32 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                       </NativeSelect>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Matched from the extracted sample location. Confirm or clear before saving.
+                      </p>
+                    </div>
+                  )}
+                  {showItpItemPicker && (
+                    <div>
+                      <Label htmlFor="upload-itp-checklist-item-id">Satisfies ITP item</Label>
+                      <NativeSelect
+                        id="upload-itp-checklist-item-id"
+                        value={reviewFormData.itpChecklistItemId || ''}
+                        onChange={(e) =>
+                          setReviewFormData({
+                            ...reviewFormData,
+                            itpChecklistItemId: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">None</option>
+                        {itpTestItems.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.description}
+                            {item.testType ? ` — ${item.testType}` : ''}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Optional link to the checklist requirement this certificate satisfies.
                       </p>
                     </div>
                   )}

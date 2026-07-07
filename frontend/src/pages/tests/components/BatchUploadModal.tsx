@@ -12,6 +12,7 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
 import { recomputeReviewPassFail } from '../certificateReview';
 import type { FailedTestNcrInput } from '../failedTestNcr';
+import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
 
 interface BatchUploadModalProps {
   isOpen: boolean;
@@ -57,6 +58,11 @@ interface BatchUploadResponse {
   message?: string;
 }
 
+const buildBatchCorrections = (data: Record<string, string>): Record<string, string> => {
+  const { itpChecklistItemId, ...rest } = data;
+  return itpChecklistItemId ? { ...rest, itpChecklistItemId } : rest;
+};
+
 export const BatchUploadModal = React.memo(function BatchUploadModal({
   isOpen,
   onClose,
@@ -75,6 +81,18 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
     {},
   );
   const [batchConfirming, setBatchConfirming] = useState(false);
+  const selectedBatchUploadResult =
+    selectedBatchResult !== null ? batchResults[selectedBatchResult] : null;
+  const selectedBatchTestId =
+    selectedBatchUploadResult?.success && selectedBatchUploadResult.testResult
+      ? selectedBatchUploadResult.testResult.id
+      : null;
+  const selectedBatchLotId = selectedBatchTestId
+    ? batchReviewData[selectedBatchTestId]?.lotId || null
+    : null;
+  const { items: selectedLotItpTestItems } = useLotItpTestItems(selectedBatchLotId);
+  const showSelectedItpItemPicker =
+    Boolean(selectedBatchLotId) && selectedLotItpTestItems.length > 0;
 
   const resetState = useCallback(() => {
     setBatchFiles([]);
@@ -190,7 +208,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         )
         .map((r) => ({
           testResultId: r.testResult.id,
-          corrections: batchReviewData[r.testResult.id] || {},
+          corrections: buildBatchCorrections(batchReviewData[r.testResult.id] || {}),
         }));
 
       await apiFetch('/api/test-results/batch-confirm', {
@@ -407,6 +425,9 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                       const updateField = (field: string, value: string) => {
                         setBatchReviewData((prev) => {
                           const nextRow = { ...prev[testId], [field]: value };
+                          if (field === 'lotId') {
+                            nextRow.itpChecklistItemId = '';
+                          }
                           // H13: recompute pass/fail when the value or spec changes.
                           const recomputed = [
                             'resultValue',
@@ -501,6 +522,34 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                               </NativeSelect>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 Matched from the extracted sample location.
+                              </p>
+                            </div>
+                          )}
+                          {showSelectedItpItemPicker && (
+                            <div>
+                              <Label
+                                className="text-xs"
+                                htmlFor={`batch-itp-checklist-item-${testId}`}
+                              >
+                                Satisfies ITP item
+                              </Label>
+                              <NativeSelect
+                                id={`batch-itp-checklist-item-${testId}`}
+                                value={formData.itpChecklistItemId || ''}
+                                onChange={(e) => updateField('itpChecklistItemId', e.target.value)}
+                                className="h-8 text-sm"
+                              >
+                                <option value="">None</option>
+                                {selectedLotItpTestItems.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.description}
+                                    {item.testType ? ` — ${item.testType}` : ''}
+                                  </option>
+                                ))}
+                              </NativeSelect>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Optional link to the checklist requirement this certificate
+                                satisfies.
                               </p>
                             </div>
                           )}
