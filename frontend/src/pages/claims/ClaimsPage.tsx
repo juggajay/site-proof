@@ -239,28 +239,11 @@ export function ClaimsPage() {
         invalidateClaimAdjacentProjectCaches();
         setShowSubmitModal(null);
 
-        try {
-          downloadCsv(`claim-${claim.claimNumber}.csv`, [
-            ['Claim Number', claim.claimNumber],
-            ['Period', `${claim.periodStart} to ${claim.periodEnd}`],
-            ['Total Amount', `$${claim.totalClaimedAmount.toLocaleString('en-AU')}`],
-            ['Lots', claim.lotCount],
-            ['Status', 'Submitted'],
-          ]);
-          toast({
-            title: 'Claim submitted',
-            description: `Claim ${claim.claimNumber} was downloaded and marked as submitted.`,
-            variant: 'success',
-          });
-        } catch (downloadError) {
-          logError('Error downloading submitted claim summary:', downloadError);
-          toast({
-            title: 'Claim submitted',
-            description:
-              'The claim was marked as submitted, but the summary CSV could not be downloaded.',
-            variant: 'warning',
-          });
-        }
+        toast({
+          title: 'Claim submitted',
+          description: `Claim ${claim.claimNumber} marked as submitted.`,
+          variant: 'success',
+        });
       } catch (error) {
         logError('Error submitting claim:', error);
         toast({
@@ -634,7 +617,10 @@ export function ClaimsPage() {
         onExportCumulativeData={handleExportCumulativeData}
         onExportMonthlyData={handleExportMonthlyData}
         onCreateClaim={() => setShowCreateModal(true)}
-        onSubmitClaim={setShowSubmitModal}
+        onSubmitClaim={(claimId) => {
+          setEvidencePackageError(null);
+          setShowSubmitModal(claimId);
+        }}
         onDeleteDraftClaim={setShowDeleteDraftModal}
         onDisputeClaim={setShowDisputeModal}
         onCertifyClaim={setShowCertificationModal}
@@ -657,8 +643,14 @@ export function ClaimsPage() {
       {submitClaim && (
         <SubmitClaimModal
           claim={submitClaim}
-          onClose={() => setShowSubmitModal(null)}
+          isGeneratingEvidence={generatingEvidence === submitClaim.id}
+          evidencePackageError={evidencePackageError}
+          onClose={() => {
+            setEvidencePackageError(null);
+            setShowSubmitModal(null);
+          }}
           onSubmitted={handleSubmitClaim}
+          onGenerateEvidencePackage={handleGenerateEvidencePackage}
         />
       )}
       {deleteDraftClaim && (
