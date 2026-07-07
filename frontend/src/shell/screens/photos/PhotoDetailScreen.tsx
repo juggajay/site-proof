@@ -37,10 +37,17 @@ const LOT_SEARCH_THRESHOLD = 8;
 
 export function PhotoDetailScreen() {
   const navigate = useNavigate();
-  const { isOnline } = useOfflineStatus();
+  const { isOnline, retryFailedSyncs, isSyncing } = useOfflineStatus();
   const documentId = useShellPhotoParam();
   const lotId = useShellPhotoLotParam();
   const { projectId, items, loading, refetch } = usePhotosShellContext();
+
+  // Revive a failed upload: reset its attempts so the app-root offline worker
+  // flushes it, then refetch so the pending state updates.
+  const handleRetryUpload = async () => {
+    await retryFailedSyncs();
+    await refetch();
+  };
 
   const item = useMemo(() => items.find((p) => p.id === documentId) ?? null, [items, documentId]);
 
@@ -274,7 +281,28 @@ export function PhotoDetailScreen() {
       )}
 
       {/* State note for the foreman */}
-      {isPending ? (
+      {isPending && item.syncState === 'error' ? (
+        <div className="shell-notice shell-notice-bad flex-col items-start gap-2">
+          <span className="text-[13px] leading-relaxed">
+            Upload failed — this photo hasn’t reached the server yet. Tap retry (you’ll need
+            signal).
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleRetryUpload()}
+            disabled={isSyncing}
+            className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-destructive px-3 text-[13px] font-semibold text-white touch-manipulation disabled:opacity-70"
+          >
+            {isSyncing ? (
+              <>
+                <Loader2 size={14} className="animate-spin" aria-hidden /> Retrying…
+              </>
+            ) : (
+              'Retry upload'
+            )}
+          </button>
+        </div>
+      ) : isPending ? (
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           This photo is still uploading from your phone. It’ll be filable once it lands — leave the
           app open with signal and it’ll sync on its own.

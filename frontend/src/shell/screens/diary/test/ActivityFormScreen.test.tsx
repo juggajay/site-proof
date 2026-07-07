@@ -35,7 +35,12 @@ vi.mock('../useDiaryShellData', () => ({
     diary: null,
     loading: false,
     lots: [],
-    handlers: { activeLotId: null, addActivityFromSheet: mockAddActivity },
+    timeline: [],
+    handlers: {
+      activeLotId: null,
+      addActivityFromSheet: mockAddActivity,
+      setEditingEntry: vi.fn(),
+    },
   }),
 }));
 

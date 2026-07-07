@@ -8,12 +8,13 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
+import { useDiaryEntryEdit } from './useDiaryEntryEdit';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import {
   readSheetDraft,
@@ -30,10 +31,12 @@ const EVENT_TYPES = ['Visitor', 'Safety', 'Instruction', 'Variation', 'Other'];
 export function EventFormScreen() {
   const navigate = useNavigate();
   const { projectId } = useEffectiveProjectId();
-  const { lots, handlers } = useDiaryShellData();
+  const { lots, timeline, handlers } = useDiaryShellData();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
 
   const todayKey = formatDateKey();
-  const draftKey = projectId ? sheetDraftKey(projectId, todayKey, 'event') : undefined;
+  const draftKey = projectId && !editId ? sheetDraftKey(projectId, todayKey, 'event') : undefined;
   const defaultLotId = handlers.activeLotId;
 
   const [restoredDraft] = useState(() => readSheetDraft(draftKey));
@@ -51,6 +54,24 @@ export function EventFormScreen() {
     restored: restoredDraft,
     fields: { eventType, description, notes, lotId },
     baseline: { eventType: '', description: '', notes: '', lotId: defaultLotId || '' },
+  });
+
+  useDiaryEntryEdit({
+    editId,
+    type: 'event',
+    timeline,
+    setEditingEntry: handlers.setEditingEntry,
+    seed: (e) => {
+      // Stored lowercase ('visitor'); match back to the capitalized chip so it
+      // highlights (save re-lowercases it).
+      setEventType(
+        EVENT_TYPES.find((t) => t.toLowerCase() === (e.data.eventType ?? '').toLowerCase()) ?? '',
+      );
+      setDescription(e.description);
+      setNotes(e.data.notes ?? '');
+      setLotId(e.lot?.id ?? '');
+      setShowMore(Boolean(e.data.notes || e.lot));
+    },
   });
 
   const backPath = withProjectQuery('/m/diary/work', projectId);
@@ -89,7 +110,7 @@ export function EventFormScreen() {
   return (
     <ShellScreen
       variant="inner"
-      title="Add Event"
+      title={editId ? 'Edit Event' : 'Add Event'}
       parent={backPath}
       sub={<span className="text-muted-foreground">Auto-saves as you type</span>}
       bottom={

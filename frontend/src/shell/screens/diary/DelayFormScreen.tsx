@@ -8,12 +8,13 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
+import { useDiaryEntryEdit } from './useDiaryEntryEdit';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import {
   readSheetDraft,
@@ -34,10 +35,12 @@ const DELAY_TYPES = ['Weather', 'Equipment', 'Material', 'Subcontractor', 'Safet
 export function DelayFormScreen() {
   const navigate = useNavigate();
   const { projectId } = useEffectiveProjectId();
-  const { lots, handlers } = useDiaryShellData();
+  const { lots, timeline, handlers } = useDiaryShellData();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
 
   const todayKey = formatDateKey();
-  const draftKey = projectId ? sheetDraftKey(projectId, todayKey, 'delay') : undefined;
+  const draftKey = projectId && !editId ? sheetDraftKey(projectId, todayKey, 'delay') : undefined;
   const defaultLotId = handlers.activeLotId;
 
   const [restoredDraft] = useState(() => readSheetDraft(draftKey));
@@ -66,6 +69,25 @@ export function DelayFormScreen() {
     },
   });
   const hoursError = getOptionalDiaryHoursError(durationHours);
+
+  useDiaryEntryEdit({
+    editId,
+    type: 'delay',
+    timeline,
+    setEditingEntry: handlers.setEditingEntry,
+    seed: (e) => {
+      setDelayType(
+        DELAY_TYPES.find((t) => t.toLowerCase() === (e.data.delayType ?? '').toLowerCase()) ??
+          e.data.delayType ??
+          '',
+      );
+      setDescription(e.description);
+      setDurationHours(e.data.durationHours != null ? String(e.data.durationHours) : '');
+      setImpact(e.data.impact ?? '');
+      setLotId(e.lot?.id ?? '');
+      setShowMore(Boolean(e.data.durationHours || e.data.impact));
+    },
+  });
 
   const backPath = withProjectQuery('/m/diary/work', projectId);
 
@@ -103,7 +125,7 @@ export function DelayFormScreen() {
   return (
     <ShellScreen
       variant="inner"
-      title="Add Delay"
+      title={editId ? 'Edit Delay' : 'Add Delay'}
       parent={backPath}
       sub={<span className="text-muted-foreground">Auto-saves as you type</span>}
       bottom={

@@ -9,8 +9,9 @@
  * Reuses: timeline entries, useDiaryMobileHandlers (delete + edit)
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, Clock, Truck, Flag, ChevronRight } from 'lucide-react';
+import { Wrench, Clock, Truck, Flag, ChevronRight, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
@@ -43,6 +44,14 @@ export function WorkScreen() {
   const navToForm = (type: string) => {
     if (isSubmitted) return;
     navigate(withProjectQuery(`/m/diary/work/${type}`, projectId));
+  };
+
+  // Edit opens the matching form pre-filled (?edit=<id>); the form seeds from the
+  // entry and the existing save path PATCHes it. Replaces the old no-op that set
+  // sheet state nothing in the shell renders.
+  const navToEdit = (entry: TimelineEntry) => {
+    if (isSubmitted) return;
+    navigate(withProjectQuery(`/m/diary/work/${entry.type}`, projectId, { edit: entry.id }));
   };
 
   const navToReview = () => {
@@ -115,7 +124,8 @@ export function WorkScreen() {
               key={entry.id}
               entry={entry}
               isSubmitted={isSubmitted}
-              onEdit={(e) => handlers.handleEditEntry(e)}
+              onEdit={navToEdit}
+              onDelete={(e) => void handlers.handleDeleteEntry(e)}
             />
           ))}
         </div>
@@ -144,9 +154,10 @@ interface WorkEntryProps {
   entry: TimelineEntry;
   isSubmitted: boolean;
   onEdit: (entry: TimelineEntry) => void;
+  onDelete: (entry: TimelineEntry) => void;
 }
 
-function WorkEntry({ entry, isSubmitted, onEdit }: WorkEntryProps) {
+function WorkEntry({ entry, isSubmitted, onEdit, onDelete }: WorkEntryProps) {
   const typeLabel = TYPE_LABELS[entry.type] ?? entry.type;
   const meta = [
     entry.lot ? `Lot ${entry.lot.lotNumber}` : null,
@@ -157,34 +168,77 @@ function WorkEntry({ entry, isSubmitted, onEdit }: WorkEntryProps) {
     .filter(Boolean)
     .join(' · ');
 
+  // Two-tap delete (no blocking window.confirm, matching the docket shell): first
+  // tap arms "Remove?", a second within 4s deletes; anything else disarms.
+  const [armed, setArmed] = useState(false);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (armTimer.current) clearTimeout(armTimer.current);
+    },
+    [],
+  );
+  const handleDeleteTap = () => {
+    if (armed) {
+      if (armTimer.current) clearTimeout(armTimer.current);
+      setArmed(false);
+      onDelete(entry);
+      return;
+    }
+    setArmed(true);
+    armTimer.current = setTimeout(() => setArmed(false), 4000);
+  };
+
   return (
-    <button
-      type="button"
-      disabled={isSubmitted}
-      onClick={() => !isSubmitted && onEdit(entry)}
-      aria-label={`${typeLabel}: ${entry.description}${meta ? ` — ${meta}` : ''}`}
+    <div
       className={cn(
-        'flex w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3',
-        'min-h-[52px] text-left shadow-sm touch-manipulation',
-        'transition-transform duration-150',
-        !isSubmitted && 'active:scale-[.98]',
+        'flex items-center gap-1 rounded-xl border border-border bg-card px-1 shadow-sm',
         isSubmitted && 'opacity-60',
       )}
     >
-      <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-semibold uppercase tracking-[.07em] text-muted-foreground">
-          {typeLabel}
+      <button
+        type="button"
+        disabled={isSubmitted}
+        onClick={() => !isSubmitted && onEdit(entry)}
+        aria-label={`Edit ${typeLabel}: ${entry.description}${meta ? ` — ${meta}` : ''}`}
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-3',
+          'min-h-[52px] text-left touch-manipulation transition-transform duration-150',
+          !isSubmitted && 'active:scale-[.98]',
+        )}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-semibold uppercase tracking-[.07em] text-muted-foreground">
+            {typeLabel}
+          </span>
+          <span className="block text-[15px] font-semibold text-foreground">
+            {entry.description}
+          </span>
+          {meta && <span className="mt-0.5 block text-[13px] text-muted-foreground">{meta}</span>}
         </span>
-        <span className="block text-[15px] font-semibold text-foreground">{entry.description}</span>
-        {meta && <span className="mt-0.5 block text-[13px] text-muted-foreground">{meta}</span>}
-      </span>
+        {!isSubmitted && (
+          <ChevronRight
+            size={16}
+            className="flex-shrink-0 text-muted-foreground/50"
+            aria-hidden="true"
+          />
+        )}
+      </button>
       {!isSubmitted && (
-        <ChevronRight
-          size={16}
-          className="flex-shrink-0 text-muted-foreground/50"
-          aria-hidden="true"
-        />
+        <button
+          type="button"
+          onClick={handleDeleteTap}
+          aria-label={armed ? `Confirm delete ${typeLabel}` : `Delete ${typeLabel}`}
+          className={cn(
+            'flex min-h-[44px] shrink-0 items-center justify-center rounded-lg active:bg-secondary',
+            armed
+              ? 'px-2 text-[12px] font-semibold text-destructive'
+              : 'w-11 text-muted-foreground',
+          )}
+        >
+          {armed ? 'Remove?' : <Trash2 size={17} aria-hidden="true" />}
+        </button>
       )}
-    </button>
+    </div>
   );
 }

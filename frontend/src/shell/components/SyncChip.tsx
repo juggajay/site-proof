@@ -23,9 +23,9 @@ function syncChipLabel(state: SyncState, pendingSyncCount: number, failedSyncCou
       return 'Syncing…';
     case 'failed':
       return `${failedSyncCount} failed`;
+    case 'offline':
+      return 'Offline';
     case 'waiting':
-      // M58: status-only — no actionable '↑'. The OfflineIndicator pill is the
-      // single interactive sync surface; the chip only reports state.
       return `${pendingSyncCount} waiting`;
   }
 }
@@ -37,44 +37,67 @@ function syncChipAriaLabel(state: SyncState, pendingSyncCount: number, failedSyn
     case 'syncing':
       return 'Syncing changes';
     case 'failed':
-      return `${failedSyncCount} change${failedSyncCount === 1 ? '' : 's'} failed to sync`;
+      return `${failedSyncCount} change${failedSyncCount === 1 ? '' : 's'} failed to sync. Tap to retry.`;
+    case 'offline':
+      return 'Offline. Changes will sync when you reconnect.';
     case 'waiting':
-      return `${pendingSyncCount} change${pendingSyncCount === 1 ? '' : 's'} waiting to sync`;
+      return `${pendingSyncCount} change${pendingSyncCount === 1 ? '' : 's'} waiting to sync. Tap to retry.`;
   }
 }
 
 function syncChipToneClass(state: SyncState) {
   if (state === 'failed') return 'text-destructive';
   if (state === 'waiting' || state === 'syncing') return 'text-warning';
+  if (state === 'offline') return 'text-muted-foreground';
   return 'text-success';
 }
 
 export function SyncChip() {
-  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing } = useOfflineStatus();
+  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing, retryFailedSyncs } =
+    useOfflineStatus();
   const state = deriveSyncState(isOnline, pendingSyncCount, isSyncing, failedSyncCount);
   const label = syncChipLabel(state, pendingSyncCount, failedSyncCount);
+  const ariaLabel = syncChipAriaLabel(state, pendingSyncCount, failedSyncCount);
+
+  const baseClass = [
+    'inline-flex items-center gap-1.5 whitespace-nowrap',
+    'rounded-full px-[11px] py-[7px]',
+    'border border-border bg-card shadow-sm',
+    'text-[12px] font-semibold leading-none',
+    syncChipToneClass(state),
+  ].join(' ');
+
+  const dot = (
+    <span
+      aria-hidden="true"
+      className={[
+        'h-[7px] w-[7px] rounded-full bg-current',
+        state === 'syncing' ? 'motion-safe:animate-pulse' : '',
+      ].join(' ')}
+    />
+  );
+
+  // Only the failed state is actionable: tapping revives dead-lettered items (the
+  // app-root offline worker then flushes them), mirroring the floating pill's
+  // Retry button. Other states stay a plain status indicator — no false button
+  // affordance for "all saved" / "waiting" / "offline".
+  if (state === 'failed') {
+    return (
+      <button
+        type="button"
+        onClick={() => void retryFailedSyncs()}
+        aria-label={ariaLabel}
+        className={`${baseClass} cursor-pointer`}
+      >
+        {dot}
+        {label}
+      </button>
+    );
+  }
 
   return (
-    <span
-      role="status"
-      aria-label={syncChipAriaLabel(state, pendingSyncCount, failedSyncCount)}
-      className={[
-        'inline-flex items-center gap-1.5 whitespace-nowrap',
-        'rounded-full px-[11px] py-[7px]',
-        'border border-border bg-card shadow-sm',
-        'text-[12px] font-semibold leading-none',
-        syncChipToneClass(state),
-      ].join(' ')}
-    >
-      {/* Status dot */}
-      <span
-        aria-hidden="true"
-        className={[
-          'h-[7px] w-[7px] rounded-full bg-current',
-          state === 'syncing' ? 'motion-safe:animate-pulse' : '',
-        ].join(' ')}
-      />
-
+    <span role="status" aria-label={ariaLabel} className={baseClass}>
+      {dot}
       {label}
     </span>
   );
