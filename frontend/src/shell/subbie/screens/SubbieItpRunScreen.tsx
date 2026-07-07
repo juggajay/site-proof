@@ -113,6 +113,9 @@ export function SubbieItpRunScreen() {
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Confirm-before-pass when a photo-required check has no photo yet, matching
+  // the foreman run so a missing evidence pass is explicit.
+  const [evidencePrompt, setEvidencePrompt] = useState(false);
 
   // Land on the first incomplete item once the instance loads.
   const landedRef = useRef(false);
@@ -160,6 +163,7 @@ export function SubbieItpRunScreen() {
     setReasonMode(null);
     setReason('');
     setReasonError(null);
+    setEvidencePrompt(false);
     setCurrentIndex(index);
   };
 
@@ -191,14 +195,25 @@ export function SubbieItpRunScreen() {
     setCurrentIndex(next);
   };
 
-  const handlePass = async () => {
-    if (!currentItem || submitting) return;
-    if (awaitingVerification || superintendentSignoffOnly) return;
-    if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
+  const doPass = async () => {
+    if (!currentItem) return;
+    setEvidencePrompt(false);
     setSubmitting(true);
     const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
     setSubmitting(false);
     if (ok) advance(`Check ${progress.checkNumber} passed — saved`);
+  };
+
+  const handlePass = () => {
+    if (!currentItem || submitting) return;
+    if (awaitingVerification || superintendentSignoffOnly) return;
+    if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
+    const attachedPhotos = currentCompletion?.attachments?.length ?? 0;
+    if (currentItem.evidenceRequired === 'photo' && attachedPhotos === 0) {
+      setEvidencePrompt(true);
+      return;
+    }
+    void doPass();
   };
 
   const handleSubmitReason = async () => {
@@ -228,7 +243,10 @@ export function SubbieItpRunScreen() {
 
   const onPhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && currentItem && !superintendentSignoffOnly) void run.addPhoto(currentItem.id, file);
+    if (file && currentItem && !superintendentSignoffOnly) {
+      setEvidencePrompt(false);
+      void run.addPhoto(currentItem.id, file);
+    }
     e.target.value = '';
   };
 
@@ -481,6 +499,42 @@ export function SubbieItpRunScreen() {
       </div>
     );
 
+  const evidencePromptCluster = (
+    <div
+      className="rounded-2xl border border-warning/40 bg-warning/10 p-4"
+      role="alertdialog"
+      aria-label="Photo evidence recommended"
+    >
+      <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+        <AlertTriangle size={16} strokeWidth={2.2} aria-hidden />
+        This check requires photo evidence
+      </div>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+        No photo has been attached to this item yet. You can still pass without one, but it is
+        recommended to attach a photo for quality assurance.
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        <button
+          type="button"
+          className="shell-photobtn min-h-[52px] w-full"
+          disabled={busy}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Camera size={19} aria-hidden />
+          Add photo
+        </button>
+        <button
+          type="button"
+          className="w-full rounded-xl border border-border py-3 text-[14px] font-semibold disabled:opacity-60"
+          disabled={busy}
+          onClick={() => void doPass()}
+        >
+          Pass without photo
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <ShellScreen
       variant="inner"
@@ -620,7 +674,7 @@ export function SubbieItpRunScreen() {
               </p>
             </div>
           )}
-          {triStateCluster}
+          {evidencePrompt ? evidencePromptCluster : triStateCluster}
         </div>
       </div>
 
