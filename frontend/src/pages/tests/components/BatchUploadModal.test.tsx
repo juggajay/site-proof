@@ -3,11 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch, authFetch } from '@/lib/api';
 import { BatchUploadModal } from './BatchUploadModal';
 
+const useLotItpTestItemsMock = vi.hoisted(() =>
+  vi.fn((_lotId?: string | null) => ({
+    items: [] as { id: string; description: string; testType: string | null }[],
+    isLoading: false,
+  })),
+);
+
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return { ...actual, apiFetch: vi.fn(), authFetch: vi.fn() };
 });
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
+vi.mock('../hooks/useLotItpTestItems', () => ({
+  useLotItpTestItems: useLotItpTestItemsMock,
+}));
 
 const apiFetchMock = vi.mocked(apiFetch);
 const authFetchMock = vi.mocked(authFetch);
@@ -51,6 +61,8 @@ function batchResponse(
 beforeEach(() => {
   apiFetchMock.mockReset();
   authFetchMock.mockReset();
+  useLotItpTestItemsMock.mockReset();
+  useLotItpTestItemsMock.mockReturnValue({ items: [], isLoading: false });
   apiFetchMock.mockResolvedValue({ testResults: [] } as never);
 });
 
@@ -148,6 +160,100 @@ describe('BatchUploadModal pass/fail review (H13)', () => {
         testId: 'tr-1',
         lotId: 'lot-1',
       }),
+    );
+  });
+
+  it('shows the optional ITP item picker for the selected certificate lot', async () => {
+    useLotItpTestItemsMock.mockReturnValue({
+      items: [{ id: 'chk-1', description: 'Subgrade density', testType: 'Density Ratio' }],
+      isLoading: false,
+    });
+    await reachReview(undefined, [
+      {
+        id: 'lot-1',
+        lotNumber: 'LOT-001',
+        chainageStart: 100,
+        chainageEnd: 150,
+        matchScore: 100,
+      },
+    ]);
+
+    expect(screen.getByLabelText('Satisfies ITP item')).toHaveValue('');
+    expect(screen.getByRole('option', { name: 'Subgrade density — Density Ratio' })).toHaveValue(
+      'chk-1',
+    );
+  });
+
+  it('hides the ITP item picker when the selected certificate has no lot', async () => {
+    await reachReview();
+
+    expect(screen.queryByLabelText('Satisfies ITP item')).not.toBeInTheDocument();
+  });
+
+  it('sends the selected ITP item id in batch-confirm corrections', async () => {
+    useLotItpTestItemsMock.mockReturnValue({
+      items: [{ id: 'chk-1', description: 'Subgrade density', testType: 'Density Ratio' }],
+      isLoading: false,
+    });
+    await reachReview(undefined, [
+      {
+        id: 'lot-1',
+        lotNumber: 'LOT-001',
+        chainageStart: 100,
+        chainageEnd: 150,
+        matchScore: 100,
+      },
+    ]);
+
+    fireEvent.change(screen.getByLabelText('Satisfies ITP item'), {
+      target: { value: 'chk-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Confirm All/ }));
+
+    await waitFor(() => {
+      const confirmCall = apiFetchMock.mock.calls.find((call) =>
+        String(call[0]).includes('/batch-confirm'),
+      );
+      const body = JSON.parse(String((confirmCall?.[1] as { body?: string })?.body));
+      expect(body.confirmations[0].corrections.itpChecklistItemId).toBe('chk-1');
+    });
+  });
+
+  it('resets the selected ITP item when the selected certificate lot changes', async () => {
+    useLotItpTestItemsMock.mockImplementation((lotId: string | null | undefined) => ({
+      items:
+        lotId === 'lot-2'
+          ? [{ id: 'chk-2', description: 'Basecourse proof roll', testType: 'Proof Roll' }]
+          : [{ id: 'chk-1', description: 'Subgrade density', testType: 'Density Ratio' }],
+      isLoading: false,
+    }));
+    await reachReview(undefined, [
+      {
+        id: 'lot-1',
+        lotNumber: 'LOT-001',
+        chainageStart: 100,
+        chainageEnd: 150,
+        matchScore: 100,
+      },
+      {
+        id: 'lot-2',
+        lotNumber: 'LOT-002',
+        chainageStart: 150,
+        chainageEnd: 200,
+        matchScore: 90,
+      },
+    ]);
+
+    fireEvent.change(screen.getByLabelText('Satisfies ITP item'), {
+      target: { value: 'chk-1' },
+    });
+    fireEvent.change(screen.getByLabelText('Suggested Lot'), { target: { value: 'lot-2' } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Satisfies ITP item')).toHaveValue('');
+    });
+    expect(screen.getByRole('option', { name: 'Basecourse proof roll — Proof Roll' })).toHaveValue(
+      'chk-2',
     );
   });
 });
