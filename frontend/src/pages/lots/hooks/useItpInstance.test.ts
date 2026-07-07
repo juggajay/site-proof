@@ -421,17 +421,15 @@ describe('useItpInstance — assignTemplate', () => {
     );
   });
 
-  it('deletes the instance, clears local state, and refreshes readiness + conform status', async () => {
+  it('deletes the instance, clears local state, and refreshes readiness', async () => {
     const refetchReadiness = vi.fn();
-    const refetchConformStatus = vi.fn();
     routeApiFetch({
       getInstance: () => ({ instance: instanceFixture }),
       deleteInstance: () => ({ success: true, message: 'ITP unassigned from lot' }),
     });
 
-    const { result } = renderHook(() =>
-      useItpInstance({ ...baseParams, refetchReadiness, refetchConformStatus }),
-    );
+    // The readiness payload carries conformStatus, so one refetch covers both.
+    const { result } = renderHook(() => useItpInstance({ ...baseParams, refetchReadiness }));
     await waitFor(() => expect(result.current.itpInstance).toEqual(instanceFixture));
 
     let returned: boolean | undefined;
@@ -443,7 +441,6 @@ describe('useItpInstance — assignTemplate', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/itp/instances/instance-1', { method: 'DELETE' });
     expect(result.current.itpInstance).toBeNull();
     expect(refetchReadiness).toHaveBeenCalledTimes(1);
-    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
   });
 
   it('returns false, keeps local state, and surfaces the backend 409 message', async () => {

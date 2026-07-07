@@ -59,8 +59,8 @@ export function useItpTemplateAssignment({
         method: 'DELETE',
       });
       setItpInstance(null);
+      // The readiness payload carries conformStatus, so one refetch covers both.
       void refetchReadiness();
-      void refetchConformStatus();
       return true;
     } catch (err) {
       logError('Failed to unassign template:', err);
