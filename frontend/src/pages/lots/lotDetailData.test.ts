@@ -16,7 +16,6 @@ vi.mock('@/lib/logger', () => ({ devLog: vi.fn(), devWarn: vi.fn(), logError: vi
 import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import {
-  buildConformanceStatusPath,
   buildLotHistoryPath,
   buildLotNcrsPath,
   buildLotTestResultsPath,
@@ -37,16 +36,6 @@ describe('buildQualityAccessPath', () => {
 
   it('encodes the project id', () => {
     expect(buildQualityAccessPath('a/b c')).toBe('/api/lots/check-role/a%2Fb%20c');
-  });
-});
-
-describe('buildConformanceStatusPath', () => {
-  it('builds the conform-status path for a lot', () => {
-    expect(buildConformanceStatusPath('lot-1')).toBe('/api/lots/lot-1/conform-status');
-  });
-
-  it('encodes the lot id', () => {
-    expect(buildConformanceStatusPath('a/b')).toBe('/api/lots/a%2Fb/conform-status');
   });
 });
 

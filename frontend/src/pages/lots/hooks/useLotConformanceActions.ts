@@ -5,14 +5,13 @@ import { apiFetch } from '@/lib/api';
 import { extractErrorDetails, extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { queryKeys } from '@/lib/queryKeys';
 import { formatStatusLabel } from '@/lib/statusLabels';
-import type { ConformStatus, Lot, LotTab } from '../types';
+import type { Lot, LotTab } from '../types';
 
 interface UseLotConformanceActionsParams {
   lotId: string | undefined;
   projectId: string | undefined;
   currentTab: LotTab;
   setLot: Dispatch<SetStateAction<Lot | null>>;
-  setConformStatus: Dispatch<SetStateAction<ConformStatus | null>>;
   refetchReadiness: () => Promise<unknown>;
   refreshActivityHistory: () => Promise<void>;
 }
@@ -22,7 +21,6 @@ export function useLotConformanceActions({
   projectId,
   currentTab,
   setLot,
-  setConformStatus,
   refetchReadiness,
   refreshActivityHistory,
 }: UseLotConformanceActionsParams) {
@@ -57,7 +55,6 @@ export function useLotConformanceActions({
       setShowForceConformConfirm(false);
       setForceConformReason('');
       setLot((prev) => (prev ? { ...prev, status: 'conformed' } : null));
-      setConformStatus(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.lotReadiness(lotId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) }),

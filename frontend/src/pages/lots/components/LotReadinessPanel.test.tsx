@@ -12,6 +12,20 @@ const readiness: LotEvidenceReadiness = {
   lotId: 'lot-1',
   lotNumber: 'LOT-001',
   status: 'in_progress',
+  conformStatus: {
+    canConform: false,
+    blockingReasons: ['ITP checklist incomplete (1/4 items completed)'],
+    prerequisites: {
+      itpAssigned: true,
+      itpCompleted: false,
+      itpCompletedCount: 1,
+      itpTotalCount: 4,
+      testRequired: false,
+      hasPassingTest: false,
+      noOpenNcrs: true,
+      openNcrs: [],
+    },
+  },
   conformance: {
     state: 'blocked',
     blockers: [

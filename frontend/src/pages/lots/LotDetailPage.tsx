@@ -6,15 +6,14 @@ import { useAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { logError } from '@/lib/logger';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // Types and constants extracted to separate files
-import type { Lot, ConformStatus, LocationState, LotSubcontractorAssignment } from './types';
+import type { Lot, LocationState, LotSubcontractorAssignment } from './types';
 import { getLotTabsForRole } from './constants';
 import { canReviewItpByRole } from './components/itpChecklistTabHelpers';
-import { buildConformanceStatusPath, useLotQualityAccessQuery } from './lotDetailData';
+import { useLotQualityAccessQuery } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
 import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
@@ -68,8 +67,6 @@ export function LotDetailPage() {
   const [error, setError] = useState<LotDetailPageError | null>(null);
   // Offline state
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
-  const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null);
-  const [loadingConformStatus, setLoadingConformStatus] = useState(false);
   // Copy-link workflow (URL build, clipboard write + textarea fallback, toast,
   // 2-second reset) lives in useLotLinkCopy; the page only wires it into the
   // header button.
@@ -120,6 +117,8 @@ export function LotDetailPage() {
     enabled: Boolean(lotId),
     refetchInterval: 20_000,
   });
+  const conformStatus = readinessData?.readiness.conformStatus ?? null;
+  const loadingConformStatus = loadingReadiness;
 
   // Quality access permissions for this project (read-only; drives the derived
   // permissions below). Single-attempt fetch that logs on failure, preserving
@@ -160,26 +159,6 @@ export function LotDetailPage() {
   useEffect(() => {
     void fetchLot();
   }, [fetchLot]);
-
-  const fetchConformStatus = useCallback(async () => {
-    if (!lotId || !lot || lot.status === 'conformed' || lot.status === 'claimed') return;
-
-    setLoadingConformStatus(true);
-
-    try {
-      const data = await apiFetch<ConformStatus>(buildConformanceStatusPath(lotId));
-      setConformStatus(data);
-    } catch (err) {
-      logError('Failed to fetch conform status:', err);
-    } finally {
-      setLoadingConformStatus(false);
-    }
-  }, [lotId, lot]);
-
-  // Fetch conformance status when lot is loaded and not yet conformed
-  useEffect(() => {
-    void fetchConformStatus();
-  }, [fetchConformStatus]);
 
   // Lightweight page-owned refreshers run after an ITP item is marked failed.
   // Each swallows its own errors (matching the original inline refreshes) so the
@@ -241,7 +220,6 @@ export function LotDetailPage() {
     currentTab,
     isOnline,
     refetchReadiness,
-    refetchConformStatus: fetchConformStatus,
     onRequestWitness: setWitnessModal,
     onRequestEvidenceWarning: setEvidenceWarning,
     onToggleSettled: () => setEvidenceWarning(null),
@@ -302,7 +280,6 @@ export function LotDetailPage() {
     projectId,
     currentTab,
     setLot,
-    setConformStatus,
     refetchReadiness,
     refreshActivityHistory,
   });

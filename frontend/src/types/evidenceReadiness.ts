@@ -1,3 +1,5 @@
+import type { ConformStatus } from '@/pages/lots/types';
+
 export type EvidenceReadinessSeverity = 'blocker' | 'warning' | 'support';
 
 export type EvidenceReadinessArea =
@@ -64,6 +66,7 @@ export interface LotEvidenceReadiness {
   lotId: string;
   lotNumber: string;
   status: string;
+  conformStatus: ConformStatus;
   conformance: ReadinessBucket;
   claim: ReadinessBucket & {
     budgetAmount?: number | null;
