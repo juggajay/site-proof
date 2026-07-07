@@ -477,17 +477,16 @@ test.describe('Claims seeded commercial contract', () => {
 
     const submitModal = page.getByRole('dialog').filter({ hasText: 'Submit Claim' });
     await expect(submitModal.getByRole('heading', { name: 'Submit Claim' })).toBeVisible();
+    // Honest submit: SiteProof records the submission, it does not deliver the
+    // claim anywhere — the evidence package download is offered but optional.
     await expect(
-      submitModal.getByText(
-        'Download the register export, then submit the claim through your client channel.',
-      ),
+      submitModal.getByText("SiteProof doesn't send this claim to your client."),
+    ).toBeVisible();
+    await expect(
+      submitModal.getByRole('button', { name: 'Download evidence package (PDF)' }),
     ).toBeVisible();
 
-    const submitDownloadPromise = page.waitForEvent('download');
-    await submitModal.getByText('Download summary CSV').click();
-    const submitDownload = await submitDownloadPromise;
-    expect(submitDownload.suggestedFilename()).toBe('claim-7.csv');
-    await submitDownload.delete();
+    await submitModal.getByRole('button', { name: 'Mark as submitted' }).click();
 
     // M82: submit now also records the submission method (recipient is optional
     // and left blank here).
@@ -495,7 +494,7 @@ test.describe('Claims seeded commercial contract', () => {
       status: 'submitted',
       submissionMethod: 'download',
     });
-    await expect(page.getByText('Claim 7 was downloaded and marked as submitted.')).toBeVisible();
+    await expect(page.getByText('Claim 7 marked as submitted.')).toBeVisible();
     await expect(claimRow.getByText('Submitted')).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Mark as Disputed' })).toBeVisible();
 
@@ -522,7 +521,9 @@ test.describe('Claims seeded commercial contract', () => {
       disputeNotes: 'E2E dispute over certified quantity.',
     });
     await expect(page.getByText('The claim has been marked as disputed.')).toBeVisible();
-    await expect(claimRow.getByText('Disputed')).toBeVisible();
+    await expect(claimRow.getByText('Disputed', { exact: true })).toBeVisible();
+    // Dispute read-back: the notes are visible in the register, not write-only.
+    await expect(claimRow.getByText('E2E dispute over certified quantity.')).toBeVisible();
   });
 
   test('exports the claims register and chart CSVs with safe user-facing filenames', async ({
