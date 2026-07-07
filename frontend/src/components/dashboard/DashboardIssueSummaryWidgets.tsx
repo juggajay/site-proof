@@ -66,7 +66,7 @@ export function HoldPointsSummaryWidget({
       countLabel="Open Hold Points"
       count={openHoldPoints}
       linkLabel="View all hold points →"
-      to="/projects?view=holdpoints"
+      to="/projects"
       headerIcon={<ClipboardCheck className="h-4 w-4 text-muted-foreground" />}
       countIcon={<Clock className="h-4 w-4 text-warning" />}
       onNavigate={onNavigate}
@@ -86,7 +86,7 @@ export function NcrSummaryWidget({ openNCRs, onNavigate }: NcrSummaryWidgetProps
       countLabel="Open NCRs"
       count={openNCRs}
       linkLabel="View all NCRs →"
-      to="/projects?view=ncrs"
+      to="/projects"
       headerIcon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
       countIcon={<AlertTriangle className="h-4 w-4 text-destructive" />}
       onNavigate={onNavigate}

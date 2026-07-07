@@ -83,7 +83,7 @@ function computeHero(todaysDocket: Docket | null): HeroState {
     ['draft', 'pending_approval', 'approved', 'queried', 'rejected'].includes(todaysDocket.status)
       ? todaysDocket.status
       : 'draft'
-  ) as Exclude<HeroState['kind'], 'none'>;
+  ) as Exclude<HeroState['kind'], 'none' | 'setup'>;
   return { kind, docketId: todaysDocket.id, total, entryHint: '' };
 }
 
@@ -142,7 +142,7 @@ function ProjectSwitcher({ value, options }: { value: string; options: PortalCom
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, actualRole } = useAuth();
   const {
     projectId,
     subcontractorCompanyId,
@@ -264,7 +264,13 @@ export function HomeScreen() {
   });
   const companyNeedsSetup = !!company && !docketPrerequisites.prerequisitesMet;
 
-  const hero: HeroState = companyNeedsSetup ? { kind: 'setup' } : computeHero(todaysDocket);
+  const hero: HeroState = companyNeedsSetup
+    ? {
+        kind: 'setup',
+        canManageSetup: actualRole === 'subcontractor_admin',
+        companyName,
+      }
+    : computeHero(todaysDocket);
   const heroPath =
     hero.kind === 'setup'
       ? myCompanyLink

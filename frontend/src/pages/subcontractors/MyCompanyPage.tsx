@@ -17,7 +17,7 @@ import {
 } from './MyCompanySections';
 
 export function MyCompanyPage() {
-  const { user } = useAuth();
+  const { user, actualRole } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
@@ -40,9 +40,8 @@ export function MyCompanyPage() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Only subcontractor_admin can manage roster - regular subcontractor users can only view
-  // Note: user.role is used (from auth context) not roleInCompany
-  const canManageRoster = user?.role === 'subcontractor_admin';
+  // Only subcontractor_admin can manage roster - regular subcontractor users can only view.
+  const canManageRoster = actualRole === 'subcontractor_admin';
 
   const companyQuery = useMyCompanyQuery(
     user?.id,
