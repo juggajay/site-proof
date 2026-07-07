@@ -13,16 +13,16 @@ import {
 } from './subcontractorDashboardHelpers';
 
 describe('subcontractor dashboard – formatCurrency', () => {
-  it('formats whole-dollar AUD amounts with no decimals', () => {
-    expect(formatCurrency(1234)).toBe('$1,234');
+  it('formats AUD amounts with cents', () => {
+    expect(formatCurrency(1234)).toBe('$1,234.00');
   });
 
-  it('rounds to whole dollars', () => {
-    expect(formatCurrency(1234.56)).toBe('$1,235');
+  it('keeps fractional cents instead of rounding', () => {
+    expect(formatCurrency(1234.56)).toBe('$1,234.56');
   });
 
-  it('formats zero as $0', () => {
-    expect(formatCurrency(0)).toBe('$0');
+  it('formats zero as $0.00', () => {
+    expect(formatCurrency(0)).toBe('$0.00');
   });
 });
 

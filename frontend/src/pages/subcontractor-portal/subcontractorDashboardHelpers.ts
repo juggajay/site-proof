@@ -4,6 +4,7 @@
 // behavior, route links, and page layout stay in the page; JSX (status icons,
 // the badge wrapper) also stays in the page and renders from this metadata.
 import { formatDateKey } from '@/lib/localDate';
+import { formatAud } from '@/lib/formatAud';
 
 export function formatDate(dateString: string) {
   const date = new Date(dateString);
@@ -15,14 +16,9 @@ export function formatDate(dateString: string) {
   });
 }
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+// Delegates to the single lib/formatAud implementation (cents) so the subbie
+// dashboard and shell hero match the office approvals view.
+export const formatCurrency = formatAud;
 
 // The `now` parameter exists only so tests can pin the cutoffs; the page calls
 // this with no argument, exactly as before.

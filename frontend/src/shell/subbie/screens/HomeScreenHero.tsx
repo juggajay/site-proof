@@ -15,6 +15,10 @@ export interface Docket {
   totalPlantSubmitted: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
+  // Entry counts from the list endpoint — the honest "has this docket been
+  // started?" signal (independent of whether rates make the totals non-zero).
+  labourEntryCount?: number;
+  plantEntryCount?: number;
   foremanNotes?: string;
 }
 

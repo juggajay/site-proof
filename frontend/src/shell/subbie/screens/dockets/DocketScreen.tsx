@@ -279,7 +279,10 @@ export function DocketScreen() {
   };
 
   // ── Add labour ──────────────────────────────────────────────────────────────
-  const addLabourEntry = async () => {
+  // keepOpen backs "Save & add another": the sheet stays open with the times and
+  // lot retained, only the person cleared, so a foreman logging a whole crew on
+  // the same shift doesn't reopen and re-set the times for every worker.
+  const addLabourEntry = async (keepOpen = false) => {
     if (!selectedEmployee || !selectedLotId) {
       toast({
         title: 'Missing information',
@@ -313,8 +316,12 @@ export function DocketScreen() {
             }
           : prev,
       );
-      closeSheet();
-      resetSheetState();
+      if (keepOpen) {
+        setSelectedEmployee(null);
+      } else {
+        closeSheet();
+        resetSheetState();
+      }
       toast({ title: 'Labour entry added', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to add labour entry');
@@ -324,7 +331,9 @@ export function DocketScreen() {
   };
 
   // ── Add plant ─────────────────────────────────────────────────────────────────
-  const addPlantEntry = async () => {
+  // keepOpen backs "Save & add another": retains hours + wet/dry + lot, clears
+  // only the machine (see addLabourEntry).
+  const addPlantEntry = async (keepOpen = false) => {
     if (!selectedPlant) {
       toast({
         title: 'Missing information',
@@ -376,8 +385,12 @@ export function DocketScreen() {
             }
           : prev,
       );
-      closeSheet();
-      resetSheetState();
+      if (keepOpen) {
+        setSelectedPlant(null);
+      } else {
+        closeSheet();
+        resetSheetState();
+      }
       toast({ title: 'Plant entry added', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to add plant entry');
@@ -970,7 +983,8 @@ export function DocketScreen() {
           onFinishTimeChange={setFinishTime}
           onSelectedLotIdChange={setSelectedLotId}
           onClose={closeSheet}
-          onAdd={addLabourEntry}
+          onAdd={() => addLabourEntry(false)}
+          onAddAnother={() => addLabourEntry(true)}
         />
       )}
       {sheetOpen && sheetType === 'plant' && (
@@ -991,7 +1005,8 @@ export function DocketScreen() {
           onWetOrDryChange={setWetOrDry}
           onSelectedLotIdChange={setSelectedLotId}
           onClose={closeSheet}
-          onAdd={addPlantEntry}
+          onAdd={() => addPlantEntry(false)}
+          onAddAnother={() => addPlantEntry(true)}
         />
       )}
     </ShellScreen>

@@ -141,7 +141,7 @@ describe('subbie shell DocketsListScreen', () => {
   it('renders the month-approved sub-line', async () => {
     renderList();
     // Only the approved docket counts: $2,180.
-    expect(await screen.findByText('$2,180')).toBeInTheDocument();
+    expect(await screen.findByText('$2,180.00')).toBeInTheDocument();
     expect(screen.getByText(/approved/)).toBeInTheDocument();
   });
 

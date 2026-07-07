@@ -177,6 +177,15 @@ export function HomeScreen() {
   const recentDockets = dockets.filter((d) => d.date !== today).slice(0, 5);
   const queriedCount = dockets.filter((d) => d.status === 'queried').length;
 
+  // Back-day dockets left in draft with hours already on them — today's draft is
+  // already the hero, so this nudges the ones from earlier that never got sent.
+  const startedDrafts = dockets.filter(
+    (d) =>
+      d.date !== today &&
+      d.status === 'draft' &&
+      ((d.labourEntryCount ?? 0) > 0 || (d.plantEntryCount ?? 0) > 0),
+  );
+
   // Assigned lots — existing portal key; count chip + prerequisite state.
   const { data: assignedLotsData } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
@@ -285,6 +294,29 @@ export function HomeScreen() {
       {/* Today's docket hero — or the setup call-to-action while prerequisites
           are unmet (the hero carries the setup state; no separate notice). */}
       <DocketHero state={hero} onPress={() => navigate(heroPath)} />
+
+      {/* Started-but-unsubmitted back-day dockets (today's draft is the hero). */}
+      {startedDrafts.length > 0 && (
+        <Link
+          to={
+            startedDrafts.length === 1
+              ? `/p/docket/${encodeURIComponent(startedDrafts[0].id)}${currentProjectQuery}`
+              : docketsPath
+          }
+          className="shell-notice shell-notice-warn"
+          aria-label="Started, not submitted"
+        >
+          <AlertTriangle size={19} aria-hidden="true" className="mt-px shrink-0 text-warning" />
+          <div className="min-w-0">
+            <b className="block text-[13.5px]">Started, not submitted</b>
+            <span className="block text-[13.5px]">
+              {startedDrafts.length === 1
+                ? 'A docket from earlier still has hours in draft — submit it to get paid.'
+                : `${startedDrafts.length} dockets from earlier still have hours in draft — submit them to get paid.`}
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Needs-attention notices */}
       {needsAttention.slice(0, 3).map((item) => (

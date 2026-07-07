@@ -58,16 +58,16 @@ const lots: LotCost[] = [
 ];
 
 describe('formatCurrency', () => {
-  it('formats whole australian dollars with no cents', () => {
-    expect(formatCurrency(1234)).toBe('$1,234');
+  it('formats australian dollars with cents', () => {
+    expect(formatCurrency(1234)).toBe('$1,234.00');
   });
 
   it('formats negative variances with a leading minus', () => {
-    expect(formatCurrency(-500)).toBe('-$500');
+    expect(formatCurrency(-500)).toBe('-$500.00');
   });
 
-  it('rounds to whole dollars', () => {
-    expect(formatCurrency(1234.56)).toBe('$1,235');
+  it('keeps fractional cents instead of rounding', () => {
+    expect(formatCurrency(1234.56)).toBe('$1,234.56');
   });
 });
 
@@ -155,29 +155,29 @@ describe('buildCostReportRows', () => {
       [],
       ['COST SUMMARY'],
       ['Metric', 'Value'],
-      ['Total Cost', '$32,000'],
-      ['Labour Cost', '$20,000'],
-      ['Plant Cost', '$12,000'],
-      ['Budget Total', '$30,000'],
-      ['Budget Variance', '-$2,000'],
+      ['Total Cost', '$32,000.00'],
+      ['Labour Cost', '$20,000.00'],
+      ['Plant Cost', '$12,000.00'],
+      ['Budget Total', '$30,000.00'],
+      ['Budget Variance', '-$2,000.00'],
       ['Approved Dockets', '7'],
       ['Pending Dockets', '2'],
       [],
       ['COSTS BY SUBCONTRACTOR'],
       ['Subcontractor', 'Labour Cost', 'Plant Cost', 'Total Cost', 'Approved Dockets'],
-      ['Ryox Carpentry', '$12,000', '$3,000', '$15,000', '4'],
+      ['Ryox Carpentry', '$12,000.00', '$3,000.00', '$15,000.00', '4'],
       [],
       ['COSTS BY LOT'],
       ['Lot', 'Activity', 'Budget', 'Actual Cost', 'Variance'],
-      ['LOT-001', 'Earthworks', '$20,000', '$18,000', '+$2,000'],
-      ['LOT-002', 'Drainage', '$10,000', '$10,500', '-$500'],
+      ['LOT-001', 'Earthworks', '$20,000.00', '$18,000.00', '+$2,000.00'],
+      ['LOT-002', 'Drainage', '$10,000.00', '$10,500.00', '-$500.00'],
     ]);
   });
 
   it('prefixes zero variance with + like any non-negative variance', () => {
     const rows = buildCostReportRows(summary, [], [{ ...lots[0], variance: 0 }]);
 
-    expect(rows[rows.length - 1][4]).toBe('+$0');
+    expect(rows[rows.length - 1][4]).toBe('+$0.00');
   });
 
   it('keeps the section headers when the filtered lists are empty', () => {

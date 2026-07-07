@@ -188,7 +188,7 @@ describe('subbie shell HomeScreen', () => {
     renderHome();
     expect(await screen.findByText('Keep adding hours')).toBeInTheDocument();
     // 1280 + 1170 = 2450, formatted as AUD with no decimals.
-    expect(await screen.findByText('$2,450')).toBeInTheDocument();
+    expect(await screen.findByText('$2,450.00')).toBeInTheDocument();
   });
 
   it('hero "queried" state routes attention to the docket', async () => {
