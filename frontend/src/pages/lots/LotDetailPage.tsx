@@ -225,6 +225,7 @@ export function LotDetailPage() {
     updatingCompletionRef,
     refetchItp,
     assignTemplate,
+    unassignTemplate,
     toggleCompletion,
     updateNotes,
     markAsNA,
@@ -512,6 +513,7 @@ export function LotDetailPage() {
         handleMobileAddPhoto={handleMobileAddPhoto}
         handleAddPhoto={handleAddPhoto}
         assignTemplate={assignTemplate}
+        unassignTemplate={unassignTemplate}
         refetchItp={refetchItp}
         assigningTemplate={assigningTemplate}
         shouldOpenAssignItp={shouldOpenAssignItp}
