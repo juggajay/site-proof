@@ -55,6 +55,18 @@ describe('NCRsTabContent — empty state', () => {
     );
     expect(screen.getByText('No NCRs')).toBeInTheDocument();
   });
+
+  it('offers a lot-scoped "Raise NCR" action when a lotId is provided', () => {
+    renderWithProviders(
+      <NCRsTabContent projectId="proj-1" lotId="lot-9" ncrs={[]} loading={false} />,
+    );
+    expect(screen.getByRole('button', { name: 'Raise NCR' })).toBeInTheDocument();
+  });
+
+  it('falls back to the register link when no lotId is provided', () => {
+    renderWithProviders(<NCRsTabContent projectId="proj-1" ncrs={[]} loading={false} />);
+    expect(screen.getByRole('button', { name: 'Go to NCR Register' })).toBeInTheDocument();
+  });
 });
 
 describe('NCRsTabContent — mobile card rendering', () => {

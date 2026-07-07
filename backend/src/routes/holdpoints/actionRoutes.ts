@@ -475,6 +475,7 @@ holdPointActionRouter.post(
       // Create in-app notifications for all project team members
       const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
         projectId: existingHP.lot.projectId,
+        holdPointId: holdPoint.id,
         holdPointDescription: holdPoint.description,
         lotNumber: holdPoint.lot.lotNumber,
         releasedByName,
@@ -496,6 +497,7 @@ holdPointActionRouter.post(
       // the same for every recipient, so build it once.
       const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
         projectId: existingHP.lot.projectId,
+        holdPointId: holdPoint.id,
         holdPointDescription: holdPoint.description,
         lotNumber: holdPoint.lot.lotNumber,
         releasedByName,

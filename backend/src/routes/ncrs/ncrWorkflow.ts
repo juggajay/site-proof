@@ -25,7 +25,7 @@ import {
 } from './ncrWorkflowValidation.js';
 import { ncrClosureWorkflowRouter } from './ncrClosureWorkflow.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
-import { notifySubcontractorNcrPortalUsers } from './ncrNotifications.js';
+import { notifyInternalNcrUser, notifySubcontractorNcrPortalUsers } from './ncrNotifications.js';
 
 const qmReviewedNcrInclude = {
   project: { select: { name: true } },
@@ -212,15 +212,13 @@ ncrWorkflowRouter.post(
 
       // Notify responsible party that response was accepted
       if (ncr.responsibleUserId) {
-        await prisma.notification.create({
-          data: {
-            userId: ncr.responsibleUserId,
-            projectId: ncr.projectId,
-            type: 'ncr_response_accepted',
-            title: `NCR Response Accepted`,
-            message: `${reviewerName} has accepted your response for ${ncr.ncrNumber}. Please proceed with rectification.`,
-            linkUrl: `/projects/${ncr.projectId}/ncr`,
-          },
+        await notifyInternalNcrUser({
+          userId: ncr.responsibleUserId,
+          projectId: ncr.projectId,
+          ncrId: ncr.id,
+          type: 'ncr_response_accepted',
+          title: `NCR Response Accepted`,
+          message: `${reviewerName} has accepted your response for ${ncr.ncrNumber}. Please proceed with rectification.`,
         });
       }
       if (ncr.responsibleSubcontractorId) {
@@ -289,15 +287,13 @@ ncrWorkflowRouter.post(
 
       // Notify responsible party about revision request
       if (ncr.responsibleUserId) {
-        await prisma.notification.create({
-          data: {
-            userId: ncr.responsibleUserId,
-            projectId: ncr.projectId,
-            type: 'ncr_revision_requested',
-            title: `NCR Revision Requested`,
-            message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
-            linkUrl: `/projects/${ncr.projectId}/ncr`,
-          },
+        await notifyInternalNcrUser({
+          userId: ncr.responsibleUserId,
+          projectId: ncr.projectId,
+          ncrId: ncr.id,
+          type: 'ncr_revision_requested',
+          title: `NCR Revision Requested`,
+          message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
         });
       }
       if (ncr.responsibleSubcontractorId) {
@@ -487,15 +483,13 @@ ncrWorkflowRouter.post(
 
     // Notify responsible party about rejection
     if (ncr.responsibleUserId) {
-      await prisma.notification.create({
-        data: {
-          userId: ncr.responsibleUserId,
-          projectId: ncr.projectId,
-          type: 'ncr_rectification_rejected',
-          title: `Rectification Rejected`,
-          message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
-          linkUrl: `/projects/${ncr.projectId}/ncr`,
-        },
+      await notifyInternalNcrUser({
+        userId: ncr.responsibleUserId,
+        projectId: ncr.projectId,
+        ncrId: ncr.id,
+        type: 'ncr_rectification_rejected',
+        title: `Rectification Rejected`,
+        message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
       });
     }
     if (ncr.responsibleSubcontractorId) {

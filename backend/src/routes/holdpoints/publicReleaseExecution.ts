@@ -267,6 +267,7 @@ export async function runHoldPointReleasePostCommit({
   if (isProjectNotificationEnabled(project.settings, 'holdPointReleases')) {
     const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
       projectId: project.id,
+      holdPointId: holdPoint.id,
       holdPointDescription: holdPoint.description,
       lotNumber: holdPoint.lot.lotNumber,
       releasedByName: effectiveReleasedByName,
@@ -286,6 +287,7 @@ export async function runHoldPointReleasePostCommit({
 
     const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
       projectId: project.id,
+      holdPointId: holdPoint.id,
       holdPointDescription: holdPoint.description,
       lotNumber: holdPoint.lot.lotNumber,
       releasedByName: effectiveReleasedByName,

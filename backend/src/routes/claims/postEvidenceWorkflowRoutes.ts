@@ -6,6 +6,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
+import { buildProjectEntityLink } from '../notifications/links.js';
 import {
   buildClaimCertifiedResponse,
   buildClaimDeletedResponse,
@@ -240,7 +241,7 @@ export function createClaimPostEvidenceWorkflowRouter({
               type: 'claim_certified',
               title: 'Claim Certified',
               message: `Claim #${claim.claimNumber} has been certified by ${certifierName}. Certified amount: ${formattedAmount}.${variationNotes ? ` Variations: ${variationNotes.substring(0, 100)}${variationNotes.length > 100 ? '...' : ''}` : ''}`,
-              linkUrl: `/projects/${projectId}/claims`,
+              linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
             })),
           });
         }
@@ -252,7 +253,7 @@ export function createClaimPostEvidenceWorkflowRouter({
               title: 'Claim Certified',
               message: `Claim #${claim.claimNumber} has been certified.\n\nProject: ${claim.project.name}\nCertified Amount: ${formattedAmount}${variationNotes ? `\nVariations: ${variationNotes}` : ''}\n\nPlease review the claim details in the system.`,
               projectName: claim.project.name,
-              linkUrl: `/projects/${projectId}/claims`,
+              linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
             });
           } catch (emailError) {
             logError(`Failed to send certification email to PM ${pm.id}:`, emailError);
@@ -468,7 +469,7 @@ export function createClaimPostEvidenceWorkflowRouter({
               type: notificationType,
               title: notificationTitle,
               message: notificationMessage,
-              linkUrl: `/projects/${projectId}/claims`,
+              linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
             })),
           });
         }
@@ -480,7 +481,7 @@ export function createClaimPostEvidenceWorkflowRouter({
               title: notificationTitle,
               message: `${notificationMessage}\n\nProject: ${claim.project.name}\nRecorded by: ${payerName}\n\nPlease review the payment details in the system.`,
               projectName: claim.project.name,
-              linkUrl: `/projects/${projectId}/claims`,
+              linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
             });
           } catch (emailError) {
             logError(`Failed to send payment email to PM ${pm.id}:`, emailError);
