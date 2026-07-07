@@ -8,12 +8,13 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
+import { useDiaryEntryEdit } from './useDiaryEntryEdit';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import {
   readSheetDraft,
@@ -32,10 +33,13 @@ import { formatDateKey } from '@/lib/localDate';
 export function DeliveryFormScreen() {
   const navigate = useNavigate();
   const { projectId } = useEffectiveProjectId();
-  const { lots, handlers } = useDiaryShellData();
+  const { lots, timeline, handlers } = useDiaryShellData();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
 
   const todayKey = formatDateKey();
-  const draftKey = projectId ? sheetDraftKey(projectId, todayKey, 'delivery') : undefined;
+  const draftKey =
+    projectId && !editId ? sheetDraftKey(projectId, todayKey, 'delivery') : undefined;
   const defaultLotId = handlers.activeLotId;
 
   const [restoredDraft] = useState(() => readSheetDraft(draftKey));
@@ -71,6 +75,23 @@ export function DeliveryFormScreen() {
     },
   });
   const quantityError = getOptionalDiaryQuantityError(quantity);
+
+  useDiaryEntryEdit({
+    editId,
+    type: 'delivery',
+    timeline,
+    setEditingEntry: handlers.setEditingEntry,
+    seed: (e) => {
+      setDescription(e.description);
+      setSupplier(e.data.supplier ?? '');
+      setDocketNumber(e.data.docketNumber ?? '');
+      setQuantity(e.data.quantity != null ? String(e.data.quantity) : '');
+      setUnit(e.data.unit ?? '');
+      setLotId(e.lot?.id ?? '');
+      setNotes(e.data.notes ?? '');
+      setShowMore(Boolean(e.data.supplier || e.data.docketNumber || e.data.quantity));
+    },
+  });
 
   const backPath = withProjectQuery('/m/diary/work', projectId);
 
@@ -112,7 +133,7 @@ export function DeliveryFormScreen() {
   return (
     <ShellScreen
       variant="inner"
-      title="Add Delivery"
+      title={editId ? 'Edit Delivery' : 'Add Delivery'}
       parent={backPath}
       sub={<span className="text-muted-foreground">Auto-saves as you type</span>}
       bottom={

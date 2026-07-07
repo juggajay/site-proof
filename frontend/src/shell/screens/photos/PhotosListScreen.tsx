@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { ImageOff, Loader2, AlertTriangle } from 'lucide-react';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { cn } from '@/lib/utils';
+import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { usePhotosShellContext } from './photosShellContext';
@@ -32,7 +33,18 @@ import {
   type PhotoItem,
 } from './photosShellState';
 
-function PhotoTile({ item, onPress }: { item: PhotoItem; onPress: () => void }) {
+function PhotoTile({
+  item,
+  onPress,
+  onRetry,
+  retrying,
+}: {
+  item: PhotoItem;
+  onPress: () => void;
+  // Provided only for failed uploads — turns the "Retry" badge into a real button.
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
   const isPending = item.source === 'pending';
   const pendingError = item.syncState === 'error';
 
@@ -46,77 +58,97 @@ function PhotoTile({ item, onPress }: { item: PhotoItem; onPress: () => void }) 
     .join(' ');
 
   return (
-    <button
-      type="button"
-      onClick={onPress}
-      aria-label={ariaLabel}
-      className="group relative block overflow-hidden rounded-2xl border border-border bg-secondary text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
-      {/* Aspect-ratio box — fixes layout before the image loads (no shift). */}
-      <span className="block aspect-square w-full">
-        {isPending || !item.documentId ? (
-          <img
-            src={item.src}
-            alt={item.caption || 'Site photo'}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <SecureDocumentImage
-            documentId={item.documentId}
-            fileUrl={item.src}
-            alt={item.caption || 'Site photo'}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover"
-          />
-        )}
-      </span>
-
-      {/* Top-left: status chip — UNFILED (amber) or filed lot chip. */}
-      <span className="pointer-events-none absolute left-1.5 top-1.5 flex flex-wrap gap-1">
-        {item.unfiled ? (
-          <span className="shell-pill shell-pill-attention text-[10px] shadow-sm">UNFILED</span>
-        ) : item.lotLabel ? (
-          <span className="shell-pill bg-card/90 text-[10px] shadow-sm">{item.lotLabel}</span>
-        ) : null}
-      </span>
-
-      {/* Pending sync badge — top-right. */}
-      {isPending && (
-        <span
-          className={cn(
-            'pointer-events-none absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold shadow-sm',
-            pendingError ? 'bg-destructive text-white' : 'bg-warning text-white',
-          )}
-        >
-          {pendingError ? (
-            <>
-              <AlertTriangle size={11} aria-hidden /> Retry
-            </>
+    // Relative wrapper so the Retry affordance is a real sibling button rather
+    // than a (non-interactive) child of the tile button — no nested buttons.
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onPress}
+        aria-label={ariaLabel}
+        className="group block w-full overflow-hidden rounded-2xl border border-border bg-secondary text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        {/* Aspect-ratio box — fixes layout before the image loads (no shift). */}
+        <span className="block aspect-square w-full">
+          {isPending || !item.documentId ? (
+            <img
+              src={item.src}
+              alt={item.caption || 'Site photo'}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
           ) : (
-            <>
-              <Loader2 size={11} className="animate-spin" aria-hidden /> Uploading
-            </>
+            <SecureDocumentImage
+              documentId={item.documentId}
+              fileUrl={item.src}
+              alt={item.caption || 'Site photo'}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
           )}
         </span>
-      )}
 
-      {/* Bottom gradient + mono date. */}
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end bg-gradient-to-t from-black/55 to-transparent px-2 pb-1.5 pt-6">
-        <span className="shell-mono text-[11px] font-semibold text-white/90">
-          {formatPhotoDate(item.takenAt)}
+        {/* Top-left: status chip — UNFILED (amber) or filed lot chip. */}
+        <span className="pointer-events-none absolute left-1.5 top-1.5 flex flex-wrap gap-1">
+          {item.unfiled ? (
+            <span className="shell-pill shell-pill-attention text-[10px] shadow-sm">UNFILED</span>
+          ) : item.lotLabel ? (
+            <span className="shell-pill bg-card/90 text-[10px] shadow-sm">{item.lotLabel}</span>
+          ) : null}
         </span>
-      </span>
-    </button>
+
+        {/* Bottom gradient + mono date. */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end bg-gradient-to-t from-black/55 to-transparent px-2 pb-1.5 pt-6">
+          <span className="shell-mono text-[11px] font-semibold text-white/90">
+            {formatPhotoDate(item.takenAt)}
+          </span>
+        </span>
+      </button>
+
+      {/* Pending sync badge — top-right. A failed upload is a real Retry button;
+          an in-flight upload stays a non-interactive status pill. */}
+      {isPending &&
+        (pendingError && onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            aria-label="Retry upload"
+            className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-1 text-[10px] font-semibold text-white shadow-sm touch-manipulation disabled:opacity-70"
+          >
+            {retrying ? (
+              <>
+                <Loader2 size={11} className="animate-spin" aria-hidden /> Retrying
+              </>
+            ) : (
+              <>
+                <AlertTriangle size={11} aria-hidden /> Retry
+              </>
+            )}
+          </button>
+        ) : (
+          <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-warning px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
+            <Loader2 size={11} className="animate-spin" aria-hidden /> Uploading
+          </span>
+        ))}
+    </div>
   );
 }
 
 export function PhotosListScreen() {
   const navigate = useNavigate();
   const { projectId, items, loading, loadError, unfiledCount, refetch } = usePhotosShellContext();
+  const { retryFailedSyncs, isSyncing } = useOfflineStatus();
   const lotId = useShellPhotoLotParam();
+
+  // Reviving failed items resets their attempt count; the app-root offline worker
+  // then flushes them, and the pending grid poll reflects the change. Also refetch
+  // so the tile updates promptly.
+  const handleRetryUpload = async () => {
+    await retryFailedSyncs();
+    await refetch();
+  };
 
   const [filter, setFilter] = useState<PhotoFilterKey>('all');
 
@@ -229,7 +261,13 @@ export function PhotosListScreen() {
       {visible.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {visible.map((item) => (
-            <PhotoTile key={item.id} item={item} onPress={() => navigate(photoHref(item))} />
+            <PhotoTile
+              key={item.id}
+              item={item}
+              onPress={() => navigate(photoHref(item))}
+              onRetry={item.syncState === 'error' ? () => void handleRetryUpload() : undefined}
+              retrying={isSyncing}
+            />
           ))}
         </div>
       )}

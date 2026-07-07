@@ -8,7 +8,7 @@
  * SyncChip → useOfflineStatus.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { PhotosShellData } from '../usePhotosShellData';
 import {
@@ -18,8 +18,14 @@ import {
   type ServerPhotoDoc,
 } from '../photosShellState';
 
+const retryFailedSyncsMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/lib/useOfflineStatus', () => ({
-  useOfflineStatus: () => ({ isOnline: true, pendingSyncCount: 0, isSyncing: false }),
+  useOfflineStatus: () => ({
+    isOnline: true,
+    pendingSyncCount: 0,
+    isSyncing: false,
+    retryFailedSyncs: retryFailedSyncsMock,
+  }),
 }));
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: { id: 'user-me', fullName: 'Jay', roleInCompany: 'foreman' } }),
@@ -115,10 +121,14 @@ describe('PhotosListScreen', () => {
     expect(screen.getByText('Uploading')).toBeInTheDocument();
   });
 
-  it('renders a failed pending tile with a Retry badge', () => {
+  it('renders a failed pending tile with a real Retry button that fires retry', () => {
+    retryFailedSyncsMock.mockClear();
     _data = makeData({ items: mergePhotoItems([], [pending({ syncStatus: 'error' })]) });
     renderScreen();
-    expect(screen.getByText('Retry')).toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: 'Retry upload' });
+    expect(retry).toBeInTheDocument();
+    fireEvent.click(retry);
+    expect(retryFailedSyncsMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows pending tiles above server tiles in the grid', () => {
@@ -127,8 +137,9 @@ describe('PhotosListScreen', () => {
     });
     renderScreen();
     const tiles = screen.getAllByRole('button', { name: /^Photo/ });
-    // First tile is the pending capture.
-    expect(within(tiles[0]).getByText('Uploading')).toBeInTheDocument();
+    // First tile is the pending capture (its aria-label notes it's uploading).
+    expect(tiles[0].getAttribute('aria-label')).toContain('uploading');
+    expect(screen.getByText('Uploading')).toBeInTheDocument();
   });
 
   it('filters to Unfiled and hides filed photos', () => {

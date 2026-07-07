@@ -11,12 +11,13 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
+import { useDiaryEntryEdit } from './useDiaryEntryEdit';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import {
   readSheetDraft,
@@ -35,10 +36,15 @@ import { formatDateKey } from '@/lib/localDate';
 export function ActivityFormScreen() {
   const navigate = useNavigate();
   const { projectId } = useEffectiveProjectId();
-  const { lots, handlers } = useDiaryShellData();
+  const { lots, timeline, handlers } = useDiaryShellData();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
 
   const todayKey = formatDateKey();
-  const draftKey = projectId ? sheetDraftKey(projectId, todayKey, 'activity') : undefined;
+  // No auto-draft while editing an existing entry — it would pollute the create
+  // draft and fight the seeded values.
+  const draftKey =
+    projectId && !editId ? sheetDraftKey(projectId, todayKey, 'activity') : undefined;
   const defaultLotId = handlers.activeLotId;
 
   const [restoredDraft] = useState(() => readSheetDraft(draftKey));
@@ -61,6 +67,21 @@ export function ActivityFormScreen() {
     baseline: { description: '', lotId: defaultLotId || '', quantity: '', unit: '', notes: '' },
   });
   const quantityError = getOptionalDiaryQuantityError(quantity);
+
+  useDiaryEntryEdit({
+    editId,
+    type: 'activity',
+    timeline,
+    setEditingEntry: handlers.setEditingEntry,
+    seed: (e) => {
+      setDescription(e.description);
+      setLotId(e.lot?.id ?? '');
+      setQuantity(e.data.quantity != null ? String(e.data.quantity) : '');
+      setUnit(e.data.unit ?? '');
+      setNotes(e.data.notes ?? '');
+      setShowMore(Boolean(e.data.quantity || e.data.unit || e.data.notes));
+    },
+  });
 
   const backPath = withProjectQuery('/m/diary/work', projectId);
 
@@ -102,7 +123,7 @@ export function ActivityFormScreen() {
   return (
     <ShellScreen
       variant="inner"
-      title="Add Activity"
+      title={editId ? 'Edit Activity' : 'Add Activity'}
       parent={backPath}
       sub={sub}
       bottom={
