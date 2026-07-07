@@ -1,16 +1,11 @@
 // ===== Display formatters =====
 // Pure presentation helpers shared between DocketEditPage and DocketEditTabs.
-// Moved verbatim out of DocketEditPage so the page header/action bar and the
-// extracted tab panels format currency and dates identically.
+// Currency now delegates to the single lib/formatAud implementation (cents) so
+// the subbie docket surfaces match the office approvals view instead of rounding
+// to whole dollars.
+import { formatAud } from '@/lib/formatAud';
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+export const formatCurrency = formatAud;
 
 export function formatDate(dateString: string) {
   const date = new Date(dateString);

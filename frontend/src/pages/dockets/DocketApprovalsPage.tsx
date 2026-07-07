@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
@@ -23,7 +23,12 @@ import {
   useDocketApprovalsQuery,
   useDocketProjectQuery,
 } from './docketApprovalsData';
-import { type DocketActionType, statusLabels } from './docketActionData';
+import {
+  type DocketActionType,
+  buildDocketActionPath,
+  buildDocketActionPayload,
+  statusLabels,
+} from './docketActionData';
 import { DocketActionModal } from './components/DocketActionModal';
 import { CreateDocketModal } from './components/CreateDocketModal';
 import { DocketApprovalsTable } from './components/DocketApprovalsTable';
@@ -134,6 +139,124 @@ export function DocketApprovalsPage() {
   const canShowTotalDisplayedCost = useMemo(
     () => filteredDockets.some((docket) => hasDocketCommercialAmounts(docket)),
     [filteredDockets],
+  );
+
+  // ── Bulk approval (unadjusted) ──────────────────────────────────────────────
+  // No batch endpoint exists, so we loop the existing per-docket approve route
+  // client-side with an empty (unadjusted) payload, showing progress and
+  // surfacing per-docket failures by docket number. Dockets that need hour edits
+  // are simply left unselected — they still go through the detail sheet.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const selectablePendingIds = useMemo(
+    () => filteredDockets.filter((d) => d.status === 'pending_approval').map((d) => d.id),
+    [filteredDockets],
+  );
+  const selectionEnabled = canApprove && selectablePendingIds.length > 0;
+  const selectedPendingCount = useMemo(
+    () => selectablePendingIds.filter((id) => selectedIds.has(id)).length,
+    [selectablePendingIds, selectedIds],
+  );
+  const allPendingSelected =
+    selectablePendingIds.length > 0 && selectedPendingCount === selectablePendingIds.length;
+
+  // Drop any selected ids that are no longer pending/visible (filter change,
+  // refetch, or another approver acting) so the count and bulk action stay honest.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const allowed = new Set(selectablePendingIds);
+      const next = new Set<string>();
+      let changed = false;
+      prev.forEach((id) => {
+        if (allowed.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [selectablePendingIds]);
+
+  const toggleDocketSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllPending = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allSelected =
+        selectablePendingIds.length > 0 && selectablePendingIds.every((id) => prev.has(id));
+      return allSelected ? new Set() : new Set(selectablePendingIds);
+    });
+  }, [selectablePendingIds]);
+
+  const handleBulkApprove = useCallback(async () => {
+    if (bulkApproving) return;
+    const ids = selectablePendingIds.filter((id) => selectedIds.has(id));
+    if (ids.length === 0) return;
+
+    setBulkApproving(true);
+    setBulkProgress({ done: 0, total: ids.length });
+    const failures: string[] = [];
+    const payload = buildDocketActionPayload('approve', { actionNotes: '', adjustmentReason: '' });
+
+    for (let i = 0; i < ids.length; i += 1) {
+      const id = ids[i];
+      const docket = dockets.find((d) => d.id === id);
+      try {
+        await apiFetch(buildDocketActionPath(id, 'approve'), {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      } catch (error) {
+        logError('Error bulk-approving docket:', error);
+        failures.push(docket?.docketNumber ?? id);
+      }
+      setBulkProgress({ done: i + 1, total: ids.length });
+    }
+
+    setBulkApproving(false);
+    setBulkProgress(null);
+    setSelectedIds(new Set());
+    await refetchDockets();
+
+    const approved = ids.length - failures.length;
+    if (failures.length === 0) {
+      toast({
+        variant: 'success',
+        description: `Approved ${approved} docket${approved === 1 ? '' : 's'}.`,
+      });
+    } else if (approved === 0) {
+      toast({
+        variant: 'error',
+        description: `Could not approve ${failures.length} docket${
+          failures.length === 1 ? '' : 's'
+        }: ${failures.join(', ')}`,
+      });
+    } else {
+      toast({
+        variant: 'warning',
+        description: `Approved ${approved} of ${ids.length}. Failed: ${failures.join(', ')}`,
+      });
+    }
+  }, [bulkApproving, selectablePendingIds, selectedIds, dockets, refetchDockets]);
+
+  // ── Draft-dockets-with-hours visibility (read-only) ─────────────────────────
+  // Started-but-unsubmitted dockets are excluded from the approvals list; this
+  // dedicated draft read (approvers only) surfaces a non-blocking count so the
+  // office can nudge a subbie whose docket is sitting in draft with hours on it.
+  const draftQuery = useDocketApprovalsQuery(projectId, 'draft', { enabled: canApprove });
+  const draftsWithHoursCount = useMemo(
+    () =>
+      (draftQuery.data ?? EMPTY_DOCKETS).filter(
+        (d) => (d.labourHours || 0) > 0 || (d.plantHours || 0) > 0,
+      ).length,
+    [draftQuery.data],
   );
 
   // Create a new docket
@@ -324,6 +447,14 @@ export function DocketApprovalsPage() {
           onReject={(d) => openActionModal(d, 'reject')}
           onTapDocket={handleTapDocket}
           onRefresh={refetchDockets}
+          selectionEnabled={selectionEnabled}
+          selectedIds={selectedIds}
+          onToggleDocket={toggleDocketSelection}
+          selectedPendingCount={selectedPendingCount}
+          bulkApproving={bulkApproving}
+          bulkProgress={bulkProgress}
+          onBulkApprove={handleBulkApprove}
+          draftsWithHoursCount={draftsWithHoursCount}
         />
       ) : (
         <div className="space-y-6 p-6">
@@ -340,8 +471,20 @@ export function DocketApprovalsPage() {
               <p className="text-sm text-muted-foreground">
                 Review and approve subcontractor dockets for project {projectLabel}
               </p>
+              {draftsWithHoursCount > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {draftsWithHoursCount} started but not yet submitted
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
+              {selectionEnabled && selectedPendingCount > 0 && (
+                <Button variant="success" onClick={handleBulkApprove} disabled={bulkApproving}>
+                  {bulkApproving && bulkProgress
+                    ? `Approving ${bulkProgress.done}/${bulkProgress.total}…`
+                    : `Approve ${selectedPendingCount} selected`}
+                </Button>
+              )}
               {dockets.length > 0 && (
                 <Button variant="outline" onClick={handleExportCSV}>
                   Export CSV
@@ -396,6 +539,11 @@ export function DocketApprovalsPage() {
               onApprove={(d) => openActionModal(d, 'approve')}
               onQuery={(d) => openActionModal(d, 'query')}
               onReject={(d) => openActionModal(d, 'reject')}
+              selectionEnabled={selectionEnabled}
+              selectedIds={selectedIds}
+              allPendingSelected={allPendingSelected}
+              onToggleDocket={toggleDocketSelection}
+              onToggleAll={toggleSelectAllPending}
             />
           )}
 

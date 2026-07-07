@@ -299,6 +299,69 @@ describe('subbie shell DocketScreen', () => {
     });
   });
 
+  it('"Save & add another" keeps the sheet open, clears the person, and retains times + lot', async () => {
+    setApi({ docket: makeDocket(), existingDockets: [] });
+    const labourPost = vi.fn();
+    apiFetchMock.mockImplementation((url: string, opts?: { method?: string; body?: string }) => {
+      const method = opts?.method ?? 'GET';
+      if (url.startsWith('/api/subcontractors/my-company'))
+        return Promise.resolve({
+          company: {
+            id: 'c1',
+            projectId: PROJECT_ID,
+            projectName: 'Demo',
+            employees: [APPROVED_EMP, PENDING_EMP],
+            plant: [APPROVED_PLANT],
+          },
+        });
+      if (url.startsWith('/api/lots')) return Promise.resolve({ lots: ASSIGNED_LOTS });
+      if (/^\/api\/dockets\?/.test(url)) return Promise.resolve({ dockets: [] });
+      if (/^\/api\/dockets\/dk-1$/.test(url) && method === 'GET')
+        return Promise.resolve({ docket: makeDocket() });
+      if (/\/labour$/.test(url) && method === 'POST') {
+        labourPost(JSON.parse(opts!.body!));
+        return Promise.resolve({
+          labourEntry: {
+            id: `le-${labourPost.mock.calls.length}`,
+            employee: { id: APPROVED_EMP.id, name: 'Tommy', role: 'Pipe Layer', hourlyRate: 74 },
+            startTime: '07:00',
+            finishTime: '15:30',
+            submittedHours: 8,
+            hourlyRate: 74,
+            submittedCost: 592,
+            lotAllocations: [{ lotId: 'lot-1', lotNumber: 'LOT-014', hours: 8 }],
+          },
+          runningTotal: { cost: 592 },
+        });
+      }
+      return Promise.resolve({ docket: makeDocket() });
+    });
+
+    renderDocket('/p/docket/dk-1');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add crew hours' }));
+    const tommyRow = await screen.findByRole('button', { name: /Tommy Vella/ });
+    fireEvent.click(tommyRow);
+    fireEvent.click(screen.getByRole('button', { name: /Save and add another/i }));
+
+    await waitFor(() => expect(labourPost).toHaveBeenCalledTimes(1));
+
+    // Sheet stays open and the person is cleared (no longer selected).
+    expect(screen.getByRole('button', { name: 'Add to docket' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Tommy Vella/ })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+
+    // Re-picking the same worker and adding again reuses the retained times + lot.
+    fireEvent.click(screen.getByRole('button', { name: /Tommy Vella/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to docket' }));
+    await waitFor(() => expect(labourPost).toHaveBeenCalledTimes(2));
+    expect(labourPost.mock.calls[1][0]).toEqual(labourPost.mock.calls[0][0]);
+  });
+
   it('plant POST payload carries wetOrDry literal + hoursOperated', async () => {
     setApi({ docket: makeDocket(), existingDockets: [] });
     const plantPost = vi.fn();
@@ -445,18 +508,18 @@ describe('subbie shell DocketScreen', () => {
     renderDocket('/p/docket/dk-1');
 
     expect(await screen.findByText('Tommy')).toBeInTheDocument();
-    expect(screen.getAllByText('$444').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$444.00').length).toBeGreaterThan(0);
     expect(screen.getByText('6 h')).toBeInTheDocument();
-    expect(screen.getAllByText('$300').length).toBeGreaterThan(0);
-    expect(screen.getByText('was 8 h / $592')).toBeInTheDocument();
-    expect(screen.getByText('was $450')).toBeInTheDocument();
+    expect(screen.getAllByText('$300.00').length).toBeGreaterThan(0);
+    expect(screen.getByText('was 8 h / $592.00')).toBeInTheDocument();
+    expect(screen.getByText('was $450.00')).toBeInTheDocument();
     expect(screen.getAllByText('LOT-014').length).toBeGreaterThan(1);
     expect(screen.getByText(/Approved with adjustment/i)).toBeInTheDocument();
     expect(screen.getByText('Reduced to verified site hours')).toBeInTheDocument();
 
     const grandLabel = screen.getByText("Today's total");
     const grandRow = grandLabel.closest('.grand')!;
-    expect(within(grandRow as HTMLElement).getByText('$744')).toBeInTheDocument();
+    expect(within(grandRow as HTMLElement).getByText('$744.00')).toBeInTheDocument();
   });
 
   it('submit is disabled when the draft has no entries', async () => {
@@ -648,7 +711,7 @@ describe('subbie shell DocketScreen', () => {
     const grandLabel = await screen.findByText("Today's total");
     // The grand-total row pairs the label with the running total ($592).
     const grandRow = grandLabel.closest('.grand')!;
-    expect(within(grandRow as HTMLElement).getByText('$592')).toBeInTheDocument();
+    expect(within(grandRow as HTMLElement).getByText('$592.00')).toBeInTheDocument();
   });
 
   it('entry delete is two-tap: first tap arms (no DELETE), second tap deletes', async () => {
@@ -740,7 +803,7 @@ describe('subbie shell DocketScreen', () => {
     renderDocket('/p/docket/dk-1');
 
     const totalBefore = (await screen.findByText("Today's total")).closest('.grand')!;
-    expect(within(totalBefore as HTMLElement).getByText('$740')).toBeInTheDocument();
+    expect(within(totalBefore as HTMLElement).getByText('$740.00')).toBeInTheDocument();
 
     const removeBtn = await screen.findByRole('button', { name: /Remove Tommy Vella/ });
     fireEvent.click(removeBtn);
@@ -750,7 +813,7 @@ describe('subbie shell DocketScreen', () => {
       expect(screen.queryByRole('button', { name: /Remove Tommy Vella/ })).not.toBeInTheDocument();
     });
     const totalAfter = screen.getByText("Today's total").closest('.grand')!;
-    expect(within(totalAfter as HTMLElement).getByText('$111')).toBeInTheDocument();
+    expect(within(totalAfter as HTMLElement).getByText('$111.00')).toBeInTheDocument();
   });
 
   it('a slow docket GET after the lazy create cannot erase the first entry (seed-once guard)', async () => {

@@ -180,7 +180,7 @@ describe('DocketEditPagePanels', () => {
       />,
     );
 
-    expect(screen.getByText('$731')).toBeInTheDocument();
+    expect(screen.getByText('$731.25')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /resubmit for approval/i }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
 

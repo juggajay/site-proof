@@ -31,7 +31,19 @@ interface DocketApprovalsMobileViewProps {
   onReject: (docket: Docket) => void;
   onTapDocket: (docket: Docket) => void;
   onRefresh: () => Promise<void>;
+  // Bulk-approve selection (unadjusted). Omitted on read-only surfaces.
+  selectionEnabled?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleDocket?: (id: string) => void;
+  selectedPendingCount?: number;
+  bulkApproving?: boolean;
+  bulkProgress?: { done: number; total: number } | null;
+  onBulkApprove?: () => void;
+  // Read-only count of started-but-unsubmitted dockets that already carry hours.
+  draftsWithHoursCount?: number;
 }
+
+const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -94,10 +106,16 @@ function DocketCard({
   docket,
   onTap,
   actions,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   docket: Docket;
   onTap: () => void;
   actions?: ReactNode;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const touchStartRef = useRef({ x: 0, y: 0 });
 
@@ -123,6 +141,16 @@ function DocketCard({
     >
       {/* Header: title + status badge */}
       <div className="flex items-start justify-between gap-3">
+        {selectable && (
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 shrink-0"
+            checked={selected}
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => onToggleSelect?.()}
+            aria-label={`Select docket ${docket.docketNumber}`}
+          />
+        )}
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-base truncate">{docket.subcontractor}</h3>
           <p className="text-sm text-muted-foreground">{docket.docketNumber}</p>
@@ -208,6 +236,14 @@ export function DocketApprovalsMobileView({
   onReject,
   onTapDocket,
   onRefresh,
+  selectionEnabled = false,
+  selectedIds = EMPTY_SELECTION,
+  onToggleDocket,
+  selectedPendingCount = 0,
+  bulkApproving = false,
+  bulkProgress = null,
+  onBulkApprove,
+  draftsWithHoursCount = 0,
 }: DocketApprovalsMobileViewProps) {
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh });
   const hasSubmittedDockets = dockets.some((docket) => docket.status !== 'draft');
@@ -223,6 +259,13 @@ export function DocketApprovalsMobileView({
           </span>
         )}
       </div>
+
+      {/* A2. Draft-with-hours nudge (read-only) */}
+      {draftsWithHoursCount > 0 && (
+        <p className="px-4 pb-1 text-xs text-muted-foreground">
+          {draftsWithHoursCount} started but not yet submitted
+        </p>
+      )}
 
       {/* B. Filter pills */}
       <div className="flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
@@ -373,6 +416,9 @@ export function DocketApprovalsMobileView({
                   <DocketCard
                     docket={docket}
                     onTap={() => onTapDocket(docket)}
+                    selectable={selectionEnabled}
+                    selected={selectedIds.has(docket.id)}
+                    onToggleSelect={() => onToggleDocket?.(docket.id)}
                     actions={
                       canApprove ? (
                         <>
@@ -411,6 +457,23 @@ export function DocketApprovalsMobileView({
             )}
         </div>
       </div>
+
+      {/* Bulk-approve bar — unadjusted approvals only; dockets needing an hour
+          edit are approved one at a time through the detail sheet. */}
+      {selectionEnabled && selectedPendingCount > 0 && (
+        <div className="border-t bg-background px-4 py-3">
+          <button
+            type="button"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-success px-3 py-2 text-sm font-medium text-success-foreground disabled:opacity-50"
+            onClick={() => onBulkApprove?.()}
+            disabled={bulkApproving}
+          >
+            {bulkApproving && bulkProgress
+              ? `Approving ${bulkProgress.done}/${bulkProgress.total}…`
+              : `Approve ${selectedPendingCount} selected`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

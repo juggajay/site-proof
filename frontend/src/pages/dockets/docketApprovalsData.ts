@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { formatAud } from '@/lib/formatAud';
 import { logError } from '@/lib/logger';
 import { queryKeys } from '@/lib/queryKeys';
 
@@ -102,12 +103,9 @@ function centsDiffer(left: number, right: number): boolean {
   return Math.abs(left - right) >= 0.005;
 }
 
-export function formatDocketCurrency(value: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-  }).format(value);
-}
+// Kept as a named re-export so the many docket callers stay untouched; the one
+// AUD implementation lives in lib/formatAud.
+export const formatDocketCurrency = formatAud;
 
 export function getDocketSubmittedLabourCost(docket: Docket): number {
   return moneyValue(docket.totalLabourSubmitted);

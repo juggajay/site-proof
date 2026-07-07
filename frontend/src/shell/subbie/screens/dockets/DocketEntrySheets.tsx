@@ -46,6 +46,7 @@ export function LabourSheet({
   onSelectedLotIdChange,
   onClose,
   onAdd,
+  onAddAnother,
 }: {
   open: boolean;
   /** All roster employees — pending/counter render locked, approved selectable. */
@@ -65,6 +66,8 @@ export function LabourSheet({
   onSelectedLotIdChange: (value: string) => void;
   onClose: () => void;
   onAdd: () => void;
+  /** Save this entry but keep the sheet open (times + lot retained). */
+  onAddAnother?: () => void;
 }) {
   const lotMissing = !selectedLotId;
   const canAdd = Boolean(selectedEmployee) && !lotMissing && !labourHoursError && !saving;
@@ -215,6 +218,18 @@ export function LabourSheet({
             'Add to docket'
           )}
         </button>
+
+        {onAddAnother && (
+          <button
+            type="button"
+            className="-mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-input text-[14px] font-medium text-foreground active:bg-secondary disabled:opacity-50"
+            disabled={!canAdd}
+            onClick={onAddAnother}
+            aria-label="Save and add another"
+          >
+            Save &amp; add another
+          </button>
+        )}
       </div>
     </BottomSheet>
   );
@@ -240,6 +255,7 @@ export function PlantSheet({
   onSelectedLotIdChange,
   onClose,
   onAdd,
+  onAddAnother,
 }: {
   open: boolean;
   plant: Plant[];
@@ -258,6 +274,8 @@ export function PlantSheet({
   onSelectedLotIdChange: (value: string) => void;
   onClose: () => void;
   onAdd: () => void;
+  /** Save this entry but keep the sheet open (hours + wet/dry + lot retained). */
+  onAddAnother?: () => void;
 }) {
   const lotMissing = assignedLots.length > 0 && !selectedLotId;
   const canAdd = Boolean(selectedPlant) && !lotMissing && !plantHoursError && !saving;
@@ -408,6 +426,18 @@ export function PlantSheet({
             'Add to docket'
           )}
         </button>
+
+        {onAddAnother && (
+          <button
+            type="button"
+            className="-mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-input text-[14px] font-medium text-foreground active:bg-secondary disabled:opacity-50"
+            disabled={!canAdd}
+            onClick={onAddAnother}
+            aria-label="Save and add another"
+          >
+            Save &amp; add another
+          </button>
+        )}
       </div>
     </BottomSheet>
   );

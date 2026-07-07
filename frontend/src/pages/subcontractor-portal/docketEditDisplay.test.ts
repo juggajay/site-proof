@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { formatCurrency, formatDate } from './docketEditDisplay';
 
 describe('docket edit display – formatCurrency', () => {
-  it('formats whole-dollar AUD amounts with no decimals', () => {
-    expect(formatCurrency(1234)).toBe('$1,234');
+  it('formats AUD amounts with cents', () => {
+    expect(formatCurrency(1234)).toBe('$1,234.00');
   });
 
-  it('rounds to whole dollars (no fractional cents shown)', () => {
-    expect(formatCurrency(1234.56)).toBe('$1,235');
-    expect(formatCurrency(0.4)).toBe('$0');
+  it('keeps fractional cents instead of rounding to whole dollars', () => {
+    expect(formatCurrency(1234.56)).toBe('$1,234.56');
+    expect(formatCurrency(0.4)).toBe('$0.40');
   });
 
-  it('formats zero as $0', () => {
-    expect(formatCurrency(0)).toBe('$0');
+  it('formats zero as $0.00', () => {
+    expect(formatCurrency(0)).toBe('$0.00');
   });
 
   it('prefixes negative amounts with a minus sign', () => {
-    expect(formatCurrency(-50)).toBe('-$50');
+    expect(formatCurrency(-50)).toBe('-$50.00');
   });
 });
 

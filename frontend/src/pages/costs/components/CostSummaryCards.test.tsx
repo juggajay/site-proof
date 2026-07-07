@@ -23,12 +23,12 @@ describe('CostSummaryCards', () => {
     renderWithProviders(<CostSummaryCards summary={summary} isMobile={false} />);
 
     expect(screen.getByText('Total Cost')).toBeInTheDocument();
-    expect(screen.getByText('$30,000')).toBeInTheDocument();
+    expect(screen.getByText('$30,000.00')).toBeInTheDocument();
     expect(screen.getByText('Labour Cost')).toBeInTheDocument();
-    expect(screen.getByText('$20,000')).toBeInTheDocument();
+    expect(screen.getByText('$20,000.00')).toBeInTheDocument();
     expect(screen.getByText('67% of total')).toBeInTheDocument();
     expect(screen.getByText('Plant Cost')).toBeInTheDocument();
-    expect(screen.getByText('$10,000')).toBeInTheDocument();
+    expect(screen.getByText('$10,000.00')).toBeInTheDocument();
     expect(screen.getByText('33% of total')).toBeInTheDocument();
   });
 
@@ -48,7 +48,7 @@ describe('CostSummaryCards', () => {
       <CostSummaryCards summary={{ ...summary, budgetVariance: -2500 }} isMobile={false} />,
     );
 
-    expect(screen.getByText(/Over budget by/i)).toHaveTextContent('Over budget by $2,500');
+    expect(screen.getByText(/Over budget by/i)).toHaveTextContent('Over budget by $2,500.00');
   });
 });
 

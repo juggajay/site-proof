@@ -16,6 +16,8 @@ import {
 // reject actions. All queries, mutations, filtering state, and the action
 // modal trigger stay on the page; this component is prop-driven and
 // presentation-only, mirroring DocketApprovalsMobileView's callback API.
+const EMPTY_SELECTION: ReadonlySet<string> = new Set();
+
 export function DocketApprovalsTable({
   loading,
   filteredDockets,
@@ -31,6 +33,11 @@ export function DocketApprovalsTable({
   onApprove,
   onQuery,
   onReject,
+  selectionEnabled = false,
+  selectedIds = EMPTY_SELECTION,
+  allPendingSelected = false,
+  onToggleDocket,
+  onToggleAll,
 }: {
   loading: boolean;
   filteredDockets: Docket[];
@@ -46,12 +53,30 @@ export function DocketApprovalsTable({
   onApprove: (docket: Docket) => void;
   onQuery: (docket: Docket) => void;
   onReject: (docket: Docket) => void;
+  // Bulk-approve selection (unadjusted). Omitted on read-only surfaces.
+  selectionEnabled?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  allPendingSelected?: boolean;
+  onToggleDocket?: (id: string) => void;
+  onToggleAll?: () => void;
 }) {
+  const columnCount = selectionEnabled ? 10 : 9;
   return (
     <div className="rounded-lg border">
       <table className="w-full">
         <thead className="border-b bg-muted/50">
           <tr>
+            {selectionEnabled && (
+              <th className="px-4 py-3 text-left text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={allPendingSelected}
+                  onChange={() => onToggleAll?.()}
+                  aria-label="Select all pending dockets"
+                />
+              </th>
+            )}
             <th className="px-4 py-3 text-left text-sm font-medium">Docket #</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Subcontractor</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
@@ -66,7 +91,7 @@ export function DocketApprovalsTable({
         <tbody className="divide-y">
           {loading ? (
             <tr>
-              <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+              <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                   <span className="ml-2">Loading dockets...</span>
@@ -75,7 +100,7 @@ export function DocketApprovalsTable({
             </tr>
           ) : filteredDockets.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+              <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
                 {submittedDockets.length === 0 ? (
                   <div className="mx-auto flex max-w-md flex-col items-center gap-3">
                     <div>
@@ -114,6 +139,19 @@ export function DocketApprovalsTable({
                 className="hover:bg-muted/30 cursor-pointer"
                 onClick={() => onTapDocket(docket)}
               >
+                {selectionEnabled && (
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    {docket.status === 'pending_approval' && (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={selectedIds.has(docket.id)}
+                        onChange={() => onToggleDocket?.(docket.id)}
+                        aria-label={`Select docket ${docket.docketNumber}`}
+                      />
+                    )}
+                  </td>
+                )}
                 <td className="px-4 py-3 text-sm font-medium">{docket.docketNumber}</td>
                 <td className="px-4 py-3 text-sm">{docket.subcontractor}</td>
                 <td className="px-4 py-3 text-sm">{docket.date}</td>

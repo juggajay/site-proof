@@ -89,16 +89,16 @@ describe('DocketEditTabs', () => {
     renderTabs('labour');
 
     expect(screen.getByText('Tommy Vella')).toBeInTheDocument();
-    expect(screen.getAllByText('$444').length).toBeGreaterThan(0);
-    expect(screen.getByText('Submitted: 8h / $592')).toBeInTheDocument();
+    expect(screen.getAllByText('$444.00').length).toBeGreaterThan(0);
+    expect(screen.getByText('Submitted: 8h / $592.00')).toBeInTheDocument();
   });
 
   it('shows approved plant entry cost with the submitted value as context', () => {
     renderTabs('plant');
 
     expect(screen.getByText('Excavator')).toBeInTheDocument();
-    expect(screen.getAllByText('$300').length).toBeGreaterThan(0);
-    expect(screen.getByText('Submitted: 3h × $150/hr (dry) = $450')).toBeInTheDocument();
+    expect(screen.getAllByText('$300.00').length).toBeGreaterThan(0);
+    expect(screen.getByText('Submitted: 3h × $150/hr (dry) = $450.00')).toBeInTheDocument();
     expect(screen.getByText('LOT-014')).toBeInTheDocument();
   });
 });

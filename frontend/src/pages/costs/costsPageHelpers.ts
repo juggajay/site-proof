@@ -3,6 +3,7 @@
 // currency formatting, search/over-budget filtering, the subcontractor totals
 // reducer, and the CSV row builder for the export report. The downloadCsv
 // side effect (and its dated filename) stays in the page.
+import { formatAud } from '@/lib/formatAud';
 
 export interface CostSummary {
   totalLabourCost: number;
@@ -57,14 +58,10 @@ export function createEmptyCostSummary(): CostSummary {
   };
 }
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+// Delegates to the single lib/formatAud implementation (cents). This drives both
+// the on-screen cost figures and the CSV export rows below, so the exported
+// report now carries full cents instead of silently rounding to whole dollars.
+export const formatCurrency = formatAud;
 
 // Returns the input array untouched when there is no search so memoized
 // callers keep their referential identity, matching the previous inline memo.
