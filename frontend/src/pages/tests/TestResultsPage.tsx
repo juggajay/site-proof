@@ -519,6 +519,8 @@ export function TestResultsPage() {
             category: ncrFormData.category,
             severity: ncrFormData.severity,
             specificationReference: ncrFormData.specificationReference.trim() || undefined,
+            responsibleUserId: ncrFormData.responsibleUserId,
+            responsibleSubcontractorId: ncrFormData.responsibleSubcontractorId,
             lotIds: failedTestForNcr.lotId ? [failedTestForNcr.lotId] : undefined,
             linkedTestResultId: failedTestForNcr.testId,
           }),
@@ -829,6 +831,7 @@ export function TestResultsPage() {
         onSubmit={handleCreateNcrFromTest}
         failedTestForNcr={failedTestForNcr}
         initialDescription={ncrInitialDescription}
+        projectId={projectId}
       />
     </div>
   );

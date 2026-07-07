@@ -48,5 +48,32 @@ export function useItpTemplateAssignment({
     }
   };
 
-  return { assigningTemplate, assignTemplate };
+  const unassignTemplate = async (instanceId: string) => {
+    if (!instanceId || assigningTemplate) return false;
+
+    setAssigningTemplate(true);
+    setItpLoadError(null);
+
+    try {
+      await apiFetch(`/api/itp/instances/${encodeURIComponent(instanceId)}`, {
+        method: 'DELETE',
+      });
+      setItpInstance(null);
+      void refetchReadiness();
+      void refetchConformStatus();
+      return true;
+    } catch (err) {
+      logError('Failed to unassign template:', err);
+      toast({
+        title: 'Failed to unassign ITP template',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
+      return false;
+    } finally {
+      setAssigningTemplate(false);
+    }
+  };
+
+  return { assigningTemplate, assignTemplate, unassignTemplate };
 }

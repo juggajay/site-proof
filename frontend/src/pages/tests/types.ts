@@ -52,6 +52,8 @@ export interface NcrFormData {
   category: string;
   severity: string;
   specificationReference: string;
+  responsibleUserId?: string;
+  responsibleSubcontractorId?: string;
 }
 
 export interface FailedTestForNcr {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import { ITPChecklistTab, type ITPChecklistTabProps } from './ITPChecklistTab';
@@ -117,6 +117,7 @@ function renderChecklist(overrides: Partial<ITPChecklistTabProps> = {}) {
     onAddPhoto: vi.fn(),
     onAddPhotoDesktop: vi.fn(),
     onAssignTemplate: vi.fn(),
+    onUnassignTemplate: vi.fn(),
     onRetryItp: vi.fn(),
     assigningTemplate: false,
     onOpenNaModal: vi.fn(),
@@ -136,6 +137,33 @@ describe('ITPChecklistTab desktop default expansion', () => {
     expect(screen.queryByText(/Strip topsoil/i)).not.toBeInTheDocument();
     expect(screen.getByText('Pavement')).toBeInTheDocument();
     expect(screen.getByText('Earthworks')).toBeInTheDocument();
+  });
+});
+
+describe('ITPChecklistTab unassign action', () => {
+  it('shows Unassign for template managers when an ITP is assigned', async () => {
+    renderChecklist({ itpInstance, canAssignITPTemplate: true });
+
+    expect(await screen.findByRole('button', { name: 'Unassign' })).toBeInTheDocument();
+  });
+
+  it('hides Unassign when the user cannot manage ITP templates', async () => {
+    renderChecklist({ itpInstance, canAssignITPTemplate: false });
+
+    expect(await screen.findByText(/Compact subgrade/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Unassign' })).not.toBeInTheDocument();
+  });
+
+  it('confirms before unassigning the current ITP instance', async () => {
+    const onUnassignTemplate = vi.fn().mockResolvedValue(true);
+    renderChecklist({ itpInstance, onUnassignTemplate });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Unassign' }));
+    expect(screen.getByRole('alertdialog', { name: 'Unassign ITP template' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unassign ITP' }));
+
+    await waitFor(() => expect(onUnassignTemplate).toHaveBeenCalledWith('instance-1'));
   });
 });
 

@@ -7,8 +7,9 @@
  *     key the classic MyCompanyPage uses, so the cache is shared and new rows
  *     surface via the same invalidation). The shell's selected projectId comes
  *     from the subbie context.
- *   - write gate: `canManageRoster = user.role === 'subcontractor_admin'` —
- *     byte-identical to MyCompanyPage.tsx:44. Plain `subcontractor` is view-only.
+ *   - write gate: `canManageRoster = actualRole === 'subcontractor_admin'`.
+ *     Plain `subcontractor` is view-only even when the dev role preview changes
+ *     `user.role`.
  *   - rate validation: `parseRateInput` (imported) — invalid rate is rejected
  *     before the POST, exactly as the classic page does.
  *   - endpoints: POST /api/subcontractors/my-company/{employees,plant};
@@ -240,7 +241,7 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count: s
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export function CompanyScreen() {
-  const { user } = useAuth();
+  const { user, actualRole } = useAuth();
   const queryClient = useQueryClient();
   const { projectId, subcontractorCompanyId } = useSubbieShellContext();
 
@@ -248,8 +249,7 @@ export function CompanyScreen() {
   const companyQuery = useMyCompanyQuery(user?.id, projectId, subcontractorCompanyId);
   const company = companyQuery.data ?? null;
 
-  // Write gate — byte-identical to MyCompanyPage.tsx:44.
-  const canManageRoster = user?.role === 'subcontractor_admin';
+  const canManageRoster = actualRole === 'subcontractor_admin';
 
   const [sheet, setSheet] = useState<'employee' | 'plant' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -532,7 +532,7 @@ export function CompanyScreen() {
 
       {!canManageRoster && (
         <p className="px-5 py-1 text-center text-[12px] text-muted-foreground/70">
-          Adding and removing crew or plant needs a company admin login.
+          Only your company admin can add or edit crew, plant and rates. Ask them to complete setup.
         </p>
       )}
 

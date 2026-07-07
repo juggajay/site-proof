@@ -195,7 +195,7 @@ export function useItpInstance({
   // Poll for ITP updates every 20 seconds to catch holdpoint releases quickly.
   useItpReleasePolling({ lotId, currentTab, isOnline, setItpInstance });
 
-  const { assigningTemplate, assignTemplate } = useItpTemplateAssignment({
+  const { assigningTemplate, assignTemplate, unassignTemplate } = useItpTemplateAssignment({
     lotId,
     setItpInstance,
     setItpLoadError,
@@ -510,6 +510,7 @@ export function useItpInstance({
     updatingCompletionRef,
     refetchItp: fetchItpInstance,
     assignTemplate,
+    unassignTemplate,
     toggleCompletion,
     updateNotes,
     markAsNA,

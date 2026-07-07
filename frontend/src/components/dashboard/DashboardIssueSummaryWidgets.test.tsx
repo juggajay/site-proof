@@ -21,12 +21,12 @@ describe('DashboardIssueSummaryWidgets', () => {
     expect(screen.getByRole('button', { name: /Open Hold Points\s+4/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View all hold points →' })).toHaveAttribute(
       'href',
-      '/projects?view=holdpoints',
+      '/projects',
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Open Hold Points\s+4/i }));
 
-    expect(onNavigate).toHaveBeenCalledWith('/projects?view=holdpoints');
+    expect(onNavigate).toHaveBeenCalledWith('/projects');
   });
 
   it('renders NCR counts and reports navigation', () => {
@@ -42,11 +42,11 @@ describe('DashboardIssueSummaryWidgets', () => {
     expect(screen.getByRole('button', { name: /Open NCRs\s+2/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View all NCRs →' })).toHaveAttribute(
       'href',
-      '/projects?view=ncrs',
+      '/projects',
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Open NCRs\s+2/i }));
 
-    expect(onNavigate).toHaveBeenCalledWith('/projects?view=ncrs');
+    expect(onNavigate).toHaveBeenCalledWith('/projects');
   });
 });

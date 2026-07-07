@@ -48,7 +48,7 @@ export function DashboardKpiTiles({
       label: 'Active Projects',
       value: String(activeProjects),
       sub: 'currently on site',
-      to: '/projects?status=active',
+      to: '/projects',
     },
     {
       label: 'Total Lots',

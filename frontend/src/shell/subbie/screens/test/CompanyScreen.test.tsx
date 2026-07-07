@@ -28,8 +28,12 @@ vi.mock('@/lib/useOfflineStatus', () => ({
 }));
 
 let _role = 'subcontractor';
+let _actualRole = 'subcontractor';
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ user: { id: 'u1', fullName: 'Mick', role: _role } }),
+  useAuth: () => ({
+    user: { id: 'u1', fullName: 'Mick', role: _role },
+    actualRole: _actualRole,
+  }),
 }));
 
 const apiFetchMock = vi.fn().mockResolvedValue({});
@@ -114,6 +118,7 @@ describe('subbie shell CompanyScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _role = 'subcontractor';
+    _actualRole = 'subcontractor';
     _ctx = ctx();
     _companyData = company();
     apiFetchMock.mockResolvedValue({});
@@ -129,12 +134,23 @@ describe('subbie shell CompanyScreen', () => {
     expect(screen.queryByRole('button', { name: /Add crew member/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Remove Mick/i })).toBeNull();
     expect(
-      screen.getByText(/Adding and removing crew or plant needs a company admin login/i),
+      screen.getByText(
+        /Only your company admin can add or edit crew, plant and rates\. Ask them to complete setup\./i,
+      ),
     ).toBeInTheDocument();
   });
 
-  it('subcontractor_admin sees add buttons', () => {
+  it('uses actualRole instead of the preview role for roster management', () => {
     _role = 'subcontractor_admin';
+    _actualRole = 'subcontractor';
+    renderScreen();
+    expect(screen.queryByRole('button', { name: /Add crew member/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add plant/i })).toBeNull();
+  });
+
+  it('subcontractor_admin actualRole sees add buttons', () => {
+    _role = 'subcontractor';
+    _actualRole = 'subcontractor_admin';
     renderScreen();
     expect(screen.getByRole('button', { name: /Add crew member/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add plant/i })).toBeInTheDocument();
@@ -142,6 +158,7 @@ describe('subbie shell CompanyScreen', () => {
 
   it('add-employee POSTs the exact payload after parseRateInput', async () => {
     _role = 'subcontractor_admin';
+    _actualRole = 'subcontractor_admin';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: /Add crew member/i }));
     const sheet = screen.getByRole('dialog', { name: 'Add crew member' });
@@ -172,6 +189,7 @@ describe('subbie shell CompanyScreen', () => {
 
   it('rejects an invalid hourly rate before POST', async () => {
     _role = 'subcontractor_admin';
+    _actualRole = 'subcontractor_admin';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: /Add crew member/i }));
     const sheet = screen.getByRole('dialog', { name: 'Add crew member' });
@@ -188,6 +206,7 @@ describe('subbie shell CompanyScreen', () => {
 
   it('add-plant POSTs the exact payload (dry required, wet optional/zero)', async () => {
     _role = 'subcontractor_admin';
+    _actualRole = 'subcontractor_admin';
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: /Add plant/i }));
     const sheet = screen.getByRole('dialog', { name: 'Add plant' });
@@ -218,6 +237,7 @@ describe('subbie shell CompanyScreen', () => {
 
   it('delete employee is two-tap (arm, then DELETE on the classic endpoint with ?projectId=)', async () => {
     _role = 'subcontractor_admin';
+    _actualRole = 'subcontractor_admin';
     _companyData = company({
       employees: [
         {

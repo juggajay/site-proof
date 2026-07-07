@@ -6,8 +6,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, WifiOff, CloudOff, Printer } from 'lucide-react';
+import { RefreshCw, WifiOff, CloudOff, Printer, Unlink } from 'lucide-react';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findFirstIncompleteItpCategory } from '@/components/foreman/mobileItpChecklistHelpers';
 import type { ITPInstance, ITPTemplate, ITPAttachment, Lot } from '../types';
 import { ITPChecklistItemRow } from './ITPChecklistItemRow';
@@ -61,6 +62,7 @@ export interface ITPChecklistTabProps {
     event: React.ChangeEvent<HTMLInputElement>,
   ) => void;
   onAssignTemplate: (templateId: string) => Promise<boolean>;
+  onUnassignTemplate: (instanceId: string) => Promise<boolean>;
   onRetryItp: () => void;
   assigningTemplate: boolean;
   autoOpenAssignTemplate?: boolean;
@@ -102,6 +104,7 @@ export function ITPChecklistTab({
   onAddPhoto,
   onAddPhotoDesktop,
   onAssignTemplate,
+  onUnassignTemplate,
   onRetryItp,
   assigningTemplate,
   autoOpenAssignTemplate = false,
@@ -123,6 +126,7 @@ export function ITPChecklistTab({
   const [itpStatusFilter, setItpStatusFilter] = useState<ItpStatusFilter>('all');
   const [expandedItpCategories, setExpandedItpCategories] = useState<Set<string>>(new Set());
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showUnassignConfirm, setShowUnassignConfirm] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
   const [photoZoom, setPhotoZoom] = useState(1);
   const hasAppliedDefaultItpExpansion = useRef(false);
@@ -230,6 +234,14 @@ export function ITPChecklistTab({
     setPhotoZoom(1);
   };
 
+  const handleConfirmUnassign = async () => {
+    if (!itpInstance) return;
+    const unassigned = await onUnassignTemplate(itpInstance.id);
+    if (unassigned) {
+      setShowUnassignConfirm(false);
+    }
+  };
+
   if (loadingItp) {
     return (
       <div className="flex justify-center p-8" role="status" aria-label="Loading ITP checklist">
@@ -321,11 +333,26 @@ export function ITPChecklistTab({
               ) : null}
             </div>
           )}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-lg font-semibold">ITP Progress</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">{itpInstance.template.name}</span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="max-w-[18rem] truncate text-sm text-muted-foreground">
+                {itpInstance.template.name}
+              </span>
+              {canAssignITPTemplate && (
+                <button
+                  type="button"
+                  onClick={() => setShowUnassignConfirm(true)}
+                  disabled={assigningTemplate}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50 print:hidden"
+                  title="Unassign ITP template"
+                >
+                  <Unlink className="h-4 w-4" />
+                  <span>Unassign</span>
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors print:hidden"
                 title="Print ITP Checklist"
@@ -541,6 +568,28 @@ export function ITPChecklistTab({
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={showUnassignConfirm}
+          title="Unassign ITP template"
+          description={
+            <>
+              <p>
+                Unassign {itpInstance.template.name} from {lot?.lotNumber || 'this lot'}?
+              </p>
+              <p>
+                This is only allowed when no completions, hold points, or test results have been
+                recorded for this ITP on the lot.
+              </p>
+            </>
+          }
+          confirmLabel={assigningTemplate ? 'Unassigning...' : 'Unassign ITP'}
+          variant="destructive"
+          confirmDisabled={assigningTemplate}
+          cancelDisabled={assigningTemplate}
+          onCancel={() => setShowUnassignConfirm(false)}
+          onConfirm={() => void handleConfirmUnassign()}
+        />
       </>
     );
   }

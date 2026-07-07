@@ -24,6 +24,10 @@ import { buildItpInstanceResponse } from './instances/responses.js';
 import { sanitizeItpCompletionResponse } from './completionResponses.js';
 import { deriveItpVerificationFlags } from './completionWorkflow.js';
 import { findLinkedNcrsForChecklistItems, type NcrLinkClient } from './instances/ncrLinks.js';
+import {
+  assertItpInstanceUnassignable,
+  type ItpInstanceUnassignGuardClient,
+} from './instances/unassignGuard.js';
 
 // Type for ITP completion with attachments
 interface CompletionWithAttachments {
@@ -231,6 +235,65 @@ instancesRouter.post(
     };
 
     res.status(201).json(buildItpInstanceResponse(transformedInstance));
+  }),
+);
+
+// DELETE /instances/:id - Unassign ITP instance from a lot
+instancesRouter.delete(
+  '/instances/:id',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const user = req.user as AuthUser;
+    const id = parseInstanceRouteParam(req.params.id, 'id');
+
+    const instance = await prisma.iTPInstance.findUnique({
+      where: { id },
+      include: {
+        lot: {
+          select: { id: true, projectId: true, status: true },
+        },
+      },
+    });
+
+    if (!instance) {
+      throw AppError.notFound('ITP instance');
+    }
+
+    const { lot } = instance;
+    if (lot.status === 'conformed' || lot.status === 'claimed') {
+      throw AppError.badRequest(`Cannot unassign an ITP from a ${lot.status} lot`);
+    }
+
+    await requireItpProjectRole(
+      user,
+      lot.projectId,
+      ITP_MANAGE_ROLES,
+      'ITP template assignment access required',
+    );
+
+    await assertItpInstanceUnassignable(prisma as unknown as ItpInstanceUnassignGuardClient, {
+      instanceId: instance.id,
+      lotId: lot.id,
+      templateId: instance.templateId,
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.iTPInstance.delete({
+        where: { id: instance.id },
+      });
+
+      await tx.lot.update({
+        where: { id: lot.id },
+        data: { itpTemplateId: null },
+      });
+    });
+
+    res.json({
+      success: true,
+      message: 'ITP unassigned from lot',
+      instanceId: instance.id,
+      lotId: lot.id,
+    });
   }),
 );
 
