@@ -26,19 +26,12 @@ import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
 import { useTheme } from '@/lib/theme';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { buildProjectSwitchPath } from './projectSwitchPath';
 
 interface Project {
   id: string;
   name: string;
   projectNumber: string;
-}
-
-function decodePathSegment(segment: string): string {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
 }
 
 export function Header() {
@@ -149,22 +142,7 @@ export function Header() {
 
   const handleProjectSelect = (project: Project) => {
     setIsProjectSelectorOpen(false);
-    // Extract the current path segment after projectId (e.g., /lots, /ncr)
-    const pathParts = location.pathname.split('/').filter(Boolean);
-    const projectIndex = pathParts.findIndex(
-      (part, index) =>
-        index > 0 && pathParts[index - 1] === 'projects' && decodePathSegment(part) === projectId,
-    );
-    const targetProjectId = encodeURIComponent(project.id);
-    let targetPath = `/projects/${targetProjectId}/lots`; // Default to lots page
-
-    if (projectIndex !== -1 && pathParts.length > projectIndex + 1) {
-      // Navigate to the same module in the new project
-      const modulePath = pathParts.slice(projectIndex + 1).join('/');
-      targetPath = `/projects/${targetProjectId}/${modulePath}`;
-    }
-
-    navigate(targetPath);
+    navigate(buildProjectSwitchPath(location.pathname, projectId, project.id));
   };
 
   return (

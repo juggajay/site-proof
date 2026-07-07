@@ -32,8 +32,13 @@ import {
 vi.mock('@/lib/useOfflineStatus', () => ({
   useOfflineStatus: () => ({ isOnline: true, pendingSyncCount: 0, isSyncing: false }),
 }));
+let _role = 'subcontractor';
+let _actualRole = 'subcontractor';
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ user: { id: 'u1', fullName: 'Mick Hargraves', role: 'subcontractor' } }),
+  useAuth: () => ({
+    user: { id: 'u1', fullName: 'Mick Hargraves', role: _role },
+    actualRole: _actualRole,
+  }),
 }));
 
 // apiFetch — resolve per URL.
@@ -154,6 +159,8 @@ function LocationProbe() {
 describe('subbie shell HomeScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _role = 'subcontractor';
+    _actualRole = 'subcontractor';
     _ctx = makeCtx();
     setApi();
   });
@@ -210,19 +217,40 @@ describe('subbie shell HomeScreen', () => {
     expect(await screen.findByText('Answer the foreman')).toBeInTheDocument();
   });
 
-  it('renders the setup hero instead of the docket hero while prerequisites are unmet', () => {
+  it('renders the non-admin setup hero without promising roster setup access', () => {
     // Default ctx: no approved crew/plant → the hero IS the setup CTA, and the
     // old finish-setup notice is gone (the hero carries it now).
     renderHome();
-    expect(screen.getByRole('button', { name: 'Set up your company' })).toBeInTheDocument();
-    expect(screen.getByText('GET SET UP')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View company setup' })).toBeInTheDocument();
+    expect(screen.getByText('COMPANY SETUP')).toBeInTheDocument();
+    expect(screen.getByText('Company setup needed')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Ask your Hargraves Earthmoving admin to add crew and plant rates before you can submit dockets\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Set up your company')).toBeNull();
     expect(screen.queryByText("Start today's docket")).toBeNull();
     expect(screen.queryByText(/finish setup before filling out a docket/i)).toBeNull();
   });
 
+  it('keeps the admin setup hero copy and CTA', () => {
+    _role = 'subcontractor';
+    _actualRole = 'subcontractor_admin';
+    renderHome();
+    expect(screen.getByRole('button', { name: 'Set up your company' })).toBeInTheDocument();
+    expect(screen.getByText('GET SET UP')).toBeInTheDocument();
+    expect(screen.getByText('Set up your company')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Add your crew & plant in My Company and wait for rate approval — then dockets unlock\./i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('setup hero taps through to My Company with the project query', () => {
     renderHome();
-    fireEvent.click(screen.getByRole('button', { name: 'Set up your company' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View company setup' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/p/company?projectId=proj-1');
   });
 
@@ -413,6 +441,6 @@ describe('subbie shell HomeScreen', () => {
 
     // No lots assigned → prerequisites unmet → the hero flips to setup.
     lotsDeferred.resolve({ lots: [] });
-    expect(await screen.findByRole('button', { name: 'Set up your company' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'View company setup' })).toBeInTheDocument();
   });
 });

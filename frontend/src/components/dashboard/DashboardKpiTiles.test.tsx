@@ -48,7 +48,7 @@ describe('DashboardKpiTiles', () => {
     fireEvent.click(getTile('Team Members'));
 
     expect(onNavigate).toHaveBeenNthCalledWith(1, '/projects');
-    expect(onNavigate).toHaveBeenNthCalledWith(2, '/projects?status=active');
+    expect(onNavigate).toHaveBeenNthCalledWith(2, '/projects');
     expect(onNavigate).toHaveBeenNthCalledWith(3, '/projects');
     expect(onNavigate).toHaveBeenNthCalledWith(4, '/company-settings');
   });
