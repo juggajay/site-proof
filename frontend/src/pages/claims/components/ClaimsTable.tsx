@@ -134,6 +134,21 @@ function CertificationReadBack({ claim }: { claim: Claim }) {
   );
 }
 
+function DisputeReadBack({ claim }: { claim: Claim }) {
+  const { disputeNotes, disputedAt } = claim;
+  if (!disputeNotes) return null;
+
+  const notesSnippet = disputeNotes.length > 80 ? `${disputeNotes.slice(0, 80)}…` : disputeNotes;
+  const disputedDate = disputedAt ? new Date(disputedAt).toLocaleDateString('en-AU') : null;
+
+  return (
+    <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+      <div>{disputedDate ? `Disputed ${disputedDate}` : 'Disputed'}</div>
+      <div title={disputeNotes}>{notesSnippet}</div>
+    </div>
+  );
+}
+
 function downloadClaimCsv(claim: Claim) {
   const paymentDue =
     claim.paymentDueDate ??
@@ -251,6 +266,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                   <td className="p-4">
                     {getStatusBadge(claim.status)}
                     <CertificationReadBack claim={claim} />
+                    <DisputeReadBack claim={claim} />
                   </td>
                   <td className="p-4">
                     {certStatus ? (

@@ -9,6 +9,7 @@ import { queryKeys } from '@/lib/queryKeys';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const downloadCsvMock = vi.hoisted(() => vi.fn());
+const generateClaimEvidencePackagePDFMock = vi.hoisted(() => vi.fn());
 const openDocumentAccessUrlMock = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => vi.fn());
 
@@ -23,6 +24,11 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/lib/csv', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/csv')>();
   return { ...actual, downloadCsv: downloadCsvMock };
+});
+
+vi.mock('@/lib/pdfGenerator', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/pdfGenerator')>();
+  return { ...actual, generateClaimEvidencePackagePDF: generateClaimEvidencePackagePDFMock };
 });
 
 vi.mock('@/lib/documentAccess', () => ({
@@ -46,6 +52,7 @@ import type { Claim } from './types';
 import { calculatePaymentDueDate } from './utils';
 
 beforeEach(() => {
+  generateClaimEvidencePackagePDFMock.mockReset();
   openDocumentAccessUrlMock.mockReset();
   toastMock.mockReset();
 });
@@ -328,13 +335,35 @@ describe('ClaimsTable row CSV export', () => {
 });
 
 describe('SubmitClaimModal copy', () => {
-  it('describes the CSV register export without implying an evidence package is included', () => {
-    render(<SubmitClaimModal claim={SEEDED_CLAIM} onClose={vi.fn()} onSubmitted={vi.fn()} />);
+  it('says SiteProof does not send the claim and separates package download from submission', async () => {
+    const onSubmitted = vi.fn().mockResolvedValue(undefined);
+    const onGenerateEvidencePackage = vi.fn();
+    const user = userEvent.setup();
 
-    expect(screen.getByText(/claim summary CSV/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/register export/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/claim package/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/evidence package/i)).not.toBeInTheDocument();
+    render(
+      <SubmitClaimModal
+        claim={SEEDED_CLAIM}
+        onClose={vi.fn()}
+        onSubmitted={onSubmitted}
+        onGenerateEvidencePackage={onGenerateEvidencePackage}
+      />,
+    );
+
+    expect(
+      screen.getByText(/SiteProof doesn't send this claim to your client/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download evidence package (PDF)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark as submitted' })).toBeInTheDocument();
+    expect(screen.queryByText(/summary CSV/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Download evidence package (PDF)' }));
+    expect(onGenerateEvidencePackage).toHaveBeenCalledWith('claim-1', expect.any(Object));
+    expect(onSubmitted).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Mark as submitted' }));
+    expect(onSubmitted).toHaveBeenCalledWith('claim-1', 'download', undefined);
   });
 });
 
@@ -425,13 +454,83 @@ describe('ClaimsPage TanStack Query register', () => {
     expect(await screen.findByText('Claim 7')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit Claim' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Download/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark as submitted' }));
 
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claims('p1') }),
     );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claimReadiness('p1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lots('p1') });
+  });
+
+  it('generates the evidence package PDF from the submit modal without closing it', async () => {
+    generateClaimEvidencePackagePDFMock.mockResolvedValue(undefined);
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path === '/api/projects/p1/claims/claim-1/evidence-package') {
+        return Promise.resolve({ summary: { totalLots: 3 } });
+      }
+      if (path === '/api/projects/p1/claims') {
+        return Promise.resolve({ claims: [SEEDED_CLAIM] });
+      }
+      return Promise.resolve({ project: { name: 'Project One' } });
+    });
+
+    renderClaimsPage();
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Claim' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.click(within(modal).getByRole('button', { name: 'Download evidence package (PDF)' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/projects/p1/claims/claim-1/evidence-package'),
+    );
+    await waitFor(() =>
+      expect(generateClaimEvidencePackagePDFMock).toHaveBeenCalledWith(
+        expect.objectContaining({ summary: expect.objectContaining({ totalLots: 3 }) }),
+        expect.any(Object),
+      ),
+    );
+    expect(within(modal).getByRole('button', { name: 'Mark as submitted' })).toBeEnabled();
+  });
+
+  it('marks a claim submitted without requiring a package download or CSV export', async () => {
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/api/projects/p1/claims/claim-1' && options?.method === 'PUT') {
+        return Promise.resolve({
+          claim: { ...SEEDED_CLAIM, status: 'submitted', submittedAt: '2026-06-07T03:30:00.000Z' },
+        });
+      }
+      if (path === '/api/projects/p1/claims') {
+        return Promise.resolve({ claims: [SEEDED_CLAIM] });
+      }
+      return Promise.resolve({ project: { name: 'Project One' } });
+    });
+
+    renderClaimsPage();
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Claim' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark as submitted' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/projects/p1/claims/claim-1', {
+        method: 'PUT',
+        body: JSON.stringify({
+          status: 'submitted',
+          submissionMethod: 'download',
+        }),
+      }),
+    );
+    expect(downloadCsvMock).not.toHaveBeenCalled();
+    expect(generateClaimEvidencePackagePDFMock).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Claim submitted',
+        description: 'Claim 7 marked as submitted.',
+        variant: 'success',
+      }),
+    );
   });
 
   it('deletes a draft claim and releases related register caches', async () => {
@@ -495,7 +594,7 @@ describe('ClaimsPage TanStack Query register', () => {
     expect(await screen.findByText('Claim 7')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit Claim' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Download/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark as submitted' }));
 
     await waitFor(() => {
       const cachedClaims = queryClient.getQueryData<Claim[]>(queryKeys.claims('p1'));
@@ -660,5 +759,56 @@ describe('ClaimsPage TanStack Query register', () => {
       }),
     );
     expect(toastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('ClaimsTable dispute read-back', () => {
+  it('renders disputed notes and date under the status badge', () => {
+    const disputeNotes =
+      'Scope is disputed because the claimed works need principal review before payment can proceed.';
+    const disputedAt = '2026-06-12T00:00:00.000Z';
+    const expectedDate = new Date(disputedAt).toLocaleDateString('en-AU');
+    const expectedSnippet = `${disputeNotes.slice(0, 80)}…`;
+
+    render(
+      <ClaimsTable
+        claims={[{ ...SEEDED_CLAIM, status: 'disputed', disputeNotes, disputedAt }]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(`Disputed ${expectedDate}`)).toBeInTheDocument();
+    expect(screen.getByText(expectedSnippet)).toHaveAttribute('title', disputeNotes);
+  });
+
+  it('does not render a dispute read-back when no dispute notes are present', () => {
+    render(
+      <ClaimsTable
+        claims={[{ ...SEEDED_CLAIM, status: 'disputed', disputedAt: '2026-06-12T00:00:00.000Z' }]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/Disputed \d{1,2}\/\d{1,2}\/\d{4}/)).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { readdir, readFile } from 'node:fs/promises';
-import { CLAIM_SUBMISSION_OPTIONS } from '../src/pages/claims/submissionOptions';
 import { getPhotoLocationLinks } from '../src/pages/lots/components/photoLocationLinks';
 import { formatDateKey, getCalendarDaysSince } from '../src/lib/localDate';
 
@@ -43,8 +42,22 @@ function expectProjectRouteGuard(
 }
 
 test.describe('production readiness guardrails', () => {
-  test('claim submission exposes only implemented methods', () => {
-    expect(CLAIM_SUBMISSION_OPTIONS.map((option) => option.method)).toEqual(['download']);
+  test('claim submission exposes only implemented methods', async () => {
+    // The submit flow records a submission; it cannot send anything anywhere.
+    // 'download' is the only implemented method — widening SubmitMethod must
+    // come with a real implementation, and the modal copy must stay honest
+    // about SiteProof not delivering the claim to the client.
+    const typesSource = await readFile(
+      new URL('../src/pages/claims/types.ts', import.meta.url),
+      'utf8',
+    );
+    expect(typesSource).toMatch(/export type SubmitMethod = 'download';/);
+
+    const modalSource = await readFile(
+      new URL('../src/pages/claims/components/SubmitClaimModal.tsx', import.meta.url),
+      'utf8',
+    );
+    expect(modalSource).toMatch(/doesn(?:'|&rsquo;|’)t send this claim/i);
   });
 
   test('user-facing frontend branding does not reference the retired v2 product name', async () => {
