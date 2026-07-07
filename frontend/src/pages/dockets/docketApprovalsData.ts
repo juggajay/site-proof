@@ -22,7 +22,9 @@ export interface Docket {
   totalPlantApprovedCost?: number | null;
   adjustmentReason?: string | null;
   submittedAt: string | null;
+  submittedBy?: { id?: string; fullName: string | null; email: string } | null;
   approvedAt: string | null;
+  approvedBy?: { id?: string; fullName: string | null; email: string } | null;
   foremanNotes: string | null;
 }
 

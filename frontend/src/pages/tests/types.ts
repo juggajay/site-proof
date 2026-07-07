@@ -19,6 +19,8 @@ export interface TestResult {
   specificationMax: number | null;
   passFail: string;
   status: string;
+  verifiedBy?: { id: string; fullName: string | null; email: string } | null;
+  verifiedAt?: string | null;
   lotId: string | null;
   lot: Lot | null;
   aiExtracted?: boolean;

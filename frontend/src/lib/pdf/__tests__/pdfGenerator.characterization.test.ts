@@ -298,7 +298,14 @@ describe('pdfGenerator characterization', () => {
   });
 
   it('preserves docket detail PDF headings, totals, approval fields, and filename', async () => {
-    await generateDocketDetailPDF(approvedDocketDetailFixture);
+    await generateDocketDetailPDF({
+      ...approvedDocketDetailFixture,
+      docket: {
+        ...approvedDocketDetailFixture.docket,
+        submittedBy: { fullName: 'Sasha Subbie', email: 'sasha@example.com' },
+        approvedBy: { fullName: 'Riley Foreman', email: 'riley@example.com' },
+      },
+    } as typeof approvedDocketDetailFixture);
 
     const doc = latestPdf();
     const text = renderedText(doc);
@@ -314,6 +321,10 @@ describe('pdfGenerator characterization', () => {
         'Docket Details',
         'Docket Number:',
         'Status:',
+        'Submitted By:',
+        'Sasha Subbie',
+        'Approved By:',
+        'Riley Foreman',
         'Project & Subcontractor',
         'Project:',
         'Pacific Highway Upgrade',
@@ -358,6 +369,7 @@ describe('pdfGenerator characterization', () => {
         'APPROVAL CERTIFICATION',
         'I certify that the hours claimed in this docket have been verified and approved.',
         'Approved By:',
+        'Riley Foreman',
         'Signature',
       ]),
     );

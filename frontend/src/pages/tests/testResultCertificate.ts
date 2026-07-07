@@ -83,6 +83,8 @@ export async function generateTestResultCertificate(
         passFail: test.passFail,
         status: test.status,
         aiExtracted: test.aiExtracted,
+        verifiedBy: test.verifiedBy ?? null,
+        verifiedAt: test.verifiedAt ?? null,
         createdAt: test.createdAt,
       },
       lot: lotInfo,

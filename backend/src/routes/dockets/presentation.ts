@@ -212,7 +212,9 @@ export type DocketListItemSource = {
   totalLabourApprovedCost?: NumericLike;
   totalPlantApprovedCost?: NumericLike;
   submittedAt: Date | null;
+  submittedBy?: DocketUserSummary | null;
   approvedAt: Date | null;
+  approvedBy?: DocketUserSummary | null;
   foremanNotes: string | null;
 };
 
@@ -248,7 +250,9 @@ export function mapDocketListItem(
     ),
     totalPlantApprovedCost: commercialOptionalNumericValue(docket.totalPlantApprovedCost, options),
     submittedAt: docket.submittedAt,
+    submittedBy: docket.submittedBy ?? null,
     approvedAt: docket.approvedAt,
+    approvedBy: docket.approvedBy ?? null,
     foremanNotes: docket.foremanNotes,
   };
 }

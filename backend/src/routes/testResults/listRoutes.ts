@@ -226,6 +226,14 @@ listRoutes.get(
           specificationMax: true,
           passFail: true,
           status: true,
+          verifiedAt: true,
+          verifiedBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
           lotId: true,
           lot: {
             select: {

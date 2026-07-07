@@ -58,6 +58,10 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
     yPos += 6;
   };
 
+  const formatPersonName = (
+    person: { fullName?: string | null; email?: string | null } | null | undefined,
+  ): string | null => person?.fullName || person?.email || null;
+
   // ========== HEADER ==========
   // Pass/Fail based header color
   const passFailColors: Record<string, [number, number, number]> = {
@@ -223,12 +227,15 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text('Verified By:', margin, yPos);
+  const verifierName = formatPersonName(data.test.verifiedBy);
+  if (verifierName) {
+    doc.text(verifierName, margin + doc.getTextWidth('Verified By: ') + 2, yPos);
+  }
+  doc.text(`Date: ${formatDate(data.test.verifiedAt)}`, margin + 100, yPos);
   yPos += 15;
   doc.line(margin, yPos, margin + 60, yPos);
   yPos += 5;
   doc.text('Signature', margin, yPos);
-
-  doc.text('Date:', margin + 100, yPos - 20);
   doc.line(margin + 100, yPos - 5, margin + 160, yPos - 5);
 
   // ========== FOOTER ==========

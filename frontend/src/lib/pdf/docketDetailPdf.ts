@@ -68,6 +68,10 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
     yPos += 6;
   };
 
+  const formatPersonName = (
+    person: { fullName?: string | null; email?: string | null } | null | undefined,
+  ): string | null => person?.fullName || person?.email || null;
+
   const formatHours = (hours: number): string => `${hours} hrs`;
   const moneyValue = (value: number | null | undefined): number =>
     Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -146,8 +150,14 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   if (data.docket.submittedAt) {
     addField('Submitted', formatDateTime(data.docket.submittedAt));
   }
+  if (data.docket.submittedAt || data.docket.submittedBy) {
+    addField('Submitted By', formatPersonName(data.docket.submittedBy));
+  }
   if (data.docket.approvedAt) {
     addField('Approved', formatDateTime(data.docket.approvedAt));
+  }
+  if (data.docket.approvedAt || data.docket.approvedBy) {
+    addField('Approved By', formatPersonName(data.docket.approvedBy));
   }
 
   yPos += 5;
@@ -383,6 +393,10 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
 
     // Foreman signature
     doc.text('Approved By:', margin, yPos);
+    const approvedByName = formatPersonName(data.docket.approvedBy);
+    if (approvedByName) {
+      doc.text(approvedByName, margin + doc.getTextWidth('Approved By: ') + 2, yPos);
+    }
     yPos += 12;
     doc.line(margin, yPos, margin + 60, yPos);
     yPos += 5;
