@@ -115,6 +115,7 @@ interface ApiHandlers {
   getInstance?: () => unknown;
   getTemplates?: () => unknown;
   postInstance?: () => unknown;
+  deleteInstance?: () => unknown;
   postCompletion?: (body: Record<string, unknown>) => unknown;
 }
 function routeApiFetch(handlers: ApiHandlers) {
@@ -135,6 +136,11 @@ function routeApiFetch(handlers: ApiHandlers) {
       }
       if (url.includes('/api/itp/instances') && method === 'POST') {
         return handlers.postInstance ? handlers.postInstance() : { instance: null };
+      }
+      if (url.includes('/api/itp/instances/') && method === 'DELETE') {
+        return handlers.deleteInstance
+          ? handlers.deleteInstance()
+          : { success: true, message: 'ITP unassigned from lot' };
       }
       throw new Error(`Unexpected apiFetch URL: ${url}`);
     },
@@ -417,6 +423,74 @@ describe('useItpInstance — assignTemplate', () => {
     expect(returned).toBe(false);
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Failed to assign ITP template' }),
+    );
+  });
+
+  it('deletes the instance, clears local state, and refreshes readiness + conform status', async () => {
+    const refetchReadiness = vi.fn();
+    const refetchConformStatus = vi.fn();
+    routeApiFetch({
+      getInstance: () => ({ instance: instanceFixture }),
+      deleteInstance: () => ({ success: true, message: 'ITP unassigned from lot' }),
+    });
+
+    const { result } = renderHook(() =>
+      useItpInstance({ ...baseParams, refetchReadiness, refetchConformStatus }),
+    );
+    await waitFor(() => expect(result.current.itpInstance).toEqual(instanceFixture));
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.unassignTemplate('instance-1');
+    });
+
+    expect(returned).toBe(true);
+    expect(apiFetch).toHaveBeenCalledWith('/api/itp/instances/instance-1', { method: 'DELETE' });
+    expect(result.current.itpInstance).toBeNull();
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns false, keeps local state, and surfaces the backend 409 message', async () => {
+    const conflictMessage =
+      "This ITP has recorded work on this lot and can't be unassigned. Remove the recorded completions, hold points, or test results before unassigning it.";
+    routeApiFetch({
+      getInstance: () => ({ instance: instanceFixture }),
+      deleteInstance: () => {
+        throw new ApiError(
+          409,
+          JSON.stringify({
+            error: {
+              message: conflictMessage,
+              code: 'CONFLICT',
+              details: {
+                code: 'ITP_INSTANCE_HAS_RECORDED_WORK',
+                completionCount: 1,
+                holdPointCount: 0,
+                testResultCount: 0,
+              },
+            },
+          }),
+        );
+      },
+    });
+
+    const { result } = renderHook(() => useItpInstance(baseParams));
+    await waitFor(() => expect(result.current.itpInstance).toEqual(instanceFixture));
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.unassignTemplate('instance-1');
+    });
+
+    expect(returned).toBe(false);
+    expect(result.current.itpInstance).toEqual(instanceFixture);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Failed to unassign ITP template',
+        description: conflictMessage,
+        variant: 'error',
+      }),
     );
   });
 });

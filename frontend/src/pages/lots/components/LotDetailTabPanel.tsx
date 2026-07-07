@@ -45,6 +45,7 @@ interface LotDetailTabPanelProps {
   handleMobileAddPhoto: ITPChecklistTabProps['onAddPhoto'];
   handleAddPhoto: ITPChecklistTabProps['onAddPhotoDesktop'];
   assignTemplate: ITPChecklistTabProps['onAssignTemplate'];
+  unassignTemplate: ITPChecklistTabProps['onUnassignTemplate'];
   refetchItp: () => Promise<void>;
   assigningTemplate: boolean;
   shouldOpenAssignItp: boolean;
@@ -97,6 +98,7 @@ export function LotDetailTabPanel({
   handleMobileAddPhoto,
   handleAddPhoto,
   assignTemplate,
+  unassignTemplate,
   refetchItp,
   assigningTemplate,
   shouldOpenAssignItp,
@@ -170,6 +172,7 @@ export function LotDetailTabPanel({
             onAddPhoto={handleMobileAddPhoto}
             onAddPhotoDesktop={handleAddPhoto}
             onAssignTemplate={assignTemplate}
+            onUnassignTemplate={unassignTemplate}
             onRetryItp={() => void refetchItp()}
             assigningTemplate={assigningTemplate}
             autoOpenAssignTemplate={shouldOpenAssignItp}

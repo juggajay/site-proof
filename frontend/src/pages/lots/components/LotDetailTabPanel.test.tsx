@@ -66,6 +66,7 @@ function renderPanel(overrides: Partial<Parameters<typeof LotDetailTabPanel>[0]>
     handleMobileAddPhoto: vi.fn().mockResolvedValue(undefined),
     handleAddPhoto: vi.fn(),
     assignTemplate: vi.fn().mockResolvedValue(true),
+    unassignTemplate: vi.fn().mockResolvedValue(true),
     refetchItp: vi.fn().mockResolvedValue(undefined),
     assigningTemplate: false,
     shouldOpenAssignItp: false,
@@ -124,13 +125,15 @@ describe('LotDetailTabPanel', () => {
 
   it('forwards the assign-itp readiness wiring to ITPChecklistTab', () => {
     const handleAssignItpActionHandled = vi.fn();
-    renderPanel({ shouldOpenAssignItp: true, handleAssignItpActionHandled });
+    const unassignTemplate = vi.fn().mockResolvedValue(true);
+    renderPanel({ shouldOpenAssignItp: true, handleAssignItpActionHandled, unassignTemplate });
 
     expect(screen.getByTestId('itp-checklist-tab-mock')).toBeInTheDocument();
     expect(captured.checklistTab).toMatchObject({ autoOpenAssignTemplate: true });
     expect(captured.checklistTab?.onAutoOpenAssignTemplateHandled).toBe(
       handleAssignItpActionHandled,
     );
+    expect(captured.checklistTab?.onUnassignTemplate).toBe(unassignTemplate);
   });
 
   it('opens the project documents page with the current lot selected for uploads', () => {
