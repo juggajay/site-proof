@@ -105,9 +105,12 @@ describe('SubbieItpRunScreen', () => {
     expect(screen.getByText('CHECK 1/1')).toBeInTheDocument();
   });
 
-  it('Pass fires the reused completion action and advances', async () => {
+  it('Pass fires the reused completion action and advances for a non-photo check', async () => {
     _run = makeRun(
-      makeInstance([makeItem({ id: 'a' }), makeItem({ id: 'b', description: 'Second' })]),
+      makeInstance([
+        makeItem({ id: 'a', evidenceRequired: 'none' }),
+        makeItem({ id: 'b', description: 'Second' }),
+      ]),
     );
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
@@ -179,7 +182,7 @@ describe('SubbieItpRunScreen', () => {
     expect(screen.queryByRole('button', { name: /Mark not applicable/i })).not.toBeInTheDocument();
   });
 
-  it('shows rejected state and allows the subbie to resubmit', async () => {
+  it('shows rejected state and allows the subbie to resubmit when evidence is attached', async () => {
     _run = makeRun(
       makeInstance(
         [makeItem({ id: 'a' })],
@@ -197,7 +200,7 @@ describe('SubbieItpRunScreen', () => {
             isVerified: false,
             verifiedAt: null,
             verifiedBy: null,
-            attachments: [],
+            attachments: [{ id: 'att-1' }] as ITPCompletion['attachments'],
           },
         ],
       ),
@@ -209,6 +212,80 @@ describe('SubbieItpRunScreen', () => {
     expect(screen.getAllByText(/Photo does not show the bedding depth/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
     await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+  });
+
+  it('confirms before passing a photo-required check with no photo (does not pass yet)', () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+
+    expect(pass).not.toHaveBeenCalled();
+    expect(screen.getByText(/requires photo evidence/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Pass without photo$/i })).toBeInTheDocument();
+  });
+
+  it('"Pass without photo" proceeds with the pass', async () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Pass without photo$/i }));
+
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+  });
+
+  it('"Add photo" from the guard opens the picker so a photo can be attached', () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    const { container } = renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+    expect(screen.getByRole('button', { name: /^Add photo$/i })).toBeInTheDocument();
+
+    const file = new File(['x'], 'p.jpg', { type: 'image/jpeg' });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(addPhoto).toHaveBeenCalledWith('a', file);
+    expect(pass).not.toHaveBeenCalled();
+  });
+
+  it('does NOT guard when the photo-required check already has a photo', async () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          {
+            id: 'comp-a',
+            checklistItemId: 'a',
+            isCompleted: false,
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [{ id: 'att-1' }] as ITPCompletion['attachments'],
+          },
+        ],
+      ),
+    );
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+    expect(screen.queryByText(/requires photo evidence/i)).not.toBeInTheDocument();
+  });
+
+  it('does NOT guard a check that does not require a photo', async () => {
+    _run = makeRun(makeInstance([makeItem({ id: 'a', evidenceRequired: 'none' })]));
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+    expect(screen.queryByText(/requires photo evidence/i)).not.toBeInTheDocument();
   });
 
   it('does not call failed checks complete in the finished state', () => {
