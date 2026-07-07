@@ -1012,6 +1012,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/testResults/statusNotifications.ts', import.meta.url),
       'utf8',
     );
+    const notificationLinks = await readFile(
+      new URL('../../backend/src/routes/notifications/links.ts', import.meta.url),
+      'utf8',
+    );
 
     expectProjectRouteGuard(
       appSource,
@@ -1041,9 +1045,14 @@ test.describe('production readiness guardrails', () => {
     expect(holdPointsPage).toContain("param: 'hp'");
     expect(ncrPage).toContain('useRegisterDeepLink');
     expect(ncrPage).toContain("param: 'ncr'");
-    expect(testResultsNotifications).toContain('/projects/${projectId}/tests');
+    // Test-result notifications must deep-link to /tests (not the dead
+    // /test-results route). The URL is now built centrally in
+    // notifications/links.ts via buildProjectEntityLink.
+    expect(testResultsNotifications).toContain("buildProjectEntityLink('test'");
+    expect(notificationLinks).toContain('/projects/${encodedProjectId}/tests');
     expect(testResultsRoute).not.toContain('/projects/${testResult.projectId}/test-results');
-    expect(testResultsNotifications).not.toContain('/projects/${projectId}/test-results');
+    expect(testResultsNotifications).not.toContain('/test-results');
+    expect(notificationLinks).not.toContain('/test-results');
   });
 
   test('internal project module routes show role-denied UI before API fallback errors', async () => {
