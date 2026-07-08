@@ -18,6 +18,7 @@ export const CREATE_LOT_ACTIVITY_TYPES = [
   'Structures',
   'Utilities',
   'Landscaping',
+  'Rail',
   'Services',
   'Other',
 ] as const;

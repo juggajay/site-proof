@@ -51,6 +51,7 @@ export const STATUS_LABELS: Record<string, string> = {
   queried: 'Queried',
 
   // Claim lifecycle statuses
+  proposed: 'Proposed',
   submitted: 'Submitted',
   certified: 'Certified',
   disputed: 'Disputed',

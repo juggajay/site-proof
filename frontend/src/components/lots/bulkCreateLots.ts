@@ -11,7 +11,14 @@ export interface LotPreview {
 
 export type WizardStep = 'chainage' | 'parameters' | 'preview' | 'confirm';
 
-export const ACTIVITY_TYPES = ['Earthworks', 'Pavement', 'Drainage', 'Concrete', 'Structures'];
+export const ACTIVITY_TYPES = [
+  'Earthworks',
+  'Pavement',
+  'Drainage',
+  'Concrete',
+  'Structures',
+  'Rail',
+];
 export const LAYERS = ['Subgrade', 'Subbase', 'Base', 'Surface', 'Wearing Course'];
 export const MAX_BULK_LOTS = 500;
 export const INTERVAL_TOO_SMALL_MESSAGE =

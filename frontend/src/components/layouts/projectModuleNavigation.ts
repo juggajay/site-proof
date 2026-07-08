@@ -8,7 +8,7 @@ const DEFAULT_PROJECT_MODULES: Record<string, boolean> = {
 
 const MODULE_NAV_MAPPING: Record<string, string[]> = {
   costTracking: ['Costs'],
-  progressClaims: ['Progress Claims'],
+  progressClaims: ['Progress Claims', 'Variations'],
   subcontractors: ['Subcontractors'],
   dockets: ['Docket Approvals'],
   dailyDiary: ['Daily Diary'],

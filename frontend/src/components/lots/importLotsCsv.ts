@@ -186,7 +186,14 @@ export function validateLots(lots: ParsedLot[]): ValidationResult {
       });
     }
 
-    const validActivityTypes = ['Earthworks', 'Pavement', 'Drainage', 'Concrete', 'Structures'];
+    const validActivityTypes = [
+      'Earthworks',
+      'Pavement',
+      'Drainage',
+      'Concrete',
+      'Structures',
+      'Rail',
+    ];
     if (
       lot.activityType &&
       !validActivityTypes.some((t) => t.toLowerCase() === lot.activityType.toLowerCase())

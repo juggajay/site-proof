@@ -47,6 +47,16 @@ describe('formatStatusLabel', () => {
     });
   });
 
+  describe('known variation statuses', () => {
+    it('maps variation register enums to their canonical labels', () => {
+      expect(formatStatusLabel('proposed')).toBe('Proposed');
+      expect(formatStatusLabel('submitted')).toBe('Submitted');
+      expect(formatStatusLabel('approved')).toBe('Approved');
+      expect(formatStatusLabel('rejected')).toBe('Rejected');
+      expect(formatStatusLabel('claimed')).toBe('Claimed');
+    });
+  });
+
   describe('lookup normalization', () => {
     it('is case-insensitive and tolerates spaces/hyphens as delimiters', () => {
       expect(formatStatusLabel('OPEN')).toBe('Open');

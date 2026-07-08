@@ -11,6 +11,7 @@ const ACTIVITY_TYPES = [
   'Concrete',
   'Structures',
   'Landscaping',
+  'Rail',
   'Services',
   'Other',
 ];

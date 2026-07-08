@@ -28,6 +28,7 @@ export interface Claim {
   disputeNotes: string | null;
   disputedAt: string | null;
   lotCount: number;
+  variationCount?: number;
   paymentDueDate?: string | null;
   // The project's Australian state/territory (e.g. 'NSW', 'WA'). Drives the
   // per-jurisdiction SOPA certification/payment-due timeframes. Optional so

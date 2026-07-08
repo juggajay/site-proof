@@ -83,6 +83,7 @@ import {
   TermsOfServicePage,
   TestResultsPage,
   TodayWorklist,
+  VariationsPage,
   VerifyEmailPage,
 } from './appLazyPages';
 import { ProjectDetailRoute } from './appProjectRoutes';
@@ -448,6 +449,14 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
                     <ClaimsPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/variations"
+                element={
+                  <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
+                    <VariationsPage />
                   </ProjectProtectedRoute>
                 }
               />

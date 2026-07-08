@@ -16,6 +16,7 @@ const CLAIM: Claim = {
   disputeNotes: null,
   disputedAt: null,
   lotCount: 3,
+  variationCount: 2,
 };
 
 function renderTable(overrides: Partial<React.ComponentProps<typeof ClaimsTable>> = {}) {
@@ -49,5 +50,14 @@ describe('ClaimsTable — Export to Xero', () => {
     const props = renderTable();
     fireEvent.click(screen.getByRole('button', { name: 'Export to Xero' }));
     expect(props.onExportXero).toHaveBeenCalledWith(CLAIM);
+  });
+});
+
+describe('ClaimsTable — lot and variation counts', () => {
+  it('shows variation count alongside lots when a claim includes variations', () => {
+    renderTable();
+
+    expect(screen.getByText(/3 lots/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+ 2 var/i)).toBeInTheDocument();
   });
 });
