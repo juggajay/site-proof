@@ -15,6 +15,7 @@ const MOUNTED_PAGE_KEYS = [
   'diary',
   'dockets',
   'claims',
+  'variations',
   'costs',
   'documents',
   'subcontractors',

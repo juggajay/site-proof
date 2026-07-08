@@ -28,6 +28,7 @@ Lot Statuses:
 • Awaiting Test - Ready for testing
 • Hold Point - Inspection required
 • NCR Raised - Non-conformance identified
+• On Hold - Work paused
 • Completed - Work finished
 • Conformed - Quality approved
 • Claimed - Included in progress claim
@@ -84,19 +85,21 @@ Tips:
 
 Key Features:
 • Record test results and attach evidence
-• Link tests to specific lots
-• Track pass/fail rates
+• Link tests to specific lots and the ITP checklist item they satisfy
+• Upload lab certificates - extracted details are pre-filled for your review
+• Track pass/fail rates and verification status
 • Export test data for reporting
 
-Test Types:
-• Compaction tests
-• Concrete tests
-• Material tests
-• Survey checks
+Getting tests to count for conformance:
+1. Link the test to the lot and the ITP checklist item it satisfies
+2. Record a passing result
+3. Have the result verified
+
+A passing test that isn't linked and verified will still show as an outstanding requirement on the lot's readiness panel.
 
 Tips:
-• Attach test certificates as evidence
-• Failed tests can trigger NCRs
+• Start from the certificate - upload it and confirm the extracted details
+• Failed tests can raise an NCR directly from the register
 • Use filters to find specific test types`,
   },
   ncr: {
@@ -112,6 +115,7 @@ Key Features:
 NCR Statuses:
 • Open - Issue identified
 • Investigating - Root cause being assessed
+• Rectification - Corrective action underway
 • Verification - Corrective action being checked
 • Closed - Issue resolved (with or without concession)
 
@@ -144,44 +148,71 @@ Tips:
   },
   dockets: {
     title: 'Docket Approvals',
-    content: `Docket Approvals manages delivery and work dockets requiring sign-off.
+    content: `Docket Approvals manages the daily labour and plant dockets your subcontractors submit.
 
 Key Features:
-• View pending dockets
-• Approve or reject dockets
-• Track approval history
-• Link dockets to lots
+• Review labour hours and plant hours by day and lot
+• Approve, reject, or query dockets (a query goes back to the subcontractor to fix)
+• Approve in bulk when a batch is ready
+• Approved dockets feed the Costs view
 
-Docket Types:
-• Delivery dockets
-• Work completion dockets
-• Material receipts
+Docket Statuses:
+• Draft - Started but not submitted
+• Pending Approval - Submitted, awaiting review
+• Queried - Sent back with a question
+• Approved - Signed off, counted in costs
+• Rejected - Not accepted
 
 Tips:
-• Review dockets promptly
-• Attach photos for verification
-• Link to relevant lots`,
+• Review dockets promptly - subcontractors are waiting on them
+• Query instead of reject when the fix is small
+• Docket hours can feed the daily diary where configured`,
   },
   claims: {
     title: 'Progress Claims',
-    content: `Progress Claims tracks work completed for payment certification.
+    content: `Progress Claims turns conformed work and approved variations into a claim you can send to your client.
 
 Key Features:
-• Create monthly progress claims
-• Include completed lots
-• Track claim history
-• Generate claim reports
+• Build claims from conformed, budgeted lots (full or partial percentages)
+• Add approved variations as claim lines
+• Generate a branded evidence package PDF (ITPs, hold points, tests, NCRs, photos, variations)
+• Export a Xero-ready CSV that becomes a draft invoice
+• Track certification, payment, and disputes
 
-Claim Process:
-1. Select claimable lots (conformed status)
-2. Review quantities and values
-3. Submit claim for certification
-4. Track payment status
+Claim Lifecycle:
+• Draft - Being prepared
+• Submitted - Marked as sent to the client (CIVOS records the date; you send the package yourself)
+• Certified - Client has certified an amount
+• Disputed - Certification contested, with notes on the register
+• Partially Paid / Paid - Payment recorded
 
 Tips:
-• Only conformed lots can be claimed
-• Track cumulative progress over time
-• Export claims for accounting`,
+• The Create Claim modal explains exactly why any lot can't be selected
+• Only approved, unclaimed variations can be added to a claim
+• Deleting a draft claim releases its lots and variations to be claimed again`,
+  },
+  variations: {
+    title: 'Variations',
+    content: `The Variations register tracks changed or extra work so it can be approved and claimed.
+
+Key Features:
+• Number variations automatically (VAR-0001, VAR-0002...)
+• Record the client reference or site instruction behind the change
+• Attach evidence - photos, instructions, correspondence
+• Link a variation to the lot where the work happened
+• Claim approved variations in a progress claim
+
+Variation Lifecycle:
+• Proposed - Drafted, still editable
+• Submitted - Sent to the client for a decision
+• Approved - Agreed with a final amount; ready to claim
+• Rejected - Not agreed (can be resubmitted)
+• Claimed - Included in a progress claim; locked
+
+Tips:
+• Approval requires a final amount - it can differ from what you proposed
+• Attach the site instruction or email before the details go stale
+• Claimed variations appear in the claim's evidence package and Xero export`,
   },
   costs: {
     title: 'Cost Management',
