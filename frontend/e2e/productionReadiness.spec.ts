@@ -1093,6 +1093,24 @@ test.describe('production readiness guardrails', () => {
       'DocketApprovalsPage',
       'INTERNAL_ROLES',
     );
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/claims',
+      'ClaimsPage',
+      'COMMERCIAL_ROLES',
+    );
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/variations',
+      'VariationsPage',
+      'COMMERCIAL_ROLES',
+    );
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/costs',
+      'CostsPage',
+      'COMMERCIAL_ROLES',
+    );
   });
 
   test('foreman mobile quick navigation resolves to mounted routes', async () => {

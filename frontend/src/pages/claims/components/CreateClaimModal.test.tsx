@@ -33,6 +33,56 @@ const READY_LOT_READINESS: ProjectClaimReadiness = {
   ],
 };
 
+const APPROVED_VARIATIONS_RESPONSE = {
+  variations: [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      variationNumber: 'VAR-0007',
+      title: 'Client-directed drainage change',
+      status: 'approved',
+      approvedAmount: 5500,
+      clientReference: 'SI-7',
+      lotId: null,
+      claimedInId: null,
+      evidence: [],
+    },
+    {
+      id: '22222222-2222-4222-8222-222222222222',
+      variationNumber: 'VAR-0008',
+      title: 'Unapproved traffic control',
+      status: 'submitted',
+      approvedAmount: 1200,
+      clientReference: null,
+      lotId: null,
+      claimedInId: null,
+      evidence: [],
+    },
+  ],
+};
+
+function mockClaimReadinessAndVariations({
+  readiness = READY_LOT_READINESS,
+  variations = APPROVED_VARIATIONS_RESPONSE,
+  postResponse = { claim: { id: 'claim-1' } },
+}: {
+  readiness?: ProjectClaimReadiness;
+  variations?: { variations: unknown[] };
+  postResponse?: unknown;
+} = {}) {
+  apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+    if (options?.method === 'POST') {
+      return Promise.resolve(postResponse);
+    }
+    if (path === '/api/projects/p1/claim-readiness') {
+      return Promise.resolve(readiness);
+    }
+    if (path === '/api/projects/p1/variations') {
+      return Promise.resolve(variations);
+    }
+    return Promise.reject(new Error(`Unexpected request: ${path}`));
+  });
+}
+
 function renderModal() {
   return renderWithProviders(
     <CreateClaimModal projectId="p1" onClose={vi.fn()} onClaimCreated={vi.fn()} />,
@@ -45,7 +95,10 @@ beforeEach(() => {
 
 describe('CreateClaimModal conformed-lot zero state', () => {
   it('explains the conformed-lot prerequisite and links to lots instead of dead-ending', async () => {
-    apiFetchMock.mockResolvedValue({ lots: [] });
+    mockClaimReadinessAndVariations({
+      readiness: { lots: [] },
+      variations: { variations: [] },
+    });
 
     renderModal();
 
@@ -60,7 +113,7 @@ describe('CreateClaimModal conformed-lot zero state', () => {
 
 describe('CreateClaimModal claim period validation', () => {
   it('shows an inline error and disables Create Claim when the period ends before it starts', async () => {
-    apiFetchMock.mockResolvedValue(READY_LOT_READINESS);
+    mockClaimReadinessAndVariations({ variations: { variations: [] } });
 
     renderModal();
 
@@ -79,12 +132,12 @@ describe('CreateClaimModal claim period validation', () => {
       'Period end must be on or after period start.',
     );
     expect(screen.getByRole('button', { name: 'Create Claim' })).toBeDisabled();
-    // Only the readiness load hit the API — no claim POST was attempted.
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    // Only the initial readiness/variation loads hit the API — no claim POST was attempted.
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('requires both period dates before a claim can be created', async () => {
-    apiFetchMock.mockResolvedValue(READY_LOT_READINESS);
+    mockClaimReadinessAndVariations({ variations: { variations: [] } });
 
     renderModal();
 
@@ -101,15 +154,18 @@ describe('CreateClaimModal claim period validation', () => {
 
 describe('CreateClaimModal create flow', () => {
   it('gives each selected lot percentage input a lot-specific accessible name', async () => {
-    apiFetchMock.mockResolvedValue({
-      lots: [
-        READY_LOT_READINESS.lots[0],
-        {
-          ...READY_LOT_READINESS.lots[0],
-          lotId: 'lot-2',
-          lotNumber: 'LOT-002',
-        },
-      ],
+    mockClaimReadinessAndVariations({
+      readiness: {
+        lots: [
+          READY_LOT_READINESS.lots[0],
+          {
+            ...READY_LOT_READINESS.lots[0],
+            lotId: 'lot-2',
+            lotNumber: 'LOT-002',
+          },
+        ],
+      },
+      variations: { variations: [] },
     });
 
     renderModal();
@@ -123,7 +179,7 @@ describe('CreateClaimModal create flow', () => {
   });
 
   it('requires selected lot claim increments to be greater than zero', async () => {
-    apiFetchMock.mockResolvedValue(READY_LOT_READINESS);
+    mockClaimReadinessAndVariations({ variations: { variations: [] } });
 
     renderModal();
 
@@ -140,12 +196,7 @@ describe('CreateClaimModal create flow', () => {
   it('notifies the parent after a successful create so it can invalidate the claims cache', async () => {
     const onClaimCreated = vi.fn();
     const onClose = vi.fn();
-    apiFetchMock.mockImplementation((_path: string, options?: RequestInit) => {
-      if (options?.method === 'POST') {
-        return Promise.resolve({ claim: { id: 'claim-1' } });
-      }
-      return Promise.resolve(READY_LOT_READINESS);
-    });
+    mockClaimReadinessAndVariations({ variations: { variations: [] } });
 
     renderWithProviders(
       <CreateClaimModal projectId="p1" onClose={onClose} onClaimCreated={onClaimCreated} />,
@@ -164,5 +215,43 @@ describe('CreateClaimModal create flow', () => {
       (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
     );
     expect(postCall?.[0]).toBe('/api/projects/p1/claims');
+  });
+
+  it('renders approved variations, includes selected variationIds, and folds them into the total', async () => {
+    mockClaimReadinessAndVariations();
+
+    renderModal();
+
+    expect(await screen.findByText('Approved variations')).toBeInTheDocument();
+    expect(screen.getByText('VAR-0007')).toBeInTheDocument();
+    expect(screen.getByText('Client-directed drainage change')).toBeInTheDocument();
+    expect(screen.queryByText('Unapproved traffic control')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+    fireEvent.click(screen.getByLabelText('Select variation VAR-0007'));
+
+    expect(screen.getByText('$105,500')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Claim' }));
+
+    await waitFor(() => {
+      const postCall = apiFetchMock.mock.calls.find(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+      );
+      expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toMatchObject({
+        variationIds: ['11111111-1111-4111-8111-111111111111'],
+      });
+    });
+  });
+
+  it('hides the approved variations section when there are no approved variations', async () => {
+    mockClaimReadinessAndVariations({
+      variations: { variations: [APPROVED_VARIATIONS_RESPONSE.variations[1]] },
+    });
+
+    renderModal();
+
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    expect(screen.queryByText('Approved variations')).not.toBeInTheDocument();
   });
 });

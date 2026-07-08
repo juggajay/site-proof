@@ -133,6 +133,7 @@ describe('Sidebar project navigation', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: /Progress Claims/i })).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: /Variations/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Costs/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Project Settings/i })).toBeInTheDocument();
@@ -156,6 +157,7 @@ describe('Sidebar project navigation', () => {
     expect(screen.getByRole('link', { name: /Lots/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Reports/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Progress Claims/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Variations/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Costs/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Subcontractors/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();

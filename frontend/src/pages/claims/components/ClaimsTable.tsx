@@ -284,7 +284,18 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                       );
                     })()}
                   </td>
-                  <td className="p-4 text-right">{claim.lotCount}</td>
+                  <td className="p-4 text-right">
+                    {claim.variationCount && claim.variationCount > 0 ? (
+                      <div className="space-y-0.5">
+                        <div>{claim.lotCount} lots</div>
+                        <div className="text-xs text-muted-foreground">
+                          + {claim.variationCount} var
+                        </div>
+                      </div>
+                    ) : (
+                      claim.lotCount
+                    )}
+                  </td>
                   <td className="p-4 text-right font-semibold">
                     {formatCurrency(claim.totalClaimedAmount)}
                   </td>

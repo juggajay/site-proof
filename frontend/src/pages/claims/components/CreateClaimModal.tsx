@@ -1,5 +1,6 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { ConformedLot, NewClaimFormData } from '../types';
@@ -25,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { queryKeys } from '@/lib/queryKeys';
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -39,6 +41,19 @@ type ClaimableLot = ConformedLot & {
   actionBlocked: boolean;
   readinessItems: EvidenceReadinessItem[];
 };
+
+interface ClaimableVariation {
+  id: string;
+  variationNumber: string;
+  title: string;
+  status: string;
+  approvedAmount: number | null;
+  clientReference?: string | null;
+}
+
+interface VariationsResponse {
+  variations?: ClaimableVariation[];
+}
 
 function readinessItems(lot: ClaimReadinessLot): EvidenceReadinessItem[] {
   return [...lot.claim.blockers, ...lot.claim.warnings, ...lot.claim.support];
@@ -80,7 +95,9 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   onClose,
   onClaimCreated,
 }: CreateClaimModalProps) {
+  const queryClient = useQueryClient();
   const [conformedLots, setConformedLots] = useState<ClaimableLot[]>([]);
+  const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [loadingLots, setLoadingLots] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -118,6 +135,31 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     fetchConformedLots();
   }, [fetchConformedLots]);
 
+  const variationsQuery = useQuery({
+    queryKey: queryKeys.variations(projectId),
+    queryFn: () =>
+      apiFetch<VariationsResponse>(`/api/projects/${encodeURIComponent(projectId)}/variations`),
+    staleTime: 30_000,
+    onError: (error) => logError('Error fetching approved variations:', error),
+  });
+
+  const approvedVariations = useMemo(
+    () =>
+      (variationsQuery.data?.variations ?? []).filter(
+        (variation) =>
+          variation.status === 'approved' &&
+          variation.approvedAmount !== null &&
+          variation.approvedAmount > 0,
+      ),
+    [variationsQuery.data?.variations],
+  );
+
+  useEffect(() => {
+    setSelectedVariationIds((ids) =>
+      ids.filter((id) => approvedVariations.some((variation) => variation.id === id)),
+    );
+  }, [approvedVariations]);
+
   const toggleLotSelection = useCallback((lotId: string) => {
     setConformedLots((lots) =>
       lots.map((lot) =>
@@ -132,6 +174,12 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     );
   }, []);
 
+  const toggleVariationSelection = useCallback((variationId: string) => {
+    setSelectedVariationIds((ids) =>
+      ids.includes(variationId) ? ids.filter((id) => id !== variationId) : [...ids, variationId],
+    );
+  }, []);
+
   const createClaim = async () => {
     if (creatingRef.current) return;
 
@@ -142,8 +190,13 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     }
 
     const selectedLots = conformedLots.filter((l) => l.selected);
-    if (selectedLots.length === 0) {
-      setCreateError('Please select at least one lot to include in the claim.');
+    const selectedVariations = approvedVariations.filter((variation) =>
+      selectedVariationIds.includes(variation.id),
+    );
+    if (selectedLots.length === 0 && selectedVariations.length === 0) {
+      setCreateError(
+        'Please select at least one lot or approved variation to include in the claim.',
+      );
       return;
     }
 
@@ -183,8 +236,10 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
             lotId: lot.lotId,
             percentageComplete: lot.percentageComplete,
           })),
+          variationIds: selectedVariations.map((variation) => variation.id),
         }),
       });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.variations(projectId) });
       onClaimCreated();
       onClose();
     } catch (error) {
@@ -202,7 +257,12 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   };
 
   const selectedLots = conformedLots.filter((l) => l.selected);
-  const totalClaimAmount = selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0);
+  const selectedVariations = approvedVariations.filter((variation) =>
+    selectedVariationIds.includes(variation.id),
+  );
+  const totalClaimAmount =
+    selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0) +
+    selectedVariations.reduce((sum, variation) => sum + (variation.approvedAmount ?? 0), 0);
   const hasPartialProgress = selectedLots.some(
     (l) => (parseClaimPercentageInput(l.percentComplete) ?? 0) < 100,
   );
@@ -407,6 +467,43 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
             </div>
           </div>
 
+          {approvedVariations.length > 0 && (
+            <div>
+              <Label>Approved variations</Label>
+              <div className="mt-1 max-h-56 divide-y overflow-auto rounded-lg border">
+                {approvedVariations.map((variation) => (
+                  <div key={variation.id} className="p-3 hover:bg-muted/30">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select variation ${variation.variationNumber}`}
+                        checked={selectedVariationIds.includes(variation.id)}
+                        onChange={() => toggleVariationSelection(variation.id)}
+                        className="h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2">
+                          <span className="font-medium">{variation.variationNumber}</span>
+                          <span className="truncate text-sm text-muted-foreground">
+                            {variation.title}
+                          </span>
+                        </div>
+                        {variation.clientReference && (
+                          <p className="text-xs text-muted-foreground">
+                            Client ref {variation.clientReference}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-sm font-semibold">
+                        {formatCurrency(variation.approvedAmount)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Total */}
           <div className="bg-muted/50 rounded-lg p-4">
             <div className="flex justify-between items-center">
@@ -415,6 +512,9 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               {selectedLots.length} lots selected
+              {selectedVariations.length > 0 && (
+                <span className="ml-1">+ {selectedVariations.length} variations</span>
+              )}
               {hasPartialProgress && <span className="ml-1">(includes partial progress)</span>}
             </p>
           </div>
@@ -427,7 +527,10 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
         <Button
           onClick={createClaim}
           disabled={
-            creating || selectedLots.length === 0 || hasPercentageErrors || Boolean(periodError)
+            creating ||
+            (selectedLots.length === 0 && selectedVariations.length === 0) ||
+            hasPercentageErrors ||
+            Boolean(periodError)
           }
         >
           {creating ? 'Creating...' : 'Create Claim'}

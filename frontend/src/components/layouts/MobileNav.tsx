@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Home,
   Building2,
+  GitPullRequest,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -115,6 +116,13 @@ const projectNavigation: NavigationItem[] = [
     name: 'Progress Claims',
     href: 'claims',
     icon: DollarSign,
+    requiresCommercialAccess: true,
+    section: 'Commercial',
+  },
+  {
+    name: 'Variations',
+    href: 'variations',
+    icon: GitPullRequest,
     requiresCommercialAccess: true,
     section: 'Commercial',
   },

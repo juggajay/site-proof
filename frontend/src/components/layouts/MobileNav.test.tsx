@@ -153,6 +153,7 @@ describe('MobileNav menu trigger', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: /progress claims/i })).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: /variations/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /costs/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /subcontractors/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /project settings/i })).toBeInTheDocument();
@@ -173,6 +174,7 @@ describe('MobileNav menu trigger', () => {
     expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /progress claims/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /variations/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /costs/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /subcontractors/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /project settings/i })).not.toBeInTheDocument();
@@ -262,6 +264,7 @@ describe('MobileNav menu trigger', () => {
     });
     expect(screen.queryByRole('link', { name: /docket approvals/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /progress claims/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /variations/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /costs/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /subcontractors/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);

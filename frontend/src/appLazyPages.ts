@@ -92,6 +92,9 @@ export const DocketApprovalsPage = lazy(() =>
 export const ClaimsPage = lazy(() =>
   import('@/pages/claims/ClaimsPage').then((m) => ({ default: m.ClaimsPage })),
 );
+export const VariationsPage = lazy(() =>
+  import('@/pages/variations/VariationsPage').then((m) => ({ default: m.VariationsPage })),
+);
 export const DocumentsPage = lazy(() =>
   import('@/pages/documents/DocumentsPage').then((m) => ({ default: m.DocumentsPage })),
 );
