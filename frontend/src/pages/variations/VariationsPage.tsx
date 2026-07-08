@@ -5,6 +5,7 @@ import { getAuthToken } from '@/lib/auth';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { Button } from '@/components/ui/button';
 import { ContextFAB } from '@/components/mobile/ContextFAB';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
@@ -150,7 +151,13 @@ export function VariationsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Variation Register</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold">Variation Register</h1>
+            <ContextHelp
+              title={HELP_CONTENT.variations.title}
+              content={HELP_CONTENT.variations.content}
+            />
+          </div>
           <p className="mt-1 text-muted-foreground">
             Track changed or extra work from proposal through approval and claim.
           </p>

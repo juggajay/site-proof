@@ -11,6 +11,7 @@ import {
   FileCheck,
   FileText,
   FolderKanban,
+  GitPullRequest,
   MapPin,
   TestTube,
   Upload,
@@ -66,7 +67,7 @@ export const workflowSteps: DocumentationStep[] = [
   {
     title: 'Claim and report from the same evidence',
     description:
-      'Conformed, budgeted, unclaimed lots can flow into progress claims, reports, exports, and the audit trail without re-keying.',
+      'Conformed lots and approved variations flow into progress claims, evidence packages, reports, and exports without re-keying.',
   },
 ];
 
@@ -154,6 +155,8 @@ export const documentationSections: DocumentationSection[] = [
     ],
     tips: [
       'Seeded jurisdictional templates are global and can be copied into a project.',
+      'Assigned the wrong ITP? It can be unassigned from the lot until work is recorded against it.',
+      'Test results count toward conformance once linked to their ITP checklist item and verified.',
       'Verified ITP and test records are protected from unsafe edits.',
       'Hold point release and request events are written to the audit log.',
     ],
@@ -249,20 +252,25 @@ export const documentationSections: DocumentationSection[] = [
   },
   {
     id: 'claims-reports',
-    title: 'Claims, costs, and reports',
+    title: 'Claims, variations, costs, and reports',
     summary:
-      'Turn conformed work into progress claims and use reports to prove the story behind the numbers.',
+      'Turn conformed work and approved variations into progress claims, and use reports to prove the story behind the numbers.',
     icon: DollarSign,
     steps: [
       {
         title: 'Create claims from ready lots',
         description:
-          'Only conformed, budgeted, unclaimed lots can be selected. Readiness explains every disabled lot in the modal.',
+          'Only conformed, budgeted lots with remaining percentage can be selected. Readiness explains every disabled lot in the modal.',
+      },
+      {
+        title: 'Track variations from proposal to claim',
+        description:
+          'Raise changed or extra work in the Variations register with evidence and a client reference. Once approved with a final amount, a variation can be added to a progress claim as its own line.',
       },
       {
         title: 'Move through the claim lifecycle',
         description:
-          'Draft, submit, certify, and mark paid. Claim status changes are part of the commercial control path.',
+          'Draft, submit, certify, dispute if contested, and record payment. Submitting records the date — download the evidence package PDF and send it to your client yourself.',
       },
       {
         title: 'Use reports for review and handover',
@@ -272,7 +280,8 @@ export const documentationSections: DocumentationSection[] = [
     ],
     tips: [
       'Budget amount is required before a conformed lot can be claimed.',
-      'Claim PDFs and evidence packages use Australian date and currency formatting.',
+      'The evidence package PDF compiles ITPs, hold points, tests, NCRs, photos, and claimed variations per claim.',
+      'The Xero export produces a draft-invoice CSV with a line per lot and per variation.',
       'Reports are strongest when field teams maintain lots, dockets, tests, and diaries daily.',
     ],
   },
@@ -314,6 +323,7 @@ export const quickReference: QuickReferenceItem[] = [
   { label: 'Tests', icon: TestTube, href: '/projects' },
   { label: 'Dockets', icon: FileCheck, href: '/projects' },
   { label: 'Claims', icon: DollarSign, href: '/projects' },
+  { label: 'Variations', icon: GitPullRequest, href: '/projects' },
   { label: 'Reports', icon: BarChart3, href: '/projects' },
   { label: 'Documents', icon: FileText, href: '/projects' },
   {
