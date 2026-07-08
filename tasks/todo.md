@@ -1,3 +1,42 @@
+# Variation register — Jay-approved 2026-07-08 — COMPLETE (same day)
+
+PM research verdict (Jay's outside-model flagged 2 gaps): variations =
+REAL first-claim-cycle blocker, built (data-compiler stance: register +
+evidence trail + one approved amount claimed whole in one claim; NO
+pricing build-ups/margin/contract-clause logic — Xero owns money). Rail
+= PARKED; hedge shipped ('Rail' activity option in the 4 lists).
+Competitors (Payapps/Varicon/Styck/Planyard) all bundle variations with
+claims. Spec: docs/plans/variation-register-plan-2026-07-08.md.
+
+- [x] PR 1 #1361 merged `b9c9adc2` — Variation + VariationEvidence
+      models, additive migration 20260708120000 (APPLIED TO PROD
+      manually after Jay's go), VAR-0001 numbering (NCR allocation
+      pattern), routes behind requireCommercialProjectAccess, claim
+      wiring (FOR UPDATE locks, VARIATION_NOT_CLAIMABLE guard, total
+      fold so certify/Xero guards inherit, draft-delete reversal),
+      evidence-package payload variations[]+subtotal, Xero row per
+      variation
+- [x] PR 2 #1362 merged `9d700871` — /projects/:id/variations register
+      (NCR-pattern module), lifecycle UI (approve needs final amount,
+      reject w/ reason), evidence upload, CreateClaimModal approved-
+      variations section, ClaimsTable count, Sidebar+MobileNav, Rail
+      rider; CI round-trip: appLazyPages MOCKS in App-level route tests
+      need every new lazy page export (3 files) — run FULL frontend
+      suite before push, targeted suites miss these
+- [x] PR 3 #1363 merged `d732ea4e` — evidence-package PDF VARIATIONS
+      table + manifest entries + includeVariations toggle
+- [x] PR 4 #1364 merged `f8d3c3eb` — help/docs fact-check: dockets help
+      described delivery dockets (wrong product — they're subbie
+      labour+plant day dockets), claims help predated honest submit/
+      disputes/variations, tests help now teaches link-to-ITP+verify,
+      new variations help entry mounted on register header (ContextHelp
+      mounted-keys guard extended), /docs page updated
+
+Stacked-PR mechanics that worked: branch PR2 off PR1's branch (codex
+needs backend files in-tree to read response shapes), PR3 off PR2, docs
+off PR3; after each squash-merge, `git merge origin/master` into the
+next branch (add/add conflicts on new files resolve --ours).
+
 # UX audit Batch 3 (LEAN) — Jay-approved scope 2026-07-07/08 — COMPLETE
 
 Jay decisions: offline dockets = NO (block stays deliberate); all polish
