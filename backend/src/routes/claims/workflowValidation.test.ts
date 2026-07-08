@@ -73,6 +73,55 @@ describe('claims workflow validation', () => {
     });
   });
 
+  it('accepts approved variation ids alongside claim lots', () => {
+    const result = createClaimSchema.safeParse({
+      periodStart: '2026-06-01',
+      periodEnd: '2026-06-30',
+      lots: [{ lotId: 'lot-1', percentageComplete: 75 }],
+      variationIds: [
+        '63e67e9b-5964-40c7-a2c9-62ff1d2a651f',
+        'e93f9304-0e29-4e09-a8f4-46f12e914789',
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.variationIds).toEqual([
+        '63e67e9b-5964-40c7-a2c9-62ff1d2a651f',
+        'e93f9304-0e29-4e09-a8f4-46f12e914789',
+      ]);
+    }
+  });
+
+  it('rejects duplicate or invalid variation ids', () => {
+    const duplicate = createClaimSchema.safeParse({
+      periodStart: '2026-06-01',
+      periodEnd: '2026-06-30',
+      lots: [{ lotId: 'lot-1', percentageComplete: 75 }],
+      variationIds: [
+        '63e67e9b-5964-40c7-a2c9-62ff1d2a651f',
+        '63e67e9b-5964-40c7-a2c9-62ff1d2a651f',
+      ],
+    });
+    expect(duplicate.success).toBe(false);
+    expect(duplicate.success ? [] : duplicate.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Duplicate variations cannot be added to the same claim',
+          path: ['variationIds'],
+        }),
+      ]),
+    );
+
+    const invalid = createClaimSchema.safeParse({
+      periodStart: '2026-06-01',
+      periodEnd: '2026-06-30',
+      lots: [{ lotId: 'lot-1', percentageComplete: 75 }],
+      variationIds: ['not-a-uuid'],
+    });
+    expect(invalid.success).toBe(false);
+  });
+
   it('parses ISO date-only inputs and rejects invalid calendar dates', () => {
     expect(parseClaimDate('2026-06-01', 'periodStart').toISOString()).toBe(
       '2026-06-01T00:00:00.000Z',

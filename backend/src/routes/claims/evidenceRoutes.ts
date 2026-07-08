@@ -10,6 +10,7 @@ import {
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
 } from './presentation.js';
+import { roundClaimAmountToCents } from './workflowValidation.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -130,12 +131,39 @@ export function createClaimEvidenceRouter({
               },
             },
           },
+          variations: {
+            include: {
+              evidence: {
+                include: {
+                  document: {
+                    select: {
+                      id: true,
+                      filename: true,
+                      fileUrl: true,
+                    },
+                  },
+                },
+                orderBy: { uploadedAt: 'desc' },
+              },
+            },
+            orderBy: { variationNumber: 'asc' },
+          },
         },
       });
 
       if (!claim) {
         throw AppError.notFound('Claim');
       }
+
+      const lotsTotal = roundClaimAmountToCents(
+        claim.claimedLots.reduce(
+          (sum, claimedLot) => sum + Number(claimedLot.amountClaimed ?? 0),
+          0,
+        ),
+      );
+      const variationsTotal = roundClaimAmountToCents(
+        claim.variations.reduce((sum, variation) => sum + Number(variation.approvedAmount ?? 0), 0),
+      );
 
       // Transform the data for the frontend PDF generator
       const evidencePackage = {
@@ -350,11 +378,28 @@ export function createClaimEvidenceRouter({
             },
           };
         }),
+        variations: claim.variations.map((variation) => ({
+          id: variation.id,
+          variationNumber: variation.variationNumber,
+          title: variation.title,
+          clientReference: variation.clientReference || null,
+          approvedAmount: variation.approvedAmount == null ? 0 : Number(variation.approvedAmount),
+          evidence: variation.evidence.map((evidence) => ({
+            id: evidence.id,
+            documentId: evidence.document.id,
+            filename: evidence.document.filename,
+            fileUrl: evidence.document.fileUrl,
+            evidenceType: evidence.evidenceType,
+            uploadedAt: evidence.uploadedAt.toISOString(),
+          })),
+        })),
 
         // Overall summary
         summary: {
           totalLots: claim.claimedLots.length,
           totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
+          lotsTotalClaimedAmount: lotsTotal,
+          variationsTotal,
           totalTestResults: claim.claimedLots.reduce(
             (sum, cl) => sum + cl.lot.testResults.length,
             0,

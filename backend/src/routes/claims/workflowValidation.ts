@@ -10,6 +10,7 @@ const CLAIM_DISPUTE_NOTES_MAX_LENGTH = 5000;
 export const CLAIM_VARIATION_NOTES_MAX_LENGTH = 2000;
 const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 export const MAX_CERTIFICATION_DOCUMENT_ID_LENGTH = 120;
+const CLAIM_VARIATION_IDS_MAX = 100;
 export const CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE =
   'Each claimed lot must include percentageComplete';
 
@@ -44,6 +45,13 @@ export const createClaimSchema = z
     lotIds: z
       .array(requiredTrimmedClaimString('lotId', CLAIM_ID_MAX_LENGTH, 'Lot ID is required'))
       .optional(),
+    variationIds: z
+      .array(z.string().uuid('variationId must be a valid ID'))
+      .max(
+        CLAIM_VARIATION_IDS_MAX,
+        `variationIds cannot contain more than ${CLAIM_VARIATION_IDS_MAX} items`,
+      )
+      .optional(),
     lots: z
       .array(
         z.object({
@@ -69,11 +77,21 @@ export const createClaimSchema = z
       });
     }
 
-    if (!data.lots || data.lots.length === 0) {
+    const hasLots = Boolean(data.lots && data.lots.length > 0);
+    const hasVariations = Boolean(data.variationIds && data.variationIds.length > 0);
+    if (!hasLots && !hasVariations) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'At least one lot is required',
+        message: 'At least one lot or variation is required',
         path: ['lots'],
+      });
+    }
+
+    if (data.variationIds && new Set(data.variationIds).size !== data.variationIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Duplicate variations cannot be added to the same claim',
+        path: ['variationIds'],
       });
     }
   });
@@ -294,6 +312,10 @@ export function getRequestedClaimLots(
     lotId: lot.lotId,
     percentageComplete: lot.percentageComplete,
   }));
+}
+
+export function getRequestedClaimVariationIds(data: z.infer<typeof createClaimSchema>): string[] {
+  return data.variationIds || [];
 }
 
 export function getRequestedClaimPercentage(

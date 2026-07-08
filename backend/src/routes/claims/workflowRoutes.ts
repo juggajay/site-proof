@@ -32,6 +32,7 @@ import {
   buildClaimCertificationSettlement,
   createClaimSchema,
   getRequestedClaimLots,
+  getRequestedClaimVariationIds,
   getRequestedClaimPercentage,
   isLotFullyClaimed,
   parseClaimDate,
@@ -43,10 +44,13 @@ import {
 
 type AuthUser = NonNullable<Express.Request['user']>;
 type ClaimCreateResult = {
-  claim: Prisma.ProgressClaimGetPayload<{ include: { _count: { select: { claimedLots: true } } } }>;
+  claim: Prisma.ProgressClaimGetPayload<{
+    include: { _count: { select: { claimedLots: true; variations: true } } };
+  }>;
   totalClaimedAmount: number;
   nextClaimNumber: number;
   lotCount: number;
+  variationCount: number;
 };
 
 function normalizeUniqueTargetField(value: string) {
@@ -91,6 +95,46 @@ async function lockClaimLotsForUpdate(
   `;
 }
 
+async function lockClaimVariationsForUpdate(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  variationIds: string[],
+): Promise<void> {
+  if (variationIds.length === 0) return;
+
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM variations
+    WHERE project_id = ${projectId}
+      AND id IN (${Prisma.join([...variationIds].sort())})
+    ORDER BY id
+    FOR UPDATE
+  `;
+}
+
+function assertVariationClaimable(variation: {
+  variationNumber: string;
+  status: string;
+  claimedInId: string | null;
+  approvedAmount: unknown;
+}): void {
+  const approvedAmount = Number(variation.approvedAmount ?? 0);
+  if (
+    variation.status !== 'approved' ||
+    variation.claimedInId !== null ||
+    !Number.isFinite(approvedAmount) ||
+    approvedAmount <= 0
+  ) {
+    throw AppError.badRequest(`Variation ${variation.variationNumber} is not claimable`, {
+      code: 'VARIATION_NOT_CLAIMABLE',
+      variationNumber: variation.variationNumber,
+      status: variation.status,
+      claimedInId: variation.claimedInId,
+      approvedAmount,
+    });
+  }
+}
+
 interface ClaimWorkflowRouterDependencies {
   parseClaimRouteParam: (value: unknown, field: string) => string;
   requireCommercialProjectAccess: (
@@ -129,6 +173,7 @@ export function createClaimWorkflowRouter({
       }
       const { periodStart, periodEnd } = validation.data;
       const requestedLots = getRequestedClaimLots(validation.data);
+      const requestedVariationIds = getRequestedClaimVariationIds(validation.data);
       const claimPeriodStart = parseClaimDate(periodStart, 'periodStart');
       const claimPeriodEnd = parseClaimDate(periodEnd, 'periodEnd');
 
@@ -140,6 +185,7 @@ export function createClaimWorkflowRouter({
       if (uniqueLotIds.length !== requestedLots.length) {
         throw AppError.badRequest('Duplicate lots cannot be added to the same claim');
       }
+      const uniqueVariationIds = Array.from(new Set(requestedVariationIds));
       const percentageByLotId = new Map(
         requestedLots.map((lot) => [lot.lotId, lot.percentageComplete]),
       );
@@ -150,6 +196,7 @@ export function createClaimWorkflowRouter({
         try {
           claimResult = await prisma.$transaction(async (tx) => {
             await lockClaimLotsForUpdate(tx, projectId, uniqueLotIds);
+            await lockClaimVariationsForUpdate(tx, projectId, uniqueVariationIds);
 
             // Get the next claim number for this project. A retry handles concurrent creates.
             const lastClaim = await tx.progressClaim.findFirst({
@@ -163,16 +210,19 @@ export function createClaimWorkflowRouter({
             // (claimedInId null) and remains selectable until its cumulative
             // claimed percentage reaches 100%. Only fully-claimed lots are
             // flipped to `claimed`.
-            const lots = await tx.lot.findMany({
-              where: {
-                id: { in: uniqueLotIds },
-                projectId,
-                status: 'conformed',
-                claimedInId: null,
-              },
-            });
+            const lots =
+              uniqueLotIds.length > 0
+                ? await tx.lot.findMany({
+                    where: {
+                      id: { in: uniqueLotIds },
+                      projectId,
+                      status: 'conformed',
+                      claimedInId: null,
+                    },
+                  })
+                : [];
 
-            if (lots.length === 0) {
+            if (uniqueLotIds.length > 0 && lots.length === 0) {
               throw AppError.badRequest('No valid conformed lots found');
             }
 
@@ -229,21 +279,61 @@ export function createClaimWorkflowRouter({
 
             // Cumulative claiming: reject any increment that would push a lot
             // past 100% of its budget across all of its claims so far.
-            const priorCumulativeByLotId = await getCumulativeClaimedPercentByLot(uniqueLotIds, tx);
+            const priorCumulativeByLotId =
+              uniqueLotIds.length > 0
+                ? await getCumulativeClaimedPercentByLot(uniqueLotIds, tx)
+                : new Map<string, number>();
             for (const lot of lots) {
               const increment = getRequestedClaimPercentage(percentageByLotId, lot.id);
               const priorCumulative = priorCumulativeByLotId.get(lot.id) ?? 0;
               assertClaimIncrementWithinRemaining(priorCumulative, increment, lot.lotNumber);
             }
 
+            const variations =
+              uniqueVariationIds.length > 0
+                ? await tx.variation.findMany({
+                    where: {
+                      id: { in: uniqueVariationIds },
+                      projectId,
+                    },
+                    select: {
+                      id: true,
+                      variationNumber: true,
+                      status: true,
+                      claimedInId: true,
+                      approvedAmount: true,
+                    },
+                  })
+                : [];
+
+            if (variations.length !== uniqueVariationIds.length) {
+              throw AppError.badRequest('All selected variations must belong to this project', {
+                code: 'VARIATION_NOT_CLAIMABLE',
+              });
+            }
+
+            for (const variation of variations) {
+              assertVariationClaimable(variation);
+            }
+
             // The line amount for each lot is THIS claim's increment percentage
             // of its budget, so claim totals always reconcile to the budget.
-            const totalClaimedAmount = roundClaimAmountToCents(
+            const lotClaimedAmount = roundClaimAmountToCents(
               lots.reduce((sum, lot) => {
                 const percentageComplete = getRequestedClaimPercentage(percentageByLotId, lot.id);
                 const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
                 return sum + roundClaimAmountToCents((budgetAmount * percentageComplete) / 100);
               }, 0),
+            );
+            const variationClaimedAmount = roundClaimAmountToCents(
+              variations.reduce(
+                (sum, variation) =>
+                  sum + roundClaimAmountToCents(Number(variation.approvedAmount ?? 0)),
+                0,
+              ),
+            );
+            const totalClaimedAmount = roundClaimAmountToCents(
+              lotClaimedAmount + variationClaimedAmount,
             );
 
             // Create the claim with claimed lots
@@ -257,33 +347,60 @@ export function createClaimWorkflowRouter({
                 preparedById: userId,
                 preparedAt: new Date(),
                 totalClaimedAmount,
-                claimedLots: {
-                  create: lots.map((lot) => {
-                    const percentageComplete = getRequestedClaimPercentage(
-                      percentageByLotId,
-                      lot.id,
-                    );
-                    const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
+                claimedLots:
+                  lots.length > 0
+                    ? {
+                        create: lots.map((lot) => {
+                          const percentageComplete = getRequestedClaimPercentage(
+                            percentageByLotId,
+                            lot.id,
+                          );
+                          const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
 
-                    return {
-                      lotId: lot.id,
-                      quantity: 1,
-                      unit: 'ea',
-                      rate: lot.budgetAmount,
-                      amountClaimed: roundClaimAmountToCents(
-                        (budgetAmount * percentageComplete) / 100,
-                      ),
-                      percentageComplete,
-                    };
-                  }),
-                },
+                          return {
+                            lotId: lot.id,
+                            quantity: 1,
+                            unit: 'ea',
+                            rate: lot.budgetAmount,
+                            amountClaimed: roundClaimAmountToCents(
+                              (budgetAmount * percentageComplete) / 100,
+                            ),
+                            percentageComplete,
+                          };
+                        }),
+                      }
+                    : undefined,
               },
               include: {
                 _count: {
-                  select: { claimedLots: true },
+                  select: { claimedLots: true, variations: true },
                 },
               },
             });
+
+            if (uniqueVariationIds.length > 0) {
+              const variationUpdateResult = await tx.variation.updateMany({
+                where: {
+                  id: { in: uniqueVariationIds },
+                  projectId,
+                  status: 'approved',
+                  claimedInId: null,
+                },
+                data: {
+                  status: 'claimed',
+                  claimedInId: claim.id,
+                },
+              });
+
+              if (variationUpdateResult.count !== uniqueVariationIds.length) {
+                throw AppError.badRequest(
+                  'One or more selected variations are no longer available to claim',
+                  {
+                    code: 'VARIATION_NOT_CLAIMABLE',
+                  },
+                );
+              }
+            }
 
             // Flip only the lots that this claim takes to 100% cumulative into
             // the terminal `claimed` state, linking them to this completing
@@ -318,7 +435,22 @@ export function createClaimWorkflowRouter({
               }
             }
 
-            return { claim, totalClaimedAmount, nextClaimNumber, lotCount: lots.length };
+            const claimWithCounts = await tx.progressClaim.findUniqueOrThrow({
+              where: { id: claim.id },
+              include: {
+                _count: {
+                  select: { claimedLots: true, variations: true },
+                },
+              },
+            });
+
+            return {
+              claim: claimWithCounts,
+              totalClaimedAmount,
+              nextClaimNumber,
+              lotCount: lots.length,
+              variationCount: variations.length,
+            };
           });
           break;
         } catch (error) {
@@ -337,7 +469,7 @@ export function createClaimWorkflowRouter({
         throw AppError.conflict('Could not allocate a claim number. Please try again.');
       }
 
-      const { claim, totalClaimedAmount, nextClaimNumber, lotCount } = claimResult;
+      const { claim, totalClaimedAmount, nextClaimNumber, lotCount, variationCount } = claimResult;
 
       const transformedClaim = mapClaimCreateItem(claim);
 
@@ -348,7 +480,7 @@ export function createClaimWorkflowRouter({
         entityType: 'progress_claim',
         entityId: claim.id,
         action: AuditAction.CLAIM_CREATED,
-        changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount },
+        changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount, variationCount },
         req,
       });
 

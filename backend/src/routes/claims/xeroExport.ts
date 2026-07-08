@@ -43,6 +43,13 @@ export interface XeroLotExportInput {
   cumulativePercent: number;
 }
 
+export interface XeroVariationExportInput {
+  variationNumber: string;
+  title: string;
+  /** Ex-GST approved amount claimed once in full. */
+  approvedAmount: number;
+}
+
 export interface XeroClaimExportInput {
   claimNumber: number;
   projectName: string;
@@ -52,6 +59,7 @@ export interface XeroClaimExportInput {
   /** Ex-GST claim total; must equal the sum of the line amounts. */
   totalClaimedAmount: number;
   lots: XeroLotExportInput[];
+  variations?: XeroVariationExportInput[];
 }
 
 export interface XeroExportConfig {
@@ -87,8 +95,9 @@ export function buildXeroInvoiceExport(
   claim: XeroClaimExportInput,
   config: XeroExportConfig,
 ): { filename: string; rows: CsvCell[][] } {
-  if (claim.lots.length === 0) {
-    throw AppError.badRequest('Cannot export a claim with no claimed lots to Xero');
+  const variations = claim.variations ?? [];
+  if (claim.lots.length === 0 && variations.length === 0) {
+    throw AppError.badRequest('Cannot export a claim with no claimed lines to Xero');
   }
 
   const invoiceNumber = `Claim ${claim.claimNumber} — ${claim.projectName}`;
@@ -96,7 +105,7 @@ export function buildXeroInvoiceExport(
   const contactName = claim.clientName?.trim() || claim.projectName;
   const taxType = config.taxType?.trim() ?? '';
 
-  const dataRows: CsvCell[][] = claim.lots.map((lot) => {
+  const lotRows: CsvCell[][] = claim.lots.map((lot) => {
     const unitAmount = roundClaimAmountToCents(lot.amountClaimed);
     const description =
       `Lot ${lot.lotNumber} — ${lot.activityType} — ` +
@@ -114,6 +123,18 @@ export function buildXeroInvoiceExport(
       taxType,
     ];
   });
+  const variationRows: CsvCell[][] = variations.map((variation) => [
+    contactName,
+    invoiceNumber,
+    invoiceDate,
+    invoiceDate,
+    `Variation ${variation.variationNumber} — ${variation.title}`,
+    1,
+    roundClaimAmountToCents(variation.approvedAmount),
+    config.accountCode,
+    taxType,
+  ]);
+  const dataRows = [...lotRows, ...variationRows];
 
   const unitAmountIndex = XERO_INVOICE_CSV_HEADER.indexOf('*UnitAmount');
   const lineTotal = roundClaimAmountToCents(
@@ -184,6 +205,14 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
             },
           },
           project: { select: { name: true, clientName: true } },
+          variations: {
+            select: {
+              variationNumber: true,
+              title: true,
+              approvedAmount: true,
+            },
+            orderBy: { variationNumber: 'asc' },
+          },
         },
       });
       if (!claim) {
@@ -208,6 +237,11 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
             thisClaimPercent: toNumber(claimedLot.percentageComplete),
             cumulativePercent:
               cumulativeByLot.get(claimedLot.lotId) ?? toNumber(claimedLot.percentageComplete),
+          })),
+          variations: claim.variations.map((variation) => ({
+            variationNumber: variation.variationNumber,
+            title: variation.title,
+            approvedAmount: toNumber(variation.approvedAmount),
           })),
         },
         { accountCode, taxType },

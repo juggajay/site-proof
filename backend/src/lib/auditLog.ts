@@ -224,6 +224,11 @@ export const AuditAction = {
   CLAIM_DELETED: 'claim_deleted',
   CLAIM_CERTIFIED: 'claim_certified',
   CLAIM_PAYMENT_RECORDED: 'claim_payment_recorded',
+  VARIATION_CREATED: 'variation_created',
+  VARIATION_UPDATED: 'variation_updated',
+  VARIATION_DELETED: 'variation_deleted',
+  VARIATION_EVIDENCE_ADDED: 'variation_evidence_added',
+  VARIATION_EVIDENCE_REMOVED: 'variation_evidence_removed',
   // Scheduled reports
   SCHEDULED_REPORT_CREATED: 'scheduled_report_created',
   SCHEDULED_REPORT_UPDATED: 'scheduled_report_updated',
