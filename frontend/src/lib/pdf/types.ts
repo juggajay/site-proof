@@ -308,6 +308,24 @@ export interface ClaimEvidenceDocument {
   uploadedAt: string | null;
 }
 
+export interface ClaimVariationEvidenceDocument {
+  id?: string;
+  documentId: string;
+  filename: string;
+  fileUrl?: string | null;
+  evidenceType?: string | null;
+  uploadedAt?: string | null;
+}
+
+export interface ClaimVariation {
+  id: string;
+  variationNumber: string;
+  title: string;
+  clientReference: string | null;
+  approvedAmount: number;
+  evidence?: ClaimVariationEvidenceDocument[];
+}
+
 export interface ClaimEvidencePackageData extends PDFBrandableData {
   claim: {
     id: string;
@@ -362,9 +380,12 @@ export interface ClaimEvidencePackageData extends PDFBrandableData {
       itpCompletionPercentage: number;
     };
   }[];
+  variations?: ClaimVariation[];
   summary: {
     totalLots: number;
     totalClaimedAmount: number;
+    lotsTotalClaimedAmount?: number;
+    variationsTotal?: number;
     totalTestResults: number;
     totalPassedTests: number;
     totalFailedTests?: number;
@@ -387,6 +408,7 @@ export interface ClaimPackageOptions {
   includeNCRs: boolean;
   includeHoldPoints: boolean;
   includePhotos: boolean;
+  includeVariations: boolean;
   includeDeclaration: boolean;
 }
 
@@ -398,6 +420,7 @@ export const defaultPackageOptions: ClaimPackageOptions = {
   includeNCRs: true,
   includeHoldPoints: true,
   includePhotos: true,
+  includeVariations: true,
   includeDeclaration: true,
 };
 

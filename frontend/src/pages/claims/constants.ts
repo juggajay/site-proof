@@ -82,5 +82,6 @@ export const DEFAULT_PACKAGE_OPTIONS: ClaimPackageOptions = {
   includeNCRs: true,
   includeHoldPoints: true,
   includePhotos: true,
+  includeVariations: true,
   includeDeclaration: true,
 };
