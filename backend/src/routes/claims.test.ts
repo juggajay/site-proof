@@ -102,6 +102,8 @@ describe('Progress Claims API', () => {
   afterAll(async () => {
     // Cleanup
     await prisma.notification.deleteMany({ where: { projectId } });
+    await prisma.variationEvidence.deleteMany({ where: { variation: { projectId } } });
+    await prisma.variation.deleteMany({ where: { projectId } });
     await prisma.claimedLot.deleteMany({ where: { claim: { projectId } } });
     await prisma.progressClaim.deleteMany({ where: { projectId } });
     await prisma.document.deleteMany({ where: { projectId } });
@@ -240,6 +242,19 @@ describe('Progress Claims API', () => {
         budgetAmount,
         conformedAt: new Date(),
         conformedById: userId,
+      },
+    });
+  }
+
+  async function createApprovedVariation(prefix: string, approvedAmount = 250.25) {
+    return prisma.variation.create({
+      data: {
+        projectId,
+        variationNumber: `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: `${prefix} approved variation`,
+        status: 'approved',
+        approvedAmount,
+        createdById: userId,
       },
     });
   }
@@ -562,6 +577,94 @@ describe('Progress Claims API', () => {
       } finally {
         await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
       }
+    });
+
+    it('folds approved variations into the claim total and marks them claimed', async () => {
+      const lot = await createClaimableLot('VARIATION-CLAIM-LOT', 1000);
+      const variation = await createApprovedVariation('VAR-CLAIM', 250.25);
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          periodStart: '2025-02-01',
+          periodEnd: '2025-02-28',
+          lots: [{ lotId: lot.id, percentageComplete: 50 }],
+          variationIds: [variation.id],
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.claim.totalClaimedAmount).toBe(750.25);
+
+      const claimedVariation = await prisma.variation.findUnique({ where: { id: variation.id } });
+      expect(claimedVariation?.status).toBe('claimed');
+      expect(claimedVariation?.claimedInId).toBe(res.body.claim.id);
+
+      const listRes = await request(app)
+        .get(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(listRes.status).toBe(200);
+      expect(
+        listRes.body.claims.find((claim: { id: string }) => claim.id === res.body.claim.id),
+      ).toMatchObject({
+        id: res.body.claim.id,
+        variationCount: 1,
+      });
+
+      const detailRes = await request(app)
+        .get(`/api/projects/${projectId}/claims/${res.body.claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.claim.variations).toEqual([
+        expect.objectContaining({
+          id: variation.id,
+          variationNumber: variation.variationNumber,
+          title: variation.title,
+          approvedAmount: 250.25,
+        }),
+      ]);
+
+      // Clean up the draft claim so later tests that pin absolute claim
+      // numbers (concurrent allocation) see an unchanged sequence.
+      const deleteRes = await request(app)
+        .delete(`/api/projects/${projectId}/claims/${res.body.claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteRes.status).toBe(200);
+    });
+
+    it('rejects variations that are not approved, unclaimed, and positive-valued', async () => {
+      const lot = await createClaimableLot('VARIATION-GUARD-LOT', 1000);
+      const variation = await prisma.variation.create({
+        data: {
+          projectId,
+          variationNumber: `VAR-GUARD-${Date.now()}`,
+          title: 'Submitted variation cannot be claimed',
+          status: 'submitted',
+          approvedAmount: 100,
+          createdById: userId,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          periodStart: '2025-02-01',
+          periodEnd: '2025-02-28',
+          lots: [{ lotId: lot.id, percentageComplete: 50 }],
+          variationIds: [variation.id],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.details?.code).toBe('VARIATION_NOT_CLAIMABLE');
+      expect(res.body.error.details?.variationNumber).toBe(variation.variationNumber);
+
+      const unchangedVariation = await prisma.variation.findUnique({ where: { id: variation.id } });
+      expect(unchangedVariation?.status).toBe('submitted');
+      expect(unchangedVariation?.claimedInId).toBeNull();
+      await expect(
+        prisma.progressClaim.count({ where: { variations: { some: { id: variation.id } } } }),
+      ).resolves.toBe(0);
     });
 
     it('should reject claim without period dates', async () => {
@@ -1159,6 +1262,35 @@ describe('Progress Claims API', () => {
       const relockedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
       expect(relockedLot?.status).toBe('claimed');
       expect(relockedLot?.claimedInId).toBe(reclaim.body.claim.id);
+    });
+
+    it('releases claimed variations when a draft claim is deleted', async () => {
+      const lot = await createCumulativeLot(100000);
+      const variation = await createApprovedVariation('VAR-DELETE', 1250);
+
+      const createRes = await request(app)
+        .post(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          periodStart: '2025-09-01',
+          periodEnd: '2025-09-30',
+          lots: [{ lotId: lot.id, percentageComplete: 20 }],
+          variationIds: [variation.id],
+        });
+      expect(createRes.status).toBe(201);
+
+      const claimedVariation = await prisma.variation.findUnique({ where: { id: variation.id } });
+      expect(claimedVariation?.status).toBe('claimed');
+      expect(claimedVariation?.claimedInId).toBe(createRes.body.claim.id);
+
+      const del = await request(app)
+        .delete(`/api/projects/${projectId}/claims/${createRes.body.claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(del.status).toBe(200);
+
+      const releasedVariation = await prisma.variation.findUnique({ where: { id: variation.id } });
+      expect(releasedVariation?.status).toBe('approved');
+      expect(releasedVariation?.claimedInId).toBeNull();
     });
 
     it('writes an audit log when a draft claim is deleted', async () => {
@@ -3003,6 +3135,67 @@ describe('Progress Claims API', () => {
           uploadedAt: '2025-02-20T10:00:00.000Z',
         }),
       ]);
+    });
+
+    it('includes claimed variations and their evidence in the evidence package summary', async () => {
+      const document = await prisma.document.findFirstOrThrow({
+        where: { projectId, filename: 'evidence-lot-proof-photo.jpg' },
+      });
+      const variation = await prisma.variation.create({
+        data: {
+          projectId,
+          variationNumber: `VAR-EVIDENCE-${Date.now()}`,
+          title: 'Additional proof rolling',
+          clientReference: 'SI-77',
+          status: 'claimed',
+          approvedAmount: 333,
+          claimedInId: evidenceClaimId,
+          createdById: userId,
+          evidence: {
+            create: {
+              documentId: document.id,
+              evidenceType: 'site_instruction',
+            },
+          },
+        },
+      });
+      await prisma.progressClaim.update({
+        where: { id: evidenceClaimId },
+        data: { totalClaimedAmount: 2333 },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.variations).toEqual([
+          expect.objectContaining({
+            id: variation.id,
+            variationNumber: variation.variationNumber,
+            title: 'Additional proof rolling',
+            clientReference: 'SI-77',
+            approvedAmount: 333,
+            evidence: [
+              expect.objectContaining({
+                documentId: document.id,
+                filename: 'evidence-lot-proof-photo.jpg',
+                fileUrl: '/uploads/documents/evidence-lot-proof-photo.jpg',
+              }),
+            ],
+          }),
+        ]);
+        expect(res.body.summary.variationsTotal).toBe(333);
+        expect(res.body.summary.totalClaimedAmount).toBe(2333);
+      } finally {
+        await prisma.variationEvidence.deleteMany({ where: { variationId: variation.id } });
+        await prisma.variation.delete({ where: { id: variation.id } }).catch(() => {});
+        await prisma.progressClaim.update({
+          where: { id: evidenceClaimId },
+          data: { totalClaimedAmount: 2000 },
+        });
+      }
     });
 
     it('preserves a zero claimed percentage in the evidence package', async () => {

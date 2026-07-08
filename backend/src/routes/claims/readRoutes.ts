@@ -286,7 +286,7 @@ export function createClaimReadRouter({
           orderBy: { claimNumber: 'desc' },
           include: {
             _count: {
-              select: { claimedLots: true },
+              select: { claimedLots: true, variations: true },
             },
           },
         }),
@@ -341,6 +341,16 @@ export function createClaimReadRouter({
           preparedBy: {
             select: { id: true, fullName: true, email: true },
           },
+          variations: {
+            select: {
+              id: true,
+              variationNumber: true,
+              title: true,
+              clientReference: true,
+              approvedAmount: true,
+            },
+            orderBy: { variationNumber: 'asc' },
+          },
         },
       });
 
@@ -367,6 +377,14 @@ export function createClaimReadRouter({
       res.json(
         buildClaimDetailResponse({
           ...claim,
+          variations: claim.variations.map((variation) => ({
+            id: variation.id,
+            variationNumber: variation.variationNumber,
+            title: variation.title,
+            clientReference: variation.clientReference,
+            approvedAmount:
+              variation.approvedAmount == null ? null : Number(variation.approvedAmount),
+          })),
           disputeNotes: getClaimReadDisputeNotes(claim.disputeNotes),
           certification,
         }),

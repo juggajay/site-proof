@@ -25,6 +25,7 @@ type ClaimListItem = {
   disputedAt: Date | null;
   _count: {
     claimedLots: number;
+    variations?: number;
   };
 };
 
@@ -37,6 +38,7 @@ type ClaimCreateItem = {
   totalClaimedAmount: unknown;
   _count: {
     claimedLots: number;
+    variations?: number;
   };
 };
 
@@ -221,6 +223,7 @@ export function mapClaimListItem(
     disputeNotes: getClaimReadDisputeNotes(claim.disputeNotes),
     disputedAt: claim.disputedAt ? formatClaimDateKey(claim.disputedAt) : null,
     lotCount: claim._count.claimedLots,
+    variationCount: claim._count.variations ?? 0,
     // The project's jurisdiction drives the SOPA certification/payment-due
     // timeframes the frontend renders. Null when unknown so the client can
     // fall back to NSW (its historical default).
@@ -243,6 +246,7 @@ export function mapClaimCreateItem(claim: ClaimCreateItem) {
     paidAmount: null,
     submittedAt: null,
     lotCount: claim._count.claimedLots,
+    variationCount: claim._count.variations ?? 0,
   };
 }
 

@@ -546,7 +546,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         const claim = await tx.progressClaim.findFirst({
           where: { id: claimId, projectId },
           include: {
-            _count: { select: { claimedLots: true } },
+            _count: { select: { claimedLots: true, variations: true } },
           },
         });
 
@@ -571,14 +571,18 @@ export function createClaimPostEvidenceWorkflowRouter({
           where: { claimedInId: claimId, projectId },
           data: { claimedInId: null },
         });
+        const releasedVariations = await tx.variation.updateMany({
+          where: { claimedInId: claimId, projectId, status: 'claimed' },
+          data: { claimedInId: null, status: 'approved' },
+        });
         await tx.progressClaim.delete({
           where: { id: claimId },
         });
 
-        return { claim, releasedClaimedLots, clearedStaleLotLinks };
+        return { claim, releasedClaimedLots, clearedStaleLotLinks, releasedVariations };
       });
 
-      const { claim, releasedClaimedLots, clearedStaleLotLinks } = deleteResult;
+      const { claim, releasedClaimedLots, clearedStaleLotLinks, releasedVariations } = deleteResult;
 
       await createAuditLog({
         projectId,
@@ -591,8 +595,10 @@ export function createClaimPostEvidenceWorkflowRouter({
           previousStatus: claim.status,
           totalClaimedAmount: Number(claim.totalClaimedAmount),
           lotCount: claim._count.claimedLots,
+          variationCount: claim._count.variations,
           releasedClaimedLots: releasedClaimedLots.count,
           clearedStaleLotLinks: clearedStaleLotLinks.count,
+          releasedVariations: releasedVariations.count,
         },
         req,
       });

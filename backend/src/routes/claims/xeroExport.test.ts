@@ -38,6 +38,7 @@ const base: XeroClaimExportInput = {
       cumulativePercent: 85,
     },
   ],
+  variations: [],
 };
 const config = { accountCode: '200' };
 
@@ -90,6 +91,34 @@ describe('buildXeroInvoiceExport', () => {
     ).toThrowError(/does not match/i);
   });
 
+  it('adds one invoice row per claimed variation and reconciles it into the claim total', () => {
+    const { rows } = buildXeroInvoiceExport(
+      {
+        ...base,
+        totalClaimedAmount: 63750,
+        variations: [
+          {
+            variationNumber: 'VAR-0007',
+            title: 'Additional rock excavation',
+            approvedAmount: 2250,
+          },
+        ],
+      },
+      config,
+    );
+
+    expect(rows).toHaveLength(1 + 3 + 1);
+    const variationRow = rows.find((r) =>
+      String(r[col('*Description')]).includes('Variation VAR-0007'),
+    )!;
+    expect(variationRow[col('*Description')]).toBe(
+      'Variation VAR-0007 — Additional rock excavation',
+    );
+    expect(variationRow[col('*Quantity')]).toBe(1);
+    expect(variationRow[col('*UnitAmount')]).toBe(2250);
+    expect(variationRow[col('*AccountCode')]).toBe('200');
+  });
+
   it('reconciles cent-level rounding without false-blocking', () => {
     const rounding: XeroClaimExportInput = {
       ...base,
@@ -114,10 +143,10 @@ describe('buildXeroInvoiceExport', () => {
     expect(() => buildXeroInvoiceExport(rounding, config)).not.toThrow();
   });
 
-  it('blocks export when there are no claimed lots', () => {
+  it('blocks export when there are no claimed lines', () => {
     expect(() =>
-      buildXeroInvoiceExport({ ...base, lots: [], totalClaimedAmount: 0 }, config),
-    ).toThrowError(/no claimed lots/i);
+      buildXeroInvoiceExport({ ...base, lots: [], variations: [], totalClaimedAmount: 0 }, config),
+    ).toThrowError(/no claimed lines/i);
   });
 
   it('never adds GST — the line total equals the ex-GST claim total', () => {

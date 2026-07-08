@@ -65,7 +65,7 @@ describe('mapClaimListItem', () => {
           submittedAt: new Date('2026-06-01T12:00:00.000Z'),
           disputeNotes: 'Variation pending',
           disputedAt: new Date('2026-06-02T12:00:00.000Z'),
-          _count: { claimedLots: 3 },
+          _count: { claimedLots: 3, variations: 2 },
         },
         'WA',
       ),
@@ -85,6 +85,7 @@ describe('mapClaimListItem', () => {
       disputeNotes: 'Variation pending',
       disputedAt: '2026-06-02',
       lotCount: 3,
+      variationCount: 2,
       projectState: 'WA',
       certification: null,
     });
@@ -109,7 +110,7 @@ describe('mapClaimListItem', () => {
           certifiedBy: 'user-7',
         }),
         disputedAt: null,
-        _count: { claimedLots: 2 },
+        _count: { claimedLots: 2, variations: 1 },
       },
       'NSW',
       new Map([['user-7', 'Jane Principal']]),
@@ -168,7 +169,7 @@ describe('mapClaimListItem', () => {
           disputeNotes: 'Certified quantity now disputed',
         }),
         disputedAt: new Date('2026-06-04T00:00:00.000Z'),
-        _count: { claimedLots: 2 },
+        _count: { claimedLots: 2, variations: 1 },
       },
       'NSW',
       new Map([['user-8', 'Alex Principal']]),
@@ -239,7 +240,7 @@ describe('mapClaimCreateItem', () => {
         claimPeriodEnd: new Date('2026-06-30T12:00:00.000Z'),
         status: 'draft',
         totalClaimedAmount: '250000.40',
-        _count: { claimedLots: 2 },
+        _count: { claimedLots: 2, variations: 1 },
       }),
     ).toEqual({
       id: 'claim-3',
@@ -252,6 +253,7 @@ describe('mapClaimCreateItem', () => {
       paidAmount: null,
       submittedAt: null,
       lotCount: 2,
+      variationCount: 1,
     });
   });
 

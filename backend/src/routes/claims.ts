@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { createClaimEvidenceRouter } from './claims/evidenceRoutes.js';
 import { createClaimPostEvidenceWorkflowRouter } from './claims/postEvidenceWorkflowRoutes.js';
 import { createClaimReadRouter } from './claims/readRoutes.js';
+import { createVariationRouter } from './claims/variationRoutes.js';
 import { createClaimWorkflowRouter } from './claims/workflowRoutes.js';
 import { createClaimXeroExportRouter } from './claims/xeroExport.js';
 
@@ -65,6 +66,13 @@ router.use(requireAuth);
 
 router.use(
   createClaimWorkflowRouter({
+    parseClaimRouteParam,
+    requireCommercialProjectAccess,
+  }),
+);
+
+router.use(
+  createVariationRouter({
     parseClaimRouteParam,
     requireCommercialProjectAccess,
   }),

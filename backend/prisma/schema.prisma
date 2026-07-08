@@ -86,6 +86,7 @@ model User {
   auditLogs                   AuditLog[]
   syncQueues                  SyncQueue[]
   preparedClaims              ProgressClaim[]
+  createdVariations           Variation[]                  @relation("CreatedVariations")
   passwordResetTokens         PasswordResetToken[]
   emailVerificationTokens     EmailVerificationToken[]
   comments                    Comment[]
@@ -388,6 +389,7 @@ model Project {
   subcontractorCompanies      SubcontractorCompany[]
   dailyDockets                DailyDocket[]
   progressClaims              ProgressClaim[]
+  variations                  Variation[]
   documents                   Document[]
   drawings                    Drawing[]
   notifications               Notification[]
@@ -498,6 +500,7 @@ model Lot {
   docketLabourLots         DocketLabourLot[]
   docketPlantLots          DocketPlantLot[]
   claimedLots              ClaimedLot[]
+  variations               Variation[]
   subcontractorAssignments LotSubcontractorAssignment[]
 
   @@unique([projectId, lotNumber])
@@ -1341,6 +1344,7 @@ model ProgressClaim {
 
   claimedLots ClaimedLot[]
   lots        Lot[]
+  variations  Variation[]
 
   @@unique([projectId, claimNumber])
   @@map("progress_claims")
@@ -1363,6 +1367,51 @@ model ClaimedLot {
 
   @@unique([claimId, lotId])
   @@map("claimed_lots")
+}
+
+model Variation {
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  variationNumber String    @map("variation_number")
+  title           String
+  description     String?
+  status          String    @default("proposed")
+  approvedAmount  Decimal?  @map("approved_amount")
+  clientReference String?   @map("client_reference")
+  lotId           String?   @map("lot_id")
+  claimedInId     String?   @map("claimed_in_id")
+  submittedAt     DateTime? @map("submitted_at")
+  approvedAt      DateTime? @map("approved_at")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?   @map("rejection_reason")
+  createdById     String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot       Lot?                 @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  claimedIn ProgressClaim?       @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
+  createdBy User?                @relation("CreatedVariations", fields: [createdById], references: [id], onDelete: SetNull)
+  evidence  VariationEvidence[]
+
+  @@unique([projectId, variationNumber])
+  @@index([projectId])
+  @@index([claimedInId])
+  @@map("variations")
+}
+
+model VariationEvidence {
+  id           String   @id @default(uuid())
+  variationId  String   @map("variation_id")
+  documentId   String   @map("document_id")
+  evidenceType String   @map("evidence_type")
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  variation Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([variationId, documentId])
+  @@map("variation_evidence")
 }
 
 // ============================================================================
@@ -1402,6 +1451,7 @@ model Document {
 
   itpCompletionAttachments ITPCompletionAttachment[]
   ncrEvidence              NCREvidence[]
+  variationEvidence        VariationEvidence[]
   testCertificates         TestResult[]
   drawings                 Drawing[]
   signedUrlTokens          DocumentSignedUrlToken[]
