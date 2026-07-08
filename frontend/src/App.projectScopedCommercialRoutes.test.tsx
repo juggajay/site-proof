@@ -111,6 +111,7 @@ vi.mock('./appLazyPages', () => ({
   DelayRegisterPage: () => <div>Delays</div>,
   DocketApprovalsPage: () => <div>Docket approvals</div>,
   ClaimsPage: () => <div>Claims route reached</div>,
+  VariationsPage: () => <div>Variations route reached</div>,
   CostsPage: () => <div>Costs route reached</div>,
   DocumentsPage: () => <div>Documents</div>,
   DrawingsPage: () => <div>Drawings</div>,
@@ -179,6 +180,7 @@ beforeEach(() => {
 describe('project-scoped commercial routes', () => {
   it.each([
     ['/projects/project-1/claims', 'Claims route reached'],
+    ['/projects/project-1/variations', 'Variations route reached'],
     ['/projects/project-1/costs', 'Costs route reached'],
     ['/projects/project-1/lots/lot-1/edit', 'Lot edit'],
     ['/projects/project-1/subcontractors', 'Subcontractors'],
@@ -226,6 +228,23 @@ describe('project-scoped commercial routes', () => {
       expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
     },
   );
+
+  it('blocks project-scoped quality_manager users from opening variations', async () => {
+    authState.user = {
+      id: 'project-qm-var-1',
+      email: 'project-qm-var@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'quality_manager',
+      companyId: 'company-1',
+    };
+    projectAccessState.role = 'quality_manager';
+
+    renderAppAt('/projects/project-1/variations');
+
+    expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+    expect(screen.queryByText('Variations route reached')).not.toBeInTheDocument();
+  });
 
   it('allows project-scoped quality managers to open the audit log', async () => {
     authState.user = {
