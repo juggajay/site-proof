@@ -22,6 +22,7 @@ import {
   generateTestCertificatePDF,
 } from '../../pdfGenerator';
 import type { ConformanceReportData } from '../../pdfGenerator';
+import type { ClaimEvidencePackageData } from '../../pdfGenerator';
 
 import { JsPdfRecorder, latestPdf, renderedText } from './pdfTestRecorder';
 vi.mock('jspdf', () => ({
@@ -646,6 +647,116 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).toContain('Document ID: doc-itp-attachment-1');
   });
 
+  it('renders claim variations and their evidence documents when included', async () => {
+    const claimWithVariations: ClaimEvidencePackageData = {
+      ...submittedClaimEvidencePackageFixture,
+      claim: {
+        ...submittedClaimEvidencePackageFixture.claim,
+        totalClaimedAmount: 260500,
+      },
+      variations: [
+        {
+          id: 'variation-1',
+          variationNumber: 'VAR-001',
+          title: 'Additional drainage excavation',
+          clientReference: 'TFNSW-CVO-14',
+          approvedAmount: 12000,
+          evidence: [
+            {
+              id: 'variation-evidence-1',
+              documentId: 'doc-var-1',
+              filename: 'VAR-001-client-approval.pdf',
+              fileUrl: 'supabase://documents/variations/VAR-001-client-approval.pdf',
+              evidenceType: 'client_approval',
+              uploadedAt: '2026-05-22T01:10:00.000Z',
+            },
+          ],
+        },
+      ],
+      summary: {
+        ...submittedClaimEvidencePackageFixture.summary,
+        totalClaimedAmount: 260500,
+        lotsTotalClaimedAmount: 248500,
+        variationsTotal: 12000,
+      },
+    };
+
+    await generateClaimEvidencePackagePDF(claimWithVariations);
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).toContain('Claimed Amount: $260,500');
+    expect(textContent).toContain('VARIATIONS');
+    expect(textContent).toContain('VAR #');
+    expect(textContent).toContain('VAR-001');
+    expect(textContent).toContain('Additional drainage excavation');
+    expect(textContent).toContain('TFNSW-CVO-14');
+    expect(textContent).toContain('$12,000');
+    expect(textContent).toContain('Subtotal');
+    expect(textContent).toContain('VARIATION VAR-001');
+    expect(textContent).toContain('VAR-001-client-approval.pdf');
+    expect(textContent).toContain('client_approval');
+    expect(textContent).toContain('Document ID: doc-var-1');
+    expect(textContent).toContain('#7 in the amount of $260,500.');
+  });
+
+  it('omits claim variations and their manifest evidence when the option is disabled', async () => {
+    const claimWithVariations: ClaimEvidencePackageData = {
+      ...submittedClaimEvidencePackageFixture,
+      variations: [
+        {
+          id: 'variation-1',
+          variationNumber: 'VAR-001',
+          title: 'Additional drainage excavation',
+          clientReference: 'TFNSW-CVO-14',
+          approvedAmount: 12000,
+          evidence: [
+            {
+              id: 'variation-evidence-1',
+              documentId: 'doc-var-1',
+              filename: 'VAR-001-client-approval.pdf',
+              fileUrl: 'supabase://documents/variations/VAR-001-client-approval.pdf',
+              evidenceType: 'client_approval',
+              uploadedAt: '2026-05-22T01:10:00.000Z',
+            },
+          ],
+        },
+      ],
+      summary: {
+        ...submittedClaimEvidencePackageFixture.summary,
+        variationsTotal: 12000,
+      },
+    };
+
+    await generateClaimEvidencePackagePDF(claimWithVariations, {
+      includeLotSummary: true,
+      includeLotDetails: true,
+      includeITPChecklists: true,
+      includeTestResults: true,
+      includeNCRs: true,
+      includeHoldPoints: true,
+      includePhotos: true,
+      includeVariations: false,
+      includeDeclaration: true,
+    });
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).not.toContain('VARIATIONS');
+    expect(textContent).not.toContain('Additional drainage excavation');
+    expect(textContent).not.toContain('VAR-001-client-approval.pdf');
+    expect(textContent).not.toContain('Document ID: doc-var-1');
+  });
+
+  it('does not throw when the claim evidence payload has no variations field', async () => {
+    const olderPayload = { ...submittedClaimEvidencePackageFixture };
+    delete (olderPayload as Partial<ClaimEvidencePackageData>).variations;
+
+    await expect(generateClaimEvidencePackagePDF(olderPayload)).resolves.toBeUndefined();
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).toContain('PROGRESS CLAIM');
+    expect(textContent).not.toContain('VARIATIONS');
+  });
+
   it('keeps claim evidence ITP detail counts aligned with accepted completion percentage', async () => {
     const reviewSensitiveLot = {
       ...submittedClaimEvidencePackageFixture.lots[1],
@@ -690,6 +801,7 @@ describe('pdfGenerator characterization', () => {
       includeNCRs: true,
       includeHoldPoints: true,
       includePhotos: false,
+      includeVariations: false,
       includeDeclaration: false,
     });
 

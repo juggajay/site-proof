@@ -39,6 +39,11 @@ const PACKAGE_SECTIONS: { key: keyof ClaimPackageOptions; label: string; descrip
     label: 'Non-Conformance Reports',
     description: 'NCR status and resolution details',
   },
+  {
+    key: 'includeVariations',
+    label: 'Variations',
+    description: 'Approved variations and supporting evidence',
+  },
   { key: 'includeHoldPoints', label: 'Hold Points', description: 'Hold point release information' },
   {
     key: 'includePhotos',
@@ -62,6 +67,7 @@ const ALL_FALSE: ClaimPackageOptions = {
   includeNCRs: false,
   includeHoldPoints: false,
   includePhotos: false,
+  includeVariations: false,
   includeDeclaration: false,
 };
 

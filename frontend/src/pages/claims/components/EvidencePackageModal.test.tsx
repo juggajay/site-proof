@@ -19,4 +19,21 @@ describe('EvidencePackageModal', () => {
     fireEvent.click(generateButton);
     expect(onGenerate).not.toHaveBeenCalled();
   });
+
+  it('includes variations by default and allows excluding them from generation', () => {
+    const onGenerate = vi.fn();
+
+    render(<EvidencePackageModal claimId="claim-1" onClose={vi.fn()} onGenerate={onGenerate} />);
+
+    const variationsCheckbox = screen.getByRole('checkbox', { name: /Variations/i });
+    expect(variationsCheckbox).toBeChecked();
+
+    fireEvent.click(variationsCheckbox);
+    fireEvent.click(screen.getByRole('button', { name: /Generate Package/i }));
+
+    expect(onGenerate).toHaveBeenCalledWith(
+      'claim-1',
+      expect.objectContaining({ includeVariations: false }),
+    );
+  });
 });

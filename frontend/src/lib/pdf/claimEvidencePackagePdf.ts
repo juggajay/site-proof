@@ -49,6 +49,10 @@ export async function generateClaimEvidencePackagePDF(
     }).format(amount);
   };
 
+  const variations = Array.isArray(data.variations) ? data.variations : [];
+  const includeVariations = options.includeVariations !== false;
+  const includedVariations = includeVariations ? variations : [];
+
   const isEvidenceDocument = (
     document: unknown,
   ): document is NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number] =>
@@ -467,12 +471,78 @@ export async function generateClaimEvidencePackagePDF(
     });
   }
 
+  if (includeVariations && variations.length > 0) {
+    checkPageBreak(45);
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('VARIATIONS', margin, yPos);
+    yPos += 10;
+
+    const headers = ['VAR #', 'Title', 'Client ref', 'Amount'];
+    const colWidths = [28, 72, 45, 35];
+
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
+    headers.forEach((header, i) => {
+      doc.text(header, xPos, yPos + 5.5);
+      xPos += colWidths[i];
+    });
+    yPos += 10;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    variations.forEach((variation, idx) => {
+      checkPageBreak(8);
+
+      if (idx % 2 === 1) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(margin, yPos - 1, contentWidth, 7, 'F');
+      }
+
+      xPos = margin + 2;
+      doc.text(variation.variationNumber.slice(0, 14), xPos, yPos + 4);
+      xPos += colWidths[0];
+
+      doc.text(variation.title.slice(0, 38), xPos, yPos + 4);
+      xPos += colWidths[1];
+
+      doc.text((variation.clientReference || '-').slice(0, 24), xPos, yPos + 4);
+      xPos += colWidths[2];
+
+      doc.text(formatCurrency(variation.approvedAmount), xPos, yPos + 4);
+      yPos += 7;
+    });
+
+    yPos += 3;
+    doc.setFillColor(220, 220, 220);
+    doc.rect(margin, yPos - 1, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('Subtotal', margin + 2, yPos + 5);
+    doc.text(
+      formatCurrency(data.summary.variationsTotal ?? 0),
+      margin + colWidths[0] + colWidths[1] + colWidths[2] + 2,
+      yPos + 5,
+    );
+    yPos += 15;
+  }
+
   if (options.includePhotos) {
     const lotsWithDocuments = (data.lots ?? [])
       .map((lot) => ({ lot, documents: getLotDocuments(lot) }))
       .filter(({ documents }) => documents.length > 0);
+    const variationsWithDocuments = includedVariations
+      .map((variation) => ({
+        variation,
+        documents: Array.isArray(variation.evidence) ? variation.evidence : [],
+      }))
+      .filter(({ documents }) => documents.length > 0);
 
-    if (lotsWithDocuments.length > 0) {
+    if (lotsWithDocuments.length > 0 || variationsWithDocuments.length > 0) {
       doc.addPage();
       yPos = margin;
 
@@ -485,7 +555,7 @@ export async function generateClaimEvidencePackagePDF(
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.text(
-        'Document evidence recorded against claimed lots. Use CIVOS document IDs to retrieve controlled originals.',
+        'Document evidence recorded against claimed lots and approved variations. Use CIVOS document IDs to retrieve controlled originals.',
         margin,
         yPos,
       );
@@ -514,6 +584,41 @@ export async function generateClaimEvidencePackagePDF(
           if (document.uploadedAt) {
             const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU');
             doc.text(`Uploaded: ${uploadedDate} | Document ID: ${document.id}`, margin + 6, yPos);
+            yPos += 4;
+          }
+
+          yPos += 2;
+        });
+        yPos += 4;
+      });
+
+      variationsWithDocuments.forEach(({ variation, documents }) => {
+        checkPageBreak(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(`VARIATION ${variation.variationNumber}`, margin, yPos);
+        yPos += 6;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        documents.forEach((document) => {
+          checkPageBreak(12);
+          doc.text(document.filename.slice(0, 90), margin + 3, yPos);
+          yPos += 4;
+
+          doc.text((document.evidenceType || 'variation evidence').slice(0, 110), margin + 6, yPos);
+          yPos += 4;
+
+          if (document.uploadedAt) {
+            const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU');
+            doc.text(
+              `Uploaded: ${uploadedDate} | Document ID: ${document.documentId}`,
+              margin + 6,
+              yPos,
+            );
+            yPos += 4;
+          } else {
+            doc.text(`Document ID: ${document.documentId}`, margin + 6, yPos);
             yPos += 4;
           }
 
