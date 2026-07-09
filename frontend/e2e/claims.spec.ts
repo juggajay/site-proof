@@ -642,7 +642,9 @@ test.describe('Claims seeded commercial contract', () => {
     const submitModal = page.getByRole('dialog').filter({ hasText: 'Submit Claim' });
     await expect(submitModal.getByRole('heading', { name: 'Submit Claim' })).toBeVisible();
 
-    const submitButton = submitModal.getByText('Download summary CSV');
+    // The honest-submit rework renamed the action: the modal marks the claim
+    // as submitted (the client sends it themselves).
+    const submitButton = submitModal.getByRole('button', { name: 'Mark as submitted' });
     await submitButton.evaluate((button: HTMLElement) => {
       button.click();
       button.click();

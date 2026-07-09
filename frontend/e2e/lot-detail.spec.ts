@@ -274,29 +274,46 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       return;
     }
 
-    if (url.pathname === `/api/lots/${E2E_LOT_ID}/conform-status`) {
-      await json({
-        canConform: false,
-        blockingReasons: ['ITP incomplete'],
-        prerequisites: {
-          itpAssigned: true,
-          itpCompleted: false,
-          itpCompletedCount: currentItpCompletions().filter(
-            (entry) =>
-              entry.isCompleted &&
-              !entry.isPendingVerification &&
-              !entry.isRejected &&
-              entry.verificationStatus !== 'pending_verification' &&
-              entry.verificationStatus !== 'rejected',
-          ).length,
-          itpTotalCount: 1,
-          hasPassingTest: false,
-          noOpenNcrs: true,
-          openNcrs: [],
-        },
-      });
-      return;
-    }
+    // The lot page reads conformStatus from the readiness payload
+    // (LotDetailPage reads readiness.conformStatus; the standalone
+    // /conform-status endpoint is no longer called by the app).
+    const buildConformStatus = () =>
+      forceConformed
+        ? {
+            canConform: true,
+            blockingReasons: [],
+            prerequisites: {
+              itpAssigned: true,
+              itpCompleted: true,
+              itpCompletedCount: 1,
+              itpTotalCount: 1,
+              hasPassingTest: true,
+              noOpenNcrs: true,
+              openNcrs: [],
+            },
+          }
+        : {
+            canConform: false,
+            blockingReasons: options.noItpAssigned
+              ? ['No ITP assigned', 'No passing test result']
+              : ['ITP incomplete'],
+            prerequisites: {
+              itpAssigned: !options.noItpAssigned,
+              itpCompleted: false,
+              itpCompletedCount: currentItpCompletions().filter(
+                (entry) =>
+                  entry.isCompleted &&
+                  !entry.isPendingVerification &&
+                  !entry.isRejected &&
+                  entry.verificationStatus !== 'pending_verification' &&
+                  entry.verificationStatus !== 'rejected',
+              ).length,
+              itpTotalCount: 1,
+              hasPassingTest: false,
+              noOpenNcrs: true,
+              openNcrs: [],
+            },
+          };
 
     if (url.pathname === `/api/lots/${E2E_LOT_ID}/readiness`) {
       if (forceConformed) {
@@ -305,6 +322,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
             lotId: E2E_LOT_ID,
             lotNumber: 'LOT-ITP-001',
             status: 'conformed',
+            conformStatus: buildConformStatus(),
             conformance: {
               state: 'already_conformed',
               blockers: [],
@@ -354,6 +372,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
             lotId: E2E_LOT_ID,
             lotNumber: 'LOT-ITP-001',
             status: 'not_started',
+            conformStatus: buildConformStatus(),
             conformance: {
               state: 'blocked',
               blockers: [
@@ -412,6 +431,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
           lotId: E2E_LOT_ID,
           lotNumber: 'LOT-ITP-001',
           status: 'in_progress',
+          conformStatus: buildConformStatus(),
           conformance: {
             state: 'blocked',
             blockers: [
