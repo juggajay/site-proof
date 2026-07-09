@@ -137,11 +137,7 @@ export async function generateHPEvidencePackagePDF(
     const org = data.holdPoint.releasedByOrg;
     const isExternal = Boolean(org) || data.holdPoint.releaseMethod === 'secure_link';
     doc.setFont('helvetica', 'bold');
-    doc.text(
-      `Released by: ${data.holdPoint.releasedByName}${org ? `, ${org}` : ''}`,
-      margin,
-      yPos,
-    );
+    doc.text(`Released by: ${data.holdPoint.releasedByName}${org ? `, ${org}` : ''}`, margin, yPos);
     yPos += 6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
@@ -399,10 +395,21 @@ export async function generateHPEvidencePackagePDF(
         doc.text(result.slice(0, 14), xPos, yPos + 4);
         xPos += testColWidths[2];
 
-        doc.text(formatSpecLimit(test.specificationMin, test.specificationMax, test.resultUnit).slice(0, 18), xPos, yPos + 4);
+        doc.text(
+          formatSpecLimit(test.specificationMin, test.specificationMax, test.resultUnit).slice(
+            0,
+            18,
+          ),
+          xPos,
+          yPos + 4,
+        );
         xPos += testColWidths[3];
 
-        doc.text(test.passFail === 'pass' ? 'P' : test.passFail === 'fail' ? 'F' : '-', xPos, yPos + 4);
+        doc.text(
+          test.passFail === 'pass' ? 'P' : test.passFail === 'fail' ? 'F' : '-',
+          xPos,
+          yPos + 4,
+        );
         yPos += 6;
       });
     } else {

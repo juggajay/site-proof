@@ -369,7 +369,9 @@ export async function generateConformanceReportPDF(
       doc.text(test.testType.slice(0, 20), txPos, yPos + 4);
       txPos += testColWidths[0];
       const result =
-        test.resultValue != null ? `${test.resultValue}${test.resultUnit ? ' ' + test.resultUnit : ''}` : 'N/A';
+        test.resultValue != null
+          ? `${test.resultValue}${test.resultUnit ? ' ' + test.resultUnit : ''}`
+          : 'N/A';
       doc.text(result.slice(0, 16), txPos, yPos + 4);
       txPos += testColWidths[1];
       doc.text(

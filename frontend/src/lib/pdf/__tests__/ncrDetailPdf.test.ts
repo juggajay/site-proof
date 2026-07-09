@@ -52,8 +52,10 @@ describe('NCR detail PDF — Batch C disposition + concession block', () => {
       ncr: {
         ...majorNcrDetailFixture.ncr,
         status: 'closed_concession',
-        concessionJustification: 'Minor cover shortfall within durability tolerance per RPEQ review.',
-        concessionRiskAssessment: 'No durability impact over design life; monitored at next inspection.',
+        concessionJustification:
+          'Minor cover shortfall within durability tolerance per RPEQ review.',
+        concessionRiskAssessment:
+          'No durability impact over design life; monitored at next inspection.',
         clientApprovalReference: 'SUP-APP-2291',
         qmApprovedBy: { fullName: 'Quinn Manager', email: 'quinn@example.com' },
         qmApprovedAt: '2026-05-29T06:00:00.000Z',

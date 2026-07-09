@@ -30,7 +30,10 @@ function isConcessionDisposition(ncr: NCRDetailData['ncr']): boolean {
 function formatLinkedTestReference(
   linked: NonNullable<NCRDetailData['ncr']['linkedTestResult']>,
 ): string {
-  const parts = [linked.testType, linked.testRequestNumber ? `Req ${linked.testRequestNumber}` : null];
+  const parts = [
+    linked.testType,
+    linked.testRequestNumber ? `Req ${linked.testRequestNumber}` : null,
+  ];
   if (linked.laboratoryReportNumber) parts.push(`Lab Report ${linked.laboratoryReportNumber}`);
   return parts.filter((part): part is string => Boolean(part)).join(' · ');
 }
@@ -328,7 +331,10 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
         'Verified By',
         data.ncr.verifiedBy?.fullName || data.ncr.verifiedBy?.email || 'Not recorded',
       );
-      addField('Verified On', data.ncr.verifiedAt ? formatDateTime(data.ncr.verifiedAt) : 'Not recorded');
+      addField(
+        'Verified On',
+        data.ncr.verifiedAt ? formatDateTime(data.ncr.verifiedAt) : 'Not recorded',
+      );
     }
     if (data.ncr.closedAt) {
       addField('Closed On', formatDateTime(data.ncr.closedAt));
