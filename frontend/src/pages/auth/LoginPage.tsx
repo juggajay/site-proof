@@ -565,7 +565,7 @@ export function LoginPage() {
           </div>
 
           <p className="below">
-            Subcontractor crew? Use the invitation link your head contractor sent you.
+            Subcontractor? Use the invitation link your head contractor sent you.
           </p>
         </div>
       </div>

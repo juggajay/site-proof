@@ -266,7 +266,19 @@
 /* ---------- hero ---------- */
 .sp-lp .hero {
   position: relative;
-  background: var(--night);
+  /* Night-earthworks photograph under the survey grid: heavy dark gradient
+     keeps the headline zone clean; the staked horizon glows low in frame. */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 16, 13, 0.94) 0%,
+      rgba(20, 16, 13, 0.82) 42%,
+      rgba(20, 16, 13, 0.45) 72%,
+      rgba(20, 16, 13, 0.9) 96%,
+      var(--night) 100%
+    ),
+    url('/landing/hero-stakes-night.jpg') center bottom / cover no-repeat,
+    var(--night);
   color: var(--bone);
   padding: 96px 0 0;
   overflow: visible;
@@ -481,6 +493,34 @@
   color: var(--bone-3);
   opacity: 0;
   animation: splp-frag-in 0.6s ease 1.55s forwards;
+}
+/* Small screens: tighten the hero's vertical rhythm so the primary CTA
+   lands above the fold, and give the buttons full-width tap targets. */
+@media (max-width: 480px) {
+  .sp-lp .hero {
+    padding-top: 84px;
+  }
+  .sp-lp .stack {
+    margin-top: 24px;
+  }
+  .sp-lp .frag {
+    font-size: clamp(42px, 12.5vw, 54px);
+  }
+  .sp-lp .answer {
+    margin-top: 24px;
+    gap: 10px 12px;
+  }
+  .sp-lp .hero-sub {
+    margin-top: 24px;
+    font-size: 17px;
+  }
+  .sp-lp .hero-ctas {
+    margin-top: 26px;
+  }
+  .sp-lp .hero-ctas .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
 }
 
 .sp-lp .chainage {
@@ -1255,7 +1295,17 @@
 /* ---------- early access (returns to night) ---------- */
 .sp-lp .ea-outer {
   margin-top: 128px;
-  background: var(--night);
+  /* Aerial night corridor bookends the hero's photography; kept dim so the
+     form and copy stay the subject. */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(20, 16, 13, 0.96) 0%,
+      rgba(20, 16, 13, 0.78) 50%,
+      rgba(20, 16, 13, 0.96) 100%
+    ),
+    url('/landing/corridor-night.jpg') center / cover no-repeat,
+    var(--night);
   color: var(--bone);
   position: relative;
   overflow: hidden;

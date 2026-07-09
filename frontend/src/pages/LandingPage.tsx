@@ -13,7 +13,7 @@ import './landing.css';
    ============================================================ */
 
 const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mzdqayao';
-const FOUNDER_EMAIL = 'jaysonryan21@hotmail.com';
+const FOUNDER_EMAIL = 'jayson@civos.com.au';
 
 const TEMPLATE_CELLS = [
   { auth: 'AUSTROADS', region: 'National baseline', n: '6' },
@@ -72,25 +72,32 @@ const FAQ_ITEMS = [
     q: 'Q.2',
     summary: 'What does it cost?',
     answer: [
-      'There’s no published pricing yet, and we won’t pretend there is. Early crews get in first and help shape it — that’s part of the deal.',
+      'There’s no published pricing yet, and we won’t pretend there is. The companies that get in early help shape it — that’s part of the deal.',
     ],
   },
   {
     q: 'Q.3',
+    summary: 'We run multiple projects and a lot of subbies — will it hold up?',
+    answer: [
+      'That’s the shape it’s built for. Access is role-based — foremen work the field, quality managers run verification and NCRs, and commercial data stays with the roles that should see it. Critical actions land in an audit log, subcontractors work in their own portal scoped to what’s theirs, and a portfolio view keeps every project’s status on one screen.',
+    ],
+  },
+  {
+    q: 'Q.4',
     summary: 'Will our subbies actually use it?',
     answer: [
       'Subbies get their own portal scoped to what’s theirs: dockets, assigned work, the ITPs and hold points that concern them, and documents. They submit dockets from their own phone; your foreman approves, queries or adjusts from theirs. One subbie login works across the projects they’re invited to.',
     ],
   },
   {
-    q: 'Q.4',
+    q: 'Q.5',
     summary: 'Can we use our own ITP templates?',
     answer: [
       'Yes. Start from the Austroads and state authority libraries and adapt them per project, or build your own. Templates are editable — they’re a head start, not a cage.',
     ],
   },
   {
-    q: 'Q.5',
+    q: 'Q.6',
     summary: 'Does it work where there’s no signal?',
     answer: [
       'The core field workflows keep working offline — ITP completions, photos and selected diary actions. Work queues on the device and syncs when coverage returns, and lot-edit conflicts can be reviewed before sync. Docket submission, admin and reporting need a connection.',
@@ -350,7 +357,7 @@ export function LandingPage() {
 
           <p className="hero-sub">
             CIVOS pulls <strong>ITPs, hold points, tests, dockets and photos</strong> onto the lot,
-            so Australian civil teams can claim on evidence instead of optimism.
+            so Australian civil contractors can claim on evidence instead of optimism.
           </p>
 
           <div className="hero-ctas">
@@ -362,8 +369,8 @@ export function LandingPage() {
             </a>
           </div>
           <p className="hero-note">
-            No pricing published yet — the first crews on board help set it. No credit card, no
-            sales pitch.
+            No pricing published yet — the first contractors on board help set it. No credit card,
+            no sales pitch.
           </p>
 
           <div className="chainage" ref={chainRef} aria-hidden="true" />
@@ -525,9 +532,9 @@ export function LandingPage() {
             </h2>
           </div>
           <p className="sec-lead rv">
-            Civil teams don&rsquo;t lose claim arguments because the work wasn&rsquo;t done. They
-            lose because the proof is scattered across utes, inboxes and site sheds when someone
-            finally asks for it.
+            Civil contractors don&rsquo;t lose claim arguments because the work wasn&rsquo;t done.
+            They lose because the proof is scattered across utes, inboxes and site sheds when
+            someone finally asks for it.
           </p>
           <div className="prob-grid">
             <div className="plist rv">
@@ -748,16 +755,17 @@ export function LandingPage() {
           <div className="ea">
             <div className="ea-copy rv">
               <span className="micro">Why there&rsquo;s no proof wall on this page</span>
-              <h3>You&rsquo;d be among the first crews. We&rsquo;re not pretending otherwise.</h3>
+              <h3>
+                You&rsquo;d be among the first companies. We&rsquo;re not pretending otherwise.
+              </h3>
               <p>
                 Most software pages this early are padded with stock photos of hard hats and
                 statistics nobody can source. We&rsquo;d rather show you the real product and earn
                 the case studies.
               </p>
               <p>
-                CIVOS is <b>founder-built out of the paperwork pain of running real crews</b> —
-                built in Australia, for Australian civil work, dogfooded on the workflows on this
-                page.
+                CIVOS is <b>founder-built out of real site paperwork pain</b> — built in Australia,
+                for Australian civil work, dogfooded on the workflows on this page.
               </p>
               <ul className="ea-list">
                 <li>
@@ -766,10 +774,10 @@ export function LandingPage() {
                 </li>
                 <li>
                   <span className="tick">02</span>A direct line to the founder. What&rsquo;s missing
-                  for your crew gets built or answered fast.
+                  for your projects gets built or answered fast.
                 </li>
                 <li>
-                  <span className="tick">03</span>A say in pricing before it exists. Early crews
+                  <span className="tick">03</span>A say in pricing before it exists. Early companies
                   help set it — you won&rsquo;t be surprised by it.
                 </li>
               </ul>
@@ -924,7 +932,9 @@ export function LandingPage() {
           <a href="#templates">Templates</a>
           <a href="#early-access">Early access</a>
           <div className="fine">
-            <span>© 2026 CIVOS · Built in Australia for civil crews · Evidence, lot by lot.</span>
+            <span>
+              © 2026 CIVOS · Built in Australia for civil contractors · Evidence, lot by lot.
+            </span>
             <span className="mono">CH 2800 — END OF JOB</span>
           </div>
         </div>
