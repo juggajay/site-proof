@@ -17,6 +17,7 @@
  */
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import { buildConformanceReportData } from '../lib/buildConformanceReportData';
@@ -99,7 +100,7 @@ export function useConformanceReportGeneration({
       // Fetch all data needed for the report
       const encodedProjectId = encodeURIComponent(projectId || '');
       const encodedLotId = encodeURIComponent(lotId || '');
-      const [projectData, itpData, testsData, ncrsData] = await Promise.all([
+      const [projectData, itpData, testsData, ncrsData, branding] = await Promise.all([
         apiFetch<ProjectResponse>(`/api/projects/${encodedProjectId}`),
         itpInstance
           ? Promise.resolve<ItpInstanceResponse>({ instance: itpInstance })
@@ -108,6 +109,7 @@ export function useConformanceReportGeneration({
           `/api/test-results?projectId=${encodedProjectId}&lotId=${encodedLotId}`,
         ),
         apiFetch<NcrsResponse>(`/api/ncrs?projectId=${encodedProjectId}&lotId=${encodedLotId}`),
+        fetchPdfBranding(projectId || ''),
       ]);
       const project = projectData.project;
       if (!project?.name) {
@@ -118,7 +120,9 @@ export function useConformanceReportGeneration({
         project: {
           name: project.name,
           projectNumber: project.projectNumber,
-          company: project.company,
+          // Prefer the branding endpoint (embedded logo + ABN/address); fall
+          // back to the project detail's company block.
+          company: branding ?? project.company,
         },
         itpInstance: itpData.instance,
         testResults: testsData.testResults,

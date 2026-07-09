@@ -116,21 +116,29 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
   doc.text('Dashboard Summary', margin, 18);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('CIVOS Civil Execution and Conformance Platform', margin, 27);
+  // Customer brand owns the header (name under the title, logo top-right);
+  // platform attribution lives in the shared footer.
+  if (branding?.companyName) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(branding.companyName, margin, 27);
+  }
   if (branding) {
-    await drawPdfBrandingHeader(doc, branding, {
-      logoX: pageWidth - margin - 30,
-      logoY: 8,
-      logoWidth: 30,
-      logoHeight: 18,
-      companyNameX: pageWidth - margin,
-      companyNameY: 30,
-      companyNameAlign: 'right',
-      companyNameColor: [255, 255, 255],
-      companyNameFontSize: 8,
-    });
+    await drawPdfBrandingHeader(
+      doc,
+      { logoUrl: branding.logoUrl },
+      {
+        logoX: pageWidth - margin - 30,
+        logoY: 8,
+        logoWidth: 30,
+        logoHeight: 18,
+        companyNameX: pageWidth - margin,
+        companyNameY: 30,
+        companyNameAlign: 'right',
+        companyNameColor: [255, 255, 255],
+        companyNameFontSize: 8,
+      },
+    );
   }
 
   yPos = 45;
@@ -186,7 +194,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   });
 
   const filenameDate = formatDateKey(new Date(data.generatedAt));
-  savePdf(doc, `civos-dashboard-${filenameDate}.pdf`, 'civos-dashboard.pdf');
+  savePdf(doc, `Dashboard-Summary-${filenameDate}.pdf`, 'dashboard-summary.pdf');
 
   devLog(`Dashboard PDF generated in ${Date.now() - startTime}ms`);
 }

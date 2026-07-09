@@ -7,6 +7,7 @@ import { buildNcrDetailPdfData } from '../ncrDetailPdfData';
 import { getAvailableNcrActions } from '../ncrActions';
 import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
+import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
 import { logError } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
 
@@ -59,6 +60,11 @@ function NCRTableInner({
     const pdfData = buildNcrDetailPdfData(ncr);
 
     try {
+      if (ncr.project?.id) {
+        // Company block (logo/ABN/address) is best-effort — null keeps the
+        // PDF unbranded rather than failing the download.
+        pdfData.company = await fetchPdfBranding(ncr.project.id);
+      }
       const { generateNCRDetailPDF } = await import('@/lib/pdfGenerator');
       await generateNCRDetailPDF(pdfData);
       toast({

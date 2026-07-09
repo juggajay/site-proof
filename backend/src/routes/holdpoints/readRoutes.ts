@@ -288,7 +288,9 @@ holdPointReadRouter.get(
           include: {
             project: {
               include: {
-                company: { select: { id: true, name: true, logoUrl: true } },
+                company: {
+                  select: { id: true, name: true, abn: true, address: true, logoUrl: true },
+                },
               },
             },
             itpInstance: {
@@ -465,7 +467,7 @@ holdPointReadRouter.post(
       include: {
         project: {
           include: {
-            company: { select: { id: true, name: true, logoUrl: true } },
+            company: { select: { id: true, name: true, abn: true, address: true, logoUrl: true } },
           },
         },
         itpInstance: {

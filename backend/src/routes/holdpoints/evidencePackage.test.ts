@@ -596,6 +596,8 @@ describe('header mappers', () => {
         company: {
           id: 'company-1',
           name: 'Gateway Civil Pty Ltd',
+          abn: '12 345 678 901',
+          address: '1 Haul Rd, Sydney NSW',
           logoUrl: 'https://cdn.example.com/gateway-logo.png',
         },
       }),
@@ -605,6 +607,32 @@ describe('header mappers', () => {
       projectNumber: 'PRJ-9',
       company: {
         name: 'Gateway Civil Pty Ltd',
+        abn: '12 345 678 901',
+        address: '1 Haul Rd, Sydney NSW',
+        logoUrl: 'https://cdn.example.com/gateway-logo.png',
+      },
+    });
+    // Companies without ABN/address serialize explicit nulls (PDF-side treats
+    // them as absent).
+    expect(
+      await mapHoldPointEvidenceProject({
+        id: 'p1',
+        name: 'Highway',
+        projectNumber: 'PRJ-9',
+        company: {
+          id: 'company-1',
+          name: 'Gateway Civil Pty Ltd',
+          logoUrl: 'https://cdn.example.com/gateway-logo.png',
+        },
+      }),
+    ).toEqual({
+      id: 'p1',
+      name: 'Highway',
+      projectNumber: 'PRJ-9',
+      company: {
+        name: 'Gateway Civil Pty Ltd',
+        abn: null,
+        address: null,
         logoUrl: 'https://cdn.example.com/gateway-logo.png',
       },
     });

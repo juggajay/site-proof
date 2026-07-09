@@ -4,7 +4,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
-import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
+import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
 import { buildProjectCostsResponse } from './costResponses.js';
 import { buildProjectDetailResponse, buildProjectListResponse } from './listDetailResponses.js';
 import { createProjectOverviewRouter } from './projectOverviewRoute.js';
@@ -44,6 +44,36 @@ function buildCompanyBranding(company: CompanyBrandingRecord) {
 
 function canViewProjectContractValue(role: string | null | undefined): boolean {
   return Boolean(role && PROJECT_COMMERCIAL_ROLES.includes(role));
+}
+
+type CompanyBrandingDetailRecord = {
+  id: string;
+  name: string;
+  abn: string | null;
+  address: string | null;
+  logoUrl: string | null;
+};
+
+// Full company block for generated documents (logo + name + ABN + address).
+// `embeddedLogo` is the server-side data URL when Supabase could provide one,
+// so client-side PDF generation needs no live logo fetch (the hold-point
+// evidence-package pattern); falls back to the signed display URL.
+export function buildProjectBrandingResponse(
+  company: CompanyBrandingDetailRecord | null,
+  embeddedLogo: string | null,
+) {
+  if (!company) {
+    return { company: null };
+  }
+
+  return {
+    company: {
+      name: company.name,
+      abn: company.abn,
+      address: company.address,
+      logoUrl: embeddedLogo ?? buildCompanyLogoDisplayUrl(company.id, company.logoUrl),
+    },
+  };
 }
 
 async function getSubcontractorProjectAccess(
@@ -331,6 +361,55 @@ export function createProjectReadRouter({
           currentUserRole: effectiveRole,
         }),
       );
+    }),
+  );
+
+  // GET /api/projects/:id/branding - Company block for generated documents
+  // (PDFs/exports): name, ABN, address, and the logo embedded as a data URL so
+  // client-side generation needs no live logo fetch. Same access rule as
+  // GET /:id — any project member, subcontractor, or company admin.
+  projectReadRouter.get(
+    '/:id/branding',
+    asyncHandler(async (req, res) => {
+      const id = parseProjectRouteParam(req.params.id, 'id');
+      const user = req.user!;
+      const isSubcontractor = isSubcontractorUser(user);
+      const isStandaloneSubcontractor = isStandaloneSubcontractorPortalIdentity(user);
+
+      const project = await prisma.project.findUnique({
+        where: { id },
+        select: {
+          companyId: true,
+          company: {
+            select: { id: true, name: true, abn: true, address: true, logoUrl: true },
+          },
+        },
+      });
+
+      if (!project) {
+        throw AppError.notFound('Project');
+      }
+
+      const projectUser = isSubcontractor
+        ? null
+        : await prisma.projectUser.findFirst({
+            where: { projectId: id, userId: user.id, status: 'active' },
+            select: { id: true },
+          });
+      const { hasSubcontractorAccess } = isStandaloneSubcontractor
+        ? await getSubcontractorProjectAccess(user.id, id, isBlockedSubcontractorStatus)
+        : { hasSubcontractorAccess: false };
+      const hasCompanyAdminAccess = isCompanyAdmin(user) && project.companyId === user.companyId;
+
+      if (!projectUser && !hasSubcontractorAccess && !hasCompanyAdminAccess) {
+        throw AppError.forbidden('Access denied to this project');
+      }
+
+      const embeddedLogo = project.company
+        ? await getCompanyLogoDataUrl(project.company.id, project.company.logoUrl)
+        : null;
+
+      res.json(buildProjectBrandingResponse(project.company, embeddedLogo));
     }),
   );
 

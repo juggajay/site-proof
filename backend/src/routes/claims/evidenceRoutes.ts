@@ -5,7 +5,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { isItpCompletionFinished } from '../../lib/conformancePrerequisites.js';
 import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
-import { buildCompanyLogoDisplayUrl } from '../company/logoStorage.js';
+import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
 import {
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
@@ -49,6 +49,8 @@ export function createClaimEvidenceRouter({
                 select: {
                   id: true,
                   name: true,
+                  abn: true,
+                  address: true,
                   logoUrl: true,
                 },
               },
@@ -186,10 +188,17 @@ export function createClaimEvidenceRouter({
         },
         company: {
           name: claim.project.company.name,
-          logoUrl: buildCompanyLogoDisplayUrl(
-            claim.project.company.id,
-            claim.project.company.logoUrl,
-          ),
+          abn: claim.project.company.abn,
+          address: claim.project.company.address,
+          // Embed the logo as a data URL so client-side PDF generation needs
+          // no live fetch (hold-point evidence-package pattern); fall back to
+          // the signed display URL when embedding isn't possible.
+          logoUrl:
+            (await getCompanyLogoDataUrl(
+              claim.project.company.id,
+              claim.project.company.logoUrl,
+            )) ??
+            buildCompanyLogoDisplayUrl(claim.project.company.id, claim.project.company.logoUrl),
         },
         project: {
           id: claim.project.id,

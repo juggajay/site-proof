@@ -1,5 +1,5 @@
 import { devLog } from '../logger';
-import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
+import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DailyDiaryPDFData } from './types';
@@ -101,6 +101,7 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
     companyNameColor: [255, 255, 255],
     companyNameFontSize: 8,
   });
+  drawCompanyDetailsLine(doc, data, { x: pageWidth - margin, y: 46 });
 
   yPos = 50;
   doc.setTextColor(0, 0, 0);
@@ -475,7 +476,8 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   });
 
   // Save the PDF
-  const filename = `Daily-Diary-${diaryDate}-${data.diary.status}.pdf`;
+  // {Type}-{Ref}-{Date} convention: the diary date is both the ref and date.
+  const filename = `Daily-Diary-${diaryDate}.pdf`;
   savePdf(doc, filename, 'daily-diary.pdf');
 
   devLog(`Daily diary PDF generated in ${Date.now() - startTime}ms`);

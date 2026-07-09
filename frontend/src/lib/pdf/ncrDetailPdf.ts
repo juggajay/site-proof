@@ -1,7 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
-import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
+import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { NCRDetailData } from './types';
@@ -135,6 +135,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
     companyNameColor: [255, 255, 255],
     companyNameFontSize: 8,
   });
+  drawCompanyDetailsLine(doc, data, { x: pageWidth - margin, y: 41 });
 
   yPos = 45;
   doc.setTextColor(0, 0, 0);
