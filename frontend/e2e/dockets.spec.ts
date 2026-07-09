@@ -76,10 +76,18 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     }
 
     if (url.pathname === '/api/dockets' && url.searchParams.get('projectId') === E2E_PROJECT_ID) {
-      docketLoadCount += 1;
-      if (docketLoadCount <= (options.failDocketLoadsUntil ?? 0)) {
-        await json({ message: 'Unable to load dockets right now' }, 500);
-        return;
+      // The approvals page runs a secondary status-scoped query (draft count)
+      // alongside the main list, and the app QueryClient retries each query
+      // once. failDocketLoadsUntil must only fail the MAIN list query, or a
+      // single configured failure gets absorbed by retries across the two
+      // queries and the error state never renders.
+      const isMainListLoad = !url.searchParams.get('status');
+      if (isMainListLoad) {
+        docketLoadCount += 1;
+        if (docketLoadCount <= (options.failDocketLoadsUntil ?? 0)) {
+          await json({ message: 'Unable to load dockets right now' }, 500);
+          return;
+        }
       }
       await json({
         dockets: options.dockets ?? [buildDocket(docketStatus, { foremanNotes })],
@@ -571,7 +579,8 @@ test.describe('Dockets seeded approval contract', () => {
     await docketRow.getByRole('button', { name: 'Print docket' }).click();
     const download = await downloadPromise;
 
-    expect(download.suggestedFilename()).toBe('Docket-DKT-E2E-001-pending_approval.pdf');
+    // Batch A filename convention: {Type}-{Ref}-{Date}.pdf (date = generation day).
+    expect(download.suggestedFilename()).toMatch(/^Docket-DKT-E2E-001-\d{4}-\d{2}-\d{2}\.pdf$/);
     await expect(page.getByText('Docket PDF downloaded')).toBeVisible();
     await download.delete();
   });
@@ -592,7 +601,8 @@ test.describe('Dockets seeded approval contract', () => {
     await docketRow.getByRole('button', { name: 'Print docket' }).click();
     const download = await downloadPromise;
 
-    expect(download.suggestedFilename()).toBe('Docket-DKT-E2E-001-pending_approval.pdf');
+    // Batch A filename convention: {Type}-{Ref}-{Date}.pdf (date = generation day).
+    expect(download.suggestedFilename()).toMatch(/^Docket-DKT-E2E-001-\d{4}-\d{2}-\d{2}\.pdf$/);
     await expect(page.getByText('Docket PDF downloaded')).toBeVisible();
     expect(api.getProjectRequestCount()).toBeGreaterThan(projectRequestsBeforePrint);
     await download.delete();
