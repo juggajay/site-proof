@@ -1940,7 +1940,10 @@ test.describe('production readiness guardrails', () => {
       "export { generateDashboardPDF } from './pdf/dashboardPdf'",
     );
     expect(dashboardPdfSource).toContain('export async function generateDashboardPDF');
-    expect(dashboardPdfSource).toContain('civos-dashboard-');
+    // The saved filename proves a real PDF download (repointed when the
+    // filename convention changed to {Type}-{Ref}-{Date} in the Batch A
+    // branding overhaul — never weaken to a looser match).
+    expect(dashboardPdfSource).toContain('Dashboard-Summary-');
   });
 
   test('project report generated timestamps use date and timezone preferences', async () => {

@@ -15,11 +15,15 @@ export interface ConformanceFormatOptions {
 export interface PDFCompanyBranding {
   name?: string | null;
   logoUrl?: string | null;
+  abn?: string | null;
+  address?: string | null;
 }
 
 export interface PDFBrandingData {
   companyName?: string | null;
   logoUrl?: string | null;
+  abn?: string | null;
+  address?: string | null;
 }
 
 export interface PDFBrandableData {

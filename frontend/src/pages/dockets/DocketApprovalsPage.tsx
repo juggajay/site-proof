@@ -6,6 +6,8 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
+import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
+import type { PDFCompanyBranding } from '@/lib/pdf/types';
 import type { DocketDetailPDFData } from '@/lib/pdfGenerator';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView';
@@ -376,18 +378,22 @@ export function DocketApprovalsPage() {
 
     try {
       let project: ProjectResponse['project'] = { name: 'Unknown Project', projectNumber: null };
+      let company: PDFCompanyBranding | null = null;
       try {
         if (projectId) {
-          const projectResponse = await apiFetch<ProjectResponse>(
-            `/api/projects/${encodeURIComponent(projectId)}`,
-          );
+          const [projectResponse, branding] = await Promise.all([
+            apiFetch<ProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`),
+            fetchPdfBranding(projectId),
+          ]);
           project = projectResponse.project;
+          company = branding;
         }
       } catch {
         // Use default project info when a docket PDF can still be generated.
       }
 
       const pdfData: DocketDetailPDFData = {
+        company,
         docket: {
           id: docket.id,
           docketNumber: docket.docketNumber,

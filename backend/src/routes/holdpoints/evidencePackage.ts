@@ -90,6 +90,8 @@ export type EvidenceProjectInput = {
   company?: {
     id: string;
     name: string;
+    abn?: string | null;
+    address?: string | null;
     logoUrl: string | null;
   } | null;
 };
@@ -278,6 +280,8 @@ export async function mapHoldPointEvidenceProject(project: EvidenceProjectInput)
     ...mappedProject,
     company: {
       name: project.company.name,
+      abn: project.company.abn ?? null,
+      address: project.company.address ?? null,
       logoUrl:
         embeddedLogo ?? buildCompanyLogoDisplayUrl(project.company.id, project.company.logoUrl),
     },

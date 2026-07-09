@@ -1,4 +1,6 @@
 import { apiFetch } from '@/lib/api';
+import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
+import type { PDFCompanyBranding } from '@/lib/pdf/types';
 import type { TestCertificateData } from '@/lib/pdfGenerator';
 import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
@@ -43,12 +45,14 @@ export async function generateTestResultCertificate(
   }
 
   try {
-    // Fetch project info for the certificate
+    // Fetch project info + company branding for the certificate
     let projectData: ProjectCertificateResponse | null = null;
+    let company: PDFCompanyBranding | null = null;
     try {
-      projectData = await apiFetch<ProjectCertificateResponse>(
-        `/api/projects/${encodeURIComponent(projectId)}`,
-      );
+      [projectData, company] = await Promise.all([
+        apiFetch<ProjectCertificateResponse>(`/api/projects/${encodeURIComponent(projectId)}`),
+        fetchPdfBranding(projectId),
+      ]);
     } catch {
       // ignore - projectData stays null
     }
@@ -66,6 +70,7 @@ export async function generateTestResultCertificate(
       : null;
 
     const pdfData: TestCertificateData = {
+      company,
       test: {
         id: test.id,
         testType: test.testType,

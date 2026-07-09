@@ -41,7 +41,7 @@ function getReleaseDetailRows(data: HPEvidencePackageData['holdPoint']): string[
  */
 export async function generateHPEvidencePackagePDF(
   data: HPEvidencePackageData,
-  _options: HPPackageOptions = defaultHPPackageOptions,
+  options: HPPackageOptions = defaultHPPackageOptions,
 ): Promise<void> {
   const jsPDF = await getJsPDF();
   const doc = new jsPDF();
@@ -50,6 +50,11 @@ export async function generateHPEvidencePackagePDF(
   const margin = 20;
   const contentWidth = pageWidth - margin * 2;
   let yPos = margin;
+
+  // Sections number themselves so a package with toggled-off sections
+  // (Feature #466 options) never shows gaps; all-on defaults render 1–7.
+  let sectionNumber = 0;
+  const nextSectionLabel = (title: string) => `${++sectionNumber}. ${title}`;
 
   // Helper to add a new page if needed
   const checkPageBreak = (requiredSpace: number) => {
@@ -88,7 +93,7 @@ export async function generateHPEvidencePackagePDF(
   // ========== HOLD POINT IDENTIFICATION ==========
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('1. Hold Point Identification', margin, yPos);
+  doc.text(nextSectionLabel('Hold Point Identification'), margin, yPos);
   yPos += 8;
 
   doc.setFontSize(10);
@@ -134,18 +139,24 @@ export async function generateHPEvidencePackagePDF(
     yPos += 6;
   }
 
-  for (const row of getReleaseDetailRows(data.holdPoint)) {
-    doc.text(row, margin, yPos);
-    yPos += 6;
-  }
+  if (options.includeReleaseDetails) {
+    for (const row of getReleaseDetailRows(data.holdPoint)) {
+      doc.text(row, margin, yPos);
+      yPos += 6;
+    }
 
-  if (data.holdPoint.releaseNotes) {
-    doc.text(`Release Notes: ${data.holdPoint.releaseNotes}`, margin, yPos);
-    yPos += 6;
+    if (data.holdPoint.releaseNotes) {
+      doc.text(`Release Notes: ${data.holdPoint.releaseNotes}`, margin, yPos);
+      yPos += 6;
+    }
   }
 
   // Release Authorisation: the signature that authorised the release.
-  if (data.holdPoint.status === 'released' && data.holdPoint.releaseSignatureUrl) {
+  if (
+    options.includeReleaseDetails &&
+    data.holdPoint.status === 'released' &&
+    data.holdPoint.releaseSignatureUrl
+  ) {
     checkPageBreak(32);
     doc.setFont('helvetica', 'bold');
     doc.text('Release Signature:', margin, yPos);
@@ -176,7 +187,7 @@ export async function generateHPEvidencePackagePDF(
   checkPageBreak(50);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('2. Lot Details', margin, yPos);
+  doc.text(nextSectionLabel('Lot Details'), margin, yPos);
   yPos += 8;
 
   doc.setFontSize(10);
@@ -207,207 +218,213 @@ export async function generateHPEvidencePackagePDF(
   drawLine();
 
   // ========== COMPLETED CHECKLIST ITEMS ==========
-  checkPageBreak(40);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('3. Completed Checklist Items', margin, yPos);
-  yPos += 8;
+  if (options.includeChecklistDetails) {
+    checkPageBreak(40);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(nextSectionLabel('Completed Checklist Items'), margin, yPos);
+    yPos += 8;
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(
-    `Completion Status: ${data.summary.completedItems} / ${data.summary.totalChecklistItems} items completed`,
-    margin,
-    yPos,
-  );
-  yPos += 8;
-
-  // Checklist table header
-  const headers = ['#', 'Description', 'Type', 'Status', 'Completed By'];
-  const colWidths = [10, 75, 20, 25, 40];
-
-  doc.setFillColor(240, 240, 240);
-  doc.rect(margin, yPos, contentWidth, 7, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  let xPos = margin + 2;
-  headers.forEach((header, i) => {
-    doc.text(header, xPos, yPos + 5);
-    xPos += colWidths[i];
-  });
-  yPos += 9;
-
-  // Checklist rows
-  doc.setFont('helvetica', 'normal');
-  data.checklist.forEach((item) => {
-    checkPageBreak(12);
-    xPos = margin + 2;
-
-    doc.text(item.sequenceNumber.toString(), xPos, yPos + 4);
-    xPos += colWidths[0];
-
-    const desc =
-      item.description.length > 45 ? item.description.slice(0, 42) + '...' : item.description;
-    doc.text(desc, xPos, yPos + 4);
-    xPos += colWidths[1];
-
-    const typeLabel =
-      item.pointType === 'hold_point' ? 'HP' : item.pointType === 'witness' ? 'W' : 'S';
-    doc.text(typeLabel, xPos, yPos + 4);
-    xPos += colWidths[2];
-
-    const statusLabel = item.isVerified ? 'Verified' : item.isCompleted ? 'Done' : 'Pending';
-    doc.text(statusLabel, xPos, yPos + 4);
-    xPos += colWidths[3];
-
-    if (item.completedBy) {
-      const completedBy =
-        item.completedBy.length > 22 ? item.completedBy.slice(0, 19) + '...' : item.completedBy;
-      doc.text(completedBy, xPos, yPos + 4);
-    }
-
-    yPos += 6;
-
-    // Second line: completed/verified accountability (who + when) — the actual
-    // evidence a reviewer needs. Only when there is something to show.
-    const accountability: string[] = [];
-    if (item.completedAt) {
-      accountability.push(`Completed ${shortDate(item.completedAt)}`);
-    }
-    if (item.verifiedBy || item.verifiedAt) {
-      accountability.push(
-        `Verified${item.verifiedBy ? ` by ${item.verifiedBy}` : ''}${
-          item.verifiedAt ? ` ${shortDate(item.verifiedAt)}` : ''
-        }`,
-      );
-    }
-    if (accountability.length > 0) {
-      doc.setTextColor(120, 120, 120);
-      doc.text(accountability.join('  ·  '), margin + colWidths[0] + 2, yPos + 2);
-      doc.setTextColor(0, 0, 0);
-      yPos += 5;
-    }
-  });
-  yPos += 8;
-
-  drawLine();
-
-  // ========== TEST RESULTS ==========
-  checkPageBreak(40);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('4. Test Results', margin, yPos);
-  yPos += 8;
-
-  if (data.testResults.length > 0) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `Total Tests: ${data.summary.totalTestResults} | Passing: ${data.summary.passingTests}`,
+      `Completion Status: ${data.summary.completedItems} / ${data.summary.totalChecklistItems} items completed`,
       margin,
       yPos,
     );
     yPos += 8;
 
-    // Test table header
-    const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Verified'];
-    const testColWidths = [40, 35, 35, 25, 35];
+    // Checklist table header
+    const headers = ['#', 'Description', 'Type', 'Status', 'Completed By'];
+    const colWidths = [10, 75, 20, 25, 40];
 
     doc.setFillColor(240, 240, 240);
     doc.rect(margin, yPos, contentWidth, 7, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    xPos = margin + 2;
-    testHeaders.forEach((header, i) => {
+    let xPos = margin + 2;
+    headers.forEach((header, i) => {
       doc.text(header, xPos, yPos + 5);
-      xPos += testColWidths[i];
+      xPos += colWidths[i];
     });
     yPos += 9;
 
-    // Test rows
+    // Checklist rows
     doc.setFont('helvetica', 'normal');
-    data.testResults.forEach((test) => {
-      checkPageBreak(8);
+    data.checklist.forEach((item) => {
+      checkPageBreak(12);
       xPos = margin + 2;
 
-      doc.text(test.testType.slice(0, 22), xPos, yPos + 4);
-      xPos += testColWidths[0];
+      doc.text(item.sequenceNumber.toString(), xPos, yPos + 4);
+      xPos += colWidths[0];
 
-      doc.text((test.laboratoryName || 'N/A').slice(0, 18), xPos, yPos + 4);
-      xPos += testColWidths[1];
+      const desc =
+        item.description.length > 45 ? item.description.slice(0, 42) + '...' : item.description;
+      doc.text(desc, xPos, yPos + 4);
+      xPos += colWidths[1];
 
-      const result =
-        test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A';
-      doc.text(result.slice(0, 18), xPos, yPos + 4);
-      xPos += testColWidths[2];
+      const typeLabel =
+        item.pointType === 'hold_point' ? 'HP' : item.pointType === 'witness' ? 'W' : 'S';
+      doc.text(typeLabel, xPos, yPos + 4);
+      xPos += colWidths[2];
 
-      doc.text(test.passFail || 'Pending', xPos, yPos + 4);
-      xPos += testColWidths[3];
+      const statusLabel = item.isVerified ? 'Verified' : item.isCompleted ? 'Done' : 'Pending';
+      doc.text(statusLabel, xPos, yPos + 4);
+      xPos += colWidths[3];
 
-      doc.text(test.isVerified ? 'Yes' : 'No', xPos, yPos + 4);
+      if (item.completedBy) {
+        const completedBy =
+          item.completedBy.length > 22 ? item.completedBy.slice(0, 19) + '...' : item.completedBy;
+        doc.text(completedBy, xPos, yPos + 4);
+      }
+
       yPos += 6;
+
+      // Second line: completed/verified accountability (who + when) — the actual
+      // evidence a reviewer needs. Only when there is something to show.
+      const accountability: string[] = [];
+      if (item.completedAt) {
+        accountability.push(`Completed ${shortDate(item.completedAt)}`);
+      }
+      if (item.verifiedBy || item.verifiedAt) {
+        accountability.push(
+          `Verified${item.verifiedBy ? ` by ${item.verifiedBy}` : ''}${
+            item.verifiedAt ? ` ${shortDate(item.verifiedAt)}` : ''
+          }`,
+        );
+      }
+      if (accountability.length > 0) {
+        doc.setTextColor(120, 120, 120);
+        doc.text(accountability.join('  ·  '), margin + colWidths[0] + 2, yPos + 2);
+        doc.setTextColor(0, 0, 0);
+        yPos += 5;
+      }
     });
-  } else {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('No test results recorded for this lot.', margin, yPos);
-    yPos += 5;
+    yPos += 8;
+
+    drawLine();
   }
-  yPos += 8;
 
-  drawLine();
-
-  // ========== PHOTOS & ATTACHMENTS ==========
-  checkPageBreak(30);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('5. Photos & Evidence', margin, yPos);
-  yPos += 8;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Photos: ${data.summary.totalPhotos}`, margin, yPos);
-  yPos += 5;
-  doc.text(`Checklist Attachments: ${data.summary.totalAttachments}`, margin, yPos);
-  yPos += 5;
-
-  if (data.photos.length > 0) {
-    yPos += 3;
+  // ========== TEST RESULTS ==========
+  if (options.includeTestResults) {
+    checkPageBreak(40);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Photo List:', margin, yPos);
-    yPos += 5;
-    doc.setFont('helvetica', 'normal');
-    data.photos.slice(0, 10).forEach((photo) => {
-      checkPageBreak(6);
-      const uploadDate = photo.uploadedAt
-        ? new Date(photo.uploadedAt).toLocaleDateString('en-AU')
-        : '';
+    doc.text(nextSectionLabel('Test Results'), margin, yPos);
+    yPos += 8;
+
+    if (data.testResults.length > 0) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
       doc.text(
-        `- ${photo.filename}${photo.caption ? ` (${photo.caption})` : ''} ${uploadDate}`,
-        margin + 5,
+        `Total Tests: ${data.summary.totalTestResults} | Passing: ${data.summary.passingTests}`,
+        margin,
         yPos,
       );
-      yPos += 5;
-    });
-    if (data.photos.length > 10) {
+      yPos += 8;
+
+      // Test table header
+      const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Verified'];
+      const testColWidths = [40, 35, 35, 25, 35];
+
+      doc.setFillColor(240, 240, 240);
+      doc.rect(margin, yPos, contentWidth, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      let xPos = margin + 2;
+      testHeaders.forEach((header, i) => {
+        doc.text(header, xPos, yPos + 5);
+        xPos += testColWidths[i];
+      });
+      yPos += 9;
+
+      // Test rows
+      doc.setFont('helvetica', 'normal');
+      data.testResults.forEach((test) => {
+        checkPageBreak(8);
+        xPos = margin + 2;
+
+        doc.text(test.testType.slice(0, 22), xPos, yPos + 4);
+        xPos += testColWidths[0];
+
+        doc.text((test.laboratoryName || 'N/A').slice(0, 18), xPos, yPos + 4);
+        xPos += testColWidths[1];
+
+        const result =
+          test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A';
+        doc.text(result.slice(0, 18), xPos, yPos + 4);
+        xPos += testColWidths[2];
+
+        doc.text(test.passFail || 'Pending', xPos, yPos + 4);
+        xPos += testColWidths[3];
+
+        doc.text(test.isVerified ? 'Yes' : 'No', xPos, yPos + 4);
+        yPos += 6;
+      });
+    } else {
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'italic');
-      doc.text(`... and ${data.photos.length - 10} more photos`, margin + 5, yPos);
+      doc.text('No test results recorded for this lot.', margin, yPos);
       yPos += 5;
     }
-  } else if (data.summary.totalAttachments === 0) {
-    doc.setFont('helvetica', 'italic');
-    doc.text('None recorded for this lot.', margin, yPos);
-    yPos += 5;
-  }
-  yPos += 5;
+    yPos += 8;
 
-  drawLine();
+    drawLine();
+  }
+
+  // ========== PHOTOS & ATTACHMENTS ==========
+  if (options.includePhotos) {
+    checkPageBreak(30);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(nextSectionLabel('Photos & Evidence'), margin, yPos);
+    yPos += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Photos: ${data.summary.totalPhotos}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Checklist Attachments: ${data.summary.totalAttachments}`, margin, yPos);
+    yPos += 5;
+
+    if (data.photos.length > 0) {
+      yPos += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Photo List:', margin, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      data.photos.slice(0, 10).forEach((photo) => {
+        checkPageBreak(6);
+        const uploadDate = photo.uploadedAt
+          ? new Date(photo.uploadedAt).toLocaleDateString('en-AU')
+          : '';
+        doc.text(
+          `- ${photo.filename}${photo.caption ? ` (${photo.caption})` : ''} ${uploadDate}`,
+          margin + 5,
+          yPos,
+        );
+        yPos += 5;
+      });
+      if (data.photos.length > 10) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(`... and ${data.photos.length - 10} more photos`, margin + 5, yPos);
+        yPos += 5;
+      }
+    } else if (data.summary.totalAttachments === 0) {
+      doc.setFont('helvetica', 'italic');
+      doc.text('None recorded for this lot.', margin, yPos);
+      yPos += 5;
+    }
+    yPos += 5;
+
+    drawLine();
+  }
 
   // ========== SURVEY DATA ==========
   checkPageBreak(20);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('6. Survey Data', margin, yPos);
+  doc.text(nextSectionLabel('Survey Data'), margin, yPos);
   yPos += 8;
 
   doc.setFontSize(10);
@@ -429,50 +446,42 @@ export async function generateHPEvidencePackagePDF(
   drawLine();
 
   // ========== SUMMARY ==========
-  checkPageBreak(40);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('7. Evidence Summary', margin, yPos);
-  yPos += 8;
+  if (options.includeSummary) {
+    checkPageBreak(40);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(nextSectionLabel('Evidence Summary'), margin, yPos);
+    yPos += 8;
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
 
-  // Summary box
-  doc.setFillColor(245, 245, 245);
-  doc.rect(margin, yPos, contentWidth, 35, 'F');
-  yPos += 6;
+    // Summary box
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, yPos, contentWidth, 35, 'F');
+    yPos += 6;
 
-  doc.text(
-    `Checklist Items Completed: ${data.summary.completedItems} / ${data.summary.totalChecklistItems}`,
-    margin + 5,
-    yPos,
-  );
-  yPos += 5;
-  doc.text(`Items Verified: ${data.summary.verifiedItems}`, margin + 5, yPos);
-  yPos += 5;
-  doc.text(
-    `Test Results: ${data.summary.totalTestResults} (${data.summary.passingTests} passing)`,
-    margin + 5,
-    yPos,
-  );
-  yPos += 5;
-  doc.text(`Photos: ${data.summary.totalPhotos}`, margin + 5, yPos);
-  yPos += 5;
-  doc.text(`Attachments: ${data.summary.totalAttachments}`, margin + 5, yPos);
-  yPos += 15;
+    doc.text(
+      `Checklist Items Completed: ${data.summary.completedItems} / ${data.summary.totalChecklistItems}`,
+      margin + 5,
+      yPos,
+    );
+    yPos += 5;
+    doc.text(`Items Verified: ${data.summary.verifiedItems}`, margin + 5, yPos);
+    yPos += 5;
+    doc.text(
+      `Test Results: ${data.summary.totalTestResults} (${data.summary.passingTests} passing)`,
+      margin + 5,
+      yPos,
+    );
+    yPos += 5;
+    doc.text(`Photos: ${data.summary.totalPhotos}`, margin + 5, yPos);
+    yPos += 5;
+    doc.text(`Attachments: ${data.summary.totalAttachments}`, margin + 5, yPos);
+    yPos += 15;
+  }
 
-  // ========== FOOTER ==========
-  drawLine();
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(128, 128, 128);
-  doc.text(
-    'This evidence package was generated by CIVOS - Civil Execution and Conformance Platform',
-    margin,
-    yPos,
-  );
-
+  // Platform attribution lives in the shared per-page footer, not the body.
   // Document identity on every page (shared chrome).
   drawPdfFooters(doc, {
     margin,

@@ -1,6 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
-import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
+import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { TestCertificateData } from './types';
@@ -98,6 +98,7 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
     companyNameColor: [255, 255, 255],
     companyNameFontSize: 8,
   });
+  drawCompanyDetailsLine(doc, data, { x: pageWidth - margin, y: 46 });
 
   yPos = 50;
   doc.setTextColor(0, 0, 0);

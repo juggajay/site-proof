@@ -4,6 +4,8 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { extractSubmitWarnings } from '@/lib/diarySubmitWarnings';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
+import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
+import type { PDFCompanyBranding } from '@/lib/pdf/types';
 import type { DailyDiaryPDFData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -106,11 +108,16 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
     setPrinting(true);
     try {
       let project: ProjectResponse['project'];
+      let company: PDFCompanyBranding | null = null;
       try {
-        const projectResponse = await apiFetch<ProjectResponse>(
-          `/api/projects/${encodeURIComponent(projectId)}`,
-        );
+        // Branding is best-effort (resolves null on failure) — only the
+        // project fetch can reject into the catch below.
+        const [projectResponse, branding] = await Promise.all([
+          apiFetch<ProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`),
+          fetchPdfBranding(projectId),
+        ]);
         project = projectResponse.project;
+        company = branding;
         if (!project?.name) {
           throw new Error('Missing project metadata');
         }
@@ -119,6 +126,7 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
       }
 
       const pdfData: DailyDiaryPDFData = {
+        company,
         diary: {
           id: diary.id,
           date: diary.date,

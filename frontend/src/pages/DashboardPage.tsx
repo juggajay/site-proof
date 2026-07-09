@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch } from '@/lib/api';
+import type { PDFCompanyBranding } from '@/lib/pdf/types';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import {
@@ -247,8 +248,13 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     setIsExportingPDF(true);
 
     try {
+      // Company block is best-effort — an unbranded export beats a failed one.
+      const company = await apiFetch<{ company: PDFCompanyBranding | null }>('/api/company')
+        .then((data) => data.company ?? null)
+        .catch(() => null);
       const { generateDashboardPDF } = await import('@/lib/pdfGenerator');
       await generateDashboardPDF({
+        company,
         generatedAt: new Date().toISOString(),
         exportedBy: user?.fullName || user?.name || user?.email || null,
         dateRange: {
