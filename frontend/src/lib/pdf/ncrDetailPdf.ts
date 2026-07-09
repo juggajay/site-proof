@@ -9,6 +9,32 @@ import type { NCRDetailData } from './types';
 type NcrEvidenceItem = NonNullable<NCRDetailData['ncr']['evidence']>[number];
 type DateTimeFormatter = (dateStr: string | null | undefined) => string;
 
+// Explicit disposition type (ISO 9001 8.7.1): how the non-conformity was dealt
+// with, derived from the closure status. Kept separate from the raw status so a
+// reviewer sees the decision, not just a state name.
+function getNcrDisposition(status: string): string {
+  if (status === 'closed_concession') return 'Accepted by concession (use-as-is)';
+  if (status === 'closed') return 'Corrected / rectified';
+  return 'Open — under management';
+}
+
+function isConcessionDisposition(ncr: NCRDetailData['ncr']): boolean {
+  return (
+    ncr.status === 'closed_concession' ||
+    Boolean(
+      ncr.concessionJustification || ncr.concessionRiskAssessment || ncr.clientApprovalReference,
+    )
+  );
+}
+
+function formatLinkedTestReference(
+  linked: NonNullable<NCRDetailData['ncr']['linkedTestResult']>,
+): string {
+  const parts = [linked.testType, linked.testRequestNumber ? `Req ${linked.testRequestNumber}` : null];
+  if (linked.laboratoryReportNumber) parts.push(`Lab Report ${linked.laboratoryReportNumber}`);
+  return parts.filter((part): part is string => Boolean(part)).join(' · ');
+}
+
 function getEvidenceUploadDate(evidence: NcrEvidenceItem): string | null | undefined {
   return evidence.uploadedAt || evidence.document?.uploadedAt;
 }
@@ -145,8 +171,12 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
 
   addField('NCR Number', data.ncr.ncrNumber);
   addField('Status', formatStatusLabel(data.ncr.status));
+  addField('Disposition', getNcrDisposition(data.ncr.status));
   addField('Category', data.ncr.category.replace(/_/g, ' '));
   addField('Severity', data.ncr.severity.toUpperCase());
+  if (data.ncr.specificationReference) {
+    addField('Specification Reference', data.ncr.specificationReference);
+  }
   addField('Raised By', data.ncr.raisedBy?.fullName || data.ncr.raisedBy?.email || 'Unknown');
   addField('Raised On', formatDateTime(data.ncr.createdAt));
   addField('Due Date', formatDate(data.ncr.dueDate));
@@ -157,6 +187,9 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
       data.ncr.responsibleSubcontractor?.companyName ||
       'Unassigned',
   );
+  if (data.ncr.linkedTestResult) {
+    addField('Linked Failed Test', formatLinkedTestReference(data.ncr.linkedTestResult));
+  }
 
   yPos += 5;
 
@@ -240,6 +273,35 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
     yPos += 3;
   }
 
+  // ========== CONCESSION / DISPOSITION (must-fix) ==========
+  // ISO 9001 8.7.2(c)(d) + MRTS50/Q6 written-approval rule: a use-as-is
+  // concession must record the justification, the client's written approval
+  // reference, and who authorised it (with date). Never silently accept.
+  if (isConcessionDisposition(data.ncr)) {
+    drawSectionHeader('Concession / Disposition');
+
+    addField('Disposition Type', 'Accepted by concession (use-as-is)');
+    if (data.ncr.concessionJustification) {
+      addParagraph('Justification', data.ncr.concessionJustification);
+    }
+    if (data.ncr.concessionRiskAssessment) {
+      addParagraph('Risk Assessment', data.ncr.concessionRiskAssessment);
+    }
+    addField('Client Approval Reference', data.ncr.clientApprovalReference || 'Not recorded');
+
+    // Authoriser + date: prefer the QM sign-off, fall back to who closed it.
+    const approver =
+      data.ncr.qmApprovedBy?.fullName ||
+      data.ncr.qmApprovedBy?.email ||
+      data.ncr.closedBy?.fullName ||
+      data.ncr.closedBy?.email ||
+      'Not recorded';
+    const approvedAt = data.ncr.qmApprovedAt || data.ncr.closedAt;
+    addField('Approved By', approver);
+    addField('Approval Date', approvedAt ? formatDateTime(approvedAt) : 'Not recorded');
+    yPos += 3;
+  }
+
   // ========== QM APPROVAL (for major NCRs) ==========
   if (data.ncr.severity === 'major') {
     drawSectionHeader('Quality Manager Approval');
@@ -258,11 +320,20 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   }
 
   // ========== CLOSURE DETAILS ==========
-  if (data.ncr.closedAt) {
-    drawSectionHeader('Closure Details');
+  if (data.ncr.closedAt || data.ncr.verifiedAt) {
+    drawSectionHeader('Verification & Closure');
 
-    addField('Closed On', formatDateTime(data.ncr.closedAt));
-    addField('Closed By', data.ncr.closedBy?.fullName || data.ncr.closedBy?.email || 'Unknown');
+    if (data.ncr.verifiedAt || data.ncr.verifiedBy) {
+      addField(
+        'Verified By',
+        data.ncr.verifiedBy?.fullName || data.ncr.verifiedBy?.email || 'Not recorded',
+      );
+      addField('Verified On', data.ncr.verifiedAt ? formatDateTime(data.ncr.verifiedAt) : 'Not recorded');
+    }
+    if (data.ncr.closedAt) {
+      addField('Closed On', formatDateTime(data.ncr.closedAt));
+      addField('Closed By', data.ncr.closedBy?.fullName || data.ncr.closedBy?.email || 'Unknown');
+    }
     yPos += 3;
   }
 

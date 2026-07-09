@@ -76,10 +76,14 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
 
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('TEST CERTIFICATE', margin, 15);
+  doc.setFontSize(15);
+  // NATA: a contractor must not title a document "Test Certificate" (implies
+  // lab/product certification). This is a conformance record built on top of the
+  // referenced laboratory report.
+  doc.text('MATERIAL CONFORMANCE RECORD', margin, 14);
 
-  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
   doc.text(data.test.testType, margin, 27);
 
   // Pass/Fail badge
@@ -103,6 +107,35 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   yPos = 50;
   doc.setTextColor(0, 0, 0);
 
+  // ========== SOURCE LABORATORY REPORT (audit anchor) ==========
+  // The referenced laboratory report is the authoritative artefact; lead with it
+  // so a reviewer can trace this record back to the lab.
+  checkPageBreak(28);
+  doc.setFillColor(238, 242, 255);
+  doc.roundedRect(margin, yPos - 3, contentWidth, 22, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 58, 138);
+  doc.text('Source Laboratory Report', margin + 3, yPos + 3);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(`Laboratory: ${data.test.laboratoryName || 'Not recorded'}`, margin + 3, yPos + 9);
+  doc.text(
+    `Lab Report No.: ${data.test.laboratoryReportNumber || 'Not recorded'}`,
+    margin + 3,
+    yPos + 14,
+  );
+  const sampleParts = [
+    data.test.sampleLocation ? `Sample: ${data.test.sampleLocation}` : null,
+    data.test.sampleDate ? `Sampled ${formatDate(data.test.sampleDate)}` : null,
+    data.test.testDate ? `Tested ${formatDate(data.test.testDate)}` : null,
+  ].filter((part): part is string => part !== null);
+  if (sampleParts.length > 0) {
+    doc.text(sampleParts.join('  |  ').slice(0, 110), margin + 3, yPos + 19);
+  }
+  yPos += 26;
+
   // ========== TEST IDENTIFICATION ==========
   drawSectionHeader('Test Identification');
 
@@ -110,6 +143,9 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   addField('Request Number', data.test.testRequestNumber);
   addField('Lab Report Number', data.test.laboratoryReportNumber);
   addField('Laboratory', data.test.laboratoryName);
+  if (data.test.testMethod) {
+    addField('Test Method', data.test.testMethod);
+  }
   addField('Status', data.test.status.replace(/_/g, ' ').toUpperCase());
   if (data.test.aiExtracted) {
     addField('Data Source', 'AI Extracted from Certificate');
@@ -239,6 +275,24 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   doc.text('Signature', margin, yPos);
   doc.line(margin + 100, yPos - 5, margin + 160, yPos - 5);
 
+  // ========== MANDATORY DISCLAIMER (NATA) ==========
+  // A contractor conformance record is not a laboratory report; state so plainly
+  // so the document can never be mistaken for lab-issued certification.
+  yPos += 12;
+  checkPageBreak(14);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 5;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
+  doc.setTextColor(90, 90, 90);
+  const disclaimerLines = doc.splitTextToSize(
+    'Contractor conformance record based on the referenced laboratory report — not a laboratory report.',
+    contentWidth,
+  );
+  doc.text(disclaimerLines, margin, yPos);
+  doc.setTextColor(0, 0, 0);
+
   // ========== FOOTER ==========
   drawPdfFooters(doc, {
     margin,
@@ -247,8 +301,8 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   });
 
   // Save the PDF
-  const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${formatDateKey()}.pdf`;
-  savePdf(doc, filename, 'test-certificate.pdf');
+  const filename = `Material-Conformance-Record-${data.test.testRequestNumber || data.test.id}-${formatDateKey()}.pdf`;
+  savePdf(doc, filename, 'material-conformance-record.pdf');
 
   devLog(`Test certificate PDF generated in ${Date.now() - startTime}ms`);
 }

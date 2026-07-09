@@ -13,6 +13,20 @@ function shortDate(value: string | null | undefined): string {
   return value ? new Date(value).toLocaleDateString('en-AU') : '';
 }
 
+// Result-vs-spec-limit label (MRTS50 10.1.1(b)): show the acceptance limit
+// alongside the result so a reviewer can see the analysis, not just the value.
+function formatSpecLimit(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  unit: string | null | undefined,
+): string {
+  const u = unit ? ` ${unit}` : '';
+  if (min != null && max != null) return `${min} - ${max}${u}`;
+  if (min != null) return `>= ${min}${u}`;
+  if (max != null) return `<= ${max}${u}`;
+  return 'Not specified';
+}
+
 function getReleaseDetailRows(data: HPEvidencePackageData['holdPoint']): string[] {
   const rows: string[] = [];
 
@@ -116,6 +130,33 @@ export async function generateHPEvidencePackagePDF(
   doc.text(`STATUS: ${statusText}`, pageWidth / 2, yPos + 8, { align: 'center' });
   doc.setTextColor(0, 0, 0);
   yPos += 17;
+
+  // Releaser authority — the load-bearing fact: who released this hold point and
+  // whether they are an external party (Principal/Superintendent) or internal.
+  if (data.holdPoint.status === 'released' && data.holdPoint.releasedByName) {
+    const org = data.holdPoint.releasedByOrg;
+    const isExternal = Boolean(org) || data.holdPoint.releaseMethod === 'secure_link';
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      `Released by: ${data.holdPoint.releasedByName}${org ? `, ${org}` : ''}`,
+      margin,
+      yPos,
+    );
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(90, 90, 90);
+    doc.text(
+      `Releasing authority: ${isExternal ? 'External party' : 'Internal sign-off'}${
+        org ? ` (${org})` : ''
+      }`,
+      margin,
+      yPos,
+    );
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    yPos += 7;
+  }
 
   doc.setFont('helvetica', 'normal');
   doc.text(`Hold Point Description: ${data.holdPoint.description}`, margin, yPos);
@@ -323,9 +364,9 @@ export async function generateHPEvidencePackagePDF(
       );
       yPos += 8;
 
-      // Test table header
-      const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Verified'];
-      const testColWidths = [40, 35, 35, 25, 35];
+      // Test table header — lab report reference + spec limit alongside result.
+      const testHeaders = ['Test Type', 'Lab / Report', 'Result', 'Spec Limit', 'P/F'];
+      const testColWidths = [36, 40, 26, 34, 14];
 
       doc.setFillColor(240, 240, 240);
       doc.rect(margin, yPos, contentWidth, 7, 'F');
@@ -344,21 +385,24 @@ export async function generateHPEvidencePackagePDF(
         checkPageBreak(8);
         xPos = margin + 2;
 
-        doc.text(test.testType.slice(0, 22), xPos, yPos + 4);
+        doc.text(test.testType.slice(0, 20), xPos, yPos + 4);
         xPos += testColWidths[0];
 
-        doc.text((test.laboratoryName || 'N/A').slice(0, 18), xPos, yPos + 4);
+        const labCell = test.laboratoryReportNumber
+          ? `${test.laboratoryName || 'N/A'} / ${test.laboratoryReportNumber}`
+          : test.laboratoryName || 'N/A';
+        doc.text(labCell.slice(0, 22), xPos, yPos + 4);
         xPos += testColWidths[1];
 
         const result =
           test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A';
-        doc.text(result.slice(0, 18), xPos, yPos + 4);
+        doc.text(result.slice(0, 14), xPos, yPos + 4);
         xPos += testColWidths[2];
 
-        doc.text(test.passFail || 'Pending', xPos, yPos + 4);
+        doc.text(formatSpecLimit(test.specificationMin, test.specificationMax, test.resultUnit).slice(0, 18), xPos, yPos + 4);
         xPos += testColWidths[3];
 
-        doc.text(test.isVerified ? 'Yes' : 'No', xPos, yPos + 4);
+        doc.text(test.passFail === 'pass' ? 'P' : test.passFail === 'fail' ? 'F' : '-', xPos, yPos + 4);
         yPos += 6;
       });
     } else {

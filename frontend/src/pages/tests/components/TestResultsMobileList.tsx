@@ -314,10 +314,10 @@ function TestResultMobileCard({
                 size="lg"
                 className="w-full"
                 onClick={() => generateTestResultCertificate(test, projectId)}
-                aria-label={`Print test certificate for ${test.testType}`}
+                aria-label={`Print material conformance record for ${test.testType}`}
               >
                 <Printer className="h-4 w-4" />
-                Print Certificate
+                Conformance Record
               </Button>
             )}
           </div>

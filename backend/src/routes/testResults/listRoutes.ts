@@ -224,6 +224,7 @@ listRoutes.get(
           resultUnit: true,
           specificationMin: true,
           specificationMax: true,
+          testMethod: true,
           passFail: true,
           status: true,
           verifiedAt: true,

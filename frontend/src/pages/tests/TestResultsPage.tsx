@@ -327,6 +327,7 @@ export function TestResultsPage() {
             resultUnit: values.resultUnit.trim(),
             specificationMin: values.specificationMin.trim(),
             specificationMax: values.specificationMax.trim(),
+            testMethod: values.testMethod.trim(),
             passFail: values.passFail,
           }),
         });

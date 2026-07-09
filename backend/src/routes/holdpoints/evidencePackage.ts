@@ -57,8 +57,11 @@ export type EvidenceTestResultInput = {
   testType: string;
   testRequestNumber: string | null;
   laboratoryName: string | null;
+  laboratoryReportNumber: string | null;
   resultValue: Prisma.Decimal | null;
   resultUnit: string | null;
+  specificationMin: Prisma.Decimal | null;
+  specificationMax: Prisma.Decimal | null;
   passFail: string;
   status: string;
   verifiedBy: EvidenceNamedUser;
@@ -178,8 +181,11 @@ export function mapHoldPointEvidenceTestResults(
       testType: t.testType,
       testRequestNumber: t.testRequestNumber,
       laboratoryName: t.laboratoryName,
+      laboratoryReportNumber: t.laboratoryReportNumber,
       resultValue: t.resultValue,
       resultUnit: t.resultUnit,
+      specificationMin: t.specificationMin,
+      specificationMax: t.specificationMax,
       passFail: t.passFail,
       status: t.status,
       isVerified: t.status === 'verified',

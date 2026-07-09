@@ -236,13 +236,13 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2 items-center">
-                        {/* Feature #668: Print Certificate button */}
+                        {/* Feature #668: Print material conformance record */}
                         {canGenerateTestResultCertificate(test) && (
                           <button
                             onClick={() => generateTestResultCertificate(test, projectId)}
                             className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
-                            title="Print Test Certificate"
-                            aria-label={`Print test certificate for ${test.testType}`}
+                            title="Print Material Conformance Record"
+                            aria-label={`Print material conformance record for ${test.testType}`}
                           >
                             {'\uD83D\uDDA8\uFE0F'}
                           </button>

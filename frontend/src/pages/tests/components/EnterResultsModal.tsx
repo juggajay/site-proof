@@ -20,6 +20,7 @@ export interface EnterResultsValues {
   resultUnit: string;
   specificationMin: string;
   specificationMax: string;
+  testMethod: string;
   passFail: string;
 }
 
@@ -28,6 +29,8 @@ const enterResultsSchema = z.object({
   resultUnit: z.string().trim(),
   specificationMin: z.string().trim(),
   specificationMax: z.string().trim(),
+  // Batch C: optional free-text method annotation; the lab report is authoritative.
+  testMethod: z.string().trim().max(240, 'Test method is too long'),
   passFail: z.string().trim(),
 });
 
@@ -72,6 +75,7 @@ export const EnterResultsModal = React.memo(function EnterResultsModal({
       resultUnit: '',
       specificationMin: '',
       specificationMax: '',
+      testMethod: '',
       passFail: 'pending',
     },
   });
@@ -89,6 +93,7 @@ export const EnterResultsModal = React.memo(function EnterResultsModal({
         resultUnit: test.resultUnit ?? '',
         specificationMin: toInputString(test.specificationMin),
         specificationMax: toInputString(test.specificationMax),
+        testMethod: test.testMethod ?? '',
         passFail: test.passFail || 'pending',
       });
       setFormError(null);
@@ -219,6 +224,19 @@ export const EnterResultsModal = React.memo(function EnterResultsModal({
                 placeholder="e.g., 100"
               />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="enter-test-method">Test Method</Label>
+            <Input
+              id="enter-test-method"
+              type="text"
+              className="min-h-[44px]"
+              {...register('testMethod')}
+              placeholder="e.g., AS 1289.5.2.1 (optional)"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Optional. The laboratory report states the method authoritatively.
+            </p>
           </div>
           <div>
             <Label htmlFor="enter-pass-fail">

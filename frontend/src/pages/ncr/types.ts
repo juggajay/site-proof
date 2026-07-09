@@ -10,6 +10,19 @@ export interface NCR {
   category: string;
   severity: 'minor' | 'major';
   status: string;
+  // Batch C: spec reference + concession disposition fields (backend returns them
+  // on the NCR detail record). Rendered in the NCR PDF; optional for list rows.
+  specificationReference?: string | null;
+  concessionJustification?: string | null;
+  concessionRiskAssessment?: string | null;
+  clientApprovalReference?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: { fullName: string | null; email: string } | null;
+  linkedTestResult?: {
+    testType: string;
+    testRequestNumber: string | null;
+    laboratoryReportNumber?: string | null;
+  } | null;
   qmApprovalRequired: boolean;
   qmApprovedAt: string | null;
   qmApprovedBy?: { id?: string; fullName: string; email: string } | null;

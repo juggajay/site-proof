@@ -731,6 +731,7 @@ model TestResult {
   resultDate             DateTime? @map("result_date")
   resultValue            Decimal?  @map("result_value")
   resultUnit             String?   @map("result_unit")
+  testMethod             String?   @map("test_method")
   specificationMin       Decimal?  @map("specification_min")
   specificationMax       Decimal?  @map("specification_max")
   passFail               String    @default("pending") @map("pass_fail")

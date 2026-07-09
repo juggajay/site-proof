@@ -37,8 +37,8 @@ export async function generateTestResultCertificate(
 ): Promise<void> {
   if (!canGenerateTestResultCertificate(test)) {
     toast({
-      title: 'Certificate not ready',
-      description: 'Attach a certificate and verify the test before printing.',
+      title: 'Record not ready',
+      description: 'Attach the laboratory certificate and verify the test before printing.',
       variant: 'warning',
     });
     return;
@@ -85,6 +85,7 @@ export async function generateTestResultCertificate(
         resultUnit: test.resultUnit,
         specificationMin: test.specificationMin,
         specificationMax: test.specificationMax,
+        testMethod: test.testMethod ?? null,
         passFail: test.passFail,
         status: test.status,
         aiExtracted: test.aiExtracted,
@@ -103,14 +104,14 @@ export async function generateTestResultCertificate(
     const { generateTestCertificatePDF } = await import('@/lib/pdfGenerator');
     await generateTestCertificatePDF(pdfData);
     toast({
-      title: 'Certificate Generated',
-      description: `Test certificate PDF downloaded successfully`,
+      title: 'Record generated',
+      description: `Material conformance record PDF downloaded successfully`,
     });
   } catch (error) {
-    logError('Error generating test certificate:', error);
+    logError('Error generating material conformance record:', error);
     toast({
       title: 'Error',
-      description: 'Failed to generate test certificate',
+      description: 'Failed to generate material conformance record',
       variant: 'error',
     });
   }

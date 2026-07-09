@@ -294,7 +294,9 @@ describe('pdfGenerator characterization', () => {
         testRequestNumber: 'TR/001:bad*name',
       },
     });
-    expect(latestPdf().savedFilename).toBe('Test-Certificate-TR-001-bad-name-2026-05-28.pdf');
+    expect(latestPdf().savedFilename).toBe(
+      'Material-Conformance-Record-TR-001-bad-name-2026-05-28.pdf',
+    );
     assertSafeFilename(latestPdf().savedFilename);
   });
 
@@ -854,6 +856,9 @@ describe('pdfGenerator characterization', () => {
         'Lot: EW-001',
         '1. Hold Point Identification',
         'STATUS: RELEASED',
+        // Batch C: releaser authority is surfaced prominently under the status box.
+        'Released by: Sam Supervisor, Client Superintendent Org',
+        'Releasing authority: External party (Client Superintendent Org)',
         'Hold Point Description: Subgrade proof roll prior to pavement layer',
         'Released By: Sam Supervisor, Client Superintendent Org',
         'Release Method: Secure Link',
@@ -917,19 +922,19 @@ describe('pdfGenerator characterization', () => {
         '4. Test Results',
         'Total Tests: 2 | Passing: 1',
         'Test Type',
-        'Lab',
+        // Batch C: lab report ref + spec limit columns replace the old Lab/Verified.
+        'Lab / Report',
         'Result',
-        'Pass/Fail',
-        'Verified',
+        'Spec Limit',
+        'P/F',
         'Compaction',
         'Moisture',
-        'Civil Lab',
+        'Civil Lab / LAB-771',
         '98 %',
         '12 %',
-        'pass',
-        'fail',
-        'Yes',
-        'No',
+        '95 - 100 %',
+        'P',
+        'F',
       ]),
     );
 
@@ -1073,7 +1078,8 @@ describe('pdfGenerator characterization', () => {
         'STATUS: CONFORMED',
         'ITP Checklist Summary',
         'No ITP assigned to this lot.',
-        'Test Results Summary',
+        // Batch C: result-vs-spec-limit analysis leads the evidence sections.
+        'Test Results vs Specification',
         'No test results recorded for this lot.',
         'Hold Point Releases',
         'NCR Summary',
