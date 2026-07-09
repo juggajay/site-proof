@@ -21,6 +21,7 @@ interface ExportLot {
   status?: string | null;
   budgetAmount?: number | string | null;
   createdAt?: string | null;
+  conformedAt?: string | null;
   assignedSubcontractor?: {
     companyName?: string | null;
   } | null;
@@ -49,6 +50,7 @@ const ALL_COLUMNS: ExportColumn[] = [
   { key: 'chainageEnd', label: 'Chainage End' },
   { key: 'activityType', label: 'Activity Type' },
   { key: 'status', label: 'Status' },
+  { key: 'conformedAt', label: 'Conformed At' },
   { key: 'budgetAmount', label: 'Budget' },
   { key: 'subcontractor', label: 'Subcontractor' },
 ];
@@ -164,6 +166,9 @@ export function ExportLotsModal({
             break;
           case 'status':
             row.push(lot.status || '');
+            break;
+          case 'conformedAt':
+            row.push(lot.conformedAt ? new Date(lot.conformedAt).toLocaleDateString('en-AU') : '');
             break;
           case 'budgetAmount':
             row.push(lot.budgetAmount?.toString() || '');

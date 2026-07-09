@@ -56,6 +56,8 @@ describe('diary reporting response helpers', () => {
       diaryDate: new Date('2026-06-01T00:00:00.000Z'),
       delayType: 'weather',
       durationHours: 1.5,
+      // Delay-register lot column: the response builder must preserve it.
+      lotNumber: 'DR-010',
     };
     const newer = {
       id: 'delay-2',

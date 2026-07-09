@@ -529,6 +529,9 @@ export interface DailyDiaryPDFData extends PDFBrandableData {
     isLate?: boolean;
     submittedBy?: { fullName: string; email: string } | null;
     submittedAt?: string | null;
+    // Contemporaneity: server-set lock timestamp (present once submitted). Its
+    // presence is the "record is closed to edits" fact a reviewer relies on.
+    lockedAt?: string | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -544,6 +547,10 @@ export interface DailyDiaryPDFData extends PDFBrandableData {
     startTime?: string | null;
     finishTime?: string | null;
     hours?: number | null;
+    // Provenance: 'docket' = pulled from an approved subcontractor docket;
+    // 'manual' = hand-entered. Load-bearing for who attested the row.
+    source?: string | null;
+    lot?: { lotNumber: string } | null;
   }>;
   plant: Array<{
     id: string;
@@ -552,6 +559,8 @@ export interface DailyDiaryPDFData extends PDFBrandableData {
     company?: string | null;
     hoursOperated?: number | null;
     notes?: string | null;
+    source?: string | null;
+    lot?: { lotNumber: string } | null;
   }>;
   activities: Array<{
     id: string;
@@ -569,6 +578,32 @@ export interface DailyDiaryPDFData extends PDFBrandableData {
     endTime?: string | null;
     durationHours?: number | null;
     impact?: string | null;
+    lot?: { lotNumber: string } | null;
+  }>;
+  deliveries?: Array<{
+    id: string;
+    description: string;
+    supplier?: string | null;
+    docketNumber?: string | null;
+    quantity?: number | null;
+    unit?: string | null;
+    lot?: { lotNumber: string } | null;
+    notes?: string | null;
+  }>;
+  // Safety / site events. Rendered as occurrence + reference (type, short
+  // description, lot) — not the raw narrative note.
+  events?: Array<{
+    id: string;
+    eventType: string;
+    description: string;
+    lot?: { lotNumber: string } | null;
+  }>;
+  visitors?: Array<{
+    id: string;
+    name: string;
+    company?: string | null;
+    purpose?: string | null;
+    timeInOut?: string | null;
   }>;
   addendums?: Array<{
     id: string;

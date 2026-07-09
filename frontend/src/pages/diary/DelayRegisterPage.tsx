@@ -20,6 +20,7 @@ interface Delay {
   durationHours: number | null;
   description: string;
   impact: string | null;
+  lotNumber: string | null;
 }
 
 interface DelaySummary {
@@ -330,6 +331,7 @@ export function DelayRegisterPage() {
                         : '-',
                     priority: 'primary',
                   },
+                  { label: 'Lot', value: delay.lotNumber || '-', priority: 'secondary' },
                   { label: 'Impact', value: delay.impact || '-', priority: 'secondary' },
                 ]}
                 onClick={() =>
@@ -359,6 +361,9 @@ export function DelayRegisterPage() {
                     Duration
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                    Lot
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
                     Description
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
@@ -385,6 +390,9 @@ export function DelayRegisterPage() {
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-destructive">
                       {delay.durationHours ? `${delay.durationHours.toFixed(1)}h` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                      {delay.lotNumber || '-'}
                     </td>
                     <td className="px-4 py-3 text-sm max-w-xs truncate" title={delay.description}>
                       {delay.description}

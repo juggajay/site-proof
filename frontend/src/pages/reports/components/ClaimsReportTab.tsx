@@ -195,12 +195,18 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                 {formatCurrency(report.financialSummary.totalCertified)}
               </div>
               <div className="text-sm text-muted-foreground">Certified</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {report.financialSummary.certificationRate}% certified
+              </div>
             </div>
             <div className="rounded-lg border bg-card p-4">
               <div className="text-2xl font-bold text-foreground">
                 {formatCurrency(report.financialSummary.totalPaid)}
               </div>
               <div className="text-sm text-muted-foreground">Paid</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {report.financialSummary.collectionRate}% collected
+              </div>
             </div>
             <div className="rounded-lg border bg-card p-4">
               <div className="text-2xl font-bold text-foreground">
@@ -275,6 +281,9 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase text-muted-foreground">
                       Outstanding
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                      Payment Ref
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase text-muted-foreground">
                       Lots
                     </th>
@@ -300,6 +309,12 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
                         {formatNullableCurrency(claim.outstanding)}
+                      </td>
+                      <td className="px-4 py-3 text-left text-sm text-muted-foreground">
+                        {claim.paymentReference || '-'}
+                        {claim.paidAt && (
+                          <span className="block text-xs">Paid {formatDate(claim.paidAt)}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
                         {claim.lotCount}

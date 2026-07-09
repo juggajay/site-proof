@@ -253,7 +253,13 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                       Laboratory
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Lab Report #
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                       Result
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Spec Limits
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                       Pass/Fail
@@ -274,8 +280,16 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                         {test.laboratoryName || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {test.laboratoryReportNumber || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
                         {test.resultValue != null
                           ? `${test.resultValue} ${test.resultUnit || ''}`
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {test.specificationMin != null || test.specificationMax != null
+                          ? `${test.specificationMin ?? '-'} to ${test.specificationMax ?? '-'}`
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm">

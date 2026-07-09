@@ -11,6 +11,11 @@ export interface Personnel {
   startTime?: string;
   finishTime?: string;
   hours?: number;
+  // Provenance: 'docket' rows are pulled from an approved subcontractor docket.
+  source?: string;
+  docketId?: string | null;
+  lotId?: string | null;
+  lot?: { id: string; lotNumber: string } | null;
   createdAt: string;
 }
 
@@ -21,6 +26,10 @@ export interface Plant {
   company?: string;
   hoursOperated?: number;
   notes?: string;
+  source?: string;
+  docketId?: string | null;
+  lotId?: string | null;
+  lot?: { id: string; lotNumber: string } | null;
   createdAt: string;
 }
 
@@ -43,7 +52,17 @@ export interface Delay {
   durationHours?: number;
   description: string;
   impact?: string;
+  lotId?: string | null;
+  lot?: { id: string; lotNumber: string } | null;
   createdAt: string;
+}
+
+export interface DiaryVisitor {
+  id: string;
+  name: string;
+  company?: string | null;
+  purpose?: string | null;
+  timeInOut?: string | null;
 }
 
 export interface Delivery {
@@ -93,8 +112,10 @@ export interface DailyDiary {
   delays: Delay[];
   deliveries: Delivery[];
   events: DiaryEvent[];
+  visitors?: DiaryVisitor[];
   submittedBy?: { id: string; fullName: string; email: string };
   submittedAt?: string;
+  lockedAt?: string | null;
   isLate?: boolean;
   createdAt: string;
   updatedAt: string;

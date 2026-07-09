@@ -69,6 +69,42 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
     yPos += 6;
   };
 
+  // Renders a titled section with a simple bordered table. Used by the
+  // deliveries / safety events / visitors sections, which are only drawn when
+  // they hold records (print-what-you-store).
+  const drawTableSection = (
+    title: string,
+    headers: string[],
+    colWidths: number[],
+    rows: string[][],
+  ): void => {
+    drawSectionHeader(title);
+
+    checkPageBreak(10);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let headerX = margin + 2;
+    headers.forEach((header, i) => {
+      doc.text(header, headerX, yPos + 5);
+      headerX += colWidths[i];
+    });
+    yPos += 9;
+
+    doc.setFont('helvetica', 'normal');
+    rows.forEach((cells) => {
+      checkPageBreak(7);
+      let cellX = margin + 2;
+      cells.forEach((cell, i) => {
+        doc.text(cell, cellX, yPos + 4);
+        cellX += colWidths[i];
+      });
+      yPos += 6;
+    });
+    yPos += 5;
+  };
+
   // ========== HEADER ==========
   // Status-based header color
   const isSubmitted = data.diary.status === 'submitted';
@@ -106,6 +142,64 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   yPos = 50;
   doc.setTextColor(0, 0, 0);
 
+  // ========== CONTEMPORANEOUS RECORD ==========
+  // Highest legal value on the whole document (Walter Lilly): when the record
+  // was submitted, whether same-day or late, that it is locked, and who
+  // attested it. Rendered prominently at the top rather than buried in fields.
+  {
+    const isSubmittedRecord = data.diary.status === 'submitted';
+    const timingText = data.diary.isLate ? 'Late entry' : 'Same-day entry';
+    const statusLine = isSubmittedRecord
+      ? `Submitted — ${timingText}`
+      : 'Draft — not yet submitted';
+    const submitterName = data.diary.submittedBy
+      ? data.diary.submittedBy.fullName || data.diary.submittedBy.email
+      : null;
+    const lockText = data.diary.lockedAt
+      ? formatDateTime(data.diary.lockedAt)
+      : isSubmittedRecord
+        ? 'Locked on submission'
+        : 'Not locked (editable)';
+
+    const boxHeight = 34;
+    doc.setDrawColor(...headerColor);
+    doc.setFillColor(248, 250, 249);
+    doc.rect(margin, yPos, contentWidth, boxHeight, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Contemporaneous Record', margin + 4, yPos + 7);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    const boxFieldX = margin + 4;
+    const drawBoxField = (label: string, value: string, lineY: number): void => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${label}:`, boxFieldX, lineY);
+      const w = doc.getTextWidth(`${label}: `);
+      doc.setFont('helvetica', 'normal');
+      doc.text(value, boxFieldX + w + 1, lineY);
+    };
+    drawBoxField('Status', statusLine, yPos + 15);
+    drawBoxField('Submitted By', submitterName || 'Not submitted', yPos + 22);
+    drawBoxField(
+      'Submitted At',
+      data.diary.submittedAt ? formatDateTime(data.diary.submittedAt) : 'Not submitted',
+      yPos + 29,
+    );
+    // Locked status on the right column, aligned with the Submitted By line.
+    doc.setFont('helvetica', 'bold');
+    const lockedLabelX = margin + contentWidth / 2 + 4;
+    doc.text('Record Locked:', lockedLabelX, yPos + 22);
+    doc.setFont('helvetica', 'normal');
+    doc.text(lockText, lockedLabelX + doc.getTextWidth('Record Locked: ') + 1, yPos + 22);
+
+    doc.setTextColor(0, 0, 0);
+    yPos += boxHeight + 6;
+  }
+
   // ========== PROJECT INFO ==========
   drawSectionHeader('Project Information');
 
@@ -115,11 +209,6 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   }
   addField('Diary Date', formatDate(data.diary.date));
   addField('Status', data.diary.status === 'submitted' ? 'Submitted' : 'Draft');
-
-  if (data.diary.submittedBy && data.diary.submittedAt) {
-    addField('Submitted By', data.diary.submittedBy.fullName || data.diary.submittedBy.email);
-    addField('Submitted At', formatDateTime(data.diary.submittedAt));
-  }
 
   yPos += 5;
 
@@ -162,8 +251,8 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
 
   if (data.personnel.length > 0) {
     // Table header
-    const personnelHeaders = ['Name', 'Company', 'Role', 'Start', 'Finish', 'Hours'];
-    const personnelColWidths = [40, 35, 30, 20, 20, 20];
+    const personnelHeaders = ['Name', 'Company', 'Role', 'Start', 'Finish', 'Hours', 'Source'];
+    const personnelColWidths = [38, 30, 25, 17, 17, 15, 22];
 
     checkPageBreak(10);
     doc.setFillColor(245, 245, 245);
@@ -183,13 +272,13 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
       checkPageBreak(7);
       xPos = margin + 2;
 
-      doc.text((person.name || 'N/A').slice(0, 22), xPos, yPos + 4);
+      doc.text((person.name || 'N/A').slice(0, 21), xPos, yPos + 4);
       xPos += personnelColWidths[0];
 
-      doc.text((person.company || '-').slice(0, 18), xPos, yPos + 4);
+      doc.text((person.company || '-').slice(0, 16), xPos, yPos + 4);
       xPos += personnelColWidths[1];
 
-      doc.text((person.role || '-').slice(0, 16), xPos, yPos + 4);
+      doc.text((person.role || '-').slice(0, 14), xPos, yPos + 4);
       xPos += personnelColWidths[2];
 
       doc.text(person.startTime || '-', xPos, yPos + 4);
@@ -199,6 +288,9 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
       xPos += personnelColWidths[4];
 
       doc.text(person.hours != null ? person.hours.toString() : '-', xPos, yPos + 4);
+      xPos += personnelColWidths[5];
+
+      doc.text(person.source === 'docket' ? 'Docket' : 'Manual', xPos, yPos + 4);
 
       yPos += 6;
     });
@@ -250,8 +342,8 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
 
   if (data.plant.length > 0) {
     // Table header
-    const plantHeaders = ['Description', 'ID/Rego', 'Company', 'Hours', 'Notes'];
-    const plantColWidths = [50, 25, 30, 20, 45];
+    const plantHeaders = ['Description', 'ID/Rego', 'Company', 'Hours', 'Source', 'Notes'];
+    const plantColWidths = [46, 24, 28, 16, 20, 46];
 
     checkPageBreak(10);
     doc.setFillColor(245, 245, 245);
@@ -271,19 +363,22 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
       checkPageBreak(7);
       xPos = margin + 2;
 
-      doc.text((item.description || 'N/A').slice(0, 28), xPos, yPos + 4);
+      doc.text((item.description || 'N/A').slice(0, 26), xPos, yPos + 4);
       xPos += plantColWidths[0];
 
       doc.text((item.idRego || '-').slice(0, 12), xPos, yPos + 4);
       xPos += plantColWidths[1];
 
-      doc.text((item.company || '-').slice(0, 16), xPos, yPos + 4);
+      doc.text((item.company || '-').slice(0, 15), xPos, yPos + 4);
       xPos += plantColWidths[2];
 
       doc.text(item.hoursOperated != null ? item.hoursOperated.toString() : '-', xPos, yPos + 4);
       xPos += plantColWidths[3];
 
-      doc.text((item.notes || '-').slice(0, 25), xPos, yPos + 4);
+      doc.text(item.source === 'docket' ? 'Docket' : 'Manual', xPos, yPos + 4);
+      xPos += plantColWidths[4];
+
+      doc.text((item.notes || '-').slice(0, 26), xPos, yPos + 4);
 
       yPos += 6;
     });
@@ -350,8 +445,8 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
 
   if (data.delays.length > 0) {
     // Table header
-    const delayHeaders = ['Type', 'Description', 'Start', 'End', 'Duration', 'Impact'];
-    const delayColWidths = [25, 55, 20, 20, 20, 30];
+    const delayHeaders = ['Type', 'Description', 'Lot', 'Start', 'End', 'Duration', 'Impact'];
+    const delayColWidths = [22, 48, 18, 15, 15, 16, 30];
 
     checkPageBreak(10);
     doc.setFillColor(245, 245, 245);
@@ -371,20 +466,23 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
       checkPageBreak(7);
       xPos = margin + 2;
 
-      doc.text((delay.delayType || 'N/A').slice(0, 14), xPos, yPos + 4);
+      doc.text((delay.delayType || 'N/A').slice(0, 13), xPos, yPos + 4);
       xPos += delayColWidths[0];
 
       doc.text((delay.description || '-').slice(0, 32), xPos, yPos + 4);
       xPos += delayColWidths[1];
 
-      doc.text(delay.startTime || '-', xPos, yPos + 4);
+      doc.text((delay.lot?.lotNumber || '-').slice(0, 10), xPos, yPos + 4);
       xPos += delayColWidths[2];
 
-      doc.text(delay.endTime || '-', xPos, yPos + 4);
+      doc.text(delay.startTime || '-', xPos, yPos + 4);
       xPos += delayColWidths[3];
 
-      doc.text(delay.durationHours != null ? `${delay.durationHours}h` : '-', xPos, yPos + 4);
+      doc.text(delay.endTime || '-', xPos, yPos + 4);
       xPos += delayColWidths[4];
+
+      doc.text(delay.durationHours != null ? `${delay.durationHours}h` : '-', xPos, yPos + 4);
+      xPos += delayColWidths[5];
 
       doc.text((delay.impact || '-').slice(0, 18), xPos, yPos + 4);
 
@@ -404,6 +502,54 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
     doc.setFontSize(9);
     doc.text('No delays recorded.', margin, yPos);
     yPos += 8;
+  }
+
+  // ========== DELIVERIES ==========
+  if (data.deliveries && data.deliveries.length > 0) {
+    drawTableSection(
+      `Deliveries (${data.deliveries.length})`,
+      ['Description', 'Supplier', 'Docket #', 'Qty', 'Lot', 'Notes'],
+      [45, 32, 25, 18, 20, 40],
+      data.deliveries.map((d) => [
+        (d.description || 'N/A').slice(0, 26),
+        (d.supplier || '-').slice(0, 18),
+        (d.docketNumber || '-').slice(0, 14),
+        d.quantity != null ? `${d.quantity}${d.unit ? ' ' + d.unit : ''}`.slice(0, 10) : '-',
+        (d.lot?.lotNumber || '-').slice(0, 11),
+        (d.notes || '-').slice(0, 22),
+      ]),
+    );
+  }
+
+  // ========== SAFETY / SITE EVENTS ==========
+  // Occurrence + reference level of detail (type, short description, lot) — the
+  // raw narrative note is deliberately not reprinted here.
+  if (data.events && data.events.length > 0) {
+    drawTableSection(
+      `Safety & Site Events (${data.events.length})`,
+      ['Type', 'Occurrence', 'Lot'],
+      [45, 105, 30],
+      data.events.map((e) => [
+        (e.eventType || 'N/A').slice(0, 26),
+        (e.description || '-').slice(0, 68),
+        (e.lot?.lotNumber || '-').slice(0, 18),
+      ]),
+    );
+  }
+
+  // ========== VISITORS ==========
+  if (data.visitors && data.visitors.length > 0) {
+    drawTableSection(
+      `Visitors (${data.visitors.length})`,
+      ['Name', 'Company', 'Purpose', 'Time In/Out'],
+      [45, 45, 55, 35],
+      data.visitors.map((v) => [
+        (v.name || 'N/A').slice(0, 28),
+        (v.company || '-').slice(0, 28),
+        (v.purpose || '-').slice(0, 34),
+        (v.timeInOut || '-').slice(0, 20),
+      ]),
+    );
   }
 
   // ========== ADDENDUMS (for submitted diaries) ==========

@@ -61,6 +61,8 @@ export function buildLotListSelect(includeITP: boolean): Prisma.LotSelect {
       },
     },
     createdAt: true,
+    // Surfaced so the lot register CSV can report when each lot conformed.
+    conformedAt: true,
   };
 
   if (includeITP) {

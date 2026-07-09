@@ -15,6 +15,7 @@ export interface Lot {
   // Additional properties for expanded view
   createdAt?: string | null;
   updatedAt?: string | null;
+  conformedAt?: string | null;
   itpCount?: number;
   testCount?: number;
   documentCount?: number;
