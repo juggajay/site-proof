@@ -265,6 +265,7 @@ crudRoutes.patch(
       resultUnit,
       specificationMin,
       specificationMax,
+      testMethod,
       passFail,
     } = req.body;
 
@@ -320,6 +321,7 @@ crudRoutes.patch(
       resultUnit,
       specificationMin,
       specificationMax,
+      testMethod,
       passFail,
     });
 

@@ -21,6 +21,34 @@ function formatReleaseMethod(method: string): string {
   return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+// Result-vs-spec-limit label (MRTS50 10.1.1(b)): the report must analyse the
+// result against the acceptance limit, not merely list it.
+function formatSpecLimit(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  unit: string | null | undefined,
+): string {
+  const u = unit ? ` ${unit}` : '';
+  if (min != null && max != null) return `${min} - ${max}${u}`;
+  if (min != null) return `>= ${min}${u}`;
+  if (max != null) return `<= ${max}${u}`;
+  return 'Not specified';
+}
+
+function formatShortDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-AU');
+}
+
+// Disposition + closure status for the NCR reference row. The conformance report
+// references NCRs — it must not reprint them (the NCR is the system of record).
+function formatNcrDisposition(status: string): string {
+  if (status === 'closed_concession') return 'Concession (use-as-is)';
+  if (status === 'closed') return 'Corrected / closed';
+  return 'Open';
+}
+
 // Format-specific configurations
 const FORMAT_CONFIGS: Record<
   ConformanceFormat,
@@ -298,6 +326,85 @@ export async function generateConformanceReportPDF(
 
   drawLine();
 
+  // ========== TEST RESULTS vs SPECIFICATION (top-priority analysis) ==========
+  // MRTS50 10.1.1(b): analyse each result against its spec limit with an explicit
+  // pass/fail verdict — this leads the evidence, not a bare value list.
+  checkPageBreak(30);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Test Results vs Specification', margin, yPos);
+  yPos += 7;
+
+  if (data.testResults.length > 0) {
+    const passedTests = data.testResults.filter((t) => t.passFail === 'pass').length;
+    const failedTests = data.testResults.filter((t) => t.passFail === 'fail').length;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `Total Tests: ${data.testResults.length}  |  Passed: ${passedTests}  |  Failed: ${failedTests}`,
+      margin,
+      yPos,
+    );
+    yPos += 8;
+
+    // Table header: result analysed against the acceptance limit.
+    const testHeaders = ['Test Type', 'Result', 'Spec Limit', 'Verdict', 'Lab Report'];
+    const testColWidths = [38, 30, 42, 22, 38];
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let hxPos = margin + 2;
+    testHeaders.forEach((header, i) => {
+      doc.text(header, hxPos, yPos + 5);
+      hxPos += testColWidths[i];
+    });
+    yPos += 8;
+
+    doc.setFont('helvetica', 'normal');
+    data.testResults.slice(0, 15).forEach((test) => {
+      checkPageBreak(8);
+      let txPos = margin + 2;
+      doc.text(test.testType.slice(0, 20), txPos, yPos + 4);
+      txPos += testColWidths[0];
+      const result =
+        test.resultValue != null
+          ? `${test.resultValue}${test.resultUnit ? ' ' + test.resultUnit : ''}`
+          : 'N/A';
+      doc.text(result.slice(0, 16), txPos, yPos + 4);
+      txPos += testColWidths[1];
+      doc.text(
+        formatSpecLimit(test.specificationMin, test.specificationMax, test.resultUnit).slice(0, 22),
+        txPos,
+        yPos + 4,
+      );
+      txPos += testColWidths[2];
+      const verdict =
+        test.passFail === 'pass' ? 'PASS' : test.passFail === 'fail' ? 'FAIL' : 'Pending';
+      if (test.passFail === 'fail') doc.setTextColor(200, 30, 30);
+      doc.text(verdict, txPos, yPos + 4);
+      doc.setTextColor(0, 0, 0);
+      txPos += testColWidths[3];
+      doc.text((test.laboratoryReportNumber || '-').slice(0, 18), txPos, yPos + 4);
+      yPos += 6;
+    });
+
+    if (data.testResults.length > 15) {
+      doc.setFont('helvetica', 'italic');
+      doc.text(`... and ${data.testResults.length - 15} more test results`, margin, yPos + 4);
+      yPos += 6;
+    }
+  } else {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No test results recorded for this lot.', margin, yPos);
+    yPos += 5;
+  }
+  yPos += 10;
+
+  drawLine();
+
   // ========== ITP CHECKLIST SUMMARY ==========
   checkPageBreak(30);
   doc.setFontSize(12);
@@ -374,78 +481,49 @@ export async function generateConformanceReportPDF(
       }
 
       yPos += 6;
+
+      // Second line: verifier identity + dates (MRTS50 8.4 independence, "at least
+      // one remove") and the acceptance criterion the item was checked against
+      // (MRTS50 8.2(e)) — the objective evidence a reviewer needs per item.
+      const accountability: string[] = [];
+      if (completion?.completedAt) {
+        accountability.push(`Completed ${formatShortDate(completion.completedAt)}`);
+      }
+      if (completion?.verifiedBy || completion?.verifiedAt) {
+        const verifier = completion.verifiedBy?.fullName || completion.verifiedBy?.email || '';
+        accountability.push(
+          `Verified${verifier ? ` by ${verifier}` : ''}${
+            completion.verifiedAt ? ` ${formatShortDate(completion.verifiedAt)}` : ''
+          }`,
+        );
+      }
+      if (accountability.length > 0) {
+        checkPageBreak(5);
+        doc.setTextColor(120, 120, 120);
+        doc.setFontSize(7);
+        doc.text(accountability.join('  ·  '), margin + colWidths[0] + 2, yPos + 2);
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(8);
+        yPos += 5;
+      }
+      if (item.acceptanceCriteria) {
+        checkPageBreak(5);
+        doc.setTextColor(120, 120, 120);
+        doc.setFontSize(7);
+        const critLines = doc.splitTextToSize(
+          `Acceptance: ${item.acceptanceCriteria}`,
+          contentWidth - colWidths[0] - 4,
+        );
+        doc.text(critLines, margin + colWidths[0] + 2, yPos + 2);
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(8);
+        yPos += critLines.length * 3 + 2;
+      }
     });
   } else {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'italic');
     doc.text('No ITP assigned to this lot.', margin, yPos);
-    yPos += 5;
-  }
-  yPos += 10;
-
-  drawLine();
-
-  // ========== TEST RESULTS SUMMARY ==========
-  checkPageBreak(30);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Test Results Summary', margin, yPos);
-  yPos += 7;
-
-  if (data.testResults.length > 0) {
-    const passedTests = data.testResults.filter((t) => t.passFail === 'pass').length;
-    const failedTests = data.testResults.filter((t) => t.passFail === 'fail').length;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Total Tests: ${data.testResults.length}`, margin, yPos);
-    yPos += 5;
-    doc.text(`Passed: ${passedTests} | Failed: ${failedTests}`, margin, yPos);
-    yPos += 8;
-
-    // Test results table header
-    doc.setFillColor(240, 240, 240);
-    doc.rect(margin, yPos, contentWidth, 7, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Status'];
-    const testColWidths = [40, 35, 35, 25, 35];
-    let txPos = margin + 2;
-    testHeaders.forEach((header, i) => {
-      doc.text(header, txPos, yPos + 5);
-      txPos += testColWidths[i];
-    });
-    yPos += 8;
-
-    // Test rows
-    doc.setFont('helvetica', 'normal');
-    data.testResults.slice(0, 10).forEach((test) => {
-      // Limit to 10 for brevity
-      checkPageBreak(8);
-      txPos = margin + 2;
-      doc.text(test.testType.slice(0, 20), txPos, yPos + 4);
-      txPos += testColWidths[0];
-      doc.text((test.laboratoryName || 'N/A').slice(0, 18), txPos, yPos + 4);
-      txPos += testColWidths[1];
-      const result =
-        test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A';
-      doc.text(result.slice(0, 18), txPos, yPos + 4);
-      txPos += testColWidths[2];
-      doc.text(test.passFail || 'Pending', txPos, yPos + 4);
-      txPos += testColWidths[3];
-      doc.text(test.status, txPos, yPos + 4);
-      yPos += 6;
-    });
-
-    if (data.testResults.length > 10) {
-      doc.setFont('helvetica', 'italic');
-      doc.text(`... and ${data.testResults.length - 10} more test results`, margin, yPos + 4);
-      yPos += 6;
-    }
-  } else {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('No test results recorded for this lot.', margin, yPos);
     yPos += 5;
   }
   yPos += 10;
@@ -515,21 +593,33 @@ export async function generateConformanceReportPDF(
       margin,
       yPos,
     );
-    yPos += 8;
+    yPos += 6;
 
-    data.ncrs.forEach((ncr) => {
-      checkPageBreak(12);
+    // An open NCR is a live non-conformance — flag it, don't bury it.
+    if (openNcrs > 0) {
       doc.setFont('helvetica', 'bold');
-      doc.text(`${ncr.ncrNumber} - ${ncr.severity.toUpperCase()}`, margin, yPos);
-      yPos += 5;
-      doc.setFont('helvetica', 'normal');
-      const desc =
-        ncr.description.length > 80 ? ncr.description.slice(0, 77) + '...' : ncr.description;
-      doc.text(`  ${desc}`, margin, yPos);
-      yPos += 5;
+      doc.setTextColor(200, 30, 30);
       doc.text(
-        `  Status: ${formatStatusLabel(ncr.status)} | Category: ${ncr.category}`,
+        `WARNING: ${openNcrs} open NCR${openNcrs > 1 ? 's' : ''} on this lot — conformance is qualified.`,
         margin,
+        yPos,
+      );
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      yPos += 6;
+    }
+    yPos += 2;
+
+    // Reference-only: disposition + closure status + NCR number. The NCR itself
+    // stays the system of record — this report never reprints its content.
+    data.ncrs.forEach((ncr) => {
+      checkPageBreak(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${ncr.ncrNumber} (${ncr.severity.toUpperCase()})`, margin, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `Disposition: ${formatNcrDisposition(ncr.status)}  ·  Status: ${formatStatusLabel(ncr.status)}`,
+        margin + 45,
         yPos,
       );
       yPos += 6;
@@ -576,44 +666,55 @@ export async function generateConformanceReportPDF(
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
+    // Wire the authority spec series (specPrefix) into the certification wording
+    // for road-authority formats instead of the generic "relevant specifications".
+    const specSeriesText =
+      formatConfig.includesSpecReference && formatConfig.specPrefix
+        ? `documents and ${formatConfig.specPrefix} specifications.`
+        : 'documents and relevant specifications.';
     doc.text(
       'I hereby certify that this lot has been constructed in accordance with the contract',
       margin,
       yPos,
     );
     yPos += 5;
-    doc.text('documents and relevant specifications.', margin, yPos);
+    doc.text(specSeriesText, margin, yPos);
     yPos += 15;
 
-    // Contractor signature
-    doc.text('Contractor Representative:', margin, yPos);
-    yPos += 12;
-    doc.line(margin, yPos, margin + 70, yPos);
-    yPos += 5;
-    doc.setFontSize(8);
-    doc.text('Signature', margin, yPos);
-    doc.text('Date: _______________', margin + 80, yPos - 5);
-    yPos += 8;
-    doc.line(margin, yPos, margin + 70, yPos);
-    yPos += 5;
-    doc.text('Print Name', margin, yPos);
-    yPos += 15;
-
-    // Superintendent signature (for TMR/TfNSW)
-    if (options.format === 'tmr' || options.format === 'tfnsw') {
+    // Signature block with role/title + organisation lines. The verifier identity
+    // must be able to represent a Principal/Superintendent release, not just an
+    // internal sign-off (MRTS50 8.4).
+    const drawSignatureBlock = (roleLabel: string) => {
       doc.setFontSize(10);
-      doc.text('Superintendent / Client Representative:', margin, yPos);
+      doc.setFont('helvetica', 'bold');
+      doc.text(roleLabel, margin, yPos);
+      doc.setFont('helvetica', 'normal');
       yPos += 12;
       doc.line(margin, yPos, margin + 70, yPos);
+      doc.text('Date: _______________', margin + 80, yPos);
       yPos += 5;
       doc.setFontSize(8);
       doc.text('Signature', margin, yPos);
-      doc.text('Date: _______________', margin + 80, yPos - 5);
+      yPos += 8;
+      doc.line(margin, yPos, margin + 70, yPos);
+      doc.line(margin + 80, yPos, margin + 150, yPos);
+      yPos += 5;
+      doc.text('Print Name', margin, yPos);
+      doc.text('Title / Position', margin + 80, yPos);
       yPos += 8;
       doc.line(margin, yPos, margin + 70, yPos);
       yPos += 5;
-      doc.text('Print Name', margin, yPos);
-      yPos += 10;
+      doc.text('Company / Organisation', margin, yPos);
+      yPos += 12;
+      doc.setFontSize(10);
+    };
+
+    drawSignatureBlock('Contractor Representative:');
+
+    // Principal/Superintendent authority signature (for TMR/TfNSW hold-point release).
+    if (options.format === 'tmr' || options.format === 'tfnsw') {
+      checkPageBreak(45);
+      drawSignatureBlock('Superintendent / Principal Representative:');
     }
   }
 

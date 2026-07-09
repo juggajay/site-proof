@@ -94,6 +94,10 @@ export interface ITPChecklistItem {
   pointType: string;
   isHoldPoint: boolean;
   evidenceRequired: string;
+  // Batch C: acceptance criterion / spec clause per item (MRTS50 8.2(e)). Rendered
+  // when the template holds it; not every template does.
+  acceptanceCriteria?: string | null;
+  testType?: string | null;
 }
 
 export interface ITPCompletion {
@@ -122,6 +126,11 @@ export interface TestResult {
   status: string;
   sampleDate: string | null;
   resultDate: string | null;
+  // Batch C: result-vs-spec-limit analysis (MRTS50 10.1.1(b)). Present from the
+  // test-results API select; rendered as a min/max range with a pass/fail verdict.
+  specificationMin?: number | null;
+  specificationMax?: number | null;
+  laboratoryReportNumber?: string | null;
 }
 
 export interface NCR {
@@ -249,8 +258,11 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     testType: string;
     testRequestNumber: string | null;
     laboratoryName: string | null;
+    laboratoryReportNumber?: string | null;
     resultValue: number | null;
     resultUnit: string | null;
+    specificationMin?: number | null;
+    specificationMax?: number | null;
     passFail: string | null;
     status: string;
     isVerified: boolean;
@@ -480,6 +492,8 @@ export interface NCRDetailData extends PDFBrandableData {
     category: string;
     severity: 'minor' | 'major';
     status: string;
+    // Batch C: spec reference (clause + drawing/rev) per ISO 9001 8.7 / MRTS50.
+    specificationReference?: string | null;
     rootCauseCategory?: string | null;
     rootCause?: string | null;
     proposedAction?: string | null;
@@ -487,12 +501,26 @@ export interface NCRDetailData extends PDFBrandableData {
     preventativeMeasures?: string | null;
     verificationNotes?: string | null;
     lessonsLearned?: string | null; // Feature #474
+    // Batch C: concession disposition block (ISO 9001 8.7.2(c)(d); MRTS50/Q6
+    // written-approval rule). Rendered when the NCR was closed by concession.
+    concessionJustification?: string | null;
+    concessionRiskAssessment?: string | null;
+    clientApprovalReference?: string | null;
     qmApprovalRequired: boolean;
     qmApprovedAt: string | null;
     qmApprovedBy?: { id?: string; fullName: string; email: string } | null;
+    verifiedAt?: string | null;
+    verifiedBy?: { fullName: string | null; email: string } | null;
     raisedBy: { fullName: string; email: string };
     responsibleUser?: { fullName: string; email: string } | null;
     responsibleSubcontractor?: { companyName: string } | null;
+    // Batch C: linked failed-test reference (conditional) — the objective
+    // evidence a fail-driven NCR points back to.
+    linkedTestResult?: {
+      testType: string;
+      testRequestNumber: string | null;
+      laboratoryReportNumber?: string | null;
+    } | null;
     dueDate?: string | null;
     closedAt?: string | null;
     closedBy?: { fullName: string; email: string } | null;
@@ -540,6 +568,9 @@ export interface TestCertificateData extends PDFBrandableData {
     resultUnit: string | null;
     specificationMin: number | null;
     specificationMax: number | null;
+    // Batch C: optional free-text test method (e.g. "AS 1289.5.2.1"). The lab
+    // report states the method authoritatively; this is a contractor annotation.
+    testMethod?: string | null;
     passFail: string;
     status: string;
     aiExtracted?: boolean;

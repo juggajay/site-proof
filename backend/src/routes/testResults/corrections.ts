@@ -45,6 +45,7 @@ export type TestResultCorrections = {
   resultUnit?: unknown;
   specificationMin?: unknown;
   specificationMax?: unknown;
+  testMethod?: unknown;
   passFail?: unknown;
 };
 
@@ -104,6 +105,12 @@ export function applyTestResultCorrections(
     updateData.specificationMin = toNullableFloat(corrections.specificationMin, 'specificationMin');
   if (corrections.specificationMax !== undefined)
     updateData.specificationMax = toNullableFloat(corrections.specificationMax, 'specificationMax');
+  if (corrections.testMethod !== undefined)
+    updateData.testMethod = toNullableString(
+      corrections.testMethod,
+      'testMethod',
+      MAX_TEST_TEXT_LENGTH,
+    );
   if (corrections.passFail !== undefined)
     updateData.passFail = normalizePassFail(corrections.passFail, 'pending');
 }

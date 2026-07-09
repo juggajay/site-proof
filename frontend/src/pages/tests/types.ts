@@ -17,6 +17,9 @@ export interface TestResult {
   resultUnit: string | null;
   specificationMin: number | null;
   specificationMax: number | null;
+  // Batch C: optional contractor-annotated test method (nullable; entered on the
+  // result form). The lab report remains the authoritative statement of method.
+  testMethod?: string | null;
   passFail: string;
   status: string;
   verifiedBy?: { id: string; fullName: string | null; email: string } | null;
