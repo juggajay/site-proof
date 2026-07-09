@@ -2,7 +2,7 @@
  * Tests for PathScreen — path renders node states from mocked queries.
  *
  * Covers:
- *   - No diary → weather=now, others locked
+ *   - No diary → weather=now, others todo but still tappable (never gated)
  *   - Weather done → crew=now
  *   - Full diary → review=now
  *   - Submitted → all done, read-only banner
@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { DailyDiary } from '@/pages/diary/types';
@@ -26,9 +26,10 @@ vi.mock('@/hooks/useEffectiveProjectId', () => ({
   useEffectiveProjectId: () => ({ projectId: 'proj-1', isResolving: false }),
 }));
 
+const mockNavigate = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
-  return { ...actual, useNavigate: () => vi.fn() };
+  return { ...actual, useNavigate: () => mockNavigate };
 });
 
 // useDiaryShellData: mutable via the ref below
@@ -117,11 +118,15 @@ describe('PathScreen — node states', () => {
     expect(weatherBtn).not.toBeDisabled();
   });
 
-  it('Crew & Plant is locked when no diary', () => {
+  it('Crew & Plant is tappable even with no diary — steps are never gated', () => {
+    // Save handlers create the diary row on demand (ensureDiaryExists), so a
+    // foreman can log crew before weather. The path suggests order, not enforces.
     _shellData = makeShellData(null);
     renderPathScreen();
-    const crewBtn = screen.getByRole('button', { name: /Crew & Plant — locked/i });
-    expect(crewBtn).toBeDisabled();
+    const crewBtn = screen.getByRole('button', { name: /Crew & Plant — not started/i });
+    expect(crewBtn).not.toBeDisabled();
+    fireEvent.click(crewBtn);
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/m/diary/crew'));
   });
 
   it('Crew & Plant is "now" after weather done', () => {
@@ -131,14 +136,16 @@ describe('PathScreen — node states', () => {
     expect(crewBtn).not.toBeDisabled();
   });
 
-  it('Review & Submit is locked when work not done', () => {
+  it('Review & Submit is tappable before work is logged', () => {
     _shellData = makeShellData({
       weatherConditions: 'Fine',
       personnel: [{ id: 'p1', name: 'Jay', createdAt: '' }],
     });
     renderPathScreen();
-    const reviewBtn = screen.getByRole('button', { name: /Review & Submit — locked/i });
-    expect(reviewBtn).toBeDisabled();
+    const reviewBtn = screen.getByRole('button', { name: /Review & Submit — not started/i });
+    expect(reviewBtn).not.toBeDisabled();
+    fireEvent.click(reviewBtn);
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/m/diary/review'));
   });
 
   it('Review & Submit is interactive when work exists', () => {
