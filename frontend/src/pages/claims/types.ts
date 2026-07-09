@@ -25,6 +25,8 @@ export interface Claim {
   paidAmount: number | null;
   submittedAt: string | null;
   certifiedAt?: string | null;
+  paidAt?: string | null;
+  paymentReference?: string | null;
   disputeNotes: string | null;
   disputedAt: string | null;
   lotCount: number;

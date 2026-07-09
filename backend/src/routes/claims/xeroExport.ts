@@ -62,13 +62,37 @@ export interface XeroClaimExportInput {
   variations?: XeroVariationExportInput[];
 }
 
+/**
+ * Xero's own account default for a present-but-blank TaxType cell is *no tax* —
+ * a blank cell silently imports the line as untaxed and under-bills GST. So we
+ * never emit blank: default to the standard GST-on-income rate name. The org can
+ * override with the exact display name from their chart (see route help text).
+ */
+export const XERO_DEFAULT_TAX_TYPE = 'GST on Income';
+
+/** Calendar days added to the invoice date when no explicit due date is given. */
+export const XERO_DEFAULT_PAYMENT_TERMS_DAYS = 30;
+
 export interface XeroExportConfig {
   /** Xero income account code (e.g. "200"). Must exist in the org's chart. */
   accountCode: string;
-  /** Tax-rate display name (e.g. "GST on Income"); blank => Xero account default. */
+  /**
+   * Tax-rate display name; must match the org's chart exactly. Defaults to
+   * `GST on Income`. A blank value is treated as unset (falls back to the
+   * default) — Xero imports a blank TaxType as untaxed, never the account
+   * default, so we refuse to emit blank.
+   */
   taxType?: string;
   /** ISO date override for the invoice date; defaults to the claim period end. */
   invoiceDate?: string;
+  /**
+   * ISO date override for the payment due date. When absent, DueDate is the
+   * invoice date plus `paymentTermsDays`. The frontend passes the SOPA-derived
+   * due date here so the invoice does not age overdue from day one.
+   */
+  dueDate?: string;
+  /** Calendar days added to the invoice date for DueDate. Default 30. */
+  paymentTermsDays?: number;
 }
 
 type CsvCell = string | number;
@@ -77,12 +101,23 @@ function formatPercent(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
 }
 
-/** Xero expects DD/MM/YYYY. Format from the UTC parts so it is timezone-stable. */
+/**
+ * Emit ISO `YYYY-MM-DD` from the UTC parts so it is timezone-stable and
+ * locale-safe on import (Xero accepts ISO and cannot misread it as US M/D/Y).
+ */
 function formatDate(iso: string): string {
   const date = new Date(iso);
-  const day = String(date.getUTCDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  return `${day}/${month}/${date.getUTCFullYear()}`;
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Invoice date + N calendar days, returned as an ISO date string (UTC-based). */
+function addCalendarDaysIso(iso: string, days: number): string {
+  const date = new Date(iso);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
 }
 
 /**
@@ -101,9 +136,19 @@ export function buildXeroInvoiceExport(
   }
 
   const invoiceNumber = `Claim ${claim.claimNumber} — ${claim.projectName}`;
-  const invoiceDate = formatDate(config.invoiceDate ?? claim.periodEnd);
+  const invoiceDateIso = config.invoiceDate ?? claim.periodEnd;
+  const invoiceDate = formatDate(invoiceDateIso);
+  // DueDate must never equal InvoiceDate (Xero takes it literally → overdue on
+  // day one). Prefer an explicit due date (the SOPA-derived date the frontend
+  // passes); otherwise invoice date + payment terms.
+  const termsDays =
+    config.paymentTermsDays && config.paymentTermsDays > 0
+      ? config.paymentTermsDays
+      : XERO_DEFAULT_PAYMENT_TERMS_DAYS;
+  const dueDate = formatDate(config.dueDate ?? addCalendarDaysIso(invoiceDateIso, termsDays));
   const contactName = claim.clientName?.trim() || claim.projectName;
-  const taxType = config.taxType?.trim() ?? '';
+  // Never blank — a blank TaxType imports as untaxed and under-bills GST.
+  const taxType = config.taxType?.trim() || XERO_DEFAULT_TAX_TYPE;
 
   const lotRows: CsvCell[][] = claim.lots.map((lot) => {
     const unitAmount = roundClaimAmountToCents(lot.amountClaimed);
@@ -115,7 +160,7 @@ export function buildXeroInvoiceExport(
       contactName,
       invoiceNumber,
       invoiceDate,
-      invoiceDate,
+      dueDate,
       description,
       1,
       unitAmount,
@@ -127,7 +172,7 @@ export function buildXeroInvoiceExport(
     contactName,
     invoiceNumber,
     invoiceDate,
-    invoiceDate,
+    dueDate,
     `Variation ${variation.variationNumber} — ${variation.title}`,
     1,
     roundClaimAmountToCents(variation.approvedAmount),
@@ -193,6 +238,10 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
 
       const accountCode = parseOptionalQueryString(req.query.accountCode, 'accountCode') ?? '200';
       const taxType = parseOptionalQueryString(req.query.taxType, 'taxType');
+      // The frontend computes the SOPA-derived payment due date (it owns the
+      // per-state business-day tables) and passes it here; falls back to invoice
+      // date + default terms when absent.
+      const dueDate = parseOptionalQueryString(req.query.dueDate, 'dueDate');
 
       const claim = await prisma.progressClaim.findFirst({
         where: { id: claimId, projectId },
@@ -244,7 +293,7 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
             approvedAmount: toNumber(variation.approvedAmount),
           })),
         },
-        { accountCode, taxType },
+        { accountCode, taxType, dueDate },
       );
 
       res.json(result);

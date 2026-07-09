@@ -276,9 +276,32 @@ export interface HPEvidencePackageData extends PDFBrandableData {
   generatedAt: string;
 }
 
+// One ITP checklist item as sent by the evidence payload. Only id/description
+// are relied on for itemised rendering; the rest are optional passthrough.
+export interface ClaimItpChecklistItem {
+  id?: string;
+  sequenceNumber?: number;
+  description?: string;
+  responsibleParty?: string;
+  pointType?: string;
+  isHoldPoint?: boolean;
+  evidenceRequired?: string;
+}
+
+export interface ClaimPersonRef {
+  name: string;
+  email?: string;
+}
+
 export interface ClaimItpCompletion {
+  checklistItemId?: string;
   isCompleted?: boolean;
   isNotApplicable?: boolean;
+  completedAt?: string | null;
+  completedBy?: ClaimPersonRef | null;
+  isVerified?: boolean;
+  verifiedAt?: string | null;
+  verifiedBy?: ClaimPersonRef | null;
   attachments?: {
     id: string;
     documentId: string;
@@ -288,6 +311,9 @@ export interface ClaimItpCompletion {
 
 export interface ClaimHoldPoint {
   status?: string;
+  description?: string;
+  releasedAt?: string | null;
+  releasedBy?: { name: string; organization?: string | null } | null;
 }
 
 export interface ClaimTestResult {
@@ -296,6 +322,12 @@ export interface ClaimTestResult {
   resultUnit?: string | null;
   passFail?: string | null;
   status?: string | null;
+  testRequestNumber?: string | null;
+  laboratoryName?: string | null;
+  resultDate?: string | null;
+  sampleDate?: string | null;
+  isVerified?: boolean;
+  verifiedBy?: ClaimPersonRef | null;
 }
 
 export interface ClaimNcr {
@@ -364,9 +396,14 @@ export interface ClaimEvidencePackageData extends PDFBrandableData {
     conformedBy: { name: string; email: string } | null;
     claimAmount: number;
     percentComplete: number;
+    // Physical position (%), no dollars. Optional so older payloads/tests fall
+    // back to percentComplete.
+    percentThisClaim?: number;
+    percentPrevious?: number;
+    percentCumulative?: number;
     itp: {
       templateName: string;
-      checklistItems: unknown[];
+      checklistItems: ClaimItpChecklistItem[];
       completions: ClaimItpCompletion[];
     } | null;
     holdPoints: ClaimHoldPoint[];
@@ -385,6 +422,14 @@ export interface ClaimEvidencePackageData extends PDFBrandableData {
     };
   }[];
   variations?: ClaimVariation[];
+  // Activity-type subtotals computed server-side. subtotal is a pass-through sum
+  // of this claim's own lot line amounts (not a CIVOS-derived contract value).
+  lotsByActivity?: {
+    activityType: string;
+    lotCount: number;
+    subtotal: number;
+    lots: { id: string; lotNumber: string; amount: number }[];
+  }[];
   summary: {
     totalLots: number;
     totalClaimedAmount: number;
@@ -600,6 +645,10 @@ export interface DocketDetailPDFData extends PDFBrandableData {
     adjustmentReason?: string | null;
     submittedBy?: { fullName: string | null; email: string } | null;
     approvedBy?: { fullName: string | null; email: string } | null;
+    // Itemised lines (optional; absent on older callers that only had totals).
+    // Costs/rates are permission-gated server-side (null when restricted).
+    labourEntries?: DocketLabourLine[];
+    plantEntries?: DocketPlantLine[];
   };
   subcontractor: {
     name: string;
@@ -609,4 +658,24 @@ export interface DocketDetailPDFData extends PDFBrandableData {
     name: string;
     projectNumber: string | null;
   };
+}
+
+export interface DocketLabourLine {
+  employee: { name: string; role?: string | null };
+  submittedHours: number;
+  approvedHours?: number | null;
+  hourlyRate?: number | null;
+  submittedCost?: number | null;
+  approvedCost?: number | null;
+  adjustmentReason?: string | null;
+}
+
+export interface DocketPlantLine {
+  plant: { type: string; description?: string | null; idRego?: string | null };
+  hoursOperated: number;
+  wetOrDry?: string | null;
+  hourlyRate?: number | null;
+  submittedCost?: number | null;
+  approvedCost?: number | null;
+  adjustmentReason?: string | null;
 }

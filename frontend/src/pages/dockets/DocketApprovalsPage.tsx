@@ -15,6 +15,7 @@ import { logError } from '@/lib/logger';
 import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 import {
   type Docket,
+  type DocketDetailResponse,
   type ProjectResponse,
   canApproveDocketsForProjectRole,
   formatDocketCurrency,
@@ -29,6 +30,7 @@ import {
   type DocketActionType,
   buildDocketActionPath,
   buildDocketActionPayload,
+  buildDocketDetailPath,
   statusLabels,
 } from './docketActionData';
 import { DocketActionModal } from './components/DocketActionModal';
@@ -392,6 +394,19 @@ export function DocketApprovalsPage() {
         // Use default project info when a docket PDF can still be generated.
       }
 
+      // Itemised labour/plant lines + subbie ABN live on the docket detail
+      // endpoint, not the list payload. Best-effort: an itemless PDF is still
+      // useful, so a failed detail fetch never blocks the download.
+      let detail: NonNullable<DocketDetailResponse['docket']> | null = null;
+      try {
+        const detailResponse = await apiFetch<DocketDetailResponse>(
+          buildDocketDetailPath(docket.id),
+        );
+        detail = detailResponse.docket ?? null;
+      } catch {
+        // Fall through: render totals-only PDF.
+      }
+
       const pdfData: DocketDetailPDFData = {
         company,
         docket: {
@@ -413,9 +428,13 @@ export function DocketApprovalsPage() {
           approvedAt: docket.approvedAt,
           approvedBy: docket.approvedBy ?? null,
           foremanNotes: docket.foremanNotes,
+          adjustmentReason: detail?.adjustmentReason ?? docket.adjustmentReason ?? null,
+          labourEntries: detail?.labourEntries,
+          plantEntries: detail?.plantEntries,
         },
         subcontractor: {
           name: docket.subcontractor,
+          abn: detail?.subcontractor?.abn ?? null,
         },
         project: {
           name: project?.name || 'Unknown Project',

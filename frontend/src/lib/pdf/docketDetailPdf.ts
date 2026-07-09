@@ -318,6 +318,75 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   drawCostRow('Total Cost', submittedTotalCost, approvedTotalCost, true);
   yPos += 5;
 
+  // ========== ITEMISED LABOUR ==========
+  // Per-person lines: hours (submitted -> approved when adjusted), cost only
+  // when the payload includes it (server permission-gates rate/cost to null),
+  // and the per-line adjustment reason (why this specific line changed).
+  const labourEntries = data.docket.labourEntries ?? [];
+  if (labourEntries.length > 0) {
+    drawSectionHeader('Labour Detail');
+    doc.setFontSize(9);
+    labourEntries.forEach((entry) => {
+      checkPageBreak(12);
+      const role = entry.employee.role ? ` (${entry.employee.role})` : '';
+      const submitted = entry.submittedHours ?? 0;
+      const approved = entry.approvedHours;
+      const hours =
+        approved !== null && approved !== undefined && approved !== submitted
+          ? `${submitted} hrs submitted / ${approved} hrs approved`
+          : `${submitted} hrs`;
+      const cost = entry.approvedCost ?? entry.submittedCost;
+      const costStr = cost !== null && cost !== undefined ? `  ·  ${formatCurrency(cost)}` : '';
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${entry.employee.name}${role}`, margin, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${hours}${costStr}`, margin + 70, yPos);
+      yPos += 5;
+      if (entry.adjustmentReason) {
+        doc.setTextColor(120, 120, 120);
+        const reasonLines = doc.splitTextToSize(
+          `Adjustment: ${entry.adjustmentReason}`,
+          contentWidth - 10,
+        );
+        doc.text(reasonLines, margin + 5, yPos);
+        doc.setTextColor(0, 0, 0);
+        yPos += reasonLines.length * 4 + 1;
+      }
+    });
+    yPos += 4;
+  }
+
+  // ========== ITEMISED PLANT ==========
+  const plantEntries = data.docket.plantEntries ?? [];
+  if (plantEntries.length > 0) {
+    drawSectionHeader('Plant Detail');
+    doc.setFontSize(9);
+    plantEntries.forEach((entry) => {
+      checkPageBreak(12);
+      const rego = entry.plant.idRego ? ` [${entry.plant.idRego}]` : '';
+      const desc = entry.plant.description ? ` — ${entry.plant.description}` : '';
+      const wetDry = entry.wetOrDry ? `${entry.wetOrDry.toUpperCase()} · ` : '';
+      const cost = entry.approvedCost ?? entry.submittedCost;
+      const costStr = cost !== null && cost !== undefined ? `  ·  ${formatCurrency(cost)}` : '';
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${entry.plant.type}${desc}${rego}`.slice(0, 60), margin, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${wetDry}${entry.hoursOperated ?? 0} hrs${costStr}`, margin + 70, yPos);
+      yPos += 5;
+      if (entry.adjustmentReason) {
+        doc.setTextColor(120, 120, 120);
+        const reasonLines = doc.splitTextToSize(
+          `Adjustment: ${entry.adjustmentReason}`,
+          contentWidth - 10,
+        );
+        doc.text(reasonLines, margin + 5, yPos);
+        doc.setTextColor(0, 0, 0);
+        yPos += reasonLines.length * 4 + 1;
+      }
+    });
+    yPos += 4;
+  }
+
   // ========== NOTES ==========
   if (data.docket.notes) {
     drawSectionHeader('Docket Notes');

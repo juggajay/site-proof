@@ -79,6 +79,8 @@ describe('mapClaimListItem', () => {
       certifiedAmount: 47000.1,
       certifiedAt: null,
       paidAmount: 1000,
+      paidAt: null,
+      paymentReference: null,
       submittedAt: '2026-06-01',
       // A plain-string disputeNotes is not certification metadata, so the
       // raw field is preserved and `certification` stays null.

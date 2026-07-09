@@ -5,10 +5,11 @@
 // output is preserved exactly (same field names + order, same `Number(x) || 0`
 // coercion, same `wetOrDry || 'dry'` fallback, same totals).
 //
-// The detail route (`GET /:id`) omits `adjustmentReason` from each entry, while
-// the per-entry routes (`GET /:id/labour`, `GET /:id/plant`) include it; the
-// `includeAdjustmentReason` option reproduces both shapes (and the original key
-// position) without changing any other field.
+// The `includeAdjustmentReason` option controls whether each entry carries its
+// per-line `adjustmentReason` (kept in the original key position, between
+// `approvedCost` and `lotAllocations`). The detail route (`GET /:id`) and the
+// per-entry routes (`GET /:id/labour`, `GET /:id/plant`) both enable it so the
+// approval modal and docket PDF can show why a line was adjusted.
 // =============================================================================
 
 import { formatDocketDate, formatDocketNumber } from './formatting.js';
@@ -330,7 +331,7 @@ export type DocketDetailSource = {
   date: Date;
   status: string;
   projectId: string;
-  subcontractorCompany: { id: string; companyName: string };
+  subcontractorCompany: { id: string; companyName: string; abn?: string | null };
   notes: string | null;
   foremanNotes: string | null;
   adjustmentReason: string | null;
@@ -367,6 +368,10 @@ export function buildDocketDetailResponse(input: {
     includeCommercialAmounts,
   } = input;
   const commercialOptions = { includeCommercialAmounts };
+  // The detail route now carries the per-line adjustment reason so the docket
+  // PDF (and the approval modal) can show *why* each labour/plant line was
+  // adjusted — the highest-value transparency item for the subbie-facing record.
+  const entryOptions = { includeCommercialAmounts, includeAdjustmentReason: true };
   return {
     docket: {
       id: docket.id,
@@ -397,12 +402,8 @@ export function buildDocketDetailResponse(input: {
         docket.totalPlantApprovedCost,
         commercialOptions,
       ),
-      labourEntries: docket.labourEntries.map((entry) =>
-        mapDocketLabourEntry(entry, commercialOptions),
-      ),
-      plantEntries: docket.plantEntries.map((entry) =>
-        mapDocketPlantEntry(entry, commercialOptions),
-      ),
+      labourEntries: docket.labourEntries.map((entry) => mapDocketLabourEntry(entry, entryOptions)),
+      plantEntries: docket.plantEntries.map((entry) => mapDocketPlantEntry(entry, entryOptions)),
     },
     foremanDiary,
     discrepancies: discrepancies.length > 0 ? discrepancies : null,

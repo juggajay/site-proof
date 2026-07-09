@@ -64,11 +64,31 @@ describe('buildXeroInvoiceExport', () => {
     expect(row18[col('*AccountCode')]).toBe('200');
   });
 
-  it('sets invoice number from claim + project and date as DD/MM/YYYY periodEnd', () => {
+  it('sets invoice number from claim + project and invoice date as ISO periodEnd', () => {
     const { rows } = buildXeroInvoiceExport(base, config);
     expect(rows[1][col('*InvoiceNumber')]).toBe('Claim 5 — Northern Interchange');
-    expect(rows[1][col('*InvoiceDate')]).toBe('30/06/2026');
-    expect(rows[1][col('*DueDate')]).toBe('30/06/2026');
+    // ISO YYYY-MM-DD is locale-safe (Xero cannot misread it as US M/D/Y).
+    expect(rows[1][col('*InvoiceDate')]).toBe('2026-06-30');
+  });
+
+  it('defaults DueDate to invoice date + payment terms, never equal to InvoiceDate', () => {
+    const { rows } = buildXeroInvoiceExport(base, config);
+    // 2026-06-30 + 30 calendar days = 2026-07-30. Never day-one overdue.
+    expect(rows[1][col('*DueDate')]).toBe('2026-07-30');
+    expect(rows[1][col('*DueDate')]).not.toBe(rows[1][col('*InvoiceDate')]);
+  });
+
+  it('uses an explicit due date override when provided (the SOPA-derived date)', () => {
+    const { rows } = buildXeroInvoiceExport(base, {
+      accountCode: '200',
+      dueDate: '2026-07-21T00:00:00.000Z',
+    });
+    expect(rows[1][col('*DueDate')]).toBe('2026-07-21');
+  });
+
+  it('honours a custom payment-terms window', () => {
+    const { rows } = buildXeroInvoiceExport(base, { accountCode: '200', paymentTermsDays: 14 });
+    expect(rows[1][col('*DueDate')]).toBe('2026-07-14');
   });
 
   it('uses clientName as contact, falling back to project name when blank', () => {
@@ -78,11 +98,19 @@ describe('buildXeroInvoiceExport', () => {
     expect(noClient.rows[1][col('*ContactName')]).toBe('Northern Interchange');
   });
 
-  it('leaves TaxType blank by default (Xero applies the account default rate)', () => {
+  it('defaults TaxType to GST on Income and never emits a blank cell', () => {
+    // A blank TaxType imports as *untaxed* in Xero (it does NOT inherit the
+    // account default) — silent GST under-billing. So we always emit a rate name.
     const { rows } = buildXeroInvoiceExport(base, config);
-    expect(rows[1][col('*TaxType')]).toBe('');
-    const withTax = buildXeroInvoiceExport(base, { accountCode: '200', taxType: 'GST on Income' });
-    expect(withTax.rows[1][col('*TaxType')]).toBe('GST on Income');
+    expect(rows[1][col('*TaxType')]).toBe('GST on Income');
+    // A blank/whitespace override is treated as unset and falls back to default.
+    const blank = buildXeroInvoiceExport(base, { accountCode: '200', taxType: '   ' });
+    expect(blank.rows[1][col('*TaxType')]).toBe('GST on Income');
+    const custom = buildXeroInvoiceExport(base, {
+      accountCode: '200',
+      taxType: 'GST Free Income',
+    });
+    expect(custom.rows[1][col('*TaxType')]).toBe('GST Free Income');
   });
 
   it('blocks export when line total does not match claim total', () => {

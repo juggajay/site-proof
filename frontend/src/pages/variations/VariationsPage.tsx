@@ -164,7 +164,10 @@ export function VariationsPage() {
         </div>
         <div className="flex gap-2">
           {!isMobile && displayedVariations.length > 0 && (
-            <Button variant="outline" onClick={() => handleExportCSV(displayedVariations)}>
+            <Button
+              variant="outline"
+              onClick={() => handleExportCSV(displayedVariations, lotsById)}
+            >
               Export CSV
             </Button>
           )}
