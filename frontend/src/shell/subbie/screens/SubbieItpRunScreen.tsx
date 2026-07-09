@@ -553,6 +553,7 @@ export function SubbieItpRunScreen() {
 
       <div
         data-testid="itp-content-zone"
+        ref={contentDrag.zoneRef}
         className="flex flex-1 flex-col"
         style={{ touchAction: 'pan-y', cursor: 'grab' }}
         {...contentDrag.handlers}

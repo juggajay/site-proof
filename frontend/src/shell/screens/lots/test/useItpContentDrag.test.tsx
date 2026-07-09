@@ -137,6 +137,50 @@ describe('useItpContentDrag', () => {
     }
   });
 
+  it('cancels native touchmove defaults only while a horizontal scrub is live', () => {
+    // The device-dependent failure: with touch-action: pan-y the browser may
+    // still start a native vertical scroll on a slightly diagonal swipe and
+    // kill the drag with pointercancel. The zoneRef installs a non-passive
+    // touchmove guard (React's own touch listeners are passive) that cancels
+    // defaults once the direction lock has chosen horizontal — and ONLY then,
+    // so genuine vertical scrolling through the card keeps working.
+    const { result } = setup();
+    const node = document.createElement('div');
+    act(() => result.current.zoneRef(node));
+
+    const dispatchTouchMove = () => {
+      const e = new Event('touchmove', { cancelable: true, bubbles: true });
+      node.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+
+    // Idle: never prevented.
+    expect(dispatchTouchMove()).toBe(false);
+
+    // Undecided (under threshold): never prevented — vertical scroll must win.
+    act(() => result.current.handlers.onPointerDown(evt(300, 200)));
+    act(() => result.current.handlers.onPointerMove(evt(304, 203)));
+    expect(dispatchTouchMove()).toBe(false);
+
+    // Horizontal lock engaged: every touchmove default is cancelled.
+    act(() => result.current.handlers.onPointerMove(evt(260, 202)));
+    expect(result.current.engaged).toBe(true);
+    expect(dispatchTouchMove()).toBe(true);
+
+    // Released: guard disarms again.
+    act(() => result.current.handlers.onPointerUp(evt(260, 202)));
+    expect(dispatchTouchMove()).toBe(false);
+
+    // A vertical drag never arms the guard.
+    act(() => result.current.handlers.onPointerDown(evt(300, 200)));
+    act(() => result.current.handlers.onPointerMove(evt(302, 260)));
+    expect(dispatchTouchMove()).toBe(false);
+
+    // Detach cleans the listener up (no throw, no stale prevention).
+    act(() => result.current.zoneRef(null));
+    expect(dispatchTouchMove()).toBe(false);
+  });
+
   it('reduced motion still commits (direct positioning, no fling)', () => {
     reducedMotion = true;
     const { result, onCommit } = setup();

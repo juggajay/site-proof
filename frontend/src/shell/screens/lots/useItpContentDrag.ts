@@ -54,6 +54,8 @@ export function useItpContentDrag({
   onScrubChange,
 }: UseItpContentDragArgs): {
   handlers: ItpContentDragHandlers;
+  /** Attach to the zone element — installs the native touchmove guard below. */
+  zoneRef: (node: HTMLDivElement | null) => void;
   /** True once a horizontal scrub has engaged (suppress the click that follows). */
   engaged: boolean;
 } {
@@ -72,6 +74,33 @@ export function useItpContentDrag({
     zoneWidth: 1,
     pointerId: -1,
   });
+
+  const zoneNodeRef = useRef<HTMLDivElement | null>(null);
+
+  // Native NON-PASSIVE touchmove guard. React attaches its touch listeners
+  // passively, so no synthetic handler can cancel a touchmove. Without this,
+  // the zone's touch-action: pan-y still permits the browser to start a native
+  // vertical scroll on a slightly diagonal swipe — even AFTER our direction
+  // lock chose horizontal — at which point it fires pointercancel and the
+  // scrub dies mid-gesture. Which side wins that race varies by device and
+  // finger angle: the exact "carousel works on one phone, dead on another"
+  // failure. Pointer events dispatch before their touch counterparts, so the
+  // lock is already resolved when this runs: once horizontal, every touchmove
+  // default is cancelled and the browser can never steal the gesture; while
+  // undecided or vertical, defaults pass through and page scrolling is intact.
+  const guardTouchMove = useCallback((e: TouchEvent) => {
+    const s = stateRef.current;
+    if (s.active && s.axis === 'horizontal' && e.cancelable) e.preventDefault();
+  }, []);
+
+  const zoneRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      zoneNodeRef.current?.removeEventListener('touchmove', guardTouchMove);
+      zoneNodeRef.current = node;
+      node?.addEventListener('touchmove', guardTouchMove, { passive: false });
+    },
+    [guardTouchMove],
+  );
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -178,6 +207,7 @@ export function useItpContentDrag({
       onPointerUp: finish,
       onPointerCancel: finish,
     },
+    zoneRef,
     engaged,
   };
 }
