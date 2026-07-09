@@ -252,6 +252,24 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                   <div className="text-sm text-muted-foreground">Total Operating Hours</div>
                 </div>
               </div>
+              {Object.keys(report.summary.plant.byCompany).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-2">By Company</h4>
+                  <div className="space-y-2">
+                    {Object.entries(report.summary.plant.byCompany).map(([company, data]) => (
+                      <div
+                        key={company}
+                        className="flex justify-between bg-muted px-3 py-2 rounded"
+                      >
+                        <span>{company}</span>
+                        <span className="font-medium">
+                          {data.count} items, {data.hours.toFixed(1)} hrs
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -37,6 +37,8 @@ const testResults: TestResult[] = [
     specificationMax: 100,
     passFail: 'pass',
     status: 'verified',
+    verifiedBy: { id: 'user-1', fullName: 'Quinn Verifier', email: 'quinn@example.com' },
+    verifiedAt: '2026-06-03T00:00:00.000Z',
     lotId: 'lot-1',
     lot: { id: 'lot-1', lotNumber: 'LOT-001' },
     createdAt: '2026-06-01T08:00:00.000Z',
@@ -99,12 +101,15 @@ describe('testResultsPageHelpers', () => {
 
   it('builds CSV rows with the existing fallback values and result formatting', () => {
     expect(TEST_RESULTS_CSV_HEADERS).toContain('Linked Lot');
+    expect(TEST_RESULTS_CSV_HEADERS).toContain('Lab Report #');
+    expect(TEST_RESULTS_CSV_HEADERS).toContain('Verified By (Contractor)');
     expect(buildTestResultsCsvRows(testResults)).toEqual([
       [
         'Compaction',
         'TR-001',
         'LOT-001',
         'Lab One',
+        'LR-001',
         'Chainage 10',
         '97 %',
         95,
@@ -112,8 +117,9 @@ describe('testResultsPageHelpers', () => {
         'pass',
         'verified',
         '02/06/2026',
+        'Quinn Verifier',
       ],
-      ['Concrete', '-', 'LOT-002', '-', '-', '-', '-', '-', 'fail', 'entered', '-'],
+      ['Concrete', '-', 'LOT-002', '-', '-', '-', '-', '-', '-', 'fail', 'entered', '-', '-'],
     ]);
   });
 });

@@ -456,6 +456,25 @@ describe('pdfGenerator characterization', () => {
         '12:00',
         '0.75h',
         'Total Delay: 0.8 hours',
+        // Contemporaneity block (top of document).
+        'Contemporaneous Record',
+        'Record Locked:',
+        // Docket-provenance column on personnel/plant.
+        'Source',
+        'Docket',
+        'Manual',
+        // Deliveries section.
+        'Deliveries (1)',
+        'Class 3 road base',
+        'Boral Quarries',
+        'BQ-88421',
+        // Safety & site events (occurrence + reference, no raw narrative note).
+        'Safety & Site Events (1)',
+        'Near miss reported at trench edge',
+        // Visitors section.
+        'Visitors (1)',
+        'Dana Superintendent',
+        'Hold point inspection',
         'Addendums (1)',
         'Addendum 1',
         'Client requested photo set attached after inspection.',
@@ -466,6 +485,8 @@ describe('pdfGenerator characterization', () => {
         'Delays: 1 (0.8 hrs)',
       ]),
     );
+    // Contemporaneity status line carries the same-day/late flag.
+    expect(textContent).toContain('Late entry');
     // Shared per-page document footer identity.
     expect(textContent).toContain('Page 1 of');
     expect(textContent).toContain('Pacific Highway Upgrade / Diary 2026-05-28');

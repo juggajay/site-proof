@@ -346,9 +346,12 @@ export function useNCRActions({
         'Category',
         'Severity',
         'Status',
+        'Raised By',
         'Responsible',
+        'Root Cause',
         'Due Date',
         'Created At',
+        'Closed At',
       ];
       const rows = filteredNcrs.map((ncr) => [
         ncr.ncrNumber,
@@ -357,13 +360,16 @@ export function useNCRActions({
         ncr.category,
         ncr.severity,
         formatStatusLabel(ncr.status),
+        ncr.raisedBy ? ncr.raisedBy.fullName || ncr.raisedBy.email : '-',
         ncr.responsibleUser
           ? ncr.responsibleUser.fullName || ncr.responsibleUser.email
           : ncr.responsibleSubcontractor
             ? ncr.responsibleSubcontractor.companyName
             : 'Unassigned',
+        ncr.rootCauseDescription || ncr.rootCauseCategory || '-',
         ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString('en-AU') : '-',
         new Date(ncr.createdAt).toLocaleDateString('en-AU'),
+        ncr.closedAt ? new Date(ncr.closedAt).toLocaleDateString('en-AU') : '-',
       ]);
       downloadCsv(`ncr-register-${projectId || 'all'}-${formatDateKey()}.csv`, [headers, ...rows]);
     },

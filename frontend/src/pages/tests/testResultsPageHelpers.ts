@@ -16,6 +16,8 @@ export const TEST_RESULTS_CSV_HEADERS = [
   'Request #',
   'Linked Lot',
   'Laboratory',
+  // Lab-issued report/serial number (the lab signatory's audit anchor).
+  'Lab Report #',
   'Sample Location',
   'Result',
   'Spec Min',
@@ -23,6 +25,8 @@ export const TEST_RESULTS_CSV_HEADERS = [
   'Pass/Fail',
   'Status',
   'Test Date',
+  // Contractor's internal verifier — distinct from the lab signatory above.
+  'Verified By (Contractor)',
 ];
 
 export function filterTestResults(
@@ -110,6 +114,7 @@ export function buildTestResultsCsvRows(testResults: TestResult[]): Array<Array<
     test.testRequestNumber || '-',
     test.lot?.lotNumber || '-',
     test.laboratoryName || '-',
+    test.laboratoryReportNumber || '-',
     test.sampleLocation || '-',
     test.resultValue != null
       ? `${test.resultValue}${test.resultUnit ? ' ' + test.resultUnit : ''}`
@@ -119,5 +124,6 @@ export function buildTestResultsCsvRows(testResults: TestResult[]): Array<Array<
     test.passFail,
     test.status,
     formatTestDate(test.testDate),
+    test.verifiedBy ? test.verifiedBy.fullName || test.verifiedBy.email : '-',
   ]);
 }

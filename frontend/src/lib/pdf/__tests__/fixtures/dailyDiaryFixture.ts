@@ -18,6 +18,7 @@ export const submittedDailyDiaryFixture: DailyDiaryPDFData = {
       email: 'riley@example.com',
     },
     submittedAt: '2026-05-28T08:30:00.000Z',
+    lockedAt: '2026-05-28T08:30:00.000Z',
     createdAt: '2026-05-28T00:30:00.000Z',
     updatedAt: '2026-05-28T08:30:00.000Z',
   },
@@ -43,6 +44,8 @@ export const submittedDailyDiaryFixture: DailyDiaryPDFData = {
       startTime: '07:00',
       finishTime: '14:30',
       hours: 7.5,
+      source: 'docket',
+      lot: { lotNumber: 'DR-010' },
     },
   ],
   plant: [
@@ -53,6 +56,8 @@ export const submittedDailyDiaryFixture: DailyDiaryPDFData = {
       company: 'Drainage Crew',
       hoursOperated: 7,
       notes: 'Trimmed trench invert',
+      source: 'docket',
+      lot: { lotNumber: 'DR-010' },
     },
   ],
   activities: [
@@ -74,6 +79,36 @@ export const submittedDailyDiaryFixture: DailyDiaryPDFData = {
       endTime: '12:00',
       durationHours: 0.75,
       impact: 'Delayed bedding compaction',
+      lot: { lotNumber: 'DR-010' },
+    },
+  ],
+  deliveries: [
+    {
+      id: 'delivery-1',
+      description: 'Class 3 road base',
+      supplier: 'Boral Quarries',
+      docketNumber: 'BQ-88421',
+      quantity: 40,
+      unit: 't',
+      lot: { lotNumber: 'DR-010' },
+      notes: 'Stockpiled at compound',
+    },
+  ],
+  events: [
+    {
+      id: 'event-1',
+      eventType: 'Safety incident',
+      description: 'Near miss reported at trench edge',
+      lot: { lotNumber: 'DR-010' },
+    },
+  ],
+  visitors: [
+    {
+      id: 'visitor-1',
+      name: 'Dana Superintendent',
+      company: 'Principal',
+      purpose: 'Hold point inspection',
+      timeInOut: '10:00 - 10:45',
     },
   ],
   addendums: [

@@ -48,6 +48,7 @@ describe('buildLotListSelect', () => {
       'assignedSubcontractor',
       'subcontractorAssignments',
       'createdAt',
+      'conformedAt',
     ]);
     expect(select.itpInstance).toBeUndefined();
     expect(select.subcontractorAssignments).toEqual({

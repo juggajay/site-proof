@@ -245,7 +245,7 @@ router.get(
         ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
       },
       include: {
-        delays: true,
+        delays: { include: { lot: { select: { lotNumber: true } } } },
       },
     });
 
@@ -262,6 +262,7 @@ router.get(
         durationHours: delay.durationHours ? Number(delay.durationHours) : null,
         description: delay.description,
         impact: delay.impact,
+        lotNumber: delay.lot?.lotNumber ?? null,
       })),
     );
 
@@ -296,7 +297,7 @@ router.get(
         ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
       },
       include: {
-        delays: true,
+        delays: { include: { lot: { select: { lotNumber: true } } } },
       },
     });
 
@@ -310,6 +311,7 @@ router.get(
         durationHours: delay.durationHours ? Number(delay.durationHours) : null,
         description: delay.description,
         impact: delay.impact,
+        lotNumber: delay.lot?.lotNumber ?? null,
       })),
     );
 
@@ -325,6 +327,7 @@ router.get(
     const csvHeaders = [
       'Date',
       'Delay Type',
+      'Lot',
       'Start Time',
       'End Time',
       'Duration (Hours)',
@@ -334,6 +337,7 @@ router.get(
     const csvRows = delays.map((d) => [
       new Date(d.diaryDate).toLocaleDateString('en-AU'),
       d.delayType,
+      d.lotNumber || '',
       d.startTime || '',
       d.endTime || '',
       d.durationHours?.toFixed(1) || '',
