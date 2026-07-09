@@ -136,8 +136,10 @@ export async function generateClaimEvidencePackagePDF(
     companyNameFontSize: 8,
   });
   // Company ABN/address under the right-aligned company name (Batch A helper).
-  // Title is centred at y=40/52, so the right-aligned detail line at y=40 clears it.
-  drawCompanyDetailsLine(doc, data, { x: pageWidth - margin, y: 40, align: 'right' });
+  // The centred 24pt titles at y=40/52 reach ~x144, and a long address line can
+  // start around x139 — so sit below the title block (clear band before the
+  // Claim # at y=70) rather than sharing the y=40 baseline.
+  drawCompanyDetailsLine(doc, data, { x: pageWidth - margin, y: 60, align: 'right' });
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
