@@ -5,17 +5,20 @@
  *   1. Weather       — done when diary has weatherConditions
  *   2. Crew & Plant  — done when any personnel or plant recorded
  *   3. Today's Work  — done when any activities/delays/deliveries/events
- *   4. Review & Submit — locked until work exists; done when submitted
+ *   4. Review & Submit — done when submitted
  *
- * Node states per mock: done (green), now (amber ring, current step), locked (dim).
- * Header sub shows "STEP n/4".
+ * Node states: done (green), now (amber ring, the suggested next step),
+ * todo (plain, not started). Every node is always tappable — the path is
+ * guidance, not a gate: each save handler creates the diary row on demand,
+ * so a foreman can log work before crew before weather if that's how the
+ * day went. Header sub shows "STEP n/4".
  * Submitted diary: all nodes done + read-only state per doc 14.
  *
  * Design spec: docs/design-foreman-shell-mock-v4.html #diary
  */
 
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, Lock } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
@@ -29,32 +32,29 @@ interface PathNodeProps {
   num: number;
   title: string;
   description: string;
-  status: 'done' | 'now' | 'locked';
+  status: 'done' | 'now' | 'todo';
   onPress?: () => void;
 }
 
 function PathNode({ num, title, description, status, onPress }: PathNodeProps) {
-  const isLocked = status === 'locked';
   const isDone = status === 'done';
   const isNow = status === 'now';
 
   return (
     <button
       type="button"
-      disabled={isLocked}
       onClick={onPress}
-      aria-label={`${title} — ${isDone ? 'complete' : isNow ? 'in progress' : 'locked'}`}
+      aria-label={`${title} — ${isDone ? 'complete' : isNow ? 'in progress' : 'not started'}`}
       className={cn(
         'relative flex w-full items-center gap-3.5 rounded-2xl border px-4 py-[15px] text-left',
         'min-h-[78px] shadow-sm',
         'transition-transform [transition-duration:180ms] [transition-timing-function:cubic-bezier(.32,1.15,.35,1)]',
-        !isLocked && 'active:scale-[.98]',
-        isDone && 'border-border bg-card',
+        'active:scale-[.98]',
+        'border-border bg-card',
         isNow && [
-          'border-warning bg-card',
+          'border-warning',
           'shadow-[0_0_0_3px_hsl(var(--warning)/0.14),0_1px_2px_hsl(24_14%_9%/0.04)]',
         ],
-        isLocked && 'border-border bg-card opacity-45 shadow-none',
       )}
     >
       {/* Node number / check */}
@@ -65,7 +65,7 @@ function PathNode({ num, title, description, status, onPress }: PathNodeProps) {
           'rounded-full border-[1.5px] font-mono text-[16px] font-semibold',
           isDone && 'border-success bg-success text-white',
           isNow && 'border-warning bg-warning text-white',
-          isLocked && 'border-border bg-secondary text-muted-foreground',
+          status === 'todo' && 'border-border bg-secondary text-muted-foreground',
         )}
       >
         {isDone ? <Check size={18} strokeWidth={2.4} /> : num}
@@ -86,16 +86,11 @@ function PathNode({ num, title, description, status, onPress }: PathNodeProps) {
         <span className="mt-0.5 block text-[13px] text-muted-foreground">{description}</span>
       </span>
 
-      {/* Chevron or lock */}
-      {isLocked ? (
-        <Lock size={14} className="flex-shrink-0 text-muted-foreground/40" aria-hidden="true" />
-      ) : (
-        <ChevronRight
-          size={16}
-          className="flex-shrink-0 text-muted-foreground/50"
-          aria-hidden="true"
-        />
-      )}
+      <ChevronRight
+        size={16}
+        className="flex-shrink-0 text-muted-foreground/50"
+        aria-hidden="true"
+      />
     </button>
   );
 }
@@ -135,9 +130,7 @@ export function PathScreen() {
   // Review description
   const reviewDesc = stepState.allDone
     ? 'Submitted — diary locked for this day.'
-    : stepState.work === 'locked'
-      ? 'Unlocks when work is logged.'
-      : 'Review everything, then slide to submit.';
+    : 'Review everything, then slide to submit.';
 
   // Loading skeleton
   if (loading && !diary) {
@@ -259,7 +252,7 @@ export function PathScreen() {
           title="Today's Work"
           description={workDesc}
           status={stepState.work}
-          onPress={stepState.work !== 'locked' ? () => navTo('work') : undefined}
+          onPress={() => navTo('work')}
         />
         <Connector />
         <PathNode
@@ -267,7 +260,7 @@ export function PathScreen() {
           title="Review & Submit"
           description={reviewDesc}
           status={stepState.review}
-          onPress={stepState.review !== 'locked' ? () => navTo('review') : undefined}
+          onPress={() => navTo('review')}
         />
       </div>
     </ShellScreen>

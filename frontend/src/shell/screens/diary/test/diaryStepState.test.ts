@@ -30,12 +30,12 @@ function makeDiary(overrides: Partial<DailyDiary> = {}): DailyDiary {
 // ── deriveDiaryStepState ───────────────────────────────────────────────────────
 
 describe('deriveDiaryStepState — null/no diary', () => {
-  it('all locked except weather=now when diary is null', () => {
+  it('all todo except weather=now when diary is null — nothing is gated', () => {
     const state = deriveDiaryStepState(null);
     expect(state.weather).toBe('now');
-    expect(state.crew).toBe('locked');
-    expect(state.work).toBe('locked');
-    expect(state.review).toBe('locked');
+    expect(state.crew).toBe('todo');
+    expect(state.work).toBe('todo');
+    expect(state.review).toBe('todo');
     expect(state.allDone).toBe(false);
     expect(state.stepsComplete).toBe(0);
     expect(state.currentStep).toBe(0);
@@ -54,8 +54,8 @@ describe('deriveDiaryStepState — weather only', () => {
     const state = deriveDiaryStepState(diary);
     expect(state.weather).toBe('done');
     expect(state.crew).toBe('now');
-    expect(state.work).toBe('locked');
-    expect(state.review).toBe('locked');
+    expect(state.work).toBe('todo');
+    expect(state.review).toBe('todo');
     expect(state.stepsComplete).toBe(1);
     expect(state.currentStep).toBe(1);
   });
@@ -71,7 +71,7 @@ describe('deriveDiaryStepState — weather + crew', () => {
     expect(state.weather).toBe('done');
     expect(state.crew).toBe('done');
     expect(state.work).toBe('now');
-    expect(state.review).toBe('locked');
+    expect(state.review).toBe('todo');
     expect(state.stepsComplete).toBe(2);
     expect(state.currentStep).toBe(2);
   });
@@ -86,7 +86,7 @@ describe('deriveDiaryStepState — weather + crew', () => {
   });
 });
 
-describe('deriveDiaryStepState — full work logged, review unlocked', () => {
+describe('deriveDiaryStepState — full work logged, review is the current step', () => {
   it('review=now when work exists but not submitted', () => {
     const diary = makeDiary({
       weatherConditions: 'Fine',

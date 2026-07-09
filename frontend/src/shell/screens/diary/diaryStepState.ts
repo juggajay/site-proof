@@ -13,7 +13,7 @@
 
 import type { DailyDiary } from '@/pages/diary/types';
 
-export type StepStatus = 'done' | 'now' | 'locked';
+export type StepStatus = 'done' | 'now' | 'todo';
 
 export interface DiaryStepState {
   weather: StepStatus;
@@ -55,25 +55,29 @@ export function deriveDiaryStepState(diary: DailyDiary | null | undefined): Diar
   const stepsComplete =
     (weatherDone ? 1 : 0) + (crewDone ? 1 : 0) + (workDone ? 1 : 0) + (submitted ? 1 : 0);
 
-  // Node status derivation: done → now (first incomplete) → locked (rest)
+  // Node status derivation: done → now (first incomplete, the suggested next
+  // step) → todo (rest). No step is ever blocked: every save handler already
+  // creates the diary row on demand (useDiaryMobileHandlers ensureDiaryExists),
+  // so a foreman can log crew or work before weather in whatever order the day
+  // actually happened. 'now' is guidance, not a gate.
   let foundCurrent = false;
 
-  function nodeStatus(isDone: boolean, isAccessible: boolean): StepStatus {
+  function nodeStatus(isDone: boolean): StepStatus {
     if (isDone) return 'done';
-    if (!foundCurrent && isAccessible) {
+    if (!foundCurrent) {
       foundCurrent = true;
       return 'now';
     }
-    return 'locked';
+    return 'todo';
   }
 
   // When diary is submitted, treat all prior steps as complete regardless of
   // field presence (submitted = all work was done; content may be sparse in tests).
-  const weather = submitted ? 'done' : nodeStatus(weatherDone, true);
-  const crew = submitted ? 'done' : nodeStatus(crewDone, weatherDone || crewDone);
-  const work = submitted ? 'done' : nodeStatus(workDone, crewDone || workDone);
-  // Review unlocks only when work exists; once submitted = done
-  const review = submitted ? 'done' : nodeStatus(false, workDone);
+  const weather = submitted ? 'done' : nodeStatus(weatherDone);
+  const crew = submitted ? 'done' : nodeStatus(crewDone);
+  const work = submitted ? 'done' : nodeStatus(workDone);
+  // Review is 'now' once everything else is done; open (todo) at any time.
+  const review = submitted ? 'done' : nodeStatus(false);
 
   // currentStep: 0=weather,1=crew,2=work,3=review
   const currentStep = submitted ? 3 : !weatherDone ? 0 : !crewDone ? 1 : !workDone ? 2 : 3;
