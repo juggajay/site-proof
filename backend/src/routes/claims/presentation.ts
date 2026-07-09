@@ -20,6 +20,8 @@ type ClaimListItem = {
   certifiedAmount: unknown;
   certifiedAt?: Date | null;
   paidAmount: unknown;
+  paidAt?: Date | null;
+  paymentReference?: string | null;
   submittedAt: Date | null;
   disputeNotes: string | null;
   disputedAt: Date | null;
@@ -219,6 +221,8 @@ export function mapClaimListItem(
     certifiedAmount: amountOrNull(claim.certifiedAmount),
     certifiedAt: claim.certifiedAt ? claim.certifiedAt.toISOString() : null,
     paidAmount: amountOrNull(claim.paidAmount),
+    paidAt: claim.paidAt ? claim.paidAt.toISOString() : null,
+    paymentReference: claim.paymentReference ?? null,
     submittedAt: claim.submittedAt ? formatClaimDateKey(claim.submittedAt) : null,
     disputeNotes: getClaimReadDisputeNotes(claim.disputeNotes),
     disputedAt: claim.disputedAt ? formatClaimDateKey(claim.disputedAt) : null,

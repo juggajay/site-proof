@@ -514,14 +514,18 @@ describe('pdfGenerator characterization', () => {
         'Project #: PHU-001',
         'Claim Summary',
         'Total Lots: 2',
-        'Claimed Amount: $248,500',
+        // Physical position + labelled pass-through claim total (no CIVOS $).
+        'Physical position: 1 of 2 lots conformed',
+        'Claim total (as prepared): $248,500',
+        'refer payment claim',
         'Test Results: 5 (4 passed)',
         'NCRs: 1 (1 open)',
         'Photos: 9',
-        'Conformed Lots: 1',
         'Status: Submitted',
         'Prepared by: Morgan Estimator',
-        'This evidence package supports your payment claim evidence record.',
+        // Ancillary-document wording + NSW supporting-statement reminder.
+        'This is an ancillary evidence record supporting a payment claim.',
+        "Reminder: a head contractor's payment claim must be accompanied by a supporting statement in the approved form.",
         'State: NSW',
       ]),
     );
@@ -610,12 +614,19 @@ describe('pdfGenerator characterization', () => {
         'This evidence package contains the supporting documentation for Progress Claim',
         '#7 in the amount of $248,500.',
         'knowledge. It describes the work claimed in this package and the evidence available',
-        'at generation time. Lot status and percentage complete are shown in the lot sections.',
+        // Declaration no longer lies: physical progress % IS now rendered per lot.
+        'at generation time. Lot status and physical progress (previous, this claim, and',
+        'cumulative percentage complete) are shown in the lot sections.',
+        'This ancillary record is not the statutory payment claim or a supporting statement.',
         'Signature',
         'Name',
         'Date',
       ]),
     );
+    // Physical progress line rendered per lot (no CIVOS dollars).
+    expect(textContent).toContain('Physical progress');
+    expect(textContent).toContain('this claim: 100%');
+    expect(textContent).toContain('cumulative: 75%');
     // Shared per-page document footer identity (replaces the cover + declaration CIVOS lines).
     expect(textContent).toContain('Page 1 of');
     expect(textContent).toContain('Pacific Highway Upgrade / Claim #7');
@@ -705,7 +716,7 @@ describe('pdfGenerator characterization', () => {
     await generateClaimEvidencePackagePDF(claimWithVariations);
 
     const textContent = renderedText(latestPdf()).join('\n');
-    expect(textContent).toContain('Claimed Amount: $260,500');
+    expect(textContent).toContain('Claim total (as prepared): $260,500');
     expect(textContent).toContain('VARIATIONS');
     expect(textContent).toContain('VAR #');
     expect(textContent).toContain('VAR-001');

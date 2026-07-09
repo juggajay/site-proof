@@ -155,7 +155,11 @@ export function ClaimsPage() {
       'Lots',
       'Claimed Amount',
       'Certified Amount',
+      'Certified At',
       'Paid Amount',
+      'Paid At',
+      'Payment Reference',
+      'Disputed',
       'Submitted At',
       'Payment Due Date',
     ];
@@ -168,6 +172,7 @@ export function ClaimsPage() {
         (c.submittedAt
           ? calculatePaymentDueDate(c.submittedAt, c.projectState ?? undefined)
           : null);
+      const disputed = c.status === 'disputed' || Boolean(c.disputedAt);
       return [
         `Claim ${c.claimNumber}`,
         new Date(c.periodStart).toLocaleDateString('en-AU'),
@@ -176,7 +181,11 @@ export function ClaimsPage() {
         c.lotCount,
         c.totalClaimedAmount,
         c.certifiedAmount ?? '-',
+        c.certifiedAt ? new Date(c.certifiedAt).toLocaleDateString('en-AU') : '-',
         c.paidAmount ?? '-',
+        c.paidAt ? new Date(c.paidAt).toLocaleDateString('en-AU') : '-',
+        c.paymentReference ?? '-',
+        disputed ? 'Yes' : 'No',
         c.submittedAt ? new Date(c.submittedAt).toLocaleDateString('en-AU') : '-',
         paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
       ];
@@ -498,6 +507,13 @@ export function ClaimsPage() {
       // blocking prompts. Moves to a per-company setting with the live Xero
       // integration (see docs/plans/2026-07-02-xero-export-v0-design.md).
       const accountCode = (readLocalStorageItem('xeroExport.accountCode') ?? '').trim() || '200';
+      // The backend defaults DueDate to invoice date + terms, but we own the
+      // per-state SOPA business-day tables — pass the statutory payment due date
+      // so Xero shows the real due date, not a generic +30 days.
+      const dueDate = claim.submittedAt
+        ? calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined)
+        : null;
+      const dueDateParam = dueDate ? `&dueDate=${encodeURIComponent(dueDate)}` : '';
       try {
         const { filename, rows } = await apiFetch<{
           filename: string;
@@ -505,13 +521,13 @@ export function ClaimsPage() {
         }>(
           `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(
             claim.id,
-          )}/xero-export?accountCode=${encodeURIComponent(accountCode)}`,
+          )}/xero-export?accountCode=${encodeURIComponent(accountCode)}${dueDateParam}`,
         );
         downloadCsv(filename, rows);
         toast({
           title: 'Xero invoice CSV downloaded',
           description:
-            'Import it in Xero (Business > Invoices > Import). It lands as a draft invoice for review.',
+            'Import in Xero (Business > Invoices > Import) as Tax Exclusive. It lands as a draft invoice for review.',
           variant: 'success',
         });
       } catch (error) {

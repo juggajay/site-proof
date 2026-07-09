@@ -1,11 +1,39 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
-import { drawPdfBrandingHeader, drawPdfFooters } from './branding';
+import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
-import type { ClaimEvidencePackageData, ClaimPackageOptions } from './types';
+import type {
+  ClaimEvidencePackageData,
+  ClaimItpChecklistItem,
+  ClaimItpCompletion,
+  ClaimPackageOptions,
+} from './types';
+
+/**
+ * Supporting-statement reminder, keyed off the project's jurisdiction. Returns
+ * null where no note applies (WA/TAS/NT). See the validated report spec
+ * (multi-state validation, 2026-07-09) — this evidence package is ancillary and
+ * never satisfies the statement itself.
+ */
+export function supportingStatementNote(state: string | null | undefined): string | null {
+  const normalized = (state || 'NSW').trim().toUpperCase();
+  if (['NSW', 'QLD', 'VIC', 'ACT'].includes(normalized)) {
+    return "Reminder: a head contractor's payment claim must be accompanied by a supporting statement in the approved form.";
+  }
+  if (normalized === 'SA') {
+    return 'Note: SA sets no statutory supporting-statement requirement, but Government/DIT contracts require a Subcontractor Payment Statutory Declaration.';
+  }
+  return null;
+}
+
+/** Physical % rendered as an integer where whole, else 2dp — no dollars. */
+function formatPct(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  return Number.isInteger(value) ? `${value}%` : `${Number(value.toFixed(2))}%`;
+}
 
 /**
  * Generate a PDF evidence package for a progress claim.
@@ -107,6 +135,11 @@ export async function generateClaimEvidencePackagePDF(
     companyNameColor: [71, 85, 105],
     companyNameFontSize: 8,
   });
+  // Company ABN/address under the right-aligned company name (Batch A helper).
+  // The centred 24pt titles at y=40/52 reach ~x144, and a long address line can
+  // start around x139 — so sit below the title block (clear band before the
+  // Claim # at y=70) rather than sharing the y=40 baseline.
+  drawCompanyDetailsLine(doc, data, { x: pageWidth - margin, y: 60, align: 'right' });
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
@@ -139,7 +172,13 @@ export async function generateClaimEvidencePackagePDF(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
   doc.text(`Total Lots: ${data.summary.totalLots}`, margin + 5, 150);
-  doc.text(`Claimed Amount: ${formatCurrency(data.summary.totalClaimedAmount)}`, margin + 5, 158);
+  // Physical position (no CIVOS-computed dollars). The only dollar figure is the
+  // claim's own total, labelled as a pass-through — see the payment claim itself.
+  doc.text(
+    `Physical position: ${data.summary.conformedLots} of ${data.summary.totalLots} lots conformed`,
+    margin + 5,
+    158,
+  );
   doc.text(
     `Test Results: ${data.summary.totalTestResults} (${data.summary.totalPassedTests} passed)`,
     margin + 5,
@@ -148,8 +187,17 @@ export async function generateClaimEvidencePackagePDF(
   doc.text(`NCRs: ${data.summary.totalNCRs} (${data.summary.totalOpenNCRs} open)`, margin + 5, 174);
 
   doc.text(`Photos: ${data.summary.totalPhotos}`, margin + contentWidth / 2, 150);
-  doc.text(`Conformed Lots: ${data.summary.conformedLots}`, margin + contentWidth / 2, 158);
-  doc.text(`Status: ${formatStatusLabel(data.claim.status)}`, margin + contentWidth / 2, 166);
+  doc.text(`Status: ${formatStatusLabel(data.claim.status)}`, margin + contentWidth / 2, 158);
+  doc.setFont('helvetica', 'bold');
+  doc.text(
+    `Claim total (as prepared): ${formatCurrency(data.summary.totalClaimedAmount)}`,
+    margin + contentWidth / 2,
+    166,
+  );
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('refer payment claim', margin + contentWidth / 2, 172);
+  doc.setFontSize(11);
 
   // Prepared by
   if (data.claim.preparedBy) {
@@ -161,16 +209,35 @@ export async function generateClaimEvidencePackagePDF(
     }
   }
 
-  // Payment claim evidence note
+  // Ancillary-document wording: this record supports a payment claim but is NOT
+  // the statutory payment claim and NOT a supporting statement / stat dec.
+  let noteY = 224;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.text(
-    'This evidence package supports your payment claim evidence record.',
+    'This is an ancillary evidence record supporting a payment claim.',
     pageWidth / 2,
-    240,
+    noteY,
     { align: 'center' },
   );
-  doc.text(`State: ${data.project.state || 'NSW'}`, pageWidth / 2, 248, { align: 'center' });
+  noteY += 6;
+  doc.text(
+    'It is NOT the payment claim itself and NOT a supporting statement or statutory declaration.',
+    pageWidth / 2,
+    noteY,
+    { align: 'center' },
+  );
+  noteY += 8;
+
+  const statementNote = supportingStatementNote(data.project.state);
+  if (statementNote) {
+    doc.setFont('helvetica', 'normal');
+    const noteLines = doc.splitTextToSize(statementNote, contentWidth - 10);
+    doc.text(noteLines, pageWidth / 2, noteY, { align: 'center' });
+    noteY += noteLines.length * 5 + 3;
+  }
+  doc.setFont('helvetica', 'italic');
+  doc.text(`State: ${data.project.state || 'NSW'}`, pageWidth / 2, noteY, { align: 'center' });
 
   // ========== LOT SUMMARY TABLE (Page 2) ==========
   if (options.includeLotSummary) {
@@ -314,6 +381,18 @@ export async function generateClaimEvidencePackagePDF(
         margin,
         yPos,
       );
+      yPos += 6;
+
+      // Physical progress (%), no dollars — the honest three-point position the
+      // Declaration promises. Falls back to the single snapshot % on old payloads.
+      const thisClaimPct = lot.percentThisClaim ?? lot.percentComplete;
+      const previousPct = lot.percentPrevious ?? 0;
+      const cumulativePct = lot.percentCumulative ?? lot.percentComplete;
+      doc.text(
+        `Physical progress  ·  previous: ${formatPct(previousPct)}  ·  this claim: ${formatPct(thisClaimPct)}  ·  cumulative: ${formatPct(cumulativePct)}`,
+        margin,
+        yPos,
+      );
       yPos += 8;
 
       drawLine();
@@ -337,7 +416,63 @@ export async function generateClaimEvidencePackagePDF(
           margin,
           yPos,
         );
-        yPos += 4;
+        yPos += 5;
+
+        // Itemised ITP evidence: who did each item and who verified it. "A QS
+        // cannot certify a count" — the reviewer needs the named accountable
+        // parties, not just a tally. Joined to completions by checklist item id.
+        const completionByItem = new Map<string, ClaimItpCompletion>();
+        (lot.itp.completions ?? []).forEach((completion) => {
+          if (completion.checklistItemId && !completionByItem.has(completion.checklistItemId)) {
+            completionByItem.set(completion.checklistItemId, completion);
+          }
+        });
+        const itemsWithText = (lot.itp.checklistItems ?? []).filter((item: ClaimItpChecklistItem) =>
+          Boolean(item?.description),
+        );
+        const MAX_ITEMISED_ITP = 12;
+        itemsWithText.slice(0, MAX_ITEMISED_ITP).forEach((item: ClaimItpChecklistItem) => {
+          checkPageBreak(9);
+          const seq = item.sequenceNumber ? `${item.sequenceNumber}. ` : '';
+          const hp = item.isHoldPoint ? ' [HOLD POINT]' : '';
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.text(`  ${seq}${(item.description || '').slice(0, 90)}${hp}`, margin, yPos);
+          yPos += 4;
+          const completion = item.id ? completionByItem.get(item.id) : undefined;
+          const parts: string[] = [];
+          if (completion?.completedBy?.name) {
+            const when = completion.completedAt
+              ? ` on ${new Date(completion.completedAt).toLocaleDateString('en-AU')}`
+              : '';
+            parts.push(`Completed by ${completion.completedBy.name}${when}`);
+          }
+          if (completion?.verifiedBy?.name) {
+            const when = completion.verifiedAt
+              ? ` on ${new Date(completion.verifiedAt).toLocaleDateString('en-AU')}`
+              : '';
+            parts.push(`Verified by ${completion.verifiedBy.name}${when}`);
+          } else if (item.responsibleParty) {
+            parts.push(`Responsible: ${item.responsibleParty}`);
+          }
+          if (parts.length > 0) {
+            doc.setTextColor(90, 90, 90);
+            doc.text(`      ${parts.join('  ·  ').slice(0, 110)}`, margin, yPos);
+            doc.setTextColor(0, 0, 0);
+            yPos += 4;
+          }
+        });
+        if (itemsWithText.length > MAX_ITEMISED_ITP) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(8);
+          doc.text(
+            `  ... and ${itemsWithText.length - MAX_ITEMISED_ITP} more checklist items`,
+            margin,
+            yPos,
+          );
+          doc.setFont('helvetica', 'normal');
+          yPos += 4;
+        }
 
         yPos += 4;
       }
@@ -355,7 +490,26 @@ export async function generateClaimEvidencePackagePDF(
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(9);
           doc.text(`Hold Points: ${releasedHP}/${totalHP} released`, margin, yPos);
-          yPos += 8;
+          yPos += 5;
+
+          // Named releasing authority per hold point (the load-bearing fact — who
+          // signed off the release), when the payload carries it.
+          (lot.holdPoints ?? [])
+            .filter((hp) => hp.releasedBy?.name)
+            .slice(0, 8)
+            .forEach((hp) => {
+              checkPageBreak(5);
+              const org = hp.releasedBy?.organization ? ` (${hp.releasedBy.organization})` : '';
+              const when = hp.releasedAt
+                ? ` on ${new Date(hp.releasedAt).toLocaleDateString('en-AU')}`
+                : '';
+              const desc = hp.description ? `${hp.description.slice(0, 45)}: ` : '';
+              doc.setFontSize(8);
+              doc.text(`  ${desc}released by ${hp.releasedBy?.name}${org}${when}`, margin, yPos);
+              yPos += 4;
+            });
+          doc.setFontSize(9);
+          yPos += 3;
         }
       }
 
@@ -392,7 +546,18 @@ export async function generateClaimEvidencePackagePDF(
                 : '-';
           const result =
             test.resultValue !== null ? `${test.resultValue} ${test.resultUnit || ''}` : 'pending';
-          doc.text(`  ${passFail} ${test.testType}: ${result}`, margin, yPos);
+          // Lab identity + report/request number = the audit anchor for a QS.
+          const refs = [
+            test.laboratoryName ? `Lab: ${test.laboratoryName}` : null,
+            test.testRequestNumber ? `Req: ${test.testRequestNumber}` : null,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join('  ·  ');
+          doc.text(
+            `  ${passFail} ${test.testType}: ${result}${refs ? `  ·  ${refs}` : ''}`,
+            margin,
+            yPos,
+          );
           yPos += 4;
         });
         if ((lot.testResults ?? []).length > 5) {
@@ -469,6 +634,57 @@ export async function generateClaimEvidencePackagePDF(
       drawLine();
       yPos += 5;
     });
+  }
+
+  // Activity-type subtotals (computed server-side). Subtotal is a pass-through
+  // sum of this claim's own lot line amounts, labelled as such — not a
+  // CIVOS-derived contract value.
+  const activityGroups = Array.isArray(data.lotsByActivity) ? data.lotsByActivity : [];
+  if (includeLotLevelSections && activityGroups.length > 0) {
+    checkPageBreak(30);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('ACTIVITY SUMMARY', margin, yPos);
+    yPos += 8;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text(
+      'Subtotals are pass-through sums of this claim’s lines. Refer payment claim.',
+      margin,
+      yPos,
+    );
+    yPos += 6;
+
+    const headers = ['Activity', 'Lots', 'Subtotal (as prepared)'];
+    const colWidths = [110, 25, 45];
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    let xPos = margin + 2;
+    headers.forEach((header, i) => {
+      doc.text(header, xPos, yPos + 5.5);
+      xPos += colWidths[i];
+    });
+    yPos += 10;
+
+    doc.setFont('helvetica', 'normal');
+    activityGroups.forEach((group, idx) => {
+      checkPageBreak(8);
+      if (idx % 2 === 1) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(margin, yPos - 1, contentWidth, 7, 'F');
+      }
+      xPos = margin + 2;
+      doc.text((group.activityType || 'Uncategorized').slice(0, 55), xPos, yPos + 4);
+      xPos += colWidths[0];
+      doc.text(`${group.lotCount}`, xPos, yPos + 4);
+      xPos += colWidths[1];
+      doc.text(formatCurrency(group.subtotal), xPos, yPos + 4);
+      yPos += 7;
+    });
+    yPos += 8;
   }
 
   if (includeVariations && variations.length > 0) {
@@ -667,10 +883,22 @@ export async function generateClaimEvidencePackagePDF(
     );
     yPos += 5;
     doc.text(
-      'at generation time. Lot status and percentage complete are shown in the lot sections.',
+      'at generation time. Lot status and physical progress (previous, this claim, and',
       margin,
       yPos,
     );
+    yPos += 5;
+    doc.text('cumulative percentage complete) are shown in the lot sections.', margin, yPos);
+    yPos += 8;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text(
+      'This ancillary record is not the statutory payment claim or a supporting statement.',
+      margin,
+      yPos,
+    );
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
     yPos += 20;
 
     // Signature lines

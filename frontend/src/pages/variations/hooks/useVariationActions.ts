@@ -7,7 +7,17 @@ import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
 import { queryKeys } from '@/lib/queryKeys';
-import type { Variation, VariationEvidencePayload, VariationFormData } from '../types';
+import type {
+  Variation,
+  VariationEvidencePayload,
+  VariationFormData,
+  VariationLot,
+} from '../types';
+
+/** dd/mm/yyyy for a CSV cell, or '' when the timestamp is absent. */
+function csvDate(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleDateString('en-AU') : '';
+}
 
 function optionalTrimmed(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -241,15 +251,36 @@ export function useVariationActions({
   );
 
   const handleExportCSV = useCallback(
-    (variations: Variation[]) => {
+    (variations: Variation[], lotsById?: Map<string, VariationLot>) => {
       downloadCsv(`variation-register-${projectId || 'all'}-${formatDateKey()}.csv`, [
-        ['VAR #', 'Title', 'Client Ref', 'Amount', 'Status', 'Updated'],
+        [
+          'VAR #',
+          'Title',
+          'Description',
+          'Client Ref',
+          'Amount',
+          'Status',
+          'Submitted',
+          'Approved',
+          'Rejected',
+          'Rejection Reason',
+          'Claimed',
+          'Lot',
+          'Updated',
+        ],
         ...variations.map((variation) => [
           variation.variationNumber,
           variation.title,
+          variation.description ?? '',
           variation.clientReference ?? '',
           variation.approvedAmount ?? '',
           formatStatusLabel(variation.status),
+          csvDate(variation.submittedAt),
+          csvDate(variation.approvedAt),
+          csvDate(variation.rejectedAt),
+          variation.rejectionReason ?? '',
+          variation.claimedInId ? 'Yes' : 'No',
+          (variation.lotId && lotsById?.get(variation.lotId)?.lotNumber) || '',
           new Date(variation.updatedAt).toLocaleDateString('en-AU'),
         ]),
       ]);

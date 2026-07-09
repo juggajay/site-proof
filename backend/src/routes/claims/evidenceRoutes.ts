@@ -6,11 +6,17 @@ import { prisma } from '../../lib/prisma.js';
 import { isItpCompletionFinished } from '../../lib/conformancePrerequisites.js';
 import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
+import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
 } from './presentation.js';
 import { roundClaimAmountToCents } from './workflowValidation.js';
+
+/** Round a physical-progress percentage to 2dp, clamped at 0 (no negatives). */
+function roundPercent(value: number): number {
+  return Math.max(0, Math.round(value * 100) / 100);
+}
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -157,6 +163,14 @@ export function createClaimEvidenceRouter({
         throw AppError.notFound('Claim');
       }
 
+      // Cumulative claimed % per lot (summed across every claim the lot appears
+      // on, including this one). Lets the evidence PDF show the honest physical
+      // position — previous / this claim / cumulative — instead of the single
+      // snapshot % the Declaration falsely promised was rendered.
+      const cumulativeByLot = await getCumulativeClaimedPercentByLot(
+        claim.claimedLots.map((claimedLot) => claimedLot.lotId),
+      );
+
       const lotsTotal = roundClaimAmountToCents(
         claim.claimedLots.reduce(
           (sum, claimedLot) => sum + Number(claimedLot.amountClaimed ?? 0),
@@ -248,6 +262,27 @@ export function createClaimEvidenceRouter({
             claimAmount: claimedLot.amountClaimed ? Number(claimedLot.amountClaimed) : 0,
             percentComplete:
               claimedLot.percentageComplete === null ? 100 : Number(claimedLot.percentageComplete),
+            // Physical position (%), no dollars: this claim's increment, what was
+            // claimed on prior claims, and the cumulative total including this
+            // claim. previous = cumulative - this.
+            percentThisClaim: roundPercent(
+              claimedLot.percentageComplete === null ? 100 : Number(claimedLot.percentageComplete),
+            ),
+            percentPrevious: roundPercent(
+              (cumulativeByLot.get(claimedLot.lotId) ??
+                (claimedLot.percentageComplete === null
+                  ? 100
+                  : Number(claimedLot.percentageComplete))) -
+                (claimedLot.percentageComplete === null
+                  ? 100
+                  : Number(claimedLot.percentageComplete)),
+            ),
+            percentCumulative: roundPercent(
+              cumulativeByLot.get(claimedLot.lotId) ??
+                (claimedLot.percentageComplete === null
+                  ? 100
+                  : Number(claimedLot.percentageComplete)),
+            ),
 
             // ITP data
             itp: itpInstance

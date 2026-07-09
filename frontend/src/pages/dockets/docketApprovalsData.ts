@@ -38,6 +38,7 @@ export interface LabourEntry {
   hourlyRate: number | null;
   submittedCost: number | null;
   approvedCost: number | null;
+  adjustmentReason?: string | null;
 }
 
 export interface PlantEntry {
@@ -48,6 +49,7 @@ export interface PlantEntry {
   hourlyRate: number | null;
   submittedCost: number | null;
   approvedCost: number | null;
+  adjustmentReason?: string | null;
 }
 
 interface DocketPagination {
@@ -64,6 +66,7 @@ export type DocketsResponse =
 export interface DocketDetailResponse {
   docket?: {
     adjustmentReason?: string | null;
+    subcontractor?: { id: string; companyName: string; abn?: string | null } | null;
     labourEntries?: LabourEntry[];
     plantEntries?: PlantEntry[];
   };

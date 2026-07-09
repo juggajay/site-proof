@@ -269,7 +269,7 @@ docketsRouter.get(
       where: { id },
       include: {
         subcontractorCompany: {
-          select: { id: true, companyName: true },
+          select: { id: true, companyName: true, abn: true },
         },
         labourEntries: {
           include: {

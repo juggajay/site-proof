@@ -606,8 +606,10 @@ describe('dockets presentation helpers (pure)', () => {
         totalPlantApproved: 780,
         totalLabourApprovedCost: 520,
         totalPlantApprovedCost: 760,
-        labourEntries: [mapDocketLabourEntry(labourSource)],
-        plantEntries: [mapDocketPlantEntry(plantSource)],
+        // Detail route now carries per-line adjustmentReason (highest-value
+        // transparency item for the docket PDF + approval modal).
+        labourEntries: [mapDocketLabourEntry(labourSource, { includeAdjustmentReason: true })],
+        plantEntries: [mapDocketPlantEntry(plantSource, { includeAdjustmentReason: true })],
       });
       expect(result.foremanDiary).toBe(foremanDiarySummary);
       expect(result.discrepancies).toEqual(['Weather hours lost noted in diary: 4 hours']);
@@ -715,7 +717,7 @@ describe('dockets presentation helpers (pure)', () => {
       });
     });
 
-    it('reuses the labour/plant entry mappers (detail shape omits adjustmentReason)', () => {
+    it('reuses the labour/plant entry mappers and includes per-line adjustmentReason', () => {
       const result = buildDocketDetailResponse({
         docket: detailDocket,
         project: null,
@@ -724,10 +726,14 @@ describe('dockets presentation helpers (pure)', () => {
         foremanDiary: null,
         discrepancies: [],
       });
-      expect(result.docket.labourEntries).toStrictEqual([mapDocketLabourEntry(labourSource)]);
-      expect(result.docket.plantEntries).toStrictEqual([mapDocketPlantEntry(plantSource)]);
-      expect('adjustmentReason' in result.docket.labourEntries[0]).toBe(false);
-      expect('adjustmentReason' in result.docket.plantEntries[0]).toBe(false);
+      expect(result.docket.labourEntries).toStrictEqual([
+        mapDocketLabourEntry(labourSource, { includeAdjustmentReason: true }),
+      ]);
+      expect(result.docket.plantEntries).toStrictEqual([
+        mapDocketPlantEntry(plantSource, { includeAdjustmentReason: true }),
+      ]);
+      expect('adjustmentReason' in result.docket.labourEntries[0]).toBe(true);
+      expect('adjustmentReason' in result.docket.plantEntries[0]).toBe(true);
     });
   });
 });
