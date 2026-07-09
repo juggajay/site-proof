@@ -1,5 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/renderWithProviders';
+import {
+  createTestQueryClient,
+  renderWithProviders,
+  screen,
+  fireEvent,
+  waitFor,
+} from '@/test/renderWithProviders';
+import { queryKeys } from '@/lib/queryKeys';
 import type { ProjectClaimReadiness } from '@/types/evidenceReadiness';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -241,6 +248,32 @@ describe('CreateClaimModal create flow', () => {
       expect(JSON.parse(String((postCall?.[1] as RequestInit).body))).toMatchObject({
         variationIds: ['11111111-1111-4111-8111-111111111111'],
       });
+    });
+  });
+
+  it('shares the variations cache key with the register page using the bare-array shape', async () => {
+    mockClaimReadinessAndVariations();
+    const queryClient = createTestQueryClient();
+    // useVariationsData (the Variations register) stores the BARE ARRAY under
+    // this key. The modal shares the key, so it must read and write the same
+    // shape — a mismatch either hides approved variations here or crashes the
+    // register page's `.filter` with the modal's stale object still cached.
+    queryClient.setQueryData(queryKeys.variations('p1'), APPROVED_VARIATIONS_RESPONSE.variations);
+
+    renderWithProviders(
+      <CreateClaimModal projectId="p1" onClose={vi.fn()} onClaimCreated={vi.fn()} />,
+      { queryClient },
+    );
+
+    // Read side: the register-shaped cache must surface approved variations.
+    expect(await screen.findByText('Approved variations')).toBeInTheDocument();
+    expect(screen.getByText('VAR-0007')).toBeInTheDocument();
+
+    // Write side: force the modal's own queryFn to run and confirm it stores
+    // the array back, not the raw API response object.
+    await queryClient.invalidateQueries({ queryKey: queryKeys.variations('p1') });
+    await waitFor(() => {
+      expect(Array.isArray(queryClient.getQueryData(queryKeys.variations('p1')))).toBe(true);
     });
   });
 

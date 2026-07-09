@@ -137,21 +137,27 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
 
   const variationsQuery = useQuery({
     queryKey: queryKeys.variations(projectId),
-    queryFn: () =>
-      apiFetch<VariationsResponse>(`/api/projects/${encodeURIComponent(projectId)}/variations`),
+    // Must return the same shape as useVariationsData (the bare array) — both
+    // queries share this cache key, so a mismatched shape poisons the other page.
+    queryFn: async () => {
+      const data = await apiFetch<VariationsResponse>(
+        `/api/projects/${encodeURIComponent(projectId)}/variations`,
+      );
+      return data.variations ?? [];
+    },
     staleTime: 30_000,
     onError: (error) => logError('Error fetching approved variations:', error),
   });
 
   const approvedVariations = useMemo(
     () =>
-      (variationsQuery.data?.variations ?? []).filter(
+      (variationsQuery.data ?? []).filter(
         (variation) =>
           variation.status === 'approved' &&
           variation.approvedAmount !== null &&
           variation.approvedAmount > 0,
       ),
-    [variationsQuery.data?.variations],
+    [variationsQuery.data],
   );
 
   useEffect(() => {
