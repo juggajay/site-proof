@@ -594,6 +594,7 @@ export function ItpRunScreen() {
           10px threshold still reach the photo button. */}
       <div
         data-testid="itp-content-zone"
+        ref={contentDrag.zoneRef}
         className="flex flex-1 flex-col"
         style={{ touchAction: 'pan-y', cursor: 'grab' }}
         {...contentDrag.handlers}
