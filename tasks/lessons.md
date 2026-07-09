@@ -74,3 +74,18 @@ never assume "leftover edits are harmless". (2) Orchestrator: when a merge
 output lists an unexpected `create mode`/file, diff master immediately —
 that's how this was caught. (3) When two PRs touch the same file in one
 day, verify the final master state, not the individual PR diffs.
+
+## 2026-07-09 — schema-coupled PR merged hours before its prod migration
+Batch C shipped a new nullable TestResult column: Prisma client is generated
+from the schema, so EVERY un-`select`ed read of that model queries the new
+column — merging to auto-deploying master without the prod migration applied
+puts a countdown on prod breakage (test-result reads would 500 once Railway
+deployed). Caught post-merge; migration applied under operator go before the
+deploy landed, but the ordering was luck, not process.
+**Rules:** (1) A PR that touches `schema.prisma` cannot merge until the prod
+migration is applied or explicitly scheduled with the merge — check this at
+REVIEW time, not after. (2) Migration-then-code is the safe order (old code
+ignores new nullable columns; new code breaks on missing ones). (3) When
+dispatching build agents, any "create a migration" instruction must come
+with "the orchestrator gates the merge on the migration plan" — agents
+can't apply prod migrations, so the coupling is the orchestrator's job.
