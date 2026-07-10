@@ -3784,7 +3784,11 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     });
   });
 
-  it('still completes a standard/witness item via the bare path (regression)', async () => {
+  // F-08: a witness point cannot be completed via the bare path — the offline
+  // cache used to downgrade witness items to standard, letting a bare completion
+  // (no witness decision) through and recording a witnessed inspection that
+  // never captured a witness. The backend now rejects it and persists nothing.
+  it('rejects completing a witness item without a witness decision and persists nothing (F-08)', async () => {
     await prisma.iTPCompletion.deleteMany({
       where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
     });
@@ -3798,9 +3802,138 @@ describe('ITP Completion Decision Logic (characterization)', () => {
         status: 'completed',
       });
 
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('witness point');
+
+    const completion = await prisma.iTPCompletion.findFirst({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+    expect(completion).toBeNull();
+  });
+
+  it('rejects a present witness completion that omits the witness name (F-08)', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: witnessItemId,
+        status: 'completed',
+        witnessPresent: true,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('Witness name is required');
+
+    const completion = await prisma.iTPCompletion.findFirst({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+    expect(completion).toBeNull();
+  });
+
+  it('completes a witness item when the witness was present and named (F-08)', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: witnessItemId,
+        status: 'completed',
+        witnessPresent: true,
+        witnessName: 'Jane Inspector',
+        witnessCompany: 'Client Co',
+      });
+
     expect(res.status).toBe(200);
     expect(res.body.completion.status).toBe('completed');
     expect(res.body.completion.completedById).toBe(userId);
+
+    const completion = await prisma.iTPCompletion.findFirstOrThrow({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+    expect(completion.witnessPresent).toBe(true);
+    expect(completion.witnessName).toBe('Jane Inspector');
+
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+  });
+
+  it('completes a witness item when notification was given but the witness was not present (F-08 waived)', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: witnessItemId,
+        status: 'completed',
+        witnessPresent: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion.status).toBe('completed');
+
+    const completion = await prisma.iTPCompletion.findFirstOrThrow({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+    expect(completion.witnessPresent).toBe(false);
+
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+  });
+
+  it('lets a notes edit re-complete an already-witnessed item without re-sending witness fields (F-08)', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+
+    // First: a proper witnessed completion records the decision on the row.
+    await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: witnessItemId,
+        status: 'completed',
+        witnessPresent: true,
+        witnessName: 'Jane Inspector',
+      })
+      .expect(200);
+
+    // Then: a bare re-complete (as the notes-edit path sends) is allowed because
+    // the persisted witness decision satisfies the guard.
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: witnessItemId,
+        isCompleted: true,
+        notes: 'Updated site note',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion.status).toBe('completed');
+
+    const completion = await prisma.iTPCompletion.findFirstOrThrow({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+    expect(completion.witnessPresent).toBe(true);
+    expect(completion.witnessName).toBe('Jane Inspector');
+    expect(completion.notes).toBe('Updated site note');
 
     await prisma.iTPCompletion.deleteMany({
       where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },

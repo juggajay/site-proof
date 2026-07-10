@@ -44,6 +44,13 @@ export interface OfflineITPCompletion {
   ncrDescription?: string;
   ncrCategory?: string;
   ncrSeverity?: string;
+  // Witness attribution carried on a queued witness-point completion so an
+  // offline-captured witness syncs complete (the backend now rejects a bare
+  // witness completion). Plain nested fields, not Dexie indexes, so adding
+  // them needs no schema version bump.
+  witnessPresent?: boolean;
+  witnessName?: string;
+  witnessCompany?: string;
 }
 
 export interface OfflineITPChecklist {
@@ -61,6 +68,12 @@ export interface OfflineChecklistItem {
   description?: string;
   responsibleParty: string;
   isHoldPoint: boolean;
+  // Granular point type (witness vs standard vs hold_point). Plain nested
+  // field, not a Dexie index, so it needs no schema version bump. Optional so
+  // pre-fix cache rows (no pointType) still load; readers fall back to
+  // isHoldPoint when it is missing. The union mirrors ITPChecklistItem's
+  // pointType so it round-trips into the reconstructed instance without a cast.
+  pointType?: 'standard' | 'verification' | 'witness' | 'hold_point';
   status: 'pending' | 'completed' | 'na' | 'failed';
   notes?: string;
   completedAt?: string;

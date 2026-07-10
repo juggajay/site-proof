@@ -106,6 +106,32 @@ describe('writeItpCompletionToggle — offline fallback', () => {
       'completed',
       'keep me',
       'Current User (Offline)',
+      undefined, // ncrDetails
+      undefined, // witnessDetails — none supplied for a plain toggle
+    );
+  });
+
+  it('forwards witness attribution into the offline queue write (F-08)', async () => {
+    mockApiFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    const result = await writeItpCompletionToggle({
+      itpInstanceId: 'inst-1',
+      lotId: 'lot-1',
+      checklistItemId: 'item-1',
+      currentlyCompleted: false,
+      existingNotes: null,
+      witnessData: { witnessPresent: true, witnessName: 'Sam', witnessCompany: 'Co' },
+    });
+
+    expect(result.status).toBe('queued');
+    expect(mockUpdateOffline).toHaveBeenCalledWith(
+      'lot-1',
+      'item-1',
+      'completed',
+      undefined,
+      'Current User (Offline)',
+      undefined, // ncrDetails
+      { witnessPresent: true, witnessName: 'Sam', witnessCompany: 'Co' },
     );
   });
 
@@ -126,6 +152,8 @@ describe('writeItpCompletionToggle — offline fallback', () => {
       'pending',
       undefined,
       'Current User (Offline)',
+      undefined, // ncrDetails
+      undefined, // witnessDetails
     );
   });
 });

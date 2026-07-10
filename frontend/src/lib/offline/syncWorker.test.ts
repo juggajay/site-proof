@@ -305,6 +305,78 @@ describe('syncSingleItem — itp_completion', () => {
     });
   });
 
+  it('carries the queued witness fields through so an offline witness completion syncs complete (F-08)', async () => {
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'inst-1' } }))
+      .mockResolvedValueOnce(okJson({ ok: true }));
+
+    const result = await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: {
+          lotId: 'lot-1',
+          checklistItemId: 'ci-1',
+          status: 'completed',
+          witnessPresent: true,
+          witnessName: 'Jane Inspector',
+          witnessCompany: 'Client Co',
+        },
+      }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(JSON.parse(authFetchMock.mock.calls[1][1].body)).toMatchObject({
+      isCompleted: true,
+      witnessPresent: true,
+      witnessName: 'Jane Inspector',
+      witnessCompany: 'Client Co',
+    });
+  });
+
+  it('carries a witness-waived (present=false) completion through with no name (F-08)', async () => {
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'inst-1' } }))
+      .mockResolvedValueOnce(okJson({ ok: true }));
+
+    await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: {
+          lotId: 'lot-1',
+          checklistItemId: 'ci-1',
+          status: 'completed',
+          witnessPresent: false,
+        },
+      }),
+    );
+
+    const body = JSON.parse(authFetchMock.mock.calls[1][1].body);
+    expect(body.witnessPresent).toBe(false);
+    expect(body).not.toHaveProperty('witnessName');
+    expect(body).not.toHaveProperty('witnessCompany');
+  });
+
+  it('omits witness fields from the body for a non-witness completion (F-08 passthrough is conditional)', async () => {
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'inst-1' } }))
+      .mockResolvedValueOnce(okJson({ ok: true }));
+
+    await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: { lotId: 'lot-1', checklistItemId: 'ci-1', status: 'completed' },
+      }),
+    );
+
+    const body = JSON.parse(authFetchMock.mock.calls[1][1].body);
+    expect(body).not.toHaveProperty('witnessPresent');
+    expect(body).not.toHaveProperty('witnessName');
+    expect(body).not.toHaveProperty('witnessCompany');
+  });
+
   it('returns "handled" and error-marks (no removal) when the instance lookup fails', async () => {
     authFetchMock.mockResolvedValueOnce(errorResponse(500, 'boom'));
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
 import {
   assertExpectedPreviousItpCompletion,
+  assertWitnessDecisionForCompletion,
   buildItpCompletionTransform,
   buildItpCompletionWitnessData,
   buildItpSubbieCompletionNotifications,
@@ -78,6 +79,88 @@ describe('isItpCompletionFinished', () => {
   it('is false for pending and unknown statuses', () => {
     expect(isItpCompletionFinished('pending')).toBe(false);
     expect(isItpCompletionFinished('in_progress')).toBe(false);
+  });
+});
+
+describe('assertWitnessDecisionForCompletion (F-08)', () => {
+  it('is a no-op for non-witness items regardless of status', () => {
+    expect(() =>
+      assertWitnessDecisionForCompletion({ isWitnessItem: false, newStatus: 'completed' }),
+    ).not.toThrow();
+  });
+
+  it('is a no-op for a witness item that is not being completed (N/A, failed, pending)', () => {
+    for (const newStatus of ['not_applicable', 'failed', 'pending']) {
+      expect(() =>
+        assertWitnessDecisionForCompletion({ isWitnessItem: true, newStatus }),
+      ).not.toThrow();
+    }
+  });
+
+  it('rejects a completed witness item with no witness decision', () => {
+    expect(() =>
+      assertWitnessDecisionForCompletion({ isWitnessItem: true, newStatus: 'completed' }),
+    ).toThrow(AppError);
+    try {
+      assertWitnessDecisionForCompletion({ isWitnessItem: true, newStatus: 'completed' });
+    } catch (err) {
+      expect((err as AppError).statusCode).toBe(400);
+      expect((err as AppError).message).toContain('witness point');
+    }
+  });
+
+  it('rejects a present witness completion without a name', () => {
+    expect(() =>
+      assertWitnessDecisionForCompletion({
+        isWitnessItem: true,
+        newStatus: 'completed',
+        requestWitnessPresent: true,
+      }),
+    ).toThrow('Witness name is required');
+  });
+
+  it('accepts a present witness completion with a name', () => {
+    expect(() =>
+      assertWitnessDecisionForCompletion({
+        isWitnessItem: true,
+        newStatus: 'completed',
+        requestWitnessPresent: true,
+        requestWitnessName: 'Jane Inspector',
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts a waived witness completion (present === false, no name needed)', () => {
+    expect(() =>
+      assertWitnessDecisionForCompletion({
+        isWitnessItem: true,
+        newStatus: 'completed',
+        requestWitnessPresent: false,
+      }),
+    ).not.toThrow();
+  });
+
+  it('falls back to the persisted decision when the request omits witness fields', () => {
+    // A notes-edit re-complete: request has no witness fields, but the row does.
+    expect(() =>
+      assertWitnessDecisionForCompletion({
+        isWitnessItem: true,
+        newStatus: 'completed',
+        existingWitnessPresent: true,
+        existingWitnessName: 'Jane Inspector',
+      }),
+    ).not.toThrow();
+  });
+
+  it('still rejects when neither request nor existing row records a present name', () => {
+    expect(() =>
+      assertWitnessDecisionForCompletion({
+        isWitnessItem: true,
+        newStatus: 'completed',
+        existingWitnessPresent: true,
+        existingWitnessName: null,
+      }),
+    ).toThrow('Witness name is required');
   });
 });
 

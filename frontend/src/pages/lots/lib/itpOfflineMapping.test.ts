@@ -226,7 +226,7 @@ describe('mapInstanceToOfflineItems', () => {
     expect(item.completedBy).toBeUndefined();
   });
 
-  it('persists only the isHoldPoint flag and drops the granular pointType', () => {
+  it('persists the granular pointType alongside the isHoldPoint flag', () => {
     const items = [
       makeChecklistItem({ id: 'w', pointType: 'witness', isHoldPoint: false }),
       makeChecklistItem({ id: 'h', pointType: 'hold_point', isHoldPoint: true }),
@@ -235,7 +235,7 @@ describe('mapInstanceToOfflineItems', () => {
     const result = mapInstanceToOfflineItems(makeInstance(items, []));
 
     expect(result.map((i) => i.isHoldPoint)).toEqual([false, true]);
-    expect(result[0]).not.toHaveProperty('pointType');
+    expect(result.map((i) => i.pointType)).toEqual(['witness', 'hold_point']);
   });
 });
 
@@ -295,7 +295,20 @@ describe('mapCachedToItpInstance', () => {
     expect(item.acceptanceCriteria).toBeNull();
   });
 
-  it('derives pointType from isHoldPoint only — a non-hold cached item is always "standard"', () => {
+  it('uses the persisted pointType when present (witness survives, not collapsed to standard)', () => {
+    const cached = makeCached([
+      makeCachedItem({ id: 'w', pointType: 'witness', isHoldPoint: false }),
+      makeCachedItem({ id: 'v', pointType: 'verification', isHoldPoint: false }),
+      makeCachedItem({ id: 'h', pointType: 'hold_point', isHoldPoint: true }),
+    ]);
+
+    const items = mapCachedToItpInstance(cached).template.checklistItems;
+
+    expect(items.map((i) => i.pointType)).toEqual(['witness', 'verification', 'hold_point']);
+  });
+
+  it('falls back to isHoldPoint for pre-fix cache rows that lack pointType', () => {
+    // Old cache entries (written before F-08) have no pointType field.
     const cached = makeCached([
       makeCachedItem({ id: 'h', isHoldPoint: true }),
       makeCachedItem({ id: 's', isHoldPoint: false }),
@@ -404,16 +417,16 @@ describe('mapCachedToItpInstance', () => {
   });
 });
 
-// --- round-trip characterization (documents known lossiness) ----------------
+// --- round-trip: pointType is preserved (F-08) ------------------------------
 
 describe('offline round-trip', () => {
-  it('collapses a witness point to a standard point because only isHoldPoint is persisted', () => {
+  it('preserves a witness point across the round-trip (F-08: no longer collapses to standard)', () => {
     const witnessItem = makeChecklistItem({ id: 'w', pointType: 'witness', isHoldPoint: false });
 
     const offlineItems = mapInstanceToOfflineItems(makeInstance([witnessItem], []));
     const reconstructed = mapCachedToItpInstance(makeCached(offlineItems));
 
-    expect(reconstructed.template.checklistItems[0].pointType).toBe('standard');
+    expect(reconstructed.template.checklistItems[0].pointType).toBe('witness');
   });
 
   it('preserves a hold point across the round-trip', () => {
@@ -423,5 +436,15 @@ describe('offline round-trip', () => {
     const reconstructed = mapCachedToItpInstance(makeCached(offlineItems));
 
     expect(reconstructed.template.checklistItems[0].pointType).toBe('hold_point');
+  });
+
+  it('reconstructs a pre-fix cache row (no pointType) without crashing, via isHoldPoint fallback', () => {
+    // Simulate a cache row written before F-08: pointType absent on the row.
+    const legacyRow = makeCachedItem({ id: 'w', isHoldPoint: false });
+    delete (legacyRow as { pointType?: string }).pointType;
+
+    const reconstructed = mapCachedToItpInstance(makeCached([legacyRow]));
+
+    expect(reconstructed.template.checklistItems[0].pointType).toBe('standard');
   });
 });

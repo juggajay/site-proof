@@ -550,6 +550,8 @@ describe('useItpInstance — completion mutations', () => {
         'completed',
         undefined,
         'Current User (Offline)',
+        undefined, // ncrDetails
+        undefined, // witnessDetails
       );
       const offline = result.current.itpInstance?.completions.find(
         (c) => c.checklistItemId === 'item-1',
@@ -582,6 +584,8 @@ describe('useItpInstance — completion mutations', () => {
       'completed',
       undefined,
       'Current User (Offline)',
+      undefined, // ncrDetails
+      undefined, // witnessDetails
     );
     const offline = result.current.itpInstance?.completions.find(
       (c) => c.checklistItemId === 'item-1',
@@ -609,6 +613,8 @@ describe('useItpInstance — completion mutations', () => {
       'completed',
       undefined,
       'Current User (Offline)',
+      undefined, // ncrDetails
+      undefined, // witnessDetails
     );
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
   });

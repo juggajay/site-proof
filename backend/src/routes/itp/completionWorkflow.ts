@@ -55,6 +55,55 @@ export function isItpCompletionFinished(status: string): boolean {
 }
 
 /**
+ * Enforce that a witness point cannot be FINISHED as `completed` without a
+ * recorded witness decision. Mirrors the WitnessPointModal contract: the
+ * completer must state whether the client witness was present; when present a
+ * witness name is required; "notification given, witness not present"
+ * (witnessPresent === false) is a valid completion. The decision may come from
+ * this request or already be persisted on the existing completion (so editing
+ * notes on an already-witnessed item is not blocked). Only fires for
+ * newStatus === 'completed' on a witness item; N/A, failed, and pending saves
+ * are unaffected.
+ */
+export function assertWitnessDecisionForCompletion(input: {
+  isWitnessItem: boolean;
+  newStatus: string;
+  requestWitnessPresent?: boolean;
+  requestWitnessName?: string | null;
+  existingWitnessPresent?: boolean | null;
+  existingWitnessName?: string | null;
+}): void {
+  if (!input.isWitnessItem || input.newStatus !== 'completed') {
+    return;
+  }
+
+  const effectiveWitnessPresent =
+    input.requestWitnessPresent !== undefined
+      ? input.requestWitnessPresent
+      : (input.existingWitnessPresent ?? null);
+
+  if (effectiveWitnessPresent === null || effectiveWitnessPresent === undefined) {
+    throw AppError.badRequest(
+      'This is a witness point. Record whether the client witness was present (or that ' +
+        'notification was given) before completing it.',
+      { code: 'WITNESS_DECISION_REQUIRED' },
+    );
+  }
+
+  if (effectiveWitnessPresent === true) {
+    const effectiveWitnessName =
+      input.requestWitnessName !== undefined
+        ? input.requestWitnessName
+        : (input.existingWitnessName ?? null);
+    if (!effectiveWitnessName || !effectiveWitnessName.trim()) {
+      throw AppError.badRequest('Witness name is required when the witness was present.', {
+        code: 'WITNESS_NAME_REQUIRED',
+      });
+    }
+  }
+}
+
+/**
  * Read the project-level `requireSubcontractorVerification` flag from the
  * project's `settings` column. Settings may be a JSON string or an already
  * parsed object; invalid JSON falls back to the default (no verification).

@@ -325,6 +325,13 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
         ...(completion.ncrDescription ? { ncrDescription: completion.ncrDescription } : {}),
         ...(completion.ncrCategory ? { ncrCategory: completion.ncrCategory } : {}),
         ...(completion.ncrSeverity ? { ncrSeverity: completion.ncrSeverity } : {}),
+        ...(completion.witnessPresent !== undefined
+          ? { witnessPresent: completion.witnessPresent }
+          : {}),
+        ...(completion.witnessName !== undefined ? { witnessName: completion.witnessName } : {}),
+        ...(completion.witnessCompany !== undefined
+          ? { witnessCompany: completion.witnessCompany }
+          : {}),
         ...(completion.serverCompletionBase
           ? { expectedPreviousCompletion: completion.serverCompletionBase }
           : {}),
