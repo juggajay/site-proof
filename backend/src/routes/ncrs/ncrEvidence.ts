@@ -330,9 +330,18 @@ ncrEvidenceRouter.delete(
       throw AppError.notFound('NCR');
     }
 
-    // Check if NCR is not closed
-    if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
-      throw AppError.badRequest('Cannot remove evidence from a closed NCR');
+    // Evidence is immutable once the NCR has been submitted for verification:
+    // it is the record the QM verifies and closes against, so it must not be
+    // pulled out from under the verification/closure decision.
+    if (
+      ncr.status === 'verification' ||
+      ncr.status === 'closed' ||
+      ncr.status === 'closed_concession'
+    ) {
+      throw AppError.badRequest(
+        'Cannot remove evidence once an NCR has been submitted for verification',
+        { currentStatus: ncr.status },
+      );
     }
 
     const evidence = await prisma.nCREvidence.findUnique({
