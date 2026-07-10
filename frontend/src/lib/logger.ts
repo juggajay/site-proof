@@ -72,13 +72,17 @@ function serializeClientError(error: unknown): SerializedClientError {
   }
 }
 
-function getSafeLocationPath(): string | undefined {
+export function getSafeLocationPath(): string | undefined {
   if (typeof window === 'undefined') {
     return undefined;
   }
 
   const { pathname, search, hash } = window.location;
-  return `${pathname}${search ? '?[redacted]' : ''}${hash ? '#[redacted]' : ''}`;
+  // Redact capability tokens embedded in the path segment (hold-point public
+  // release links) before the path leaves the browser. Query and hash are
+  // redacted wholesale below.
+  const safePathname = pathname.replace(/(\/hp-release\/(?:batch\/)?)[^/?#\s]+/gi, '$1[redacted]');
+  return `${safePathname}${search ? '?[redacted]' : ''}${hash ? '#[redacted]' : ''}`;
 }
 
 export async function reportClientError(
