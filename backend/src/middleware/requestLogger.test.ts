@@ -45,6 +45,37 @@ describe('request log sanitization', () => {
     );
   });
 
+  it('redacts batch, invitation, and frontend release tokens from logs and metrics', () => {
+    const token = 'a'.repeat(64);
+    const invite = `sub_invite_${'b'.repeat(64)}`;
+
+    // Batch summary / evidence-download / release path shapes.
+    const batchPaths = [
+      `/api/holdpoints/public/batch/${token}`,
+      `/api/holdpoints/public/batch/${token}/release`,
+      `/api/holdpoints/public/batch/${token}/holdpoints/hp-1/documents/doc-1`,
+    ];
+    for (const path of batchPaths) {
+      expect(sanitizeLogPath(path)).not.toContain(token);
+      expect(sanitizeLogUrl(path)).not.toContain(token);
+      expect(normalizeRequestMetricPath(path)).not.toContain(token);
+    }
+
+    // Subcontractor invitation token paths.
+    for (const path of [
+      `/api/subcontractors/invitation/${invite}`,
+      `/api/subcontractors/invitation/${invite}/accept`,
+    ]) {
+      expect(sanitizeLogPath(path)).not.toContain(invite);
+      expect(sanitizeLogUrl(path)).not.toContain(invite);
+      expect(normalizeRequestMetricPath(path)).not.toContain(invite);
+    }
+
+    // Frontend public release path shapes (reach logs via the support route).
+    expect(sanitizeLogPath(`/hp-release/${token}`)).toBe('/hp-release/[REDACTED]');
+    expect(sanitizeLogPath(`/hp-release/batch/${token}`)).toBe('/hp-release/batch/[REDACTED]');
+  });
+
   it('redacts all query values when sanitizing URL values for logs', () => {
     expect(
       sanitizeUrlValueForLog(

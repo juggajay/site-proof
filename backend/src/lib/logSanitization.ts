@@ -36,24 +36,32 @@ function containsSensitiveLogText(value: string): boolean {
 }
 
 export function sanitizeLogText(value: string): string {
-  return value
-    .replace(
-      /(["'])(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature)\1\s*:\s*(["'])(.*?)\3/gi,
-      (_match, quote, key, valueQuote) =>
-        `${quote}${key}${quote}:${valueQuote}${REDACTED_LOG_VALUE}${valueQuote}`,
-    )
-    .replace(
-      /\b(authorization)\s*[:=]\s*(?:(?:Bearer|ApiKey)\s+)?[^,\s;]+/gi,
-      `$1=${REDACTED_LOG_VALUE}`,
-    )
-    .replace(/\b(Bearer|ApiKey)\s+[A-Za-z0-9._~+/=-]+/gi, `$1 ${REDACTED_LOG_VALUE}`)
-    .replace(/\b(cookie|set-cookie)\s*[:=]\s*[^,\s;]+/gi, `$1=${REDACTED_LOG_VALUE}`)
-    .replace(
-      /\b(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature)=([^&\s]+)/gi,
-      (_match, key) => `${key}=${REDACTED_LOG_VALUE}`,
-    )
-    .replace(/(\/api\/holdpoints\/public\/)[^/?#\s]+/gi, `$1${REDACTED_LOG_VALUE}`)
-    .replace(/\/(?:reset|magic|verify)_[^/?#\s]+/gi, `/${REDACTED_LOG_VALUE}`);
+  return (
+    value
+      .replace(
+        /(["'])(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature)\1\s*:\s*(["'])(.*?)\3/gi,
+        (_match, quote, key, valueQuote) =>
+          `${quote}${key}${quote}:${valueQuote}${REDACTED_LOG_VALUE}${valueQuote}`,
+      )
+      .replace(
+        /\b(authorization)\s*[:=]\s*(?:(?:Bearer|ApiKey)\s+)?[^,\s;]+/gi,
+        `$1=${REDACTED_LOG_VALUE}`,
+      )
+      .replace(/\b(Bearer|ApiKey)\s+[A-Za-z0-9._~+/=-]+/gi, `$1 ${REDACTED_LOG_VALUE}`)
+      .replace(/\b(cookie|set-cookie)\s*[:=]\s*[^,\s;]+/gi, `$1=${REDACTED_LOG_VALUE}`)
+      .replace(
+        /\b(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature)=([^&\s]+)/gi,
+        (_match, key) => `${key}=${REDACTED_LOG_VALUE}`,
+      )
+      // Redact the capability token after /public/ or /public/batch/ (not the
+      // static "batch" segment), plus deeper batch subpaths.
+      .replace(/(\/api\/holdpoints\/public\/(?:batch\/)?)[^/?#\s]+/gi, `$1${REDACTED_LOG_VALUE}`)
+      // Frontend public release paths carry the same token in the path segment.
+      .replace(/(\/hp-release\/(?:batch\/)?)[^/?#\s]+/gi, `$1${REDACTED_LOG_VALUE}`)
+      // Subcontractor invitation tokens are self-identifying by their prefix.
+      .replace(/sub_invite_[^/?#\s]+/gi, REDACTED_LOG_VALUE)
+      .replace(/\/(?:reset|magic|verify)_[^/?#\s]+/gi, `/${REDACTED_LOG_VALUE}`)
+  );
 }
 
 export function sanitizeLogValue(value: unknown): unknown {
@@ -83,7 +91,9 @@ export function sanitizeLogQuery(query: Record<string, unknown>): Record<string,
 
 export function sanitizeLogPath(pathname: string): string {
   return pathname
-    .replace(/(\/api\/holdpoints\/public\/)[^/?#]+/gi, `$1${REDACTED_LOG_VALUE}`)
+    .replace(/(\/api\/holdpoints\/public\/(?:batch\/)?)[^/?#]+/gi, `$1${REDACTED_LOG_VALUE}`)
+    .replace(/(\/hp-release\/(?:batch\/)?)[^/?#]+/gi, `$1${REDACTED_LOG_VALUE}`)
+    .replace(/sub_invite_[^/?#]+/gi, REDACTED_LOG_VALUE)
     .replace(/\/(?:reset|magic|verify)_[^/?#]+/gi, `/${REDACTED_LOG_VALUE}`);
 }
 
