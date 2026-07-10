@@ -19,6 +19,29 @@ const CLAIM: Claim = {
 };
 
 describe('RecordPaymentModal', () => {
+  it('reuses the same operationKey across repeated submissions from one dialog (F-04)', async () => {
+    // F-04: onRecordPayment (ClaimsPage) swallows errors, so the dialog stays
+    // open after a lost response. A second submit must carry the SAME
+    // operationKey so the server replays the payment instead of double-recording
+    // it. The key is minted once per dialog instance and never cleared.
+    const onRecordPayment = vi.fn(() => Promise.resolve());
+
+    renderWithProviders(
+      <RecordPaymentModal claim={CLAIM} onClose={vi.fn()} onRecordPayment={onRecordPayment} />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Record Payment' });
+    fireEvent.click(button);
+    await waitFor(() => expect(onRecordPayment).toHaveBeenCalledTimes(1));
+    fireEvent.click(button);
+    await waitFor(() => expect(onRecordPayment).toHaveBeenCalledTimes(2));
+
+    const firstKey = onRecordPayment.mock.calls[0][1].operationKey;
+    const secondKey = onRecordPayment.mock.calls[1][1].operationKey;
+    expect(firstKey).toBeTruthy();
+    expect(secondKey).toBe(firstKey);
+  });
+
   it('keeps cancel disabled while payment is recording', async () => {
     const onRecordPayment = vi.fn(
       () =>

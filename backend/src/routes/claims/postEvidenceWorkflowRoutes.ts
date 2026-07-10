@@ -35,6 +35,7 @@ interface PaymentHistoryEntry {
   notes: string | null;
   recordedAt: string;
   recordedBy: string;
+  operationKey?: string;
 }
 
 type AuthUser = NonNullable<Express.Request['user']>;
@@ -301,6 +302,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         throw AppError.fromZodError(validation.error);
       }
       const { paidAmount, paymentDate, paymentReference, paymentNotes } = validation.data;
+      const operationKey = validation.data.operationKey;
       const roundedPaidAmount = roundClaimAmountToCents(paidAmount);
       const paidAt = parseOptionalClaimDate(paymentDate, 'paymentDate') ?? new Date();
       const paymentDateForHistory = paymentDate || paidAt.toISOString().split('T')[0];
@@ -323,6 +325,50 @@ export function createClaimPostEvidenceWorkflowRouter({
 
         if (!claim) {
           throw AppError.notFound('Claim');
+        }
+
+        // Build notes with payment history using disputeNotes field
+        let existingDisputeNotes: Record<string, unknown> = {};
+        const paymentHistory: PaymentHistoryEntry[] = [];
+        if (claim.disputeNotes) {
+          try {
+            const existingNotes = JSON.parse(claim.disputeNotes) as {
+              paymentHistory?: PaymentHistoryEntry[];
+            } & Record<string, unknown>;
+            existingDisputeNotes = existingNotes;
+            if (Array.isArray(existingNotes.paymentHistory)) {
+              paymentHistory.push(...existingNotes.paymentHistory);
+            }
+          } catch (_e) {
+            // Not JSON, start fresh
+          }
+        }
+
+        if (operationKey) {
+          const priorEntry = paymentHistory.find((entry) => entry.operationKey === operationKey);
+          if (priorEntry) {
+            const certifiedAmount = roundClaimAmountToCents(
+              claim.certifiedAmount ? Number(claim.certifiedAmount) : 0,
+            );
+            const alreadyPaid = roundClaimAmountToCents(
+              claim.paidAmount ? Number(claim.paidAmount) : 0,
+            );
+            const claimWithLots = await tx.progressClaim.findUniqueOrThrow({
+              where: { id: claimId },
+              include: { claimedLots: true },
+            });
+            return {
+              claim,
+              updatedClaim: claimWithLots,
+              previousStatus: claim.status,
+              newStatus: claim.status,
+              totalPaid: alreadyPaid,
+              outstanding: roundClaimAmountToCents(certifiedAmount - alreadyPaid),
+              paymentHistory,
+              replayEntry: priorEntry,
+              replayed: true,
+            };
+          }
         }
 
         // Only allow payment of certified or partially paid claims
@@ -352,23 +398,6 @@ export function createClaimPostEvidenceWorkflowRouter({
         const outstanding = roundClaimAmountToCents(certifiedAmount - totalPaid);
         const newStatus = outstanding <= CLAIM_AMOUNT_EPSILON ? 'paid' : 'partially_paid';
 
-        // Build notes with payment history using disputeNotes field
-        let existingDisputeNotes: Record<string, unknown> = {};
-        const paymentHistory: PaymentHistoryEntry[] = [];
-        if (claim.disputeNotes) {
-          try {
-            const existingNotes = JSON.parse(claim.disputeNotes) as {
-              paymentHistory?: PaymentHistoryEntry[];
-            } & Record<string, unknown>;
-            existingDisputeNotes = existingNotes;
-            if (Array.isArray(existingNotes.paymentHistory)) {
-              paymentHistory.push(...existingNotes.paymentHistory);
-            }
-          } catch (_e) {
-            // Not JSON, start fresh
-          }
-        }
-
         paymentHistory.push({
           amount: roundedPaidAmount,
           date: paymentDateForHistory,
@@ -376,6 +405,7 @@ export function createClaimPostEvidenceWorkflowRouter({
           notes: paymentNotes || null,
           recordedAt,
           recordedBy: userId,
+          operationKey: operationKey ?? undefined,
         });
 
         const updatedClaim = await tx.progressClaim.update({
@@ -404,6 +434,8 @@ export function createClaimPostEvidenceWorkflowRouter({
           totalPaid,
           outstanding,
           paymentHistory,
+          replayEntry: undefined,
+          replayed: false,
         };
       });
 
@@ -415,112 +447,128 @@ export function createClaimPostEvidenceWorkflowRouter({
         totalPaid,
         outstanding,
         paymentHistory,
+        replayEntry,
+        replayed,
       } = paymentResult;
 
       // Send notifications to project managers
-      try {
-        const payer = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { id: true, email: true, fullName: true },
-        });
-        const payerName = payer?.fullName || payer?.email || 'Unknown';
-
-        const projectManagers = await prisma.projectUser.findMany({
-          where: {
-            projectId,
-            role: 'project_manager',
-            status: 'active',
-          },
-        });
-
-        const pmUserIds = projectManagers.map((pm) => pm.userId);
-        const pmUsers =
-          pmUserIds.length > 0
-            ? await prisma.user.findMany({
-                where: { id: { in: pmUserIds } },
-                select: { id: true, email: true, fullName: true },
-              })
-            : [];
-
-        const formattedPaidAmount = new Intl.NumberFormat('en-AU', {
-          style: 'currency',
-          currency: 'AUD',
-        }).format(roundedPaidAmount);
-
-        const formattedOutstanding = new Intl.NumberFormat('en-AU', {
-          style: 'currency',
-          currency: 'AUD',
-        }).format(Math.max(0, outstanding));
-
-        const notificationType = newStatus === 'paid' ? 'claim_paid' : 'claim_partial_payment';
-        const notificationTitle =
-          newStatus === 'paid' ? 'Claim Payment Complete' : 'Partial Payment Received';
-        const notificationMessage =
-          newStatus === 'paid'
-            ? `Claim #${claim.claimNumber} payment of ${formattedPaidAmount} has been recorded${paymentReference ? ` (Ref: ${paymentReference})` : ''}. Claim is now fully paid.`
-            : `Partial payment of ${formattedPaidAmount} recorded for Claim #${claim.claimNumber}${paymentReference ? ` (Ref: ${paymentReference})` : ''}. Outstanding: ${formattedOutstanding}.`;
-
-        // Create in-app notifications
-        if (pmUsers.length > 0) {
-          await prisma.notification.createMany({
-            data: pmUsers.map((pm) => ({
-              userId: pm.id,
-              projectId,
-              type: notificationType,
-              title: notificationTitle,
-              message: notificationMessage,
-              linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
-            })),
+      if (!replayed) {
+        try {
+          const payer = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, email: true, fullName: true },
           });
-        }
+          const payerName = payer?.fullName || payer?.email || 'Unknown';
 
-        // Send email notifications
-        for (const pm of pmUsers) {
-          try {
-            await sendNotificationIfEnabled(pm.id, 'enabled', {
-              title: notificationTitle,
-              message: `${notificationMessage}\n\nProject: ${claim.project.name}\nRecorded by: ${payerName}\n\nPlease review the payment details in the system.`,
-              projectName: claim.project.name,
-              linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
+          const projectManagers = await prisma.projectUser.findMany({
+            where: {
+              projectId,
+              role: 'project_manager',
+              status: 'active',
+            },
+          });
+
+          const pmUserIds = projectManagers.map((pm) => pm.userId);
+          const pmUsers =
+            pmUserIds.length > 0
+              ? await prisma.user.findMany({
+                  where: { id: { in: pmUserIds } },
+                  select: { id: true, email: true, fullName: true },
+                })
+              : [];
+
+          const formattedPaidAmount = new Intl.NumberFormat('en-AU', {
+            style: 'currency',
+            currency: 'AUD',
+          }).format(roundedPaidAmount);
+
+          const formattedOutstanding = new Intl.NumberFormat('en-AU', {
+            style: 'currency',
+            currency: 'AUD',
+          }).format(Math.max(0, outstanding));
+
+          const notificationType = newStatus === 'paid' ? 'claim_paid' : 'claim_partial_payment';
+          const notificationTitle =
+            newStatus === 'paid' ? 'Claim Payment Complete' : 'Partial Payment Received';
+          const notificationMessage =
+            newStatus === 'paid'
+              ? `Claim #${claim.claimNumber} payment of ${formattedPaidAmount} has been recorded${paymentReference ? ` (Ref: ${paymentReference})` : ''}. Claim is now fully paid.`
+              : `Partial payment of ${formattedPaidAmount} recorded for Claim #${claim.claimNumber}${paymentReference ? ` (Ref: ${paymentReference})` : ''}. Outstanding: ${formattedOutstanding}.`;
+
+          // Create in-app notifications
+          if (pmUsers.length > 0) {
+            await prisma.notification.createMany({
+              data: pmUsers.map((pm) => ({
+                userId: pm.id,
+                projectId,
+                type: notificationType,
+                title: notificationTitle,
+                message: notificationMessage,
+                linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
+              })),
             });
-          } catch (emailError) {
-            logError(`Failed to send payment email to PM ${pm.id}:`, emailError);
           }
+
+          // Send email notifications
+          for (const pm of pmUsers) {
+            try {
+              await sendNotificationIfEnabled(pm.id, 'enabled', {
+                title: notificationTitle,
+                message: `${notificationMessage}\n\nProject: ${claim.project.name}\nRecorded by: ${payerName}\n\nPlease review the payment details in the system.`,
+                projectName: claim.project.name,
+                linkUrl: buildProjectEntityLink('claim', claim.id, projectId),
+              });
+            } catch (emailError) {
+              logError(`Failed to send payment email to PM ${pm.id}:`, emailError);
+            }
+          }
+        } catch (notifError) {
+          logError('Failed to send payment notifications:', notifError);
         }
-      } catch (notifError) {
-        logError('Failed to send payment notifications:', notifError);
       }
+
+      const paymentForResponse =
+        replayed && replayEntry
+          ? {
+              amount: replayEntry.amount,
+              date: replayEntry.date,
+              reference: replayEntry.reference ?? undefined,
+              notes: replayEntry.notes ?? undefined,
+            }
+          : {
+              amount: roundedPaidAmount,
+              date: paymentDateForHistory,
+              reference: paymentReference,
+              notes: paymentNotes,
+            };
 
       const response = buildClaimPaymentRecordedResponse(
         updatedClaim,
-        {
-          amount: roundedPaidAmount,
-          date: paymentDateForHistory,
-          reference: paymentReference,
-          notes: paymentNotes,
-        },
+        paymentForResponse,
         outstanding,
         previousStatus,
         paymentHistory,
       );
 
       // Audit log for claim payment
-      await createAuditLog({
-        projectId,
-        userId,
-        entityType: 'progress_claim',
-        entityId: claimId,
-        action: AuditAction.CLAIM_PAYMENT_RECORDED,
-        changes: {
-          previousStatus,
-          newStatus,
-          paidAmount: roundedPaidAmount,
-          paymentReference,
-          totalPaid,
-          outstanding,
-        },
-        req,
-      });
+      if (!replayed) {
+        await createAuditLog({
+          projectId,
+          userId,
+          entityType: 'progress_claim',
+          entityId: claimId,
+          action: AuditAction.CLAIM_PAYMENT_RECORDED,
+          changes: {
+            previousStatus,
+            newStatus,
+            paidAmount: roundedPaidAmount,
+            paymentReference,
+            totalPaid,
+            outstanding,
+          },
+          req,
+        });
+      }
 
       res.json(response);
     }),

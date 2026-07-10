@@ -1325,6 +1325,7 @@ model ProgressClaim {
   status                 String    @default("draft")
   preparedById           String?   @map("prepared_by")
   preparedAt             DateTime? @map("prepared_at")
+  requestKey             String?   @map("request_key")
   submittedAt            DateTime? @map("submitted_at")
   submittedTo            String?   @map("submitted_to")
   totalClaimedAmount     Decimal?  @map("total_claimed_amount")
@@ -1348,6 +1349,7 @@ model ProgressClaim {
   variations  Variation[]
 
   @@unique([projectId, claimNumber])
+  @@unique([projectId, requestKey])
   @@map("progress_claims")
 }
 

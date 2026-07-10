@@ -38,3 +38,7 @@ function createCryptoRandomId(): string {
 export function createLocalId(prefix: string): string {
   return `${prefix}-${createCryptoRandomId()}`;
 }
+
+export function createUuid(): string | undefined {
+  return globalThis.crypto?.randomUUID?.();
+}

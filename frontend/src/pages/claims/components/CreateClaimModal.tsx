@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { queryKeys } from '@/lib/queryKeys';
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
+import { createUuid } from '@/lib/localIds';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface CreateClaimModalProps {
@@ -103,6 +104,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const creatingRef = useRef(false);
+  const requestKeyRef = useRef<string | undefined>(undefined);
   const [newClaim, setNewClaim] = useState<NewClaimFormData>(() => {
     const today = new Date();
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -233,6 +235,10 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     setCreating(true);
     setCreateError(null);
     try {
+      if (!requestKeyRef.current) {
+        requestKeyRef.current = createUuid();
+      }
+
       await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/claims`, {
         method: 'POST',
         body: JSON.stringify({
@@ -243,11 +249,13 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
             percentageComplete: lot.percentageComplete,
           })),
           variationIds: selectedVariations.map((variation) => variation.id),
+          requestKey: requestKeyRef.current,
         }),
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.variations(projectId) });
       onClaimCreated();
       onClose();
+      requestKeyRef.current = undefined;
     } catch (error) {
       logError('Error creating claim:', error);
       setCreateError(

@@ -51,6 +51,7 @@ type ClaimCreateResult = {
   nextClaimNumber: number;
   lotCount: number;
   variationCount: number;
+  replayed?: boolean;
 };
 
 function normalizeUniqueTargetField(value: string) {
@@ -172,6 +173,7 @@ export function createClaimWorkflowRouter({
         throw AppError.fromZodError(validation.error);
       }
       const { periodStart, periodEnd } = validation.data;
+      const requestKey = validation.data.requestKey;
       const requestedLots = getRequestedClaimLots(validation.data);
       const requestedVariationIds = getRequestedClaimVariationIds(validation.data);
       const claimPeriodStart = parseClaimDate(periodStart, 'periodStart');
@@ -195,6 +197,23 @@ export function createClaimWorkflowRouter({
       for (let attempt = 1; attempt <= CLAIM_NUMBER_RETRY_LIMIT; attempt += 1) {
         try {
           claimResult = await prisma.$transaction(async (tx) => {
+            if (requestKey) {
+              const existing = await tx.progressClaim.findFirst({
+                where: { projectId, requestKey },
+                include: { _count: { select: { claimedLots: true, variations: true } } },
+              });
+              if (existing) {
+                return {
+                  claim: existing,
+                  totalClaimedAmount: Number(existing.totalClaimedAmount ?? 0),
+                  nextClaimNumber: existing.claimNumber,
+                  lotCount: existing._count.claimedLots,
+                  variationCount: existing._count.variations,
+                  replayed: true,
+                };
+              }
+            }
+
             await lockClaimLotsForUpdate(tx, projectId, uniqueLotIds);
             await lockClaimVariationsForUpdate(tx, projectId, uniqueVariationIds);
 
@@ -346,6 +365,7 @@ export function createClaimWorkflowRouter({
                 status: 'draft',
                 preparedById: userId,
                 preparedAt: new Date(),
+                requestKey: requestKey ?? null,
                 totalClaimedAmount,
                 claimedLots:
                   lots.length > 0
@@ -454,6 +474,24 @@ export function createClaimWorkflowRouter({
           });
           break;
         } catch (error) {
+          if (requestKey && isUniqueConstraintOn(error, ['projectId', 'requestKey'])) {
+            const existing = await prisma.progressClaim.findFirst({
+              where: { projectId, requestKey },
+              include: { _count: { select: { claimedLots: true, variations: true } } },
+            });
+            if (existing) {
+              claimResult = {
+                claim: existing,
+                totalClaimedAmount: Number(existing.totalClaimedAmount ?? 0),
+                nextClaimNumber: existing.claimNumber,
+                lotCount: existing._count.claimedLots,
+                variationCount: existing._count.variations,
+                replayed: true,
+              };
+              break;
+            }
+          }
+
           if (
             attempt < CLAIM_NUMBER_RETRY_LIMIT &&
             (isUniqueConstraintOn(error, ['projectId', 'claimNumber']) ||
@@ -474,15 +512,17 @@ export function createClaimWorkflowRouter({
       const transformedClaim = mapClaimCreateItem(claim);
 
       // Audit log for claim creation
-      await createAuditLog({
-        projectId,
-        userId,
-        entityType: 'progress_claim',
-        entityId: claim.id,
-        action: AuditAction.CLAIM_CREATED,
-        changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount, variationCount },
-        req,
-      });
+      if (!claimResult.replayed) {
+        await createAuditLog({
+          projectId,
+          userId,
+          entityType: 'progress_claim',
+          entityId: claim.id,
+          action: AuditAction.CLAIM_CREATED,
+          changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount, variationCount },
+          req,
+        });
+      }
 
       res.status(201).json(buildClaimCreatedResponse(transformedClaim));
     }),

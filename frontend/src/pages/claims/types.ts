@@ -83,6 +83,7 @@ export interface ClaimPaymentFormData {
   paymentDate?: string;
   paymentReference?: string;
   paymentNotes?: string;
+  operationKey?: string;
 }
 
 export interface ClaimCertificationFormData {
