@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
-import type { Claim } from '../types';
+import type { Claim, ClaimPaymentFormData } from '../types';
 import { RecordPaymentModal } from './RecordPaymentModal';
 
 const CLAIM: Claim = {
@@ -24,7 +24,9 @@ describe('RecordPaymentModal', () => {
     // open after a lost response. A second submit must carry the SAME
     // operationKey so the server replays the payment instead of double-recording
     // it. The key is minted once per dialog instance and never cleared.
-    const onRecordPayment = vi.fn(() => Promise.resolve());
+    const onRecordPayment = vi.fn((_claimId: string, _payment: ClaimPaymentFormData) =>
+      Promise.resolve(),
+    );
 
     renderWithProviders(
       <RecordPaymentModal claim={CLAIM} onClose={vi.fn()} onRecordPayment={onRecordPayment} />,
