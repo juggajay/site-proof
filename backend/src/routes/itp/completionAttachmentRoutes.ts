@@ -19,7 +19,7 @@ import {
   isStoredDocumentUploadPath,
   normalizeStoredDocumentReference,
 } from '../../lib/uploadPaths.js';
-import { canReadDocument } from '../documents/access.js';
+import { canReadDocument, requireNoLockedItpEvidenceAttachment } from '../documents/access.js';
 import {
   buildItpCompletionAttachmentDeletedResponse,
   buildItpCompletionAttachmentResponse,
@@ -244,13 +244,17 @@ completionAttachmentRoutes.post(
         updateData.gpsLongitude = parsedGpsLongitude;
       }
 
-      document =
-        Object.keys(updateData).length > 0
-          ? await prisma.document.update({
-              where: { id: existingDocument.id },
-              data: updateData,
-            })
-          : existingDocument;
+      if (Object.keys(updateData).length > 0) {
+        // Reusing an existing document must not rewrite metadata that is locked
+        // as evidence on a verified/not-applicable completion elsewhere (F-10).
+        await requireNoLockedItpEvidenceAttachment(existingDocument);
+        document = await prisma.document.update({
+          where: { id: existingDocument.id },
+          data: updateData,
+        });
+      } else {
+        document = existingDocument;
+      }
     } else {
       if (!filename || !fileUrl) {
         throw AppError.badRequest('filename and fileUrl are required');
