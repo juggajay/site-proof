@@ -33,6 +33,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { HubTile } from '@/shell/components/HubTile';
 import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import {
@@ -189,12 +190,12 @@ export function HomeScreen() {
   // Assigned lots — existing portal key; count chip + prerequisite state.
   const { data: assignedLotsData } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
-    queryFn: async () => {
-      const res = await apiFetch<{ lots: Lot[] }>(
+    // Same queryFn behavior as WorkScreen — these share the portalAssignedWork
+    // cache key, so both must return the full paginated set.
+    queryFn: () =>
+      fetchAllLotPages<Lot>(
         `/api/lots${currentProjectQuery}${currentProjectQuery ? '&' : '?'}portalModule=lots`,
-      );
-      return res.lots ?? [];
-    },
+      ),
     enabled: !!user?.id && !!projectId && lotsEnabled,
   });
   const assignedLots = assignedLotsData ?? [];
@@ -205,11 +206,12 @@ export function HomeScreen() {
   // not yet finished). Only fetched when the itps module is on.
   const { data: itpLotsData } = useQuery({
     queryKey: queryKeys.portalITPs(user?.id, projectId, subcontractorCompanyId),
+    // Same queryFn behavior as ItpsScreen (shared portalITPs cache key).
     queryFn: async () => {
-      const res = await apiFetch<{ lots: ItpLot[] }>(
+      const lots = await fetchAllLotPages<ItpLot>(
         `/api/lots${currentProjectQuery}${currentProjectQuery ? '&' : '?'}includeITP=true&portalModule=itps`,
       );
-      return (res.lots ?? []).filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
+      return lots.filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
     },
     enabled: !!user?.id && !!projectId && itpsEnabled,
   });

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   buildPortalCompanyQuery,
@@ -281,10 +282,9 @@ async function fetchAssignedLots(
   projectId: string,
   subcontractorCompanyId?: string | null,
 ): Promise<Lot[]> {
-  const data = await apiFetch<{ lots: Lot[] }>(
-    buildAssignedLotsPath(projectId, subcontractorCompanyId),
-  );
-  return normalizeAssignedLots(data);
+  // The docket lot selector needs the COMPLETE assigned-lot set, so follow every
+  // page rather than stopping at the first 20.
+  return fetchAllLotPages<Lot>(buildAssignedLotsPath(projectId, subcontractorCompanyId));
 }
 
 async function fetchDocketDetail(docketId: string): Promise<Docket> {

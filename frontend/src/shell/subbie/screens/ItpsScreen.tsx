@@ -29,7 +29,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ClipboardList, Eye } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
-import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -172,10 +172,10 @@ export function ItpsScreen() {
   } = useQuery({
     queryKey: queryKeys.portalITPs(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
-      const res = await apiFetch<{ lots: Lot[] }>(
+      const lots = await fetchAllLotPages<Lot>(
         `/api/lots${projectQuery}${projectQuery ? '&' : '?'}includeITP=true&portalModule=itps`,
       );
-      return (res.lots ?? []).filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
+      return lots.filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
     },
     enabled: !!user?.id && !!projectId && itpsEnabled,
   });

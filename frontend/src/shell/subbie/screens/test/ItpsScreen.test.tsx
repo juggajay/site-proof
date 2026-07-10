@@ -105,12 +105,12 @@ describe('subbie shell ItpsScreen', () => {
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
 
-  it('fetches with the includeITP=true & portalModule=itps URL', async () => {
+  it('fetches with the includeITP=true & portalModule=itps URL (paginated)', async () => {
     setLots([]);
     renderItps();
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/lots?projectId=proj-1&includeITP=true&portalModule=itps',
+        '/api/lots?projectId=proj-1&includeITP=true&portalModule=itps&limit=100&page=1',
       ),
     );
   });
@@ -121,7 +121,7 @@ describe('subbie shell ItpsScreen', () => {
     renderItps();
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/lots?projectId=proj-1%26portalModule%3Dlots&includeITP=true&portalModule=itps',
+        '/api/lots?projectId=proj-1%26portalModule%3Dlots&includeITP=true&portalModule=itps&limit=100&page=1',
       ),
     );
   });

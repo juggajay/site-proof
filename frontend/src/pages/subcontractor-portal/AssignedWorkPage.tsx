@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -99,15 +100,13 @@ export function AssignedWorkPage() {
     error,
   } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId, company?.id),
-    queryFn: async () => {
-      const res = await apiFetch<{ lots: Lot[] }>(
+    queryFn: () =>
+      fetchAllLotPages<Lot>(
         `/api/lots${buildPortalCompanyQuery({
           projectId: company!.projectId,
           subcontractorCompanyId: company!.id,
         })}&portalModule=lots`,
-      );
-      return res.lots || [];
-    },
+      ),
     enabled: !!user?.id && !!company?.projectId && canViewAssignedWork,
   });
 

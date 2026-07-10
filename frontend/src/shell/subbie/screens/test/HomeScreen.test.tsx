@@ -333,7 +333,7 @@ describe('subbie shell HomeScreen', () => {
       ),
     );
     expect(apiFetchMock).toHaveBeenCalledWith(
-      '/api/lots?projectId=proj-1%26portalModule%3Ditps&portalModule=lots',
+      '/api/lots?projectId=proj-1%26portalModule%3Ditps&portalModule=lots&limit=100&page=1',
     );
   });
 

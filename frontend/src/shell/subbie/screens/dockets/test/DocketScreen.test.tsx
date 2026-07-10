@@ -171,7 +171,7 @@ describe('subbie shell DocketScreen', () => {
 
     await screen.findByRole('button', { name: 'Add crew hours' });
     expect(apiFetchMock).toHaveBeenCalledWith(
-      '/api/lots?projectId=proj-1&subcontractorCompanyId=company-selected',
+      '/api/lots?projectId=proj-1&subcontractorCompanyId=company-selected&limit=100&page=1',
     );
   });
 
