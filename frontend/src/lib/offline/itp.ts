@@ -62,6 +62,14 @@ export interface OfflineNcrDetails {
   severity: string;
 }
 
+// Witness attribution captured for a witness-point completion made offline,
+// carried on the queued completion so it syncs identically to the online path.
+export interface OfflineWitnessDetails {
+  witnessPresent: boolean;
+  witnessName?: string;
+  witnessCompany?: string;
+}
+
 function buildCompletionRecord(
   lotId: string,
   checklistItemId: string,
@@ -72,6 +80,7 @@ function buildCompletionRecord(
   completedAt?: string | null,
   serverCompletionBase?: ItpCompletionServerBase,
   ncrDetails?: OfflineNcrDetails,
+  witnessDetails?: OfflineWitnessDetails,
 ): OfflineITPCompletion {
   return {
     id: `${lotId}-${checklistItemId}`,
@@ -94,6 +103,13 @@ function buildCompletionRecord(
           ncrDescription: ncrDetails.description,
           ncrCategory: ncrDetails.category,
           ncrSeverity: ncrDetails.severity,
+        }
+      : {}),
+    ...(witnessDetails
+      ? {
+          witnessPresent: witnessDetails.witnessPresent,
+          witnessName: witnessDetails.witnessName,
+          witnessCompany: witnessDetails.witnessCompany,
         }
       : {}),
   };
@@ -204,6 +220,7 @@ export async function updateChecklistItemOffline(
   notes?: string,
   completedBy?: string,
   ncrDetails?: OfflineNcrDetails,
+  witnessDetails?: OfflineWitnessDetails,
 ): Promise<void> {
   const cachedChecklist = await getCachedITPChecklist(lotId);
   const cachedItem = cachedChecklist?.items.find((item) => item.id === checklistItemId);
@@ -217,6 +234,7 @@ export async function updateChecklistItemOffline(
     undefined,
     cachedItem?.serverCompletionBase,
     ncrDetails,
+    witnessDetails,
   );
 
   // Store the completion

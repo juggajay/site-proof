@@ -90,6 +90,14 @@ export async function writeItpCompletionToggle({
       nextCompleted ? 'completed' : 'pending',
       existingNotes || undefined,
       'Current User (Offline)',
+      undefined,
+      witnessData
+        ? {
+            witnessPresent: witnessData.witnessPresent,
+            witnessName: witnessData.witnessName,
+            witnessCompany: witnessData.witnessCompany,
+          }
+        : undefined,
     );
 
     const optimistic: ITPCompletion = {

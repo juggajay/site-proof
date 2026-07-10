@@ -6,9 +6,9 @@
  * `mapInstanceToOfflineItems` projects a server ITP instance into the rows the
  * page writes to the offline cache. `mapCachedToItpInstance` reverses that,
  * rebuilding a synthetic `ITPInstance` from cached rows for offline display.
- * The offline row shape only persists `isHoldPoint` (a boolean), so the granular
- * `pointType` (witness vs standard) does NOT survive the round-trip — a witness
- * point comes back as `standard`. See itpOfflineMapping.test.ts.
+ * The offline row now persists the granular `pointType` and preserves it across
+ * the round-trip, falling back to `isHoldPoint` only for pre-fix cache rows that
+ * lack it.
  *
  * `@/lib/offlineDb` is imported type-only so this module never pulls Dexie /
  * IndexedDB into its runtime graph.
@@ -77,6 +77,7 @@ export function mapInstanceToOfflineItems(instance: ITPInstance): OfflineCheckli
       description: item.acceptanceCriteria || undefined,
       responsibleParty: item.responsibleParty,
       isHoldPoint: item.isHoldPoint,
+      pointType: item.pointType,
       status,
       notes: completion?.notes || undefined,
       completedAt: completion?.completedAt || undefined,
@@ -89,8 +90,9 @@ export function mapInstanceToOfflineItems(instance: ITPInstance): OfflineCheckli
 /**
  * Rebuild a synthetic `ITPInstance` from a cached offline checklist for display
  * when the network fetch fails. Items become virtual checklist items (with
- * `pointType` derived from `isHoldPoint`); non-pending items become synthetic
- * completions. Caller sets `isOfflineData` and surfaces the cache age.
+ * `pointType` used when present, else derived from `isHoldPoint`); non-pending
+ * items become synthetic completions. Caller sets `isOfflineData` and surfaces
+ * the cache age.
  */
 export function mapCachedToItpInstance(cached: OfflineITPChecklist): ITPInstance {
   return {
@@ -104,7 +106,7 @@ export function mapCachedToItpInstance(cached: OfflineITPChecklist): ITPInstance
         category: 'General',
         responsibleParty: normalizeResponsibleParty(item.responsibleParty),
         isHoldPoint: item.isHoldPoint,
-        pointType: item.isHoldPoint ? 'hold_point' : 'standard',
+        pointType: item.pointType ?? (item.isHoldPoint ? 'hold_point' : 'standard'),
         evidenceRequired: 'none',
         order: index,
         acceptanceCriteria: item.description || null,

@@ -26,6 +26,7 @@ import { isUniqueConstraintOn } from '../ncrs/ncrCoreValidation.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
 import {
   assertExpectedPreviousItpCompletion,
+  assertWitnessDecisionForCompletion,
   buildItpCompletionTransform,
   buildItpCompletionWitnessData,
   buildItpSubbieCompletionNotifications,
@@ -39,7 +40,10 @@ import {
 import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
 import { completionUpdateRoutes } from './completionUpdateRoutes.js';
 import { completionVerificationRoutes } from './completionVerificationRoutes.js';
-import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import {
+  isReleaseGatedChecklistItem,
+  isWitnessChecklistItem,
+} from '../../lib/holdPointReleaseGating.js';
 import {
   isSubcontractorVisibleChecklistItem,
   resolveChecklistItemForInstance,
@@ -265,6 +269,7 @@ completionsRouter.post(
     // a hold point N/A or raise an NCR. The guard fires only when FINISHING the
     // item as 'completed'.
     const isHoldPointSignoffItem = isReleaseGatedChecklistItem(checklistItemForInstance);
+    const isWitnessItem = isWitnessChecklistItem(checklistItemForInstance);
 
     if (newStatus === 'completed' && isHoldPointSignoffItem) {
       let holdPointReleased = false;
@@ -391,6 +396,15 @@ completionsRouter.post(
             { currentStatus: existingCompletion.status },
           );
         }
+
+        assertWitnessDecisionForCompletion({
+          isWitnessItem,
+          newStatus,
+          requestWitnessPresent: witnessPresent,
+          requestWitnessName: witnessName,
+          existingWitnessPresent: existingCompletion?.witnessPresent ?? null,
+          existingWitnessName: existingCompletion?.witnessName ?? null,
+        });
 
         let completion;
         if (existingCompletion) {

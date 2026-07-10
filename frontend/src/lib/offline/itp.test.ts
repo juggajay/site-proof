@@ -253,6 +253,38 @@ describe('updateChecklistItemOffline', () => {
     );
   });
 
+  it('persists witness attribution on a queued witness completion so it syncs complete (F-08)', async () => {
+    mockChecklistLookup(undefined);
+
+    await updateChecklistItemOffline(
+      'lot-1',
+      'item-1',
+      'completed',
+      undefined,
+      'You (Offline)',
+      undefined,
+      { witnessPresent: true, witnessName: 'Jane Inspector', witnessCompany: 'Client Co' },
+    );
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'completed',
+        witnessPresent: true,
+        witnessName: 'Jane Inspector',
+        witnessCompany: 'Client Co',
+      }),
+    );
+    expect(offlineDb.syncQueue.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          witnessPresent: true,
+          witnessName: 'Jane Inspector',
+          witnessCompany: 'Client Co',
+        }),
+      }),
+    );
+  });
+
   it('replaces a still-queued entry for the same item instead of appending (last-write-wins)', async () => {
     mockChecklistLookup(undefined);
     mockSyncQueueLookup([
