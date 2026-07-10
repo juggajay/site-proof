@@ -181,16 +181,18 @@ describe('buildItpCompletionWitnessData', () => {
 });
 
 describe('shouldCreateFailedItpNcr', () => {
-  it('is true only on the first transition into failed', () => {
-    expect(shouldCreateFailedItpNcr('failed', 'pending')).toBe(true);
-    expect(shouldCreateFailedItpNcr('failed', null)).toBe(true);
-    expect(shouldCreateFailedItpNcr('failed', undefined)).toBe(true);
+  it('is true for a failed item that has no linked NCR yet (first failure or orphan repair)', () => {
+    expect(shouldCreateFailedItpNcr('failed', false)).toBe(true);
   });
 
-  it('is false when already failed or when the new status is not failed', () => {
-    expect(shouldCreateFailedItpNcr('failed', 'failed')).toBe(false);
-    expect(shouldCreateFailedItpNcr('completed', 'pending')).toBe(false);
-    expect(shouldCreateFailedItpNcr('pending', 'failed')).toBe(false);
+  it('is false when the failed item already has a linked NCR (dedup)', () => {
+    expect(shouldCreateFailedItpNcr('failed', true)).toBe(false);
+  });
+
+  it('is false when the new status is not failed, regardless of existing NCR', () => {
+    expect(shouldCreateFailedItpNcr('completed', false)).toBe(false);
+    expect(shouldCreateFailedItpNcr('pending', false)).toBe(false);
+    expect(shouldCreateFailedItpNcr('not_applicable', true)).toBe(false);
   });
 });
 

@@ -17,8 +17,12 @@ import {
   requireItpSubcontractorCompletionPermission,
 } from './helpers/access.js';
 import { logError } from '../../lib/serverLogger.js';
-import { createNcrWithAllocatedNumber } from '../ncrs/ncrNumberAllocation.js';
-import { buildChecklistItemNcrMarker } from './instances/ncrLinks.js';
+import { allocateNcrNumber, NCR_NUMBER_RETRY_LIMIT } from '../ncrs/ncrNumberAllocation.js';
+import {
+  buildChecklistItemNcrMarker,
+  rectificationNotesReferencesChecklistItem,
+} from './instances/ncrLinks.js';
+import { isUniqueConstraintOn } from '../ncrs/ncrCoreValidation.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
 import {
   assertExpectedPreviousItpCompletion,
@@ -346,163 +350,196 @@ completionsRouter.post(
       checklistItem: true,
     } as const;
 
-    const { completion, shouldCreateFailedNcr } = await prisma.$transaction(async (tx) => {
-      // Serialize find-or-create completion writes for an ITP instance without requiring a schema migration.
-      const lockedInstances = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id
-        FROM itp_instances
-        WHERE id = ${itpInstanceId}
-        FOR UPDATE
-      `;
-      if (lockedInstances.length !== 1) {
-        throw AppError.notFound('ITP instance');
-      }
+    // Completion write + (for failed items) NCR creation happen in ONE atomic
+    // transaction so a failed ITP can never commit without its NCR. NCR numbers
+    // are unique per project, so a concurrent failed completion in the same
+    // project can lose the [projectId, ncrNumber] race; we retry the whole
+    // transaction on that unique-constraint violation (mirrors
+    // createNcrWithAllocatedNumber's retry, but here the completion write rides
+    // along and is safely re-run because the aborted attempt rolled it back).
+    const commitCompletion = () =>
+      prisma.$transaction(async (tx) => {
+        // Serialize find-or-create completion writes for an ITP instance without requiring a schema migration.
+        const lockedInstances = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id
+          FROM itp_instances
+          WHERE id = ${itpInstanceId}
+          FOR UPDATE
+        `;
+        if (lockedInstances.length !== 1) {
+          throw AppError.notFound('ITP instance');
+        }
 
-      const existingCompletion = await tx.iTPCompletion.findUnique({
-        where: {
-          itpInstanceId_checklistItemId: {
-            itpInstanceId,
-            checklistItemId,
+        const existingCompletion = await tx.iTPCompletion.findUnique({
+          where: {
+            itpInstanceId_checklistItemId: {
+              itpInstanceId,
+              checklistItemId,
+            },
           },
-        },
-      });
-      assertExpectedPreviousItpCompletion(existingCompletion, expectedPreviousCompletion);
-      if (existingCompletion?.verificationStatus === 'verified') {
-        throw AppError.conflict(
-          'Verified ITP completions cannot be changed through the standard completion path',
-          { verificationStatus: existingCompletion.verificationStatus },
-        );
-      }
-      if (existingCompletion?.status === 'failed' && newStatus !== 'failed') {
-        throw AppError.conflict(
-          'Failed ITP completions cannot be changed through the standard completion path',
-          { currentStatus: existingCompletion.status },
-        );
-      }
-
-      const shouldCreateFailedNcr = shouldCreateFailedItpNcr(newStatus, existingCompletion?.status);
-
-      if (existingCompletion) {
-        // Update existing completion
-        const completion = await tx.iTPCompletion.update({
-          where: { id: existingCompletion.id },
-          data: {
-            status: newStatus,
-            notes: notes ?? existingCompletion.notes,
-            completedAt: isFinished ? new Date() : null,
-            completedById: isFinished ? user.userId : null,
-            // Feature #463: Signature capture
-            ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
-            // Feature #271: Set pending_verification for subcontractor finished outcomes.
-            // H6: a previously rejected item that is resubmitted re-enters the
-            // queue and its prior verifier attribution (verifiedBy/At/notes) is
-            // cleared; a non-rejected item just takes the computed status.
-            ...resolveItpRecompletionVerificationFields({
-              existingVerificationStatus: existingCompletion.verificationStatus,
-              computedVerificationStatus: verificationStatus,
-            }),
-            ...witnessData,
-          },
-          include: completionInclude,
         });
+        assertExpectedPreviousItpCompletion(existingCompletion, expectedPreviousCompletion);
+        if (existingCompletion?.verificationStatus === 'verified') {
+          throw AppError.conflict(
+            'Verified ITP completions cannot be changed through the standard completion path',
+            { verificationStatus: existingCompletion.verificationStatus },
+          );
+        }
+        if (existingCompletion?.status === 'failed' && newStatus !== 'failed') {
+          throw AppError.conflict(
+            'Failed ITP completions cannot be changed through the standard completion path',
+            { currentStatus: existingCompletion.status },
+          );
+        }
 
-        return { completion, shouldCreateFailedNcr };
-      }
-
-      // Create new completion
-      const completion = await tx.iTPCompletion.create({
-        data: {
-          itpInstanceId,
-          checklistItemId,
-          status: newStatus,
-          notes: notes || null,
-          completedAt: isFinished ? new Date() : null,
-          completedById: isFinished ? user.userId : null,
-          // Feature #463: Signature capture
-          signatureUrl: signatureDataUrl || null,
-          // Feature #271: Set pending_verification for subcontractor finished outcomes
-          ...(verificationStatus ? { verificationStatus } : {}),
-          ...witnessData,
-        },
-        include: completionInclude,
-      });
-
-      return { completion, shouldCreateFailedNcr };
-    });
-
-    // If status is 'failed', create an NCR linked to the lot
-    let createdNcr = null;
-    if (shouldCreateFailedNcr) {
-      // Get the ITP instance to find the lot and project
-      const itpInstance = await prisma.iTPInstance.findUnique({
-        where: { id: itpInstanceId },
-        include: {
-          lot: true,
-          template: true,
-        },
-      });
-
-      if (itpInstance && itpInstance.lot) {
-        const lot = itpInstance.lot;
-
-        // Get checklist item description for NCR context
-        const checklistItemDescription =
-          completion.checklistItem?.description || 'ITP checklist item';
-
-        // Determine if major NCR requires QM approval
-        const isMajor = ncrSeverity === 'major';
-
-        // Allocate the NCR number and create the NCR using the canonical race-safe
-        // path (max sequence + 1 inside a transaction with retry on the
-        // [projectId, ncrNumber] unique constraint). Computing the number with a
-        // plain count outside a transaction lets two concurrent "Mark as Failed"
-        // submissions derive the same number, so the second one 500s on P2002.
-        createdNcr = await createNcrWithAllocatedNumber(lot.projectId, async (tx, ncrNumber) => {
-          const ncr = await tx.nCR.create({
+        let completion;
+        if (existingCompletion) {
+          // Update existing completion
+          completion = await tx.iTPCompletion.update({
+            where: { id: existingCompletion.id },
             data: {
-              projectId: lot.projectId,
-              ncrNumber,
-              description: ncrDescription || `ITP item failed: ${checklistItemDescription}`,
-              specificationReference: itpInstance.template?.specificationReference || null,
-              category: ncrCategory || 'workmanship',
-              severity: ncrSeverity || 'minor',
-              qmApprovalRequired: isMajor,
-              clientNotificationRequired: isMajor,
-              raisedById: user.userId,
-              // Store ITP item reference in rectification notes for traceability. The
-              // human-readable sentence keeps context for reviewers; the trailing
-              // machine-parseable marker lets the GET ITP instance endpoint re-attach
-              // this NCR as the failed item's linkedNcr after a page reload.
-              rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId}) ${buildChecklistItemNcrMarker(checklistItemId)}`,
-              ncrLots: {
-                create: [
-                  {
-                    lotId: lot.id,
-                  },
-                ],
-              },
+              status: newStatus,
+              notes: notes ?? existingCompletion.notes,
+              completedAt: isFinished ? new Date() : null,
+              completedById: isFinished ? user.userId : null,
+              // Feature #463: Signature capture
+              ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
+              // Feature #271: Set pending_verification for subcontractor finished outcomes.
+              // H6: a previously rejected item that is resubmitted re-enters the
+              // queue and its prior verifier attribution (verifiedBy/At/notes) is
+              // cleared; a non-rejected item just takes the computed status.
+              ...resolveItpRecompletionVerificationFields({
+                existingVerificationStatus: existingCompletion.verificationStatus,
+                computedVerificationStatus: verificationStatus,
+              }),
+              ...witnessData,
             },
+            include: completionInclude,
+          });
+        } else {
+          // Create new completion
+          completion = await tx.iTPCompletion.create({
+            data: {
+              itpInstanceId,
+              checklistItemId,
+              status: newStatus,
+              notes: notes || null,
+              completedAt: isFinished ? new Date() : null,
+              completedById: isFinished ? user.userId : null,
+              // Feature #463: Signature capture
+              signatureUrl: signatureDataUrl || null,
+              // Feature #271: Set pending_verification for subcontractor finished outcomes
+              ...(verificationStatus ? { verificationStatus } : {}),
+              ...witnessData,
+            },
+            include: completionInclude,
+          });
+        }
+
+        // Failed items raise an NCR in the SAME transaction. The decision keys on
+        // whether the item already has a linked NCR (idempotent + self-healing:
+        // repairs a previously orphaned failed completion), not on the status
+        // transition.
+        let createdNcr = null;
+        if (newStatus === 'failed') {
+          const itpInstance = await tx.iTPInstance.findUnique({
+            where: { id: itpInstanceId },
             include: {
-              project: { select: { name: true } },
-              raisedBy: { select: { fullName: true, email: true } },
-              ncrLots: {
-                include: {
-                  lot: { select: { lotNumber: true } },
-                },
-              },
+              lot: true,
+              template: true,
             },
           });
 
-          // Update lot status to ncr_raised in the same transaction as the NCR.
-          await tx.lot.update({
-            where: { id: lot.id },
-            data: { status: 'ncr_raised' },
-          });
+          if (itpInstance && itpInstance.lot) {
+            const lot = itpInstance.lot;
 
-          return ncr;
-        });
+            const lotNcrs = await tx.nCR.findMany({
+              where: { ncrLots: { some: { lotId: lot.id } } },
+              select: { rectificationNotes: true },
+            });
+            const hasExistingItemNcr = lotNcrs.some((ncrRow) =>
+              rectificationNotesReferencesChecklistItem(ncrRow.rectificationNotes, checklistItemId),
+            );
+
+            if (shouldCreateFailedItpNcr(newStatus, hasExistingItemNcr)) {
+              // Get checklist item description for NCR context
+              const checklistItemDescription =
+                completion.checklistItem?.description || 'ITP checklist item';
+
+              // Determine if major NCR requires QM approval
+              const isMajor = ncrSeverity === 'major';
+
+              // Allocate the NCR number inside this transaction. On a concurrent
+              // [projectId, ncrNumber] clash the create throws P2002 and the outer
+              // retry loop re-runs the whole transaction with a fresh number.
+              const ncrNumber = await allocateNcrNumber(tx, lot.projectId);
+
+              createdNcr = await tx.nCR.create({
+                data: {
+                  projectId: lot.projectId,
+                  ncrNumber,
+                  description: ncrDescription || `ITP item failed: ${checklistItemDescription}`,
+                  specificationReference: itpInstance.template?.specificationReference || null,
+                  category: ncrCategory || 'workmanship',
+                  severity: ncrSeverity || 'minor',
+                  qmApprovalRequired: isMajor,
+                  clientNotificationRequired: isMajor,
+                  raisedById: user.userId,
+                  // Store ITP item reference in rectification notes for traceability. The
+                  // human-readable sentence keeps context for reviewers; the trailing
+                  // machine-parseable marker lets the GET ITP instance endpoint re-attach
+                  // this NCR as the failed item's linkedNcr after a page reload.
+                  rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId}) ${buildChecklistItemNcrMarker(checklistItemId)}`,
+                  ncrLots: {
+                    create: [
+                      {
+                        lotId: lot.id,
+                      },
+                    ],
+                  },
+                },
+                include: {
+                  project: { select: { name: true } },
+                  raisedBy: { select: { fullName: true, email: true } },
+                  ncrLots: {
+                    include: {
+                      lot: { select: { lotNumber: true } },
+                    },
+                  },
+                },
+              });
+
+              // Update lot status to ncr_raised in the same transaction as the NCR.
+              await tx.lot.update({
+                where: { id: lot.id },
+                data: { status: 'ncr_raised' },
+              });
+            }
+          }
+        }
+
+        return { completion, createdNcr };
+      });
+
+    let txOutcome: Awaited<ReturnType<typeof commitCompletion>> | null = null;
+    for (let attempt = 1; attempt <= NCR_NUMBER_RETRY_LIMIT; attempt += 1) {
+      try {
+        txOutcome = await commitCompletion();
+        break;
+      } catch (error) {
+        if (
+          attempt < NCR_NUMBER_RETRY_LIMIT &&
+          isUniqueConstraintOn(error, ['projectId', 'ncrNumber'])
+        ) {
+          continue;
+        }
+        throw error;
       }
     }
+    if (!txOutcome) {
+      throw AppError.conflict('Could not allocate an NCR number. Please try again.');
+    }
+    const { completion, createdNcr } = txOutcome;
 
     // Auto-progress lot status based on ITP completion state (but not for failed items)
     if (isFinished && newStatus !== 'failed') {

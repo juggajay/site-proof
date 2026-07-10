@@ -15,6 +15,27 @@ export const NCR_NUMBER_RETRY_LIMIT = 5;
 type NcrTransactionClient = Prisma.TransactionClient;
 
 /**
+ * Allocate the next sequential NCR number (max existing sequence + 1) using a
+ * caller-supplied transaction client, so a caller that already owns a transaction
+ * (e.g. the failed-ITP completion write) can allocate and create the NCR in the
+ * SAME atomic transaction. The caller must retry the whole transaction on a
+ * [projectId, ncrNumber] unique-constraint violation (see isUniqueConstraintOn).
+ */
+export async function allocateNcrNumber(
+  tx: NcrTransactionClient,
+  projectId: string,
+): Promise<string> {
+  const existingNcrNumbers = await tx.nCR.findMany({
+    where: {
+      projectId,
+      ncrNumber: { startsWith: 'NCR-' },
+    },
+    select: { ncrNumber: true },
+  });
+  return getNextNcrNumber(existingNcrNumbers);
+}
+
+/**
  * Allocate the next sequential NCR number for a project (max existing sequence + 1)
  * and run `create` inside a transaction, retrying on a unique-constraint clash so
  * concurrent NCR creators do not produce duplicate numbers / 500s.
@@ -30,14 +51,7 @@ export async function createNcrWithAllocatedNumber<T>(
   for (let attempt = 1; attempt <= NCR_NUMBER_RETRY_LIMIT; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
-        const existingNcrNumbers = await tx.nCR.findMany({
-          where: {
-            projectId,
-            ncrNumber: { startsWith: 'NCR-' },
-          },
-          select: { ncrNumber: true },
-        });
-        const ncrNumber = getNextNcrNumber(existingNcrNumbers);
+        const ncrNumber = await allocateNcrNumber(tx, projectId);
         return create(tx, ncrNumber);
       });
     } catch (error) {
