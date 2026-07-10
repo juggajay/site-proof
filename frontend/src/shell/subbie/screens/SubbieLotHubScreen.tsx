@@ -24,7 +24,7 @@ import { ChevronRight, ClipboardCheck, Eye, Flag, FolderOpen, Inbox } from 'luci
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { HubTile } from '@/shell/components/HubTile';
-import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -133,23 +133,24 @@ export function SubbieLotHubScreen() {
   // Lot identity/status — shared portalAssignedWork cache.
   const { data: workLots = [] } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
-    queryFn: async () => {
-      const res = await apiFetch<{ lots: WorkLot[] }>(
+    // Same queryFn behavior as WorkScreen (shared portalAssignedWork cache key);
+    // also means lots beyond the first page can be found by id here.
+    queryFn: () =>
+      fetchAllLotPages<WorkLot>(
         `/api/lots${projectQuery}${projectQuery ? '&' : '?'}portalModule=lots`,
-      );
-      return res.lots ?? [];
-    },
+      ),
     enabled: !!user?.id && !!projectId && lotsEnabled,
   });
 
   // Inspection + permission — shared portalITPs cache (same query as ItpsScreen).
   const { data: itpLotsData } = useQuery({
     queryKey: queryKeys.portalITPs(user?.id, projectId, subcontractorCompanyId),
+    // Same queryFn behavior as ItpsScreen (shared portalITPs cache key).
     queryFn: async () => {
-      const res = await apiFetch<{ lots: ItpLot[] }>(
+      const lots = await fetchAllLotPages<ItpLot>(
         `/api/lots${projectQuery}${projectQuery ? '&' : '?'}includeITP=true&portalModule=itps`,
       );
-      return (res.lots ?? []).filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
+      return lots.filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
     },
     enabled: !!user?.id && !!projectId && itpsEnabled,
   });

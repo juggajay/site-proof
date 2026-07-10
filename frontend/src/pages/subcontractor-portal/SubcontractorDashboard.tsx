@@ -19,6 +19,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { isPortalModuleEnabled } from './portalAccessModel';
@@ -214,18 +215,19 @@ export function SubcontractorDashboard() {
 
   const { data: assignedLotsData } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId, company?.id),
-    queryFn: async () => {
-      const res = await apiFetch<{ lots: Lot[] }>(
+    // Same queryFn behavior as AssignedWorkPage — these share the
+    // portalAssignedWork cache key, so cache the full set; the dashboard's
+    // 5-item preview is sliced at render below.
+    queryFn: () =>
+      fetchAllLotPages<Lot>(
         `/api/lots${buildPortalCompanyQuery({
           projectId: company!.projectId,
           subcontractorCompanyId: company!.id,
         })}&portalModule=lots`,
-      );
-      return res.lots.slice(0, 5);
-    },
+      ),
     enabled: !!user?.id && !!company?.projectId && canViewAssignedLots,
   });
-  const assignedLots = assignedLotsData ?? [];
+  const assignedLots = (assignedLotsData ?? []).slice(0, 5);
   const hasAssignedLotsResponse = assignedLotsData !== undefined;
 
   const { data: notifData } = useQuery({
