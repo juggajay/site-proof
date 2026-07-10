@@ -53,3 +53,66 @@ reports hub computed fields. → opus subagent
 
 ## Review notes
 (fill as batches land)
+
+---
+
+# External adversarial codebase review (2026-07-10)
+
+Brief: `docs/research/external-review-prompt-2026-07-10.md`
+
+- [x] Map current route mounts, middleware, schema, and high-risk workflows.
+- [x] Audit tenancy/authorization and public hold-point token handling.
+- [x] Audit claims, variations, dockets, Xero export, transitions, and DB constraints.
+- [x] Audit AU civil workflow integrity, resilience, pagination, query shape, and high-risk test gaps.
+- [x] Reproduce every candidate finding from code and reject findings covered by middleware or constraints.
+- [x] Write the final review with exact evidence, smallest fixes, and unverified gaps separated.
+
+## Fix campaign (2026-07-10) — Jay's directives
+
+F-05 = intended workflow, no change. F-09 parked. Fix F-01..F-04, F-06..F-08, F-10.
+Orchestration: Fable plans/reviews/merges; opus subagents implement in worktrees;
+codex CLI (gpt-5.6-sol ultra) drives the most complex (F-02, F-03/04, F-08).
+Base: origin/master 5e3f00f1 (= review target, no drift).
+
+### Wave 1 (parallel, disjoint files)
+- [x] F-01 token redaction in telemetry — PR #1379 MERGED
+- [x] F-03+F-04 claims/payment replay idempotency — PR #1382 MERGED;
+      migration 20260710120000_claim_request_key applied to prod Railway
+      BEFORE merge (migrate deploy, verified up to date)
+- [x] F-06 NCR evidence immutability — PR #1380 MERGED
+- [x] F-07 lot pagination (8 surfaces incl. HomeScreen shared-cache-key fix +
+      SubcontractorDashboard slice-poisoning) — PR #1378 MERGED
+- [x] F-10 locked-evidence metadata guard — PR #1377 MERGED
+- [x] BONUS: master CI time bomb — hardcoded scheduledDate 2026-07-10 in HP
+      batch delivery test vs working-day notice check — PR #1381 MERGED
+
+### Wave 2 (sequential — both touch itp completion backend)
+- [x] F-02 failed ITP + NCR in one transaction + retry repair — PR #1383 MERGED
+      (marker-existence idempotency = self-healing for prod orphans on next touch;
+      one-off prod orphan COUNT deferred to operator)
+- [x] F-08 offline witness pointType preservation + backend witness validation — PR #1384 MERGED
+      (old queued bare witness completions now dead-letter on sync with a visible error — by design)
+
+### Campaign review (all done 2026-07-10)
+All 8 actioned findings merged same day: #1377 (F-10), #1378 (F-07, 8 surfaces),
+#1379 (F-01), #1380 (F-06), #1381 (CI time bomb), #1382 (F-03+F-04, prod
+migration applied pre-merge), #1383 (F-02), #1384 (F-08).
+Jay's calls: F-05 = intended workflow (no change); F-09 parked.
+Operator follow-ups (not code): Sentry/Railway log sweep for already-captured
+HP tokens (F-01 tail); one-off prod aggregates — failed ITPs without NCR,
+verification/closed NCRs with zero evidence, duplicate claims/payments.
+Proposed next: second-pass hunt on the 6 finding CLASSES (Xero replay,
+number allocators, evidence-link delete guards, split transactions,
+CSV/register pagination, offline type lossiness) — awaiting Jay's go.
+
+### Merge protocol per PR
+Review vs finding spec + quality → guardrails (type-check, routeAuthCoverage,
+productionReadiness, fallow verdict in body) → `gh pr checks --watch` green → merge.
+
+## External review notes
+
+- Report: `docs/research/external-codebase-review-2026-07-10.md`
+- Final set: 10 verified findings (8 High, 2 Medium-High); design-dependent Xero/diary candidates were rejected.
+- Strongest risks: capability tokens in telemetry, failed ITP/NCR split commit, claim/payment replay, release-time HP prerequisite bypass, NCR evidence lifecycle bypass.
+- Tenancy result: no additional conventional cross-tenant IDOR verified; HP hash/expiry/single-use logic otherwise held up.
+- Verification: focused frontend suites 58/58 passed; synthetic-token helper checks reproduced F-01. Focused backend tests were stopped by the non-local database safety guard and were not bypassed.

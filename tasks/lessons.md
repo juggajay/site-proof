@@ -89,3 +89,33 @@ ignores new nullable columns; new code breaks on missing ones). (3) When
 dispatching build agents, any "create a migration" instruction must come
 with "the orchestrator gates the merge on the migration plan" — agents
 can't apply prod migrations, so the coupling is the orchestrator's job.
+
+## 2026-07-10 — subagents ran touched-file tests only; CI caught cross-file breaks twice
+Two of five build agents in the review-fix campaign shipped green on their
+own targeted test runs, then failed CI on OTHER files' tests: F-07's URL
+change broke DocketScreen.test.tsx (exact-URL mock in a consumer it didn't
+touch); F-08's added parameter broke useItpInstance.test.ts +
+itpCompletionWrite.test.ts (callers pinning the old mock arity). The signal:
+changing a shared function/URL shape means the blast radius is its CALLERS'
+tests, which targeted runs never execute.
+**Rules:** (1) Agent prompts for frontend changes must require the FULL unit
+suite (`vitest run`) before pushing, not just touched files — backend suites
+are slower but itp/claims/ncrs cross-file suites should run when shared
+helpers change. (2) When a change alters any exported function signature,
+fetch URL, or mock-visible shape, grep for consumers' tests explicitly.
+(3) Orchestrator: name the known parallel-load flakes (ReportsPage,
+ClaimsPageSections — pass in isolation) in the prompt so agents don't burn
+time chasing them or, worse, "fix" them.
+
+## 2026-07-10 — hardcoded future date in a test became a time bomb on the day it expired
+The HP batch delivery test hardcoded scheduledDate '2026-07-10'; the route
+validates a minimum working-day notice period from NOW, so the test passed
+every day until the calendar caught up, then broke master and every open PR
+simultaneously (same test, three unrelated PRs — the tell that master itself
+was broken). Fix: compute dates relative to now (+14d clears any
+weekend/notice combo).
+**Rules:** (1) A test input validated against the current clock must be
+computed, never literal. (2) When the SAME test fails on multiple unrelated
+PRs, suspect master/date/environment before suspecting any PR — reproduce on
+clean master first. (3) `gh pr checks --watch` exits non-zero for SKIPPED
+checks (path-gated jobs); parse for state "fail" before treating a PR as red.
