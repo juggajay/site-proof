@@ -2622,6 +2622,36 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('should reject removing the last evidence while the NCR is in verification', async () => {
+    const verificationNcrId = await createVerificationNcr(
+      'Evidence must be immutable during verification',
+    );
+
+    const evidence = await prisma.nCREvidence.findFirstOrThrow({
+      where: { ncrId: verificationNcrId },
+      select: { id: true },
+    });
+
+    const res = await request(app)
+      .delete(`/api/ncrs/${verificationNcrId}/evidence/${evidence.id}`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('submitted for verification');
+
+    // Evidence survives, so the QM still closes against the record they reviewed.
+    await expect(
+      prisma.nCREvidence.findUnique({ where: { id: evidence.id } }),
+    ).resolves.not.toBeNull();
+
+    const closeRes = await request(app)
+      .post(`/api/ncrs/${verificationNcrId}/close`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ verificationNotes: 'Verified complete with evidence intact' });
+    expect(closeRes.status).toBe(200);
+    expect(closeRes.body.ncr.status).toBe('closed');
+  });
+
   it('should reject adding evidence to a closed NCR', async () => {
     const ncrId = await createVerificationNcr('Closed NCR should reject late evidence');
 

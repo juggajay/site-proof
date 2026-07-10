@@ -2464,6 +2464,59 @@ describe('Documents API', () => {
       }
     });
 
+    it('rejects generic deletion of a document linked to a closed NCR and preserves the evidence link', async () => {
+      const suffix = Date.now();
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'ncr_evidence',
+          filename: `delete-ncr-evidence-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/delete-ncr-evidence-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-DELETE-${suffix}`,
+          description: 'Closed NCR evidence fixture',
+          category: 'workmanship',
+          status: 'closed',
+          raisedById: userId,
+        },
+      });
+      const evidence = await prisma.nCREvidence.create({
+        data: { ncrId: ncr.id, documentId: sourceDocument.id, evidenceType: 'photo' },
+      });
+
+      try {
+        const deleteRes = await request(app)
+          .delete(`/api/documents/${sourceDocument.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(deleteRes.status).toBe(409);
+        expect(deleteRes.body.error.code).toBe('CONFLICT');
+        expect(deleteRes.body.error.message).toContain('NCR workflow');
+
+        // The FK is onDelete: Cascade, so the document must survive to keep the
+        // closed NCR's evidence link intact.
+        await expect(
+          prisma.document.findUnique({ where: { id: sourceDocument.id } }),
+        ).resolves.not.toBeNull();
+        await expect(
+          prisma.nCREvidence.findUnique({ where: { id: evidence.id } }),
+        ).resolves.not.toBeNull();
+      } finally {
+        await prisma.nCREvidence.deleteMany({ where: { ncrId: ncr.id } });
+        await prisma.nCR.deleteMany({ where: { id: ncr.id } });
+        await prisma.document.deleteMany({ where: { id: sourceDocument.id } });
+      }
+    });
+
     it.each([
       ['drawing', 'Drawings', 'drawing register'],
       ['test_certificate', 'test_results', 'test result workflow'],

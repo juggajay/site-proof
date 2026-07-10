@@ -95,8 +95,18 @@ async function ensureCloseClaimed(
 
   const currentNcr = await client.nCR.findUnique({
     where: { id: ncrId },
-    select: { status: true },
+    select: { status: true, _count: { select: { ncrEvidence: true } } },
   });
+
+  // The close guard also requires evidence to exist; distinguish that cause so
+  // the caller isn't told the status is wrong when it is actually evidence that
+  // is missing (e.g. the last evidence was pulled during verification).
+  if (currentNcr?.status === 'verification' && currentNcr._count.ncrEvidence === 0) {
+    throw AppError.badRequest(
+      'This NCR has no rectification evidence attached and cannot be closed.',
+      { evidenceCount: 0 },
+    );
+  }
 
   throw AppError.badRequest('NCR must be in verification status to close', {
     currentStatus: currentNcr?.status,
@@ -281,7 +291,7 @@ ncrClosureWorkflowRouter.post(
 
     const updatedNcr = await prisma.$transaction(async (tx) => {
       const closeUpdate = await tx.nCR.updateMany({
-        where: { id, status: 'verification' },
+        where: { id, status: 'verification', ncrEvidence: { some: {} } },
         data: {
           status: closeStatus,
           verifiedById: user.userId,

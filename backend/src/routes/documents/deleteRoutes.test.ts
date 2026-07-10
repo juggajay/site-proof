@@ -30,7 +30,7 @@ import { writeAuditLogInTransaction } from '../../lib/auditLog.js';
 
 const mockWriteAuditLogInTransaction = vi.mocked(writeAuditLogInTransaction);
 
-function buildApp(documentType: string) {
+function buildApp(documentType: string, { ncrEvidenceLink = false } = {}) {
   const document = {
     id: 'document-1',
     projectId: 'project-1',
@@ -61,6 +61,9 @@ function buildApp(documentType: string) {
     document: {
       findUnique: vi.fn(async () => document),
       delete: rootDocumentDelete,
+    },
+    nCREvidence: {
+      findFirst: vi.fn(async () => (ncrEvidenceLink ? { id: 'ncr-evidence-1' } : null)),
     },
     $transaction: transaction,
   } as unknown as PrismaClient;
@@ -129,5 +132,22 @@ describe('createDocumentDeleteRouter', () => {
     expect(res.body.error.message).toContain(expectedMessage);
     expect(transaction).not.toHaveBeenCalled();
     expect(rootDocumentDelete).not.toHaveBeenCalled();
+  });
+
+  it('rejects generic deletion of a document linked as NCR evidence', async () => {
+    const { app, rootDocumentDelete, transaction, txDocumentDelete } = buildApp('photo', {
+      ncrEvidenceLink: true,
+    });
+
+    const res = await request(app)
+      .delete('/api/documents/document-1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CONFLICT');
+    expect(res.body.error.message).toContain('NCR workflow');
+    expect(transaction).not.toHaveBeenCalled();
+    expect(rootDocumentDelete).not.toHaveBeenCalled();
+    expect(txDocumentDelete).not.toHaveBeenCalled();
   });
 });
