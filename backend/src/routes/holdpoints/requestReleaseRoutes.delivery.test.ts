@@ -446,7 +446,10 @@ describe('hold point request-release delivery failure', () => {
           { itpChecklistItemId: 'item-2' },
         ],
         sharedEvidenceDocumentIds: ['doc-shared'],
-        scheduledDate: '2026-07-10',
+        // Dynamic future date: the route enforces a minimum working-day notice
+        // period from "now", so a hardcoded date becomes a time bomb the day
+        // the calendar catches up to it (this one failed on 2026-07-10).
+        scheduledDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         scheduledTime: '09:30',
         recipientEmail: 'reviewer@example.com',
         recipientName: 'Site Reviewer',
