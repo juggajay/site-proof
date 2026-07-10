@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
+import * as ncrNumberAllocation from './ncrs/ncrNumberAllocation.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
@@ -3987,8 +3988,8 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     const ncrCountAfterFirst = await prisma.nCR.count({ where: { projectId } });
     expect(ncrCountAfterFirst).toBe(1);
 
-    // Re-submitting failed for an item already failed must NOT create a second NCR
-    // (shouldCreateFailedNcr guard: existingCompletion?.status !== 'failed').
+    // Re-submitting failed for an item that already has a linked NCR must NOT
+    // create a second one (shouldCreateFailedItpNcr keys on NCR existence).
     const repeat = await request(app)
       .post('/api/itp/completions')
       .set('Authorization', `Bearer ${authToken}`)
@@ -4004,6 +4005,124 @@ describe('ITP Completion Decision Logic (characterization)', () => {
 
     const ncrCountAfterRepeat = await prisma.nCR.count({ where: { projectId } });
     expect(ncrCountAfterRepeat).toBe(1);
+  });
+
+  // F-02: the failed completion and its NCR must commit atomically. If NCR
+  // creation fails mid-transaction the whole write rolls back, so an inspection
+  // can never be left `failed` with no NCR disposition record.
+  it('rolls back the failed completion when NCR creation fails mid-transaction (atomicity)', async () => {
+    await resetContractorCompletion();
+    await prisma.nCRLot.deleteMany({ where: { lotId } });
+    await prisma.nCR.deleteMany({ where: { projectId } });
+
+    const spy = vi
+      .spyOn(ncrNumberAllocation, 'allocateNcrNumber')
+      .mockRejectedValue(new Error('injected NCR allocation failure'));
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'failed',
+          ncrDescription: 'Compaction below specification',
+        });
+
+      // The injected failure (not a retryable NCR-number clash) aborts the transaction.
+      expect(res.status).toBe(500);
+
+      // The completion must NOT be left `failed` without its NCR — it rolled back entirely.
+      const completion = await prisma.iTPCompletion.findFirst({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+      });
+      expect(completion).toBeNull();
+
+      // No NCR row and no orphaned lot-status flip.
+      const ncrCount = await prisma.nCR.count({ where: { projectId } });
+      expect(ncrCount).toBe(0);
+      const lot = await prisma.lot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lot.status).toBe('not_started');
+    } finally {
+      spy.mockRestore();
+      await prisma.nCRLot.deleteMany({ where: { lotId } });
+      await prisma.nCR.deleteMany({ where: { projectId } });
+      await resetContractorCompletion();
+    }
+  });
+
+  // F-02 repair path: a `failed` completion that was orphaned without an NCR
+  // (e.g. a row broken by the pre-fix bug) heals on the next POST — the missing
+  // NCR is created idempotently instead of the write being rejected.
+  it('repairs an orphaned failed completion by creating its missing NCR on the next POST', async () => {
+    await resetContractorCompletion();
+    await prisma.nCRLot.deleteMany({ where: { lotId } });
+    await prisma.nCR.deleteMany({ where: { projectId } });
+
+    // Seed a `failed` completion with NO linked NCR (the broken pre-fix state).
+    await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: contractorItemId,
+        status: 'failed',
+        notes: 'Orphaned failure with no NCR',
+        completedById: userId,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+
+    const ncrsBefore = await prisma.nCR.count({ where: { projectId } });
+    expect(ncrsBefore).toBe(0);
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'failed',
+          ncrDescription: 'Compaction below specification',
+          ncrCategory: 'workmanship',
+          ncrSeverity: 'minor',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ncr).not.toBeNull();
+      expect(res.body.ncr.ncrNumber).toMatch(/^NCR-/);
+
+      // The missing NCR now exists and links to the lot, tagged for this item.
+      const ncrs = await prisma.nCR.findMany({
+        where: { ncrLots: { some: { lotId } } },
+        select: { id: true, rectificationNotes: true },
+      });
+      expect(ncrs).toHaveLength(1);
+      expect(ncrs[0].rectificationNotes).toContain(`[itp-item:${contractorItemId}]`);
+
+      const lot = await prisma.lot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lot.status).toBe('ncr_raised');
+
+      // Idempotent: re-POSTing the now-healed item does not create a second NCR.
+      const repeat = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'failed',
+          ncrDescription: 'Still below specification',
+        });
+      expect(repeat.status).toBe(200);
+      expect(repeat.body.ncr).toBeNull();
+
+      const ncrCountAfter = await prisma.nCR.count({ where: { projectId } });
+      expect(ncrCountAfter).toBe(1);
+    } finally {
+      await prisma.nCRLot.deleteMany({ where: { lotId } });
+      await prisma.nCR.deleteMany({ where: { projectId } });
+      await resetContractorCompletion();
+    }
   });
 
   it('rejects subcontractor completion writes to hidden superintendent checklist items', async () => {

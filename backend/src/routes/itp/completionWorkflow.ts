@@ -117,14 +117,15 @@ export function buildItpCompletionWitnessData(input: {
 }
 
 /**
- * An NCR is created only on the first transition into `failed` — a completion
- * that is already `failed` must not raise a duplicate NCR.
+ * An NCR should be created for a `failed` ITP item only when the item does not
+ * already have one linked. Keying on NCR existence (rather than the previous
+ * completion status) makes the create idempotent AND self-healing: a first
+ * failure creates the NCR, a retry after a successful create skips it, and a
+ * `failed` row that was orphaned without an NCR (e.g. a mid-request crash) gets
+ * its NCR created on the next touch.
  */
-export function shouldCreateFailedItpNcr(
-  newStatus: string,
-  existingStatus: string | null | undefined,
-): boolean {
-  return newStatus === 'failed' && existingStatus !== 'failed';
+export function shouldCreateFailedItpNcr(newStatus: string, hasExistingItemNcr: boolean): boolean {
+  return newStatus === 'failed' && !hasExistingItemNcr;
 }
 
 export interface ExpectedPreviousItpCompletion {
