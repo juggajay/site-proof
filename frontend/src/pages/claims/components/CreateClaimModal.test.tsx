@@ -224,6 +224,45 @@ describe('CreateClaimModal create flow', () => {
     expect(postCall?.[0]).toBe('/api/projects/p1/claims');
   });
 
+  it('reuses the same requestKey across a retry after a failed create (F-03)', async () => {
+    // F-03: a lost-response retry must carry the SAME requestKey so the server
+    // treats it as a replay of one operation, not a second billable claim.
+    let postCount = 0;
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (options?.method === 'POST') {
+        postCount += 1;
+        return postCount === 1
+          ? Promise.reject(new Error('network dropped the response'))
+          : Promise.resolve({ claim: { id: 'claim-1' } });
+      }
+      if (path === '/api/projects/p1/claim-readiness') {
+        return Promise.resolve(READY_LOT_READINESS);
+      }
+      if (path === '/api/projects/p1/variations') {
+        return Promise.resolve({ variations: [] });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+
+    renderModal();
+
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Claim' }));
+    await waitFor(() => expect(postCount).toBe(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Claim' }));
+    await waitFor(() => expect(postCount).toBe(2));
+
+    const bodies = apiFetchMock.mock.calls
+      .filter((call) => (call[1] as RequestInit | undefined)?.method === 'POST')
+      .map((call) => JSON.parse(String((call[1] as RequestInit).body)));
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].requestKey).toBeTruthy();
+    expect(bodies[1].requestKey).toBe(bodies[0].requestKey);
+  });
+
   it('renders approved variations, includes selected variationIds, and folds them into the total', async () => {
     mockClaimReadinessAndVariations();
 

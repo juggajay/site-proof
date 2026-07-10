@@ -67,6 +67,7 @@ export const createClaimSchema = z
         }),
       )
       .optional(),
+    requestKey: z.string().uuid('requestKey must be a valid UUID').optional(),
   })
   .superRefine((data, ctx) => {
     if (data.lotIds && data.lotIds.length > 0) {
@@ -175,6 +176,7 @@ export const recordPaymentSchema = z.object({
     CLAIM_PAYMENT_REFERENCE_MAX_LENGTH,
   ),
   paymentNotes: optionalTrimmedClaimString('paymentNotes', CLAIM_PAYMENT_NOTES_MAX_LENGTH),
+  operationKey: z.string().uuid('operationKey must be a valid UUID').optional(),
 });
 
 export const CLAIM_AMOUNT_EPSILON = 0.000001;

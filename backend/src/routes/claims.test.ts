@@ -1429,6 +1429,75 @@ describe('Progress Claims API', () => {
         ),
       ).toBe(false);
     });
+
+    describe('claim creation idempotency (F-03)', () => {
+      function createClaimWithKey(lotId: string, percentageComplete: number, requestKey: string) {
+        return request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2025-09-01',
+            periodEnd: '2025-09-30',
+            lots: [{ lotId, percentageComplete }],
+            requestKey,
+          });
+      }
+
+      it('returns the same claim on a replayed create with the same requestKey', async () => {
+        const lot = await createCumulativeLot(100000);
+        const requestKey = '33333333-3333-4333-8333-333333333333';
+
+        const first = await createClaimWithKey(lot.id, 50, requestKey);
+        expect(first.status).toBe(201);
+
+        // Lost-response retry: same key, same body. Must NOT create a second
+        // $50k increment (the F-03 double-billing scenario).
+        const replay = await createClaimWithKey(lot.id, 50, requestKey);
+        expect(replay.status).toBe(201);
+        expect(replay.body.claim.id).toBe(first.body.claim.id);
+
+        const claims = await prisma.progressClaim.findMany({
+          where: { projectId, requestKey },
+        });
+        expect(claims).toHaveLength(1);
+        const claimedLots = await prisma.claimedLot.findMany({ where: { lotId: lot.id } });
+        expect(claimedLots).toHaveLength(1);
+      });
+
+      it('still allows distinct successive partial claims (no requestKey collision)', async () => {
+        const lot = await createCumulativeLot(100000);
+
+        const first = await createClaimWithKey(lot.id, 40, '33333333-3333-4333-8333-3333333330a1');
+        expect(first.status).toBe(201);
+        const second = await createClaimWithKey(lot.id, 40, '33333333-3333-4333-8333-3333333330a2');
+        expect(second.status).toBe(201);
+        expect(second.body.claim.id).not.toBe(first.body.claim.id);
+
+        const claimedLots = await prisma.claimedLot.findMany({ where: { lotId: lot.id } });
+        expect(claimedLots).toHaveLength(2);
+      });
+
+      it('converges concurrent same-key creates to a single claim', async () => {
+        const lot = await createCumulativeLot(100000);
+        const requestKey = '44444444-4444-4444-8444-444444444444';
+
+        const responses = await Promise.all([
+          createClaimWithKey(lot.id, 50, requestKey),
+          createClaimWithKey(lot.id, 50, requestKey),
+        ]);
+
+        expect(responses.every((res) => res.status === 201)).toBe(true);
+        const ids = new Set(responses.map((res) => res.body.claim.id));
+        expect(ids.size).toBe(1);
+
+        const claims = await prisma.progressClaim.findMany({
+          where: { projectId, requestKey },
+        });
+        expect(claims).toHaveLength(1);
+        const claimedLots = await prisma.claimedLot.findMany({ where: { lotId: lot.id } });
+        expect(claimedLots).toHaveLength(1);
+      });
+    });
   });
 
   describe('GET /api/projects/:projectId/claims', () => {
@@ -2990,6 +3059,74 @@ describe('Progress Claims API', () => {
           DROP FUNCTION IF EXISTS test_delay_claim_payment_update()
         `;
       }
+    });
+
+    describe('payment idempotency (F-04)', () => {
+      async function createCertifiedClaim(certifiedAmount = 1000) {
+        const claim = await createSubmittedCertificationClaim(certifiedAmount);
+        await prisma.progressClaim.update({
+          where: { id: claim.id },
+          data: { status: 'certified', certifiedAmount, certifiedAt: new Date() },
+        });
+        return claim;
+      }
+
+      it('does not double-record a replayed payment with the same operationKey', async () => {
+        const claim = await createCertifiedClaim(1000);
+        const operationKey = '55555555-5555-4555-8555-555555555555';
+        const body = { paidAmount: 400, paymentReference: 'PAY-IDEMP', operationKey };
+
+        const first = await request(app)
+          .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send(body);
+        expect(first.status).toBe(200);
+        expect(first.body.payment.amount).toBe(400);
+
+        // Lost-response retry: same key. Must return the prior result and NOT
+        // record a second $400 (the F-04 double-payment scenario).
+        const replay = await request(app)
+          .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send(body);
+        expect(replay.status).toBe(200);
+        expect(replay.body.payment.amount).toBe(400);
+
+        const updated = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(Number(updated?.paidAmount)).toBe(400);
+        expect(updated?.status).toBe('partially_paid');
+        const storedNotes = JSON.parse(updated?.disputeNotes || '{}') as {
+          paymentHistory?: unknown[];
+        };
+        expect(storedNotes.paymentHistory).toHaveLength(1);
+      });
+
+      it('records a payment once for concurrent same-operationKey requests', async () => {
+        const claim = await createCertifiedClaim(1000);
+        const operationKey = '66666666-6666-4666-8666-666666666666';
+        const body = { paidAmount: 400, paymentReference: 'PAY-CONC-IDEMP', operationKey };
+
+        const responses = await Promise.all([
+          request(app)
+            .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send(body),
+          request(app)
+            .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send(body),
+        ]);
+
+        expect(responses.map((res) => res.status).sort()).toEqual([200, 200]);
+
+        const updated = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(Number(updated?.paidAmount)).toBe(400);
+        expect(updated?.status).toBe('partially_paid');
+        const storedNotes = JSON.parse(updated?.disputeNotes || '{}') as {
+          paymentHistory?: unknown[];
+        };
+        expect(storedNotes.paymentHistory).toHaveLength(1);
+      });
     });
   });
 

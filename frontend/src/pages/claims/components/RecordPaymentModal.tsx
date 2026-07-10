@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 import { formatDateKey } from '@/lib/localDate';
+import { createUuid } from '@/lib/localIds';
 
 interface RecordPaymentModalProps {
   claim: Claim;
@@ -38,6 +39,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const recordingRef = useRef(false);
+  const operationKeyRef = useRef<string | undefined>(undefined);
 
   const parsedPaymentAmount = useMemo(
     () => parseOptionalNonNegativeDecimalInput(paymentAmount),
@@ -79,11 +81,22 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
     setRecording(true);
     setError(null);
     try {
+      // Generate one operation key per modal instance and keep it across
+      // retries. onRecordPayment (ClaimsPage) swallows errors instead of
+      // rethrowing, so we must NOT clear the key on "success" here — a lost
+      // response would otherwise mint a new key and double-record the payment.
+      // The modal unmounts on a real success (parent closes it), so the next
+      // payment gets a fresh key naturally.
+      if (!operationKeyRef.current) {
+        operationKeyRef.current = createUuid();
+      }
+
       await onRecordPayment(claim.id, {
         paidAmount: parsedPaymentAmount,
         paymentDate: paymentDate || undefined,
         paymentReference: paymentReference.trim() || undefined,
         paymentNotes: paymentNotes.trim() || undefined,
+        operationKey: operationKeyRef.current,
       });
     } finally {
       recordingRef.current = false;
