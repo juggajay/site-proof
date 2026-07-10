@@ -88,7 +88,9 @@ function getDocumentPortalModule(category?: string | null): SubcontractorPortalA
   return 'documents';
 }
 
-async function requireNoLockedItpEvidenceAttachment(document: DocumentAccessRecord): Promise<void> {
+export async function requireNoLockedItpEvidenceAttachment(
+  document: DocumentAccessRecord,
+): Promise<void> {
   if (!document.id) {
     return;
   }

@@ -1699,6 +1699,88 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it('should reject reusing a document locked as evidence on another completion (F-10)', async () => {
+    const suffix = `sibling-lock-${Date.now()}`;
+
+    // Completion A: a separate verified completion in the same instance.
+    const siblingChecklistItem = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId,
+        description: 'Sibling verified item',
+        pointType: 'verification',
+        sequenceNumber: 2,
+      },
+    });
+    const verifiedCompletion = await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: siblingChecklistItem.id,
+        status: 'completed',
+        completedById: userId,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        verificationStatus: 'verified',
+        verifiedAt: new Date('2026-01-02T00:00:00.000Z'),
+        verifiedById: userId,
+      },
+    });
+
+    // Document D: locked evidence on verified completion A.
+    const sharedDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename: `${suffix}.jpg`,
+        fileUrl: `/uploads/documents/${suffix}.jpg`,
+        fileSize: 1024,
+        mimeType: 'image/jpeg',
+        uploadedById: userId,
+        caption: 'Original verified evidence caption',
+      },
+    });
+    await prisma.iTPCompletionAttachment.create({
+      data: { completionId: verifiedCompletion.id, documentId: sharedDocument.id },
+    });
+
+    try {
+      // completionId (B) is pending; reusing D with new metadata must be rejected
+      // because it would rewrite locked evidence on verified completion A.
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          documentId: sharedDocument.id,
+          caption: 'Tampered caption via reuse',
+          gpsLatitude: -33.865143,
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain('ITP evidence cannot be changed');
+
+      // 1) D metadata unchanged.
+      const unchanged = await prisma.document.findUniqueOrThrow({
+        where: { id: sharedDocument.id },
+      });
+      expect(unchanged.caption).toBe('Original verified evidence caption');
+      expect(unchanged.gpsLatitude).toBeNull();
+
+      // 2) No new attachment link created on the pending completion B.
+      await expect(
+        prisma.iTPCompletionAttachment.findFirst({
+          where: { completionId, documentId: sharedDocument.id },
+        }),
+      ).resolves.toBeNull();
+    } finally {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { documentId: sharedDocument.id },
+      });
+      await prisma.document.deleteMany({ where: { id: sharedDocument.id } });
+      await prisma.iTPCompletion.deleteMany({ where: { id: verifiedCompletion.id } });
+      await prisma.iTPChecklistItem.deleteMany({ where: { id: siblingChecklistItem.id } });
+    }
+  });
+
   it('should enforce one attachment link per completion and document at the database level', async () => {
     const timestamp = Date.now();
     const duplicateGuardDocument = await prisma.document.create({
