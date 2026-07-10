@@ -22,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, MapPin } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
-import { apiFetch } from '@/lib/api';
+import { fetchAllLotPages } from '@/lib/lots';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -160,12 +160,8 @@ export function WorkScreen() {
     error,
   } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
-    queryFn: async () => {
-      const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots${projectQuery}${projectQuery ? '&' : '?'}portalModule=lots`,
-      );
-      return res.lots ?? [];
-    },
+    queryFn: () =>
+      fetchAllLotPages<Lot>(`/api/lots${projectQuery}${projectQuery ? '&' : '?'}portalModule=lots`),
     enabled: !!user?.id && !!projectId && lotsEnabled,
   });
 

@@ -99,11 +99,13 @@ describe('subbie shell WorkScreen', () => {
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
 
-  it('fetches assigned lots with the portalModule=lots URL', async () => {
+  it('fetches assigned lots with the portalModule=lots URL (paginated)', async () => {
     setLots([]);
     renderWork();
     await waitFor(() =>
-      expect(apiFetchMock).toHaveBeenCalledWith('/api/lots?projectId=proj-1&portalModule=lots'),
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/lots?projectId=proj-1&portalModule=lots&limit=100&page=1',
+      ),
     );
   });
 
@@ -113,9 +115,34 @@ describe('subbie shell WorkScreen', () => {
     renderWork();
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/lots?projectId=proj-1%26subcontractorView%3Dfalse&portalModule=lots',
+        '/api/lots?projectId=proj-1%26subcontractorView%3Dfalse&portalModule=lots&limit=100&page=1',
       ),
     );
+  });
+
+  it('follows pagination so lots beyond the first page stay visible (F-07)', async () => {
+    // 35 assigned lots across two pages — the first page alone would hide 15.
+    const page1 = Array.from({ length: 20 }, (_, i) => ({
+      id: `l${i}`,
+      lotNumber: `LOT-${String(i).padStart(3, '0')}`,
+      status: 'in_progress',
+    }));
+    const page2 = Array.from({ length: 15 }, (_, i) => ({
+      id: `l${i + 20}`,
+      lotNumber: `LOT-${String(i + 20).padStart(3, '0')}`,
+      status: 'in_progress',
+    }));
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('page=2'))
+        return Promise.resolve({ lots: page2, pagination: { totalPages: 2 } });
+      return Promise.resolve({ lots: page1, pagination: { totalPages: 2 } });
+    });
+    renderWork();
+    // A lot from the SECOND page must render.
+    expect(await screen.findByText('LOT-034')).toBeInTheDocument();
+    expect(screen.getByText('LOT-000')).toBeInTheDocument();
+    expect(screen.getByText(new RegExp('In Progress \\(35\\)'))).toBeInTheDocument();
   });
 
   it('groups lots by status into the four sections', async () => {
