@@ -1872,6 +1872,118 @@ describe('Projects API', () => {
         await prisma.project.delete({ where: { id: costProject.id } }).catch(() => {});
       }
     });
+
+    it('aggregates costs per subcontractor across dockets, preferring approved cost', async () => {
+      const suffix = Date.now();
+      const costProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: 'Project Cost Multi Subcontractor',
+          projectNumber: `COST-MULTI-${suffix}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+          contractValue: 5000,
+        },
+      });
+
+      try {
+        const [subAlpha, subBravo] = await Promise.all([
+          prisma.subcontractorCompany.create({
+            data: {
+              projectId: costProject.id,
+              companyName: `Alpha Civil ${suffix}`,
+              status: 'approved',
+            },
+          }),
+          prisma.subcontractorCompany.create({
+            data: {
+              projectId: costProject.id,
+              companyName: `Bravo Civil ${suffix}`,
+              status: 'approved',
+            },
+          }),
+        ]);
+
+        // Alpha: two approved dockets. Approved cost wins over the submitted total.
+        await prisma.dailyDocket.create({
+          data: {
+            projectId: costProject.id,
+            subcontractorCompanyId: subAlpha.id,
+            date: new Date('2032-09-01T00:00:00.000Z'),
+            status: 'approved',
+            totalLabourSubmitted: 9999, // ignored: approved cost takes precedence
+            totalPlantSubmitted: 9999,
+            totalLabourApprovedCost: 1000,
+            totalPlantApprovedCost: 500,
+          },
+        });
+        await prisma.dailyDocket.create({
+          data: {
+            projectId: costProject.id,
+            subcontractorCompanyId: subAlpha.id,
+            date: new Date('2032-09-02T00:00:00.000Z'),
+            status: 'approved',
+            totalLabourApprovedCost: 200,
+            totalPlantApprovedCost: 0,
+          },
+        });
+        // Bravo: one approved docket with no approved cost — falls back to submitted.
+        await prisma.dailyDocket.create({
+          data: {
+            projectId: costProject.id,
+            subcontractorCompanyId: subBravo.id,
+            date: new Date('2032-09-01T00:00:00.000Z'),
+            status: 'approved',
+            totalLabourSubmitted: 800,
+            totalPlantSubmitted: 200,
+          },
+        });
+        // A pending docket must not count toward approved totals.
+        await prisma.dailyDocket.create({
+          data: {
+            projectId: costProject.id,
+            subcontractorCompanyId: subBravo.id,
+            date: new Date('2032-09-03T00:00:00.000Z'),
+            status: 'pending_approval',
+            totalLabourSubmitted: 500,
+          },
+        });
+
+        const res = await request(app)
+          .get(`/api/projects/${costProject.id}/costs`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toMatchObject({
+          totalLabourCost: 2000, // 1000 + 200 (Alpha) + 800 (Bravo)
+          totalPlantCost: 700, // 500 + 0 (Alpha) + 200 (Bravo)
+          totalCost: 2700,
+          budgetTotal: 5000,
+          budgetVariance: 2300,
+          approvedDockets: 3,
+          pendingDockets: 1,
+        });
+        // Sorted by total cost descending: Alpha (1700) before Bravo (1000).
+        expect(res.body.subcontractorCosts).toEqual([
+          expect.objectContaining({
+            id: subAlpha.id,
+            labourCost: 1200,
+            plantCost: 500,
+            totalCost: 1700,
+            approvedDockets: 2,
+          }),
+          expect.objectContaining({
+            id: subBravo.id,
+            labourCost: 800,
+            plantCost: 200,
+            totalCost: 1000,
+            approvedDockets: 1,
+          }),
+        ]);
+      } finally {
+        await prisma.project.delete({ where: { id: costProject.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('PATCH /api/projects/:id', () => {

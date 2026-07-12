@@ -18,24 +18,39 @@ import { AppError } from '../../lib/AppError.js';
 
 const TEMPLATE_IN_USE_CODE = 'TEMPLATE_IN_USE';
 
-/** Structural slice of the Prisma client used by the usage helpers. */
+/**
+ * Structural slice of the Prisma client used by the usage helpers.
+ *
+ * Counts come from `count()` and distinct-lot totals from `findMany` with
+ * `distinct: ['lotId']` so the database does the aggregation instead of every
+ * sign-off row being hydrated into memory. Completions carry their lot on
+ * `ITPInstance` (whose `lotId` is unique per instance), so distinct completion
+ * lots are read from the instance table directly rather than deduped in JS.
+ */
 export interface TemplateUsageClient {
   iTPCompletion: {
+    count: (args: { where: { checklistItem: { templateId: string } } }) => Promise<number>;
+  };
+  iTPInstance: {
     findMany: (args: {
-      where: { checklistItem: { templateId: string } };
-      select: { itpInstance: { select: { lotId: true } } };
-    }) => Promise<Array<{ itpInstance: { lotId: string } | null }>>;
+      where: { completions: { some: { checklistItem: { templateId: string } } } };
+      select: { lotId: true };
+    }) => Promise<Array<{ lotId: string }>>;
   };
   holdPoint: {
+    count: (args: { where: { itpChecklistItem: { templateId: string } } }) => Promise<number>;
     findMany: (args: {
       where: { itpChecklistItem: { templateId: string } };
       select: { lotId: true };
-    }) => Promise<Array<{ lotId: string | null }>>;
+      distinct: ['lotId'];
+    }) => Promise<Array<{ lotId: string }>>;
   };
   testResult: {
+    count: (args: { where: { itpChecklistItem: { templateId: string } } }) => Promise<number>;
     findMany: (args: {
-      where: { itpChecklistItem: { templateId: string } };
+      where: { itpChecklistItem: { templateId: string }; lotId: { not: null } };
       select: { lotId: true };
+      distinct: ['lotId'];
     }) => Promise<Array<{ lotId: string | null }>>;
   };
 }
@@ -56,34 +71,42 @@ export async function countTemplateItemUsage(
   client: TemplateUsageClient,
   templateId: string,
 ): Promise<TemplateItemUsage> {
-  const [completions, holdPoints, testResults] = await Promise.all([
-    client.iTPCompletion.findMany({
-      where: { checklistItem: { templateId } },
-      select: { itpInstance: { select: { lotId: true } } },
+  const [
+    completionCount,
+    holdPointCount,
+    testResultCount,
+    completionLots,
+    holdPointLots,
+    testResultLots,
+  ] = await Promise.all([
+    client.iTPCompletion.count({ where: { checklistItem: { templateId } } }),
+    client.holdPoint.count({ where: { itpChecklistItem: { templateId } } }),
+    client.testResult.count({ where: { itpChecklistItem: { templateId } } }),
+    client.iTPInstance.findMany({
+      where: { completions: { some: { checklistItem: { templateId } } } },
+      select: { lotId: true },
     }),
     client.holdPoint.findMany({
       where: { itpChecklistItem: { templateId } },
       select: { lotId: true },
+      distinct: ['lotId'],
     }),
     client.testResult.findMany({
-      where: { itpChecklistItem: { templateId } },
+      where: { itpChecklistItem: { templateId }, lotId: { not: null } },
       select: { lotId: true },
+      distinct: ['lotId'],
     }),
   ]);
 
   const lotIds = new Set<string>();
-  for (const completion of completions) {
-    if (completion.itpInstance?.lotId) lotIds.add(completion.itpInstance.lotId);
-  }
-  for (const holdPoint of holdPoints) {
-    if (holdPoint.lotId) lotIds.add(holdPoint.lotId);
-  }
-  for (const testResult of testResults) {
-    if (testResult.lotId) lotIds.add(testResult.lotId);
+  for (const { lotId } of completionLots) lotIds.add(lotId);
+  for (const { lotId } of holdPointLots) lotIds.add(lotId);
+  for (const { lotId } of testResultLots) {
+    if (lotId) lotIds.add(lotId);
   }
 
   return {
-    referenceCount: completions.length + holdPoints.length + testResults.length,
+    referenceCount: completionCount + holdPointCount + testResultCount,
     lotCount: lotIds.size,
   };
 }

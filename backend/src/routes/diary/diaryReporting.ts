@@ -65,6 +65,33 @@ function buildDiaryDateFilter(query: Request['query']) {
   return dateFilter;
 }
 
+// Query the delay rows directly so delay-free diaries are never hydrated. The
+// delayType alias filter stays in JS (see delayTypeMatchesFilter) because it
+// normalises whitespace/case and expands aliases, which a plain SQL equality
+// can't reproduce — but it now runs over just the delay rows, not every diary.
+function fetchProjectDelayRows(projectId: string, dateFilter: { gte?: Date; lte?: Date }) {
+  return prisma.diaryDelay.findMany({
+    where: {
+      diary: {
+        projectId,
+        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+      },
+    },
+    select: {
+      id: true,
+      diaryId: true,
+      delayType: true,
+      startTime: true,
+      endTime: true,
+      durationHours: true,
+      description: true,
+      impact: true,
+      diary: { select: { date: true, status: true } },
+      lot: { select: { lotNumber: true } },
+    },
+  });
+}
+
 const DELAY_TYPE_FILTER_ALIASES: Record<string, string[]> = {
   weather: ['weather'],
   'material shortage': ['material shortage', 'material delay', 'material'],
@@ -238,33 +265,22 @@ router.get(
 
     await requireDiaryReadAccess(req.user!, projectId);
 
-    // Get all diaries with delays
-    const diaries = await prisma.dailyDiary.findMany({
-      where: {
-        projectId,
-        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
-      },
-      include: {
-        delays: { include: { lot: { select: { lotNumber: true } } } },
-      },
-    });
+    // Query delay rows directly (skips delay-free diaries)
+    const delayRows = await fetchProjectDelayRows(projectId, dateFilter);
 
-    // Flatten delays and add diary info
-    let delays = diaries.flatMap((diary) =>
-      diary.delays.map((delay) => ({
-        id: delay.id,
-        diaryId: diary.id,
-        diaryDate: diary.date,
-        diaryStatus: diary.status,
-        delayType: delay.delayType,
-        startTime: delay.startTime,
-        endTime: delay.endTime,
-        durationHours: delay.durationHours ? Number(delay.durationHours) : null,
-        description: delay.description,
-        impact: delay.impact,
-        lotNumber: delay.lot?.lotNumber ?? null,
-      })),
-    );
+    let delays = delayRows.map((delay) => ({
+      id: delay.id,
+      diaryId: delay.diaryId,
+      diaryDate: delay.diary.date,
+      diaryStatus: delay.diary.status,
+      delayType: delay.delayType,
+      startTime: delay.startTime,
+      endTime: delay.endTime,
+      durationHours: delay.durationHours ? Number(delay.durationHours) : null,
+      description: delay.description,
+      impact: delay.impact,
+      lotNumber: delay.lot?.lotNumber ?? null,
+    }));
 
     // Filter by delay type if provided
     if (delayType) {
@@ -290,30 +306,19 @@ router.get(
 
     await requireDiaryReadAccess(req.user!, projectId);
 
-    // Get all diaries with delays
-    const diaries = await prisma.dailyDiary.findMany({
-      where: {
-        projectId,
-        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
-      },
-      include: {
-        delays: { include: { lot: { select: { lotNumber: true } } } },
-      },
-    });
+    // Query delay rows directly (skips delay-free diaries)
+    const delayRows = await fetchProjectDelayRows(projectId, dateFilter);
 
-    // Flatten delays
-    let delays = diaries.flatMap((diary) =>
-      diary.delays.map((delay) => ({
-        diaryDate: diary.date,
-        delayType: delay.delayType,
-        startTime: delay.startTime,
-        endTime: delay.endTime,
-        durationHours: delay.durationHours ? Number(delay.durationHours) : null,
-        description: delay.description,
-        impact: delay.impact,
-        lotNumber: delay.lot?.lotNumber ?? null,
-      })),
-    );
+    let delays = delayRows.map((delay) => ({
+      diaryDate: delay.diary.date,
+      delayType: delay.delayType,
+      startTime: delay.startTime,
+      endTime: delay.endTime,
+      durationHours: delay.durationHours ? Number(delay.durationHours) : null,
+      description: delay.description,
+      impact: delay.impact,
+      lotNumber: delay.lot?.lotNumber ?? null,
+    }));
 
     // Filter by delay type if provided
     if (delayType) {
