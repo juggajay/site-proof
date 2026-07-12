@@ -1650,7 +1650,11 @@ test.describe('production readiness guardrails', () => {
     expect(frontendVitestConfig).toContain("provider: 'v8'");
     expect(frontendVitestConfig).toContain('thresholds');
 
-    expect(ciWorkflow).toContain('run: npm audit --audit-level=moderate');
+    // PR gate is deliberately `high` (moderate advisories in transitive deps
+    // must not fail unrelated PRs); the deploy-time preflight below stays at
+    // moderate.
+    expect(ciWorkflow).toContain('run: npm audit --audit-level=high');
+    expect(ciWorkflow).not.toContain('run: npm audit --audit-level=moderate');
     expect(ciWorkflow).toContain('run: npm run format:check');
     expect(ciWorkflow).toContain('Validate Prisma migrations');
     expect(ciWorkflow).toContain('Verify database migration status');
