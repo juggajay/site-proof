@@ -73,9 +73,9 @@ const DEFAULT_SUPPORT_CONTACT: SupportContactInfo = {
   address: null,
   hours: 'Mon-Fri, 8am-6pm AEST',
   responseTime: {
-    critical: 'Prioritised same day',
-    standard: 'Typically within 1 business day',
-    general: 'Typically within 2 business days',
+    critical: 'We aim to respond the same day',
+    standard: 'We aim to respond within 1-2 business days',
+    general: 'We aim to respond within 2 business days',
   },
 };
 
@@ -473,8 +473,8 @@ export function SupportPage() {
           <div className="p-4 rounded-lg bg-muted/50">
             <h3 className="font-medium mb-1">How do I invite team members?</h3>
             <p className="text-sm text-muted-foreground">
-              Go to Project Settings → Team and click "Invite Team Member". Enter their email and
-              select their role. They'll receive an invitation email.
+              Go to Company Settings → Team Members and click "Invite Member" (owners and admins
+              only). Enter their email and select their role. They'll receive an invitation email.
             </p>
           </div>
         </div>

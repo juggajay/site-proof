@@ -1,5 +1,19 @@
 # Lessons
 
+## Scope of "fix it" on factual/legal copy
+
+- "Fix the terms page" (or any "fix X") authorizes fixing the problem, NOT choosing
+  the replacement value on a factual/legal/identity claim. When Jay flagged the
+  Terms saying "operated by CIVOS Pty Ltd" and approved a fix, I unilaterally
+  removed the entity and wrote "operated in Australia" — but he was about to
+  register the Pty Ltd and wanted it kept. Correction: "did i tell you remove the
+  pty ltd???"
+- Rule: for legal entity names, company claims, addresses, ABNs, pricing, or any
+  fact about Jay's business, confirm the exact replacement string before editing.
+  Removing a claim is itself a decision — don't treat deletion as the neutral fix.
+- Cheap safeguard: propose the specific wording ("change it to X") and get a yes,
+  rather than "want me to fix it?" then picking the wording myself.
+
 ## Production-adjacent Claude prompts
 
 - Always include explicit credential safety rules for work involving production, Railway, Supabase, DBs, storage, auth tokens, or browser sessions.
