@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, usePrismaMiddleware } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 
@@ -1357,7 +1357,7 @@ describe('Dockets API', () => {
         releaseFirstTotalUpdate = resolve;
       });
 
-      prisma.$use(async (params, next) => {
+      usePrismaMiddleware(async (params, next) => {
         const data = params.args?.data as { totalLabourSubmitted?: number } | undefined;
         const where = params.args?.where as { id?: string } | undefined;
 

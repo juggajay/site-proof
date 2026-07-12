@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { authRouter } from './auth.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, usePrismaMiddleware } from '../lib/prisma.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { holdpointsRouter } from './holdpoints.js';
@@ -2819,7 +2819,7 @@ describe('Hold Point Token Release', () => {
     });
     let middlewareActive = true;
 
-    prisma.$use(async (params, next) => {
+    usePrismaMiddleware(async (params, next) => {
       if (
         middlewareActive &&
         params.model === 'HoldPointReleaseToken' &&
