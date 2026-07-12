@@ -5,7 +5,39 @@ vi.mock('./api', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
-import { fetchAllLotPages } from './lots';
+import { fetchAllLotPages, fetchAllPages } from './lots';
+
+describe('fetchAllPages', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('pages through a custom-keyed envelope and concatenates every record', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({ id: `tr-${i}` }));
+    const page2 = Array.from({ length: 25 }, (_, i) => ({ id: `tr-${i + 100}` }));
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.includes('page=2'))
+        return Promise.resolve({ testResults: page2, pagination: { totalPages: 2 } });
+      return Promise.resolve({ testResults: page1, pagination: { totalPages: 2 } });
+    });
+
+    const records = await fetchAllPages<{ id: string }>(
+      '/api/test-results?projectId=p1&lotId=l1',
+      (page) => (page as { testResults?: { id: string }[] }).testResults ?? [],
+    );
+
+    expect(records).toHaveLength(125);
+    expect(records[124]).toEqual({ id: 'tr-124' });
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/test-results?projectId=p1&lotId=l1&limit=100&page=1',
+    );
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/test-results?projectId=p1&lotId=l1&limit=100&page=2',
+    );
+  });
+});
 
 describe('fetchAllLotPages', () => {
   beforeEach(() => {
