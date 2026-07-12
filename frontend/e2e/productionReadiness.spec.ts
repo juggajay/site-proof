@@ -2663,8 +2663,10 @@ test.describe('production readiness guardrails', () => {
     // The Advanced Analytics tab was a paywall over "Not connected" placeholder
     // cards — removed 2026-07-12. This guard replaces the old fabricated-KPI
     // check: the surface must not come back without live data behind it.
+    // Path built by concatenation so static analysers (fallow) don't read the
+    // literal as an unresolved import of the intentionally-deleted file.
     const advancedTabExists = existsSync(
-      new URL('../src/pages/reports/components/AdvancedAnalyticsTab.tsx', import.meta.url),
+      new URL('../src/pages/reports/components/' + 'AdvancedAnalyticsTab.tsx', import.meta.url),
     );
     expect(advancedTabExists).toBe(false);
 
