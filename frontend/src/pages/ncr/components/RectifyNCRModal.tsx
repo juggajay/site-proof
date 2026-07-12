@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { apiFetch, authFetch } from '@/lib/api';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import type { NCR } from '../types';
@@ -69,7 +70,7 @@ function RectifyNCRModalInner({
       }
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', await compressImageForUpload(file));
       formData.append('projectId', uploadProjectId);
       formData.append('documentType', evidenceType === 'photo' ? 'photo' : 'ncr_evidence');
       formData.append('category', 'ncr_evidence');

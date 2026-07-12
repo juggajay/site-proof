@@ -2,6 +2,7 @@ import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { getAuthToken } from '@/lib/auth';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
@@ -562,7 +563,7 @@ export function HoldPointsPage() {
           }
 
           const formData = new FormData();
-          formData.append('file', evidenceFile);
+          formData.append('file', await compressImageForUpload(evidenceFile));
           formData.append('projectId', projectId);
           formData.append('lotId', selectedHoldPoint.lotId);
           formData.append('documentType', 'hold_point_release_evidence');

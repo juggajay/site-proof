@@ -19,6 +19,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import { queryKeys } from '@/lib/queryKeys';
@@ -75,7 +76,7 @@ export function useNcrEvidence(ncrId: string | null, projectId: string | null) {
       setUploading(true);
       try {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', await compressImageForUpload(file));
         formData.append('projectId', projectId);
         formData.append('documentType', 'photo');
         formData.append('category', 'ncr_evidence');

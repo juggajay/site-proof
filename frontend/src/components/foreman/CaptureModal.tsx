@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useGeoLocation } from '@/hooks/useGeoLocation';
 import { capturePhotoOffline, queueOfflineNcrCreate } from '@/lib/offlineDb';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/ui/toaster';
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
@@ -187,7 +188,7 @@ export function CaptureModal({
       if (raisedNcr) {
         try {
           const formData = new FormData();
-          formData.append('file', capturedFile);
+          formData.append('file', await compressImageForUpload(capturedFile));
           formData.append('projectId', projectId);
           if (linkedLot) formData.append('lotId', linkedLot);
           formData.append('documentType', 'ncr_evidence');
