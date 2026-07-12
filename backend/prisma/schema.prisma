@@ -662,6 +662,7 @@ model HoldPoint {
   @@index([lotId, status])
   @@index([status, createdAt])
   @@index([status, scheduledDate])
+  @@unique([lotId, itpChecklistItemId])
   @@map("hold_points")
 }
 
