@@ -11,6 +11,7 @@
  */
 
 import { authFetch } from '@/lib/api';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 
@@ -184,7 +185,8 @@ export async function uploadDocuments({
   const failedUploads: string[] = [];
 
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+    // Compress raster images before upload; PDFs/other docs pass through.
+    const file = await compressImageForUpload(files[i]);
     try {
       const formData = buildDocumentUploadFormData({
         file,

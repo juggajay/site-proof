@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Eye, Upload, X } from 'lucide-react';
 import { apiFetch, authFetch } from '@/lib/api';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { toast } from '@/components/ui/toaster';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import type { HoldPoint, HoldPointDetails, RequestError } from '../types';
@@ -187,7 +188,7 @@ export function RequestReleaseModal({
     try {
       for (const file of files) {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', await compressImageForUpload(file));
         formData.append('projectId', projectId);
         formData.append('lotId', holdPoint.lotId);
         formData.append('documentType', 'hold_point_request_evidence');

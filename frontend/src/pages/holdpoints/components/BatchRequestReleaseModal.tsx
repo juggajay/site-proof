@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Upload, X } from 'lucide-react';
 import { authFetch } from '@/lib/api';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { toast } from '@/components/ui/toaster';
 import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
@@ -91,7 +92,7 @@ export function BatchRequestReleaseModal({
     try {
       for (const file of files) {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', await compressImageForUpload(file));
         formData.append('projectId', projectId);
         formData.append('lotId', lotId);
         formData.append('documentType', 'hold_point_request_evidence');

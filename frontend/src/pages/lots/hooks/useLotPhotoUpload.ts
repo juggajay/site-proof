@@ -26,6 +26,7 @@ import type { ChangeEvent, Dispatch, MutableRefObject, SetStateAction } from 're
 import { apiFetch, ApiError, authFetch, isRetriableNetworkFailure } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { capturePhotoOffline } from '@/lib/offlineDb';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { handleApiError } from '@/lib/errorHandling';
 import { devWarn } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
@@ -73,7 +74,7 @@ export async function uploadItpEvidencePhoto({
   const gpsLocation = await getGPSLocation();
   const caption = buildItpEvidenceCaption();
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await compressImageForUpload(file));
   formData.append('projectId', projectId);
   formData.append('lotId', lotId);
   formData.append('documentType', 'photo');
