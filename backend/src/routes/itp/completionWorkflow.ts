@@ -428,3 +428,34 @@ export function resolveItpRecompletionVerificationFields(input: {
     ? { verificationStatus: input.computedVerificationStatus }
     : {};
 }
+
+/**
+ * M-OFFLINE: a subcontractor completion that is awaiting head-contractor review
+ * (`pending_verification`) must not be silently downgraded through the standard
+ * completion path. The offline sync worker reconstructs the replayed payload
+ * from the cached row and drops `verificationStatus`, so a re-toggle that
+ * un-completes the item (or a non-subcontractor touch) would reset it to plain
+ * `pending`, wipe the subbie's attribution, and drop it from the HC verification
+ * queue — with no verifier ever having acted.
+ *
+ * Sibling to the inline `verified`/`failed` guards. A legitimate amend/resubmit
+ * by the subcontractor re-computes `pending_verification` (finished outcome on a
+ * lot that requires verification), so that write is allowed through; anything
+ * that would land the row anywhere other than `pending_verification` is blocked.
+ * The verify/reject flows run on their own `/completions/:id/verify|reject`
+ * routes and never hit this path.
+ */
+export function assertPendingVerificationNotDowngraded(input: {
+  existingVerificationStatus: string | null | undefined;
+  computedVerificationStatus?: string;
+}): void {
+  if (
+    input.existingVerificationStatus === 'pending_verification' &&
+    input.computedVerificationStatus !== 'pending_verification'
+  ) {
+    throw AppError.conflict(
+      'ITP completions awaiting verification cannot be changed through the standard completion path',
+      { verificationStatus: input.existingVerificationStatus },
+    );
+  }
+}

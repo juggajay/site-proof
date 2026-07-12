@@ -30,6 +30,7 @@ import {
   buildItpCompletionTransform,
   buildItpCompletionWitnessData,
   buildItpSubbieCompletionNotifications,
+  assertPendingVerificationNotDowngraded,
   deriveItpCompletionStatus,
   isItpCompletionFinished,
   parseProjectRequiresSubcontractorVerification,
@@ -390,6 +391,13 @@ completionsRouter.post(
             { verificationStatus: existingCompletion.verificationStatus },
           );
         }
+        // M-OFFLINE: block a silent downgrade of a completion awaiting HC review.
+        // Allowed through only when the write keeps it pending_verification (a
+        // subbie amending/resubmitting their own submission).
+        assertPendingVerificationNotDowngraded({
+          existingVerificationStatus: existingCompletion?.verificationStatus,
+          computedVerificationStatus: verificationStatus,
+        });
         if (existingCompletion?.status === 'failed' && newStatus !== 'failed') {
           throw AppError.conflict(
             'Failed ITP completions cannot be changed through the standard completion path',
