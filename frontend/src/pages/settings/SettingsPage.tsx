@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { KeyRound } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
@@ -292,6 +293,20 @@ export function SettingsPage() {
       <PushNotificationSettings />
 
       <MfaSettingsSection />
+
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <KeyRound className="h-5 w-5" />
+          Password
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Change your password from your{' '}
+          <Link to="/profile" className="text-primary underline underline-offset-2">
+            profile page
+          </Link>
+          .
+        </p>
+      </div>
 
       <PrivacyDataSection
         isExporting={isExporting}

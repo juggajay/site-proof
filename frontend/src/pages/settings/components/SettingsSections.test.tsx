@@ -130,7 +130,9 @@ describe('AboutSection', () => {
     render(<AboutSection />);
 
     expect(screen.getByText('1.3.0')).toBeInTheDocument();
-    expect(screen.getByText('2026-01-18')).toBeInTheDocument();
-    expect(screen.getByText('20260118.1')).toBeInTheDocument();
+    // Hand-maintained Build Date / Build Number tiles were removed — they had
+    // drifted months stale and showed users wrong build info.
+    expect(screen.queryByText('Build Date')).not.toBeInTheDocument();
+    expect(screen.queryByText('Build Number')).not.toBeInTheDocument();
   });
 });

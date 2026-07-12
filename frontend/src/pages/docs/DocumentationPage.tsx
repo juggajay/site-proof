@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, CheckCircle2, CircleDot, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, CircleDot, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
@@ -64,7 +64,7 @@ export function DocumentationPage() {
           <Card>
             <CardHeader>
               <h2 className="flex items-center gap-2 text-base font-semibold leading-none tracking-tight">
-                <Search className="h-4 w-4" />
+                <List className="h-4 w-4" />
                 Browse topics
               </h2>
             </CardHeader>

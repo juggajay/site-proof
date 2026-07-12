@@ -178,11 +178,14 @@ function getSupportContactInfo() {
     address: configuredSupportValue('SUPPORT_ADDRESS'),
     hours: configuredSupportValue('SUPPORT_HOURS') || 'Mon-Fri, 8am-6pm AEST',
     responseTime: {
-      critical: configuredSupportValue('SUPPORT_RESPONSE_CRITICAL') || 'Prioritised same day',
+      critical:
+        configuredSupportValue('SUPPORT_RESPONSE_CRITICAL') || 'We aim to respond the same day',
       standard:
-        configuredSupportValue('SUPPORT_RESPONSE_STANDARD') || 'Typically within 1 business day',
+        configuredSupportValue('SUPPORT_RESPONSE_STANDARD') ||
+        'We aim to respond within 1-2 business days',
       general:
-        configuredSupportValue('SUPPORT_RESPONSE_GENERAL') || 'Typically within 2 business days',
+        configuredSupportValue('SUPPORT_RESPONSE_GENERAL') ||
+        'We aim to respond within 2 business days',
     },
   };
 }

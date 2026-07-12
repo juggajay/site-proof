@@ -207,7 +207,7 @@ export const documentationSections: DocumentationSection[] = [
       {
         title: 'Attach evidence to work records',
         description:
-          'Use comments, test result certificates, drawings, and document references to keep evidence close to the relevant lot or workflow.',
+          'Use comments, test result certificates (printed as the Material Conformance Record), drawings, and document references to keep evidence close to the relevant lot or workflow.',
       },
       {
         title: 'Use clear document types',
@@ -320,9 +320,9 @@ export const quickReference: QuickReferenceItem[] = [
   { label: 'Projects', icon: FolderKanban, href: '/projects' },
   { label: 'Lots', icon: MapPin, href: '/projects' },
   { label: 'ITPs', icon: ClipboardCheck, href: '/projects' },
-  { label: 'Tests', icon: TestTube, href: '/projects' },
-  { label: 'Dockets', icon: FileCheck, href: '/projects' },
-  { label: 'Claims', icon: DollarSign, href: '/projects' },
+  { label: 'Test Results', icon: TestTube, href: '/projects' },
+  { label: 'Docket Approvals', icon: FileCheck, href: '/projects' },
+  { label: 'Progress Claims', icon: DollarSign, href: '/projects' },
   { label: 'Variations', icon: GitPullRequest, href: '/projects' },
   { label: 'Reports', icon: BarChart3, href: '/projects' },
   { label: 'Documents', icon: FileText, href: '/projects' },

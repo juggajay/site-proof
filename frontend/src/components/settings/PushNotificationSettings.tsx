@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, BellOff, Smartphone, Check, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getAuthToken, useAuth } from '@/lib/auth';
 import {
   isPushSupported,
@@ -150,11 +151,11 @@ export function PushNotificationSettings() {
 
   if (loading) {
     return (
-      <div className="bg-card rounded-lg shadow-sm border p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Smartphone className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-semibold text-foreground">Push Notifications</h3>
-        </div>
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+          <Smartphone className="h-5 w-5" />
+          Push Notifications
+        </h2>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
           <span className="ml-2 text-muted-foreground">Loading...</span>
@@ -164,11 +165,11 @@ export function PushNotificationSettings() {
   }
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Smartphone className="h-5 w-5 text-primary" />
-        <h3 className="text-lg font-semibold text-foreground">Push Notifications</h3>
-      </div>
+    <div className="rounded-lg border bg-card p-6">
+      <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+        <Smartphone className="h-5 w-5" />
+        Push Notifications
+      </h2>
 
       <p className="text-sm text-muted-foreground mb-6">
         Push notifications are in preview: you can send a test notification to this device today.
@@ -213,13 +214,15 @@ export function PushNotificationSettings() {
           <X className="h-5 w-5 text-destructive mt-0.5" />
           <div>
             <p className="text-sm text-destructive">{loadError}</p>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => void loadStatus()}
-              className="mt-3 px-3 py-1.5 rounded-lg text-sm border border-destructive/40 text-destructive hover:bg-destructive/10"
+              className="mt-3 border-destructive/40 text-destructive hover:bg-destructive/10"
             >
               Try again
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -294,16 +297,12 @@ export function PushNotificationSettings() {
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleTogglePush}
               disabled={
                 subscribing || !!loadError || !status.configured || status.permission === 'denied'
               }
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                status.subscribed
-                  ? 'bg-muted text-foreground hover:bg-muted/80'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
-              }`}
+              variant={status.subscribed ? 'secondary' : 'default'}
               title={
                 !status.configured
                   ? 'Push notifications are not configured on the server'
@@ -317,7 +316,7 @@ export function PushNotificationSettings() {
               ) : (
                 'Enable'
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Test Notification Button */}
@@ -330,13 +329,13 @@ export function PushNotificationSettings() {
                 </p>
               </div>
 
-              <button
+              <Button
                 onClick={handleSendTest}
                 disabled={sendingTest || !!loadError || !status.configured}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="secondary"
               >
                 {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Test'}
-              </button>
+              </Button>
             </div>
           )}
         </div>

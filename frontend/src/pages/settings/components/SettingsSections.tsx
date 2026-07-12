@@ -20,8 +20,6 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 
 export const APP_VERSION = '1.3.0';
-export const BUILD_DATE = '2026-01-18';
-export const BUILD_NUMBER = '20260118.1';
 
 type ThemeValue = 'light' | 'dark' | 'system';
 
@@ -382,21 +380,13 @@ export function AboutSection() {
           <Info className="h-5 w-5" />
           About CIVOS
         </h2>
-        <p className="text-sm text-muted-foreground">Application version and build information.</p>
+        <p className="text-sm text-muted-foreground">Application version information.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="p-4 rounded-lg bg-muted/50">
           <p className="text-sm text-muted-foreground">Version</p>
           <p className="text-lg font-semibold">{APP_VERSION}</p>
-        </div>
-        <div className="p-4 rounded-lg bg-muted/50">
-          <p className="text-sm text-muted-foreground">Build Date</p>
-          <p className="text-lg font-semibold">{BUILD_DATE}</p>
-        </div>
-        <div className="p-4 rounded-lg bg-muted/50">
-          <p className="text-sm text-muted-foreground">Build Number</p>
-          <p className="text-lg font-mono">{BUILD_NUMBER}</p>
         </div>
       </div>
 
