@@ -8,7 +8,7 @@ import {
   processDueDiaryReminders,
   processSystemAlerts,
 } from './notificationAutomation.js';
-import { prisma } from './prisma.js';
+import { prisma, usePrismaMiddleware } from './prisma.js';
 
 type AutomationUser = {
   id: string;
@@ -154,7 +154,7 @@ describe('notification automation jobs', () => {
     });
     const releaseFallback = setTimeout(releaseReads, 500);
 
-    prisma.$use(async (params, next) => {
+    usePrismaMiddleware(async (params, next) => {
       const result = await next(params);
       const where = params.args?.where as { projectId?: string; type?: string } | undefined;
 

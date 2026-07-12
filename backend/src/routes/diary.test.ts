@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, usePrismaMiddleware } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
@@ -196,7 +196,7 @@ describe('Daily Diary API', () => {
       let active = true;
       const fallback = setTimeout(() => releaseReads(), 1500);
 
-      prisma.$use(async (params, next) => {
+      usePrismaMiddleware(async (params, next) => {
         const result = await next(params);
         const where = params.args?.where as { projectId?: string; date?: unknown } | undefined;
         if (
