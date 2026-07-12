@@ -10,8 +10,8 @@ function makePendingAttachment(name: string, type = 'image/png'): PendingAttachm
 }
 
 describe('buildCommentFormData', () => {
-  it('builds multipart comment fields with optional parent and all files', () => {
-    const formData = buildCommentFormData({
+  it('builds multipart comment fields with optional parent and all files', async () => {
+    const formData = await buildCommentFormData({
       entityType: 'Lot',
       entityId: 'lot-1',
       content: 'Comment body',
@@ -27,12 +27,14 @@ describe('buildCommentFormData', () => {
     expect(formData.get('content')).toBe('Comment body');
     expect(formData.get('parentId')).toBe('parent-1');
 
+    // Filenames are preserved: compression re-encodes under the original name,
+    // and non-images / below-threshold files pass through untouched.
     const files = formData.getAll('files') as File[];
     expect(files.map((file) => file.name)).toEqual(['photo.png', 'evidence.pdf']);
   });
 
-  it('omits parentId when creating a top-level comment', () => {
-    const formData = buildCommentFormData({
+  it('omits parentId when creating a top-level comment', async () => {
+    const formData = await buildCommentFormData({
       entityType: 'NCR',
       entityId: 'ncr-1',
       content: 'Top-level',

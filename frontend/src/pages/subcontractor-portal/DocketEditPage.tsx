@@ -1,37 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { apiFetch } from '@/lib/api';
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage, handleApiError, isForbidden } from '@/lib/errorHandling';
-import { logError } from '@/lib/logger';
-import { formatDateKey } from '@/lib/localDate';
-import { useAuth } from '@/lib/auth';
-import { useOfflineStatus } from '@/lib/useOfflineStatus';
-import {
-  buildDocketEditRoute,
-  buildDocketDetailPath,
-  buildDocketLabourEntryPath,
-  buildDocketLabourPath,
-  buildDocketPlantEntryPath,
-  buildDocketPlantPath,
-  findTodayDocket,
-  getDocketDisplayTotalCost,
-  useAssignedLotsQuery,
-  useDocketEditQuery,
-  useExistingDocketsQuery,
-  useMyCompanyQuery,
-  type Docket,
-  type LabourEntry,
-  type Lot,
-  type PlantEntry,
-} from './docketEditData';
+import { handleApiError } from '@/lib/errorHandling';
+import { buildDocketEditRoute, getDocketDisplayTotalCost } from './docketEditData';
 import { buildPortalCompanyScopedPath } from './portalCompanyScope';
-import {
-  calculateHours,
-  isEditableDocketStatus,
-  parseDailyHoursInput,
-  PLANT_HOURS_INPUT_ERROR,
-} from './docketEditHelpers';
+import { parseDailyHoursInput, PLANT_HOURS_INPUT_ERROR } from './docketEditHelpers';
+import { useDocketEditorController } from './useDocketEditorController';
 import { useDocketEntrySheetState } from './useDocketEntrySheetState';
 import { DocketEditTabs } from './components/DocketEditTabs';
 import { DocketEntrySheet } from './components/DocketEntrySheet';
@@ -44,47 +18,46 @@ import {
   DocketEditNotices,
 } from './components/DocketEditPagePanels';
 
-// Stable empty reference so an empty lot list keeps the same identity per render.
-const EMPTY_LOTS: Lot[] = [];
-
 export function DocketEditPage() {
   const navigate = useNavigate();
-  const { docketId } = useParams();
-  const [searchParams] = useSearchParams();
-  const { user } = useAuth();
-  const { isOnline } = useOfflineStatus();
-  const userId = user?.id;
-  const requestedProjectId = searchParams.get('projectId');
-  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
-  const isNewDocket = !docketId || docketId === 'new';
-
-  const [saving, setSaving] = useState(false);
-
-  const [docket, setDocket] = useState<Docket | null>(null);
-  const [notes, setNotes] = useState('');
   const [activeTab, setActiveTab] = useState('labour');
-
-  // Query response state
   const [queryResponse, setQueryResponse] = useState('');
 
-  const today = formatDateKey();
+  // Classic portal route: /subcontractor-portal/docket/:id (see buildDocketEditRoute).
+  const buildDocketPath = useCallback(
+    (
+      docketId: string,
+      scope: { projectId?: string | null; subcontractorCompanyId?: string | null },
+    ) => buildDocketEditRoute(docketId, scope.projectId, scope.subcontractorCompanyId),
+    [],
+  );
 
-  // Bootstrap reads are served from TanStack Query: the subbie's company, their
-  // assigned lots, and either the docket being edited or (for a new docket) the
-  // "does one already exist for today?" check.
-  const companyQuery = useMyCompanyQuery(
-    userId,
+  const {
+    isNewDocket,
+    today,
     requestedProjectId,
     requestedSubcontractorCompanyId,
-  );
-  const company = companyQuery.data ?? null;
+    company,
+    assignedLots,
+    lotsModuleDisabled,
+    loading,
+    error,
+    docket,
+    notes,
+    setNotes,
+    saving,
+    saveDocketNotes,
+    handleNotesBlur,
+    postLabourEntry,
+    postPlantEntry,
+    removeLabourEntry,
+    removePlantEntry,
+    isOnline,
+    canEdit,
+    canWrite,
+    canSubmit,
+  } = useDocketEditorController({ buildDocketPath });
 
-  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId, company?.id);
-  const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
-  // The lot list 403s when the HC has turned off the subbie's "Assigned Work"
-  // (lots) portal module. Labour lines require a lot, so surface a plain-language
-  // notice instead of an inexplicably empty lot dropdown.
-  const lotsModuleDisabled = isForbidden(lotsQuery.error);
   const {
     sheetOpen,
     sheetType,
@@ -109,123 +82,6 @@ export function DocketEditPage() {
     openAddPlant,
     closeSheet,
   } = useDocketEntrySheetState(assignedLots);
-
-  const docketQuery = useDocketEditQuery(userId, docketId, !isNewDocket);
-  const existingDocketsQuery = useExistingDocketsQuery(
-    userId,
-    company?.projectId,
-    company?.id,
-    isNewDocket,
-  );
-
-  const todayDocket =
-    isNewDocket && existingDocketsQuery.data
-      ? findTodayDocket(existingDocketsQuery.data, today)
-      : undefined;
-
-  // Seed the local editing buffer from the loaded docket. This re-runs when
-  // docketId changes (e.g. after a new docket is created and the URL gains its
-  // id), mirroring the original effect's dependency on docketId.
-  useEffect(() => {
-    if (docketQuery.data) {
-      setDocket(docketQuery.data);
-      setNotes(docketQuery.data.notes || '');
-    }
-  }, [docketQuery.data]);
-
-  // A docket already exists for today: send the subbie to it instead of a new one.
-  useEffect(() => {
-    if (todayDocket) {
-      navigate(buildDocketEditRoute(todayDocket.id, company?.projectId, company?.id), {
-        replace: true,
-      });
-    }
-  }, [todayDocket, company?.projectId, company?.id, navigate]);
-
-  // Keep the spinner up until the company, lots, and the docket/existing-docket
-  // read have all settled — and while a redirect to today's docket is pending.
-  const loading =
-    companyQuery.isLoading ||
-    (Boolean(company) && lotsQuery.isLoading) ||
-    (isNewDocket ? Boolean(company) && existingDocketsQuery.isLoading : docketQuery.isLoading) ||
-    Boolean(todayDocket);
-
-  const error = companyQuery.isError
-    ? extractErrorMessage(companyQuery.error, 'Failed to load data')
-    : !isNewDocket && docketQuery.isError
-      ? 'Docket not found'
-      : null;
-
-  // Create docket if new
-  const ensureDocket = useCallback(async () => {
-    if (docket) return docket;
-
-    try {
-      const data = await apiFetch<{ docket: Docket }>(`/api/dockets`, {
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: company?.projectId,
-          subcontractorCompanyId: company?.id,
-          date: today,
-          notes,
-        }),
-      });
-
-      const newDocket: Docket = {
-        ...data.docket,
-        labourEntries: [],
-        plantEntries: [],
-        totalLabourSubmitted: 0,
-        totalPlantSubmitted: 0,
-      };
-      setDocket(newDocket);
-      // Update URL to show docket ID
-      navigate(buildDocketEditRoute(newDocket.id, company?.projectId, company?.id), {
-        replace: true,
-      });
-      return newDocket;
-    } catch (err) {
-      logError('Error creating docket:', err);
-      throw err;
-    }
-  }, [docket, company, today, notes, navigate]);
-
-  const saveDocketNotes = useCallback(
-    async (targetDocket?: Docket | null) => {
-      const currentDocket = targetDocket || docket;
-      if (!isOnline || !currentDocket || !isEditableDocketStatus(currentDocket.status)) {
-        return currentDocket;
-      }
-
-      const currentNotes = currentDocket.notes || '';
-      if (currentNotes === notes) {
-        return currentDocket;
-      }
-
-      const data = await apiFetch<{ docket: Docket }>(buildDocketDetailPath(currentDocket.id), {
-        method: 'PATCH',
-        body: JSON.stringify({ notes }),
-      });
-
-      const updatedDocket = {
-        ...currentDocket,
-        notes: data.docket.notes || '',
-      };
-
-      setDocket((prev) =>
-        prev?.id === currentDocket.id ? { ...prev, notes: updatedDocket.notes } : prev,
-      );
-      return updatedDocket;
-    },
-    [docket, isOnline, notes],
-  );
-
-  const handleNotesBlur = () => {
-    if (!docket || !isEditableDocketStatus(docket.status)) return;
-    void saveDocketNotes(docket).catch((err) => {
-      handleApiError(err, 'Failed to save docket notes');
-    });
-  };
 
   // Add labour entry
   const addLabourEntry = async () => {
@@ -254,41 +110,18 @@ export function DocketEditPage() {
       return;
     }
 
-    setSaving(true);
     try {
-      const currentDocket = await ensureDocket();
-      const hours = calculateHours(startTime, finishTime);
-
-      const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(
-        buildDocketLabourPath(currentDocket.id),
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            employeeId: selectedEmployee.id,
-            startTime,
-            finishTime,
-            lotAllocations: [{ lotId: selectedLotId, hours }],
-          }),
-        },
-      );
-
-      // Update local state
-      setDocket((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          labourEntries: [...prev.labourEntries, data.labourEntry],
-          totalLabourSubmitted: data.runningTotal.cost,
-        };
+      await postLabourEntry({
+        employeeId: selectedEmployee.id,
+        startTime,
+        finishTime,
+        lotId: selectedLotId,
       });
-
       closeSheet();
       resetSheetState();
       toast({ title: 'Labour entry added', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to add labour entry');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -329,42 +162,18 @@ export function DocketEditPage() {
       return;
     }
 
-    setSaving(true);
     try {
-      const currentDocket = await ensureDocket();
-
-      const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(
-        buildDocketPlantPath(currentDocket.id),
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            plantId: selectedPlant.id,
-            hoursOperated: parsedHoursOperated,
-            wetOrDry,
-            lotAllocations: selectedLotId
-              ? [{ lotId: selectedLotId, hours: parsedHoursOperated }]
-              : undefined,
-          }),
-        },
-      );
-
-      // Update local state
-      setDocket((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          plantEntries: [...prev.plantEntries, data.plantEntry],
-          totalPlantSubmitted: data.runningTotal.cost,
-        };
+      await postPlantEntry({
+        plantId: selectedPlant.id,
+        hoursOperated: parsedHoursOperated,
+        wetOrDry,
+        lotId: selectedLotId,
       });
-
       closeSheet();
       resetSheetState();
       toast({ title: 'Plant entry added', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to add plant entry');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -379,32 +188,8 @@ export function DocketEditPage() {
       });
       return;
     }
-
     try {
-      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
-        buildDocketLabourEntryPath(docket.id, entryId),
-        {
-          method: 'DELETE',
-        },
-      );
-
-      // Update local state
-      setDocket((prev) => {
-        if (!prev) return prev;
-        const removed = prev.labourEntries.find((e) => e.id === entryId);
-        const fallbackTotal = Math.max(
-          0,
-          prev.totalLabourSubmitted - (removed?.submittedCost || 0),
-        );
-        const newTotal =
-          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
-        return {
-          ...prev,
-          labourEntries: prev.labourEntries.filter((e) => e.id !== entryId),
-          totalLabourSubmitted: newTotal,
-        };
-      });
-
+      await removeLabourEntry(entryId);
       toast({ title: 'Entry deleted', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to delete entry');
@@ -422,29 +207,8 @@ export function DocketEditPage() {
       });
       return;
     }
-
     try {
-      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
-        buildDocketPlantEntryPath(docket.id, entryId),
-        {
-          method: 'DELETE',
-        },
-      );
-
-      // Update local state
-      setDocket((prev) => {
-        if (!prev) return prev;
-        const removed = prev.plantEntries.find((e) => e.id === entryId);
-        const fallbackTotal = Math.max(0, prev.totalPlantSubmitted - (removed?.submittedCost || 0));
-        const newTotal =
-          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
-        return {
-          ...prev,
-          plantEntries: prev.plantEntries.filter((e) => e.id !== entryId),
-          totalPlantSubmitted: newTotal,
-        };
-      });
-
+      await removePlantEntry(entryId);
       toast({ title: 'Entry deleted', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to delete entry');
@@ -484,15 +248,6 @@ export function DocketEditPage() {
 
   // Total cost
   const totalCost = docket ? getDocketDisplayTotalCost(docket) : 0;
-
-  const canEdit = isEditableDocketStatus(docket?.status);
-  const canWrite = canEdit && isOnline;
-  const canSubmit = Boolean(
-    docket &&
-    isOnline &&
-    (docket.status === 'draft' || docket.status === 'rejected') &&
-    (docket.labourEntries.length > 0 || docket.plantEntries.length > 0),
-  );
 
   if (loading) {
     return <DocketEditLoading />;

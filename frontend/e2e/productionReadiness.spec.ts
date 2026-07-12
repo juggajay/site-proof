@@ -513,7 +513,11 @@ test.describe('production readiness guardrails', () => {
 
     expect(commentsSection).not.toContain('/api/comments/attachments/upload');
     expect(commentsSectionHelpers).toContain('function buildCommentFormData');
-    expect(commentsSectionHelpers).toContain("formData.append('files', file)");
+    // Still one multipart create with attachments under `files` — now compressed
+    // on the way in (compressImageForUpload falls back to the original on failure).
+    expect(commentsSectionHelpers).toContain(
+      "formData.append('files', await compressImageForUpload(file))",
+    );
     expect(commentsSection).toContain("authFetch('/api/comments'");
   });
 

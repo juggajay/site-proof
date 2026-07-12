@@ -225,7 +225,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
     const response = await authFetch('/api/comments', {
       method: 'POST',
-      body: buildCommentFormData({ entityType, entityId, content, files, parentId }),
+      body: await buildCommentFormData({ entityType, entityId, content, files, parentId }),
     });
 
     if (!response.ok) {
