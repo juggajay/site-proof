@@ -21,6 +21,11 @@ export default defineConfig({
     clearMocks: true,
     css: true,
     environment: 'jsdom',
+    // Half the cores, not all of them: with one jsdom worker per core the
+    // pool oversubscribes the box (cumulative import time ~4x wall time) and
+    // starved workers miss Testing Library's async windows, flaking tests
+    // that pass in isolation.
+    maxWorkers: '50%',
     globals: false,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     restoreMocks: true,
