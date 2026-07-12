@@ -2,11 +2,13 @@
  * SubbieItpRunScreen — /p/lots/:lotId/itp — the subbie ITP inspection run.
  *
  * The centerpiece of the subbie shell rebuild. It mirrors the owner-approved
- * foreman run (ItpRunScreen) layout law VERBATIM and IMPORTS — never forks — the
- * foreman scrubber trio: the dot-track at the top, halo focus, whole-screen
- * content drag, tri-state at the bottom of the content zone, evidence button in
- * the fixed bottom bar, reason capture in the fixed bar, and the hold-point rule
- * (never offer Pass while unreleased).
+ * foreman run (ItpRunScreen) layout law VERBATIM and IMPORTS — never forks — both
+ * the foreman scrubber trio (dot-track, whole-screen content drag, physics) AND
+ * the shared run STATE MACHINE (`useItpRunController`): the hold-point Pass guard
+ * (never offer Pass while unreleased), the NCR-on-fail dispatch, the offline
+ * completion write, and the evidence-required guard. Only the JSX below is
+ * subbie-specific; the correctness core is the same module the foreman run uses,
+ * so a fix to one run can no longer silently miss the other.
  *
  * It differs from the foreman run ONLY where the subbie surface differs, and in
  * every such place CLASSIC (SubcontractorLotITPPage) WINS:
@@ -25,70 +27,16 @@
  *   - Pending-verification state is whatever the shared completion exposes
  *     (`isVerified`); we surface it quietly, never invent a state.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, Check, AlertTriangle, Lock, Eye } from 'lucide-react';
 import { ShellScreen } from '@/shell/components/ShellScreen';
-import {
-  advanceToNextIncomplete,
-  firstIncompleteIndex,
-  formatItpFinishedCopy,
-  holdPointGateDecision,
-  itpCompletionDisposition,
-  isSuperintendentSignoffOnlyItem,
-  runItemOrder,
-  runProgress,
-} from '@/shell/screens/lots/lotsShellState';
-import {
-  ItpDotTrack,
-  ItpContentStrip,
-  type ItpDotTrackItem,
-} from '@/shell/screens/lots/ItpDotTrack';
-import { dotStateFor, snapFrac } from '@/shell/screens/lots/itpTrackPhysics';
-import { useItpContentDrag } from '@/shell/screens/lots/useItpContentDrag';
-import type { ITPChecklistItem } from '@/pages/lots/types';
+import { formatItpFinishedCopy } from '@/shell/screens/lots/lotsShellState';
+import { ItpDotTrack, ItpContentStrip } from '@/shell/screens/lots/ItpDotTrack';
+import { subline, stripStateLine } from '@/shell/itpRun/itpRunPresentation';
+import { useItpRunController } from '@/shell/itpRun/useItpRunController';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useSubbieItpRun } from './useSubbieItpRun';
-
-const RESPONSIBLE_LABEL: Record<string, string> = {
-  contractor: 'Contractor',
-  subcontractor: 'Subcontractor',
-  superintendent: 'Superintendent',
-  general: 'General',
-};
-
-const EVIDENCE_SUFFIX: Record<string, string> = {
-  photo: 'photo evidence can be attached',
-  test: 'test cert can be attached',
-  document: 'document can be attached',
-  none: '',
-};
-
-function subline(item: ITPChecklistItem): string {
-  const who = RESPONSIBLE_LABEL[item.responsibleParty] ?? 'General';
-  const suffix = EVIDENCE_SUFFIX[item.evidenceRequired] ?? '';
-  return suffix ? `Responsible: ${who} · ${suffix}` : `Responsible: ${who}`;
-}
-
-const STRIP_STATE_LINE: Record<string, string> = {
-  done: '✓ Passed — saved',
-  failed: '✕ Failed — needs attention',
-  na: 'N/A — reason recorded',
-  hold: 'Awaiting hold point release',
-  review: 'Awaiting head-contractor verification',
-  rejected: 'Rejected — update and resubmit',
-  open: 'Not started',
-};
-
-function stripStateLine(item: ITPChecklistItem, state: string): string {
-  if (!isSuperintendentSignoffOnlyItem(item)) return STRIP_STATE_LINE[state];
-  if (state === 'done') return 'Superintendent sign-off recorded';
-  if (state === 'failed' || state === 'na') return STRIP_STATE_LINE[state];
-  return 'Superintendent sign-off required';
-}
-
-const FLASH_MS = 650;
 
 export function SubbieItpRunScreen() {
   const navigate = useNavigate();
@@ -97,158 +45,47 @@ export function SubbieItpRunScreen() {
   const run = useSubbieItpRun(lotId, { projectId, subcontractorCompanyId });
   const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const orderedItems = useMemo(
-    () => (run.instance ? runItemOrder(run.instance.template.checklistItems) : []),
-    [run.instance],
-  );
-  const completions = run.instance?.completions ?? [];
-
-  const [currentIndex, setCurrentIndex] = useState<number>(-1);
-  const [scrubFrac, setScrubFrac] = useState<number | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
-  const [reasonMode, setReasonMode] = useState<null | 'na' | 'fail'>(null);
-  const [reason, setReason] = useState('');
-  const [reasonError, setReasonError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  // Confirm-before-pass when a photo-required check has no photo yet, matching
-  // the foreman run so a missing evidence pass is explicit.
-  const [evidencePrompt, setEvidencePrompt] = useState(false);
-
-  // Land on the first incomplete item once the instance loads.
-  const landedRef = useRef(false);
-  useEffect(() => {
-    if (!run.instance || landedRef.current) return;
-    landedRef.current = true;
-    setCurrentIndex(firstIncompleteIndex(orderedItems, completions));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run.instance]);
-
-  useEffect(
-    () => () => {
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    },
-    [],
-  );
-
-  const lotHref = `/p/itps${projectQuery}`;
-
-  const progress = runProgress(orderedItems, completions, currentIndex);
-  const currentItem = currentIndex >= 0 ? orderedItems[currentIndex] : undefined;
-  const currentCompletion = currentItem ? run.completionFor(currentItem.id) : undefined;
-  const currentDisposition = itpCompletionDisposition(currentCompletion);
-  const awaitingVerification = currentDisposition === 'review';
-  const wasRejected = currentDisposition === 'rejected';
-  const gate = currentItem
-    ? holdPointGateDecision(currentItem, currentCompletion)
-    : { kind: 'open' as const };
-  const superintendentSignoffOnly = currentItem
-    ? isSuperintendentSignoffOnlyItem(currentItem)
-    : false;
-
-  const trackEntries: ItpDotTrackItem[] = useMemo(
-    () =>
-      orderedItems.map((it) => {
-        const completion = run.completionFor(it.id);
-        return { item: it, completion, state: dotStateFor(it, completion) };
-      }),
-    [orderedItems, run],
-  );
-
-  const jumpTo = (index: number) => {
-    if (index < 0 || index >= orderedItems.length) return;
-    setScrubFrac(null);
-    setReasonMode(null);
-    setReason('');
-    setReasonError(null);
-    setEvidencePrompt(false);
-    setCurrentIndex(index);
-  };
-
-  const scrubbing = scrubFrac !== null;
-  const liveFrac = scrubFrac ?? currentIndex;
-  const liveIndex = scrubbing ? snapFrac(scrubFrac, orderedItems.length) : currentIndex;
-  const liveCheckNumber =
-    orderedItems.length === 0 ? 0 : Math.min(Math.max(liveIndex + 1, 1), orderedItems.length);
-
-  const contentDrag = useItpContentDrag({
-    count: orderedItems.length,
+  // Shared run state machine — imported, not forked, from the foreman run. The
+  // subbie surface differs only in the SCREEN (read-only gating, routing, copy);
+  // the hold-point Pass guard, NCR-on-fail dispatch and offline write live in the
+  // shared controller so a fix lands on both runs at once.
+  const {
+    fileInputRef,
+    orderedItems,
     currentIndex,
-    onCommit: jumpTo,
-    onScrubChange: setScrubFrac,
-  });
+    scrubFrac,
+    setScrubFrac,
+    flash,
+    reasonMode,
+    setReasonMode,
+    reason,
+    setReason,
+    reasonError,
+    setReasonError,
+    submitting,
+    evidencePrompt,
+    progress,
+    currentItem,
+    currentCompletion,
+    awaitingVerification,
+    wasRejected,
+    gate,
+    superintendentSignoffOnly,
+    trackEntries,
+    jumpTo,
+    scrubbing,
+    liveFrac,
+    liveCheckNumber,
+    contentDrag,
+    resetReason,
+    doPass,
+    handlePass,
+    handleSubmitReason,
+    onPhotoSelected,
+  } = useItpRunController(run);
 
-  const resetReason = () => {
-    setReasonMode(null);
-    setReason('');
-    setReasonError(null);
-  };
-
-  const advance = (flashMsg: string) => {
-    resetReason();
-    const next = advanceToNextIncomplete(orderedItems, completions, currentIndex);
-    setFlash(flashMsg);
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = setTimeout(() => setFlash(null), FLASH_MS * 2);
-    setCurrentIndex(next);
-  };
-
-  const doPass = async () => {
-    if (!currentItem) return;
-    setEvidencePrompt(false);
-    setSubmitting(true);
-    const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
-    setSubmitting(false);
-    if (ok) advance(`Check ${progress.checkNumber} passed — saved`);
-  };
-
-  const handlePass = () => {
-    if (!currentItem || submitting) return;
-    if (awaitingVerification || superintendentSignoffOnly) return;
-    if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
-    const attachedPhotos = currentCompletion?.attachments?.length ?? 0;
-    if (currentItem.evidenceRequired === 'photo' && attachedPhotos === 0) {
-      setEvidencePrompt(true);
-      return;
-    }
-    void doPass();
-  };
-
-  const handleSubmitReason = async () => {
-    if (!currentItem || submitting) return;
-    if (!reason.trim()) {
-      setReasonError(
-        reasonMode === 'na' ? 'Add a reason for marking N/A.' : 'Describe what failed.',
-      );
-      return;
-    }
-    setSubmitting(true);
-    const ok =
-      reasonMode === 'na'
-        ? await run.markNA(currentItem.id, reason)
-        : await run.markFailed(currentItem.id, reason);
-    setSubmitting(false);
-    if (ok) {
-      advance(
-        reasonMode === 'na'
-          ? `Check ${progress.checkNumber} marked N/A`
-          : `Check ${progress.checkNumber} failed — issue raised`,
-      );
-    } else {
-      setReasonError('Could not save — your reason is kept. Try again.');
-    }
-  };
-
-  const onPhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && currentItem && !superintendentSignoffOnly) {
-      setEvidencePrompt(false);
-      void run.addPhoto(currentItem.id, file);
-    }
-    e.target.value = '';
-  };
+  // Subbie-only: back-navigation target carries the portal company scope.
+  const lotHref = `/p/itps${projectQuery}`;
 
   const readOnly = !run.canComplete;
   const fieldActionsReadOnly = readOnly || superintendentSignoffOnly;
