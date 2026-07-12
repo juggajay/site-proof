@@ -53,6 +53,15 @@ type CreateDocumentUploadRouterDependencies = {
     projectId: string,
   ) => Promise<void>;
   sanitizeUploadFilename: (filename: string) => string;
+  // Fire-and-forget grid-thumbnail generation. Optional so existing tests that
+  // build this router without it keep working; a failure never affects upload.
+  generateDocumentThumbnail?: (params: {
+    fileUrl: string;
+    projectId: string;
+    mimeType: string | null;
+    buffer?: Buffer | null;
+    localSourcePath?: string | null;
+  }) => Promise<void>;
 };
 
 const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
@@ -172,6 +181,7 @@ export function createDocumentUploadRouter({
   uploadToSupabase,
   cleanupStoredDocumentUpload,
   sanitizeUploadFilename,
+  generateDocumentThumbnail,
 }: CreateDocumentUploadRouterDependencies) {
   const uploadRoutes = Router();
   const uploadDocumentBodySchema = createUploadDocumentBodySchema({
@@ -308,6 +318,16 @@ export function createDocumentUploadRouter({
         });
 
         createdDocumentId = document.id;
+
+        // Grid thumbnail (fire-and-forget): never awaited, never fails the
+        // upload. buffer is set on the Supabase path, path on the local path.
+        void generateDocumentThumbnail?.({
+          fileUrl,
+          projectId,
+          mimeType: storedMimeType,
+          buffer: uploadedFile.buffer ?? null,
+          localSourcePath: uploadedFile.path ?? null,
+        });
 
         // Attach ITP evidence to its completion — the same association row the
         // direct attach endpoint creates, so a queued-and-synced photo ends up

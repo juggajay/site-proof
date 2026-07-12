@@ -12,7 +12,16 @@ import {
   getOwnedDocumentStoragePath,
   isExternalFileUrl,
   resolveLocalDocumentFilePath,
+  THUMBNAIL_STORAGE_SUFFIX,
 } from './storage.js';
+
+// Grid tiles request the thumbnail derivative; anything else serves the original.
+export type DocumentFileVariant = 'thumb';
+const THUMBNAIL_CONTENT_TYPE = 'image/webp';
+
+export function parseDocumentFileVariant(value: unknown): DocumentFileVariant | undefined {
+  return value === 'thumb' ? 'thumb' : undefined;
+}
 
 type SignedUrlValidation = {
   valid: boolean;
@@ -255,6 +264,22 @@ export function createTempUploadPath(originalName: string): string {
   );
 }
 
+function sendDownloadedBuffer(
+  res: Response,
+  buffer: Buffer,
+  filename: string,
+  contentType: string,
+  contentDisposition: 'inline' | 'attachment',
+): void {
+  res.setHeader(
+    'Content-Disposition',
+    `${contentDisposition}; filename="${getSafeDownloadFilename(filename)}"`,
+  );
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.send(buffer);
+}
+
 async function sendSupabaseDocumentFile(
   document: {
     fileUrl: string;
@@ -266,6 +291,7 @@ async function sendSupabaseDocumentFile(
   res: Response,
   contentType: string,
   contentDisposition: 'inline' | 'attachment',
+  variant?: DocumentFileVariant,
 ): Promise<void> {
   const storagePath = getOwnedDocumentStoragePath(
     document.fileUrl,
@@ -276,23 +302,38 @@ async function sendSupabaseDocumentFile(
     throw AppError.notFound('File');
   }
 
-  const { data, error } = await getSupabaseClient()
-    .storage.from(DOCUMENTS_BUCKET)
-    .download(storagePath);
+  const storage = getSupabaseClient().storage.from(DOCUMENTS_BUCKET);
+
+  // Thumbnail variant: serve the derivative when it exists, otherwise fall
+  // through to the original (legacy files never had one generated).
+  if (variant === 'thumb') {
+    const { data: thumbData } = await storage.download(`${storagePath}${THUMBNAIL_STORAGE_SUFFIX}`);
+    if (thumbData) {
+      sendDownloadedBuffer(
+        res,
+        Buffer.from(await thumbData.arrayBuffer()),
+        document.filename,
+        THUMBNAIL_CONTENT_TYPE,
+        contentDisposition,
+      );
+      return;
+    }
+  }
+
+  const { data, error } = await storage.download(storagePath);
 
   if (error || !data) {
     logWarn('Supabase document download failed:', error);
     throw AppError.notFound('File');
   }
 
-  const buffer = Buffer.from(await data.arrayBuffer());
-  res.setHeader(
-    'Content-Disposition',
-    `${contentDisposition}; filename="${getSafeDownloadFilename(document.filename)}"`,
+  sendDownloadedBuffer(
+    res,
+    Buffer.from(await data.arrayBuffer()),
+    document.filename,
+    contentType,
+    contentDisposition,
   );
-  res.setHeader('Content-Type', contentType);
-  res.setHeader('Content-Length', String(buffer.length));
-  res.send(buffer);
 }
 
 export async function sendDocumentFile(
@@ -305,6 +346,7 @@ export async function sendDocumentFile(
   },
   res: Response,
   disposition: 'inline' | 'attachment' = 'inline',
+  variant?: DocumentFileVariant,
 ): Promise<void> {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -316,7 +358,7 @@ export async function sendDocumentFile(
   const contentDisposition = getDocumentContentDisposition(disposition, contentType);
 
   if (getOwnedDocumentStoragePath(document.fileUrl, document.projectId, document.documentType)) {
-    await sendSupabaseDocumentFile(document, res, contentType, contentDisposition);
+    await sendSupabaseDocumentFile(document, res, contentType, contentDisposition, variant);
     return;
   }
 
@@ -325,6 +367,21 @@ export async function sendDocumentFile(
   }
 
   const filePath = resolveLocalDocumentFilePath(document.fileUrl);
+
+  // Thumbnail variant: serve the local derivative when present, else the original.
+  if (variant === 'thumb') {
+    const thumbPath = `${filePath}${THUMBNAIL_STORAGE_SUFFIX}`;
+    if (fs.existsSync(thumbPath)) {
+      res.setHeader(
+        'Content-Disposition',
+        `${contentDisposition}; filename="${getSafeDownloadFilename(document.filename)}"`,
+      );
+      res.setHeader('Content-Type', THUMBNAIL_CONTENT_TYPE);
+      res.sendFile(thumbPath);
+      return;
+    }
+  }
+
   if (!fs.existsSync(filePath)) {
     throw AppError.notFound('File');
   }

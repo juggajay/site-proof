@@ -1,5 +1,7 @@
 import fs from 'fs';
 
+import sharp from 'sharp';
+
 import { AppError, ErrorCodes } from '../../lib/AppError.js';
 import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logError, logWarn } from '../../lib/serverLogger.js';
@@ -204,5 +206,73 @@ export async function cleanupStoredDocumentUpload(
 
   if (!fileUrl || (!isExternalFileUrl(fileUrl) && !fileUrl.startsWith('data:'))) {
     cleanupUploadedFile(file);
+  }
+}
+
+// Grid thumbnails: a small webp derivative stored at a convention-derived key
+// right next to the original (original storage key + this suffix). No schema
+// change — presence is inferred, absence falls back to the original on read.
+export const THUMBNAIL_STORAGE_SUFFIX = '.thumb.webp';
+const THUMBNAIL_MAX_EDGE_PX = 320;
+const THUMBNAIL_WEBP_QUALITY = 70;
+
+export function isThumbnailableImageMimeType(mimeType: string | null | undefined): boolean {
+  return typeof mimeType === 'string' && /^image\/(jpe?g|png|webp|gif)$/i.test(mimeType);
+}
+
+async function renderThumbnail(input: Buffer | string): Promise<Buffer> {
+  return sharp(input, { failOn: 'none', animated: false })
+    .rotate() // honour EXIF orientation before stripping metadata
+    .resize(THUMBNAIL_MAX_EDGE_PX, THUMBNAIL_MAX_EDGE_PX, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({ quality: THUMBNAIL_WEBP_QUALITY })
+    .toBuffer();
+}
+
+// Fire-and-forget: generate a grid thumbnail alongside a freshly stored image.
+// Mirrors the supabase-vs-local decision the rest of this module makes. NEVER
+// throws — a thumbnail is an optimisation, its failure must not fail the upload.
+export async function generateDocumentThumbnail(params: {
+  fileUrl: string;
+  projectId: string;
+  mimeType: string | null;
+  buffer?: Buffer | null;
+  localSourcePath?: string | null;
+}): Promise<void> {
+  try {
+    if (!isThumbnailableImageMimeType(params.mimeType)) {
+      return;
+    }
+
+    const source = params.buffer ?? params.localSourcePath;
+    if (!source) {
+      return;
+    }
+
+    const thumbnail = await renderThumbnail(source);
+
+    const storagePath = getOwnedDocumentStoragePath(params.fileUrl, params.projectId);
+    if (storagePath && isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()
+        .storage.from(DOCUMENTS_BUCKET)
+        .upload(`${storagePath}${THUMBNAIL_STORAGE_SUFFIX}`, thumbnail, {
+          contentType: 'image/webp',
+          upsert: true,
+        });
+      if (error) {
+        logWarn('Thumbnail upload to Supabase failed (non-fatal):', error);
+      }
+      return;
+    }
+
+    // Local-disk fallback: write next to where the original is served from.
+    if (!isExternalFileUrl(params.fileUrl) && !params.fileUrl.startsWith('data:')) {
+      const filePath = resolveLocalDocumentFilePath(params.fileUrl);
+      await fs.promises.writeFile(`${filePath}${THUMBNAIL_STORAGE_SUFFIX}`, thumbnail);
+    }
+  } catch (error) {
+    logWarn('Thumbnail generation failed (non-fatal):', error);
   }
 }

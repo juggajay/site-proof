@@ -13,9 +13,14 @@ type SignedUrlResponse = {
   expiresAt: string;
 };
 
+export type DocumentAccessVariant = 'thumb';
+
 export type DocumentAccessOptions = {
   expiresInMinutes?: number;
   disposition?: DocumentAccessDisposition;
+  // 'thumb' requests the server-side grid thumbnail; the download route falls
+  // back to the original when no thumbnail exists (all legacy files).
+  variant?: DocumentAccessVariant;
 };
 
 export const DOCUMENT_ACCESS_EXPIRY_SKEW_MS = 30_000;
@@ -43,9 +48,11 @@ function getResponseExpiry(responseExpiresAt: string, expiresInMinutes: number):
   return Number.isFinite(parsed) && parsed > Date.now() ? parsed : fallback;
 }
 
-function normalizeDocumentAccessOptions(
-  options: number | DocumentAccessOptions = 15,
-): Required<DocumentAccessOptions> {
+function normalizeDocumentAccessOptions(options: number | DocumentAccessOptions = 15): {
+  expiresInMinutes: number;
+  disposition: DocumentAccessDisposition;
+  variant?: DocumentAccessVariant;
+} {
   if (typeof options === 'number') {
     return {
       expiresInMinutes: options,
@@ -56,7 +63,22 @@ function normalizeDocumentAccessOptions(
   return {
     expiresInMinutes: options.expiresInMinutes ?? 15,
     disposition: options.disposition ?? 'attachment',
+    variant: options.variant,
   };
+}
+
+// The variant only selects thumb-vs-original of the already-authorized file; it
+// is appended to the signed download URL rather than baked into the token, so
+// the signed-URL cache stays keyed by (documentId, disposition).
+function withVariant(
+  access: DocumentAccessUrl,
+  variant?: DocumentAccessVariant,
+): DocumentAccessUrl {
+  if (!variant || !access.url) {
+    return access;
+  }
+  const separator = access.url.includes('?') ? '&' : '?';
+  return { ...access, url: `${access.url}${separator}variant=${encodeURIComponent(variant)}` };
 }
 
 export async function getDocumentAccess(
@@ -64,7 +86,7 @@ export async function getDocumentAccess(
   fileUrl?: string | null,
   options: number | DocumentAccessOptions = 15,
 ): Promise<DocumentAccessUrl> {
-  const { expiresInMinutes, disposition } = normalizeDocumentAccessOptions(options);
+  const { expiresInMinutes, disposition, variant } = normalizeDocumentAccessOptions(options);
 
   if (!documentId) {
     return {
@@ -77,7 +99,7 @@ export async function getDocumentAccess(
   const cacheKey = getDocumentAccessCacheKey(documentId, disposition);
   const cached = getCachedDocumentAccessUrl(cacheKey);
   if (cached && cached.refreshAt > Date.now()) {
-    return cached;
+    return withVariant(cached, variant);
   }
 
   const response = await apiFetch<SignedUrlResponse>(
@@ -96,7 +118,7 @@ export async function getDocumentAccess(
   };
 
   setCachedDocumentAccessUrl(cacheKey, access);
-  return access;
+  return withVariant(access, variant);
 }
 
 export async function getDocumentAccessUrl(

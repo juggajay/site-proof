@@ -46,6 +46,7 @@ import {
   cleanupStoredDocumentUpload,
   cleanupUploadedFile,
   deleteFromSupabase,
+  generateDocumentThumbnail,
   getOwnedDocumentStoragePath,
   isExternalFileUrl,
   loadDocumentImageAsBase64,
@@ -327,6 +328,7 @@ router.use(
     uploadToSupabase: uploadDocumentToSupabase,
     cleanupStoredDocumentUpload,
     sanitizeUploadFilename,
+    generateDocumentThumbnail,
   }),
 );
 

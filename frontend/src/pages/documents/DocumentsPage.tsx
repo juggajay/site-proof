@@ -218,6 +218,7 @@ export function DocumentsPage() {
         try {
           const accessUrl = await getDocumentAccess(doc.id, doc.fileUrl, {
             disposition: 'inline',
+            variant: 'thumb',
           });
           return [doc.id, accessUrl] as const;
         } catch (err) {

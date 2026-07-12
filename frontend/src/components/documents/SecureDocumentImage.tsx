@@ -8,6 +8,9 @@ interface SecureDocumentImageProps extends Omit<ImgHTMLAttributes<HTMLImageEleme
   documentId: string;
   fileUrl?: string | null;
   fallbackClassName?: string;
+  // Grid surfaces pass 'thumb' to fetch the lightweight server thumbnail;
+  // full-size viewers omit it and get the original.
+  variant?: 'thumb';
 }
 
 export function SecureDocumentImage({
@@ -16,6 +19,7 @@ export function SecureDocumentImage({
   alt,
   className,
   fallbackClassName,
+  variant,
   onError,
   ...imgProps
 }: SecureDocumentImageProps) {
@@ -30,7 +34,10 @@ export function SecureDocumentImage({
 
     const loadAccessUrl = async () => {
       try {
-        const access = await getDocumentAccess(documentId, fileUrl, { disposition: 'inline' });
+        const access = await getDocumentAccess(documentId, fileUrl, {
+          disposition: 'inline',
+          variant,
+        });
         if (cancelled) return;
 
         setSrc(access.url);
@@ -53,7 +60,7 @@ export function SecureDocumentImage({
         clearTimeout(refreshTimer);
       }
     };
-  }, [documentId, fileUrl]);
+  }, [documentId, fileUrl, variant]);
 
   if (!src || failed) {
     return (
