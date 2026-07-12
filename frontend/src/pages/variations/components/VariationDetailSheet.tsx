@@ -3,6 +3,7 @@ import { authFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatAud } from '@/lib/formatAud';
 import { logError } from '@/lib/logger';
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -238,7 +239,9 @@ export function VariationDetailSheet({
     try {
       for (const file of Array.from(files)) {
         const formData = new FormData();
-        formData.append('file', file);
+        // Compress images before upload; non-images / failures fall back to the
+        // original file (compressImageForUpload never throws).
+        formData.append('file', await compressImageForUpload(file));
         formData.append('projectId', variation.projectId);
         formData.append('documentType', 'variation_evidence');
         formData.append('category', 'commercial');

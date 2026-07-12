@@ -21,19 +21,13 @@
  * Online-only (classic has no offline docket queue — we keep it that way).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Plus, AlertTriangle, Loader2, Send, Check, Trash2 } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage, handleApiError, isForbidden } from '@/lib/errorHandling';
-import { logError } from '@/lib/logger';
-import { formatDateKey } from '@/lib/localDate';
-import { useAuth } from '@/lib/auth';
-import { useOfflineStatus } from '@/lib/useOfflineStatus';
+import { handleApiError } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import {
-  findTodayDocket,
   getDocketDisplayLabourEntryCost,
   getDocketDisplayLabourEntryHours,
   getDocketDisplayLabourCost,
@@ -42,30 +36,18 @@ import {
   getDocketDisplayTotalCost,
   hasDocketLabourEntryAdjustment,
   hasDocketPlantEntryCostAdjustment,
-  useAssignedLotsQuery,
-  useDocketEditQuery,
-  useExistingDocketsQuery,
-  useMyCompanyQuery,
-  type Docket,
-  type LabourEntry,
-  type Lot,
-  type PlantEntry,
 } from '@/pages/subcontractor-portal/docketEditData';
 import {
-  calculateHours,
-  isEditableDocketStatus,
   parseDailyHoursInput,
   PLANT_HOURS_INPUT_ERROR,
 } from '@/pages/subcontractor-portal/docketEditHelpers';
+import { useDocketEditorController } from '@/pages/subcontractor-portal/useDocketEditorController';
 import { useDocketEntrySheetState } from '@/pages/subcontractor-portal/useDocketEntrySheetState';
 import { useDocketSubmitActions } from '@/pages/subcontractor-portal/useDocketSubmitActions';
 import { formatCurrency } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { LOTS_MODULE_DISABLED_DOCKET_MESSAGE } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { LabourSheet, PlantSheet } from './DocketEntrySheets';
-
-// Stable empty reference so an empty lot list keeps the same identity per render.
-const EMPTY_LOTS: Lot[] = [];
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   draft: { label: 'DRAFT', cls: 'shell-badge-draft' },
@@ -88,18 +70,6 @@ function formatTimeRange(start: string, finish: string): string {
 
 export function DocketScreen() {
   const navigate = useNavigate();
-  const { docketId } = useParams();
-  const [searchParams] = useSearchParams();
-  const { user } = useAuth();
-  const { isOnline } = useOfflineStatus();
-  const userId = user?.id;
-  const requestedProjectId = searchParams.get('projectId');
-  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
-  const isNewDocket = !docketId || docketId === 'new';
-
-  const [saving, setSaving] = useState(false);
-  const [docket, setDocket] = useState<Docket | null>(null);
-  const [notes, setNotes] = useState('');
   const [queryResponse, setQueryResponse] = useState('');
   // After a successful submit we show the mock #submitted confirmation in-shell.
   const [submittedConfirm, setSubmittedConfirm] = useState<{
@@ -108,32 +78,40 @@ export function DocketScreen() {
     date: string;
   } | null>(null);
 
-  const today = formatDateKey();
+  // Shell route: /p/docket/:id (stays inside the mobile shell).
+  const buildDocketPath = useCallback(
+    (
+      docketId: string,
+      scope: { projectId?: string | null; subcontractorCompanyId?: string | null },
+    ) => `/p/docket/${encodeURIComponent(docketId)}${buildPortalCompanyQuery(scope)}`,
+    [],
+  );
 
-  // ── Bootstrap reads (classic query hooks, shared cache) ─────────────────────
-  const companyQuery = useMyCompanyQuery(
-    userId,
+  const {
+    isNewDocket,
+    today,
     requestedProjectId,
     requestedSubcontractorCompanyId,
-  );
-  const company = companyQuery.data ?? null;
-
-  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId, company?.id);
-  const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
-  const lotsModuleDisabled = isForbidden(lotsQuery.error);
-
-  const docketQuery = useDocketEditQuery(userId, docketId, !isNewDocket);
-  const existingDocketsQuery = useExistingDocketsQuery(
-    userId,
-    company?.projectId,
-    company?.id,
-    isNewDocket,
-  );
-
-  const todayDocket =
-    isNewDocket && existingDocketsQuery.data
-      ? findTodayDocket(existingDocketsQuery.data, today)
-      : undefined;
+    company,
+    assignedLots,
+    lotsModuleDisabled,
+    loading,
+    error,
+    docket,
+    notes,
+    setNotes,
+    saving,
+    saveDocketNotes,
+    handleNotesBlur,
+    postLabourEntry,
+    postPlantEntry,
+    removeLabourEntry,
+    removePlantEntry,
+    isOnline,
+    canEdit,
+    canWrite,
+    canSubmit,
+  } = useDocketEditorController({ buildDocketPath });
 
   // ── Entry-sheet state (classic hook — money preview + validation) ───────────
   const {
@@ -163,121 +141,6 @@ export function DocketScreen() {
     closeSheet,
   } = useDocketEntrySheetState(assignedLots);
 
-  // Seed the local editing buffer from the loaded docket — ONCE per docket id.
-  // After the lazy create, ensureDocket's navigate(replace) enables this query
-  // while the first entry POST is still in flight; the GET was dispatched
-  // before the entry existed, so if its response lands AFTER the entry was
-  // appended locally, a blind overwrite would erase the entry (and grey out
-  // Submit). The id guard makes the local optimistic state authoritative for
-  // a docket we've already seeded or created.
-  const seededDocketIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    const fresh = docketQuery.data;
-    if (!fresh) return;
-    if (seededDocketIdRef.current === fresh.id) return;
-    seededDocketIdRef.current = fresh.id;
-    setDocket(fresh);
-    setNotes(fresh.notes || '');
-  }, [docketQuery.data]);
-
-  // A docket already exists for today → redirect to it (history.replace), staying in /p.
-  useEffect(() => {
-    if (todayDocket) {
-      const query = new URLSearchParams();
-      if (company?.projectId) query.set('projectId', company.projectId);
-      if (company?.id) query.set('subcontractorCompanyId', company.id);
-      const queryString = query.toString() ? `?${query.toString()}` : '';
-      navigate(`/p/docket/${encodeURIComponent(todayDocket.id)}${queryString}`, { replace: true });
-    }
-  }, [todayDocket, company?.projectId, company?.id, navigate]);
-
-  const loading =
-    companyQuery.isLoading ||
-    (Boolean(company) && lotsQuery.isLoading) ||
-    // The docket GET only blocks when we have no local docket yet — after the
-    // lazy create we already hold the authoritative local copy, and the GET
-    // fired by the URL rewrite must not flash a spinner over it.
-    (isNewDocket
-      ? Boolean(company) && existingDocketsQuery.isLoading
-      : !docket && docketQuery.isLoading) ||
-    Boolean(todayDocket);
-
-  const error = companyQuery.isError
-    ? extractErrorMessage(companyQuery.error, 'Failed to load data')
-    : !isNewDocket && docketQuery.isError
-      ? 'Docket not found'
-      : null;
-
-  // ── Lazy create — no POST until the first entry is added (classic ensureDocket) ─
-  const ensureDocket = useCallback(async () => {
-    if (docket) return docket;
-    try {
-      const data = await apiFetch<{ docket: Docket }>(`/api/dockets`, {
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: company?.projectId,
-          subcontractorCompanyId: company?.id,
-          date: today,
-          notes,
-        }),
-      });
-      const newDocket: Docket = {
-        ...data.docket,
-        labourEntries: [],
-        plantEntries: [],
-        totalLabourSubmitted: 0,
-        totalPlantSubmitted: 0,
-      };
-      // We created it — local state is authoritative; the GET fired by the
-      // navigate below must not re-seed (see seededDocketIdRef above).
-      seededDocketIdRef.current = newDocket.id;
-      setDocket(newDocket);
-      const query = new URLSearchParams();
-      if (company?.projectId) query.set('projectId', company.projectId);
-      if (company?.id) query.set('subcontractorCompanyId', company.id);
-      const queryString = query.toString() ? `?${query.toString()}` : '';
-      navigate(`/p/docket/${encodeURIComponent(newDocket.id)}${queryString}`, { replace: true });
-      return newDocket;
-    } catch (err) {
-      logError('Error creating docket:', err);
-      throw err;
-    }
-  }, [docket, company, today, notes, navigate]);
-
-  // ── Notes auto-save on blur (PATCH only when editable AND changed) ───────────
-  const saveDocketNotes = useCallback(
-    async (targetDocket?: Docket | null) => {
-      const currentDocket = targetDocket || docket;
-      if (!isOnline || !currentDocket || !isEditableDocketStatus(currentDocket.status)) {
-        return currentDocket;
-      }
-      const currentNotes = currentDocket.notes || '';
-      if (currentNotes === notes) {
-        return currentDocket;
-      }
-      const data = await apiFetch<{ docket: Docket }>(
-        `/api/dockets/${encodeURIComponent(currentDocket.id)}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ notes }),
-        },
-      );
-      const updatedNotes = data.docket.notes || '';
-      setDocket((prev) =>
-        prev?.id === currentDocket.id ? { ...prev, notes: updatedNotes } : prev,
-      );
-      return { ...currentDocket, notes: updatedNotes };
-    },
-    [docket, isOnline, notes],
-  );
-
-  const handleNotesBlur = () => {
-    if (!docket || !isEditableDocketStatus(docket.status)) return;
-    void saveDocketNotes(docket).catch((err) => {
-      handleApiError(err, 'Failed to save docket notes');
-    });
-  };
-
   // ── Add labour ──────────────────────────────────────────────────────────────
   // keepOpen backs "Save & add another": the sheet stays open with the times and
   // lot retained, only the person cleared, so a foreman logging a whole crew on
@@ -291,31 +154,13 @@ export function DocketScreen() {
       });
       return;
     }
-    setSaving(true);
     try {
-      const currentDocket = await ensureDocket();
-      const hours = calculateHours(startTime, finishTime);
-      const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(
-        `/api/dockets/${encodeURIComponent(currentDocket.id)}/labour`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            employeeId: selectedEmployee.id,
-            startTime,
-            finishTime,
-            lotAllocations: [{ lotId: selectedLotId, hours }],
-          }),
-        },
-      );
-      setDocket((prev) =>
-        prev
-          ? {
-              ...prev,
-              labourEntries: [...prev.labourEntries, data.labourEntry],
-              totalLabourSubmitted: data.runningTotal.cost,
-            }
-          : prev,
-      );
+      await postLabourEntry({
+        employeeId: selectedEmployee.id,
+        startTime,
+        finishTime,
+        lotId: selectedLotId,
+      });
       if (keepOpen) {
         setSelectedEmployee(null);
       } else {
@@ -325,8 +170,6 @@ export function DocketScreen() {
       toast({ title: 'Labour entry added', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to add labour entry');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -359,32 +202,13 @@ export function DocketScreen() {
       });
       return;
     }
-    setSaving(true);
     try {
-      const currentDocket = await ensureDocket();
-      const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(
-        `/api/dockets/${encodeURIComponent(currentDocket.id)}/plant`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            plantId: selectedPlant.id,
-            hoursOperated: parsedHoursOperated,
-            wetOrDry,
-            lotAllocations: selectedLotId
-              ? [{ lotId: selectedLotId, hours: parsedHoursOperated }]
-              : undefined,
-          }),
-        },
-      );
-      setDocket((prev) =>
-        prev
-          ? {
-              ...prev,
-              plantEntries: [...prev.plantEntries, data.plantEntry],
-              totalPlantSubmitted: data.runningTotal.cost,
-            }
-          : prev,
-      );
+      await postPlantEntry({
+        plantId: selectedPlant.id,
+        hoursOperated: parsedHoursOperated,
+        wetOrDry,
+        lotId: selectedLotId,
+      });
       if (keepOpen) {
         setSelectedPlant(null);
       } else {
@@ -394,8 +218,6 @@ export function DocketScreen() {
       toast({ title: 'Plant entry added', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to add plant entry');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -427,25 +249,7 @@ export function DocketScreen() {
     if (!docket) return;
     if (!confirmArmed(`labour-${entryId}`)) return;
     try {
-      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
-        `/api/dockets/${encodeURIComponent(docket.id)}/labour/${encodeURIComponent(entryId)}`,
-        { method: 'DELETE' },
-      );
-      setDocket((prev) => {
-        if (!prev) return prev;
-        const removed = prev.labourEntries.find((e) => e.id === entryId);
-        const fallbackTotal = Math.max(
-          0,
-          prev.totalLabourSubmitted - (removed?.submittedCost || 0),
-        );
-        const newTotal =
-          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
-        return {
-          ...prev,
-          labourEntries: prev.labourEntries.filter((e) => e.id !== entryId),
-          totalLabourSubmitted: newTotal,
-        };
-      });
+      await removeLabourEntry(entryId);
       toast({ title: 'Entry deleted', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to delete entry');
@@ -456,22 +260,7 @@ export function DocketScreen() {
     if (!docket) return;
     if (!confirmArmed(`plant-${entryId}`)) return;
     try {
-      const data = await apiFetch<{ runningTotal?: { cost: number } }>(
-        `/api/dockets/${encodeURIComponent(docket.id)}/plant/${encodeURIComponent(entryId)}`,
-        { method: 'DELETE' },
-      );
-      setDocket((prev) => {
-        if (!prev) return prev;
-        const removed = prev.plantEntries.find((e) => e.id === entryId);
-        const fallbackTotal = Math.max(0, prev.totalPlantSubmitted - (removed?.submittedCost || 0));
-        const newTotal =
-          typeof data.runningTotal?.cost === 'number' ? data.runningTotal.cost : fallbackTotal;
-        return {
-          ...prev,
-          plantEntries: prev.plantEntries.filter((e) => e.id !== entryId),
-          totalPlantSubmitted: newTotal,
-        };
-      });
+      await removePlantEntry(entryId);
       toast({ title: 'Entry deleted', variant: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to delete entry');
@@ -502,6 +291,8 @@ export function DocketScreen() {
   });
 
   // ── Derived state ───────────────────────────────────────────────────────────
+  // NOTE: unlike the classic DocketEditPage, this screen does NOT filter to
+  // status === 'approved' employees/plant. See the divergence note in the PR.
   const approvedEmployees = company?.employees ?? [];
   const approvedPlant = company?.plant ?? [];
   const totalLabour = docket ? getDocketDisplayLabourCost(docket) : 0;
@@ -510,14 +301,6 @@ export function DocketScreen() {
   const labourEntries = docket?.labourEntries ?? [];
   const plantEntries = docket?.plantEntries ?? [];
 
-  const canEdit = isEditableDocketStatus(docket?.status);
-  const canWrite = canEdit && isOnline;
-  const canSubmit = Boolean(
-    docket &&
-    isOnline &&
-    (docket.status === 'draft' || docket.status === 'rejected') &&
-    (labourEntries.length > 0 || plantEntries.length > 0),
-  );
   const isQueried = docket?.status === 'queried';
   const isRejected = docket?.status === 'rejected';
 

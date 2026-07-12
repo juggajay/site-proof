@@ -1,3 +1,4 @@
+import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import type { PendingAttachment } from './commentAttachmentDrafts';
 
 interface BuildCommentFormDataOptions {
@@ -8,13 +9,13 @@ interface BuildCommentFormDataOptions {
   parentId?: string;
 }
 
-export function buildCommentFormData({
+export async function buildCommentFormData({
   entityType,
   entityId,
   content,
   files,
   parentId,
-}: BuildCommentFormDataOptions): FormData {
+}: BuildCommentFormDataOptions): Promise<FormData> {
   const formData = new FormData();
   formData.append('entityType', entityType);
   formData.append('entityId', entityId);
@@ -23,8 +24,10 @@ export function buildCommentFormData({
     formData.append('parentId', parentId);
   }
 
+  // Compress image attachments before upload; non-images and any failure fall
+  // back to the original file (compressImageForUpload never throws).
   for (const { file } of files) {
-    formData.append('files', file);
+    formData.append('files', await compressImageForUpload(file));
   }
 
   return formData;
