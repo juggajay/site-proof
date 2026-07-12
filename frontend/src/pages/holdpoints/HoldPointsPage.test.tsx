@@ -176,13 +176,19 @@ async function selectLotForBatch(user: UserEvent, lotNumber = 'LOT-001') {
   );
 }
 
+// The date input enforces min={today}; a hardcoded date rots into the past
+// and silently blocks submit (same class as the backend fix in #1381).
+const FUTURE_SCHEDULED_DATE = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  .toISOString()
+  .slice(0, 10);
+
 async function sendBatchReleaseRequest(
   user: UserEvent,
   requestButtonName: RegExp,
   recipientName?: string,
 ) {
   await user.click(screen.getByRole('button', { name: requestButtonName }));
-  await user.type(screen.getByLabelText(/Scheduled Date/i), '2026-07-10');
+  await user.type(screen.getByLabelText(/Scheduled Date/i), FUTURE_SCHEDULED_DATE);
   await user.type(screen.getByLabelText(/Scheduled Time/i), '09:30');
   await user.type(screen.getByLabelText(/Recipient Email/i), 'reviewer@example.com');
   if (recipientName) {
@@ -375,7 +381,7 @@ describe('HoldPointsPage register data layer', () => {
       lotId: 'lot-1',
       items: [{ itpChecklistItemId: 'item-1' }, { itpChecklistItemId: 'item-2' }],
       sharedEvidenceDocumentIds: [],
-      scheduledDate: '2026-07-10',
+      scheduledDate: FUTURE_SCHEDULED_DATE,
       scheduledTime: '09:30',
       recipientEmail: 'reviewer@example.com',
       recipientName: 'Site Reviewer',
