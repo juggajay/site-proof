@@ -787,11 +787,25 @@ describe('Hold Points API', () => {
   });
 
   describe('POST /api/holdpoints/:id/release', () => {
+    // hold_points now enforces unique(lotId, itpChecklistItemId), so every
+    // release-ready hold point gets its own fresh checklist item on the shared
+    // template (the instance has no snapshot, so the live-template fallback
+    // resolves it — same pattern as the "never-ticked" test below).
+    let releaseReadySequence = 100;
+
     async function createReleaseReadyHoldPoint(status = 'notified') {
+      const freshItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId,
+          description: 'Release-ready hold point item',
+          pointType: 'hold_point',
+          sequenceNumber: releaseReadySequence++,
+        },
+      });
       const hp = await prisma.holdPoint.create({
         data: {
           lotId,
-          itpChecklistItemId: checklistItemId,
+          itpChecklistItemId: freshItem.id,
           pointType: 'hold_point',
           status,
         },
@@ -805,7 +819,7 @@ describe('Hold Points API', () => {
         where: {
           itpInstanceId_checklistItemId: {
             itpInstanceId: itpInstance.id,
-            checklistItemId,
+            checklistItemId: freshItem.id,
           },
         },
         update: {
@@ -826,7 +840,7 @@ describe('Hold Points API', () => {
         },
         create: {
           itpInstanceId: itpInstance.id,
-          checklistItemId,
+          checklistItemId: freshItem.id,
           status: 'completed',
         },
       });
@@ -1100,7 +1114,7 @@ describe('Hold Points API', () => {
             projectId,
             lotId,
             lotNumber: expect.any(String),
-            itpChecklistItemId: checklistItemId,
+            itpChecklistItemId: hp.itpChecklistItemId,
             status: 'released',
             actorUserId: userId,
             action: 'released',
@@ -1322,14 +1336,7 @@ describe('Hold Points API', () => {
     });
 
     it('suppresses hold point release notifications and emails when the project toggle is off', async () => {
-      const hp = await prisma.holdPoint.create({
-        data: {
-          lotId,
-          itpChecklistItemId: checklistItemId,
-          pointType: 'hold_point',
-          status: 'notified',
-        },
-      });
+      const { holdPoint: hp } = await createReleaseReadyHoldPoint('notified');
 
       // A foreman on the project would normally receive the Feature #948
       // contractor confirmation email — a direct `to:` send that bypasses the
@@ -1404,14 +1411,7 @@ describe('Hold Points API', () => {
     });
 
     it('should keep company admin release rights when project membership is lower', async () => {
-      const hp = await prisma.holdPoint.create({
-        data: {
-          lotId,
-          itpChecklistItemId: checklistItemId,
-          pointType: 'hold_point',
-          status: 'notified',
-        },
-      });
+      const { holdPoint: hp } = await createReleaseReadyHoldPoint('notified');
 
       await prisma.projectUser.updateMany({
         where: { projectId, userId },
@@ -1447,10 +1447,26 @@ describe('Hold Points API access control', () => {
   let adminUserId: string;
   let lotId: string;
   let unassignedLotId: string;
+  let templateId: string;
   let checklistItemId: string;
   let holdPointId: string;
   let unassignedHoldPointId: string;
   const createdUserIds: string[] = [];
+
+  // unique(lotId, itpChecklistItemId): tests that need an extra hold point on
+  // the shared lot must give it its own checklist item (deleted in finally).
+  async function createExtraHoldPointItem(description: string, sequenceNumber: number) {
+    return prisma.iTPChecklistItem.create({
+      data: {
+        templateId,
+        description,
+        pointType: 'hold_point',
+        responsibleParty: 'contractor',
+        evidenceRequired: 'none',
+        sequenceNumber,
+      },
+    });
+  }
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -1514,6 +1530,7 @@ describe('Hold Points API access control', () => {
       },
       include: { checklistItems: true },
     });
+    templateId = template.id;
     checklistItemId = template.checklistItems[0].id;
 
     await prisma.iTPInstance.create({
@@ -2159,10 +2176,11 @@ describe('Hold Points API access control', () => {
       },
     });
 
+    const escalationItem = await createExtraHoldPointItem('Escalation coverage hold point', 9001);
     const hp = await prisma.holdPoint.create({
       data: {
         lotId,
-        itpChecklistItemId: checklistItemId,
+        itpChecklistItemId: escalationItem.id,
         pointType: 'hold_point',
         description: 'Escalation coverage hold point',
         status: 'notified',
@@ -2258,14 +2276,16 @@ describe('Hold Points API access control', () => {
       });
       await prisma.auditLog.deleteMany({ where: { entityId: hp.id } });
       await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+      await prisma.iTPChecklistItem.delete({ where: { id: escalationItem.id } }).catch(() => {});
     }
   });
 
   it('rejects resolving hold points that were never escalated', async () => {
+    const neverEscalatedItem = await createExtraHoldPointItem('Never escalated hold point', 9002);
     const hp = await prisma.holdPoint.create({
       data: {
         lotId,
-        itpChecklistItemId: checklistItemId,
+        itpChecklistItemId: neverEscalatedItem.id,
         pointType: 'hold_point',
         description: 'Never escalated hold point',
         status: 'notified',
@@ -2288,14 +2308,18 @@ describe('Hold Points API access control', () => {
       expect(unchangedHoldPoint.escalationResolvedAt).toBeNull();
     } finally {
       await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+      await prisma.iTPChecklistItem
+        .delete({ where: { id: neverEscalatedItem.id } })
+        .catch(() => {});
     }
   });
 
   it('rejects chasing or escalating released hold points', async () => {
+    const releasedItem = await createExtraHoldPointItem('Released hold point', 9003);
     const releasedHoldPoint = await prisma.holdPoint.create({
       data: {
         lotId,
-        itpChecklistItemId: checklistItemId,
+        itpChecklistItemId: releasedItem.id,
         pointType: 'hold_point',
         description: 'Released hold point',
         status: 'released',
@@ -2322,6 +2346,7 @@ describe('Hold Points API access control', () => {
       expect(unchangedHoldPoint.isEscalated).toBe(false);
     } finally {
       await prisma.holdPoint.delete({ where: { id: releasedHoldPoint.id } }).catch(() => {});
+      await prisma.iTPChecklistItem.delete({ where: { id: releasedItem.id } }).catch(() => {});
     }
   });
 
@@ -3012,9 +3037,33 @@ describe('Hold Point Token Release', () => {
       select: { settings: true },
     });
     const foreman = await registerTestUser('HP Public Release Foreman Off', 'user', companyId);
+    // unique(lotId, itpChecklistItemId): the shared lot already has a hold
+    // point for checklistItemId, so this test gets its own snapshot lot (same
+    // pattern as the fresh/completed public-token tests above).
+    const toggleLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `TOK-TOGGLE-LOT-${Date.now()}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const toggleSnapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+    });
+    await prisma.iTPInstance.create({
+      data: {
+        templateId,
+        lotId: toggleLot.id,
+        templateSnapshot: JSON.stringify(buildTemplateSnapshot(toggleSnapshotSource)),
+        status: 'not_started',
+      },
+    });
     const publicToggleHoldPoint = await prisma.holdPoint.create({
       data: {
-        lotId,
+        lotId: toggleLot.id,
         itpChecklistItemId: checklistItemId,
         pointType: 'hold_point',
         status: 'pending',

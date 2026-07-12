@@ -86,6 +86,16 @@ describe('Hold Point batch review-room public routes', () => {
         sequenceNumber: 2,
       },
     });
+    // unique(lotId, itpChecklistItemId): the outside-the-batch hold point needs
+    // its own checklist item — item2 already backs hp2 on the same lot.
+    const item3 = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId,
+        description: 'Not in batch',
+        pointType: 'hold_point',
+        sequenceNumber: 3,
+      },
+    });
 
     const snapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
       where: { id: templateId },
@@ -162,7 +172,7 @@ describe('Hold Point batch review-room public routes', () => {
     const outsideHp = await prisma.holdPoint.create({
       data: {
         lotId,
-        itpChecklistItemId: item2.id,
+        itpChecklistItemId: item3.id,
         pointType: 'hold_point',
         description: 'Not in batch',
         status: 'notified',
