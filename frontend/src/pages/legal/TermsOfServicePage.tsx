@@ -60,8 +60,8 @@ export function TermsOfServicePage() {
               services, you agree to be bound by these Terms.
             </p>
             <p className="text-muted-foreground">
-              CIVOS is operated by CIVOS Pty Ltd, an Australian company. These Terms are governed by
-              the laws of New South Wales, Australia.
+              CIVOS is operated in Australia. These Terms are governed by the laws of New South
+              Wales, Australia.
             </p>
           </section>
 
