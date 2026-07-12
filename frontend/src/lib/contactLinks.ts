@@ -1,4 +1,4 @@
-export const DEFAULT_SUPPORT_EMAIL = 'support@civos.com.au';
+export const DEFAULT_SUPPORT_EMAIL = 'jayson@civos.com.au';
 
 export function normalizeSupportEmail(email: string | null | undefined): string {
   const trimmed = email?.trim();
