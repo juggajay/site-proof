@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +15,14 @@ import { LegalContactCard } from './LegalContactCard';
 
 export function PrivacyPolicyPage() {
   const lastUpdated = 'January 18, 2026';
+
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = 'Privacy Policy — CIVOS';
+    return () => {
+      document.title = prevTitle;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
