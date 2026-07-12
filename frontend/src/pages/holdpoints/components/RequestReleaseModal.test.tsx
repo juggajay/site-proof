@@ -166,8 +166,11 @@ describe('RequestReleaseModal — desktop', () => {
     expect(uploadBody.get('category')).toBe('itp_evidence');
     expect(uploadBody.get('file')).toBe(evidenceFile);
 
+    // The date input enforces min={today}; a hardcoded date rots into the past
+    // and silently blocks submit (same class as the backend fix in #1381).
+    const scheduledDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     fireEvent.change(screen.getByLabelText('Scheduled Date'), {
-      target: { value: '2026-07-10' },
+      target: { value: scheduledDate },
     });
     fireEvent.change(screen.getByLabelText('Scheduled Time'), {
       target: { value: '09:30' },
@@ -175,7 +178,7 @@ describe('RequestReleaseModal — desktop', () => {
     await user.click(screen.getByRole('button', { name: 'Request Release' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
-      '2026-07-10',
+      scheduledDate,
       '09:30',
       'inspector@example.com',
       undefined,
