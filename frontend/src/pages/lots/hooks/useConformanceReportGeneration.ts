@@ -17,6 +17,7 @@
  */
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { fetchAllPages } from '@/lib/lots';
 import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
@@ -41,12 +42,15 @@ interface ItpInstanceResponse {
   instance: ITPInstance | null;
 }
 
-interface TestResultsResponse {
-  testResults?: ConformanceReportData['testResults'];
+type TestResult = NonNullable<ConformanceReportData['testResults']>[number];
+type Ncr = NonNullable<ConformanceReportData['ncrs']>[number];
+
+interface TestResultsPage {
+  testResults?: TestResult[];
 }
 
-interface NcrsResponse {
-  ncrs?: ConformanceReportData['ncrs'];
+interface NcrsPage {
+  ncrs?: Ncr[];
 }
 
 interface UseConformanceReportGenerationParams {
@@ -100,15 +104,21 @@ export function useConformanceReportGeneration({
       // Fetch all data needed for the report
       const encodedProjectId = encodeURIComponent(projectId || '');
       const encodedLotId = encodeURIComponent(lotId || '');
-      const [projectData, itpData, testsData, ncrsData, branding] = await Promise.all([
+      // test-results and ncrs are paginated (default 20/page); a compliance PDF
+      // must include EVERY record, so page through both endpoints in full.
+      const [projectData, itpData, testResults, ncrs, branding] = await Promise.all([
         apiFetch<ProjectResponse>(`/api/projects/${encodedProjectId}`),
         itpInstance
           ? Promise.resolve<ItpInstanceResponse>({ instance: itpInstance })
           : apiFetch<ItpInstanceResponse>(`/api/itp/instances/lot/${encodedLotId}`),
-        apiFetch<TestResultsResponse>(
+        fetchAllPages<TestResult>(
           `/api/test-results?projectId=${encodedProjectId}&lotId=${encodedLotId}`,
+          (page) => (page as TestResultsPage).testResults ?? [],
         ),
-        apiFetch<NcrsResponse>(`/api/ncrs?projectId=${encodedProjectId}&lotId=${encodedLotId}`),
+        fetchAllPages<Ncr>(
+          `/api/ncrs?projectId=${encodedProjectId}&lotId=${encodedLotId}`,
+          (page) => (page as NcrsPage).ncrs ?? [],
+        ),
         fetchPdfBranding(projectId || ''),
       ]);
       const project = projectData.project;
@@ -125,8 +135,8 @@ export function useConformanceReportGeneration({
           company: branding ?? project.company,
         },
         itpInstance: itpData.instance,
-        testResults: testsData.testResults,
-        ncrs: ncrsData.ncrs,
+        testResults,
+        ncrs,
       });
 
       // Generate PDF with selected format

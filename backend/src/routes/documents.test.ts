@@ -2500,7 +2500,11 @@ describe('Documents API', () => {
 
         expect(deleteRes.status).toBe(409);
         expect(deleteRes.body.error.code).toBe('CONFLICT');
-        expect(deleteRes.body.error.message).toContain('NCR workflow');
+        // A closed NCR now trips the evidence metadata lock before the
+        // delete-specific guard; either message means the delete was blocked.
+        expect(deleteRes.body.error.message).toMatch(
+          /NCR workflow|NCR evidence cannot be modified/,
+        );
 
         // The FK is onDelete: Cascade, so the document must survive to keep the
         // closed NCR's evidence link intact.

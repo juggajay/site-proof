@@ -168,6 +168,42 @@ describe('useConformanceReportGeneration', () => {
     await waitFor(() => expect(result.current.generatingReport).toBe(false));
   });
 
+  it('pages through all test results and NCRs so a >20-record lot ships every record', async () => {
+    // Both list endpoints are paginated (default 20/page). A dense compaction
+    // lot routinely has >20 test results; the report must include all of them,
+    // not just the first page, or it ships a silently truncated compliance PDF.
+    const testResultsPage1 = Array.from({ length: 100 }, (_, i) => ({ id: `tr-${i}` }));
+    const testResultsPage2 = Array.from({ length: 25 }, (_, i) => ({ id: `tr-${i + 100}` }));
+    const ncrsPage1 = Array.from({ length: 100 }, (_, i) => ({ id: `ncr-${i}` }));
+    const ncrsPage2 = Array.from({ length: 5 }, (_, i) => ({ id: `ncr-${i + 100}` }));
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/projects/'))
+        return { project: { name: 'Demo', projectNumber: 'PN-1', clientName: 'Client' } };
+      if (path.startsWith('/api/itp/instances/lot/')) return { instance: null };
+      if (path.startsWith('/api/test-results'))
+        return path.includes('page=2')
+          ? { testResults: testResultsPage2, pagination: { totalPages: 2 } }
+          : { testResults: testResultsPage1, pagination: { totalPages: 2 } };
+      if (path.startsWith('/api/ncrs'))
+        return path.includes('page=2')
+          ? { ncrs: ncrsPage2, pagination: { totalPages: 2 } }
+          : { ncrs: ncrsPage1, pagination: { totalPages: 2 } };
+      throw new Error(`unexpected path ${path}`);
+    });
+    const { result } = renderHook(() => useConformanceReportGeneration(baseParams));
+
+    await act(async () => {
+      await result.current.generateReport();
+    });
+
+    const built = buildReportDataMock.mock.calls[0][0];
+    expect(built.testResults).toHaveLength(125);
+    expect(built.testResults?.[124]).toEqual({ id: 'tr-124' });
+    expect(built.ncrs).toHaveLength(105);
+    expect(built.ncrs?.[104]).toEqual({ id: 'ncr-104' });
+    expect(generatePdfMock).toHaveBeenCalledTimes(1);
+  });
+
   it('fetches the ITP instance when none is provided', async () => {
     apiFetchMock.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/projects/'))
