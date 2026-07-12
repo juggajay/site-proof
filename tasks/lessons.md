@@ -119,3 +119,38 @@ computed, never literal. (2) When the SAME test fails on multiple unrelated
 PRs, suspect master/date/environment before suspecting any PR — reproduce on
 clean master first. (3) `gh pr checks --watch` exits non-zero for SKIPPED
 checks (path-gated jobs); parse for state "fail" before treating a PR as red.
+
+## 2026-07-12 — new unique constraint broke 14 DB-backed tests via incidental fixture collisions
+PR #1392 added unique(lot_id, itp_checklist_item_id) on hold_points. The
+implementing agent ran mocked/targeted tests green, but CI's full DB-backed
+suite failed 14 tests in holdpoints.test.ts + publicBatchRoutes.test.ts:
+their fixtures created multiple HoldPoints on the same (lot, item) pair —
+incidental reuse, not intent. None were caught by targeted runs because
+constraint violations only exist against a real schema.
+**Rules:** (1) Any PR adding a DB constraint must run the FULL DB-backed
+backend suite locally against a test DB WITH the new migration applied,
+before pushing. (2) Fix fixtures (distinct keys per created row), never the
+constraint or assertions.
+
+## 2026-07-12 — date-rot fixed once must be swept as a class, same PR
+The 2026-07-10 lesson fixed ONE hardcoded-date test (backend HP batch). Two
+days later the identical class broke master's frontend suite twice over:
+RequestReleaseModal.test.tsx and HoldPointsPage.test.tsx both hardcoded
+'2026-07-10' against a min={today} date input — silently blocking submit so
+onSubmit was "never called". Every frontend PR went red at once.
+**Rules:** (1) When fixing a rot-class bug (dates, ports, versions), grep the
+whole repo for the class in the SAME PR — `grep -rn "202[0-9]-[0-9][0-9]-[0-9][0-9]"`
+on test files, then keep only clock-validated inputs. (2) Fixture dates that
+are only displayed don't rot; dates validated against NOW always do.
+
+## 2026-07-12 — Bash cwd persistence committed to the wrong branch (worktree/main split)
+An orchestrator committed a fix that silently landed on local master: its
+`git checkout <branch>` ran in a leftover agent-worktree cwd (shell cwd
+persists between commands), while file edits went to the main checkout via
+absolute paths — main was on master, so `git add && git commit` committed
+there. Push "succeeded" (pushed the unchanged branch); CI never saw the fix.
+**Rules:** (1) Start every git command chain with an explicit `cd <repo>` and
+include `git branch --show-current` in the SAME chain as the commit. (2) After
+any push, verify the commit actually reached the remote ref
+(`git log origin/<branch> -1`), not just that push exited 0 — reflog is the
+debugging tool when a commit "vanishes".
