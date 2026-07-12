@@ -168,3 +168,19 @@ include `git branch --show-current` in the SAME chain as the commit. (2) After
 any push, verify the commit actually reached the remote ref
 (`git log origin/<branch> -1`), not just that push exited 0 — reflog is the
 debugging tool when a commit "vanishes".
+
+## 2026-07-12 — push-only CI jobs rot silently: PR-green ≠ master-green
+The seeded Frontend E2E job runs only on pushes to master (never on PRs), so
+UI changes merged with all-green PR checks (#1396–#1398) broke it invisibly.
+It stayed red for days across many merges; when finally opened, 9 tests
+were failing and one early failure in a describe.serial chain was
+serial-skipping 3 more (skips don't count as failures, understating damage).
+All 10 were stale tests trailing intentional product changes — but only an
+audit noticed, not CI.
+**Rules:** (1) After merging a PR that changes UI flows or copy, check the
+MASTER push run (`gh run list --branch master`), not just PR checks — the
+E2E job only exists there. (2) When reading E2E failures, also count
+serial-skipped successors of a failed test; the true breakage is the chain.
+(3) When piping `gh run watch`/`gh pr checks` through `tail`, the pipe eats
+the exit code — verify with `--json conclusion` afterwards, never trust the
+pipeline's exit status.
