@@ -96,7 +96,9 @@ jobs:
         run: npm ci
 
       - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+        # High/critical advisories still block; moderate ones in transitive deps
+        # no longer fail unrelated PRs the moment an advisory publishes.
+        run: npm audit --audit-level=high
 
       - name: Generate Prisma client
         run: npx prisma generate
@@ -131,7 +133,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Building the image on every PR duplicated Railway's deploy build and
+      # added minutes of wall time; a broken Dockerfile still fails the push
+      # build on master before any deploy.
       - name: Build backend Docker image
+        if: github.event_name != 'pull_request'
         run: docker build -t siteproof-backend-ci .
         env:
           DOCKER_BUILDKIT: "1"
@@ -189,7 +195,9 @@ jobs:
         run: npm ci
 
       - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+        # High/critical advisories still block; moderate ones in transitive deps
+        # no longer fail unrelated PRs the moment an advisory publishes.
+        run: npm audit --audit-level=high
 
       - name: Check formatting
         run: npm run format:check
