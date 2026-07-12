@@ -8,6 +8,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logWarn } from '../../lib/serverLogger.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
+import { assertDocumentDeletableOutsideEvidenceWorkflow } from './evidenceLinkGuards.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -113,21 +114,12 @@ export function createDocumentDeleteRouter({
         });
       }
 
-      // Mirror the versioning guard: a document linked as NCR evidence must not
-      // be deleted through the generic route, because NCREvidence -> Document is
-      // an onDelete: Cascade FK — deleting the document would silently drop the
-      // evidence link, including from an already-closed NCR. Removal must go
-      // through the NCR evidence workflow, which enforces the NCR lifecycle.
-      const ncrEvidenceLink = await prisma.nCREvidence.findFirst({
-        where: { documentId: document.id },
-        select: { id: true },
-      });
-      if (ncrEvidenceLink) {
-        throw AppError.conflict('NCR evidence documents must be removed from the NCR workflow.', {
-          code: 'WORKFLOW_EVIDENCE_DELETE_BLOCKED',
-          evidenceType: 'ncr',
-        });
-      }
+      // A document linked as workflow evidence (NCR, variation) must not be
+      // deleted through the generic route: those links are onDelete: Cascade FKs,
+      // so deleting the document would silently drop the evidence — including
+      // from a closed NCR or claimed variation. Removal must go through the
+      // owning workflow, which enforces its lifecycle.
+      await assertDocumentDeletableOutsideEvidenceWorkflow(prisma, document.id);
 
       await prisma.$transaction(async (tx) => {
         let previousVersionId: string | null = null;

@@ -2764,6 +2764,55 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('reopen flips the NCR and its affected lots together in one transaction', async () => {
+    // M-TX: the reopen must restore lots to ncr_raised in the same transaction as
+    // the NCR status flip, so a mid-write crash can never leave an open NCR whose
+    // lots are not marked ncr_raised (and which can no longer be re-reopened).
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `NCR-REOPEN-LOT-${Date.now()}`,
+        status: 'in_progress',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const closedNcr = await prisma.nCR.create({
+      data: {
+        projectId,
+        ncrNumber: `NCR-REOPEN-LOT-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        description: 'Reopen should restore affected lot status',
+        category: 'Workmanship',
+        severity: 'minor',
+        status: 'closed',
+        raisedById: userId,
+        closedById: userId,
+        closedAt: new Date(),
+        ncrLots: { create: { lotId: lot.id } },
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/ncrs/${closedNcr.id}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Reopen with affected lot' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ncr.status).toBe('rectification');
+
+      const lotAfter = await prisma.lot.findUniqueOrThrow({
+        where: { id: lot.id },
+        select: { status: true },
+      });
+      expect(lotAfter.status).toBe('ncr_raised');
+    } finally {
+      await prisma.nCRLot.deleteMany({ where: { ncrId: closedNcr.id } });
+      await prisma.nCR.delete({ where: { id: closedNcr.id } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+    }
+  });
+
   it('should reopen only once when concurrent reopen requests race', async () => {
     const raceNcrId = await createVerificationNcr('Concurrent reopen race');
     const closeRes = await request(app)

@@ -18,6 +18,7 @@ import {
   LOCKED_ITP_EVIDENCE_MESSAGE,
   isItpCompletionEvidenceLocked,
 } from '../itp/helpers/evidenceLock.js';
+import { assertEvidenceMetadataMutable } from './evidenceLinkGuards.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -586,6 +587,9 @@ export async function requireDocumentMutationAccess(
     });
   }
   await requireNoLockedItpEvidenceAttachment(document);
+  if (document.id) {
+    await assertEvidenceMetadataMutable(prisma, document.id);
+  }
 
   if (!isDocumentSubcontractorUser(user)) {
     return;

@@ -4,6 +4,12 @@ const mockPrisma = vi.hoisted(() => ({
   nCREvidence: {
     findFirst: vi.fn(),
   },
+  variationEvidence: {
+    findFirst: vi.fn(),
+  },
+  iTPCompletionAttachment: {
+    findFirst: vi.fn(),
+  },
   project: {
     findUnique: vi.fn(),
   },
@@ -61,6 +67,7 @@ vi.mock('../ncrs/ncrAccess.js', () => ({
 
 import {
   canReadDocument,
+  requireDocumentMutationAccess,
   requireDocumentUploadAccess,
   type DocumentAccessRecord,
 } from './access.js';
@@ -105,6 +112,8 @@ describe('document access', () => {
     mockPrisma.subcontractorUser.findMany.mockResolvedValue([]);
     mockPrisma.lot.findFirst.mockResolvedValue(null);
     mockPrisma.nCREvidence.findFirst.mockResolvedValue(null);
+    mockPrisma.variationEvidence.findFirst.mockResolvedValue(null);
+    mockPrisma.iTPCompletionAttachment.findFirst.mockResolvedValue(null);
     ncrAccessMocks.canReadNcr.mockResolvedValue(false);
   });
 
@@ -145,5 +154,62 @@ describe('document access', () => {
     await expect(
       requireDocumentUploadAccess(subcontractorUser, 'project-1', null, 'Site Photos'),
     ).rejects.toThrow('documents denied');
+  });
+
+  describe('requireDocumentMutationAccess evidence locks', () => {
+    const ownerUser = {
+      id: 'owner-1',
+      userId: 'owner-1',
+      email: 'owner@example.com',
+      fullName: 'Owner User',
+      roleInCompany: 'owner',
+      role: 'owner',
+      companyId: 'headco-1',
+    } as const;
+
+    const evidenceDocument = {
+      id: 'doc-1',
+      projectId: 'project-1',
+      lotId: null,
+      uploadedById: 'owner-1',
+      documentType: 'photo',
+      category: 'ncr_evidence',
+    } satisfies DocumentAccessRecord;
+
+    it('blocks metadata mutation of evidence on an NCR at/past verification', async () => {
+      mockPrisma.nCREvidence.findFirst.mockResolvedValue({ ncr: { status: 'closed' } });
+
+      await expect(requireDocumentMutationAccess(ownerUser, evidenceDocument)).rejects.toThrow(
+        'NCR has been submitted for verification',
+      );
+    });
+
+    it('allows metadata mutation of evidence on an open NCR', async () => {
+      mockPrisma.nCREvidence.findFirst.mockResolvedValue({ ncr: { status: 'open' } });
+
+      await expect(
+        requireDocumentMutationAccess(ownerUser, evidenceDocument),
+      ).resolves.toBeUndefined();
+    });
+
+    it('blocks metadata mutation of evidence on a claimed variation', async () => {
+      mockPrisma.variationEvidence.findFirst.mockResolvedValue({
+        variation: { status: 'claimed', claimedInId: 'claim-1' },
+      });
+
+      await expect(requireDocumentMutationAccess(ownerUser, evidenceDocument)).rejects.toThrow(
+        'variation has been claimed',
+      );
+    });
+
+    it('allows metadata mutation of evidence on an unclaimed variation', async () => {
+      mockPrisma.variationEvidence.findFirst.mockResolvedValue({
+        variation: { status: 'approved', claimedInId: null },
+      });
+
+      await expect(
+        requireDocumentMutationAccess(ownerUser, evidenceDocument),
+      ).resolves.toBeUndefined();
+    });
   });
 });
