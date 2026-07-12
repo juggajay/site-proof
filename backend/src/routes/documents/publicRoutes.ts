@@ -41,6 +41,7 @@ type CreateDocumentPublicRouterDependencies = {
     document: DocumentDownloadRecord,
     res: Response,
     disposition: 'inline' | 'attachment',
+    variant?: 'thumb',
   ) => Promise<void>;
   buildInvalidDocumentSignedUrlTokenResponse: (expired?: boolean) => unknown;
   buildDocumentSignedUrlTokenResponse: (validation: {
@@ -119,6 +120,9 @@ export function createDocumentPublicRouter({
       const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
       const { token } = req.query;
       const disposition = parseDocumentContentDisposition(req.query.disposition);
+      // Variant selects the thumbnail derivative of the already-authorized
+      // document; it never widens access (the file key is derived server-side).
+      const variant = req.query.variant === 'thumb' ? 'thumb' : undefined;
 
       if (!token || typeof token !== 'string') {
         throw AppError.badRequest('Token is required', {
@@ -158,7 +162,7 @@ export function createDocumentPublicRouter({
         document,
       });
 
-      await sendDocumentFile(document, res, disposition);
+      await sendDocumentFile(document, res, disposition, variant);
     }),
   );
 

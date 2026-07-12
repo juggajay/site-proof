@@ -10,11 +10,16 @@ vi.mock('../../lib/supabase.js', async () => {
   };
 });
 
+import sharp from 'sharp';
+
 import * as supabaseLib from '../../lib/supabase.js';
 import { getSupabaseStorageReference } from '../../lib/supabase.js';
 import {
+  generateDocumentThumbnail,
   getOwnedDocumentStoragePath,
+  isThumbnailableImageMimeType,
   loadDocumentImageAsBase64,
+  THUMBNAIL_STORAGE_SUFFIX,
   uploadToSupabase,
 } from './storage.js';
 
@@ -154,5 +159,87 @@ describe('document Supabase storage ownership', () => {
       code: 'UPLOAD_FAILED',
       message: 'File storage is unavailable. Please try again later.',
     });
+  });
+});
+
+describe('generateDocumentThumbnail', () => {
+  async function makeTinyPng(): Promise<Buffer> {
+    return sharp({
+      create: { width: 8, height: 8, channels: 3, background: { r: 200, g: 100, b: 50 } },
+    })
+      .png()
+      .toBuffer();
+  }
+
+  it('identifies thumbnailable image mime types', () => {
+    expect(isThumbnailableImageMimeType('image/jpeg')).toBe(true);
+    expect(isThumbnailableImageMimeType('image/png')).toBe(true);
+    expect(isThumbnailableImageMimeType('image/webp')).toBe(true);
+    expect(isThumbnailableImageMimeType('application/pdf')).toBe(false);
+    expect(isThumbnailableImageMimeType(null)).toBe(false);
+  });
+
+  it('writes a webp thumbnail beside the original at the derived storage key', async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn(() => ({ upload }));
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    const fileUrl = getSupabaseStorageReference('documents', 'project-a/photo.jpg');
+
+    await generateDocumentThumbnail({
+      fileUrl,
+      projectId: 'project-a',
+      mimeType: 'image/jpeg',
+      buffer: await makeTinyPng(),
+    });
+
+    expect(from).toHaveBeenCalledWith('documents');
+    expect(upload).toHaveBeenCalledTimes(1);
+    const [key, body, options] = upload.mock.calls[0];
+    expect(key).toBe(`project-a/photo.jpg${THUMBNAIL_STORAGE_SUFFIX}`);
+    expect(Buffer.isBuffer(body)).toBe(true);
+    // A real webp thumbnail begins with the RIFF/WEBP container magic bytes.
+    expect((body as Buffer).subarray(0, 4).toString('ascii')).toBe('RIFF');
+    expect((body as Buffer).subarray(8, 12).toString('ascii')).toBe('WEBP');
+    expect(options).toMatchObject({ contentType: 'image/webp', upsert: true });
+  });
+
+  it('skips non-image mime types without touching storage', async () => {
+    const upload = vi.fn();
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from: vi.fn(() => ({ upload })) },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    await generateDocumentThumbnail({
+      fileUrl: getSupabaseStorageReference('documents', 'project-a/report.pdf'),
+      projectId: 'project-a',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('not an image'),
+    });
+
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('never throws when sharp fails on an unreadable buffer (upload stays unaffected)', async () => {
+    const upload = vi.fn();
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from: vi.fn(() => ({ upload })) },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    await expect(
+      generateDocumentThumbnail({
+        fileUrl: getSupabaseStorageReference('documents', 'project-a/photo.jpg'),
+        projectId: 'project-a',
+        mimeType: 'image/jpeg',
+        buffer: Buffer.from('this is not a decodable image'),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(upload).not.toHaveBeenCalled();
   });
 });

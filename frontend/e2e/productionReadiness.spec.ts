@@ -602,7 +602,7 @@ test.describe('production readiness guardrails', () => {
     );
     expect(documentFileHelpers).toContain('getOwnedDocumentStoragePath');
     expect(documentFileHelpers).toContain(
-      'await sendSupabaseDocumentFile(document, res, contentType, contentDisposition)',
+      'await sendSupabaseDocumentFile(document, res, contentType, contentDisposition, variant)',
     );
     expect(documentFileHelpers).toContain('if (isExternalFileUrl(document.fileUrl))');
     expect(documentFileHelpers).toContain("throw AppError.notFound('File')");

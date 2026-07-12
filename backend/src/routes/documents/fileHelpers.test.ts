@@ -103,4 +103,98 @@ describe('sendDocumentFile', () => {
     expect(res.redirect).not.toHaveBeenCalled();
     expect(res.send).not.toHaveBeenCalled();
   });
+
+  describe('thumbnail variant', () => {
+    const fileUrl = 'supabase://documents/project-1/photo.jpg';
+    const storagePath = 'project-1/photo.jpg';
+
+    function mockDownload(impl: (key: string) => { data: Blob | null; error: unknown }) {
+      const download = vi.fn(async (key: string) => impl(key));
+      const from = vi.fn(() => ({ download }));
+      mockGetSupabaseStoragePath.mockReturnValue(storagePath);
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+      return { download };
+    }
+
+    it('serves the thumbnail object as webp when it exists', async () => {
+      const res = makeResponse();
+      const { download } = mockDownload((key) =>
+        key === `${storagePath}.thumb.webp`
+          ? { data: new Blob([Buffer.from('thumb bytes')]), error: null }
+          : { data: new Blob([Buffer.from('original bytes')]), error: null },
+      );
+
+      await sendDocumentFile(
+        {
+          fileUrl,
+          filename: 'photo.jpg',
+          mimeType: 'image/jpeg',
+          projectId: 'project-1',
+          documentType: 'photo',
+        },
+        res,
+        'inline',
+        'thumb',
+      );
+
+      expect(download).toHaveBeenCalledWith(`${storagePath}.thumb.webp`);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/webp');
+      expect(res.send.mock.calls[0][0].toString()).toBe('thumb bytes');
+    });
+
+    it('falls back to the original when the thumbnail is absent', async () => {
+      const res = makeResponse();
+      const { download } = mockDownload((key) =>
+        key === `${storagePath}.thumb.webp`
+          ? { data: null, error: { message: 'not found' } }
+          : { data: new Blob([Buffer.from('original bytes')]), error: null },
+      );
+
+      await sendDocumentFile(
+        {
+          fileUrl,
+          filename: 'photo.jpg',
+          mimeType: 'image/jpeg',
+          projectId: 'project-1',
+          documentType: 'photo',
+        },
+        res,
+        'inline',
+        'thumb',
+      );
+
+      expect(download).toHaveBeenCalledWith(`${storagePath}.thumb.webp`);
+      expect(download).toHaveBeenCalledWith(storagePath);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+      expect(res.send.mock.calls[0][0].toString()).toBe('original bytes');
+    });
+
+    it('rejects an out-of-scope document before any thumbnail lookup', async () => {
+      const res = makeResponse();
+      mockGetSupabaseStoragePath.mockReturnValue(null);
+      mockIsSupabaseConfigured.mockReturnValue(true);
+
+      await expect(
+        sendDocumentFile(
+          {
+            fileUrl:
+              'https://siteproof-test.supabase.co/storage/v1/object/public/documents/other-project/photo.jpg',
+            filename: 'photo.jpg',
+            mimeType: 'image/jpeg',
+            projectId: 'project-1',
+            documentType: 'photo',
+          },
+          res,
+          'inline',
+          'thumb',
+        ),
+      ).rejects.toMatchObject({ statusCode: 404 });
+
+      expect(mockGetSupabaseClient).not.toHaveBeenCalled();
+      expect(res.send).not.toHaveBeenCalled();
+    });
+  });
 });

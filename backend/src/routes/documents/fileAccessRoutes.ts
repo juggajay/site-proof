@@ -38,6 +38,7 @@ type CreateDocumentFileAccessRouterDependencies = {
     document: DocumentDownloadRecord,
     res: Response,
     disposition?: 'inline' | 'attachment',
+    variant?: 'thumb',
   ) => Promise<void>;
 };
 
@@ -76,7 +77,8 @@ export function createDocumentFileAccessRouter({
         throw AppError.forbidden('Access denied');
       }
 
-      await sendDocumentFile(document, res);
+      const variant = req.query.variant === 'thumb' ? 'thumb' : undefined;
+      await sendDocumentFile(document, res, undefined, variant);
     }),
   );
 

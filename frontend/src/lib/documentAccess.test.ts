@@ -41,6 +41,43 @@ describe('document access URLs', () => {
     expect(apiUrlMock).not.toHaveBeenCalled();
   });
 
+  it('appends the thumb variant to the signed download URL for grid surfaces', async () => {
+    apiFetchMock.mockResolvedValue({
+      signedUrl: '/api/documents/download/document-1?token=fixture',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    const url = await getDocumentAccessUrl('document-1', null, {
+      disposition: 'inline',
+      variant: 'thumb',
+    });
+
+    expect(url).toBe('/api/documents/download/document-1?token=fixture&variant=thumb');
+    // Variant is a display hint appended client-side; it is not baked into the
+    // signed-URL request (the token/cache stay keyed by disposition only).
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/document-1/signed-url', {
+      method: 'POST',
+      body: JSON.stringify({ expiresInMinutes: 15, disposition: 'inline' }),
+    });
+  });
+
+  it('serves the same cached signed URL with and without the thumb variant', async () => {
+    apiFetchMock.mockResolvedValue({
+      signedUrl: '/api/documents/download/document-1?token=cached',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    const thumb = await getDocumentAccessUrl('document-1', null, {
+      disposition: 'inline',
+      variant: 'thumb',
+    });
+    const original = await getDocumentAccessUrl('document-1', null, { disposition: 'inline' });
+
+    expect(thumb).toBe('/api/documents/download/document-1?token=cached&variant=thumb');
+    expect(original).toBe('/api/documents/download/document-1?token=cached');
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('clears cached signed URLs for auth identity changes', async () => {
     apiFetchMock
       .mockResolvedValueOnce({
