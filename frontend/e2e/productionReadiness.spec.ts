@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { getPhotoLocationLinks } from '../src/pages/lots/components/photoLocationLinks';
 import { formatDateKey, getCalendarDaysSince } from '../src/lib/localDate';
@@ -2650,19 +2651,21 @@ test.describe('production readiness guardrails', () => {
     expect(backendPushSource).not.toContain('// Initialize on module load');
   });
 
-  test('advanced analytics does not show fabricated KPI values', async () => {
-    const advancedAnalyticsSource = await readFile(
+  test('advanced analytics placeholder surface stays removed', async () => {
+    // The Advanced Analytics tab was a paywall over "Not connected" placeholder
+    // cards — removed 2026-07-12. This guard replaces the old fabricated-KPI
+    // check: the surface must not come back without live data behind it.
+    const advancedTabExists = existsSync(
       new URL('../src/pages/reports/components/AdvancedAnalyticsTab.tsx', import.meta.url),
+    );
+    expect(advancedTabExists).toBe(false);
+
+    const reportsPageSource = await readFile(
+      new URL('../src/pages/reports/ReportsPage.tsx', import.meta.url),
       'utf8',
     );
-
-    expect(advancedAnalyticsSource).not.toContain('94%');
-    expect(advancedAnalyticsSource).not.toContain('4.2 days');
-    expect(advancedAnalyticsSource).not.toContain('$1.2M');
-    expect(advancedAnalyticsSource).not.toContain('Monthly Claims');
-    expect(advancedAnalyticsSource).not.toContain('[30, 45, 35');
-    expect(advancedAnalyticsSource).toContain('backed by live project analytics');
-    expect(advancedAnalyticsSource).toContain('verified analytics source');
+    expect(reportsPageSource).not.toContain('Advanced Analytics');
+    expect(reportsPageSource).not.toContain("'advanced'");
   });
 
   test('subcontractor invite acceptance preserves locked email submissions', async () => {

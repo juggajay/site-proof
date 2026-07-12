@@ -286,7 +286,6 @@ Available Reports:
 • Test Results Report - Pass/fail analysis
 • Daily Diary Report - Site activity summaries
 • Claims Report - Progress claim history
-• Advanced Analytics - Deeper trend analysis (plan-dependent)
 
 Tips:
 • Print reports or save them as PDFs

@@ -2,7 +2,8 @@ import { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } fro
 import { flushSync } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
-import { Lock, Sparkles, Mail, Printer, RefreshCw } from 'lucide-react';
+import { Lock, Mail, Printer, RefreshCw } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import type {
@@ -39,12 +40,8 @@ const DiaryReportTab = lazy(() =>
 const ClaimsReportTab = lazy(() =>
   import('./components/ClaimsReportTab').then((m) => ({ default: m.ClaimsReportTab })),
 );
-const AdvancedAnalyticsTab = lazy(() =>
-  import('./components/AdvancedAnalyticsTab').then((m) => ({ default: m.AdvancedAnalyticsTab })),
-);
-
 const REPORT_DATA_TABS = ['lot-status', 'ncr', 'test', 'diary', 'claims'] as const;
-const REPORT_TABS = [...REPORT_DATA_TABS, 'advanced'] as const;
+const REPORT_TABS = REPORT_DATA_TABS;
 type ReportDataTab = (typeof REPORT_DATA_TABS)[number];
 type ReportTab = (typeof REPORT_TABS)[number];
 type PaginatedReportDataTab = Exclude<ReportDataTab, 'claims'>;
@@ -241,6 +238,7 @@ export function ReportsPage() {
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showScheduleUpgradePrompt, setShowScheduleUpgradePrompt] = useState(false);
 
   // Project name for print header
   const [projectName, setProjectName] = useState<string>('');
@@ -357,8 +355,7 @@ export function ReportsPage() {
         { id: 'test', label: 'Test Results' },
         { id: 'diary', label: 'Diary Report' },
         canViewClaimsReport ? { id: 'claims', label: 'Claims' } : null,
-        { id: 'advanced', label: 'Advanced Analytics', premium: true },
-      ].filter((tab): tab is { id: string; label: string; premium?: boolean } => Boolean(tab)),
+      ].filter((tab): tab is { id: string; label: string } => Boolean(tab)),
     [canViewClaimsReport],
   );
 
@@ -562,12 +559,12 @@ export function ReportsPage() {
     }
 
     if (!hasAdvancedAnalytics) {
-      setActiveTab('advanced');
+      setShowScheduleUpgradePrompt(true);
       return;
     }
 
     setShowScheduleModal(true);
-  }, [canManageScheduledReports, hasAdvancedAnalytics, setActiveTab, subscriptionTierLoaded]);
+  }, [canManageScheduledReports, hasAdvancedAnalytics, subscriptionTierLoaded]);
 
   const handlePrintReport = useCallback(() => {
     flushSync(() => {
@@ -711,13 +708,9 @@ export function ReportsPage() {
                 activeTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-              } ${tab.premium && !hasAdvancedAnalytics ? 'text-brand hover:text-brand' : ''}`}
+              }`}
             >
               {tab.label}
-              {tab.premium && !hasAdvancedAnalytics && <Lock className="h-3.5 w-3.5" />}
-              {tab.premium && hasAdvancedAnalytics && (
-                <Sparkles className="h-3.5 w-3.5 text-brand" />
-              )}
             </button>
           ))}
         </nav>
@@ -753,7 +746,6 @@ export function ReportsPage() {
                 {activeTab === 'test' && 'Test Results Report'}
                 {activeTab === 'diary' && 'Daily Diary Report'}
                 {activeTab === 'claims' && 'Claims Report'}
-                {activeTab === 'advanced' && 'Advanced Analytics Report'}
               </h1>
               <p className="text-lg text-foreground mt-1">{projectName}</p>
             </div>
@@ -822,14 +814,6 @@ export function ReportsPage() {
                 onFiltersChange={handleClaimsReportFiltersChange}
               />
             )}
-
-            {activeTab === 'advanced' && (
-              <AdvancedAnalyticsTab
-                hasAdvancedAnalytics={hasAdvancedAnalytics}
-                subscriptionTier={subscriptionTierLabel}
-                canManageCompanySettings={canManageCompanySettings}
-              />
-            )}
           </div>
         </Suspense>
 
@@ -847,6 +831,39 @@ export function ReportsPage() {
       {/* Schedule Report Modal */}
       {showScheduleModal && projectId && (
         <ScheduleReportModal projectId={projectId} onClose={handleCloseScheduleModal} />
+      )}
+
+      {/* Upgrade prompt for scheduled reports (tier-gated) */}
+      {showScheduleUpgradePrompt && (
+        <Modal onClose={() => setShowScheduleUpgradePrompt(false)} className="max-w-md">
+          <div className="space-y-4 text-center">
+            <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+              <Lock className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold">Scheduled Reports</h2>
+            <p className="text-sm text-muted-foreground">
+              Automated report schedules require a Professional or Enterprise subscription. Your
+              current plan:{' '}
+              <span className="font-semibold capitalize">{subscriptionTierLabel}</span>
+            </p>
+            {canManageCompanySettings ? (
+              <div className="space-y-2">
+                <a
+                  href="/company-settings"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-brand-foreground rounded-lg font-medium hover:bg-brand/90 transition-colors"
+                >
+                  <Mail className="h-4 w-4" />
+                  Upgrade to Professional
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  Contact support to upgrade your subscription
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm font-medium">Ask a company admin to upgrade this workspace.</p>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );
