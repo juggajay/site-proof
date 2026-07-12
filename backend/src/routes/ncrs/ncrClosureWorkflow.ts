@@ -565,38 +565,42 @@ ncrClosureWorkflowRouter.post(
     ]);
     await assertProjectAllowsWrite(ncr.projectId);
 
-    const reopenUpdate = await prisma.nCR.updateMany({
-      where: { id, status: { in: ['closed', 'closed_concession'] } },
-      data: {
-        status: 'rectification',
-        verifiedById: null,
-        verifiedAt: null,
-        verificationNotes: null,
-        closedById: null,
-        closedAt: null,
-        qmApprovedById: null,
-        qmApprovedAt: null,
-        lessonsLearned: reason
-          ? `[Reopened: ${reason}] ${ncr.lessonsLearned || ''}`
-          : ncr.lessonsLearned,
-      },
-    });
-    await ensureReopenClaimed(reopenUpdate.count);
-
-    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
-      where: { id },
-    });
-
-    if (ncr.ncrLots.length > 0) {
-      await prisma.lot.updateMany({
-        where: {
-          id: { in: ncr.ncrLots.map((ncrLot) => ncrLot.lotId) },
-          projectId: ncr.projectId,
-          status: { notIn: ['conformed', 'claimed'] },
+    const updatedNcr = await prisma.$transaction(async (tx) => {
+      const reopenUpdate = await tx.nCR.updateMany({
+        where: { id, status: { in: ['closed', 'closed_concession'] } },
+        data: {
+          status: 'rectification',
+          verifiedById: null,
+          verifiedAt: null,
+          verificationNotes: null,
+          closedById: null,
+          closedAt: null,
+          qmApprovedById: null,
+          qmApprovedAt: null,
+          lessonsLearned: reason
+            ? `[Reopened: ${reason}] ${ncr.lessonsLearned || ''}`
+            : ncr.lessonsLearned,
         },
-        data: { status: 'ncr_raised' },
       });
-    }
+      await ensureReopenClaimed(reopenUpdate.count);
+
+      const reopenedNcr = await tx.nCR.findUniqueOrThrow({
+        where: { id },
+      });
+
+      if (ncr.ncrLots.length > 0) {
+        await tx.lot.updateMany({
+          where: {
+            id: { in: ncr.ncrLots.map((ncrLot) => ncrLot.lotId) },
+            projectId: ncr.projectId,
+            status: { notIn: ['conformed', 'claimed'] },
+          },
+          data: { status: 'ncr_raised' },
+        });
+      }
+
+      return reopenedNcr;
+    });
 
     await createAuditLog({
       projectId: ncr.projectId,
