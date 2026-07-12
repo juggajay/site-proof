@@ -25,6 +25,10 @@ vi.mock('@/lib/api', () => ({
   apiUrl: (path: string) => path,
 }));
 
+vi.mock('@/components/reports/ScheduleReportModal', () => ({
+  ScheduleReportModal: () => <div data-testid="schedule-report-modal" />,
+}));
+
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({
     user: {
@@ -335,11 +339,11 @@ describe('ReportsPage subscription tier gates', () => {
     apiFetchMock.mockReset();
   });
 
-  it('normalizes the company tier before gating advanced reporting', async () => {
+  function mockCompanyAndDiary(subscriptionTier: string) {
     apiFetchMock.mockImplementation((path) => {
       if (path === '/api/company') {
         return Promise.resolve({
-          company: { subscriptionTier: ' Professional ', name: 'QA Company', logoUrl: null },
+          company: { subscriptionTier, name: 'QA Company', logoUrl: null },
         });
       }
 
@@ -349,16 +353,71 @@ describe('ReportsPage subscription tier gates', () => {
         });
       }
 
+      if (path.startsWith('/api/reports/diary?')) {
+        return Promise.resolve(buildDiaryReport());
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+  }
+
+  it('normalizes the company tier before gating scheduled reports', async () => {
+    mockCompanyAndDiary(' Professional ');
+
+    renderReportsPage();
+    expect(await screen.findByText('Total Diaries')).toBeInTheDocument();
+
+    const scheduleButton = screen.getByRole('button', { name: 'Schedule Reports' });
+    await waitFor(() => expect(scheduleButton).toBeEnabled());
+    fireEvent.click(scheduleButton);
+
+    expect(await screen.findByTestId('schedule-report-modal')).toBeInTheDocument();
+    expect(
+      screen.queryByText(/require a Professional or Enterprise subscription/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the upgrade prompt instead of the schedule modal on the basic tier', async () => {
+    mockCompanyAndDiary('basic');
+
+    renderReportsPage();
+    expect(await screen.findByText('Total Diaries')).toBeInTheDocument();
+
+    const scheduleButton = screen.getByRole('button', { name: 'Schedule Reports' });
+    await waitFor(() => expect(scheduleButton).toBeEnabled());
+    fireEvent.click(scheduleButton);
+
+    expect(
+      await screen.findByText(/require a Professional or Enterprise subscription/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('schedule-report-modal')).not.toBeInTheDocument();
+  });
+
+  it('redirects the legacy advanced tab URL to lot status', async () => {
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: 'basic', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        return Promise.resolve(buildLotStatusReport());
+      }
+
       return Promise.reject(new Error(`Unexpected API path: ${path}`));
     });
 
     renderReportsPage('/projects/project-1/reports?tab=advanced');
 
-    expect(await screen.findByText('Advanced Analytics Dashboard')).toBeInTheDocument();
-    expect(screen.getByText(/Your professional subscription includes/i)).toBeInTheDocument();
-    expect(
-      screen.queryByText(/requires a Professional or Enterprise subscription/i),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Lot Status', selected: true })).toBeVisible();
+    expect(screen.queryByRole('tab', { name: /Advanced Analytics/i })).not.toBeInTheDocument();
   });
 });
 
