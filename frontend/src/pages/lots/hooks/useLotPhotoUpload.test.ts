@@ -371,6 +371,7 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
     const setItpInstance = vi.fn();
     const setUpdatingCompletion = vi.fn();
     const updatingCompletionRef = { current: null as string | null };
+    const refetchReadiness = vi.fn();
     const rendered = renderHook(() =>
       useLotPhotoUpload({
         projectId: 'project-1',
@@ -379,9 +380,16 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
         setItpInstance,
         setUpdatingCompletion,
         updatingCompletionRef,
+        refetchReadiness,
       }),
     );
-    return { rendered, setItpInstance, setUpdatingCompletion, updatingCompletionRef };
+    return {
+      rendered,
+      setItpInstance,
+      setUpdatingCompletion,
+      updatingCompletionRef,
+      refetchReadiness,
+    };
   }
 
   function changeEvent() {
@@ -422,7 +430,7 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
       }
       throw new Error(`Unexpected apiFetch ${url}`);
     });
-    const { rendered, setItpInstance, setUpdatingCompletion } = setup();
+    const { rendered, setItpInstance, setUpdatingCompletion, refetchReadiness } = setup();
 
     await act(async () => {
       await rendered.result.current.handleAddPhoto('completion-1', 'item-1', changeEvent());
@@ -432,6 +440,9 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
     const updater = setItpInstance.mock.calls[0][0] as (prev: ITPInstance) => ITPInstance;
     const next = updater(instanceFixture);
     expect(next.completions[0].attachments).toEqual([ATTACHMENT]);
+
+    // A successful online attach refetches readiness (photos feed the readiness card).
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
 
     // Classification ran and opened the modal.
     await waitFor(() =>

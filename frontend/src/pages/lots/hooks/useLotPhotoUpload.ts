@@ -185,6 +185,9 @@ interface UseLotPhotoUploadParams {
   setUpdatingCompletion: Dispatch<SetStateAction<string | null>>;
   /** Synchronous double-submit guard shared with useItpInstance's mutations. */
   updatingCompletionRef: MutableRefObject<string | null>;
+  // Attaching an evidence photo bumps the lot's readiness photo count — refetch
+  // it so the readiness card stays live without a background poll.
+  refetchReadiness: () => void;
 }
 
 export function useLotPhotoUpload({
@@ -194,6 +197,7 @@ export function useLotPhotoUpload({
   setItpInstance,
   setUpdatingCompletion,
   updatingCompletionRef,
+  refetchReadiness,
 }: UseLotPhotoUploadParams) {
   const { user } = useAuth();
 
@@ -303,6 +307,7 @@ export function useLotPhotoUpload({
         title: 'Photo uploaded',
         description: 'Photo has been attached to the checklist item.',
       });
+      refetchReadiness();
     } catch (err) {
       handleApiError(err, 'Failed to upload photo');
     } finally {
@@ -363,6 +368,7 @@ export function useLotPhotoUpload({
         }
         return prev;
       });
+      refetchReadiness();
 
       // Feature #247: AI Photo Classification
       // Call the AI classification endpoint after successful upload

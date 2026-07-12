@@ -3,18 +3,7 @@ import { useEffect } from 'react';
 import {
   LayoutDashboard,
   FolderKanban,
-  MapPin,
-  ClipboardCheck,
-  AlertTriangle,
-  TestTube,
-  FileWarning,
-  Calendar,
-  DollarSign,
-  FileText,
-  Users,
-  BarChart3,
   Settings,
-  FileCheck,
   Building2,
   PieChart,
   HelpCircle,
@@ -23,7 +12,6 @@ import {
   ChevronRight,
   Briefcase,
   BookOpen,
-  GitPullRequest,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -50,39 +38,13 @@ import {
   getEnabledProjectModules,
   isProjectModuleNavigationItemEnabled,
 } from './projectModuleNavigation';
-
-// Foreman simplified menu - only sees essential field items
-const FOREMAN_MENU_ITEMS = [
-  'Lots',
-  'ITPs',
-  'Hold Points',
-  'Test Results',
-  'NCRs',
-  'Daily Diary',
-  'Docket Approvals',
-];
-
-const VIEWER_PROJECT_MENU_ITEMS = ['Lots', 'Reports'];
-
-// Office roles (owner/admin/PM/QM = ROLE_GROUPS.QUALITY) get a grouped project
-// menu with these section labels, in this order. Field roles keep the flat list.
-const OFFICE_SECTION_ORDER = ['Quality', 'Commercial', 'Records', 'Admin'] as const;
-type NavSection = (typeof OFFICE_SECTION_ORDER)[number];
-
-interface NavigationItem {
-  name: string;
-  href: string;
-  icon: typeof LayoutDashboard;
-  requiresProject?: boolean;
-  requiresCommercialAccess?: boolean;
-  requiresAdmin?: boolean;
-  requiresAuditLogAccess?: boolean;
-  requiresManagement?: boolean;
-  requiresProjectSettingsAccess?: boolean;
-  allowedRoles?: readonly string[];
-  excludeRoles?: readonly string[];
-  section?: NavSection;
-}
+import {
+  FOREMAN_MENU_ITEMS,
+  VIEWER_PROJECT_MENU_ITEMS,
+  OFFICE_SECTION_ORDER,
+  projectNavigation,
+  type NavigationItem,
+} from './navItems';
 
 const navigation: NavigationItem[] = [
   {
@@ -105,53 +67,6 @@ const navigation: NavigationItem[] = [
     icon: FolderKanban,
     requiresProject: false,
     excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
-  },
-];
-
-const projectNavigation: NavigationItem[] = [
-  { name: 'Lots', href: 'lots', icon: MapPin, section: 'Quality' },
-  { name: 'ITPs', href: 'itp', icon: ClipboardCheck, section: 'Quality' },
-  { name: 'Hold Points', href: 'hold-points', icon: AlertTriangle, section: 'Quality' },
-  { name: 'Test Results', href: 'tests', icon: TestTube, section: 'Quality' },
-  { name: 'NCRs', href: 'ncr', icon: FileWarning, section: 'Quality' },
-  { name: 'Daily Diary', href: 'diary', icon: Calendar },
-  {
-    name: 'Progress Claims',
-    href: 'claims',
-    icon: DollarSign,
-    requiresCommercialAccess: true,
-    section: 'Commercial',
-  },
-  {
-    name: 'Variations',
-    href: 'variations',
-    icon: GitPullRequest,
-    requiresCommercialAccess: true,
-    section: 'Commercial',
-  },
-  {
-    name: 'Costs',
-    href: 'costs',
-    icon: DollarSign,
-    requiresCommercialAccess: true,
-    section: 'Commercial',
-  },
-  { name: 'Docket Approvals', href: 'dockets', icon: FileCheck, section: 'Commercial' },
-  { name: 'Documents', href: 'documents', icon: FileText, section: 'Records' },
-  {
-    name: 'Subcontractors',
-    href: 'subcontractors',
-    icon: Users,
-    requiresManagement: true,
-    section: 'Records',
-  },
-  { name: 'Reports', href: 'reports', icon: BarChart3, section: 'Records' },
-  {
-    name: 'Project Settings',
-    href: 'settings',
-    icon: Settings,
-    requiresProjectSettingsAccess: true,
-    section: 'Admin',
   },
 ];
 

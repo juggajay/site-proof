@@ -11,9 +11,18 @@ interface UseLotTestCreationParams {
   projectId: string | undefined;
   lotId: string | undefined;
   refreshTests: () => Promise<void> | void;
+  // Creating a test result changes the lot's readiness (unverified tests are a
+  // readiness warning) — refetch it so the readiness card stays live without a
+  // background poll. Mirrors TestResultsPage invalidating lotReadiness.
+  refetchReadiness: () => void;
 }
 
-export function useLotTestCreation({ projectId, lotId, refreshTests }: UseLotTestCreationParams) {
+export function useLotTestCreation({
+  projectId,
+  lotId,
+  refreshTests,
+  refetchReadiness,
+}: UseLotTestCreationParams) {
   const [isAddTestOpen, setIsAddTestOpen] = useState(false);
   const [addTestPrefill, setAddTestPrefill] = useState<AddTestPrefill>({});
   const creatingRef = useRef(false);
@@ -39,12 +48,13 @@ export function useLotTestCreation({ projectId, lotId, refreshTests }: UseLotTes
           }),
         });
         await refreshTests();
+        refetchReadiness();
         setIsAddTestOpen(false);
       } finally {
         creatingRef.current = false;
       }
     },
-    [projectId, lotId, refreshTests],
+    [projectId, lotId, refreshTests, refetchReadiness],
   );
 
   return { isAddTestOpen, addTestPrefill, openAddTest, closeAddTest, createTestResult };
