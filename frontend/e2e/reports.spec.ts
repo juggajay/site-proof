@@ -930,25 +930,30 @@ test.describe('Reports seeded analytics contract', () => {
     expect(api.getReportRequests()).not.toContain('/api/reports/claims?projectId=e2e-project');
   });
 
-  test('routes basic-tier schedule attempts to upgrade state without loading schedules', async ({
+  test('routes basic-tier schedule attempts to an upgrade prompt without loading schedules', async ({
     page,
   }) => {
+    // The Advanced Analytics tab was removed (PR #1398); basic-tier users who
+    // click Schedule Reports now get an inline upgrade prompt instead.
     const api = await mockReportsApi(page, { companyTier: 'basic' });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
     await expect(page.getByText('Total Lots: 2')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Advanced Analytics' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Schedule Reports' }).click();
 
-    await expect(page.getByRole('tab', { name: 'Advanced Analytics' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await expect(page.getByText('Upgrade to Professional')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Scheduled Reports' })).toBeVisible();
+    await expect(
+      page.getByText(
+        'Automated report schedules require a Professional or Enterprise subscription',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Upgrade to Professional' })).toBeVisible();
     expect(api.getScheduleLoadCount()).toBe(0);
   });
 
-  test('does not route project managers to forbidden company settings from analytics upsell', async ({
+  test('does not route non-admin project managers to forbidden company settings from the upgrade prompt', async ({
     page,
   }) => {
     const projectManager = {
@@ -966,9 +971,16 @@ test.describe('Reports seeded analytics contract', () => {
       projectCurrentUserRole: 'project_manager',
     });
 
+    // ?tab=advanced no longer resolves to a tab; it normalizes back to lot status.
     await page.goto(`/projects/${E2E_PROJECT_ID}/reports?tab=advanced`);
+    await expect(page).toHaveURL(/tab=lot-status/);
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
 
-    await expect(page.getByRole('heading', { name: 'Advanced Analytics' })).toBeVisible();
+    // A project manager who can schedule but cannot manage company settings sees
+    // the upgrade prompt without a company-settings link they are forbidden to use.
+    await page.getByRole('button', { name: 'Schedule Reports' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Scheduled Reports' })).toBeVisible();
     await expect(page.getByText('Ask a company admin to upgrade this workspace.')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Upgrade to Professional' })).toHaveCount(0);
     expect(api.getScheduleLoadCount()).toBe(0);

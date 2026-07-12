@@ -10,6 +10,10 @@ type SeededStatus = 'entered' | 'verified' | 'results_received';
 
 interface MockTestResultsOptions {
   failLoadsUntil?: number;
+  // Seed the primary (Density Ratio) row in a pre-'entered' status so its
+  // per-row action is "Enter Results" (opens the result-entry form) instead of
+  // "Verify". Used to exercise the pass/fail auto-calc in EnterResultsModal.
+  initialPrimaryStatus?: SeededStatus;
 }
 
 function buildTestResults(
@@ -17,6 +21,7 @@ function buildTestResults(
   rejectedStatus: SeededStatus = 'entered',
   includeCreatedFail = false,
   aiExtractionState: 'none' | 'draft' | 'confirmed' = 'none',
+  createdFailEntered = false,
 ) {
   const results = [
     {
@@ -81,6 +86,10 @@ function buildTestResults(
   ];
 
   if (includeCreatedFail) {
+    // The slimmed create modal (#1339) records a requirement first; results and
+    // pass/fail are entered afterwards via the Enter Results action. Until then
+    // the row is a bare requirement in 'results_received'; entering a failing
+    // result advances it to 'entered' with the recorded value.
     results.push({
       id: E2E_CREATED_TEST_ID,
       testType: 'Concrete Strength',
@@ -91,12 +100,12 @@ function buildTestResults(
       sampleLocation: 'Bridge deck pour',
       testDate: '2026-05-08',
       resultDate: '2026-05-09',
-      resultValue: 28,
-      resultUnit: 'MPa',
-      specificationMin: 32,
+      resultValue: createdFailEntered ? 28 : null,
+      resultUnit: createdFailEntered ? 'MPa' : null,
+      specificationMin: createdFailEntered ? 32 : null,
       specificationMax: null,
-      passFail: 'fail',
-      status: 'entered',
+      passFail: createdFailEntered ? 'fail' : 'pending',
+      status: createdFailEntered ? 'entered' : 'results_received',
       lotId: 'e2e-test-lot',
       lot: {
         id: 'e2e-test-lot',
@@ -166,12 +175,14 @@ function buildTestResults(
 }
 
 async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOptions = {}) {
-  let primaryStatus: SeededStatus = 'entered';
+  let primaryStatus: SeededStatus = options.initialPrimaryStatus ?? 'entered';
   let rejectedStatus: SeededStatus = 'entered';
   let includeCreatedFail = false;
+  let createdFailEntered = false;
   let verifyRequest: unknown;
   let rejectRequest: unknown;
   let createTestRequest: unknown;
+  let enterResultsRequest: unknown;
   let createNcrRequest: unknown;
   let confirmExtractionRequest: unknown;
   let testResultsLoadCount = 0;
@@ -251,8 +262,33 @@ async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOpti
           rejectedStatus,
           includeCreatedFail,
           aiExtractionState,
+          createdFailEntered,
         ),
       });
+      return;
+    }
+
+    // The create modal reads the linked lot's ITP items to offer a requirement
+    // picker; the seeded lot has no ITP instance, so the Test Type stays free-text.
+    if (url.pathname.startsWith('/api/itp/instances/lot/')) {
+      await json({ instance: null });
+      return;
+    }
+
+    // Enter Results (#1339) records the result then advances to 'entered'. Two
+    // requests, one user action: PATCH the values, POST the status.
+    if (
+      url.pathname === `/api/test-results/${E2E_CREATED_TEST_ID}` &&
+      route.request().method() === 'PATCH'
+    ) {
+      enterResultsRequest = route.request().postDataJSON();
+      await json({ testResult: { id: E2E_CREATED_TEST_ID } });
+      return;
+    }
+
+    if (url.pathname === `/api/test-results/${E2E_CREATED_TEST_ID}/status`) {
+      createdFailEntered = true;
+      await json({ testResult: { id: E2E_CREATED_TEST_ID } });
       return;
     }
 
@@ -366,6 +402,7 @@ async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOpti
     getVerifyRequestCount: () => verifyRequestCount,
     getRejectRequest: () => rejectRequest,
     getCreateTestRequest: () => createTestRequest,
+    getEnterResultsRequest: () => enterResultsRequest,
     getCreateNcrRequest: () => createNcrRequest,
     getConfirmExtractionRequest: () => confirmExtractionRequest,
   };
@@ -448,22 +485,22 @@ test.describe('Test results seeded quality evidence contract', () => {
     });
     await expect(cbrRow.getByText('Results Received')).toBeVisible();
 
+    // Create is requirement-first (#1339): the modal captures the test type,
+    // linked lot, and lab details — results and pass/fail are entered afterwards.
     await page.getByRole('button', { name: 'Add Test Result' }).click();
 
     const createModal = page.getByRole('dialog').filter({ hasText: 'Add Test Result' });
     await expect(createModal.getByRole('heading', { name: 'Add Test Result' })).toBeVisible();
-    await createModal.getByLabel('Test Type *').fill('  Concrete Strength  ');
-    await createModal.getByLabel('Test Request Number').fill('  TR-E2E-003  ');
-    await createModal.getByLabel('Lab Report Number').fill('  LAB-E2E-003  ');
     await createModal.getByLabel('Link to Lot').selectOption('e2e-test-lot');
-    await createModal.getByLabel('Laboratory Name').fill('  E2E Concrete Lab  ');
+    await createModal.getByLabel('Test Type *').fill('  Concrete Strength  ');
     await createModal.getByLabel('Sample Location').fill('  Bridge deck pour  ');
     await createModal.getByLabel('Sample Date').fill('2026-05-07');
+    await createModal.getByRole('button', { name: 'Add lab & sample details' }).click();
+    await createModal.getByLabel('Test Request Number').fill('  TR-E2E-003  ');
+    await createModal.getByLabel('Lab Report Number').fill('  LAB-E2E-003  ');
+    await createModal.getByLabel('Laboratory Name').fill('  E2E Concrete Lab  ');
     await createModal.getByLabel('Test Date').fill('2026-05-08');
     await createModal.getByLabel('Result Date').fill('2026-05-09');
-    await createModal.getByLabel('Result Value').fill('28');
-    await createModal.getByLabel('Spec Min').fill('32');
-    await expect(createModal.getByLabel('Pass/Fail Status')).toHaveValue('fail');
     await createModal.getByRole('button', { name: 'Create Test Result' }).click();
 
     expect(api.getCreateTestRequest()).toMatchObject({
@@ -473,6 +510,20 @@ test.describe('Test results seeded quality evidence contract', () => {
       laboratoryReportNumber: 'LAB-E2E-003',
       laboratoryName: 'E2E Concrete Lab',
       lotId: 'e2e-test-lot',
+    });
+
+    // Record a failing result on the new requirement: the pass/fail auto-calcs to
+    // fail, and entering a failure prompts to raise an NCR (M45).
+    const createdRow = page.getByRole('row').filter({ hasText: 'Concrete Strength' });
+    await createdRow.getByRole('button', { name: 'Enter Results' }).click();
+
+    const resultsModal = page.getByRole('dialog').filter({ hasText: 'Enter Results' });
+    await resultsModal.getByLabel('Result Value *').fill('28');
+    await resultsModal.getByLabel('Spec Min').fill('32');
+    await expect(resultsModal.getByLabel('Pass/Fail Status')).toHaveValue('fail');
+    await resultsModal.getByRole('button', { name: 'Save & Enter Results' }).click();
+
+    expect(api.getEnterResultsRequest()).toMatchObject({
       resultValue: '28',
       specificationMin: '32',
       passFail: 'fail',
@@ -502,20 +553,25 @@ test.describe('Test results seeded quality evidence contract', () => {
   });
 
   test('calculates pass/fail from the full numeric input value', async ({ page }) => {
-    await mockSeededTestResultsApi(page);
+    // Result entry (and its pass/fail auto-calc) moved out of the create modal
+    // into the Enter Results form (#1339). Seed the density row pre-'entered' so
+    // its per-row action opens that form.
+    await mockSeededTestResultsApi(page, { initialPrimaryStatus: 'results_received' });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/tests`);
-    await page.getByRole('button', { name: 'Add Test Result' }).click();
 
-    const createModal = page.getByRole('dialog').filter({ hasText: 'Add Test Result' });
-    await createModal.getByLabel('Result Value').fill('9.5e1');
-    await createModal.getByLabel('Spec Min').fill('90');
-    await createModal.getByLabel('Spec Max').fill('100');
+    const densityRow = page.getByRole('row').filter({ hasText: 'Density Ratio' });
+    await densityRow.getByRole('button', { name: 'Enter Results' }).click();
 
-    await expect(createModal.getByLabel('Pass/Fail Status')).toHaveValue('pass');
+    const resultsModal = page.getByRole('dialog').filter({ hasText: 'Enter Results' });
+    await resultsModal.getByLabel('Result Value *').fill('9.5e1');
+    await resultsModal.getByLabel('Spec Min').fill('90');
+    await resultsModal.getByLabel('Spec Max').fill('100');
 
-    await createModal.getByLabel('Result Value').fill('1e3');
-    await expect(createModal.getByLabel('Pass/Fail Status')).toHaveValue('fail');
+    await expect(resultsModal.getByLabel('Pass/Fail Status')).toHaveValue('pass');
+
+    await resultsModal.getByLabel('Result Value *').fill('1e3');
+    await expect(resultsModal.getByLabel('Pass/Fail Status')).toHaveValue('fail');
   });
 
   test('labels AI extraction rows as draft until the review dialog is confirmed', async ({

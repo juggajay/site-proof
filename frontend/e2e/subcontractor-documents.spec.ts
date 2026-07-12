@@ -141,7 +141,10 @@ test.describe('Subcontractor documents mobile access', () => {
     await page.goto('/subcontractor-portal?projectId=project-2');
     await expect(page).toHaveURL(/\/p\?projectId=project-2/);
     await expect(page.getByRole('combobox', { name: 'Project' })).toHaveValue('portal-project-2');
-    await page.getByRole('link', { name: 'Documents' }).click();
+
+    // The shell home no longer links Documents directly; the docs surface lives
+    // at /p/docs and must preserve the selected project scope.
+    await page.goto('/p/docs?projectId=project-2');
 
     await expect(page).toHaveURL(/\/p\/docs\?projectId=project-2/);
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();
