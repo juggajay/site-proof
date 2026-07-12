@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { type Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -8,11 +9,7 @@ import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/lo
 import { buildProjectCostsResponse } from './costResponses.js';
 import { buildProjectDetailResponse, buildProjectListResponse } from './listDetailResponses.js';
 import { createProjectOverviewRouter } from './projectOverviewRoute.js';
-import {
-  getApprovedOrSubmittedCost,
-  getDocketCommercialCosts,
-  splitCostByLotAllocations,
-} from '../../lib/docketCosts.js';
+import { getApprovedOrSubmittedCost, splitCostByLotAllocations } from '../../lib/docketCosts.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -462,23 +459,30 @@ export function createProjectReadRouter({
         throw AppError.forbidden('You do not have permission to view project costs');
       }
 
-      // Get all approved dockets with their subcontractor info
-      const dockets = await prisma.dailyDocket.findMany({
-        where: {
-          projectId,
-          status: 'approved',
-        },
-        select: {
-          subcontractorCompanyId: true,
-          totalLabourSubmitted: true,
-          totalPlantSubmitted: true,
-          totalLabourApprovedCost: true,
-          totalPlantApprovedCost: true,
-          subcontractorCompany: {
-            select: { id: true, companyName: true },
-          },
-        },
-      });
+      // Aggregate approved docket costs per subcontractor in the database instead
+      // of hydrating every approved docket row. The COALESCE mirrors
+      // getApprovedOrSubmittedCost: prefer the approved cost, fall back to the
+      // submitted total when it is null (and 0 when both are null).
+      const subcontractorAggregates = await prisma.$queryRaw<
+        Array<{
+          subcontractorId: string;
+          companyName: string | null;
+          approvedDockets: bigint;
+          labourCost: Prisma.Decimal | null;
+          plantCost: Prisma.Decimal | null;
+        }>
+      >`
+        SELECT
+          d.subcontractor_company_id AS "subcontractorId",
+          sc.company_name AS "companyName",
+          COUNT(*) AS "approvedDockets",
+          SUM(COALESCE(d.total_labour_approved_cost, d.total_labour_submitted, 0)) AS "labourCost",
+          SUM(COALESCE(d.total_plant_approved_cost, d.total_plant_submitted, 0)) AS "plantCost"
+        FROM daily_dockets d
+        LEFT JOIN subcontractor_companies sc ON sc.id = d.subcontractor_company_id
+        WHERE d.project_id = ${projectId} AND d.status = 'approved'
+        GROUP BY d.subcontractor_company_id, sc.company_name
+      `;
 
       // Get pending docket count
       const pendingDocketCount = await prisma.dailyDocket.count({
@@ -488,45 +492,29 @@ export function createProjectReadRouter({
         },
       });
 
-      // Calculate totals
+      // Fold the grouped rows into totals and the per-subcontractor breakdown.
       let totalLabourCost = 0;
       let totalPlantCost = 0;
+      let approvedDocketCount = 0;
 
-      // Track by subcontractor
-      const subcontractorMap = new Map<
-        string,
-        {
-          id: string;
-          companyName: string;
-          labourCost: number;
-          plantCost: number;
-          totalCost: number;
-          approvedDockets: number;
-        }
-      >();
-
-      for (const docket of dockets) {
-        const { labourCost: labour, plantCost: plant } = getDocketCommercialCosts(docket);
-
-        totalLabourCost += labour;
-        totalPlantCost += plant;
-
-        // Aggregate by subcontractor
-        const subId = docket.subcontractorCompanyId;
-        const existing = subcontractorMap.get(subId) || {
-          id: subId,
-          companyName: docket.subcontractorCompany?.companyName || 'Unknown',
-          labourCost: 0,
-          plantCost: 0,
-          totalCost: 0,
-          approvedDockets: 0,
-        };
-        existing.labourCost += labour;
-        existing.plantCost += plant;
-        existing.totalCost += labour + plant;
-        existing.approvedDockets += 1;
-        subcontractorMap.set(subId, existing);
-      }
+      const subcontractorCosts = subcontractorAggregates
+        .map((row) => {
+          const labourCost = Number(row.labourCost ?? 0);
+          const plantCost = Number(row.plantCost ?? 0);
+          const approvedDockets = Number(row.approvedDockets);
+          totalLabourCost += labourCost;
+          totalPlantCost += plantCost;
+          approvedDocketCount += approvedDockets;
+          return {
+            id: row.subcontractorId,
+            companyName: row.companyName ?? 'Unknown',
+            labourCost,
+            plantCost,
+            totalCost: labourCost + plantCost,
+            approvedDockets,
+          };
+        })
+        .sort((a, b) => b.totalCost - a.totalCost); // Sort by total cost descending
 
       const totalCost = totalLabourCost + totalPlantCost;
       const budgetTotal = Number(project.contractValue || 0);
@@ -616,11 +604,6 @@ export function createProjectReadRouter({
         };
       });
 
-      // Build subcontractor costs array
-      const subcontractorCosts = Array.from(subcontractorMap.values()).sort(
-        (a, b) => b.totalCost - a.totalCost,
-      ); // Sort by total cost descending
-
       res.json(
         buildProjectCostsResponse({
           totalLabourCost,
@@ -628,7 +611,7 @@ export function createProjectReadRouter({
           totalCost,
           budgetTotal,
           budgetVariance,
-          approvedDockets: dockets.length,
+          approvedDockets: approvedDocketCount,
           pendingDockets: pendingDocketCount,
           subcontractorCosts,
           lotCosts,

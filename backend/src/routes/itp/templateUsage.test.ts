@@ -16,16 +16,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const mocks = vi.hoisted(() => ({
-  completionFindMany: vi.fn(),
+  completionCount: vi.fn(),
+  holdPointCount: vi.fn(),
+  testResultCount: vi.fn(),
+  instanceFindMany: vi.fn(),
   holdPointFindMany: vi.fn(),
   testResultFindMany: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
-    iTPCompletion: { findMany: mocks.completionFindMany },
-    holdPoint: { findMany: mocks.holdPointFindMany },
-    testResult: { findMany: mocks.testResultFindMany },
+    iTPCompletion: { count: mocks.completionCount },
+    iTPInstance: { findMany: mocks.instanceFindMany },
+    holdPoint: { count: mocks.holdPointCount, findMany: mocks.holdPointFindMany },
+    testResult: { count: mocks.testResultCount, findMany: mocks.testResultFindMany },
   },
 }));
 
@@ -43,7 +47,10 @@ const client = prisma as unknown as TemplateUsageClient;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.completionFindMany.mockResolvedValue([]);
+  mocks.completionCount.mockResolvedValue(0);
+  mocks.holdPointCount.mockResolvedValue(0);
+  mocks.testResultCount.mockResolvedValue(0);
+  mocks.instanceFindMany.mockResolvedValue([]);
   mocks.holdPointFindMany.mockResolvedValue([]);
   mocks.testResultFindMany.mockResolvedValue([]);
 });
@@ -58,27 +65,38 @@ describe('countTemplateItemUsage', () => {
   it('queries each source scoped to the template id', async () => {
     await countTemplateItemUsage(client, TEMPLATE_ID);
 
-    expect(mocks.completionFindMany).toHaveBeenCalledWith({
+    // References are counted in the database rather than by hydrating rows.
+    expect(mocks.completionCount).toHaveBeenCalledWith({
       where: { checklistItem: { templateId: TEMPLATE_ID } },
-      select: { itpInstance: { select: { lotId: true } } },
+    });
+    expect(mocks.holdPointCount).toHaveBeenCalledWith({
+      where: { itpChecklistItem: { templateId: TEMPLATE_ID } },
+    });
+    expect(mocks.testResultCount).toHaveBeenCalledWith({
+      where: { itpChecklistItem: { templateId: TEMPLATE_ID } },
+    });
+
+    // Distinct lots come from the instance table (completions) and distinct lot ids.
+    expect(mocks.instanceFindMany).toHaveBeenCalledWith({
+      where: { completions: { some: { checklistItem: { templateId: TEMPLATE_ID } } } },
+      select: { lotId: true },
     });
     expect(mocks.holdPointFindMany).toHaveBeenCalledWith({
       where: { itpChecklistItem: { templateId: TEMPLATE_ID } },
       select: { lotId: true },
+      distinct: ['lotId'],
     });
     expect(mocks.testResultFindMany).toHaveBeenCalledWith({
-      where: { itpChecklistItem: { templateId: TEMPLATE_ID } },
+      where: { itpChecklistItem: { templateId: TEMPLATE_ID }, lotId: { not: null } },
       select: { lotId: true },
+      distinct: ['lotId'],
     });
   });
 
   it('sums references across completions, hold points, and test results', async () => {
-    mocks.completionFindMany.mockResolvedValue([
-      { itpInstance: { lotId: 'lot-a' } },
-      { itpInstance: { lotId: 'lot-a' } },
-    ]);
-    mocks.holdPointFindMany.mockResolvedValue([{ lotId: 'lot-b' }]);
-    mocks.testResultFindMany.mockResolvedValue([{ lotId: 'lot-c' }]);
+    mocks.completionCount.mockResolvedValue(2);
+    mocks.holdPointCount.mockResolvedValue(1);
+    mocks.testResultCount.mockResolvedValue(1);
 
     const usage = await countTemplateItemUsage(client, TEMPLATE_ID);
 
@@ -86,18 +104,16 @@ describe('countTemplateItemUsage', () => {
   });
 
   it('counts distinct lots across all three sources and ignores nulls', async () => {
-    mocks.completionFindMany.mockResolvedValue([
-      { itpInstance: { lotId: 'lot-a' } },
-      { itpInstance: { lotId: 'lot-b' } },
-      { itpInstance: null }, // orphaned instance reference
-    ]);
+    mocks.completionCount.mockResolvedValue(3);
+    mocks.holdPointCount.mockResolvedValue(2);
+    mocks.testResultCount.mockResolvedValue(2);
+    mocks.instanceFindMany.mockResolvedValue([{ lotId: 'lot-a' }, { lotId: 'lot-b' }]);
     mocks.holdPointFindMany.mockResolvedValue([
       { lotId: 'lot-b' }, // already counted via a completion
-      { lotId: null },
     ]);
     mocks.testResultFindMany.mockResolvedValue([
       { lotId: 'lot-c' },
-      { lotId: null }, // test result with its lot detached
+      { lotId: null }, // defensive: JS still ignores a null lot id
     ]);
 
     const usage = await countTemplateItemUsage(client, TEMPLATE_ID);
@@ -128,7 +144,9 @@ describe('assertTemplateItemsReplaceable', () => {
   });
 
   it('throws a 409 TEMPLATE_IN_USE when any sign-off references the items', async () => {
-    mocks.completionFindMany.mockResolvedValue([{ itpInstance: { lotId: 'lot-a' } }]);
+    mocks.completionCount.mockResolvedValue(1);
+    mocks.holdPointCount.mockResolvedValue(1);
+    mocks.instanceFindMany.mockResolvedValue([{ lotId: 'lot-a' }]);
     mocks.holdPointFindMany.mockResolvedValue([{ lotId: 'lot-b' }]);
 
     let thrown: unknown;
@@ -153,6 +171,7 @@ describe('assertTemplateItemsReplaceable', () => {
   });
 
   it('throws even when a hold point is the only reference', async () => {
+    mocks.holdPointCount.mockResolvedValue(1);
     mocks.holdPointFindMany.mockResolvedValue([{ lotId: 'lot-z' }]);
 
     await expect(assertTemplateItemsReplaceable(client, TEMPLATE_ID)).rejects.toMatchObject({
