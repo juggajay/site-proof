@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
 import {
   assertExpectedPreviousItpCompletion,
+  assertPendingVerificationNotDowngraded,
   assertWitnessDecisionForCompletion,
   buildItpCompletionTransform,
   buildItpCompletionWitnessData,
@@ -548,5 +549,57 @@ describe('resolveItpRecompletionVerificationFields (H6)', () => {
         computedVerificationStatus: undefined,
       }),
     ).toEqual({});
+  });
+});
+
+describe('assertPendingVerificationNotDowngraded (M-OFFLINE)', () => {
+  it('blocks a downgrade of a pending_verification completion (offline re-toggle drops verificationStatus)', () => {
+    expect(() =>
+      assertPendingVerificationNotDowngraded({
+        existingVerificationStatus: 'pending_verification',
+        computedVerificationStatus: undefined,
+      }),
+    ).toThrow('awaiting verification cannot be changed');
+
+    try {
+      assertPendingVerificationNotDowngraded({
+        existingVerificationStatus: 'pending_verification',
+        computedVerificationStatus: undefined,
+      });
+      throw new Error('expected AppError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).statusCode).toBe(409);
+      expect((err as AppError).details).toEqual({ verificationStatus: 'pending_verification' });
+    }
+  });
+
+  it('blocks a downgrade to verified (would self-verify a pending submission)', () => {
+    expect(() =>
+      assertPendingVerificationNotDowngraded({
+        existingVerificationStatus: 'pending_verification',
+        computedVerificationStatus: 'verified',
+      }),
+    ).toThrow(AppError);
+  });
+
+  it('allows a subbie amend/resubmit that keeps the item pending_verification', () => {
+    expect(() =>
+      assertPendingVerificationNotDowngraded({
+        existingVerificationStatus: 'pending_verification',
+        computedVerificationStatus: 'pending_verification',
+      }),
+    ).not.toThrow();
+  });
+
+  it('does not fire for completions that are not pending_verification', () => {
+    for (const existing of ['none', 'verified', 'rejected', null, undefined] as const) {
+      expect(() =>
+        assertPendingVerificationNotDowngraded({
+          existingVerificationStatus: existing,
+          computedVerificationStatus: undefined,
+        }),
+      ).not.toThrow();
+    }
   });
 });
