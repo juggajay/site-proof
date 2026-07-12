@@ -21,7 +21,7 @@ import * as supabaseLib from '../lib/supabase.js';
 import apiKeysRouter, { authenticateApiKey } from './apiKeys.js';
 import { companyRouter } from './company.js';
 import { authRouter } from './auth.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, usePrismaMiddleware } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import * as emailService from '../lib/email.js';
@@ -2169,7 +2169,7 @@ describe('Company API', () => {
       invitedUserIds.push(existingMember.id);
 
       let auditFailureActive = true;
-      prisma.$use(async (params, next) => {
+      usePrismaMiddleware(async (params, next) => {
         if (
           auditFailureActive &&
           params.model === 'AuditLog' &&
@@ -4217,7 +4217,7 @@ describe('Company API', () => {
           ],
         });
 
-        prisma.$use(async (params, next) => {
+        usePrismaMiddleware(async (params, next) => {
           const result = await next(params);
           const where = JSON.stringify(params.args?.where ?? {});
 

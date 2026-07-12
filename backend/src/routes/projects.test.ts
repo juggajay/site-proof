@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { projectsRouter } from './projects.js';
 import { authRouter } from './auth.js';
 import { authenticateApiKey } from './apiKeys.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, usePrismaMiddleware } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { registerTestUser, TEST_USER_PASSWORD } from '../test/routeTestHarness.js';
@@ -3565,7 +3565,7 @@ describe('Project Team Management', () => {
     });
 
     let demoteAfterFirstAccessRead = true;
-    prisma.$use(async (params, next) => {
+    usePrismaMiddleware(async (params, next) => {
       const result = await next(params);
       const where = params.args?.where as { projectId?: string; userId?: string } | undefined;
 

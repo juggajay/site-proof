@@ -3,7 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
 import * as ncrNumberAllocation from './ncrs/ncrNumberAllocation.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, usePrismaMiddleware } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
@@ -2186,7 +2186,7 @@ describe('ITP Completion Attachments', () => {
     });
     const releaseFallback = setTimeout(releaseReads, 2000);
 
-    prisma.$use(async (params, next) => {
+    usePrismaMiddleware(async (params, next) => {
       const result = await next(params);
       const where = params.args?.where as
         | { itpInstanceId?: string; checklistItemId?: string }
