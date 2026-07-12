@@ -100,9 +100,6 @@ export function LotDetailPage() {
     refreshTests,
   } = useLotTabData({ projectId, lotId, currentTab });
 
-  const { isAddTestOpen, addTestPrefill, openAddTest, closeAddTest, createTestResult } =
-    useLotTestCreation({ projectId, lotId, refreshTests });
-
   const {
     data: readinessData,
     isLoading: loadingReadiness,
@@ -115,10 +112,12 @@ export function LotDetailPage() {
         `/api/lots/${encodeURIComponent(lotId!)}/readiness`,
       ),
     enabled: Boolean(lotId),
-    refetchInterval: 20_000,
   });
   const conformStatus = readinessData?.readiness.conformStatus ?? null;
   const loadingConformStatus = loadingReadiness;
+
+  const { isAddTestOpen, addTestPrefill, openAddTest, closeAddTest, createTestResult } =
+    useLotTestCreation({ projectId, lotId, refreshTests, refetchReadiness });
 
   // Quality access permissions for this project (read-only; drives the derived
   // permissions below). Single-attempt fetch that logs on failure, preserving
@@ -247,6 +246,7 @@ export function LotDetailPage() {
     setItpInstance,
     setUpdatingCompletion,
     updatingCompletionRef,
+    refetchReadiness,
   });
 
   // Conformance report generation workflow (format dialog + lazy PDF import).

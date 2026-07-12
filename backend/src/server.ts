@@ -173,6 +173,14 @@ export async function startServer(): Promise<void> {
     logInfo(`Auth API: ${buildBackendUrl('/api/auth')}`);
     logInfo(`Readiness check: ${buildBackendUrl('/ready')}`);
   });
+
+  // Bound per-connection lifetimes so a hung/slow upstream can't hold a socket
+  // open indefinitely and stall the 5s graceful drain below. Uploads flow
+  // through this server, so requestTimeout is generous. Ordering rule (Node
+  // http): keepAliveTimeout < headersTimeout, and headersTimeout > requestTimeout.
+  server.requestTimeout = 120_000; // 2 min for a full request incl. large uploads
+  server.headersTimeout = 125_000; // slightly above requestTimeout
+  server.keepAliveTimeout = 65_000; // > typical 60s proxy idle, < headersTimeout
   const scheduledReportWorker = startScheduledReportWorker();
   const notificationDigestWorker = startNotificationDigestWorker();
   const notificationAutomationWorker = startNotificationAutomationWorker();

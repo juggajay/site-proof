@@ -2,7 +2,13 @@ import type { NextFunction, Request, Response } from 'express';
 import fs from 'fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../lib/AppError.js';
-import { errorHandler, sanitizeLogQuery, trimErrorLogContent } from './errorHandler.js';
+import {
+  __resetErrorLogTrimThrottle,
+  errorHandler,
+  sanitizeLogQuery,
+  shouldCheckErrorLogSize,
+  trimErrorLogContent,
+} from './errorHandler.js';
 import { captureServerError } from '../lib/sentry.js';
 
 vi.mock('../lib/sentry.js', () => ({
@@ -309,5 +315,33 @@ describe('errorHandler', () => {
 
   it('trims oversized error logs to complete trailing entries', () => {
     expect(trimErrorLogContent('first\nsecond\nthird\n', 12)).toBe('third\n');
+  });
+});
+
+describe('shouldCheckErrorLogSize (trim throttle gate)', () => {
+  it('does not fire the trim check on every write', () => {
+    __resetErrorLogTrimThrottle();
+    const now = 1_000_000;
+
+    // First call checks (no prior check recorded)...
+    expect(shouldCheckErrorLogSize(now)).toBe(true);
+    // ...then it stays gated for the next 99 writes within the interval.
+    let fired = 0;
+    for (let i = 0; i < 99; i += 1) {
+      if (shouldCheckErrorLogSize(now)) fired += 1;
+    }
+    expect(fired).toBe(0);
+    // The 100th write since the last check re-opens the gate.
+    expect(shouldCheckErrorLogSize(now)).toBe(true);
+  });
+
+  it('re-opens the gate once the interval elapses even under low write volume', () => {
+    __resetErrorLogTrimThrottle();
+    const base = 10_000_000; // realistic Date.now()-scale clock
+    // First real write always exceeds the interval vs the zeroed clock.
+    expect(shouldCheckErrorLogSize(base)).toBe(true);
+    expect(shouldCheckErrorLogSize(base + 1_000)).toBe(false);
+    // 5 minutes later, the time gate fires despite few writes.
+    expect(shouldCheckErrorLogSize(base + 5 * 60 * 1000 + 1_000)).toBe(true);
   });
 });

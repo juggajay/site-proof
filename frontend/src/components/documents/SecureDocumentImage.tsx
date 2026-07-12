@@ -73,6 +73,7 @@ export function SecureDocumentImage({
 
   return (
     <img
+      loading="lazy"
       {...imgProps}
       src={src}
       alt={alt}

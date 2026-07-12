@@ -127,33 +127,82 @@ export function trimErrorLogContent(content: string, maxBytes: number): string {
   return firstLineBreak === -1 ? tail : tail.slice(firstLineBreak + 1);
 }
 
-function enforceErrorLogSizeLimit(): void {
+// Trimming a >5MB log means a full read+rewrite. Doing it synchronously before
+// every append blocks the event loop and amplifies error storms, so we gate the
+// check (at most every N writes or N minutes) and run the actual read+rewrite
+// off the hot path (async, fire-and-forget). A failed trim must never throw into
+// the error handler.
+const ERROR_LOG_TRIM_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+const ERROR_LOG_TRIM_CHECK_EVERY_WRITES = 100;
+
+let errorLogWritesSinceCheck = 0;
+let lastErrorLogTrimCheckAt = 0;
+let errorLogTrimInFlight = false;
+
+/**
+ * Throttle gate: returns true at most once per N writes or once per interval,
+ * resetting the counters when it does. Exported for unit testing.
+ */
+export function shouldCheckErrorLogSize(now: number = Date.now()): boolean {
+  errorLogWritesSinceCheck += 1;
+  if (
+    errorLogWritesSinceCheck < ERROR_LOG_TRIM_CHECK_EVERY_WRITES &&
+    now - lastErrorLogTrimCheckAt < ERROR_LOG_TRIM_CHECK_INTERVAL_MS
+  ) {
+    return false;
+  }
+  errorLogWritesSinceCheck = 0;
+  lastErrorLogTrimCheckAt = now;
+  return true;
+}
+
+/** Test-only: reset the throttle gate's module state. */
+export function __resetErrorLogTrimThrottle(): void {
+  errorLogWritesSinceCheck = 0;
+  lastErrorLogTrimCheckAt = 0;
+  errorLogTrimInFlight = false;
+}
+
+async function trimErrorLogFile(): Promise<void> {
   const maxBytes = getErrorLogMaxBytes();
 
-  try {
-    if (!fs.existsSync(ERROR_LOG_FILE)) {
-      return;
-    }
-
-    const stats = fs.statSync(ERROR_LOG_FILE);
-    if (stats.size <= maxBytes) {
-      return;
-    }
-
-    const readBytes = Math.min(maxBytes, stats.size);
-    const buffer = Buffer.alloc(readBytes);
-    const file = fs.openSync(ERROR_LOG_FILE, 'r');
-    try {
-      fs.readSync(file, buffer, 0, readBytes, stats.size - readBytes);
-    } finally {
-      fs.closeSync(file);
-    }
-
-    fs.writeFileSync(ERROR_LOG_FILE, trimErrorLogContent(buffer.toString('utf8'), maxBytes));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('Failed to enforce error log size limit:', sanitizeLogText(message));
+  const stats = await fs.promises.stat(ERROR_LOG_FILE).catch(() => null);
+  if (!stats || stats.size <= maxBytes) {
+    return;
   }
+
+  const readBytes = Math.min(maxBytes, stats.size);
+  const handle = await fs.promises.open(ERROR_LOG_FILE, 'r');
+  let content: string;
+  try {
+    const buffer = Buffer.alloc(readBytes);
+    await handle.read(buffer, 0, readBytes, stats.size - readBytes);
+    content = buffer.toString('utf8');
+  } finally {
+    await handle.close();
+  }
+
+  // ponytail: a concurrent append can be lost if it lands between this read and
+  // rewrite. Acceptable for a best-effort 5MB rolling error log; the in-flight
+  // guard keeps it to one trim at a time. Upgrade to a lock only if lost error
+  // lines during storms ever matter.
+  await fs.promises.writeFile(ERROR_LOG_FILE, trimErrorLogContent(content, maxBytes));
+}
+
+function enforceErrorLogSizeLimit(): void {
+  if (errorLogTrimInFlight || !shouldCheckErrorLogSize()) {
+    return;
+  }
+
+  errorLogTrimInFlight = true;
+  void trimErrorLogFile()
+    .catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Failed to enforce error log size limit:', sanitizeLogText(message));
+    })
+    .finally(() => {
+      errorLogTrimInFlight = false;
+    });
 }
 
 function sanitizeErrorLogEntry(entry: ErrorLogEntry): ErrorLogEntry {
