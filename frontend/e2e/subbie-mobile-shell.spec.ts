@@ -688,6 +688,12 @@ test.describe('Subbie mobile shell direct routes', () => {
 
     await page.getByRole('button', { name: 'Pass this check' }).click();
 
+    // The shared run screen nudges for photo evidence when the item recommends it
+    // and none is attached; confirm the pass without a photo to resubmit.
+    const evidenceDialog = page.getByRole('alertdialog', { name: 'Photo evidence recommended' });
+    await expect(evidenceDialog).toBeVisible();
+    await evidenceDialog.getByRole('button', { name: 'Pass without photo' }).click();
+
     await expect
       .poll(() => api.itpCompletionPosts())
       .toContainEqual({

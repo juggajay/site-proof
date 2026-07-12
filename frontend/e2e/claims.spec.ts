@@ -812,12 +812,16 @@ test.describe('Claims seeded commercial contract', () => {
 
     await expect
       .poll(() => api.getPaymentRequests())
-      .toContainEqual({
-        paidAmount: 65000,
-        paymentDate: '2026-05-10',
-        paymentReference: 'PAY-E2E-001',
-        paymentNotes: 'Final payment received.',
-      });
+      // Payment requests also carry a generated operationKey (idempotency/replay
+      // guard), so match the meaningful fields rather than an exact shape.
+      .toContainEqual(
+        expect.objectContaining({
+          paidAmount: 65000,
+          paymentDate: '2026-05-10',
+          paymentReference: 'PAY-E2E-001',
+          paymentNotes: 'Final payment received.',
+        }),
+      );
     await expect(page.getByText('Claim fully paid')).toBeVisible();
     await expect(claimRow.getByText('Paid')).toBeVisible();
     await expect(claimRow.locator('td').nth(8)).toHaveText('$90,000');

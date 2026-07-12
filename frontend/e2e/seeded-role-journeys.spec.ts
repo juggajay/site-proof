@@ -499,8 +499,10 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(
       page.getByRole('banner').getByText('SUBCONTRACTOR', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText('E2E Subcontractors')).toBeVisible();
-    await expect(page.getByText('E2E Highway Upgrade')).toBeVisible();
+    // The home subtitle names the company and project; the company name also
+    // appears on the My Company tile, so match the combined subtitle to stay
+    // unambiguous.
+    await expect(page.getByText('E2E Subcontractors — E2E Highway Upgrade')).toBeVisible();
     // Locked home structure (role-tailoring slice 1): My Dockets / My Work /
     // My Company only — Inspections/NCRs/Documents live behind the lot hub and
     // Holds & Tests is gone from the subbie UI entirely.
@@ -631,8 +633,10 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByRole('banner').getByText('CIVOS', { exact: true })).toBeVisible();
     await expect(page.getByRole('banner').getByText('FOREMAN', { exact: true })).toBeVisible();
     await expect(page.getByText('E2E Highway Upgrade')).toBeVisible();
-    await expect(page.getByText('Lots')).toBeVisible();
-    await expect(page.getByText('ITP checks & hold points')).toBeVisible();
+    // The Lots tile is the foreman's ITP-checks/hold-points entry point. Its
+    // subtitle is now a dynamic "N due" chip (only when checks are due), so assert
+    // the tile itself rather than the removed static caption.
+    await expect(page.getByRole('button', { name: /^Lots/ })).toBeVisible();
   });
 
   test('seeded foreman can open hold points from a blocked mobile ITP check', async ({ page }) => {
