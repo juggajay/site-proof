@@ -826,12 +826,25 @@ holdPointRequestReleaseRouter.post(
         ...(overrideNote && { releaseNotes: overrideNote }),
       };
 
+      await tx.$queryRaw`SELECT id FROM lots WHERE id = ${lotId} FOR UPDATE`;
+
+      const lockedHoldPoint = await tx.holdPoint.findFirst({
+        where: { lotId, itpChecklistItemId },
+        select: { id: true },
+      });
+
       let savedHoldPoint;
 
-      if (existingHoldPoint) {
+      if (lockedHoldPoint) {
+        if (!existingHoldPoint) {
+          // We observed no hold point during validation but one exists now under the
+          // lock — a concurrent request created it. Bail before writing a second
+          // token / sending a second superintendent email.
+          throw AppError.conflict('A release request for this hold point is already in progress.');
+        }
         savedHoldPoint = await updateExistingHoldPointForReleaseRequest(
           tx,
-          existingHoldPoint.id,
+          lockedHoldPoint.id,
           data,
         );
       } else {

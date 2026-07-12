@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   const tx = {
+    $queryRaw: vi.fn(),
     holdPoint: {
       update: vi.fn(),
       updateMany: vi.fn(),
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
     },
@@ -215,12 +217,14 @@ describe('hold point request-release delivery failure', () => {
     mocks.requireSuperintendentApprovalRecipients.mockImplementation(
       async (_projectId, _settings, recipients) => recipients,
     );
+    mocks.tx.$queryRaw.mockResolvedValue([{ id: 'lot-1' }]);
     mocks.tx.holdPoint.update.mockResolvedValue({
       id: 'hp-1',
       status: 'notified',
       itpChecklistItem: { id: 'item-1' },
     });
     mocks.tx.holdPoint.updateMany.mockResolvedValue({ count: 1 });
+    mocks.tx.holdPoint.findFirst.mockResolvedValue({ id: 'hp-1' });
     mocks.tx.holdPoint.findUnique.mockResolvedValue({
       id: 'hp-1',
       status: 'notified',
@@ -403,6 +407,27 @@ describe('hold point request-release delivery failure', () => {
     expect(res.status).toBe(400);
     expect(res.body.error.message).toBe('This hold point has already been released.');
     expect(mocks.tx.holdPointReleaseToken.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.tx.holdPointReleaseToken.createMany).not.toHaveBeenCalled();
+    expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
+    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('prevents a second concurrent request from creating a duplicate hold point / token / email', async () => {
+    mocks.prisma.lot.findUnique.mockResolvedValueOnce({
+      ...releaseReadyLot(),
+      holdPoints: [],
+    });
+    mocks.tx.holdPoint.findFirst.mockResolvedValueOnce({ id: 'hp-1' });
+
+    const res = await request(app).post('/api/holdpoints/request-release').send({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      notificationSentTo: 'superintendent@example.com',
+    });
+
+    expect(res.status).toBe(409);
+    expect(mocks.tx.$queryRaw).toHaveBeenCalled();
+    expect(mocks.tx.holdPoint.create).not.toHaveBeenCalled();
     expect(mocks.tx.holdPointReleaseToken.createMany).not.toHaveBeenCalled();
     expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
     expect(mocks.createAuditLog).not.toHaveBeenCalled();
