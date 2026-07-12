@@ -1,6 +1,6 @@
 import webpush from 'web-push';
 
-const DEFAULT_VAPID_SUBJECT = 'mailto:admin@siteproof.com';
+const DEFAULT_VAPID_SUBJECT = 'mailto:jayson@civos.com.au';
 
 type VapidConfiguration = {
   keys: { publicKey: string; privateKey: string };

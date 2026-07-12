@@ -193,7 +193,7 @@ export function PrivacyPolicyPage() {
             </ul>
             <p className="text-muted-foreground mt-2">
               To exercise these rights, please visit your account Settings or contact us at
-              privacy@civos.com.au.
+              jayson@civos.com.au.
             </p>
           </section>
 
@@ -207,7 +207,7 @@ export function PrivacyPolicyPage() {
               If you have any questions about this Privacy Policy or our data practices, please
               contact us at:
             </p>
-            <LegalContactCard teamName="CIVOS Privacy Team" email="privacy@civos.com.au" />
+            <LegalContactCard teamName="CIVOS Privacy Team" email="jayson@civos.com.au" />
           </section>
 
           {/* Related Links */}

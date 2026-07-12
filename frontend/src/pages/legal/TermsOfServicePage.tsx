@@ -210,7 +210,7 @@ export function TermsOfServicePage() {
             <p className="text-muted-foreground">
               For questions about these Terms of Service, please contact us:
             </p>
-            <LegalContactCard teamName="CIVOS Legal" email="legal@civos.com.au" />
+            <LegalContactCard teamName="CIVOS Legal" email="jayson@civos.com.au" />
           </section>
 
           {/* Related Links */}
