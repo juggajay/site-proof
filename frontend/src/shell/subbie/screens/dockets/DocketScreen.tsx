@@ -291,10 +291,13 @@ export function DocketScreen() {
   });
 
   // ── Derived state ───────────────────────────────────────────────────────────
-  // NOTE: unlike the classic DocketEditPage, this screen does NOT filter to
-  // status === 'approved' employees/plant. See the divergence note in the PR.
-  const approvedEmployees = company?.employees ?? [];
-  const approvedPlant = company?.plant ?? [];
+  // INTENDED design (Jay, 2026-07-13): pass the FULL roster — DocketEntrySheets
+  // renders non-approved employees/plant as locked rows ("Rate pending HC
+  // approval") so subbies can see who exists but can only select approved.
+  // The classic DocketEditPage hides non-approved instead; do not "fix" either
+  // way without a fresh product call.
+  const rosterEmployees = company?.employees ?? [];
+  const rosterPlant = company?.plant ?? [];
   const totalLabour = docket ? getDocketDisplayLabourCost(docket) : 0;
   const totalPlant = docket ? getDocketDisplayPlantCost(docket) : 0;
   const totalCost = docket ? getDocketDisplayTotalCost(docket) : 0;
@@ -751,7 +754,7 @@ export function DocketScreen() {
       {sheetOpen && sheetType === 'labour' && (
         <LabourSheet
           open={sheetOpen}
-          employees={approvedEmployees}
+          employees={rosterEmployees}
           selectedEmployee={selectedEmployee}
           startTime={startTime}
           finishTime={finishTime}
@@ -773,7 +776,7 @@ export function DocketScreen() {
       {sheetOpen && sheetType === 'plant' && (
         <PlantSheet
           open={sheetOpen}
-          plant={approvedPlant}
+          plant={rosterPlant}
           selectedPlant={selectedPlant}
           hoursOperated={hoursOperated}
           wetOrDry={wetOrDry}
