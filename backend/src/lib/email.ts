@@ -281,7 +281,7 @@ export async function sendSupportRequestEmail(data: {
   userName?: string;
   to?: string;
 }): Promise<EmailResult> {
-  const supportInbox = data.to || process.env.SUPPORT_EMAIL || 'jayson@civos.com.au';
+  const supportInbox = data.to || process.env.SUPPORT_EMAIL || 'support@civos.com.au';
   const { subject, text } = renderSupportRequestEmail(data);
 
   return sendEmail({

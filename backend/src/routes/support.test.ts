@@ -46,7 +46,7 @@ describe('Support API', () => {
       const emails = getQueuedEmails();
       expect(emails).toHaveLength(1);
       const email = emails[0]!;
-      expect(email.to).toBe('jayson@civos.com.au');
+      expect(email.to).toBe('support@civos.com.au');
       expect(email.subject).toContain(res.body.ticketId);
       expect(email.text).toContain('Need help with lot creation');
       expect(email.text).toContain('technical');
