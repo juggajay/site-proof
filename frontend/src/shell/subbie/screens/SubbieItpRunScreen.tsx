@@ -46,47 +46,10 @@ import {
 } from '@/shell/screens/lots/ItpDotTrack';
 import { dotStateFor, snapFrac } from '@/shell/screens/lots/itpTrackPhysics';
 import { useItpContentDrag } from '@/shell/screens/lots/useItpContentDrag';
-import type { ITPChecklistItem } from '@/pages/lots/types';
+import { subline, stripStateLine } from '@/shell/itpRun/itpRunPresentation';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useSubbieItpRun } from './useSubbieItpRun';
-
-const RESPONSIBLE_LABEL: Record<string, string> = {
-  contractor: 'Contractor',
-  subcontractor: 'Subcontractor',
-  superintendent: 'Superintendent',
-  general: 'General',
-};
-
-const EVIDENCE_SUFFIX: Record<string, string> = {
-  photo: 'photo evidence can be attached',
-  test: 'test cert can be attached',
-  document: 'document can be attached',
-  none: '',
-};
-
-function subline(item: ITPChecklistItem): string {
-  const who = RESPONSIBLE_LABEL[item.responsibleParty] ?? 'General';
-  const suffix = EVIDENCE_SUFFIX[item.evidenceRequired] ?? '';
-  return suffix ? `Responsible: ${who} · ${suffix}` : `Responsible: ${who}`;
-}
-
-const STRIP_STATE_LINE: Record<string, string> = {
-  done: '✓ Passed — saved',
-  failed: '✕ Failed — needs attention',
-  na: 'N/A — reason recorded',
-  hold: 'Awaiting hold point release',
-  review: 'Awaiting head-contractor verification',
-  rejected: 'Rejected — update and resubmit',
-  open: 'Not started',
-};
-
-function stripStateLine(item: ITPChecklistItem, state: string): string {
-  if (!isSuperintendentSignoffOnlyItem(item)) return STRIP_STATE_LINE[state];
-  if (state === 'done') return 'Superintendent sign-off recorded';
-  if (state === 'failed' || state === 'na') return STRIP_STATE_LINE[state];
-  return 'Superintendent sign-off required';
-}
 
 const FLASH_MS = 650;
 
