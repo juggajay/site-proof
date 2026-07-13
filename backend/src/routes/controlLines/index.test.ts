@@ -333,4 +333,90 @@ describe('Control Lines API', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe('POST /control-lines/import (LandXML/DXF)', () => {
+    const LANDXML = Buffer.from(
+      `<?xml version="1.0"?><LandXML><Alignments>
+         <Alignment name="MC01" staStart="1000">
+           <CoordGeom>
+             <Line><Start>6250000 500000</Start><End>6250000 500100</End></Line>
+           </CoordGeom>
+         </Alignment>
+       </Alignments></LandXML>`,
+    );
+    const DXF = Buffer.from(
+      [
+        '0',
+        'SECTION',
+        '2',
+        'ENTITIES',
+        '0',
+        'LINE',
+        '8',
+        'CL',
+        '10',
+        '0',
+        '20',
+        '0',
+        '11',
+        '30',
+        '21',
+        '40',
+        '0',
+        'ENDSEC',
+        '0',
+        'EOF',
+      ].join('\n'),
+    );
+
+    function importReq(token: string, buf: Buffer, filename: string) {
+      return request(app)
+        .post(`/api/projects/${projectId}/control-lines/import`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', buf, { filename });
+    }
+
+    it('parses a LandXML alignment into a preview for an authorised writer', async () => {
+      const res = await importReq(pmToken, LANDXML, 'design.landxml');
+      expect(res.status).toBe(200);
+      expect(res.body.format).toBe('landxml');
+      expect(res.body.alignments).toHaveLength(1);
+      const a = res.body.alignments[0];
+      expect(a.name).toBe('MC01');
+      expect(a.chainageStart).toBe(1000);
+      expect(a.chainageEnd).toBe(1100);
+      expect(a.points[0]).toEqual({ chainage: 1000, easting: 500000, northing: 6250000 });
+    });
+
+    it('parses a DXF LINE into a preview', async () => {
+      const res = await importReq(pmToken, DXF, 'plan.dxf');
+      expect(res.status).toBe(200);
+      expect(res.body.format).toBe('dxf');
+      expect(res.body.alignments[0].name).toBe('CL');
+      expect(res.body.alignments[0].lengthM).toBe(50);
+    });
+
+    it('returns 400 for a file with no alignments', async () => {
+      const res = await importReq(pmToken, Buffer.from('<LandXML/>'), 'empty.xml');
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects a disallowed file extension', async () => {
+      const res = await importReq(pmToken, LANDXML, 'design.txt');
+      expect(res.status).toBe(400);
+    });
+
+    it('denies a viewer, a subcontractor, and a cross-company outsider', async () => {
+      expect((await importReq(viewerToken, LANDXML, 'd.landxml')).status).toBe(403);
+      expect((await importReq(subbieToken, LANDXML, 'd.landxml')).status).toBe(403);
+      expect((await importReq(outsiderToken, LANDXML, 'd.landxml')).status).toBe(403);
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/control-lines/import`)
+        .attach('file', LANDXML, { filename: 'd.landxml' });
+      expect(res.status).toBe(401);
+    });
+  });
 });

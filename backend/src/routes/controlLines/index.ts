@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import type { ControlLine, Prisma } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
@@ -9,6 +10,10 @@ import {
   requireProjectRoleExcludingSubcontractors,
 } from '../../lib/projectAccess.js';
 import { ROLES } from '../../lib/roles.js';
+import {
+  MAX_ALIGNMENT_FILE_BYTES,
+  parseAlignmentFile,
+} from '../../lib/spatial/alignmentFileImport.js';
 import { controlLineToWgs84, type ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
 import { generateChainageOffsetPolygon } from '../../lib/spatial/lotGeometry.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -28,6 +33,21 @@ import {
 // may write; any internal project member may read (subcontractors excluded).
 const WRITE_ROLES = [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const;
 const WRITE_DENIED_MESSAGE = 'You do not have permission to manage control lines';
+
+// Alignment import upload: kept in memory (parsed synchronously, never
+// persisted). The fileFilter message must start with "invalid file type" so the
+// errorHandler maps it to 400 (see INVALID_FILE_TYPE branch).
+const alignmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ALIGNMENT_FILE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (/\.(xml|landxml|dxf)$/i.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type: upload a .xml, .landxml, or .dxf file'));
+    }
+  },
+});
 
 const controlLinesRouter = Router();
 
@@ -190,6 +210,33 @@ controlLinesRouter.post(
     const candidate = cleanSetoutCandidate(raw);
 
     res.json({ candidate });
+  }),
+);
+
+// LandXML/DXF alignment import: upload a survey/CAD file and get back one preview
+// per alignment (points + summary). No DB write — the UI reviews, picks a zone,
+// and saves each selected alignment via POST /control-lines (reusing the same
+// create validation). Registered before /control-lines/:id so the literal
+// `import` suffix wins over the :id parameter route.
+controlLinesRouter.post(
+  '/:projectId/control-lines/import',
+  alignmentUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      WRITE_ROLES,
+      WRITE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+
+    if (!req.file) {
+      throw AppError.badRequest('No file uploaded');
+    }
+
+    const preview = parseAlignmentFile(req.file.originalname, req.file.buffer);
+    res.json(preview);
   }),
 );
 

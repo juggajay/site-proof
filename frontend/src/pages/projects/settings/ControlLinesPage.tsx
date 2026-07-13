@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Spline, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Spline, Plus, Trash2, Edit2, FileUp } from 'lucide-react';
 
 import { toast } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   ProjectAdminStatusBanners,
 } from './ProjectAdminPageState';
 import { ControlLineFormModal } from './ControlLineFormModal';
+import { ControlLineImportModal } from './ControlLineImportModal';
 import {
   useControlLines,
   useControlLinesAccess,
@@ -125,6 +126,7 @@ function ControlLinesTable({
 export function ControlLinesPage() {
   const { projectId } = useParams();
   const [showModal, setShowModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingLine, setEditingLine] = useState<ControlLine | null>(null);
   const [linePendingDelete, setLinePendingDelete] = useState<ControlLine | null>(null);
 
@@ -207,10 +209,21 @@ export function ControlLinesPage() {
           </p>
         </div>
         {canManage && (
-          <Button type="button" onClick={openAddModal} disabled={readOnly}>
-            <Plus className="h-4 w-4" />
-            Add Control Line
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowImport(true)}
+              disabled={readOnly}
+            >
+              <FileUp className="h-4 w-4" />
+              Import from file
+            </Button>
+            <Button type="button" onClick={openAddModal} disabled={readOnly}>
+              <Plus className="h-4 w-4" />
+              Add Control Line
+            </Button>
+          </div>
         )}
       </div>
 
@@ -248,6 +261,14 @@ export function ControlLinesPage() {
           saving={saving}
           onSubmit={(input) => void handleSubmit(input)}
           onClose={closeModal}
+        />
+      )}
+
+      {showImport && projectId && (
+        <ControlLineImportModal
+          projectId={projectId}
+          defaultCoordinateSystem={controlLines[0]?.coordinateSystem}
+          onClose={() => setShowImport(false)}
         />
       )}
 

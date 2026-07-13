@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import type { ControlPoint } from './controlPointsParsing';
 import {
@@ -42,6 +42,46 @@ function controlLinesPath(projectId: string): string {
 function invalidateControlLineConsumers(queryClient: QueryClient, projectId: string): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.projectLotGeometries(projectId) });
+}
+
+/** One importable alignment parsed from a LandXML/DXF file (points included). */
+export interface ImportedAlignmentSummary {
+  name: string;
+  points: ControlPoint[];
+  pointCount: number;
+  chainageStart: number;
+  chainageEnd: number;
+  lengthM: number;
+  bbox: { minE: number; minN: number; maxE: number; maxN: number };
+}
+
+export interface AlignmentImportPreview {
+  format: 'landxml' | 'dxf';
+  alignments: ImportedAlignmentSummary[];
+  warnings: string[];
+}
+
+/**
+ * Upload a LandXML/DXF file and get back a per-alignment preview. authFetch (not
+ * apiFetch) so the browser sets the multipart boundary itself. No DB write — the
+ * user reviews the preview, then creates selected alignments via
+ * useCreateControlLine, which reuses the same server-side create validation.
+ */
+export function useImportAlignments(projectId: string | undefined) {
+  return useMutation({
+    mutationFn: async (file: File): Promise<AlignmentImportPreview> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const response = await authFetch(`${controlLinesPath(projectId!)}/import`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!response.ok) {
+        throw new ApiError(response.status, await response.text());
+      }
+      return (await response.json()) as AlignmentImportPreview;
+    },
+  });
 }
 
 export function useControlLines(projectId: string | undefined) {
