@@ -12,6 +12,11 @@ import { ROLES } from '../../lib/roles.js';
 import { controlLineToWgs84, type ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
+  cleanSetoutCandidate,
+  extractSetoutRawCandidate,
+  setoutUpload,
+} from './setoutExtraction.js';
+import {
   createControlLineSchema,
   parseProjectRouteParam,
   updateControlLineSchema,
@@ -91,6 +96,34 @@ controlLinesRouter.post(
     });
 
     res.status(201).json({ controlLine: mapControlLine(controlLine) });
+  }),
+);
+
+// AI setout-sheet import: upload a "Geometric Setout Details" PDF/image and get
+// back a reviewed candidate (points + guessed EPSG). No DB write — the UI reviews
+// and saves via POST /control-lines. Registered before /control-lines/:id so the
+// literal `extract-points` suffix wins over the :id parameter route.
+controlLinesRouter.post(
+  '/:projectId/control-lines/extract-points',
+  setoutUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      WRITE_ROLES,
+      WRITE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+
+    if (!req.file) {
+      throw AppError.badRequest('No file uploaded');
+    }
+
+    const raw = await extractSetoutRawCandidate(req.file);
+    const candidate = cleanSetoutCandidate(raw);
+
+    res.json({ candidate });
   }),
 );
 
