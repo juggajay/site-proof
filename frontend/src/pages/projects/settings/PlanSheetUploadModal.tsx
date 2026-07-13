@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { FileUp, Loader2 } from 'lucide-react';
+import { FileUp, Loader2, MapPin } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import {
 import { COORDINATE_SYSTEM_OPTIONS, isGda94 } from '@/lib/spatial/coordinateSystems';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { createPlanSheet } from './planSheetsData';
+import { createPlanSheet, updatePlanSheet } from './planSheetsData';
 import { fileStem, pageSheetName } from './planSheetNaming';
 import {
   MAX_PDF_PAGES,
@@ -23,6 +23,7 @@ import {
   renderPdfPreviews,
   type PdfPreview,
 } from './planSheetRasterize';
+import { buildRegistration, detectGeorefs, type PageGeoref } from './geoPdf';
 
 type PageStatus = 'pending' | 'uploading' | 'done' | 'error';
 
@@ -37,6 +38,32 @@ const ACCEPT = '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
 
 function isPdf(file: File): boolean {
   return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+}
+
+/**
+ * Auto-register a freshly-created sheet from its embedded georeference against
+ * the uploaded raster's true pixel size. Returns the RMS residual (metres) on
+ * success, or null on any failure — the manual registration path is the
+ * fallback, so this never throws.
+ */
+async function autoRegisterSheet(
+  projectId: string,
+  created: { id: string; imageWidth: number; imageHeight: number },
+  georef: PageGeoref,
+): Promise<number | null> {
+  if (created.imageWidth <= 0 || created.imageHeight <= 0) return null;
+  const result = buildRegistration(georef, created.imageWidth, created.imageHeight);
+  if (!result) return null;
+  try {
+    await updatePlanSheet(projectId, created.id, {
+      coordinateSystem: result.coordinateSystem,
+      registration: result.registration,
+    });
+    return result.registration.rmsErrorM;
+  } catch (err) {
+    logError(`Auto-registration failed for sheet ${created.id} (manual fallback):`, err);
+    return null;
+  }
 }
 
 export function PlanSheetUploadModal({
@@ -56,6 +83,8 @@ export function PlanSheetUploadModal({
   const [error, setError] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState<Record<number, PageStatus>>({});
   const [summary, setSummary] = useState<string | null>(null);
+  // Pages carrying a supported embedded georeference, keyed by page number.
+  const [georefs, setGeorefs] = useState<Map<number, PageGeoref>>(new Map());
 
   const pdfSelected = file != null && isPdf(file);
 
@@ -64,6 +93,7 @@ export function PlanSheetUploadModal({
     setSummary(null);
     setPageStatus({});
     setPreview(null);
+    setGeorefs(new Map());
     if (!chosen) return;
 
     setFile(chosen);
@@ -75,6 +105,15 @@ export function PlanSheetUploadModal({
         const result = await renderPdfPreviews(chosen);
         setPreview(result);
         setSelectedPages(new Set([1]));
+        // Flag pages with an embedded, supported georeference so the picker can
+        // badge them and upload can auto-register. Best-effort — a parse failure
+        // must never block the manual upload path.
+        try {
+          const pages = Array.from({ length: result.pageCount }, (_, i) => i + 1);
+          setGeorefs(await detectGeorefs(await chosen.arrayBuffer(), pages));
+        } catch (err) {
+          logError('GeoPDF detection failed (falling back to manual):', err);
+        }
       } catch (err) {
         logError('Failed to read PDF:', err);
         setError(extractErrorMessage(err, 'Could not read that PDF. Is the file valid?'));
@@ -135,17 +174,24 @@ export function PlanSheetUploadModal({
     const singlePage = pages.length === 1;
     let succeeded = 0;
     const failed: number[] = [];
+    const autoRms: number[] = [];
 
     for (const n of pages) {
       setPageStatus((prev) => ({ ...prev, [n]: 'uploading' }));
       try {
         const blob = await renderPdfPageToPng(file, n);
-        await createPlanSheet(projectId, {
+        const created = await createPlanSheet(projectId, {
           blob,
           name: pageSheetName(name, n, singlePage),
           pageNumber: n,
           coordinateSystem,
         });
+        // Auto-register from the embedded georeference; silent manual fallback.
+        const georef = georefs.get(n);
+        if (georef) {
+          const rms = await autoRegisterSheet(projectId, created, georef);
+          if (rms != null) autoRms.push(rms);
+        }
         setPageStatus((prev) => ({ ...prev, [n]: 'done' }));
         succeeded += 1;
       } catch (err) {
@@ -158,6 +204,14 @@ export function PlanSheetUploadModal({
     if (succeeded > 0) onUploaded();
     const parts = [`Uploaded ${succeeded} of ${pages.length} page${pages.length === 1 ? '' : 's'}`];
     if (failed.length > 0) parts.push(`pages ${failed.join(', ')} failed`);
+    if (autoRms.length === 1) {
+      parts.push(`auto-registered from embedded georeference — RMS ${autoRms[0].toFixed(1)} m`);
+    } else if (autoRms.length > 1) {
+      const worst = Math.max(...autoRms).toFixed(1);
+      parts.push(
+        `auto-registered ${autoRms.length} pages from embedded georeference (RMS ≤ ${worst} m)`,
+      );
+    }
     setSummary(`${parts.join('; ')}.`);
   };
 
@@ -270,6 +324,7 @@ export function PlanSheetUploadModal({
                   const n = index + 1;
                   const checked = selectedPages.has(n);
                   const status = pageStatus[n];
+                  const georeferenced = georefs.has(n);
                   return (
                     <label
                       key={n}
@@ -285,6 +340,15 @@ export function PlanSheetUploadModal({
                         disabled={uploading}
                         aria-label={`Select page ${n}`}
                       />
+                      {georeferenced && (
+                        <span
+                          className="absolute right-1.5 top-1.5 z-10 flex items-center gap-0.5 rounded bg-primary px-1 py-0.5 text-[10px] font-medium text-primary-foreground"
+                          title="This page carries an embedded georeference and will be auto-registered."
+                          data-testid={`georef-badge-${n}`}
+                        >
+                          <MapPin className="h-2.5 w-2.5" /> GEO
+                        </span>
+                      )}
                       <img
                         src={thumb}
                         alt={`Page ${n}`}
