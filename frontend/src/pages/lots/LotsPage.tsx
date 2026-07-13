@@ -419,6 +419,7 @@ export function LotsPage() {
               projectId={projectId}
               filteredLotIds={filteredLotIds}
               canManageSettings={canManageSettings}
+              projectName={projectName}
             />
           </Suspense>
         </div>

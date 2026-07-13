@@ -21,6 +21,7 @@ export interface ConformanceReportSources {
   itpInstance: ITPInstance | null;
   testResults?: ConformanceReportData['testResults'];
   ncrs?: ConformanceReportData['ncrs'];
+  coverage?: ConformanceReportData['coverage'];
 }
 
 type HoldPointRelease = ConformanceReportData['holdPointReleases'][number];
@@ -69,6 +70,7 @@ export function buildConformanceReportData({
   itpInstance,
   testResults,
   ncrs,
+  coverage,
 }: ConformanceReportSources): ConformanceReportData {
   // Count photos from ITP completions
   let photoCount = 0;
@@ -121,5 +123,6 @@ export function buildConformanceReportData({
     ncrs: ncrs || [],
     holdPointReleases,
     photoCount,
+    coverage: coverage ?? null,
   };
 }

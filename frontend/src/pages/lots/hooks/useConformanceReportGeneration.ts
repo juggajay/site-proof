@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { fetchAllPages } from '@/lib/lots';
 import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
+import { fetchConformanceCoverage } from '@/lib/pdf/fetchCoverage';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import { buildConformanceReportData } from '../lib/buildConformanceReportData';
@@ -106,7 +107,7 @@ export function useConformanceReportGeneration({
       const encodedLotId = encodeURIComponent(lotId || '');
       // test-results and ncrs are paginated (default 20/page); a compliance PDF
       // must include EVERY record, so page through both endpoints in full.
-      const [projectData, itpData, testResults, ncrs, branding] = await Promise.all([
+      const [projectData, itpData, testResults, ncrs, branding, coverage] = await Promise.all([
         apiFetch<ProjectResponse>(`/api/projects/${encodedProjectId}`),
         itpInstance
           ? Promise.resolve<ItpInstanceResponse>({ instance: itpInstance })
@@ -120,6 +121,9 @@ export function useConformanceReportGeneration({
           (page) => (page as NcrsPage).ncrs ?? [],
         ),
         fetchPdfBranding(projectId || ''),
+        // Best-effort: coverage failure/absence resolves to null and the PDF
+        // section renders a note instead of failing generation.
+        fetchConformanceCoverage(projectId || ''),
       ]);
       const project = projectData.project;
       if (!project?.name) {
@@ -137,6 +141,7 @@ export function useConformanceReportGeneration({
         itpInstance: itpData.instance,
         testResults,
         ncrs,
+        coverage,
       });
 
       // Generate PDF with selected format
