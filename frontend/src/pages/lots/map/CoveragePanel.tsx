@@ -12,6 +12,8 @@ import {
 
 interface CoveragePanelProps {
   lines: CoverageLine[];
+  // Project-wide (not per line) — rendered once at the foot of the panel.
+  unmappedLotCount: number;
   isLoading: boolean;
   error: unknown;
   isMobile: boolean;
@@ -113,13 +115,6 @@ function LineSection({
         {metres(group.conformedLengthM)} conformed
       </p>
 
-      {line.unmappedLotCount ? (
-        <p className="mt-1 text-xs text-amber-600" data-testid={`coverage-unmapped-${line.id}`}>
-          {line.unmappedLotCount} lot{line.unmappedLotCount === 1 ? '' : 's'} have no mapped
-          geometry and are excluded.
-        </p>
-      ) : null}
-
       <div className="mt-2">
         <p className="text-xs font-medium">Gaps ({group.gaps.length})</p>
         {group.gaps.length === 0 ? (
@@ -150,6 +145,7 @@ function LineSection({
 
 export function CoveragePanel({
   lines,
+  unmappedLotCount,
   isLoading,
   error,
   isMobile,
@@ -220,6 +216,13 @@ export function CoveragePanel({
               onGapClick={onGapClick}
             />
           ))}
+
+        {!isLoading && !error && unmappedLotCount > 0 && (
+          <p className="border-t px-3 py-2 text-xs text-amber-600" data-testid="coverage-unmapped">
+            {unmappedLotCount} lot{unmappedLotCount === 1 ? '' : 's'} in this project have no mapped
+            geometry and are excluded from coverage.
+          </p>
+        )}
       </div>
     </div>
   );

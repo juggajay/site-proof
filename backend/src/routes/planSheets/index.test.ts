@@ -230,6 +230,41 @@ describe('Plan Sheets API', () => {
     expect(patched.body.planSheet.hasRegistration).toBe(true);
     expect(patched.body.planSheet.registration.rmsErrorM).toBe(0.012);
 
+    // Patch: changing the CRS alone on a REGISTERED sheet must be rejected —
+    // the transform was fitted in the old CRS and would silently mis-place the
+    // overlay. Re-registering (or clearing) in the same request is required.
+    const crsAlone = await request(app)
+      .patch(`/api/projects/${projectId}/plan-sheets/${sheet.id}`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ coordinateSystem: 'EPSG:7855' });
+    expect(crsAlone.status).toBe(400);
+    expect(crsAlone.body.error.code).toBe('COORDINATE_SYSTEM_LOCKED_BY_REGISTRATION');
+
+    // But CRS + registration:null together is allowed.
+    const crsWithClear = await request(app)
+      .patch(`/api/projects/${projectId}/plan-sheets/${sheet.id}`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ coordinateSystem: 'EPSG:7855', registration: null });
+    expect(crsWithClear.status).toBe(200);
+    expect(crsWithClear.body.planSheet.coordinateSystem).toBe('EPSG:7855');
+    expect(crsWithClear.body.planSheet.hasRegistration).toBe(false);
+
+    // Re-attach so the clear-with-null step below still exercises its path.
+    const reattached = await request(app)
+      .patch(`/api/projects/${projectId}/plan-sheets/${sheet.id}`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({
+        registration: {
+          points: [
+            { px: 0, py: 0, easting: 500000, northing: 6000000 },
+            { px: 20, py: 0, easting: 500020, northing: 6000000 },
+          ],
+          transform: [1, 0, 500000, 0, -1, 6000000],
+          rmsErrorM: 0.012,
+        },
+      });
+    expect(reattached.status).toBe(200);
+
     // Patch: clear registration with null
     const cleared = await request(app)
       .patch(`/api/projects/${projectId}/plan-sheets/${sheet.id}`)

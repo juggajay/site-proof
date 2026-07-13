@@ -226,31 +226,42 @@ controlLinesRouter.post(
     const points = controlLine.points as unknown as ControlPoint[];
     const epsg = controlLine.coordinateSystem;
 
-    // Chainaged lots with no existing chainage_offset geometry — the `none`
-    // filter is what makes a second run a no-op (idempotent).
-    const lots = await prisma.lot.findMany({
-      where: {
-        projectId,
-        chainageStart: { not: null },
-        chainageEnd: { not: null },
-        geometries: { none: { kind: 'chainage_offset' } },
-      },
-      select: { id: true, lotNumber: true, chainageStart: true, chainageEnd: true },
+    // The read-then-createMany below is only idempotent if runs are serialised:
+    // two racing backfills (double-click, two tabs) would both pass the `none`
+    // filter and insert duplicate footprints. A transaction-scoped advisory lock
+    // keyed on the project serialises them without a schema constraint (which
+    // would outlaw legitimate multi-segment lots on one control line).
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`backfill:${projectId}`}))`;
+
+      // Chainaged lots with no existing chainage_offset geometry — the `none`
+      // filter is what makes a second run a no-op (idempotent).
+      const lots = await tx.lot.findMany({
+        where: {
+          projectId,
+          chainageStart: { not: null },
+          chainageEnd: { not: null },
+          geometries: { none: { kind: 'chainage_offset' } },
+        },
+        select: { id: true, lotNumber: true, chainageStart: true, chainageEnd: true },
+      });
+
+      const { rows, skipped } = planBackfill(lots, {
+        points,
+        epsg,
+        controlLineId: id,
+        offsetLeft,
+        offsetRight,
+      });
+
+      if (rows.length > 0) {
+        await tx.lotGeometry.createMany({ data: rows });
+      }
+
+      return { created: rows.length, skipped };
     });
 
-    const { rows, skipped } = planBackfill(lots, {
-      points,
-      epsg,
-      controlLineId: id,
-      offsetLeft,
-      offsetRight,
-    });
-
-    if (rows.length > 0) {
-      await prisma.lotGeometry.createMany({ data: rows });
-    }
-
-    res.json({ created: rows.length, skipped });
+    res.json(result);
   }),
 );
 
