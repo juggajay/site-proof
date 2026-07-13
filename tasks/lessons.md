@@ -223,3 +223,15 @@ live pass on prod (or a prod-like deploy) driving the REAL UI — Playwright
 (no geometries, no history), not just the seeded/demo shape — empty states
 gate entire features. (3) UI-visible role gates need one live check per role
 that matters (a foreman and an owner see different toolbars).
+
+## 2026-07-14 — a feature is not shipped until its entry point exists for every audience
+The mobile map polish (icon-only 44px toolbar, viewport-capped panels) merged
+green — while the mobile lot register had NO view-mode switcher at all, so no
+phone user could reach any map view in the first place (pre-existing gap,
+found only by a live 390px probe that tried to walk the full path). **Rules:**
+(1) Live-verify the PATH from each audience's entry point (login → nav →
+feature), not just the feature surface itself. (2) When polishing a view for
+an audience (foremen on phones), first prove that audience can reach it at
+their viewport/role. (3) Mobile layouts here are separate component branches
+(`if (isMobile) return ...`) — a desktop-only control is invisible to every
+phone user, and desktop-viewport tests will never notice.
