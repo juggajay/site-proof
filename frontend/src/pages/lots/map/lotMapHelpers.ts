@@ -113,6 +113,47 @@ export function boundsToLatLngRect(b: SearchBounds): [LatLng, LatLng] {
   ];
 }
 
+// Geodesic area (m²) of a WGS84 ring of [lng, lat] positions, using the standard
+// spherical-excess formula (same algorithm as @turf/area / geojson-area). Pure,
+// so the map can display a drawn polygon's area before it is saved. The backend
+// recomputes authoritatively on save; this is the live preview.
+const EARTH_RADIUS_M = 6378137;
+
+function toRad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+export function polygonAreaM2(ring: [number, number][]): number {
+  if (ring.length < 3) return 0;
+  let total = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [lng1, lat1] = ring[i];
+    const [lng2, lat2] = ring[(i + 1) % ring.length];
+    total += toRad(lng2 - lng1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
+  }
+  return Math.abs((total * EARTH_RADIUS_M * EARTH_RADIUS_M) / 2);
+}
+
+// Leaflet bounds [[minLat,minLng],[maxLat,maxLng]] spanning four WGS84 [lng,lat]
+// corners — used to zoom to a plan sheet overlay.
+export function cornersToLatLngBounds(corners: [number, number][]): [LatLng, LatLng] | null {
+  if (corners.length === 0) return null;
+  let minLat = Infinity;
+  let minLng = Infinity;
+  let maxLat = -Infinity;
+  let maxLng = -Infinity;
+  for (const [lng, lat] of corners) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+  }
+  return [
+    [minLat, minLng],
+    [maxLat, maxLng],
+  ];
+}
+
 // Only geometries whose lot is in the register's current filtered set.
 export function filterGeometriesByLotIds(
   geometries: ProjectLotGeometry[],

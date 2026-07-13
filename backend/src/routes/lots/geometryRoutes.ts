@@ -14,6 +14,7 @@
 import { Router } from 'express';
 import type { LotGeometry } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
+import { area } from '@turf/turf';
 import { z } from 'zod';
 
 import { AppError } from '../../lib/AppError.js';
@@ -32,7 +33,8 @@ export const lotGeometryRouter = Router();
 
 const WRITE_DENIED_MESSAGE = 'You do not have permission to manage lot geometry';
 
-const createGeometrySchema = z.object({
+// Generated geometries (chainage_offset / point) come from a control line.
+const generatedGeometrySchema = z.object({
   kind: z.enum(['chainage_offset', 'point']),
   controlLineId: z.string().trim().min(1).max(120),
   chainageStart: z.number().finite(),
@@ -40,6 +42,56 @@ const createGeometrySchema = z.object({
   offsetLeft: z.number().finite().min(0).max(1000).optional(),
   offsetRight: z.number().finite().min(0).max(1000).optional(),
 });
+
+// Drawn geometries carry a raw WGS84 GeoJSON Polygon traced on the map/plan.
+// Structure is checked here; the ring is validated (closed, in-range) below.
+const drawnGeometrySchema = z.object({
+  kind: z.literal('drawn'),
+  geometryWgs84: z.object({
+    type: z.literal('Feature'),
+    properties: z.unknown().optional(),
+    geometry: z.object({
+      type: z.literal('Polygon'),
+      coordinates: z.array(z.array(z.array(z.number()))),
+    }),
+  }),
+});
+
+const createGeometrySchema = z.union([generatedGeometrySchema, drawnGeometrySchema]);
+
+type DrawnGeometryInput = z.infer<typeof drawnGeometrySchema>;
+
+// A drawn polygon must have a closed outer ring of ≥4 finite, in-range [lng,lat]
+// positions. Leaflet's toGeoJSON closes rings, so we require closure rather than
+// silently repairing it.
+function assertValidDrawnRing(feature: DrawnGeometryInput['geometryWgs84']): void {
+  const rings = feature.geometry.coordinates;
+  if (rings.length === 0) {
+    throw AppError.badRequest('Drawn polygon has no ring');
+  }
+  rings.forEach((ring, ringIndex) => {
+    if (ringIndex === 0 && ring.length < 4) {
+      throw AppError.badRequest('Drawn polygon ring needs at least 4 positions');
+    }
+    for (const position of ring) {
+      if (position.length < 2) {
+        throw AppError.badRequest('Each ring position needs a [lng, lat] pair');
+      }
+      const [lng, lat] = position;
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+        throw AppError.badRequest('Ring coordinates must be finite numbers');
+      }
+      if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        throw AppError.badRequest('Ring coordinates are outside the valid lng/lat range');
+      }
+    }
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      throw AppError.badRequest('Drawn polygon ring must be closed (first position = last)');
+    }
+  });
+}
 
 function toNumber(value: Prisma.Decimal | null): number | null {
   return value != null ? Number(value) : null;
@@ -74,11 +126,11 @@ async function loadLotOr404(lotId: string) {
   return lot;
 }
 
-type CreateGeometryInput = z.infer<typeof createGeometrySchema>;
+type GeneratedGeometryInput = z.infer<typeof generatedGeometrySchema>;
 
 // Dispatch to the right generator and normalise the persisted chainage/offset
 // fields (null for a point). Generator range failures throw AppError → 400.
-function buildGeometryFields(points: ControlPoint[], epsg: string, input: CreateGeometryInput) {
+function buildGeometryFields(points: ControlPoint[], epsg: string, input: GeneratedGeometryInput) {
   if (input.kind === 'chainage_offset') {
     if (input.chainageEnd === undefined) {
       throw AppError.badRequest('chainageEnd is required for a chainage_offset geometry');
@@ -128,7 +180,32 @@ lotGeometryRouter.post(
     if (!validation.success) {
       throw AppError.fromZodError(validation.error);
     }
-    const { kind, controlLineId, chainageStart } = validation.data;
+    const input = validation.data;
+
+    // Drawn footprint: a raw WGS84 polygon traced on the map/plan. No control
+    // line; area is computed server-side (turf, geodesic) and length is null.
+    if (input.kind === 'drawn') {
+      assertValidDrawnRing(input.geometryWgs84);
+      const feature = input.geometryWgs84 as unknown as Parameters<typeof area>[0];
+      const created = await prisma.lotGeometry.create({
+        data: {
+          lotId,
+          kind: 'drawn',
+          controlLineId: null,
+          chainageStart: null,
+          chainageEnd: null,
+          offsetLeft: null,
+          offsetRight: null,
+          geometryWgs84: input.geometryWgs84 as unknown as Prisma.InputJsonValue,
+          areaM2: area(feature),
+          lengthM: null,
+        },
+      });
+      res.status(201).json({ geometry: mapGeometry(created) });
+      return;
+    }
+
+    const { kind, controlLineId, chainageStart } = input;
 
     const controlLine = await prisma.controlLine.findUnique({
       where: { id: controlLineId },
@@ -142,7 +219,7 @@ lotGeometryRouter.post(
     }
 
     const points = controlLine.points as unknown as ControlPoint[];
-    const fields = buildGeometryFields(points, controlLine.coordinateSystem, validation.data);
+    const fields = buildGeometryFields(points, controlLine.coordinateSystem, input);
 
     const created = await prisma.lotGeometry.create({
       data: {

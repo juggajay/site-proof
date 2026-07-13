@@ -10,7 +10,20 @@ import {
 } from './projectPageAccess';
 import type { AffineTransform, RegistrationPoint } from './planSheetRegistration';
 
-// List rows returned by GET .../plan-sheets — registration/perimeter omitted.
+/** A WGS84 corner as [lng, lat] (GeoJSON axis order). */
+export type SheetCorner = [number, number];
+
+/** The four image corners in WGS84, for a georeferenced map overlay. */
+export interface SheetCornersWgs84 {
+  topLeft: SheetCorner;
+  topRight: SheetCorner;
+  bottomRight: SheetCorner;
+  bottomLeft: SheetCorner;
+}
+
+// List rows returned by GET .../plan-sheets. The raw registration payload is
+// omitted, but cornersWgs84 (derived from it) and the perimeter ring are
+// included so the map overlay can place + clip a sheet without a detail fetch.
 export interface PlanSheetListItem {
   id: string;
   name: string;
@@ -19,6 +32,8 @@ export interface PlanSheetListItem {
   imageHeight: number;
   coordinateSystem: string;
   hasRegistration: boolean;
+  cornersWgs84: SheetCornersWgs84 | null;
+  perimeter: [number, number][] | null;
   createdAt: string;
   updatedAt: string;
 }

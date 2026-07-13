@@ -420,6 +420,7 @@ export function LotsPage() {
               filteredLotIds={filteredLotIds}
               canManageSettings={canManageSettings}
               projectName={projectName}
+              lots={lots}
             />
           </Suspense>
         </div>
