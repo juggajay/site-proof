@@ -123,7 +123,8 @@ function mockQueries({
 } = {}) {
   useProjectLotGeometries.mockReturnValue({ data: { geometries }, isLoading, error, refetch });
   useProjectControlLines.mockReturnValue({
-    data: { controlLines },
+    // Unwrapped array — the hook caches the same shape settings' useControlLines does.
+    data: controlLines,
     isLoading: false,
     error: null,
     refetch: vi.fn(),
