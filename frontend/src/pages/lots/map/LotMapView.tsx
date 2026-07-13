@@ -302,10 +302,7 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
   }, [drawArmed]);
 
   const allGeometries = geometriesQuery.data?.geometries;
-  const controlLines = useMemo(
-    () => controlLinesQuery.data?.controlLines ?? [],
-    [controlLinesQuery.data],
-  );
+  const controlLines = useMemo(() => controlLinesQuery.data ?? [], [controlLinesQuery.data]);
 
   const filteredGeometries = useMemo(
     () => filterGeometriesByLotIds(allGeometries ?? [], filteredLotIds),

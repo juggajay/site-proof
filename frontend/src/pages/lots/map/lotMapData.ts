@@ -55,11 +55,16 @@ export function useProjectLotGeometries(projectId: string | undefined) {
 export function useProjectControlLines(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.controlLines(projectId ?? ''),
-    queryFn: () => {
+    // Settings' useControlLines shares this query key, so both queryFns must
+    // cache the SAME shape — the unwrapped array. Caching the raw envelope here
+    // poisoned the settings cache (and vice versa), leaving the map stuck on
+    // its "no control lines" empty state until a hard reload.
+    queryFn: async () => {
       if (!projectId) throw new Error('Project not found');
-      return apiFetch<{ controlLines: ProjectControlLine[] }>(
+      const data = await apiFetch<{ controlLines: ProjectControlLine[] }>(
         `/api/projects/${encodeURIComponent(projectId)}/control-lines`,
       );
+      return data.controlLines ?? [];
     },
     enabled: !!projectId,
   });
