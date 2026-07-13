@@ -10,9 +10,9 @@ starts week of 2026-07-20.**
    (paper ITPs failing in the field, hold-point sign-off bottlenecks, end-of-project
    conformance scramble, lost QA records, no at-a-glance lot status) maps onto a loop
    SiteProof already ships. Nothing found suggests a missing core loop.
-2. **Three real gaps vs CivilPro (the direct AU comp)** are worth a shortlist, not a sprint:
-   lot map (chainage data is already captured — only the visualisation is missing), survey
-   conformance workflow, and test-frequency rules (min tests per lot / testing rate).
+2. **Two real gaps vs CivilPro (the direct AU comp)** are worth a shortlist, not a sprint:
+   survey conformance workflow, and test-frequency rules (min tests per lot / testing rate).
+   (A third, the lot map, turned out to already be shipped — see false gaps.)
 3. **The highest-leverage work this week is pilot prep, not features.** Structured pilots
    with written success criteria convert 3.2x better; the proven wedge is daily diary +
    photos (already built). Playbook below.
@@ -24,6 +24,7 @@ starts week of 2026-07-20.**
 | Portfolio/multi-project analytics | `PortfolioPage` exists: cashflow, metrics, projects-at-risk, critical NCRs |
 | Open API / webhooks | `backend/src/routes/apiKeys.ts` + `webhooks.ts` (493 lines) exist |
 | Chainage-based lots | `Lot.chainageStart/chainageEnd` (+ lat/long) in schema, shown in lots UI and conformance/claim PDFs |
+| Lot map / linear chainage view (CivilPro's signature) | **Shipped.** `LinearMapView.tsx` — third view toggle on Lot Register: lots positioned by chainage in activity rows, status colours, zoom/pan, print/export, project-area background highlighting. Initially mis-reported as a gap in this doc (correction 2026-07-13: the false-gap check covered schema + backend routes but not frontend components — check `frontend/src/components/` too) |
 | Scheduled reporting | `ReportsPage` + `ScheduledReportArtifactPage` |
 | Audit trail | `auditLog` routes exist |
 | Client hold-point sign-off | Public token-release links (offline-tolerant) already shipped |
@@ -33,20 +34,19 @@ starts week of 2026-07-20.**
 ## Real gaps — ranked
 
 ### A. Shortlist (direct-comp parity, civil-specific, build when pilot user confirms)
-1. **Lot map view** — CivilPro's signature feature: lots on a map/control line, colour-coded
-   by conformance status. Our chainage + GPS data already exists; this is a visualisation
-   layer (leaflet is already a dependency for photo locations). How PMs and superintendents
-   think about linear work.
-2. **Survey conformance workflow** — survey request → surveyor → conformance evidence back
+1. **Survey conformance workflow** — survey request → surveyor → conformance evidence back
    to the lot. TfNSW/TMR require survey conformance as QA evidence. Today it'd be shoehorned
-   into documents/test results.
-3. **Test frequency rules** — per material/activity: min tests per lot, testing rate,
+   into documents/test results. (Verified: no survey models in schema.) Lean v1 reuses the
+   hold-point token-link machinery for the surveyor hand-off; needs a reviewed migration.
+2. **Test frequency rules** — per material/activity: min tests per lot, testing rate,
    auto-flag under-tested lots. Separates a "records app" from a civil QA system under
-   TfNSW/TMR specs. (Currently only free-text requirements.)
-4. **"Eagle-eye" lot/ITP status board** — a real Dashpivot user complaint: "no eagle eye
-   view... cannot know at a glance the status of worklots, itps." We have lot register +
-   dashboards; worth checking with the test user whether our register answers this in one
-   glance or needs a matrix view (lots × ITP stages).
+   TfNSW/TMR specs. (Currently only free-text requirements; `itpChecklistItemId` plumbing
+   exists.) Rules are spec-set-specific — encode from the pilot user's real spec pages,
+   not guesses.
+3. **"Eagle-eye" lot/ITP status board** — a real Dashpivot user complaint: "no eagle eye
+   view... cannot know at a glance the status of worklots, itps." (Verified: no matrix view
+   in frontend.) We have lot register + linear map + dashboards; check with the test user
+   whether those answer it in one glance before building a lots × ITP-stages matrix.
 
 ### B. Watch list (validated demand, bigger bets — need a paying user asking)
 - **Native mobile / offline field checklists** — every competitor has it; #1 objection on
