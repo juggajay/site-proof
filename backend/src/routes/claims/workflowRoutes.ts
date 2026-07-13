@@ -52,6 +52,7 @@ type ClaimCreateResult = {
   lotCount: number;
   variationCount: number;
   replayed?: boolean;
+  claimedLotRefs?: { id: string; lotNumber: string }[];
 };
 
 function normalizeUniqueTargetField(value: string) {
@@ -470,6 +471,9 @@ export function createClaimWorkflowRouter({
               nextClaimNumber,
               lotCount: lots.length,
               variationCount: variations.length,
+              claimedLotRefs: lots
+                .filter((lot) => fullyClaimedLotIds.includes(lot.id))
+                .map((lot) => ({ id: lot.id, lotNumber: lot.lotNumber })),
             };
           });
           break;
@@ -522,6 +526,23 @@ export function createClaimWorkflowRouter({
           changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount, variationCount },
           req,
         });
+
+        // Per-lot status audit so the map time scrubber sees conformed -> claimed.
+        for (const lot of claimResult.claimedLotRefs ?? []) {
+          await createAuditLog({
+            projectId,
+            userId,
+            entityType: 'lot',
+            entityId: lot.id,
+            action: AuditAction.LOT_STATUS_CHANGED,
+            changes: {
+              lotNumber: lot.lotNumber,
+              status: { from: 'conformed', to: 'claimed' },
+              claimId: claim.id,
+            },
+            req,
+          });
+        }
       }
 
       res.status(201).json(buildClaimCreatedResponse(transformedClaim));

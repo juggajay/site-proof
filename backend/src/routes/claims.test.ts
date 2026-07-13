@@ -1244,6 +1244,21 @@ describe('Progress Claims API', () => {
       expect(lockedLot?.status).toBe('claimed');
       expect(lockedLot?.claimedInId).toBe(completing.body.claim.id);
 
+      // Claiming to 100% must audit conformed -> claimed so the map time scrubber
+      // can replay it (the status flip happens via updateMany inside the tx).
+      const claimAudit = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'lot',
+          entityId: lot.id,
+          action: AuditAction.LOT_STATUS_CHANGED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(JSON.parse(claimAudit?.changes ?? '{}').status).toEqual({
+        from: 'conformed',
+        to: 'claimed',
+      });
+
       // Deleting the completing draft claim must release its 60% increment and
       // return the lot to conformed so it can be claimed again.
       const del = await request(app)
@@ -1254,6 +1269,20 @@ describe('Progress Claims API', () => {
       const releasedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
       expect(releasedLot?.status).toBe('conformed');
       expect(releasedLot?.claimedInId).toBeNull();
+
+      // ...and the release must audit claimed -> conformed.
+      const releaseAudit = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'lot',
+          entityId: lot.id,
+          action: AuditAction.LOT_STATUS_CHANGED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(JSON.parse(releaseAudit?.changes ?? '{}').status).toEqual({
+        from: 'claimed',
+        to: 'conformed',
+      });
 
       // Cumulative now back to 40%, so a further 60% is allowed again.
       const reclaim = await claimLot(lot.id, 60);
