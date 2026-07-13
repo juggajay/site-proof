@@ -3,6 +3,7 @@ import {
   COORDINATE_SYSTEM_OPTIONS,
   DEFAULT_COORDINATE_SYSTEM,
   coordinateSystemLabel,
+  isGda94,
 } from './coordinateSystems';
 
 describe('COORDINATE_SYSTEM_OPTIONS', () => {
@@ -48,5 +49,28 @@ describe('COORDINATE_SYSTEM_OPTIONS', () => {
 
   it('defaults to a supported system', () => {
     expect(COORDINATE_SYSTEM_OPTIONS.some((o) => o.value === DEFAULT_COORDINATE_SYSTEM)).toBe(true);
+  });
+});
+
+describe('isGda94', () => {
+  it('flags GDA94 MGA zones 49–56 (EPSG:28349–28356)', () => {
+    for (let code = 28349; code <= 28356; code += 1) {
+      expect(isGda94(`EPSG:${code}`)).toBe(true);
+    }
+  });
+
+  it('does not flag GDA2020 MGA zones', () => {
+    expect(isGda94('EPSG:7856')).toBe(false);
+    expect(isGda94('EPSG:7849')).toBe(false);
+  });
+
+  it('does not flag codes just outside the GDA94 MGA band', () => {
+    expect(isGda94('EPSG:28348')).toBe(false);
+    expect(isGda94('EPSG:28357')).toBe(false);
+  });
+
+  it('returns false for unparseable values', () => {
+    expect(isGda94('')).toBe(false);
+    expect(isGda94('GDA94')).toBe(false);
   });
 });

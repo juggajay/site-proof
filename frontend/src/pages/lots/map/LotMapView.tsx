@@ -1,7 +1,8 @@
 import 'leaflet/dist/leaflet.css';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Circle,
   CircleMarker,
   LayersControl,
   MapContainer,
@@ -9,6 +10,7 @@ import {
   Polyline,
   Popup,
   Rectangle,
+  ScaleControl,
   TileLayer,
   Tooltip,
   useMap,
@@ -17,7 +19,15 @@ import {
 import L from 'leaflet';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Camera, ExternalLink, Layers, Map as MapIcon, PencilRuler, Square } from 'lucide-react';
+import {
+  Camera,
+  Crosshair,
+  ExternalLink,
+  Layers,
+  Map as MapIcon,
+  PencilRuler,
+  Square,
+} from 'lucide-react';
 
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -65,6 +75,9 @@ import {
 } from './lotMapHelpers';
 
 const CONTROL_LINE_COLOR = '#f59e0b'; // amber — neutral against status fills
+// Constant dark casing for lot boundaries so the status colour lives in the fill
+// only and the outline stays crisp on satellite imagery (see UX audit Q4).
+const POLYGON_STROKE_COLOR = '#1f2937';
 // Gap overlay: dashed red outline + light red fill (see PR note — SVG hatch
 // patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
 const GAP_COLOR = '#dc2626';
@@ -96,16 +109,42 @@ function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
 }
 
 // Lifts the map's current bounds up so the Plans panel can tell which shown
-// sheets sit off-screen (and offer "Zoom to sheet").
-function MapBoundsWatcher({ onBounds }: { onBounds: (bounds: L.LatLngBounds) => void }) {
+// sheets sit off-screen (and offer "Zoom to sheet"). Also relays base-layer
+// changes so the tile-error toast can re-arm for the newly selected layer.
+function MapBoundsWatcher({
+  onBounds,
+  onBaseLayerChange,
+}: {
+  onBounds: (bounds: L.LatLngBounds) => void;
+  onBaseLayerChange: () => void;
+}) {
   const map = useMapEvents({
     moveend: () => onBounds(map.getBounds()),
     zoomend: () => onBounds(map.getBounds()),
+    baselayerchange: () => onBaseLayerChange(),
   });
   useEffect(() => {
     onBounds(map.getBounds());
   }, [map, onBounds]);
   return null;
+}
+
+// A fixed north indicator pinned inside the captured map container so it also
+// appears in snapshot PNGs (the base imagery is north-up, so a static glyph is
+// honest). Plain DOM overlay — no Leaflet control — to stay light and testable.
+function NorthArrow() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute right-3 top-16 z-[900] flex flex-col items-center rounded-md border bg-background/90 px-1.5 py-1 text-foreground shadow-sm"
+      data-testid="map-north-arrow"
+    >
+      <svg width="14" height="16" viewBox="0 0 14 16" fill="none" aria-hidden>
+        <path d="M7 1 L12 14 L7 11 L2 14 Z" fill="currentColor" />
+      </svg>
+      <span className="text-[10px] font-semibold leading-none">N</span>
+    </div>
+  );
 }
 
 function LotPopup({
@@ -166,12 +205,23 @@ function LotGeometryLayer({
   if (!shape) return null;
 
   const color = getStatusColor(geometry.status);
-  const pathOptions = { color, weight: 2, fillColor: color, fillOpacity: 0.4 };
   const popup = <LotPopup geometry={geometry} onViewDetails={onViewDetails} />;
 
   if (shape.kind === 'polygon') {
+    // Decouple stroke from fill: a constant dark casing keeps every lot boundary
+    // legible over satellite imagery, where the light Okabe-Ito fills (grey /
+    // yellow / sky) otherwise wash out. Fill still carries the status colour.
     return (
-      <Polygon positions={shape.positions} pathOptions={pathOptions}>
+      <Polygon
+        positions={shape.positions}
+        pathOptions={{
+          color: POLYGON_STROKE_COLOR,
+          weight: 2,
+          opacity: 0.9,
+          fillColor: color,
+          fillOpacity: 0.45,
+        }}
+      >
         {popup}
       </Polygon>
     );
@@ -184,7 +234,17 @@ function LotGeometryLayer({
     );
   }
   return (
-    <CircleMarker center={shape.position} radius={7} pathOptions={pathOptions}>
+    <CircleMarker
+      center={shape.position}
+      radius={7}
+      pathOptions={{
+        color: POLYGON_STROKE_COLOR,
+        weight: 2,
+        opacity: 0.9,
+        fillColor: color,
+        fillOpacity: 0.45,
+      }}
+    >
       {popup}
     </CircleMarker>
   );
@@ -352,6 +412,57 @@ export function LotMapView({
     areaM2: number;
   } | null>(null);
   const [savingDraw, setSavingDraw] = useState(false);
+
+  // Locate-me: the map instance (via MapContainer ref) plus a one-shot fix to
+  // render a temporary accuracy circle. No watch/tracking — a single lookup.
+  const [map, setMap] = useState<L.Map | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locatedFix, setLocatedFix] = useState<{ center: LatLng; accuracy: number } | null>(null);
+
+  // Tile-error toast: one debounced message per layer, re-armed on layer change.
+  const tileErrorShownRef = useRef(false);
+  const handleTileError = useCallback(() => {
+    if (tileErrorShownRef.current) return;
+    tileErrorShownRef.current = true;
+    toast({
+      title: 'Map imagery failed to load',
+      description: 'Map imagery failed to load — check your connection.',
+      variant: 'error',
+    });
+  }, []);
+  const resetTileError = useCallback(() => {
+    tileErrorShownRef.current = false;
+  }, []);
+
+  const handleLocate = useCallback(() => {
+    if (!map) return;
+    if (!('geolocation' in navigator)) {
+      toast({
+        title: 'Location unavailable',
+        description: 'This device does not support location.',
+        variant: 'error',
+      });
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const center: LatLng = [position.coords.latitude, position.coords.longitude];
+        setLocatedFix({ center, accuracy: position.coords.accuracy });
+        map.flyTo(center, 18);
+        setLocating(false);
+      },
+      (error) => {
+        setLocating(false);
+        const description =
+          error.code === error.PERMISSION_DENIED
+            ? 'Location permission was denied. Enable it in your browser to use this.'
+            : 'Could not get your location. Check your GPS/connection and try again.';
+        toast({ title: 'Location unavailable', description, variant: 'error' });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  }, [map]);
 
   const registeredSheets = useMemo(
     () => (planSheetsQuery.data ?? []).filter((s) => s.hasRegistration && s.cornersWgs84),
@@ -728,6 +839,16 @@ export function LotMapView({
                   <Camera className="h-3.5 w-3.5" />
                   {snapshotting ? 'Saving…' : 'Snapshot'}
                 </button>
+                <button
+                  type="button"
+                  onClick={handleLocate}
+                  disabled={locating || !map}
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
+                  data-testid="locate-me-button"
+                >
+                  <Crosshair className="h-3.5 w-3.5" />
+                  {locating ? 'Locating…' : 'My location'}
+                </button>
               </div>
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
@@ -754,6 +875,7 @@ export function LotMapView({
             </div>
 
             <MapContainer
+              ref={setMap}
               center={AU_DEFAULT_CENTER}
               zoom={AU_DEFAULT_ZOOM}
               scrollWheelZoom
@@ -768,6 +890,7 @@ export function LotMapView({
                       attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       maxZoom={20}
                       crossOrigin="anonymous"
+                      eventHandlers={{ tileerror: handleTileError }}
                     />
                   </LayersControl.BaseLayer>
                 )}
@@ -777,9 +900,13 @@ export function LotMapView({
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     maxZoom={19}
                     crossOrigin="anonymous"
+                    eventHandlers={{ tileerror: handleTileError }}
                   />
                 </LayersControl.BaseLayer>
               </LayersControl>
+
+              <ScaleControl position="bottomleft" imperial={false} />
+              <NorthArrow />
 
               <FitBounds bounds={bounds} />
 
@@ -842,8 +969,33 @@ export function LotMapView({
                 />
               )}
 
-              <MapBoundsWatcher onBounds={handleMapBounds} />
+              <MapBoundsWatcher onBounds={handleMapBounds} onBaseLayerChange={resetTileError} />
               <FitBounds bounds={zoomTarget} />
+
+              {locatedFix && (
+                <>
+                  <Circle
+                    center={locatedFix.center}
+                    radius={locatedFix.accuracy}
+                    pathOptions={{
+                      color: '#2563eb',
+                      weight: 1,
+                      fillColor: '#2563eb',
+                      fillOpacity: 0.12,
+                    }}
+                  />
+                  <CircleMarker
+                    center={locatedFix.center}
+                    radius={6}
+                    pathOptions={{
+                      color: '#ffffff',
+                      weight: 2,
+                      fillColor: '#2563eb',
+                      fillOpacity: 1,
+                    }}
+                  />
+                </>
+              )}
 
               {registeredSheets.map((sheet) =>
                 planShown[sheet.id] ? (

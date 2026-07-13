@@ -15,10 +15,12 @@ import {
 import {
   COORDINATE_SYSTEM_OPTIONS,
   DEFAULT_COORDINATE_SYSTEM,
+  isGda94,
 } from '@/lib/spatial/coordinateSystems';
 import type { ControlLine, ControlLineInput } from './controlLinesData';
 import {
   controlLineFormSchema,
+  hasSparseChainageGap,
   parsePastedControlPoints,
   type ControlPoint,
 } from './controlPointsParsing';
@@ -78,6 +80,9 @@ export function ControlLineFormModal({
     () => (pasteText.trim() ? parsePastedControlPoints(pasteText) : null),
     [pasteText],
   );
+
+  const showGda94Warning = isGda94(coordinateSystem);
+  const showSparseHint = useMemo(() => hasSparseChainageGap(rowsToPoints(rows)), [rows]);
 
   const updateRow = (index: number, field: keyof PointRow, value: string) => {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
@@ -153,6 +158,16 @@ export function ControlLineFormModal({
                 </option>
               ))}
             </NativeSelect>
+            {showGda94Warning && (
+              <p
+                className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-warning"
+                role="status"
+                data-testid="gda94-warning"
+              >
+                GDA94 coordinates sit about 1.8 m off current satellite imagery. Use GDA2020 if your
+                survey data supports it.
+              </p>
+            )}
           </div>
 
           <div>
@@ -276,6 +291,16 @@ export function ControlLineFormModal({
                 </tbody>
               </table>
             </div>
+            {showSparseHint && (
+              <p
+                className="mt-2 rounded-md bg-muted p-2 text-xs text-muted-foreground"
+                role="status"
+                data-testid="sparse-points-hint"
+              >
+                Points more than 75 m apart — on curves, add intermediate points so generated lots
+                follow the curve.
+              </p>
+            )}
           </div>
 
           {formError && (

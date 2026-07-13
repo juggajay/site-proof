@@ -103,6 +103,82 @@ export function parsePastedControlPoints(text: string): ParsedPointsResult {
   return { rows, points, ok: rows.length > 0 && rows.every((r) => r.error === null) };
 }
 
+/**
+ * Largest chainage gap (m) between consecutive points that we treat as "dense
+ * enough" for lot generation to follow a curve. Beyond this, chainage+offset lots
+ * chord-cut across bends (CivilPro documents the same failure mode), so the form
+ * nudges the user to add intermediate points.
+ */
+export const SPARSE_CHAINAGE_GAP_M = 75;
+
+/**
+ * True when any consecutive pair of points (ordered by chainage) is more than
+ * `maxGapM` apart. The generator follows the polyline through interior vertices,
+ * so point density — not point count — is what keeps curved lots on-shape.
+ */
+export function hasSparseChainageGap(
+  points: { chainage: number }[],
+  maxGapM = SPARSE_CHAINAGE_GAP_M,
+): boolean {
+  const chainages = points
+    .map((p) => p.chainage)
+    .filter((c) => Number.isFinite(c))
+    .sort((a, b) => a - b);
+  for (let i = 1; i < chainages.length; i += 1) {
+    if (chainages[i] - chainages[i - 1] > maxGapM) return true;
+  }
+  return false;
+}
+
+/**
+ * Interpolate a grid position (easting/northing) at a chainage along a control
+ * line, optionally offset perpendicular to the line. Mirrors the backend
+ * `positionAtChainage` (linear between the two bracketing vertices). Offset is
+ * signed metres with the same convention as the lot generator: positive = LEFT
+ * of increasing chainage (tangent rotated +90°: (-ty, tx)).
+ *
+ * Returns null when there are fewer than 2 points or the chainage is outside the
+ * line's range, so callers can surface a clear "out of range" message.
+ */
+interface GridPosition {
+  easting: number;
+  northing: number;
+}
+
+// Shift a centreline position perpendicular to the tangent (dx, dy). Positive
+// offset = LEFT of increasing chainage (tangent rotated +90°: (-ty, tx)).
+function applyOffset(centre: GridPosition, dx: number, dy: number, offset: number): GridPosition {
+  const len = Math.hypot(dx, dy);
+  if (offset === 0 || len === 0) return centre;
+  const tx = dx / len;
+  const ty = dy / len;
+  return { easting: centre.easting - ty * offset, northing: centre.northing + tx * offset };
+}
+
+export function positionFromChainage(
+  points: ControlPoint[],
+  chainage: number,
+  offset = 0,
+): GridPosition | null {
+  if (points.length < 2 || !Number.isFinite(chainage)) return null;
+  const sorted = [...points].sort((a, b) => a.chainage - b.chainage);
+  if (chainage < sorted[0].chainage || chainage > sorted[sorted.length - 1].chainage) return null;
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const a = sorted[i - 1];
+    const b = sorted[i];
+    if (chainage < a.chainage || chainage > b.chainage) continue;
+    const span = b.chainage - a.chainage;
+    const t = span === 0 ? 0 : (chainage - a.chainage) / span;
+    const centre: GridPosition = {
+      easting: a.easting + t * (b.easting - a.easting),
+      northing: a.northing + t * (b.northing - a.northing),
+    };
+    return applyOffset(centre, b.easting - a.easting, b.northing - a.northing, offset);
+  }
+  return null;
+}
+
 const finiteNumber = z.number().finite();
 
 export const controlPointSchema = z.object({

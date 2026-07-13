@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { fetchPlanSheet, useUpdatePlanSheet, type PlanSheetListItem } from './planSheetsData';
+import { useControlLines } from './controlLinesData';
 import { usePlanSheetImage } from './usePlanSheetImage';
 import {
   computeRegistration,
@@ -108,6 +109,10 @@ export function PlanSheetRegistrationModal({
   const updateCoord = (index: number, field: 'eastingText' | 'northingText', value: string) => {
     setPoints((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
   };
+
+  // CivilPro flags "click a chainage on a control line" as the fastest way to
+  // set a control point — offer it as an optional per-point entry mode.
+  const controlLinesQuery = useControlLines(projectId);
 
   const { fitPoints, indexMap } = useMemo(() => completePoints(points), [points]);
 
@@ -254,6 +259,8 @@ export function PlanSheetRegistrationModal({
           canSave={canSave}
           saving={updateMutation.isLoading}
           hasRegistration={sheet.hasRegistration}
+          controlLines={controlLinesQuery.data ?? []}
+          sheetCoordinateSystem={sheet.coordinateSystem}
           onRemovePoint={removePoint}
           onUpdateCoord={updateCoord}
           onSave={() => void handleSave()}

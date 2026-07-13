@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GeoJsonFeature, ProjectLotGeometry } from './lotMapData';
 import {
+  boundsHasArea,
   boundsToLatLngRect,
   collectLatLngs,
   computeBounds,
@@ -127,6 +128,20 @@ describe('cornersToBounds', () => {
     const a = cornersToBounds({ lat: -33.8, lng: 151.0 }, { lat: -33.81, lng: 151.01 });
     const b = cornersToBounds({ lat: -33.81, lng: 151.01 }, { lat: -33.8, lng: 151.0 });
     expect(a).toEqual(b);
+  });
+});
+
+describe('boundsHasArea', () => {
+  it('is true for a box with meaningful extent', () => {
+    expect(boundsHasArea({ west: 151.0, east: 151.01, south: -33.81, north: -33.8 })).toBe(true);
+  });
+
+  it('is false for a zero-area box (a bare tap/click)', () => {
+    expect(boundsHasArea({ west: 151.0, east: 151.0, south: -33.8, north: -33.8 })).toBe(false);
+  });
+
+  it('is false when only one axis has extent', () => {
+    expect(boundsHasArea({ west: 151.0, east: 151.01, south: -33.8, north: -33.8 })).toBe(false);
   });
 });
 

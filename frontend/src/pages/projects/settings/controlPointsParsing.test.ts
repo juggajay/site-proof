@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { controlLineFormSchema, parsePastedControlPoints } from './controlPointsParsing';
+import {
+  controlLineFormSchema,
+  hasSparseChainageGap,
+  parsePastedControlPoints,
+  positionFromChainage,
+} from './controlPointsParsing';
 
 describe('parsePastedControlPoints', () => {
   it('parses comma-separated rows', () => {
@@ -100,5 +105,69 @@ describe('controlLineFormSchema', () => {
       points: validPoints,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('hasSparseChainageGap', () => {
+  it('is false when all consecutive gaps are within the threshold', () => {
+    expect(hasSparseChainageGap([{ chainage: 0 }, { chainage: 50 }, { chainage: 120 }])).toBe(
+      false,
+    );
+  });
+
+  it('is true when any consecutive gap exceeds the threshold', () => {
+    expect(hasSparseChainageGap([{ chainage: 0 }, { chainage: 200 }])).toBe(true);
+  });
+
+  it('orders points by chainage before measuring gaps', () => {
+    expect(hasSparseChainageGap([{ chainage: 200 }, { chainage: 250 }, { chainage: 0 }])).toBe(
+      true,
+    );
+  });
+
+  it('ignores a boundary-exact 75 m gap (not "more than")', () => {
+    expect(hasSparseChainageGap([{ chainage: 0 }, { chainage: 75 }])).toBe(false);
+  });
+
+  it('honours a custom threshold', () => {
+    expect(hasSparseChainageGap([{ chainage: 0 }, { chainage: 40 }], 30)).toBe(true);
+  });
+});
+
+describe('positionFromChainage', () => {
+  const line = [
+    { chainage: 0, easting: 1000, northing: 2000 },
+    { chainage: 100, easting: 1100, northing: 2000 },
+  ];
+
+  it('interpolates linearly between bracketing vertices', () => {
+    expect(positionFromChainage(line, 50)).toEqual({ easting: 1050, northing: 2000 });
+  });
+
+  it('returns the vertex position at an endpoint', () => {
+    expect(positionFromChainage(line, 0)).toEqual({ easting: 1000, northing: 2000 });
+    expect(positionFromChainage(line, 100)).toEqual({ easting: 1100, northing: 2000 });
+  });
+
+  it('applies a positive offset to the LEFT of increasing chainage', () => {
+    // Tangent points +E (east). Left of travel is +N (north).
+    const p = positionFromChainage(line, 50, 10);
+    expect(p?.easting).toBeCloseTo(1050, 9);
+    expect(p?.northing).toBeCloseTo(2010, 9);
+  });
+
+  it('applies a negative offset to the right', () => {
+    const p = positionFromChainage(line, 50, -10);
+    expect(p?.northing).toBeCloseTo(1990, 9);
+  });
+
+  it('returns null when chainage is out of range', () => {
+    expect(positionFromChainage(line, -1)).toBeNull();
+    expect(positionFromChainage(line, 101)).toBeNull();
+  });
+
+  it('returns null with fewer than 2 points or a non-finite chainage', () => {
+    expect(positionFromChainage([{ chainage: 0, easting: 1, northing: 2 }], 0)).toBeNull();
+    expect(positionFromChainage(line, Number.NaN)).toBeNull();
   });
 });
