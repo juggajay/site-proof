@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createPlanSheet,
+  downloadDocumentFile,
   useDeletePlanSheet,
   usePlanSheets,
   usePlanSheetsAccess,
@@ -126,6 +127,28 @@ describe('planSheetsData hooks', () => {
         coordinateSystem: 'EPSG:7856',
       }),
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('downloadDocumentFile fetches document bytes via the authenticated file route', async () => {
+    const blob = new Blob(['%PDF-1.7'], { type: 'application/pdf' });
+    authFetchMock.mockResolvedValue({ ok: true, blob: async () => blob } as Response);
+
+    const documentFile = await downloadDocumentFile('doc-1', 'C-101 Rev D.pdf');
+
+    expect(authFetchMock).toHaveBeenCalledWith('/api/documents/file/doc-1');
+    expect(documentFile).toBeInstanceOf(File);
+    expect(documentFile.name).toBe('C-101 Rev D.pdf');
+    expect(documentFile.type).toBe('application/pdf');
+  });
+
+  it('downloadDocumentFile throws an ApiError on a non-OK response', async () => {
+    authFetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => 'denied',
+    } as Response);
+
+    await expect(downloadDocumentFile('doc-1', 'x.pdf')).rejects.toMatchObject({ status: 403 });
   });
 
   it('usePlanSheetsAccess grants write for a project_manager and denies a viewer', async () => {

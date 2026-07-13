@@ -12,10 +12,12 @@ import {
   ModalBody,
   ModalFooter,
 } from '@/components/ui/Modal';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { COORDINATE_SYSTEM_OPTIONS, isGda94 } from '@/lib/spatial/coordinateSystems';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { createPlanSheet, updatePlanSheet } from './planSheetsData';
+import { createPlanSheet, downloadDocumentFile, updatePlanSheet } from './planSheetsData';
+import { PlanSheetDocumentPicker, type PickerDocument } from './PlanSheetDocumentPicker';
 import { fileStem, pageSheetName } from './planSheetNaming';
 import {
   MAX_PDF_PAGES,
@@ -26,6 +28,7 @@ import {
 import { buildRegistration, detectGeorefs, type PageGeoref } from './geoPdf';
 
 type PageStatus = 'pending' | 'uploading' | 'done' | 'error';
+type SourceTab = 'upload' | 'documents';
 
 interface PlanSheetUploadModalProps {
   projectId: string;
@@ -73,7 +76,10 @@ export function PlanSheetUploadModal({
   onUploaded,
 }: PlanSheetUploadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sourceTab, setSourceTab] = useState<SourceTab>('upload');
   const [file, setFile] = useState<File | null>(null);
+  const [pickedDocumentId, setPickedDocumentId] = useState<string | null>(null);
+  const [loadingDocument, setLoadingDocument] = useState(false);
   const [name, setName] = useState('');
   const [coordinateSystem, setCoordinateSystem] = useState(defaultCoordinateSystem);
   const [preview, setPreview] = useState<PdfPreview | null>(null);
@@ -127,6 +133,24 @@ export function PlanSheetUploadModal({
     }
   };
 
+  const handleDocumentSelected = async (doc: PickerDocument) => {
+    setError(null);
+    setPickedDocumentId(doc.id);
+    setLoadingDocument(true);
+    try {
+      // Pull the stored PDF through the authenticated file route, then run it
+      // through the same client-side pipeline as a fresh upload.
+      const documentFile = await downloadDocumentFile(doc.id, doc.filename);
+      await handleFile(documentFile);
+    } catch (err) {
+      logError('Failed to load document for plan sheet:', err);
+      setError(extractErrorMessage(err, 'Could not load that document. Please try again.'));
+      setPickedDocumentId(null);
+    } finally {
+      setLoadingDocument(false);
+    }
+  };
+
   const togglePage = (n: number) => {
     setSelectedPages((prev) => {
       const next = new Set(prev);
@@ -141,11 +165,11 @@ export function PlanSheetUploadModal({
     [selectedPages],
   );
 
+  const busy = analysing || uploading || loadingDocument;
   const canSubmit =
     file != null &&
     name.trim().length > 0 &&
-    !analysing &&
-    !uploading &&
+    !busy &&
     (!pdfSelected || orderedSelectedPages.length > 0);
 
   const uploadImage = async () => {
@@ -231,27 +255,53 @@ export function PlanSheetUploadModal({
   return (
     <Modal
       onClose={() => {
-        if (!uploading && !analysing) onClose();
+        if (!busy) onClose();
       }}
       className="sm:max-w-2xl"
     >
       <ModalHeader>Add plan sheets</ModalHeader>
       <ModalDescription>
-        Upload a construction plan PDF (each selected page becomes a sheet) or a PNG/JPEG image.
+        Upload a construction plan PDF or PNG/JPEG image, or pick an existing project document. Each
+        selected PDF page becomes a sheet.
       </ModalDescription>
       <ModalBody>
         <div className="space-y-5">
           <div>
-            <Label className="mb-1">File *</Label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPT}
-              onChange={(e) => void handleFile(e.target.files?.[0])}
-              disabled={uploading}
-              className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
-              aria-label="Plan sheet file"
-            />
+            <Label className="mb-1">Source *</Label>
+            <Tabs value={sourceTab} onValueChange={(value) => setSourceTab(value as SourceTab)}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="upload" disabled={busy}>
+                  Upload file
+                </TabsTrigger>
+                <TabsTrigger value="documents" disabled={busy}>
+                  From documents
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="upload">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPT}
+                  onChange={(e) => void handleFile(e.target.files?.[0])}
+                  disabled={busy}
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+                  aria-label="Plan sheet file"
+                />
+              </TabsContent>
+              <TabsContent value="documents">
+                <PlanSheetDocumentPicker
+                  projectId={projectId}
+                  disabled={busy}
+                  selectedId={pickedDocumentId}
+                  onSelect={(doc) => void handleDocumentSelected(doc)}
+                />
+              </TabsContent>
+            </Tabs>
+            {loadingDocument && (
+              <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading document…
+              </p>
+            )}
             {analysing && (
               <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Reading PDF…
@@ -380,7 +430,7 @@ export function PlanSheetUploadModal({
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button type="button" variant="outline" onClick={onClose} disabled={uploading || analysing}>
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
           {summary ? 'Close' : 'Cancel'}
         </Button>
         <Button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit}>
