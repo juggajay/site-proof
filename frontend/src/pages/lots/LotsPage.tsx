@@ -1,10 +1,10 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/lib/auth';
-import { canCreateLots, canDeleteLots } from '@/lib/roles';
+import { canCreateLots, canDeleteLots, canManageProjectSettings } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard';
 import { ImportLotsModal } from '@/components/lots/ImportLotsModal';
@@ -37,6 +37,10 @@ import { BulkDeleteModal, BulkStatusModal, BulkAssignModal } from './components/
 import { useLotsData } from './hooks/useLotsData';
 import { useLotsActions } from './hooks/useLotsActions';
 import { parseColumnOrderPreference, parseColumnPreference } from './lotsPagePreferences';
+
+// Lazy so Leaflet (map engine + tiles) never enters the core/register bundle;
+// only loaded when the user switches to the map view.
+const LotMapView = lazy(() => import('./map/LotMapView').then((m) => ({ default: m.LotMapView })));
 
 const LOT_VIEW_MODE_STORAGE_KEY = 'siteproof_lot_view_mode';
 
@@ -111,9 +115,9 @@ export function LotsPage() {
   const canDelete = canDeleteLots(projectScopedRole);
 
   // View mode state
-  const [viewMode, setViewMode] = useState<'list' | 'card' | 'linear'>(() => {
+  const [viewMode, setViewMode] = useState<'list' | 'card' | 'linear' | 'map'>(() => {
     const stored = readLocalStorageItem(LOT_VIEW_MODE_STORAGE_KEY);
-    if (stored === 'card' || stored === 'linear') return stored;
+    if (stored === 'card' || stored === 'linear' || stored === 'map') return stored;
     return 'list';
   });
 
@@ -135,7 +139,10 @@ export function LotsPage() {
 
   const projectLabel = projectName || projectId || 'this project';
 
-  const toggleViewMode = (mode: 'list' | 'card' | 'linear') => {
+  const canManageSettings = canManageProjectSettings(projectScopedRole);
+  const filteredLotIds = useMemo(() => new Set(filteredLots.map((lot) => lot.id)), [filteredLots]);
+
+  const toggleViewMode = (mode: 'list' | 'card' | 'linear' | 'map') => {
     setViewMode(mode);
     actions.toggleViewMode(mode);
   };
@@ -395,6 +402,25 @@ export function LotsPage() {
               areas={projectAreas}
             />
           )}
+        </div>
+      )}
+
+      {/* Phase 2 - Satellite Basemap Map View */}
+      {!loading && !error && viewMode === 'map' && projectId && (
+        <div className="rounded-lg border overflow-hidden" data-testid="map-view">
+          <Suspense
+            fallback={
+              <div className="p-12 text-center text-sm text-muted-foreground" role="status">
+                Loading map…
+              </div>
+            }
+          >
+            <LotMapView
+              projectId={projectId}
+              filteredLotIds={filteredLotIds}
+              canManageSettings={canManageSettings}
+            />
+          </Suspense>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutGrid, LayoutList, MapPin } from 'lucide-react';
+import { LayoutGrid, LayoutList, Map as MapIcon, MapPin } from 'lucide-react';
 import {
   FilterBottomSheet,
   FilterTriggerButton,
@@ -77,8 +77,8 @@ interface LotFiltersBarProps {
   totalLots: number;
   filteredLotsCount: number;
   // View mode
-  viewMode: 'list' | 'card' | 'linear';
-  onToggleViewMode: (mode: 'list' | 'card' | 'linear') => void;
+  viewMode: 'list' | 'card' | 'linear' | 'map';
+  onToggleViewMode: (mode: 'list' | 'card' | 'linear' | 'map') => void;
   // Update filters
   onUpdateFilters: (params: Record<string, string>) => void;
   // Column config
@@ -473,6 +473,15 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
             data-testid="view-toggle-linear"
           >
             <MapPin className="h-4 w-4" />
+          </button>
+          {/* Phase 2 - Satellite Basemap Map View */}
+          <button
+            onClick={() => onToggleViewMode('map')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'map' ? 'bg-background shadow-sm' : 'hover:bg-muted'}`}
+            title="Satellite map view"
+            data-testid="view-toggle-map"
+          >
+            <MapIcon className="h-4 w-4" />
           </button>
         </div>
 
