@@ -33,6 +33,7 @@ import {
   CompanyOnboardingPage,
   CompanySettingsPage,
   ControlLinesPage,
+  PlanSheetsPage,
   CostsPage,
   DailyDiaryPage,
   DashboardPage,
@@ -356,6 +357,17 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <ControlLinesPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              {/* Plan sheets: same read/write split as control lines — any
+                  internal role reads; the page gates write actions (backend
+                  enforces owner/admin/project_manager). */}
+              <Route
+                path="/projects/:projectId/plan-sheets"
+                element={
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <PlanSheetsPage />
                   </ProjectProtectedRoute>
                 }
               />
