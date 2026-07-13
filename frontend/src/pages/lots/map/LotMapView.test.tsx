@@ -25,12 +25,34 @@ vi.mock('react-leaflet', () => {
     ),
     Popup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Tooltip: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Rectangle: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="rectangle">{children}</div>
+    ),
     useMap: () => ({ fitBounds: vi.fn() }),
   };
 });
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
+
+// Force desktop view so jsdom doesn't need a matchMedia polyfill.
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useMediaQuery')>();
+  return { ...actual, useIsMobile: () => false };
+});
+
+// The find-by-area mutation is exercised in its own tests; stub it here so
+// LotMapView renders without a QueryClientProvider.
+const spatialSearchMutation = {
+  mutate: vi.fn(),
+  reset: vi.fn(),
+  data: undefined,
+  isLoading: false,
+  error: null,
+};
+vi.mock('./spatialSearchData', () => ({
+  useSpatialSearch: () => spatialSearchMutation,
+}));
 
 const useProjectLotGeometries = vi.fn();
 const useProjectControlLines = vi.fn();

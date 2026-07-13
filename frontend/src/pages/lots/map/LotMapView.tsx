@@ -1,6 +1,6 @@
 import 'leaflet/dist/leaflet.css';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CircleMarker,
   LayersControl,
@@ -8,17 +8,22 @@ import {
   Polygon,
   Polyline,
   Popup,
+  Rectangle,
   TileLayer,
   Tooltip,
   useMap,
 } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Square } from 'lucide-react';
 
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
+import { AreaDrawLayer } from './AreaDrawLayer';
+import { FindByAreaPanel } from './FindByAreaPanel';
+import { useSpatialSearch } from './spatialSearchData';
 import {
   backfillLotGeometries,
   useProjectControlLines,
@@ -28,10 +33,12 @@ import {
 import {
   AU_DEFAULT_CENTER,
   AU_DEFAULT_ZOOM,
+  boundsToLatLngRect,
   computeBounds,
   featureToShape,
   filterGeometriesByLotIds,
   type LatLng,
+  type SearchBounds,
 } from './lotMapHelpers';
 
 const CONTROL_LINE_COLOR = '#f59e0b'; // amber — neutral against status fills
@@ -260,8 +267,39 @@ function EmptyStateCallout({
 
 export function LotMapView({ projectId, filteredLotIds, canManageSettings }: LotMapViewProps) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const geometriesQuery = useProjectLotGeometries(projectId);
   const controlLinesQuery = useProjectControlLines(projectId);
+
+  const search = useSpatialSearch(projectId);
+  const { mutate: runSearch, reset: resetSearch } = search;
+  const [drawArmed, setDrawArmed] = useState(false);
+  const [searchBounds, setSearchBounds] = useState<SearchBounds | null>(null);
+
+  const handleAreaComplete = useCallback(
+    (bounds: SearchBounds) => {
+      setSearchBounds(bounds);
+      setDrawArmed(false);
+      runSearch(bounds);
+    },
+    [runSearch],
+  );
+
+  const clearSearch = useCallback(() => {
+    setSearchBounds(null);
+    setDrawArmed(false);
+    resetSearch();
+  }, [resetSearch]);
+
+  // Escape cancels an armed draw.
+  useEffect(() => {
+    if (!drawArmed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawArmed(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawArmed]);
 
   const allGeometries = geometriesQuery.data?.geometries;
   const controlLines = useMemo(
@@ -336,62 +374,111 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
               No lots in the current filter have geometry.
             </p>
           )}
-          <MapContainer
-            center={AU_DEFAULT_CENTER}
-            zoom={AU_DEFAULT_ZOOM}
-            scrollWheelZoom
-            style={{ height: 520, width: '100%' }}
-            data-testid="lot-map-container"
-          >
-            <LayersControl position="topright">
-              {MAPTILER_KEY && (
-                <LayersControl.BaseLayer checked name="Satellite">
+          <div className="relative">
+            <div className="absolute left-3 top-3 z-[1000] pointer-events-auto">
+              <button
+                type="button"
+                onClick={() =>
+                  drawArmed ? setDrawArmed(false) : (clearSearch(), setDrawArmed(true))
+                }
+                aria-pressed={drawArmed}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
+                  drawArmed ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+                }`}
+                data-testid="find-by-area-button"
+              >
+                <Square className="h-3.5 w-3.5" />
+                {drawArmed ? 'Cancel' : 'Find by area'}
+              </button>
+              {drawArmed && (
+                <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
+                  Drag a box on the map. Press Esc to cancel.
+                </p>
+              )}
+            </div>
+
+            <MapContainer
+              center={AU_DEFAULT_CENTER}
+              zoom={AU_DEFAULT_ZOOM}
+              scrollWheelZoom
+              style={{ height: 520, width: '100%' }}
+              data-testid="lot-map-container"
+            >
+              <LayersControl position="topright">
+                {MAPTILER_KEY && (
+                  <LayersControl.BaseLayer checked name="Satellite">
+                    <TileLayer
+                      url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`}
+                      attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      maxZoom={20}
+                    />
+                  </LayersControl.BaseLayer>
+                )}
+                <LayersControl.BaseLayer checked={!MAPTILER_KEY} name="Street">
                   <TileLayer
-                    url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`}
-                    attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    maxZoom={20}
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    maxZoom={19}
                   />
                 </LayersControl.BaseLayer>
-              )}
-              <LayersControl.BaseLayer checked={!MAPTILER_KEY} name="Street">
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  maxZoom={19}
+              </LayersControl>
+
+              <FitBounds bounds={bounds} />
+
+              {controlLines.map((line) => {
+                const shape = featureToShape(line.geometryWgs84);
+                if (!shape || shape.kind !== 'line') return null;
+                return (
+                  <Polyline
+                    key={line.id}
+                    positions={shape.positions}
+                    pathOptions={{ color: CONTROL_LINE_COLOR, weight: 2, dashArray: '6 4' }}
+                  >
+                    <Tooltip sticky>{line.name}</Tooltip>
+                  </Polyline>
+                );
+              })}
+
+              {filteredGeometries.map((geometry) => (
+                <LotGeometryLayer
+                  key={geometry.id}
+                  geometry={geometry}
+                  onViewDetails={() =>
+                    navigate(
+                      `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(
+                        geometry.lotId,
+                      )}`,
+                    )
+                  }
                 />
-              </LayersControl.BaseLayer>
-            </LayersControl>
+              ))}
 
-            <FitBounds bounds={bounds} />
+              <AreaDrawLayer active={drawArmed} onComplete={handleAreaComplete} />
+              {searchBounds && (
+                <Rectangle
+                  bounds={boundsToLatLngRect(searchBounds)}
+                  pathOptions={{
+                    color: '#2563eb',
+                    weight: 2,
+                    fillColor: '#2563eb',
+                    fillOpacity: 0.08,
+                  }}
+                />
+              )}
+            </MapContainer>
 
-            {controlLines.map((line) => {
-              const shape = featureToShape(line.geometryWgs84);
-              if (!shape || shape.kind !== 'line') return null;
-              return (
-                <Polyline
-                  key={line.id}
-                  positions={shape.positions}
-                  pathOptions={{ color: CONTROL_LINE_COLOR, weight: 2, dashArray: '6 4' }}
-                >
-                  <Tooltip sticky>{line.name}</Tooltip>
-                </Polyline>
-              );
-            })}
-
-            {filteredGeometries.map((geometry) => (
-              <LotGeometryLayer
-                key={geometry.id}
-                geometry={geometry}
-                onViewDetails={() =>
-                  navigate(
-                    `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(
-                      geometry.lotId,
-                    )}`,
-                  )
-                }
+            {searchBounds && (
+              <FindByAreaPanel
+                projectId={projectId}
+                result={search.data}
+                isLoading={search.isLoading}
+                error={search.error}
+                isMobile={isMobile}
+                onClear={clearSearch}
+                onRetry={() => runSearch(searchBounds)}
               />
-            ))}
-          </MapContainer>
+            )}
+          </div>
           <StatusLegend />
         </>
       )}
