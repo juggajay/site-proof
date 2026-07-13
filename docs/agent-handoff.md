@@ -707,11 +707,27 @@ Status: closed — fully built, reviewed, merged, and live-verified on prod.
 - Live prod verification: coverage maths exact on SYD-roads; full
   drawings-first loop proven on a QA project (upload → register RMS 0.00 m →
   rotated overlay on satellite → draw lot → assign → drawn geometry 201).
-- Known limits (deliberate): registration clicks outside the sheet record
-  negative pixels (harmless, affine extrapolates); ObjStm-compressed GeoPDF
-  page dicts fall back to manual registration; touch box-draw verified by
-  construction, not on physical hardware; Phase 5 parked (time scrubber,
-  DXF/LandXML, offline tiles).
+- Polish wave 2026-07-14 (#1433–#1438), Jay's "completely finished, all the
+  bells and whistles" directive: paper-blend overlays (white→alpha keying in
+  canvas — deliberately NOT CSS mix-blend-mode, snapshots don't honour it;
+  default on, Plans-panel toggle), guided perimeter step after first
+  registration, registration clicks outside the sheet now ignored, plan
+  sheets from existing project documents (authenticated file route only),
+  LandXML/DXF control-line import (arcs densified to ≤2 m sagitta, chainage
+  from true arc length, spirals rejected loudly; LandXML PntList2D is
+  "northing easting"), map time scrubber (per-lot status replay from
+  AuditLog; claims create/delete and ITP auto-progression previously changed
+  lot.status with NO audit row — LOT_STATUS_CHANGED now written at all three
+  sites, client clamps today to live status), mobile map pass + the mobile
+  register view switcher (#1438 — the map views were previously unreachable
+  on phones). All live-verified on prod via the QA-owner harness (note: the
+  QA owner has no SYD-roads membership — QA scripts must target the QA
+  DOGFOOD project).
+- Known limits (deliberate): ObjStm-compressed GeoPDF page dicts fall back
+  to manual registration; touch interactions verified by browser emulation,
+  not physical hardware; offline map tiles skipped by explicit product
+  decision; plan-sheet document picker searches the most-recent 100 project
+  PDFs client-side.
 
 ## Open Follow-Ups
 
