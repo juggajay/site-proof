@@ -149,6 +149,22 @@ export async function createPlanSheet(
 }
 
 /**
+ * Imperative PATCH for the upload flow (georeference auto-registration), which
+ * runs outside React Query's hook lifecycle. Mirrors useUpdatePlanSheet's call.
+ */
+export async function updatePlanSheet(
+  projectId: string,
+  id: string,
+  input: UpdatePlanSheetInput,
+): Promise<PlanSheet> {
+  const data = await apiFetch<{ planSheet: PlanSheet }>(
+    `${planSheetsPath(projectId)}/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+  return data.planSheet;
+}
+
+/**
  * Write/read capability from the project's server-derived role — identical
  * gating to control lines (owner/admin/project_manager write; any internal role
  * reads). The backend is the real trust boundary; this only shapes the UI.
