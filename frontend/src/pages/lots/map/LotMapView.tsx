@@ -1,0 +1,402 @@
+import 'leaflet/dist/leaflet.css';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  CircleMarker,
+  LayersControl,
+  MapContainer,
+  Polygon,
+  Polyline,
+  Popup,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from 'react-leaflet';
+import { useNavigate } from 'react-router-dom';
+import { ExternalLink } from 'lucide-react';
+
+import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
+import { formatStatusLabel } from '@/lib/statusLabels';
+import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
+
+import {
+  backfillLotGeometries,
+  useProjectControlLines,
+  useProjectLotGeometries,
+  type ProjectLotGeometry,
+} from './lotMapData';
+import {
+  AU_DEFAULT_CENTER,
+  AU_DEFAULT_ZOOM,
+  computeBounds,
+  featureToShape,
+  filterGeometriesByLotIds,
+  type LatLng,
+} from './lotMapHelpers';
+
+const CONTROL_LINE_COLOR = '#f59e0b'; // amber — neutral against status fills
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
+
+interface LotMapViewProps {
+  projectId: string;
+  filteredLotIds: Set<string>;
+  canManageSettings: boolean;
+}
+
+function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds) {
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
+    }
+  }, [map, bounds]);
+  return null;
+}
+
+function LotPopup({
+  geometry,
+  onViewDetails,
+}: {
+  geometry: ProjectLotGeometry;
+  onViewDetails: () => void;
+}) {
+  return (
+    <Popup>
+      <div className="min-w-[180px]" data-testid={`lot-popup-${geometry.lotId}`}>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block w-3 h-3 rounded"
+            style={{ backgroundColor: getStatusColor(geometry.status) }}
+          />
+          <span className="font-semibold">{geometry.lotNumber}</span>
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {formatStatusLabel(geometry.status)}
+          {geometry.activityType ? ` · ${geometry.activityType}` : ''}
+        </div>
+        {(geometry.areaM2 != null || geometry.lengthM != null) && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            {geometry.areaM2 != null && (
+              <span>{Math.round(geometry.areaM2).toLocaleString()} m²</span>
+            )}
+            {geometry.areaM2 != null && geometry.lengthM != null && <span> · </span>}
+            {geometry.lengthM != null && (
+              <span>{Math.round(geometry.lengthM).toLocaleString()} m</span>
+            )}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onViewDetails}
+          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          data-testid={`lot-popup-view-${geometry.lotId}`}
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> View Details
+        </button>
+      </div>
+    </Popup>
+  );
+}
+
+// One lot geometry as the right Leaflet layer for its GeoJSON type, coloured by
+// canonical lot status. Popup content mirrors LinearMapView's.
+function LotGeometryLayer({
+  geometry,
+  onViewDetails,
+}: {
+  geometry: ProjectLotGeometry;
+  onViewDetails: () => void;
+}) {
+  const shape = featureToShape(geometry.geometryWgs84);
+  if (!shape) return null;
+
+  const color = getStatusColor(geometry.status);
+  const pathOptions = { color, weight: 2, fillColor: color, fillOpacity: 0.4 };
+  const popup = <LotPopup geometry={geometry} onViewDetails={onViewDetails} />;
+
+  if (shape.kind === 'polygon') {
+    return (
+      <Polygon positions={shape.positions} pathOptions={pathOptions}>
+        {popup}
+      </Polygon>
+    );
+  }
+  if (shape.kind === 'line') {
+    return (
+      <Polyline positions={shape.positions} pathOptions={{ color, weight: 4 }}>
+        {popup}
+      </Polyline>
+    );
+  }
+  return (
+    <CircleMarker center={shape.position} radius={7} pathOptions={pathOptions}>
+      {popup}
+    </CircleMarker>
+  );
+}
+
+function StatusLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-3 p-3 border-t bg-muted/20 text-xs">
+      <span className="font-medium">Status:</span>
+      {LOT_STATUS_LEGEND.map(({ key, label }) => (
+        <div key={key} className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded" style={{ backgroundColor: getStatusColor(key) }} />
+          <span>{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Self-bootstrapping empty state: with a control line and a write role, offer to
+// generate geometries from lot chainage; otherwise point at settings.
+function EmptyStateCallout({
+  projectId,
+  hasControlLines,
+  controlLineId,
+  canManageSettings,
+  onBackfilled,
+}: {
+  projectId: string;
+  hasControlLines: boolean;
+  controlLineId: string | null;
+  canManageSettings: boolean;
+  onBackfilled: () => void;
+}) {
+  const [offsetLeft, setOffsetLeft] = useState(6);
+  const [offsetRight, setOffsetRight] = useState(6);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const runBackfill = async () => {
+    if (!controlLineId) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await backfillLotGeometries(projectId, controlLineId, {
+        offsetLeft,
+        offsetRight,
+      });
+      const skippedNote = result.skipped.length > 0 ? `, ${result.skipped.length} skipped` : '';
+      setMessage(
+        `Generated ${result.created} lot geometr${result.created === 1 ? 'y' : 'ies'}${skippedNote}.`,
+      );
+      onBackfilled();
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Could not generate lot geometries. Please try again.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="p-8 text-center" data-testid="lot-map-empty">
+      <h3 className="text-lg font-semibold text-foreground">No lots on the map yet</h3>
+      {hasControlLines && canManageSettings ? (
+        <div className="mt-3 max-w-md mx-auto text-left">
+          <p className="text-sm text-muted-foreground">
+            Generate lot footprints from each lot&apos;s chainage against your control line. Adjust
+            the default offsets (metres either side) if needed.
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="block text-xs text-muted-foreground">Offset left (m)</span>
+              <input
+                type="number"
+                min={0}
+                value={offsetLeft}
+                onChange={(e) => setOffsetLeft(Number(e.target.value))}
+                className="mt-1 w-24 rounded border px-2 py-1"
+                data-testid="backfill-offset-left"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="block text-xs text-muted-foreground">Offset right (m)</span>
+              <input
+                type="number"
+                min={0}
+                value={offsetRight}
+                onChange={(e) => setOffsetRight(Number(e.target.value))}
+                className="mt-1 w-24 rounded border px-2 py-1"
+                data-testid="backfill-offset-right"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={runBackfill}
+              disabled={busy}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              data-testid="backfill-run"
+            >
+              {busy ? 'Generating…' : 'Generate geometries'}
+            </button>
+          </div>
+          {message && <p className="mt-2 text-sm text-success">{message}</p>}
+          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        </div>
+      ) : hasControlLines ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Lot geometries have not been generated yet. Ask a project manager to generate them from
+          the control line.
+        </p>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Add a control line in{' '}
+          <a
+            href={`/projects/${encodeURIComponent(projectId)}/settings`}
+            className="text-primary hover:underline"
+          >
+            Project Settings → Control Lines
+          </a>{' '}
+          to place lots on the map.
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function LotMapView({ projectId, filteredLotIds, canManageSettings }: LotMapViewProps) {
+  const navigate = useNavigate();
+  const geometriesQuery = useProjectLotGeometries(projectId);
+  const controlLinesQuery = useProjectControlLines(projectId);
+
+  const allGeometries = geometriesQuery.data?.geometries;
+  const controlLines = useMemo(
+    () => controlLinesQuery.data?.controlLines ?? [],
+    [controlLinesQuery.data],
+  );
+
+  const filteredGeometries = useMemo(
+    () => filterGeometriesByLotIds(allGeometries ?? [], filteredLotIds),
+    [allGeometries, filteredLotIds],
+  );
+
+  const bounds = useMemo(
+    () =>
+      computeBounds([
+        ...filteredGeometries.map((g) => g.geometryWgs84),
+        ...controlLines.map((c) => c.geometryWgs84),
+      ]),
+    [filteredGeometries, controlLines],
+  );
+
+  if (geometriesQuery.isLoading || controlLinesQuery.isLoading) {
+    return (
+      <div className="p-12 text-center text-sm text-muted-foreground" role="status">
+        Loading map…
+      </div>
+    );
+  }
+
+  if (geometriesQuery.error) {
+    const denied = isForbidden(geometriesQuery.error);
+    return (
+      <div className="p-8 text-center" role="alert">
+        <p className="font-medium text-destructive">Could not load the map</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {denied
+            ? 'You do not have access to this project’s lot geometries.'
+            : extractErrorMessage(geometriesQuery.error, 'Please try again.')}
+        </p>
+        {!denied && (
+          <button
+            type="button"
+            onClick={() => geometriesQuery.refetch()}
+            className="mt-3 rounded-md border px-4 py-2 text-sm hover:bg-muted"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const showEmptyState = filteredGeometries.length === 0;
+
+  return (
+    <div className="bg-background" data-testid="lot-map-view">
+      {showEmptyState && (allGeometries?.length ?? 0) === 0 ? (
+        <EmptyStateCallout
+          projectId={projectId}
+          hasControlLines={controlLines.length > 0}
+          controlLineId={controlLines[0]?.id ?? null}
+          canManageSettings={canManageSettings}
+          onBackfilled={() => geometriesQuery.refetch()}
+        />
+      ) : (
+        <>
+          {showEmptyState && (
+            <p
+              className="p-3 text-center text-sm text-muted-foreground border-b"
+              data-testid="lot-map-filtered-empty"
+            >
+              No lots in the current filter have geometry.
+            </p>
+          )}
+          <MapContainer
+            center={AU_DEFAULT_CENTER}
+            zoom={AU_DEFAULT_ZOOM}
+            scrollWheelZoom
+            style={{ height: 520, width: '100%' }}
+            data-testid="lot-map-container"
+          >
+            <LayersControl position="topright">
+              {MAPTILER_KEY && (
+                <LayersControl.BaseLayer checked name="Satellite">
+                  <TileLayer
+                    url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`}
+                    attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    maxZoom={20}
+                  />
+                </LayersControl.BaseLayer>
+              )}
+              <LayersControl.BaseLayer checked={!MAPTILER_KEY} name="Street">
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  maxZoom={19}
+                />
+              </LayersControl.BaseLayer>
+            </LayersControl>
+
+            <FitBounds bounds={bounds} />
+
+            {controlLines.map((line) => {
+              const shape = featureToShape(line.geometryWgs84);
+              if (!shape || shape.kind !== 'line') return null;
+              return (
+                <Polyline
+                  key={line.id}
+                  positions={shape.positions}
+                  pathOptions={{ color: CONTROL_LINE_COLOR, weight: 2, dashArray: '6 4' }}
+                >
+                  <Tooltip sticky>{line.name}</Tooltip>
+                </Polyline>
+              );
+            })}
+
+            {filteredGeometries.map((geometry) => (
+              <LotGeometryLayer
+                key={geometry.id}
+                geometry={geometry}
+                onViewDetails={() =>
+                  navigate(
+                    `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(
+                      geometry.lotId,
+                    )}`,
+                  )
+                }
+              />
+            ))}
+          </MapContainer>
+          <StatusLegend />
+        </>
+      )}
+    </div>
+  );
+}
+
+export default LotMapView;

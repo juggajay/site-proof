@@ -8,6 +8,8 @@ export const queryKeys = {
   // Lots
   lots: (projectId: string) => ['lots', projectId] as const,
   lot: (id: string) => ['lot', id] as const,
+  projectLotGeometries: (projectId: string) => ['project-lot-geometries', projectId] as const,
+  controlLines: (projectId: string) => ['control-lines', projectId] as const,
   lotReadiness: (id: string) => ['lot-readiness', id] as const,
   lotQualityAccess: (projectId: string) => ['lot-quality-access', projectId] as const,
 

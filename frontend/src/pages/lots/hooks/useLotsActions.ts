@@ -91,7 +91,7 @@ export function useLotsActions({
     [searchParams, updateFilters],
   );
 
-  const toggleViewMode = useCallback((mode: 'list' | 'card' | 'linear') => {
+  const toggleViewMode = useCallback((mode: 'list' | 'card' | 'linear' | 'map') => {
     writeLocalStorageItem('siteproof_lot_view_mode', mode);
   }, []);
 
