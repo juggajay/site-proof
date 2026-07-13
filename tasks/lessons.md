@@ -184,3 +184,18 @@ serial-skipped successors of a failed test; the true breakage is the chain.
 (3) When piping `gh run watch`/`gh pr checks` through `tail`, the pipe eats
 the exit code — verify with `--json conclusion` afterwards, never trust the
 pipeline's exit status.
+
+## 2026-07-13 — feature-gap verification must include the frontend components
+Competitive research flagged "lot map view" as SiteProof's biggest gap vs
+CivilPro. The false-gap check verified schema fields (chainage exists) and
+backend routes, then recommended building the view — but it was already
+shipped: `frontend/src/components/lots/LinearMapView.tsx`, the third view
+toggle on the Lot Register, with zoom/pan/print/area highlighting. Jay
+caught it with a screenshot.
+**Rules:** (1) Before declaring a UI capability a gap, grep
+`frontend/src/components/` and `frontend/src/pages/` for it — schema+routes
+checks only prove the data layer. (2) A feature reachable only via an icon
+toggle won't show up in a page-name scan; grep for domain words (map,
+matrix, gantt, board) too. (3) Same class as the "verify map/report premises
+before building" lesson: the cheapest verification is asking "where would
+this live if it existed?" and looking there first.
