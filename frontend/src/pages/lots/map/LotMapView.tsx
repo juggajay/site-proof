@@ -14,7 +14,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Square } from 'lucide-react';
+import { ExternalLink, Layers, Square } from 'lucide-react';
 
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -23,7 +23,14 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
 import { FindByAreaPanel } from './FindByAreaPanel';
+import { CoveragePanel } from './CoveragePanel';
 import { useSpatialSearch } from './spatialSearchData';
+import {
+  ALL_WORK_TYPES,
+  selectCoverageGroup,
+  useProjectCoverage,
+  type CoverageGap,
+} from './coverageData';
 import {
   backfillLotGeometries,
   useProjectControlLines,
@@ -42,6 +49,9 @@ import {
 } from './lotMapHelpers';
 
 const CONTROL_LINE_COLOR = '#f59e0b'; // amber — neutral against status fills
+// Gap overlay: dashed red outline + light red fill (see PR note — SVG hatch
+// patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
+const GAP_COLOR = '#dc2626';
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
 
 interface LotMapViewProps {
@@ -276,6 +286,11 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
   const [drawArmed, setDrawArmed] = useState(false);
   const [searchBounds, setSearchBounds] = useState<SearchBounds | null>(null);
 
+  const [coverageArmed, setCoverageArmed] = useState(false);
+  const [coverageSelection, setCoverageSelection] = useState<Record<string, string>>({});
+  const [gapFocusBounds, setGapFocusBounds] = useState<[LatLng, LatLng] | null>(null);
+  const coverageQuery = useProjectCoverage(projectId, coverageArmed);
+
   const handleAreaComplete = useCallback(
     (bounds: SearchBounds) => {
       setSearchBounds(bounds);
@@ -290,6 +305,30 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
     setDrawArmed(false);
     resetSearch();
   }, [resetSearch]);
+
+  // Find-by-area and Coverage are mutually exclusive tools — arming one disarms
+  // the other so their overlays and panels never fight for the map.
+  const armFindByArea = useCallback(() => {
+    if (drawArmed) {
+      setDrawArmed(false);
+      return;
+    }
+    clearSearch();
+    setCoverageArmed(false);
+    setGapFocusBounds(null);
+    setDrawArmed(true);
+  }, [drawArmed, clearSearch]);
+
+  const toggleCoverage = useCallback(() => {
+    setCoverageArmed((armed) => {
+      if (armed) {
+        setGapFocusBounds(null);
+        return false;
+      }
+      clearSearch();
+      return true;
+    });
+  }, [clearSearch]);
 
   // Escape cancels an armed draw.
   useEffect(() => {
@@ -317,6 +356,31 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
       ]),
     [filteredGeometries, controlLines],
   );
+
+  const coverageLines = useMemo(() => coverageQuery.data?.controlLines ?? [], [coverageQuery.data]);
+
+  // Gap polygons for each line's currently-selected work type (default "All work
+  // types"), flattened for rendering as hatched overlays.
+  const coverageGaps = useMemo(() => {
+    if (!coverageArmed) return [];
+    const out: { key: string; shape: ReturnType<typeof featureToShape> }[] = [];
+    for (const line of coverageLines) {
+      if (!line.groups) continue;
+      const group = selectCoverageGroup(line, coverageSelection[line.id] ?? ALL_WORK_TYPES);
+      if (!group) continue;
+      for (const gap of group.gaps) {
+        out.push({
+          key: `${line.id}-${gap.start}-${gap.end}`,
+          shape: featureToShape(gap.polygonWgs84),
+        });
+      }
+    }
+    return out;
+  }, [coverageArmed, coverageLines, coverageSelection]);
+
+  const handleGapClick = useCallback((gap: CoverageGap) => {
+    setGapFocusBounds(computeBounds([gap.polygonWgs84]));
+  }, []);
 
   if (geometriesQuery.isLoading || controlLinesQuery.isLoading) {
     return (
@@ -373,20 +437,36 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
           )}
           <div className="relative">
             <div className="absolute left-3 top-3 z-[1000] pointer-events-auto">
-              <button
-                type="button"
-                onClick={() =>
-                  drawArmed ? setDrawArmed(false) : (clearSearch(), setDrawArmed(true))
-                }
-                aria-pressed={drawArmed}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
-                  drawArmed ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
-                }`}
-                data-testid="find-by-area-button"
-              >
-                <Square className="h-3.5 w-3.5" />
-                {drawArmed ? 'Cancel' : 'Find by area'}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={armFindByArea}
+                  aria-pressed={drawArmed}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
+                    drawArmed
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-muted'
+                  }`}
+                  data-testid="find-by-area-button"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                  {drawArmed ? 'Cancel' : 'Find by area'}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleCoverage}
+                  aria-pressed={coverageArmed}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
+                    coverageArmed
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-muted'
+                  }`}
+                  data-testid="coverage-button"
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Coverage
+                </button>
+              </div>
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
                   Drag a box on the map. Press Esc to cancel.
@@ -450,6 +530,24 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
                 />
               ))}
 
+              {coverageArmed &&
+                coverageGaps.map(({ key, shape }) =>
+                  shape && shape.kind === 'polygon' ? (
+                    <Polygon
+                      key={key}
+                      positions={shape.positions}
+                      pathOptions={{
+                        color: GAP_COLOR,
+                        weight: 2,
+                        dashArray: '6 4',
+                        fillColor: GAP_COLOR,
+                        fillOpacity: 0.2,
+                      }}
+                    />
+                  ) : null,
+                )}
+              {coverageArmed && <FitBounds bounds={gapFocusBounds} />}
+
               <AreaDrawLayer active={drawArmed} onComplete={handleAreaComplete} />
               {searchBounds && (
                 <Rectangle
@@ -473,6 +571,22 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
                 isMobile={isMobile}
                 onClear={clearSearch}
                 onRetry={() => runSearch(searchBounds)}
+              />
+            )}
+
+            {coverageArmed && (
+              <CoveragePanel
+                lines={coverageLines}
+                isLoading={coverageQuery.isLoading}
+                error={coverageQuery.error}
+                isMobile={isMobile}
+                selection={coverageSelection}
+                onSelectActivity={(lineId, activityType) =>
+                  setCoverageSelection((prev) => ({ ...prev, [lineId]: activityType }))
+                }
+                onGapClick={handleGapClick}
+                onClear={() => toggleCoverage()}
+                onRetry={() => coverageQuery.refetch()}
               />
             )}
           </div>

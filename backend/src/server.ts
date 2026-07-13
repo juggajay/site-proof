@@ -17,6 +17,7 @@ import diaryRouter from './routes/diary/index.js';
 import claimsRouter from './routes/claims.js';
 import { controlLinesRouter } from './routes/controlLines/index.js';
 import { planSheetsRouter } from './routes/planSheets/index.js';
+import { projectCoverageRouter } from './routes/projectCoverage.js';
 import { projectLotGeometriesRouter } from './routes/projectLotGeometries.js';
 import { spatialSearchRouter } from './routes/spatialSearch.js';
 import { holdpointsRouter } from './routes/holdpoints.js';
@@ -142,6 +143,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/projects', claimsRouter);
   app.use('/api/projects', controlLinesRouter);
   app.use('/api/projects', planSheetsRouter);
+  app.use('/api/projects', projectCoverageRouter);
   app.use('/api/projects', projectLotGeometriesRouter);
   app.use('/api/projects', spatialSearchRouter);
   app.use('/api/holdpoints', holdpointsRouter);
