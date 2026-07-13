@@ -18,6 +18,7 @@ import claimsRouter from './routes/claims.js';
 import { controlLinesRouter } from './routes/controlLines/index.js';
 import { planSheetsRouter } from './routes/planSheets/index.js';
 import { projectLotGeometriesRouter } from './routes/projectLotGeometries.js';
+import { spatialSearchRouter } from './routes/spatialSearch.js';
 import { holdpointsRouter } from './routes/holdpoints.js';
 import { docketsRouter } from './routes/dockets.js';
 import { companyRouter } from './routes/company.js';
@@ -142,6 +143,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/projects', controlLinesRouter);
   app.use('/api/projects', planSheetsRouter);
   app.use('/api/projects', projectLotGeometriesRouter);
+  app.use('/api/projects', spatialSearchRouter);
   app.use('/api/holdpoints', holdpointsRouter);
   app.use('/api/dockets', docketsRouter);
   app.use('/api/company', companyRouter);
