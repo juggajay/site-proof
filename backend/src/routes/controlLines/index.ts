@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { ControlLine } from '@prisma/client';
+import type { ControlLine, Prisma } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -10,6 +10,7 @@ import {
 } from '../../lib/projectAccess.js';
 import { ROLES } from '../../lib/roles.js';
 import { controlLineToWgs84, type ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
+import { generateChainageOffsetPolygon } from '../../lib/spatial/lotGeometry.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
   cleanSetoutCandidate,
@@ -17,6 +18,7 @@ import {
   setoutUpload,
 } from './setoutExtraction.js';
 import {
+  backfillLotGeometriesSchema,
   createControlLineSchema,
   parseProjectRouteParam,
   updateControlLineSchema,
@@ -48,6 +50,70 @@ function mapControlLine(line: ControlLine) {
 // Derived WGS84 LineString cache; also validates the EPSG code + point set.
 function deriveGeometry(coordinateSystem: string, points: ControlPoint[]) {
   return controlLineToWgs84(coordinateSystem, points) as unknown as object;
+}
+
+interface BackfillCandidate {
+  id: string;
+  lotNumber: string;
+  chainageStart: unknown;
+  chainageEnd: unknown;
+}
+
+interface BackfillArgs {
+  points: ControlPoint[];
+  epsg: string;
+  controlLineId: string;
+  offsetLeft: number;
+  offsetRight: number;
+}
+
+// One backfilled lot geometry row. Generator range failures (throw AppError)
+// bubble to the caller, which records them as skipped lots.
+function buildBackfillRow(
+  lot: BackfillCandidate,
+  args: BackfillArgs,
+): Prisma.LotGeometryCreateManyInput {
+  const chainageStart = Number(lot.chainageStart);
+  const chainageEnd = Number(lot.chainageEnd);
+  const generated = generateChainageOffsetPolygon({
+    points: args.points,
+    epsg: args.epsg,
+    chainageStart,
+    chainageEnd,
+    offsetLeft: args.offsetLeft,
+    offsetRight: args.offsetRight,
+  });
+  return {
+    lotId: lot.id,
+    kind: 'chainage_offset',
+    controlLineId: args.controlLineId,
+    chainageStart,
+    chainageEnd,
+    offsetLeft: args.offsetLeft,
+    offsetRight: args.offsetRight,
+    geometryWgs84: generated.feature as unknown as Prisma.InputJsonValue,
+    areaM2: generated.areaM2,
+    lengthM: generated.lengthM,
+  };
+}
+
+// Split candidate lots into insertable rows and skip records (out-of-range
+// chainage etc.). A generator AppError skips just that lot; anything else throws.
+function planBackfill(lots: BackfillCandidate[], args: BackfillArgs) {
+  const rows: Prisma.LotGeometryCreateManyInput[] = [];
+  const skipped: { lotId: string; lotNumber: string; reason: string }[] = [];
+  for (const lot of lots) {
+    try {
+      rows.push(buildBackfillRow(lot, args));
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 400) {
+        skipped.push({ lotId: lot.id, lotNumber: lot.lotNumber, reason: err.message });
+        continue;
+      }
+      throw err;
+    }
+  }
+  return { rows, skipped };
 }
 
 controlLinesRouter.get(
@@ -124,6 +190,67 @@ controlLinesRouter.post(
     const candidate = cleanSetoutCandidate(raw);
 
     res.json({ candidate });
+  }),
+);
+
+// Backfill chainage_offset lot geometries for every chainaged lot in the project
+// that does not already have one. Registered BEFORE the `/:id` routes: this is a
+// more specific path, and keeping it first is defensive against route shadowing.
+controlLinesRouter.post(
+  '/:projectId/control-lines/:id/backfill-lot-geometries',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    const id = parseProjectRouteParam(req.params.id, 'id');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      WRITE_ROLES,
+      WRITE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+
+    const validation = backfillLotGeometriesSchema.safeParse(req.body);
+    if (!validation.success) {
+      throw AppError.fromZodError(validation.error);
+    }
+    const offsetLeft = validation.data.offsetLeft ?? 0;
+    const offsetRight = validation.data.offsetRight ?? 0;
+
+    const controlLine = await prisma.controlLine.findFirst({
+      where: { id, projectId },
+      select: { id: true, coordinateSystem: true, points: true },
+    });
+    if (!controlLine) {
+      throw AppError.notFound('Control line');
+    }
+    const points = controlLine.points as unknown as ControlPoint[];
+    const epsg = controlLine.coordinateSystem;
+
+    // Chainaged lots with no existing chainage_offset geometry — the `none`
+    // filter is what makes a second run a no-op (idempotent).
+    const lots = await prisma.lot.findMany({
+      where: {
+        projectId,
+        chainageStart: { not: null },
+        chainageEnd: { not: null },
+        geometries: { none: { kind: 'chainage_offset' } },
+      },
+      select: { id: true, lotNumber: true, chainageStart: true, chainageEnd: true },
+    });
+
+    const { rows, skipped } = planBackfill(lots, {
+      points,
+      epsg,
+      controlLineId: id,
+      offsetLeft,
+      offsetRight,
+    });
+
+    if (rows.length > 0) {
+      await prisma.lotGeometry.createMany({ data: rows });
+    }
+
+    res.json({ created: rows.length, skipped });
   }),
 );
 
