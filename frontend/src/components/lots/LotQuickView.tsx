@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 
 interface LotQuickViewProps {
   lotId: string;
@@ -42,15 +43,6 @@ interface LotDetails {
     documents: number;
   };
 }
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  conformed: 'bg-green-200 text-green-900',
-  on_hold: 'bg-red-100 text-red-800',
-  claimed: 'bg-purple-100 text-purple-800',
-};
 
 export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickViewProps) {
   const navigate = useNavigate();
@@ -127,7 +119,7 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
                 )}
               </div>
               <span
-                className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+                className={`px-2 py-0.5 rounded text-xs font-medium ${getLotStatusBadgeClass(lot.status)}`}
               >
                 {formatStatusLabel(lot.status)}
               </span>

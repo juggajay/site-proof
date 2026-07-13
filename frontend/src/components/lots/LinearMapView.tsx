@@ -14,11 +14,14 @@ import { formatDateKey } from '@/lib/localDate';
 import { devWarn } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import {
+  assignLanes,
   getActivityColor,
   getChainageTicks,
   getChainageX,
   getLinearMapScale,
   getStatusColor,
+  LOT_STATUS_LEGEND,
+  statusUsesDarkText,
   type LinearMapLot,
   type LinearMapProjectArea,
 } from './linearMapViewHelpers';
@@ -26,7 +29,6 @@ import {
 interface LinearMapViewProps {
   lots: LinearMapLot[];
   onLotClick: (lot: LinearMapLot) => void;
-  statusColors: Record<string, string>;
   areas?: LinearMapProjectArea[]; // Feature #708 - Optional areas for background highlighting
 }
 
@@ -37,14 +39,7 @@ interface PopupState {
   y: number;
 }
 
-export function LinearMapView({
-  lots,
-  onLotClick,
-  statusColors: _statusColors,
-  areas = [],
-}: LinearMapViewProps) {
-  // Note: _statusColors is received from props but we use the local getStatusColor function instead
-  void _statusColors;
+export function LinearMapView({ lots, onLotClick, areas = [] }: LinearMapViewProps) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState(0);
 
@@ -69,7 +64,7 @@ export function LinearMapView({
   }, [popup]);
 
   // Calculate chainage range and scale
-  const { minChainage, maxChainage, totalRange, layers } = useMemo(
+  const { minChainage, maxChainage, totalRange, layers, unmappedCount } = useMemo(
     () => getLinearMapScale(lots),
     [lots],
   );
@@ -78,6 +73,16 @@ export function LinearMapView({
   const chainageTicks = useMemo(
     () => getChainageTicks(minChainage, maxChainage, totalRange),
     [minChainage, maxChainage, totalRange],
+  );
+
+  // Stack overlapping lots into lanes within each row
+  const positionedLayers = useMemo(
+    () =>
+      layers.map(([layerName, layerLots]) => ({
+        layerName,
+        ...assignLanes(layerLots),
+      })),
+    [layers],
   );
 
   // Convert chainage to x position (percentage)
@@ -120,9 +125,10 @@ export function LinearMapView({
     }
   }, []);
 
-  const ROW_HEIGHT = 48;
+  const LANE_HEIGHT = 48;
   const HEADER_HEIGHT = 40;
   const LABEL_WIDTH = 140;
+  const totalLanes = positionedLayers.reduce((sum, layer) => sum + layer.laneCount, 0);
 
   return (
     <div className="bg-background">
@@ -133,6 +139,11 @@ export function LinearMapView({
           <span className="text-xs text-muted-foreground">
             Chainage: {minChainage.toLocaleString()} - {maxChainage.toLocaleString()}
           </span>
+          {unmappedCount > 0 && (
+            <span className="text-xs text-warning" data-testid="linear-map-unmapped-count">
+              {unmappedCount} lot{unmappedCount === 1 ? '' : 's'} without chainage not shown
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -193,7 +204,7 @@ export function LinearMapView({
       <div
         ref={mapContainerRef}
         className="relative overflow-x-auto"
-        style={{ minHeight: HEADER_HEIGHT + layers.length * ROW_HEIGHT + 20 }}
+        style={{ minHeight: HEADER_HEIGHT + totalLanes * LANE_HEIGHT + 20 }}
       >
         {/* Chainage Axis (Header) */}
         <div
@@ -222,11 +233,11 @@ export function LinearMapView({
 
         {/* Layers (Rows) */}
         <div className="relative" data-testid="layer-rows">
-          {layers.map(([layerName, layerLots]) => (
+          {positionedLayers.map(({ layerName, positioned, laneCount }) => (
             <div
               key={layerName}
               className="flex border-b last:border-b-0"
-              style={{ height: ROW_HEIGHT }}
+              style={{ height: laneCount * LANE_HEIGHT }}
             >
               {/* Layer Label */}
               <div
@@ -287,12 +298,10 @@ export function LinearMapView({
                   );
                 })}
 
-                {/* Lots as colored blocks */}
-                {layerLots.map((lot) => {
-                  const start = lot.chainageStart ?? lot.chainageEnd ?? 0;
-                  const end = lot.chainageEnd ?? lot.chainageStart ?? 0;
-                  const left = chainageToX(Math.min(start, end));
-                  const right = chainageToX(Math.max(start, end));
+                {/* Lots as colored blocks, lane-stacked so overlaps stay visible */}
+                {positioned.map(({ lot, start, end, lane }) => {
+                  const left = chainageToX(start);
+                  const right = chainageToX(end);
                   const width = Math.max(right - left, 0.5); // Minimum width for visibility
 
                   if (left > 100 * zoomLevel || right < 0) return null;
@@ -300,10 +309,12 @@ export function LinearMapView({
                   return (
                     <div
                       key={lot.id}
-                      className="absolute top-1 bottom-1 rounded cursor-pointer hover:ring-2 hover:ring-primary transition-all group"
+                      className="absolute rounded cursor-pointer hover:ring-2 hover:ring-primary transition-all group"
                       style={{
                         left: `${Math.max(left, 0)}%`,
                         width: `${width}%`,
+                        top: lane * LANE_HEIGHT + 4,
+                        height: LANE_HEIGHT - 8,
                         backgroundColor: getStatusColor(lot.status),
                         minWidth: 16,
                       }}
@@ -321,7 +332,14 @@ export function LinearMapView({
                     >
                       {/* Lot label (shown on hover or if wide enough) */}
                       <div className="absolute inset-0 flex items-center justify-center overflow-hidden px-1">
-                        <span className="text-[10px] text-primary-foreground font-medium truncate drop-shadow-sm">
+                        <span
+                          className={`text-[10px] font-medium truncate ${
+                            statusUsesDarkText(lot.status) ? '' : 'drop-shadow-sm'
+                          }`}
+                          style={{
+                            color: statusUsesDarkText(lot.status) ? '#1f2937' : '#ffffff',
+                          }}
+                        >
                           {lot.lotNumber}
                         </span>
                       </div>
@@ -352,15 +370,9 @@ export function LinearMapView({
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 p-3 border-t bg-muted/20 text-xs">
         <span className="font-medium">Status:</span>
-        {Object.entries({
-          active: 'Active',
-          in_progress: 'In Progress',
-          completed: 'Completed',
-          approved: 'Approved',
-          on_hold: 'On Hold',
-        }).map(([status, label]) => (
-          <div key={status} className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: getStatusColor(status) }} />
+        {LOT_STATUS_LEGEND.map(({ key, label }) => (
+          <div key={key} className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: getStatusColor(key) }} />
             <span>{label}</span>
           </div>
         ))}

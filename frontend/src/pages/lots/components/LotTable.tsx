@@ -18,15 +18,7 @@ import {
 import type { Lot } from '../lotsPageTypes';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { formatStatusLabel } from '@/lib/statusLabels';
-
-// Colour reserved for decision/exception states only (INV-3); benign states stay monochrome.
-const statusColors: Record<string, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-muted text-muted-foreground',
-  completed: 'bg-muted text-muted-foreground',
-  on_hold: 'bg-warning/10 text-warning',
-  not_started: 'bg-muted text-muted-foreground',
-};
+import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 
 interface LotTableProps {
   displayedLots: Lot[];
@@ -392,7 +384,7 @@ export const LotTable = React.memo(function LotTable({
                             return (
                               <td key={columnId} className="p-3">
                                 <span
-                                  className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${getLotStatusBadgeClass(lot.status)}`}
                                 >
                                   {formatStatusLabel(lot.status)}
                                 </span>

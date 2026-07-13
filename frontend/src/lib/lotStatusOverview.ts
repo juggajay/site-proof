@@ -58,3 +58,19 @@ export type LotStatusCounts = Record<LotStatusKey, number>;
 export const EMPTY_LOT_STATUS_COUNTS: LotStatusCounts = Object.fromEntries(
   LOT_STATUS_OVERVIEW_ITEMS.map((item) => [item.key, 0]),
 ) as LotStatusCounts;
+
+// Badge classes matching the dot scheme above: muted lifecycle states, colour
+// only where a human must act, foreground tint for the earned end states.
+export const LOT_STATUS_BADGE_CLASSES: Record<LotStatusKey, string> = {
+  not_started: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-muted text-muted-foreground',
+  awaiting_test: 'bg-muted text-muted-foreground',
+  hold_point: 'bg-warning/10 text-warning',
+  ncr_raised: 'bg-destructive/10 text-destructive',
+  completed: 'bg-muted text-muted-foreground',
+  conformed: 'bg-foreground/10 text-foreground',
+  claimed: 'bg-foreground/10 text-foreground',
+};
+
+export const getLotStatusBadgeClass = (status: string): string =>
+  LOT_STATUS_BADGE_CLASSES[status as LotStatusKey] ?? 'bg-muted text-muted-foreground';

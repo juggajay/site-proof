@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { RefreshCw } from 'lucide-react';
-import { lotStatusColors } from '../constants';
+import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -93,7 +93,7 @@ export function StatusOverrideModal({
             <div>
               <Label>Current Status</Label>
               <div
-                className={`mt-1 px-3 py-2 rounded border ${lotStatusColors[currentStatus] || 'bg-muted text-muted-foreground'}`}
+                className={`mt-1 px-3 py-2 rounded border ${getLotStatusBadgeClass(currentStatus)}`}
               >
                 {formatStatusLabel(currentStatus)}
               </div>

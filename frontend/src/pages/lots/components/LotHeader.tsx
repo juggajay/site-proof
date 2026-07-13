@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link2, Check, RefreshCw, Users, Printer, MoreVertical } from 'lucide-react';
 import { LotQRCode } from '@/components/lots/LotQRCode';
 import type { Lot, LotSubcontractorAssignment } from '../types';
-import { lotStatusColors as statusColors } from '../constants';
+import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection';
 import { LotSummaryCards } from './LotSummaryCards';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -84,9 +84,7 @@ export function LotHeader({
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
 
   const statusBadge = (
-    <span
-      className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
-    >
+    <span className={`px-3 py-1 rounded text-sm font-medium ${getLotStatusBadgeClass(lot.status)}`}>
       {formatStatusLabel(lot.status)}
     </span>
   );

@@ -36,7 +36,6 @@ import { BulkDeleteModal, BulkStatusModal, BulkAssignModal } from './components/
 // Extracted hooks
 import { useLotsData } from './hooks/useLotsData';
 import { useLotsActions } from './hooks/useLotsActions';
-import { LOT_STATUS_COLORS } from './lotsPageDisplay';
 import { parseColumnOrderPreference, parseColumnPreference } from './lotsPagePreferences';
 
 const LOT_VIEW_MODE_STORAGE_KEY = 'siteproof_lot_view_mode';
@@ -393,7 +392,6 @@ export function LotsPage() {
                   `/projects/${encodeURIComponent(projectId || '')}/lots/${encodeURIComponent(lot.id)}`,
                 )
               }
-              statusColors={LOT_STATUS_COLORS}
               areas={projectAreas}
             />
           )}

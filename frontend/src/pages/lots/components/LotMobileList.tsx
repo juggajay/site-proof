@@ -6,17 +6,8 @@ import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefre
 import { SwipeableCard } from '@/components/foreman/SwipeableCard';
 import { LotMobileCardSkeleton } from '@/components/ui/Skeleton';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import type { Lot } from '../lotsPageTypes';
-
-// Status pill colors for mobile cards. Benign states stay monochrome;
-// colour is reserved for the on-hold exception state (INV-3).
-const statusColors: Record<string, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-muted text-muted-foreground',
-  completed: 'bg-muted text-muted-foreground',
-  on_hold: 'bg-warning/10 text-warning',
-  not_started: 'bg-muted text-muted-foreground',
-};
 
 // Status border colors for mobile cards. Benign states use a neutral border;
 // colour is reserved for the hold-point / NCR exception states (INV-3).
@@ -176,7 +167,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="font-semibold text-lg">{lot.lotNumber}</h3>
                   <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${getLotStatusBadgeClass(lot.status)}`}
                   >
                     {formatStatusLabel(lot.status)}
                   </span>
