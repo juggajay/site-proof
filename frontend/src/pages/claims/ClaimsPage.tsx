@@ -93,10 +93,12 @@ export function ClaimsPage() {
   });
   const projectQuery = useQuery({
     queryKey: queryKeys.project(projectId ?? ''),
+    // queryKeys.project caches the UNWRAPPED project — every consumer of this
+    // key must resolve the same shape or they poison each other's cache.
     queryFn: async () =>
       apiFetch<{ project?: { name?: string | null } }>(
         `/api/projects/${encodeURIComponent(projectId ?? '')}`,
-      ),
+      ).then((d) => d.project ?? null),
     enabled: !!projectId,
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -190,11 +192,11 @@ export function ClaimsPage() {
         paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
       ];
     });
-    downloadCsv(
-      buildScopedCsvFilename('progress-claims', projectQuery.data?.project?.name || 'project'),
-      [headers, ...rows],
-    );
-  }, [claims, projectQuery.data?.project?.name]);
+    downloadCsv(buildScopedCsvFilename('progress-claims', projectQuery.data?.name || 'project'), [
+      headers,
+      ...rows,
+    ]);
+  }, [claims, projectQuery.data?.name]);
 
   const handleExportCumulativeData = useCallback(() => {
     exportChartDataToCSV(
