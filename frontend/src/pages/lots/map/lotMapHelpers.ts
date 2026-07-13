@@ -83,6 +83,36 @@ export function computeBounds(
   ];
 }
 
+// Find-by-area search box in WGS84 degrees. Matches the backend Zod schema.
+export interface SearchBounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+// Two drag corners (Leaflet {lat,lng}) → normalized bounds. Pure so the corner
+// math is unit-testable without a map.
+export function cornersToBounds(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): SearchBounds {
+  return {
+    west: Math.min(a.lng, b.lng),
+    east: Math.max(a.lng, b.lng),
+    south: Math.min(a.lat, b.lat),
+    north: Math.max(a.lat, b.lat),
+  };
+}
+
+// Leaflet bounds tuple [[south,west],[north,east]] for a <Rectangle>.
+export function boundsToLatLngRect(b: SearchBounds): [LatLng, LatLng] {
+  return [
+    [b.south, b.west],
+    [b.north, b.east],
+  ];
+}
+
 // Only geometries whose lot is in the register's current filtered set.
 export function filterGeometriesByLotIds(
   geometries: ProjectLotGeometry[],

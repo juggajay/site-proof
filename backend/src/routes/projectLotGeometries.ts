@@ -34,7 +34,7 @@ const projectLotGeometriesRouter = Router();
 
 projectLotGeometriesRouter.use(requireAuth);
 
-type GeometryWithLot = LotGeometry & {
+export type GeometryWithLot = LotGeometry & {
   lot: { id: string; lotNumber: string; status: string; activityType: string | null };
 };
 
@@ -42,7 +42,7 @@ function toNumber(value: Prisma.Decimal | null): number | null {
   return value != null ? Number(value) : null;
 }
 
-function mapGeometry(g: GeometryWithLot) {
+export function mapGeometry(g: GeometryWithLot) {
   return {
     id: g.id,
     lotId: g.lotId,

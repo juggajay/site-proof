@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { GeoJsonFeature, ProjectLotGeometry } from './lotMapData';
 import {
+  boundsToLatLngRect,
   collectLatLngs,
   computeBounds,
+  cornersToBounds,
   featureToShape,
   filterGeometriesByLotIds,
 } from './lotMapHelpers';
@@ -109,5 +111,28 @@ describe('filterGeometriesByLotIds', () => {
     ] as ProjectLotGeometry[];
     const result = filterGeometriesByLotIds(geometries, new Set(['a', 'c']));
     expect(result.map((g) => g.id)).toEqual(['g1', 'g3']);
+  });
+});
+
+describe('cornersToBounds', () => {
+  it('normalizes two drag corners regardless of direction', () => {
+    // Drag from bottom-right to top-left still yields a normalized box.
+    const bounds = cornersToBounds({ lat: -33.81, lng: 151.01 }, { lat: -33.8, lng: 151.0 });
+    expect(bounds).toEqual({ west: 151.0, east: 151.01, south: -33.81, north: -33.8 });
+  });
+
+  it('is order-independent (top-left → bottom-right gives the same box)', () => {
+    const a = cornersToBounds({ lat: -33.8, lng: 151.0 }, { lat: -33.81, lng: 151.01 });
+    const b = cornersToBounds({ lat: -33.81, lng: 151.01 }, { lat: -33.8, lng: 151.0 });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('boundsToLatLngRect', () => {
+  it('maps bounds to a leaflet [[south,west],[north,east]] rectangle', () => {
+    expect(boundsToLatLngRect({ west: 151.0, east: 151.01, south: -33.81, north: -33.8 })).toEqual([
+      [-33.81, 151.0],
+      [-33.8, 151.01],
+    ]);
   });
 });
