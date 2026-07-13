@@ -49,6 +49,11 @@ export const ProjectAreasPage = lazy(() =>
     default: m.ProjectAreasPage,
   })),
 );
+export const ControlLinesPage = lazy(() =>
+  import('@/pages/projects/settings/ControlLinesPage').then((m) => ({
+    default: m.ControlLinesPage,
+  })),
+);
 export const LotsPage = lazy(() =>
   import('@/pages/lots/LotsPage').then((m) => ({ default: m.LotsPage })),
 );

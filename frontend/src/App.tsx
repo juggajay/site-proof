@@ -32,6 +32,7 @@ import {
   ClaimsPage,
   CompanyOnboardingPage,
   CompanySettingsPage,
+  ControlLinesPage,
   CostsPage,
   DailyDiaryPage,
   DashboardPage,
@@ -345,6 +346,16 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectAreasPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              {/* Control lines: any internal role can read; the page gates write
+                  actions to owner/admin/project_manager (backend enforces too). */}
+              <Route
+                path="/projects/:projectId/control-lines"
+                element={
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <ControlLinesPage />
                   </ProjectProtectedRoute>
                 }
               />

@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { canDeleteProjects } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { apiFetch } from '@/lib/api';
-import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle } from 'lucide-react';
+import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle, Spline } from 'lucide-react';
 import type {
   EnabledModules,
   HpApprovalRequirement,
@@ -38,6 +38,9 @@ const DangerZone = lazy(() =>
 );
 const TeamTab = lazy(() => import('./components/TeamTab').then((m) => ({ default: m.TeamTab })));
 const AreasTab = lazy(() => import('./components/AreasTab').then((m) => ({ default: m.AreasTab })));
+const ControlLinesTab = lazy(() =>
+  import('./components/ControlLinesTab').then((m) => ({ default: m.ControlLinesTab })),
+);
 const ITPTemplatesTab = lazy(() =>
   import('./components/ITPTemplatesTab').then((m) => ({ default: m.ITPTemplatesTab })),
 );
@@ -193,6 +196,7 @@ const TABS = [
   { id: 'general' as SettingsTab, label: 'General', icon: Settings },
   { id: 'team' as SettingsTab, label: 'Team', icon: Users },
   { id: 'areas' as SettingsTab, label: 'Areas', icon: MapPin },
+  { id: 'control-lines' as SettingsTab, label: 'Control Lines', icon: Spline },
   { id: 'itp-templates' as SettingsTab, label: 'ITP Templates', icon: ClipboardList },
   { id: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
   { id: 'modules' as SettingsTab, label: 'Modules', icon: Puzzle },
@@ -207,6 +211,112 @@ function TabSpinner() {
     <div className="flex items-center justify-center py-12">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
     </div>
+  );
+}
+
+interface SettingsTabPanelsProps {
+  activeTab: SettingsTab;
+  projectId: string | undefined;
+  project: Project | null;
+  canViewContractValue: boolean;
+  canGrantProjectAdmin: boolean;
+  canDeleteProject: boolean;
+  readOnly: boolean;
+  hpRecipients: HpRecipient[];
+  hpApprovalRequirement: HpApprovalRequirement;
+  requireSubcontractorVerification: boolean;
+  enabledModules: EnabledModules;
+  notificationPreferences: ProjectNotificationPreferences;
+  witnessPointNotifications: WitnessPointNotificationSettings;
+  hpMinimumNoticeDays: number;
+  onProjectUpdate: (project: Project) => void;
+  onSettingsSaved: (patch: Record<string, unknown>) => void;
+}
+
+// The per-tab panel dispatch lives here so ProjectSettingsPage stays a thin
+// shell (loading/permission/nav). Behaviour is unchanged — this is the same
+// Suspense body, just addressed by props.
+function SettingsTabPanels({
+  activeTab,
+  projectId,
+  project,
+  canViewContractValue,
+  canGrantProjectAdmin,
+  canDeleteProject,
+  readOnly,
+  hpRecipients,
+  hpApprovalRequirement,
+  requireSubcontractorVerification,
+  enabledModules,
+  notificationPreferences,
+  witnessPointNotifications,
+  hpMinimumNoticeDays,
+  onProjectUpdate,
+  onSettingsSaved,
+}: SettingsTabPanelsProps) {
+  if (!projectId) return null;
+
+  return (
+    <Suspense fallback={<TabSpinner />}>
+      {activeTab === 'general' && project && (
+        <>
+          <GeneralSettingsTab
+            projectId={projectId}
+            project={project}
+            canViewContractValue={canViewContractValue}
+            readOnly={readOnly}
+            onProjectUpdate={onProjectUpdate}
+          />
+          <DangerZone
+            projectId={projectId}
+            project={project}
+            onProjectUpdate={onProjectUpdate}
+            canDeleteProject={canDeleteProject}
+          />
+        </>
+      )}
+
+      {activeTab === 'team' && (
+        <TeamTab
+          projectId={projectId}
+          readOnly={readOnly}
+          canGrantProjectAdmin={canGrantProjectAdmin}
+        />
+      )}
+
+      {activeTab === 'areas' && <AreasTab projectId={projectId} readOnly={readOnly} />}
+
+      {activeTab === 'control-lines' && (
+        <ControlLinesTab projectId={projectId} readOnly={readOnly} />
+      )}
+
+      {activeTab === 'itp-templates' && (
+        <ITPTemplatesTab projectId={projectId} readOnly={readOnly} />
+      )}
+
+      {activeTab === 'notifications' && (
+        <NotificationsTab
+          projectId={projectId}
+          initialHpRecipients={hpRecipients}
+          initialHpApprovalRequirement={hpApprovalRequirement}
+          initialRequireSubcontractorVerification={requireSubcontractorVerification}
+          initialNotificationPreferences={notificationPreferences}
+          initialWitnessPointNotifications={witnessPointNotifications}
+          initialHpMinimumNoticeDays={hpMinimumNoticeDays}
+          readOnly={readOnly}
+          onSettingsSaved={onSettingsSaved}
+        />
+      )}
+
+      {activeTab === 'modules' && (
+        <ModulesTab
+          projectId={projectId}
+          initialEnabledModules={enabledModules}
+          readOnly={readOnly}
+          onSettingsSaved={onSettingsSaved}
+        />
+      )}
+    </Suspense>
   );
 }
 
@@ -394,64 +504,24 @@ export function ProjectSettingsPage() {
       {/* Tab Content */}
       <div className="space-y-6" role="tabpanel">
         {!loadError && (
-          <Suspense fallback={<TabSpinner />}>
-            {activeTab === 'general' && project && projectId && (
-              <>
-                <GeneralSettingsTab
-                  projectId={projectId}
-                  project={project}
-                  canViewContractValue={!!canViewContractValue}
-                  readOnly={readOnly}
-                  onProjectUpdate={handleProjectUpdate}
-                />
-                <DangerZone
-                  projectId={projectId}
-                  project={project}
-                  onProjectUpdate={handleProjectUpdate}
-                  canDeleteProject={canDeleteProject}
-                />
-              </>
-            )}
-
-            {activeTab === 'team' && projectId && (
-              <TeamTab
-                projectId={projectId}
-                readOnly={readOnly}
-                canGrantProjectAdmin={canGrantProjectAdmin}
-              />
-            )}
-
-            {activeTab === 'areas' && projectId && (
-              <AreasTab projectId={projectId} readOnly={readOnly} />
-            )}
-
-            {activeTab === 'itp-templates' && projectId && (
-              <ITPTemplatesTab projectId={projectId} readOnly={readOnly} />
-            )}
-
-            {activeTab === 'notifications' && projectId && (
-              <NotificationsTab
-                projectId={projectId}
-                initialHpRecipients={hpRecipients}
-                initialHpApprovalRequirement={hpApprovalRequirement}
-                initialRequireSubcontractorVerification={requireSubcontractorVerification}
-                initialNotificationPreferences={notificationPreferences}
-                initialWitnessPointNotifications={witnessPointNotifications}
-                initialHpMinimumNoticeDays={hpMinimumNoticeDays}
-                readOnly={readOnly}
-                onSettingsSaved={applyProjectSettingsPatch}
-              />
-            )}
-
-            {activeTab === 'modules' && projectId && (
-              <ModulesTab
-                projectId={projectId}
-                initialEnabledModules={enabledModules}
-                readOnly={readOnly}
-                onSettingsSaved={applyProjectSettingsPatch}
-              />
-            )}
-          </Suspense>
+          <SettingsTabPanels
+            activeTab={activeTab}
+            projectId={projectId}
+            project={project}
+            canViewContractValue={!!canViewContractValue}
+            canGrantProjectAdmin={canGrantProjectAdmin}
+            canDeleteProject={canDeleteProject}
+            readOnly={readOnly}
+            hpRecipients={hpRecipients}
+            hpApprovalRequirement={hpApprovalRequirement}
+            requireSubcontractorVerification={requireSubcontractorVerification}
+            enabledModules={enabledModules}
+            notificationPreferences={notificationPreferences}
+            witnessPointNotifications={witnessPointNotifications}
+            hpMinimumNoticeDays={hpMinimumNoticeDays}
+            onProjectUpdate={handleProjectUpdate}
+            onSettingsSaved={applyProjectSettingsPatch}
+          />
         )}
       </div>
     </div>
