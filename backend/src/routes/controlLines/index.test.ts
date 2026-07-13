@@ -1,12 +1,21 @@
 import express from 'express';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '../../lib/prisma.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
 import { authRouter } from '../auth.js';
 import { controlLinesRouter } from './index.js';
+import { extractSetoutRawCandidate } from './setoutExtraction.js';
+
+// Only the AI network call is mocked; cleanSetoutCandidate (the trust boundary)
+// runs for real so the route genuinely validates model output end to end.
+vi.mock('./setoutExtraction.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./setoutExtraction.js')>();
+  return { ...actual, extractSetoutRawCandidate: vi.fn() };
+});
+const mockedExtract = vi.mocked(extractSetoutRawCandidate);
 
 const app = express();
 app.use(express.json());
@@ -232,5 +241,96 @@ describe('Control Lines API', () => {
       .set('Authorization', `Bearer ${pmToken}`)
       .send(createBody({ name: '' }));
     expect(missingName.status).toBe(400);
+  });
+
+  describe('POST /control-lines/extract-points (AI setout import)', () => {
+    const PDF = Buffer.from('%PDF-1.4 fake setout sheet');
+
+    function extractReq(token: string) {
+      return request(app)
+        .post(`/api/projects/${projectId}/control-lines/extract-points`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', PDF, { filename: 'setout.pdf', contentType: 'application/pdf' });
+    }
+
+    it('returns a cleaned candidate for an authorised writer', async () => {
+      mockedExtract.mockResolvedValueOnce({
+        coordinateSystem: 'EPSG:7856',
+        points: [
+          { chainage: 100, easting: 500100, northing: 6000000 },
+          { chainage: 0, easting: 500000, northing: 6000000 },
+        ],
+      });
+
+      const res = await extractReq(pmToken);
+      expect(res.status).toBe(200);
+      expect(res.body.candidate.coordinateSystem).toBe('EPSG:7856');
+      // sorted ascending by chainage
+      expect(res.body.candidate.points.map((p: { chainage: number }) => p.chainage)).toEqual([
+        0, 100,
+      ]);
+      expect(res.body.candidate.warnings).toEqual([]);
+    });
+
+    it('drops garbage rows and nulls an unsupported EPSG with warnings', async () => {
+      mockedExtract.mockResolvedValueOnce({
+        coordinateSystem: 'EPSG:9999',
+        points: [
+          { chainage: 0, easting: 500000, northing: 6000000 },
+          { chainage: 'bad', easting: 'x', northing: 'y' },
+          { chainage: 50, easting: 500050, northing: 6000000 },
+        ],
+      });
+
+      const res = await extractReq(pmToken);
+      expect(res.status).toBe(200);
+      expect(res.body.candidate.coordinateSystem).toBeNull();
+      expect(res.body.candidate.points).toHaveLength(2);
+      expect(res.body.candidate.warnings.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('returns 400 when fewer than 2 valid points are extracted', async () => {
+      mockedExtract.mockResolvedValueOnce({
+        coordinateSystem: 'EPSG:7856',
+        points: [{ chainage: 0, easting: 1, northing: 2 }],
+      });
+
+      const res = await extractReq(pmToken);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('SETOUT_EXTRACTION_INSUFFICIENT');
+    });
+
+    it('denies a viewer, a subcontractor, and a cross-company outsider', async () => {
+      mockedExtract.mockResolvedValue({
+        coordinateSystem: 'EPSG:7856',
+        points: [
+          { chainage: 0, easting: 1, northing: 2 },
+          { chainage: 1, easting: 3, northing: 4 },
+        ],
+      });
+
+      expect((await extractReq(viewerToken)).status).toBe(403);
+      expect((await extractReq(subbieToken)).status).toBe(403);
+      expect((await extractReq(outsiderToken)).status).toBe(403);
+      mockedExtract.mockReset();
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/control-lines/extract-points`)
+        .attach('file', PDF, { filename: 'setout.pdf', contentType: 'application/pdf' });
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects a disallowed file type', async () => {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/control-lines/extract-points`)
+        .set('Authorization', `Bearer ${pmToken}`)
+        .attach('file', Buffer.from('<svg/>'), {
+          filename: 'evil.svg',
+          contentType: 'image/svg+xml',
+        });
+      expect(res.status).toBe(400);
+    });
   });
 });
