@@ -32,7 +32,7 @@ export function PlansPanel({
 
   return (
     <div
-      className="mt-2 w-72 rounded-md border bg-background p-3 shadow-lg"
+      className="mt-2 w-72 max-w-[calc(100vw-1.5rem)] max-h-[60vh] overflow-y-auto rounded-md border bg-background p-3 shadow-lg"
       data-testid="plans-panel"
     >
       {sheets.length === 0 ? (

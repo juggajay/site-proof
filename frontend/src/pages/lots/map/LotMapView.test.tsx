@@ -59,10 +59,12 @@ vi.mock('@tanstack/react-query', () => ({
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 
-// Force desktop view so jsdom doesn't need a matchMedia polyfill.
+// Force a deterministic viewport so jsdom doesn't need a matchMedia polyfill.
+// Mutable so individual tests can exercise the mobile branch.
+let isMobileValue = false;
 vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/hooks/useMediaQuery')>();
-  return { ...actual, useIsMobile: () => false };
+  return { ...actual, useIsMobile: () => isMobileValue };
 });
 
 // The find-by-area mutation is exercised in its own tests; stub it here so
@@ -171,6 +173,7 @@ function mockQueries({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isMobileValue = false;
 });
 
 describe('LotMapView', () => {
@@ -282,5 +285,31 @@ describe('LotMapView', () => {
     mockQueries({ error: new ApiError(403, 'Forbidden') });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set()} canManageSettings={false} />);
     expect(screen.getByText(/do not have access/i)).toBeInTheDocument();
+  });
+
+  it('collapses toolbar buttons to icon-only (accessible name preserved) on mobile', () => {
+    isMobileValue = true;
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+
+    // Icon-only: no visible caption text, but the button is still reachable by
+    // its accessible name (aria-label) and carries a ≥44px (h-11 w-11) hit area.
+    const findButton = screen.getByTestId('find-by-area-button');
+    expect(findButton).toHaveAttribute('aria-label', 'Find by area');
+    expect(findButton.className).toMatch(/\bh-11\b/);
+    expect(findButton.className).toMatch(/\bw-11\b/);
+    expect(within(findButton).queryByText('Find by area')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My location' })).toBeInTheDocument();
+  });
+
+  it('uses touch wording for the draw-lot hint on mobile', () => {
+    isMobileValue = true;
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+
+    fireEvent.click(screen.getByTestId('draw-lot-button'));
+    expect(
+      screen.getByText(/Tap to place polygon corners; double-tap to finish/i),
+    ).toBeInTheDocument();
   });
 });

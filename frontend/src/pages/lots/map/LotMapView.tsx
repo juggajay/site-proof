@@ -27,6 +27,7 @@ import {
   Map as MapIcon,
   PencilRuler,
   Square,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
@@ -36,6 +37,7 @@ import { formatDateKey } from '@/lib/localDate';
 import { authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
+import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 
@@ -370,6 +372,50 @@ function EmptyStateCallout({
         </p>
       )}
     </div>
+  );
+}
+
+// Map toolbar control. On mobile it collapses to an icon-only button with a
+// ≥44px hit area (label carried by aria-label + title); on desktop it shows the
+// icon alongside text. `label` is the stable accessible name; `text` is the
+// dynamic desktop caption (e.g. "Cancel" while armed).
+function ToolbarButton({
+  icon: Icon,
+  label,
+  text,
+  onClick,
+  pressed,
+  disabled,
+  compact,
+  testId,
+}: {
+  icon: LucideIcon;
+  label: string;
+  text?: string;
+  onClick: () => void;
+  pressed?: boolean;
+  disabled?: boolean;
+  compact: boolean;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'inline-flex items-center justify-center gap-1.5 rounded-md border text-sm font-medium shadow-sm disabled:opacity-50',
+        compact ? 'h-11 w-11' : 'px-3 py-1.5',
+        pressed ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted',
+      )}
+      data-testid={testId}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {!compact && <span>{text ?? label}</span>}
+    </button>
   );
 }
 
@@ -808,93 +854,73 @@ export function LotMapView({
           <div className="relative">
             <div className="absolute left-3 top-3 z-[1000] pointer-events-auto">
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
+                <ToolbarButton
+                  icon={Square}
+                  label="Find by area"
+                  text={drawArmed ? 'Cancel' : 'Find by area'}
                   onClick={armFindByArea}
-                  aria-pressed={drawArmed}
-                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
-                    drawArmed
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background hover:bg-muted'
-                  }`}
-                  data-testid="find-by-area-button"
-                >
-                  <Square className="h-3.5 w-3.5" />
-                  {drawArmed ? 'Cancel' : 'Find by area'}
-                </button>
-                <button
-                  type="button"
+                  pressed={drawArmed}
+                  compact={isMobile}
+                  testId="find-by-area-button"
+                />
+                <ToolbarButton
+                  icon={Layers}
+                  label="Coverage"
                   onClick={toggleCoverage}
-                  aria-pressed={coverageArmed}
-                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
-                    coverageArmed
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background hover:bg-muted'
-                  }`}
-                  data-testid="coverage-button"
-                >
-                  <Layers className="h-3.5 w-3.5" />
-                  Coverage
-                </button>
-                <button
-                  type="button"
+                  pressed={coverageArmed}
+                  compact={isMobile}
+                  testId="coverage-button"
+                />
+                <ToolbarButton
+                  icon={MapIcon}
+                  label="Plans"
                   onClick={() => setPlansOpen((open) => !open)}
-                  aria-pressed={plansOpen}
-                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
-                    plansOpen
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background hover:bg-muted'
-                  }`}
-                  data-testid="plans-button"
-                >
-                  <MapIcon className="h-3.5 w-3.5" />
-                  Plans
-                </button>
+                  pressed={plansOpen}
+                  compact={isMobile}
+                  testId="plans-button"
+                />
                 {canManageSettings && (
-                  <button
-                    type="button"
+                  <ToolbarButton
+                    icon={PencilRuler}
+                    label="Draw lot"
+                    text={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
                     onClick={armDrawLot}
-                    aria-pressed={drawLotArmed}
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
-                      drawLotArmed
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-background hover:bg-muted'
-                    }`}
-                    data-testid="draw-lot-button"
-                  >
-                    <PencilRuler className="h-3.5 w-3.5" />
-                    {drawLotArmed ? 'Cancel draw' : 'Draw lot'}
-                  </button>
+                    pressed={drawLotArmed}
+                    compact={isMobile}
+                    testId="draw-lot-button"
+                  />
                 )}
-                <button
-                  type="button"
+                <ToolbarButton
+                  icon={Camera}
+                  label="Snapshot"
+                  text={snapshotting ? 'Saving…' : 'Snapshot'}
                   onClick={handleSnapshot}
                   disabled={snapshotting}
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
-                  data-testid="snapshot-button"
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                  {snapshotting ? 'Saving…' : 'Snapshot'}
-                </button>
-                <button
-                  type="button"
+                  compact={isMobile}
+                  testId="snapshot-button"
+                />
+                <ToolbarButton
+                  icon={Crosshair}
+                  label="My location"
+                  text={locating ? 'Locating…' : 'My location'}
                   onClick={handleLocate}
                   disabled={locating || !map}
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
-                  data-testid="locate-me-button"
-                >
-                  <Crosshair className="h-3.5 w-3.5" />
-                  {locating ? 'Locating…' : 'My location'}
-                </button>
+                  compact={isMobile}
+                  testId="locate-me-button"
+                />
               </div>
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                  Drag a box on the map. Press Esc to cancel.
+                  {isMobile
+                    ? 'Drag a box on the map. Tap the button again to cancel.'
+                    : 'Drag a box on the map. Press Esc to cancel.'}
                 </p>
               )}
               {drawLotArmed && (
                 <p className="mt-1 max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                  Click to place polygon corners; double-click to finish. Press Esc to cancel.
+                  {isMobile
+                    ? 'Tap to place polygon corners; double-tap to finish. Tap the button again to cancel.'
+                    : 'Click to place polygon corners; double-click to finish. Press Esc to cancel.'}
                 </p>
               )}
               {plansOpen && (
@@ -916,7 +942,9 @@ export function LotMapView({
               center={AU_DEFAULT_CENTER}
               zoom={AU_DEFAULT_ZOOM}
               scrollWheelZoom
-              style={{ height: 520, width: '100%' }}
+              // Mobile: cap at 60% of the (dynamic) viewport so toolbar + legend
+              // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
+              style={{ height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }}
             >
               <LayersControl position="topright">
                 {MAPTILER_KEY && (
