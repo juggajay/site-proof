@@ -147,6 +147,7 @@ describe('GET /api/projects/:projectId/coverage', () => {
       { activity: 'Earthworks', status: 'conformed', start: 0, end: 40 },
       { activity: 'Earthworks', status: 'in_progress', start: 60, end: 100 },
     ];
+    const seededLotIds: string[] = [];
     for (const s of seed) {
       const lot = await prisma.lot.create({
         data: {
@@ -159,6 +160,7 @@ describe('GET /api/projects/:projectId/coverage', () => {
           chainageEnd: s.end,
         },
       });
+      seededLotIds.push(lot.id);
       await prisma.lotGeometry.create({
         data: {
           lotId: lot.id,
@@ -172,6 +174,21 @@ describe('GET /api/projects/:projectId/coverage', () => {
         },
       });
     }
+
+    // A SECOND segment for the first lot (inside its 0–40 range): lotCount must
+    // count distinct lots, not geometry rows, and the union must not change.
+    await prisma.lotGeometry.create({
+      data: {
+        lotId: seededLotIds[0],
+        kind: 'chainage_offset',
+        controlLineId,
+        chainageStart: 0,
+        chainageEnd: 10,
+        offsetLeft: 6,
+        offsetRight: 6,
+        geometryWgs84: stubFeature() as never,
+      },
+    });
 
     // A lot with NO geometry at all -> unmappedLotCount = 1.
     await prisma.lot.create({
@@ -225,11 +242,16 @@ describe('GET /api/projects/:projectId/coverage', () => {
     expect(line).toBeDefined();
     expect(line.extentStart).toBe(0);
     expect(line.extentEnd).toBe(100);
-    expect(line.unmappedLotCount).toBe(1);
+
+    // Project-wide, at the TOP LEVEL only — attaching it per line made
+    // multi-line projects overstate exclusions (this project has 2 lines).
+    expect(res.body.unmappedLotCount).toBe(1);
+    expect(line.unmappedLotCount).toBeUndefined();
 
     const all = line.groups.find(
       (g: { activityType: string }) => g.activityType === 'All work types',
     );
+    // Distinct lots (the first lot has TWO geometry segments), not rows.
     expect(all.lotCount).toBe(2);
     expect(all.percentLotted).toBe(80);
     expect(all.percentConformed).toBe(40);

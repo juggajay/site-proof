@@ -21,7 +21,9 @@
  * - Gap polygons use constant ±6 m offsets — a visual indication of the gap on
  *   the map, NOT a legal footprint (the real lot width is unknown for a gap).
  * - `unmappedLotCount` = project lots with NO LotGeometry at all. They are
- *   invisible to coverage, so the UI must disclose them (no silent gaps).
+ *   invisible to coverage, so the UI must disclose them (no silent gaps). It is
+ *   a PROJECT-WIDE count and lives at the top level of the response — attaching
+ *   it per line made multi-line projects overstate exclusions on the PDF.
  * - One malformed control line degrades to an `{ id, name, error }` entry rather
  *   than 500-ing the whole report.
  */
@@ -53,6 +55,7 @@ const ALL_WORK_TYPES = 'All work types';
 const UNASSIGNED = 'Unassigned';
 
 type LineGeometry = {
+  lotId: string;
   chainageStart: Prisma.Decimal | null;
   chainageEnd: Prisma.Decimal | null;
   lot: { status: string; activityType: string | null };
@@ -111,7 +114,8 @@ function buildGroup(
 
   return {
     activityType,
-    lotCount: geometries.length,
+    // Distinct lots, not geometry rows — a lot with two segments is one lot.
+    lotCount: new Set(geometries.map((g) => g.lotId)).size,
     percentLotted: coverage.percentLotted,
     percentConformed: coverage.percentConformed,
     coveredLengthM: coverage.coveredLengthM,
@@ -141,6 +145,7 @@ projectCoverageRouter.get(
           lot: { projectId },
         },
         select: {
+          lotId: true,
           controlLineId: true,
           chainageStart: true,
           chainageEnd: true,
@@ -192,7 +197,6 @@ projectCoverageRouter.get(
           extentStart: extent.start,
           extentEnd: extent.end,
           groups,
-          unmappedLotCount,
         };
       } catch (err) {
         return {
@@ -203,7 +207,7 @@ projectCoverageRouter.get(
       }
     });
 
-    res.json({ controlLines: lines });
+    res.json({ controlLines: lines, unmappedLotCount });
   }),
 );
 
