@@ -15,6 +15,7 @@ import { testResultsRouter } from './routes/testResults.js';
 import { itpRouter } from './routes/itp/index.js';
 import diaryRouter from './routes/diary/index.js';
 import claimsRouter from './routes/claims.js';
+import { controlLinesRouter } from './routes/controlLines/index.js';
 import { holdpointsRouter } from './routes/holdpoints.js';
 import { docketsRouter } from './routes/dockets.js';
 import { companyRouter } from './routes/company.js';
@@ -136,6 +137,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/itp', itpRouter);
   app.use('/api/diary', diaryRouter);
   app.use('/api/projects', claimsRouter);
+  app.use('/api/projects', controlLinesRouter);
   app.use('/api/holdpoints', holdpointsRouter);
   app.use('/api/dockets', docketsRouter);
   app.use('/api/company', companyRouter);

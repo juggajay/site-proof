@@ -63,6 +63,7 @@ model User {
   company                     Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   projectUsers                ProjectUser[]
   createdLots                 Lot[]                        @relation("CreatedByUser")
+  createdControlLines         ControlLine[]                @relation("CreatedControlLines")
   conformedLots               Lot[]                        @relation("ConformedByUser")
   conformanceOverriddenLots   Lot[]                        @relation("ConformanceOverriddenByUser")
   raisedNCRs                  NCR[]                        @relation("RaisedByUser")
@@ -382,6 +383,7 @@ model Project {
   company                     Company                            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   projectUsers                ProjectUser[]
   projectAreas                ProjectArea[]
+  controlLines                ControlLine[]
   lots                        Lot[]
   itpTemplates                ITPTemplate[]
   ncrs                        NCR[]
@@ -437,6 +439,51 @@ model ProjectArea {
 
   @@index([projectId, chainageStart])
   @@map("project_areas")
+}
+
+// ============================================================================
+// Spatial (control lines + lot geometry) — GeoJSON stored WGS84, turf in app code
+// ============================================================================
+
+model ControlLine {
+  id               String   @id @default(uuid())
+  projectId        String   @map("project_id")
+  name             String
+  coordinateSystem String   @map("coordinate_system") // EPSG code, e.g. "EPSG:7856" (GDA2020 MGA56)
+  points           Json // ordered [{chainage, easting, northing}]
+  geometryWgs84    Json?    @map("geometry_wgs84") // derived GeoJSON LineString cache
+  createdById      String?  @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User?         @relation("CreatedControlLines", fields: [createdById], references: [id], onDelete: SetNull)
+  lotGeometries LotGeometry[]
+
+  @@index([projectId])
+  @@map("control_lines")
+}
+
+model LotGeometry {
+  id            String   @id @default(uuid())
+  lotId         String   @map("lot_id")
+  kind          String // 'chainage_offset' | 'drawn' | 'point'
+  controlLineId String?  @map("control_line_id") // for chainage_offset
+  chainageStart Decimal? @map("chainage_start")
+  chainageEnd   Decimal? @map("chainage_end")
+  offsetLeft    Decimal? @map("offset_left") // metres left of control line
+  offsetRight   Decimal? @map("offset_right") // metres right of control line
+  geometryWgs84 Json     @map("geometry_wgs84") // GeoJSON Feature (Polygon/LineString/Point)
+  areaM2        Decimal? @map("area_m2") // computed; user-overridable
+  lengthM       Decimal? @map("length_m")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  lot         Lot          @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  controlLine ControlLine? @relation(fields: [controlLineId], references: [id], onDelete: SetNull)
+
+  @@index([lotId])
+  @@map("lot_geometries")
 }
 
 // ============================================================================
@@ -502,6 +549,7 @@ model Lot {
   claimedLots              ClaimedLot[]
   variations               Variation[]
   subcontractorAssignments LotSubcontractorAssignment[]
+  geometries               LotGeometry[]
 
   @@unique([projectId, lotNumber])
   @@index([projectId])
