@@ -1030,6 +1030,7 @@ export function LotMapView({
             {coverageArmed && (
               <CoveragePanel
                 lines={coverageLines}
+                unmappedLotCount={coverageQuery.data?.unmappedLotCount ?? 0}
                 isLoading={coverageQuery.isLoading}
                 error={coverageQuery.error}
                 isMobile={isMobile}

@@ -32,12 +32,13 @@ export interface CoverageLine {
   extentStart?: number;
   extentEnd?: number;
   groups?: CoverageGroup[];
-  unmappedLotCount?: number;
   error?: string;
 }
 
 export interface CoverageResponse {
   controlLines: CoverageLine[];
+  // Project-wide count of lots with no geometry (excluded from all lines).
+  unmappedLotCount?: number;
 }
 
 export function useProjectCoverage(projectId: string | undefined, enabled: boolean) {

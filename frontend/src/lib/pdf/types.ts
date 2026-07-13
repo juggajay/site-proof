@@ -40,12 +40,13 @@ export interface ConformanceCoverageLine {
   extentStart?: number;
   extentEnd?: number;
   groups?: ConformanceCoverageGroup[];
-  unmappedLotCount?: number;
   error?: string;
 }
 
 export interface ConformanceCoverage {
   controlLines: ConformanceCoverageLine[];
+  // Project-wide count of lots with no geometry — printed once per report.
+  unmappedLotCount?: number;
 }
 
 export interface PDFCompanyBranding {

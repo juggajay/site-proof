@@ -236,13 +236,30 @@ planSheetsRouter.patch(
 
     const existing = await prisma.planSheet.findFirst({
       where: { id, projectId },
-      select: { id: true },
+      select: { id: true, coordinateSystem: true, registration: true },
     });
     if (!existing) {
       throw AppError.notFound('Plan sheet');
     }
 
     const data = validation.data;
+
+    // A registration's transform is only meaningful in the coordinate system it
+    // was fitted in. Changing the CRS out from under an existing registration
+    // would silently mis-georeference the overlay, so require the caller to
+    // re-register (or clear) in the same request.
+    if (
+      data.coordinateSystem !== undefined &&
+      data.coordinateSystem !== existing.coordinateSystem &&
+      existing.registration != null &&
+      data.registration === undefined
+    ) {
+      throw new AppError(
+        400,
+        'This sheet is registered in its current coordinate system — include a new registration (or registration: null) when changing it',
+        'COORDINATE_SYSTEM_LOCKED_BY_REGISTRATION',
+      );
+    }
     const planSheet = await prisma.planSheet.update({
       where: { id },
       data: {

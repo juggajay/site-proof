@@ -766,26 +766,28 @@ export async function generateConformanceReportPDF(
           });
         }
 
-        // Unmapped-lot disclosure — excluded from the coverage numbers above.
-        if (line.unmappedLotCount && line.unmappedLotCount > 0) {
-          checkPageBreak(6);
-          const n = line.unmappedLotCount;
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'italic');
-          doc.setTextColor(120, 120, 120);
-          doc.text(
-            `${n} ${n > 1 ? 'lots have' : 'lot has'} no mapped geometry and ${
-              n > 1 ? 'are' : 'is'
-            } excluded from coverage.`,
-            margin + 2,
-            yPos,
-          );
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          yPos += 6;
-        }
         yPos += 4;
       });
+
+      // Unmapped-lot disclosure — a PROJECT-WIDE count, printed once (printing
+      // it per line overstated exclusions on multi-line projects).
+      const unmapped = data.coverage?.unmappedLotCount ?? 0;
+      if (unmapped > 0) {
+        checkPageBreak(6);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `${unmapped} ${unmapped > 1 ? 'lots have' : 'lot has'} no mapped geometry and ${
+            unmapped > 1 ? 'are' : 'is'
+          } excluded from coverage.`,
+          margin + 2,
+          yPos,
+        );
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        yPos += 6;
+      }
     }
     yPos += 6;
   }

@@ -35,7 +35,6 @@ const goldenCoverage: ConformanceCoverage = {
       name: 'Mainline CL',
       extentStart: 1000,
       extentEnd: 2000,
-      unmappedLotCount: 3,
       groups: [
         {
           activityType: 'All work types',
@@ -58,6 +57,7 @@ const goldenCoverage: ConformanceCoverage = {
       ],
     },
   ],
+  unmappedLotCount: 3,
 };
 
 describe('conformance report — chainage coverage section', () => {

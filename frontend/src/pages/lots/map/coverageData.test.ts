@@ -19,7 +19,6 @@ const line: CoverageLine = {
   name: 'MC00',
   extentStart: 0,
   extentEnd: 100,
-  unmappedLotCount: 0,
   groups: [group(ALL_WORK_TYPES), group('Earthworks'), group('Drainage')],
 };
 
