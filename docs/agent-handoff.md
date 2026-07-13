@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-06-20
+Last updated: 2026-07-14
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -682,6 +682,36 @@ Status: in progress from `qa/stage88-auth-onboarding`.
   and backend type-check, touched-file ESLint, and auth/onboarding browser E2E
   (`26 passed`). DB-backed `auth.test.ts` regressions could not run locally
   because this shell has no disposable `DATABASE_URL`; CI must prove those.
+
+### Spatial Lot Map Program (2026-07-13/14)
+
+Status: closed — fully built, reviewed, merged, and live-verified on prod.
+
+- Eighteen PRs (#1413–#1431): research doc, approved spec
+  (`docs/plans/spatial-lot-map-spec-2026-07-13.md`), Phases 0–4 (control lines
+  + GDA2020/94 MGA coordinate engine, AI setout extraction, chainage→polygon
+  generation + backfill, satellite lot map, find-by-area, coverage report with
+  conformance-pack PDF section, map snapshots, TR geometry thumbnails, plan
+  sheets: client-side pdf.js raster → registration with live residuals →
+  rotated overlays on the map → perimeter clip → draw-new-lot via geoman),
+  research realignment (scale bar, north arrow, touch draw, GDA94 warning,
+  chainage-based registration entry), GeoPDF auto-registration, adversarial
+  review fixes, and three live-QA fixes (#1429–#1431).
+- Two additive prod migrations applied via pg_dump-then-migrate-deploy:
+  `20260713080924_spatial_control_lines`, `20260713110131_plan_sheets`.
+  Backups in `C:\Users\jayso\db-backups\` (Jay's machine).
+- Research verdict: ahead of CivilPro (parity across their spatial surface;
+  ahead on AI setup, computed coverage, live registration residuals, GeoPDF).
+  Geodesy audited against ICSM/EPSG — no blockers; GDA94 zones warn about the
+  ~1.8 m imagery offset. Reports summarised in PR bodies #1426–#1428.
+- Live prod verification: coverage maths exact on SYD-roads; full
+  drawings-first loop proven on a QA project (upload → register RMS 0.00 m →
+  rotated overlay on satellite → draw lot → assign → drawn geometry 201).
+- Known limits (deliberate): registration clicks outside the sheet record
+  negative pixels (harmless, affine extrapolates); ObjStm-compressed GeoPDF
+  page dicts fall back to manual registration; touch box-draw verified by
+  construction, not on physical hardware; Phase 5 parked (time scrubber,
+  DXF/LandXML, offline tiles).
 
 ## Open Follow-Ups
 

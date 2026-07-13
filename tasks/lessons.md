@@ -184,3 +184,42 @@ serial-skipped successors of a failed test; the true breakage is the chain.
 (3) When piping `gh run watch`/`gh pr checks` through `tail`, the pipe eats
 the exit code — verify with `--json conclusion` afterwards, never trust the
 pipeline's exit status.
+
+## 2026-07-14 — react-leaflet swallows DOM props; the test mock rendered them anyway
+Snapshot silently no-oped in prod: `data-testid` was passed as a prop to
+react-leaflet's `MapContainer`, which treats unknown props as Leaflet map
+OPTIONS — the attribute never reaches the DOM, so the handler's
+`querySelector` found nothing and an `if (!node) return` ate the failure. CI
+stayed green because the unit-test mock rendered a plain div that spread the
+prop. **Rules:** (1) To reach a Leaflet map's DOM node, use the map instance
+(`map.getContainer()`), never a DOM query. (2) Never silent-return on a
+"can't happen" guard in a user-triggered handler — toast the failure; the
+silent path is what hid this. (3) A mock that forwards props a real component
+drops makes tests pass for markup that doesn't exist — mocks must mimic the
+real component's prop CONTRACT, not spread everything.
+
+## 2026-07-14 — one TanStack query key = one cached shape (bug class, 2nd + 3rd hits)
+Two more instances of the same defect class in one day: (a) map vs settings
+cached different shapes under `queryKeys.controlLines` (stale-map bug); (b)
+Breadcrumbs/useCurrentProjectRole/ClaimsPage cached the raw `{project}`
+envelope under `queryKeys.project` while settings access hooks cached the
+unwrapped Project — the layout's breadcrumb query mounts first and WINS the
+dedupe (TanStack runs the FIRST observer's queryFn), so owners saw read-only
+settings pages nondeterministically. **Rules:** (1) When adding a useQuery on
+an existing key, read every other consumer's queryFn and match its resolved
+shape exactly — grep the key name first. (2) The first-mounted observer's
+queryFn wins request dedupe; layout-level consumers therefore define the
+de-facto shape. (3) Canonical shape for `queryKeys.project` is the UNWRAPPED
+project (comments at each site say so).
+
+## 2026-07-14 — live prod QA catches what 87 guardrails + 700 unit tests cannot
+Three real bugs shipped through fully-green CI in one day and were caught
+only by driving the deployed product (snapshot no-op, read-only-owner race,
+drawings-first map never rendering — the last one blocking the headline
+trace-lots-off-the-drawing flow on exactly the greenfield project shape a
+new customer starts with). **Rules:** (1) Every feature wave ends with a
+live pass on prod (or a prod-like deploy) driving the REAL UI — Playwright
++ QA accounts make this scriptable. (2) Test the zero-state project shape
+(no geometries, no history), not just the seeded/demo shape — empty states
+gate entire features. (3) UI-visible role gates need one live check per role
+that matters (a foreman and an owner see different toolbars).
