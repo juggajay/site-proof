@@ -17,6 +17,10 @@ import type {
   ITPCompletion,
 } from './types';
 
+// The aggregate coverage group key (matches ALL_WORK_TYPES in the map module);
+// its gaps are the "no lot anywhere on the alignment" ranges shown in the pack.
+const COVERAGE_ALL_WORK_TYPES = 'All work types';
+
 function formatReleaseMethod(method: string): string {
   return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -651,6 +655,140 @@ export async function generateConformanceReportPDF(
     doc.setFont('helvetica', 'normal');
   }
   yPos += 15;
+
+  // ========== CHAINAGE COVERAGE (project alignment context) ==========
+  // Optional section (toggle default on). Best-effort: a null/empty coverage
+  // payload renders a one-line note, never a generation failure. Toggled off it
+  // is omitted entirely — the other sections use plain headings, so nothing
+  // renumbers.
+  if (options.includeChainageCoverage) {
+    checkPageBreak(30);
+    drawLine();
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('Chainage Coverage', margin, yPos);
+    yPos += 7;
+
+    const coverageLines = data.coverage?.controlLines ?? [];
+    if (coverageLines.length === 0) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.text(
+        'No control lines are defined for this project, so chainage coverage is unavailable.',
+        margin,
+        yPos,
+      );
+      doc.setFont('helvetica', 'normal');
+      yPos += 5;
+    } else {
+      coverageLines.forEach((line) => {
+        checkPageBreak(30);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        const extentLabel =
+          line.extentStart != null && line.extentEnd != null
+            ? `  (Ch ${line.extentStart} - ${line.extentEnd})`
+            : '';
+        doc.text(`${line.name}${extentLabel}`, margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 6;
+
+        const groups = line.groups ?? [];
+        if (line.error || groups.length === 0) {
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'italic');
+          doc.text('Coverage could not be computed for this control line.', margin + 2, yPos);
+          doc.setFont('helvetica', 'normal');
+          yPos += 6;
+          return;
+        }
+
+        // Table: Activity | Lots | % Lotted | % Conformed | Covered/Extent (m)
+        const headers = ['Activity', 'Lots', '% Lotted', '% Conformed', 'Covered/Extent (m)'];
+        const colWidths = [55, 18, 25, 30, 42];
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, yPos, contentWidth, 7, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        let hx = margin + 2;
+        headers.forEach((header, i) => {
+          doc.text(header, hx, yPos + 5);
+          hx += colWidths[i];
+        });
+        yPos += 9;
+
+        const extentLen =
+          line.extentStart != null && line.extentEnd != null
+            ? Math.max(0, line.extentEnd - line.extentStart)
+            : null;
+
+        doc.setFont('helvetica', 'normal');
+        groups.forEach((group) => {
+          checkPageBreak(8);
+          let cx = margin + 2;
+          doc.text(group.activityType.slice(0, 30), cx, yPos + 4);
+          cx += colWidths[0];
+          doc.text(`${group.lotCount}`, cx, yPos + 4);
+          cx += colWidths[1];
+          doc.text(`${Math.round(group.percentLotted)}%`, cx, yPos + 4);
+          cx += colWidths[2];
+          doc.text(`${Math.round(group.percentConformed)}%`, cx, yPos + 4);
+          cx += colWidths[3];
+          const coveredExtent =
+            extentLen != null
+              ? `${Math.round(group.coveredLengthM)} / ${Math.round(extentLen)}`
+              : `${Math.round(group.coveredLengthM)}`;
+          doc.text(coveredExtent, cx, yPos + 4);
+          yPos += 6;
+        });
+        yPos += 3;
+
+        // Gap list for the aggregate "All work types" group — the un-lotted
+        // stretches a reviewer must chase.
+        const aggregate = groups.find((g) => g.activityType === COVERAGE_ALL_WORK_TYPES);
+        const gaps = aggregate?.gaps ?? [];
+        if (gaps.length > 0) {
+          checkPageBreak(10);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Gaps (no lot):', margin + 2, yPos);
+          doc.setFont('helvetica', 'normal');
+          yPos += 5;
+          gaps.forEach((gap) => {
+            checkPageBreak(6);
+            doc.text(
+              `Ch ${gap.start} - ${gap.end}  (${Math.round(gap.lengthM)} m)`,
+              margin + 6,
+              yPos,
+            );
+            yPos += 5;
+          });
+        }
+
+        // Unmapped-lot disclosure — excluded from the coverage numbers above.
+        if (line.unmappedLotCount && line.unmappedLotCount > 0) {
+          checkPageBreak(6);
+          const n = line.unmappedLotCount;
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(120, 120, 120);
+          doc.text(
+            `${n} ${n > 1 ? 'lots have' : 'lot has'} no mapped geometry and ${
+              n > 1 ? 'are' : 'is'
+            } excluded from coverage.`,
+            margin + 2,
+            yPos,
+          );
+          doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
+          yPos += 6;
+        }
+        yPos += 4;
+      });
+    }
+    yPos += 6;
+  }
 
   // ========== SIGNATURE BLOCK (Road Authority Formats) ==========
   if (formatConfig.requiresSignature) {

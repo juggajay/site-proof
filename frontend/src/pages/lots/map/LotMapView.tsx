@@ -14,11 +14,13 @@ import {
   useMap,
 } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Layers, Square } from 'lucide-react';
+import { Camera, ExternalLink, Layers, Square } from 'lucide-react';
 
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
+import { authFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
@@ -58,6 +60,8 @@ interface LotMapViewProps {
   projectId: string;
   filteredLotIds: Set<string>;
   canManageSettings: boolean;
+  /** For the snapshot document caption; falls back to the id when absent. */
+  projectName?: string;
 }
 
 function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
@@ -275,9 +279,15 @@ function EmptyStateCallout({
   );
 }
 
-export function LotMapView({ projectId, filteredLotIds, canManageSettings }: LotMapViewProps) {
+export function LotMapView({
+  projectId,
+  filteredLotIds,
+  canManageSettings,
+  projectName,
+}: LotMapViewProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const [snapshotting, setSnapshotting] = useState(false);
   const geometriesQuery = useProjectLotGeometries(projectId);
   const controlLinesQuery = useProjectControlLines(projectId);
 
@@ -382,6 +392,51 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
     setGapFocusBounds(computeBounds([gap.polygonWgs84]));
   }, []);
 
+  // Capture the map to a PNG and store it as a normal project document. Landing
+  // it in Documents IS the integration — from there it is already attachable to
+  // conformance packs and claims through the existing evidence flows; no new
+  // attachment mechanism. html-to-image is imported lazily at click time.
+  const handleSnapshot = useCallback(async () => {
+    const node = document.querySelector<HTMLElement>('[data-testid="lot-map-container"]');
+    if (!node) return;
+    setSnapshotting(true);
+    try {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(node, { cacheBust: true, pixelRatio: 2 });
+      const blob = await (await fetch(dataUrl)).blob();
+      const dateKey = new Date().toISOString().slice(0, 10);
+      const label = projectName || projectId;
+      const file = new File([blob], `map-snapshot-${dateKey}.png`, { type: 'image/png' });
+
+      const form = new FormData();
+      form.append('file', file);
+      form.append('projectId', projectId);
+      form.append('documentType', 'map_snapshot');
+      form.append('caption', `Map snapshot — ${label} — ${dateKey}`);
+
+      const res = await authFetch('/api/documents/upload', { method: 'POST', body: form });
+      if (!res.ok) {
+        throw new Error((await res.text()) || 'Upload failed');
+      }
+      toast({
+        title: 'Snapshot saved',
+        description: 'Saved to project Documents — attach it to a conformance pack or claim there.',
+        variant: 'success',
+      });
+    } catch (err) {
+      toast({
+        title: 'Snapshot failed',
+        description: extractErrorMessage(
+          err,
+          'Could not capture the map. Satellite/base tiles may block cross-origin capture.',
+        ),
+        variant: 'error',
+      });
+    } finally {
+      setSnapshotting(false);
+    }
+  }, [projectId, projectName]);
+
   if (geometriesQuery.isLoading || controlLinesQuery.isLoading) {
     return (
       <div className="p-12 text-center text-sm text-muted-foreground" role="status">
@@ -466,6 +521,16 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
                   <Layers className="h-3.5 w-3.5" />
                   Coverage
                 </button>
+                <button
+                  type="button"
+                  onClick={handleSnapshot}
+                  disabled={snapshotting}
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
+                  data-testid="snapshot-button"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                  {snapshotting ? 'Saving…' : 'Snapshot'}
+                </button>
               </div>
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
@@ -488,6 +553,7 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
                       url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`}
                       attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       maxZoom={20}
+                      crossOrigin="anonymous"
                     />
                   </LayersControl.BaseLayer>
                 )}
@@ -496,6 +562,7 @@ export function LotMapView({ projectId, filteredLotIds, canManageSettings }: Lot
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     maxZoom={19}
+                    crossOrigin="anonymous"
                   />
                 </LayersControl.BaseLayer>
               </LayersControl>

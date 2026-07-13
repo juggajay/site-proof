@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { LotGeometryThumbnail } from '@/components/lots/LotGeometryThumbnail';
 
 // Ticket T2: the values the Enter Results action records. These mirror the
 // result-entry fields already collected in CreateTestModal (no new fields), so a
@@ -168,6 +169,9 @@ export const EnterResultsModal = React.memo(function EnterResultsModal({
         {test ? ` for ${test.testType}` : ''}. A result and a definitive pass/fail are required
         before this test can be entered and verified.
       </p>
+      {/* Spatial context: where on the job this sample sits. Renders nothing
+          when the linked lot has no mapped geometry. */}
+      {test?.lotId && <LotGeometryThumbnail lotId={test.lotId} />}
       {formError && (
         <div
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"

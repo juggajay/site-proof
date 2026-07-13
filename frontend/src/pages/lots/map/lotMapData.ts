@@ -52,6 +52,34 @@ export function useProjectLotGeometries(projectId: string | undefined) {
   });
 }
 
+// A single lot's geometry as returned by GET /api/lots/:lotId/geometries. Unlike
+// the project-wide endpoint this carries no lot status/number — the caller
+// supplies status for colouring.
+export interface LotGeometry {
+  id: string;
+  lotId: string;
+  kind: string;
+  controlLineId: string | null;
+  geometryWgs84: GeoJsonFeature;
+  areaM2: number | null;
+  lengthM: number | null;
+  chainageStart: number | null;
+  chainageEnd: number | null;
+}
+
+export function useLotGeometries(lotId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.lotGeometries(lotId ?? ''),
+    queryFn: () => {
+      if (!lotId) throw new Error('Lot not found');
+      return apiFetch<{ geometries: LotGeometry[] }>(
+        `/api/lots/${encodeURIComponent(lotId)}/geometries`,
+      );
+    },
+    enabled: !!lotId,
+  });
+}
+
 export function useProjectControlLines(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.controlLines(projectId ?? ''),

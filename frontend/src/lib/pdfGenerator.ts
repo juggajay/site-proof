@@ -10,6 +10,7 @@ export { defaultConformanceOptions, defaultHPPackageOptions } from './pdf/types'
 export type {
   ClaimEvidencePackageData,
   ClaimPackageOptions,
+  ConformanceCoverage,
   ConformanceFormat,
   ConformanceFormatOptions,
   ConformanceReportData,

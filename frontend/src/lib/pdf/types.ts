@@ -8,8 +8,44 @@ export interface ConformanceFormatOptions {
   includeHoldPoints: boolean;
   includeNCRs: boolean;
   includePhotos: boolean;
+  // Chainage-coverage section (per control line: % lotted/conformed + gaps).
+  // Defaults on; toggled off cleanly omits the whole section.
+  includeChainageCoverage: boolean;
   clientName?: string;
   contractNumber?: string;
+}
+
+// Chainage-coverage payload — mirrors GET /api/projects/:id/coverage (#1422).
+// Defined here so the PDF module stays decoupled from the map feature; the
+// polygon geometry the endpoint also returns is not needed for the PDF table.
+export interface ConformanceCoverageGap {
+  start: number;
+  end: number;
+  lengthM: number;
+}
+
+export interface ConformanceCoverageGroup {
+  activityType: string;
+  lotCount: number;
+  percentLotted: number;
+  percentConformed: number;
+  coveredLengthM: number;
+  conformedLengthM: number;
+  gaps: ConformanceCoverageGap[];
+}
+
+export interface ConformanceCoverageLine {
+  id: string;
+  name: string;
+  extentStart?: number;
+  extentEnd?: number;
+  groups?: ConformanceCoverageGroup[];
+  unmappedLotCount?: number;
+  error?: string;
+}
+
+export interface ConformanceCoverage {
+  controlLines: ConformanceCoverageLine[];
 }
 
 export interface PDFCompanyBranding {
@@ -39,6 +75,7 @@ export const defaultConformanceOptions: ConformanceFormatOptions = {
   includeHoldPoints: true,
   includeNCRs: true,
   includePhotos: true,
+  includeChainageCoverage: true,
 };
 
 export interface DashboardPDFAttentionItem {
@@ -178,6 +215,9 @@ export interface ConformanceReportData extends PDFBrandableData {
   ncrs: NCR[];
   holdPointReleases: HoldPointRelease[];
   photoCount: number;
+  // Best-effort project chainage coverage; null when unavailable (fetch failed
+  // or no control lines). The section renders a note rather than failing.
+  coverage?: ConformanceCoverage | null;
 }
 
 // Options for customizing the HP evidence package (Feature #466)
