@@ -37,14 +37,6 @@ export function getLotTabsForRole(role: string | undefined | null): TabConfig[] 
   return [...prioritized, ...rest];
 }
 
-// Status color classes for lot status badges
-export const lotStatusColors: Record<string, string> = {
-  pending: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-muted text-muted-foreground',
-  completed: 'bg-muted text-muted-foreground',
-  on_hold: 'bg-warning/10 text-warning',
-};
-
 // Pass/fail color classes for test results
 export const testPassFailColors: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
