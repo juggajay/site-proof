@@ -32,6 +32,19 @@ function wrapper() {
   );
 }
 
+// Wrapper that also exposes the client so a test can spy on invalidateQueries.
+function wrapperWithClient() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { client, Wrapper };
+}
+
+function invalidatedKeys(spy: { mock: { calls: unknown[][] } }): unknown[] {
+  return spy.mock.calls.map((call) => (call[0] as { queryKey: unknown }).queryKey);
+}
+
 describe('controlLinesData hooks', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
@@ -87,6 +100,54 @@ describe('controlLinesData hooks', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/api/projects/project-1/control-lines/cl-1', {
       method: 'DELETE',
     });
+  });
+
+  // A control-line write must refresh every consumer of that data: the settings
+  // list AND the Lot Register map, which keys geometries under
+  // project-lot-geometries. Missing the map key was the stale-empty-state bug.
+  async function assertInvalidatesBothConsumers(keys: unknown[]): Promise<void> {
+    expect(keys).toContainEqual(['control-lines', 'project-1']);
+    expect(keys).toContainEqual(['project-lot-geometries', 'project-1']);
+  }
+
+  it('useCreateControlLine invalidates the list and the map geometries consumer', async () => {
+    apiFetchMock.mockResolvedValue({ controlLine: { id: 'cl-1' } });
+    const { client, Wrapper } = wrapperWithClient();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useCreateControlLine('project-1'), { wrapper: Wrapper });
+
+    await result.current.mutateAsync({
+      name: 'MC00',
+      coordinateSystem: 'EPSG:7856',
+      points: POINTS,
+    });
+
+    await assertInvalidatesBothConsumers(invalidatedKeys(invalidateSpy));
+  });
+
+  it('useUpdateControlLine invalidates the list and the map geometries consumer', async () => {
+    apiFetchMock.mockResolvedValue({ controlLine: { id: 'cl-1' } });
+    const { client, Wrapper } = wrapperWithClient();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useUpdateControlLine('project-1'), { wrapper: Wrapper });
+
+    await result.current.mutateAsync({
+      id: 'cl-1',
+      input: { name: 'MC00', coordinateSystem: 'EPSG:7856', points: POINTS },
+    });
+
+    await assertInvalidatesBothConsumers(invalidatedKeys(invalidateSpy));
+  });
+
+  it('useDeleteControlLine invalidates the list and the map geometries consumer', async () => {
+    apiFetchMock.mockResolvedValue(undefined);
+    const { client, Wrapper } = wrapperWithClient();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useDeleteControlLine('project-1'), { wrapper: Wrapper });
+
+    await result.current.mutateAsync('cl-1');
+
+    await assertInvalidatesBothConsumers(invalidatedKeys(invalidateSpy));
   });
 
   it('useControlLinesAccess grants write for a project_manager', async () => {

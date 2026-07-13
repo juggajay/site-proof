@@ -16,6 +16,7 @@ import { itpRouter } from './routes/itp/index.js';
 import diaryRouter from './routes/diary/index.js';
 import claimsRouter from './routes/claims.js';
 import { controlLinesRouter } from './routes/controlLines/index.js';
+import { planSheetsRouter } from './routes/planSheets/index.js';
 import { projectLotGeometriesRouter } from './routes/projectLotGeometries.js';
 import { holdpointsRouter } from './routes/holdpoints.js';
 import { docketsRouter } from './routes/dockets.js';
@@ -139,6 +140,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/diary', diaryRouter);
   app.use('/api/projects', claimsRouter);
   app.use('/api/projects', controlLinesRouter);
+  app.use('/api/projects', planSheetsRouter);
   app.use('/api/projects', projectLotGeometriesRouter);
   app.use('/api/holdpoints', holdpointsRouter);
   app.use('/api/dockets', docketsRouter);

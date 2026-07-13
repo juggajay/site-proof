@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -34,6 +34,16 @@ function controlLinesPath(projectId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/control-lines`;
 }
 
+// A control-line write is visible in two places that key their own queries: the
+// settings list (controlLines) and the Lot Register map (controlLines +
+// projectLotGeometries — deleting a line SetNulls geometries, and a
+// create+backfill produces them). Refresh every consumer so no view is stuck on
+// a stale "no control lines" / empty-map state until a hard reload.
+function invalidateControlLineConsumers(queryClient: QueryClient, projectId: string): void {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.projectLotGeometries(projectId) });
+}
+
 export function useControlLines(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.controlLines(projectId ?? 'none'),
@@ -58,7 +68,7 @@ export function useCreateControlLine(projectId: string | undefined) {
     },
     onSuccess: () => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
+        invalidateControlLineConsumers(queryClient, projectId);
       }
     },
   });
@@ -76,7 +86,7 @@ export function useUpdateControlLine(projectId: string | undefined) {
     },
     onSuccess: () => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
+        invalidateControlLineConsumers(queryClient, projectId);
       }
     },
   });
@@ -93,7 +103,7 @@ export function useDeleteControlLine(projectId: string | undefined) {
     },
     onSuccess: () => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
+        invalidateControlLineConsumers(queryClient, projectId);
       }
     },
   });

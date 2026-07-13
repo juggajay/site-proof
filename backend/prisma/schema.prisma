@@ -64,6 +64,7 @@ model User {
   projectUsers                ProjectUser[]
   createdLots                 Lot[]                        @relation("CreatedByUser")
   createdControlLines         ControlLine[]                @relation("CreatedControlLines")
+  createdPlanSheets           PlanSheet[]                  @relation("CreatedPlanSheets")
   conformedLots               Lot[]                        @relation("ConformedByUser")
   conformanceOverriddenLots   Lot[]                        @relation("ConformanceOverriddenByUser")
   raisedNCRs                  NCR[]                        @relation("RaisedByUser")
@@ -384,6 +385,7 @@ model Project {
   projectUsers                ProjectUser[]
   projectAreas                ProjectArea[]
   controlLines                ControlLine[]
+  planSheets                  PlanSheet[]
   lots                        Lot[]
   itpTemplates                ITPTemplate[]
   ncrs                        NCR[]
@@ -484,6 +486,40 @@ model LotGeometry {
 
   @@index([lotId])
   @@map("lot_geometries")
+}
+
+// A georeferenced construction drawing page: the source PDF is pre-rastered to a
+// PNG at upload and stored in the documents bucket; the viewer overlays lots on
+// it using the affine `registration.transform`.
+//
+// Transform convention: transform = [a, b, c, d, e, f] maps image pixels
+// (x right, y DOWN) to grid coords in `coordinateSystem`:
+//   easting  = a*x + b*y + c
+//   northing = d*x + e*y + f
+// rmsErrorM = root-mean-square registration residual in metres. The math is
+// computed client-side (later PR); the backend stores and validates it.
+model PlanSheet {
+  id               String   @id @default(uuid())
+  projectId        String   @map("project_id")
+  documentId       String?  @map("document_id") // optional source PDF Document
+  name             String
+  pageNumber       Int      @default(1) @map("page_number")
+  imageRef         String   @map("image_ref") // supabase://documents/... (or local fallback path)
+  imageWidth       Int      @map("image_width") // pixels
+  imageHeight      Int      @map("image_height")
+  coordinateSystem String   @map("coordinate_system") // EPSG preset, same set as ControlLine
+  registration     Json? // {points:[{px,py,easting,northing}], transform:[a,b,c,d,e,f], rmsErrorM}
+  perimeter        Json? // pixel-space ring [[x,y],...]
+  createdById      String?  @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document  Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdBy User?     @relation("CreatedPlanSheets", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@map("plan_sheets")
 }
 
 // ============================================================================
@@ -1507,6 +1543,7 @@ model Document {
   testCertificates         TestResult[]
   drawings                 Drawing[]
   signedUrlTokens          DocumentSignedUrlToken[]
+  planSheets               PlanSheet[]
 
   @@index([projectId, documentType])
   @@index([projectId, lotId])
