@@ -469,6 +469,21 @@ export function LotMapView({
     [planSheetsQuery.data],
   );
 
+  // Drawings-first projects: with no lot geometry yet, show the first registered
+  // sheet automatically so the map opens on the drawing and lots can be traced
+  // straight off it. Only seeds the initial state — user toggles are never
+  // overridden (planShown stays empty until this or the user sets it).
+  const geometryCount = geometriesQuery.data?.geometries?.length ?? 0;
+  const planShownSeeded = useRef(false);
+  useEffect(() => {
+    if (planShownSeeded.current) return;
+    if (geometriesQuery.isLoading || planSheetsQuery.isLoading) return;
+    planShownSeeded.current = true;
+    if (geometryCount === 0 && registeredSheets.length > 0) {
+      setPlanShown({ [registeredSheets[0].id]: true });
+    }
+  }, [geometriesQuery.isLoading, planSheetsQuery.isLoading, geometryCount, registeredSheets]);
+
   const handleMapBounds = useCallback((bounds: L.LatLngBounds) => setMapBounds(bounds), []);
 
   const handleAreaComplete = useCallback(
@@ -634,14 +649,23 @@ export function LotMapView({
     [allGeometries, filteredLotIds],
   );
 
-  const bounds = useMemo(
-    () =>
-      computeBounds([
-        ...filteredGeometries.map((g) => g.geometryWgs84),
-        ...controlLines.map((c) => c.geometryWgs84),
-      ]),
-    [filteredGeometries, controlLines],
-  );
+  const bounds = useMemo(() => {
+    const fromShapes = computeBounds([
+      ...filteredGeometries.map((g) => g.geometryWgs84),
+      ...controlLines.map((c) => c.geometryWgs84),
+    ]);
+    if (fromShapes) return fromShapes;
+    // Drawings-first fallback: no geometry or control line yet — open on the
+    // first registered plan sheet so the drawing is in view.
+    const corners = registeredSheets[0]?.cornersWgs84;
+    if (!corners) return null;
+    return cornersToLatLngBounds([
+      corners.topLeft,
+      corners.topRight,
+      corners.bottomRight,
+      corners.bottomLeft,
+    ]);
+  }, [filteredGeometries, controlLines, registeredSheets]);
 
   const coverageLines = useMemo(() => coverageQuery.data?.controlLines ?? [], [coverageQuery.data]);
 
@@ -761,7 +785,9 @@ export function LotMapView({
 
   return (
     <div className="bg-background" data-testid="lot-map-view">
-      {showEmptyState && (allGeometries?.length ?? 0) === 0 ? (
+      {/* A registered plan sheet is a reason to render the map even with zero
+          geometries — drawings-first projects trace their lots off the sheet. */}
+      {showEmptyState && (allGeometries?.length ?? 0) === 0 && registeredSheets.length === 0 ? (
         <EmptyStateCallout
           projectId={projectId}
           hasControlLines={controlLines.length > 0}
