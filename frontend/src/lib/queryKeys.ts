@@ -210,4 +210,5 @@ export const queryKeys = {
   projectSettings: (projectId: string) => ['project-settings', projectId] as const,
   projectUsers: (projectId: string) => ['project-users', projectId] as const,
   projectAreas: (projectId: string) => ['project-areas', projectId] as const,
+  controlLines: (projectId: string) => ['control-lines', projectId] as const,
 } as const;
