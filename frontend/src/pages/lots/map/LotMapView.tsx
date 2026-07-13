@@ -673,8 +673,19 @@ export function LotMapView({
   // conformance packs and claims through the existing evidence flows; no new
   // attachment mechanism. html-to-image is imported lazily at click time.
   const handleSnapshot = useCallback(async () => {
-    const node = document.querySelector<HTMLElement>('[data-testid="lot-map-container"]');
-    if (!node) return;
+    // Capture via the Leaflet instance, not a DOM query: react-leaflet's
+    // MapContainer treats unknown props as Leaflet options, so a data-testid
+    // prop never reaches the DOM (the mocked container in tests DID render it,
+    // which is how a selector-based lookup passed CI but no-oped in prod).
+    const node = map?.getContainer();
+    if (!node) {
+      toast({
+        title: 'Snapshot failed',
+        description: 'The map is not ready yet — try again in a moment.',
+        variant: 'error',
+      });
+      return;
+    }
     setSnapshotting(true);
     try {
       const { toBlob } = await import('html-to-image');
@@ -713,7 +724,7 @@ export function LotMapView({
     } finally {
       setSnapshotting(false);
     }
-  }, [projectId, projectName]);
+  }, [map, projectId, projectName]);
 
   if (geometriesQuery.isLoading || controlLinesQuery.isLoading) {
     return (
@@ -880,7 +891,6 @@ export function LotMapView({
               zoom={AU_DEFAULT_ZOOM}
               scrollWheelZoom
               style={{ height: 520, width: '100%' }}
-              data-testid="lot-map-container"
             >
               <LayersControl position="topright">
                 {MAPTILER_KEY && (
