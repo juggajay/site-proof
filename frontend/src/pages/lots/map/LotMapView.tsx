@@ -19,6 +19,7 @@ import { Camera, ExternalLink, Layers, Square } from 'lucide-react';
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
+import { formatDateKey } from '@/lib/localDate';
 import { authFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { useIsMobile } from '@/hooks/useMediaQuery';
@@ -401,10 +402,12 @@ export function LotMapView({
     if (!node) return;
     setSnapshotting(true);
     try {
-      const { toPng } = await import('html-to-image');
-      const dataUrl = await toPng(node, { cacheBust: true, pixelRatio: 2 });
-      const blob = await (await fetch(dataUrl)).blob();
-      const dateKey = new Date().toISOString().slice(0, 10);
+      const { toBlob } = await import('html-to-image');
+      const blob = await toBlob(node, { cacheBust: true, pixelRatio: 2 });
+      if (!blob) {
+        throw new Error('Could not capture the map image');
+      }
+      const dateKey = formatDateKey();
       const label = projectName || projectId;
       const file = new File([blob], `map-snapshot-${dateKey}.png`, { type: 'image/png' });
 
