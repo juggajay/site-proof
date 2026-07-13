@@ -1,0 +1,236 @@
+import express from 'express';
+import request from 'supertest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { prisma } from '../../lib/prisma.js';
+import { errorHandler } from '../../middleware/errorHandler.js';
+import { registerTestUser } from '../../test/routeTestHarness.js';
+import { authRouter } from '../auth.js';
+import { controlLinesRouter } from './index.js';
+
+const app = express();
+app.use(express.json());
+app.use('/api/auth', authRouter);
+app.use('/api/projects', controlLinesRouter);
+app.use(errorHandler);
+
+const POINTS = [
+  { chainage: 0, easting: 500_000, northing: 6_000_000 },
+  { chainage: 100, easting: 500_100, northing: 6_000_000 },
+];
+
+function createBody(overrides: Record<string, unknown> = {}) {
+  return { name: 'MC00 Mainline', coordinateSystem: 'EPSG:7855', points: POINTS, ...overrides };
+}
+
+describe('Control Lines API', () => {
+  let companyId: string;
+  let otherCompanyId: string;
+  let pmToken: string;
+  let viewerToken: string;
+  let subbieToken: string;
+  let outsiderToken: string;
+  let projectId: string;
+  let siblingProjectId: string; // same company, pm is also a member
+
+  beforeAll(async () => {
+    const stamp = Date.now();
+    companyId = (await prisma.company.create({ data: { name: `CL Co ${stamp}` } })).id;
+    otherCompanyId = (await prisma.company.create({ data: { name: `CL Other ${stamp}` } })).id;
+
+    const pm = await registerTestUser(app, {
+      emailPrefix: 'cl-pm',
+      fullName: 'CL PM',
+      companyId,
+      roleInCompany: 'project_manager',
+    });
+    pmToken = pm.token;
+
+    const viewer = await registerTestUser(app, {
+      emailPrefix: 'cl-viewer',
+      fullName: 'CL Viewer',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+    viewerToken = viewer.token;
+
+    const subbie = await registerTestUser(app, {
+      emailPrefix: 'cl-subbie',
+      fullName: 'CL Subbie',
+      companyId,
+      roleInCompany: 'subcontractor',
+    });
+    subbieToken = subbie.token;
+
+    const outsider = await registerTestUser(app, {
+      emailPrefix: 'cl-outsider',
+      fullName: 'CL Outsider',
+      companyId: otherCompanyId,
+      roleInCompany: 'project_manager',
+    });
+    outsiderToken = outsider.token;
+
+    const project = await prisma.project.create({
+      data: {
+        name: `CL Project ${stamp}`,
+        projectNumber: `CL-${stamp}`,
+        companyId,
+        status: 'active',
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    projectId = project.id;
+
+    const sibling = await prisma.project.create({
+      data: {
+        name: `CL Sibling ${stamp}`,
+        projectNumber: `CLS-${stamp}`,
+        companyId,
+        status: 'active',
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    siblingProjectId = sibling.id;
+
+    for (const [userId, role] of [
+      [pm.userId, 'project_manager'],
+      [viewer.userId, 'viewer'],
+      [subbie.userId, 'subcontractor'],
+    ] as const) {
+      await prisma.projectUser.create({ data: { projectId, userId, role, status: 'active' } });
+    }
+    await prisma.projectUser.create({
+      data: {
+        projectId: siblingProjectId,
+        userId: pm.userId,
+        role: 'project_manager',
+        status: 'active',
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.controlLine.deleteMany({
+      where: { projectId: { in: [projectId, siblingProjectId] } },
+    });
+    await prisma.projectUser.deleteMany({
+      where: { projectId: { in: [projectId, siblingProjectId] } },
+    });
+    await prisma.project.deleteMany({ where: { id: { in: [projectId, siblingProjectId] } } });
+    await prisma.company.deleteMany({ where: { id: { in: [companyId, otherCompanyId] } } });
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app).get(`/api/projects/${projectId}/control-lines`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-member (cross-company) with 403', async () => {
+    const listRes = await request(app)
+      .get(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${outsiderToken}`);
+    expect(listRes.status).toBe(403);
+
+    const createRes = await request(app)
+      .post(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${outsiderToken}`)
+      .send(createBody());
+    expect(createRes.status).toBe(403);
+  });
+
+  it('denies write to a read-only member (viewer) and a subcontractor', async () => {
+    const viewerRes = await request(app)
+      .post(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .send(createBody());
+    expect(viewerRes.status).toBe(403);
+
+    const subbieRes = await request(app)
+      .get(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${subbieToken}`);
+    expect(subbieRes.status).toBe(403); // control lines are internal engineering data
+  });
+
+  it('runs the full CRUD lifecycle for an authorised writer', async () => {
+    // Create
+    const created = await request(app)
+      .post(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(createBody());
+    expect(created.status).toBe(201);
+    const line = created.body.controlLine;
+    expect(line.id).toBeTruthy();
+    expect(line.geometryWgs84.geometry.type).toBe('LineString');
+    expect(line.geometryWgs84.geometry.coordinates).toHaveLength(2);
+    expect(line.createdById).toBeTruthy();
+
+    // A viewer can read it
+    const viewerList = await request(app)
+      .get(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${viewerToken}`);
+    expect(viewerList.status).toBe(200);
+    expect(viewerList.body.controlLines).toHaveLength(1);
+
+    // Get by id
+    const fetched = await request(app)
+      .get(`/api/projects/${projectId}/control-lines/${line.id}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.controlLine.name).toBe('MC00 Mainline');
+
+    // Same line requested under a sibling project the writer also belongs to → 404 (project-scoped)
+    const mismatched = await request(app)
+      .get(`/api/projects/${siblingProjectId}/control-lines/${line.id}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+    expect(mismatched.status).toBe(404);
+
+    // Patch name only (geometry cache unchanged)
+    const renamed = await request(app)
+      .patch(`/api/projects/${projectId}/control-lines/${line.id}`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ name: 'MC00 Renamed' });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.controlLine.name).toBe('MC00 Renamed');
+
+    // Patch points → geometry cache recomputed
+    const repointed = await request(app)
+      .patch(`/api/projects/${projectId}/control-lines/${line.id}`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ points: [...POINTS, { chainage: 200, easting: 500_200, northing: 6_000_000 }] });
+    expect(repointed.status).toBe(200);
+    expect(repointed.body.controlLine.geometryWgs84.geometry.coordinates).toHaveLength(3);
+
+    // Delete
+    const deleted = await request(app)
+      .delete(`/api/projects/${projectId}/control-lines/${line.id}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+    expect(deleted.status).toBe(200);
+
+    const gone = await request(app)
+      .get(`/api/projects/${projectId}/control-lines/${line.id}`)
+      .set('Authorization', `Bearer ${pmToken}`);
+    expect(gone.status).toBe(404);
+  });
+
+  it('validates the create payload', async () => {
+    const tooFewPoints = await request(app)
+      .post(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(createBody({ points: [POINTS[0]] }));
+    expect(tooFewPoints.status).toBe(400);
+
+    const badEpsg = await request(app)
+      .post(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(createBody({ coordinateSystem: 'EPSG:9999' }));
+    expect(badEpsg.status).toBe(400);
+
+    const missingName = await request(app)
+      .post(`/api/projects/${projectId}/control-lines`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(createBody({ name: '' }));
+    expect(missingName.status).toBe(400);
+  });
+});
