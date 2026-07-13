@@ -30,10 +30,15 @@ export function Breadcrumbs() {
   });
   const lotNumber = lotData?.lot?.lotNumber || null;
 
-  // Fetch project name if we have a projectId (shares cache with Sidebar)
+  // Fetch project name if we have a projectId (shares cache with Sidebar).
+  // queryKeys.project caches the UNWRAPPED project — every consumer of this
+  // key must resolve the same shape or they poison each other's cache.
   const { data: _projectData } = useQuery({
     queryKey: queryKeys.project(projectId!),
-    queryFn: () => apiFetch<{ project?: { name?: string } }>(`/api/projects/${projectId}`),
+    queryFn: () =>
+      apiFetch<{ project?: { name?: string } }>(`/api/projects/${projectId}`).then(
+        (d) => d.project ?? null,
+      ),
     enabled: !!projectId,
   });
 
