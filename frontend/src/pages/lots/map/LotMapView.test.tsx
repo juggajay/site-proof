@@ -54,6 +54,19 @@ vi.mock('./spatialSearchData', () => ({
   useSpatialSearch: () => spatialSearchMutation,
 }));
 
+// Coverage query calls useQuery; stub it so LotMapView renders without a
+// QueryClientProvider. The pure selectors stay real.
+const coverageQuery = {
+  data: undefined,
+  isLoading: false,
+  error: null,
+  refetch: vi.fn(),
+};
+vi.mock('./coverageData', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./coverageData')>();
+  return { ...actual, useProjectCoverage: () => coverageQuery };
+});
+
 const useProjectLotGeometries = vi.fn();
 const useProjectControlLines = vi.fn();
 const backfillLotGeometries = vi.fn();
