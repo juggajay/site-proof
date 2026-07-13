@@ -611,6 +611,12 @@ export function createClaimPostEvidenceWorkflowRouter({
         // own. Lots this claim had taken to 100% (status `claimed`, linked via
         // claimedInId) must be returned to `conformed` so they can be claimed
         // again.
+        // Capture refs before the update — updateMany returns only a count, but
+        // the map time scrubber needs a per-lot claimed -> conformed audit row.
+        const releasedLotRefs = await tx.lot.findMany({
+          where: { claimedInId: claimId, projectId, status: 'claimed' },
+          select: { id: true, lotNumber: true },
+        });
         const releasedClaimedLots = await tx.lot.updateMany({
           where: { claimedInId: claimId, projectId, status: 'claimed' },
           data: { claimedInId: null, status: 'conformed' },
@@ -627,10 +633,22 @@ export function createClaimPostEvidenceWorkflowRouter({
           where: { id: claimId },
         });
 
-        return { claim, releasedClaimedLots, clearedStaleLotLinks, releasedVariations };
+        return {
+          claim,
+          releasedLotRefs,
+          releasedClaimedLots,
+          clearedStaleLotLinks,
+          releasedVariations,
+        };
       });
 
-      const { claim, releasedClaimedLots, clearedStaleLotLinks, releasedVariations } = deleteResult;
+      const {
+        claim,
+        releasedLotRefs,
+        releasedClaimedLots,
+        clearedStaleLotLinks,
+        releasedVariations,
+      } = deleteResult;
 
       await createAuditLog({
         projectId,
@@ -650,6 +668,23 @@ export function createClaimPostEvidenceWorkflowRouter({
         },
         req,
       });
+
+      // Per-lot status audit so the map time scrubber sees claimed -> conformed.
+      for (const lot of releasedLotRefs) {
+        await createAuditLog({
+          projectId,
+          userId,
+          entityType: 'lot',
+          entityId: lot.id,
+          action: AuditAction.LOT_STATUS_CHANGED,
+          changes: {
+            lotNumber: lot.lotNumber,
+            status: { from: 'claimed', to: 'conformed' },
+            claimId,
+          },
+          req,
+        });
+      }
 
       res.json(buildClaimDeletedResponse());
     }),

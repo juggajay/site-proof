@@ -77,6 +77,10 @@ export function lotStatusAtDate(
   const createdKey = formatDateKey(new Date(lot.createdAt), timeZone);
   if (createdKey > dateKey) return null; // not created as of D
 
+  // Right edge of the slider must always match the live map, even where the
+  // audit trail has gaps (some status writers historically did not audit).
+  if (dateKey >= formatDateKey(new Date(), timeZone)) return lot.currentStatus;
+
   let status = lot.events.length > 0 ? lot.events[0].from : lot.currentStatus;
   for (const ev of lot.events) {
     if (formatDateKey(new Date(ev.at), timeZone) <= dateKey) {

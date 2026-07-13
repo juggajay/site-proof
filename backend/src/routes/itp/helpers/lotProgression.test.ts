@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   instanceFindUnique: vi.fn(),
   instanceUpdate: vi.fn(),
   lotUpdate: vi.fn(),
+  auditLogCreate: vi.fn(),
   logError: vi.fn(),
 }));
 
@@ -11,6 +12,7 @@ vi.mock('../../../lib/prisma.js', () => ({
   prisma: {
     iTPInstance: { findUnique: mocks.instanceFindUnique, update: mocks.instanceUpdate },
     lot: { update: mocks.lotUpdate },
+    auditLog: { create: mocks.auditLogCreate },
   },
 }));
 
@@ -49,7 +51,7 @@ function makeInstance({
   return {
     id: 'itp-1',
     status: instanceStatus,
-    lot: { id: 'lot-1', status: lotStatus, holdPoints },
+    lot: { id: 'lot-1', projectId: 'proj-1', lotNumber: 'LOT-001', status: lotStatus, holdPoints },
     templateSnapshot: null,
     template: { checklistItems: items },
     completions,
@@ -61,6 +63,7 @@ describe('updateLotStatusFromITP', () => {
     vi.clearAllMocks();
     mocks.lotUpdate.mockResolvedValue({});
     mocks.instanceUpdate.mockResolvedValue({});
+    mocks.auditLogCreate.mockResolvedValue({});
   });
 
   it('moves a one-item not-started ITP straight to completed', async () => {
@@ -81,6 +84,11 @@ describe('updateLotStatusFromITP', () => {
       where: { id: 'itp-1' },
       data: { status: 'completed' },
     });
+    // Auto-progression audits the transition so the map time scrubber can replay it.
+    expect(mocks.auditLogCreate).toHaveBeenCalledTimes(1);
+    const audited = mocks.auditLogCreate.mock.calls[0][0].data;
+    expect(audited.action).toBe('lot_status_changed');
+    expect(JSON.parse(audited.changes).status).toEqual({ from: 'not_started', to: 'completed' });
   });
 
   it('does not count a rejected completion toward auto-progression', async () => {

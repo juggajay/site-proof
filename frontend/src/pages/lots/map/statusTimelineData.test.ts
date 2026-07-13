@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { formatDateKey } from '@/lib/localDate';
 import {
   dateKeySpan,
   dayNumberToDateKey,
@@ -45,6 +46,21 @@ describe('lotStatusAtDate', () => {
     expect(
       lotStatusAtDate(lot({ events: [], currentStatus: 'not_started' }), '2026-05-01', TZ),
     ).toBe('not_started');
+  });
+
+  it('clamps to currentStatus at/after today even when the audit trail has a gap', () => {
+    // Recorded history only reaches "conformed"; the live status is "claimed"
+    // (an un-audited transition, historically). Today must show live status.
+    const gappy = lot({
+      createdAt: '2026-01-10T00:00:00.000Z',
+      currentStatus: 'claimed',
+      events: [{ at: '2026-01-15T02:00:00.000Z', from: 'completed', to: 'conformed' }],
+    });
+    const todayKey = formatDateKey(new Date(), TZ);
+    const yesterdayKey = dayNumberToDateKey(dateKeySpanBase(todayKey) - 1);
+
+    expect(lotStatusAtDate(gappy, todayKey, TZ)).toBe('claimed'); // clamp to live
+    expect(lotStatusAtDate(gappy, yesterdayKey, TZ)).toBe('conformed'); // recorded history
   });
 });
 
