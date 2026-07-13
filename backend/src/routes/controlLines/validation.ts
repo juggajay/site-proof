@@ -38,5 +38,17 @@ export const updateControlLineSchema = z
     message: 'No fields to update',
   });
 
+const offsetMetres = z.number().finite().min(0).max(100);
+
+export const backfillLotGeometriesSchema = z
+  .object({
+    offsetLeft: offsetMetres.optional(),
+    offsetRight: offsetMetres.optional(),
+  })
+  .refine((data) => (data.offsetLeft ?? 0) + (data.offsetRight ?? 0) > 0, {
+    message: 'A lot needs a non-zero offset on at least one side',
+  });
+
 export type CreateControlLineInput = z.infer<typeof createControlLineSchema>;
 export type UpdateControlLineInput = z.infer<typeof updateControlLineSchema>;
+export type BackfillLotGeometriesInput = z.infer<typeof backfillLotGeometriesSchema>;

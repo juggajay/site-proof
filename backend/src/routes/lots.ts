@@ -19,6 +19,7 @@ import {
 } from './lots/updateFields.js';
 import { buildLotUpdatedResponse } from './lots/remainingResponses.js';
 import { lotReadRouter } from './lots/readRoutes.js';
+import { lotGeometryRouter } from './lots/geometryRoutes.js';
 import { lotCreateRouter } from './lots/createRoutes.js';
 import { lotDeleteRouter } from './lots/deleteRoutes.js';
 import { lotSubcontractorAssignmentsRouter } from './lots/subcontractorAssignments.js';
@@ -33,6 +34,10 @@ lotsRouter.use(requireAuth);
 
 // Lot read routes (GET /, /suggest-number, /:id) — mounted before mutation routes. See ./lots/readRoutes.ts
 lotsRouter.use(lotReadRouter);
+
+// Lot geometry routes (GET/POST /:lotId/geometries, DELETE /:lotId/geometries/:geometryId).
+// Two-segment paths, so they never collide with the read router's dynamic `/:id`.
+lotsRouter.use(lotGeometryRouter);
 
 // Lot create routes (POST /, /bulk, /:id/clone) — mounted after read routes, before update/delete/bulk routes. See ./lots/createRoutes.ts
 lotsRouter.use(lotCreateRouter);
