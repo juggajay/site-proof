@@ -33,6 +33,11 @@ function pixelToLatLng(point: ImagePoint, imageHeight: number): L.LatLngExpressi
   return [imageHeight - point.py, point.px];
 }
 
+/** A click maps to a valid image pixel only when it lands within the sheet. */
+export function isPointInImage(point: ImagePoint, width: number, height: number): boolean {
+  return point.px >= 0 && point.px <= width && point.py >= 0 && point.py <= height;
+}
+
 function numberedIcon(index: number): L.DivIcon {
   return L.divIcon({
     className: '',
@@ -54,15 +59,20 @@ function FitImage({ width, height }: { width: number; height: number }) {
 }
 
 function ClickCapture({
+  imageWidth,
   imageHeight,
   onAddPoint,
 }: {
+  imageWidth: number;
   imageHeight: number;
   onAddPoint: (point: ImagePoint) => void;
 }) {
   useMapEvents({
     click(e) {
-      onAddPoint(latLngToPixel(e.latlng, imageHeight));
+      // Ignore clicks in the map margin outside the sheet — they map to
+      // negative / out-of-range pixels that corrupt registration/perimeter.
+      const point = latLngToPixel(e.latlng, imageHeight);
+      if (isPointInImage(point, imageWidth, imageHeight)) onAddPoint(point);
     },
   });
   return null;
@@ -96,7 +106,7 @@ export function PlanSheetImageMap({
     >
       <ImageOverlay url={imageUrl} bounds={bounds} />
       <FitImage width={imageWidth} height={imageHeight} />
-      <ClickCapture imageHeight={imageHeight} onAddPoint={onAddPoint} />
+      <ClickCapture imageWidth={imageWidth} imageHeight={imageHeight} onAddPoint={onAddPoint} />
       {polygon && points.length >= 2 && (
         <Polygon
           positions={points.map((point) => pixelToLatLng(point, imageHeight))}

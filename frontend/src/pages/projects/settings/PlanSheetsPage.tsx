@@ -212,6 +212,9 @@ export function PlanSheetsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [registerSheet, setRegisterSheet] = useState<PlanSheetListItem | null>(null);
   const [perimeterSheet, setPerimeterSheet] = useState<PlanSheetListItem | null>(null);
+  // Set when the perimeter step is entered straight after registration, so the
+  // modal shows the optional-step framing + Skip rather than the plain editor.
+  const [perimeterGuided, setPerimeterGuided] = useState(false);
   const [renameSheet, setRenameSheet] = useState<PlanSheetListItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PlanSheetListItem | null>(null);
 
@@ -307,7 +310,10 @@ export function PlanSheetsPage() {
             readOnly={readOnly}
             deletingId={deleteMutation.isLoading ? (pendingDelete?.id ?? null) : null}
             onRegister={setRegisterSheet}
-            onPerimeter={setPerimeterSheet}
+            onPerimeter={(sheet) => {
+              setPerimeterGuided(false);
+              setPerimeterSheet(sheet);
+            }}
             onRename={setRenameSheet}
             onRequestDelete={setPendingDelete}
           />
@@ -329,6 +335,15 @@ export function PlanSheetsPage() {
           sheet={registerSheet}
           onClose={() => setRegisterSheet(null)}
           onSaved={() => void sheetsQuery.refetch()}
+          onRegistered={() => {
+            // Guide first-time registrations into the optional perimeter step so
+            // the paper border/title block can be trimmed. Don't nag on
+            // re-registration of a sheet that already has a perimeter.
+            if (registerSheet && !registerSheet.perimeter) {
+              setPerimeterGuided(true);
+              setPerimeterSheet(registerSheet);
+            }
+          }}
         />
       )}
 
@@ -336,7 +351,11 @@ export function PlanSheetsPage() {
         <PlanSheetPerimeterModal
           projectId={projectId}
           sheet={perimeterSheet}
-          onClose={() => setPerimeterSheet(null)}
+          guided={perimeterGuided}
+          onClose={() => {
+            setPerimeterSheet(null);
+            setPerimeterGuided(false);
+          }}
           onSaved={() => void sheetsQuery.refetch()}
         />
       )}

@@ -19,6 +19,8 @@ interface PlanSheetPerimeterModalProps {
   sheet: PlanSheetListItem;
   onClose: () => void;
   onSaved: () => void;
+  /** Opened straight after registration — show the optional-step framing + Skip. */
+  guided?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export function PlanSheetPerimeterModal({
   sheet,
   onClose,
   onSaved,
+  guided = false,
 }: PlanSheetPerimeterModalProps) {
   const [points, setPoints] = useState<ImagePoint[]>([]);
   const [hasPerimeter, setHasPerimeter] = useState(false);
@@ -122,9 +125,19 @@ export function PlanSheetPerimeterModal({
           onClick={onClose}
           disabled={updateMutation.isLoading}
         >
-          Close
+          {guided ? 'Skip for now' : 'Close'}
         </Button>
       </div>
+
+      {guided && (
+        <p
+          className="border-b bg-primary/5 px-4 py-2 text-sm text-muted-foreground"
+          data-testid="perimeter-guided-note"
+        >
+          Optional: trace the drawing area to hide the paper border and title block on the map. You
+          can skip this and do it later.
+        </p>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <div className="relative min-h-[300px] flex-1 bg-muted">

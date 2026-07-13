@@ -39,6 +39,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
@@ -448,6 +449,15 @@ export function LotMapView({
   const [plansOpen, setPlansOpen] = useState(false);
   const [planShown, setPlanShown] = useState<Record<string, boolean>>({});
   const [planOpacity, setPlanOpacity] = useState(0.85);
+  // Blend keys the sheet's paper white to transparent so only the linework
+  // overlays the imagery. Default on; persisted per project.
+  const blendStorageKey = `siteproof.planBlend.${projectId}`;
+  const [planBlend, setPlanBlend] = useState<boolean>(
+    () => readLocalStorageItem(blendStorageKey) !== 'false',
+  );
+  useEffect(() => {
+    writeLocalStorageItem(blendStorageKey, String(planBlend));
+  }, [blendStorageKey, planBlend]);
   const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
   const [zoomTarget, setZoomTarget] = useState<[LatLng, LatLng] | null>(null);
 
@@ -929,9 +939,11 @@ export function LotMapView({
                   sheets={registeredSheets}
                   shown={planShown}
                   opacity={planOpacity}
+                  blend={planBlend}
                   offscreenIds={offscreenSheetIds}
                   onToggle={togglePlanShown}
                   onOpacityChange={setPlanOpacity}
+                  onBlendChange={setPlanBlend}
                   onZoom={zoomToSheet}
                 />
               )}
@@ -1068,6 +1080,7 @@ export function LotMapView({
                     projectId={projectId}
                     sheet={sheet}
                     opacity={planOpacity}
+                    blend={planBlend}
                   />
                 ) : null,
               )}

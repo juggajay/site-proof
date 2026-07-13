@@ -7,9 +7,11 @@ interface PlansPanelProps {
   sheets: PlanSheetListItem[];
   shown: Record<string, boolean>;
   opacity: number;
+  blend: boolean;
   offscreenIds: Set<string>;
   onToggle: (id: string) => void;
   onOpacityChange: (value: number) => void;
+  onBlendChange: (value: boolean) => void;
   onZoom: (id: string) => void;
 }
 
@@ -23,9 +25,11 @@ export function PlansPanel({
   sheets,
   shown,
   opacity,
+  blend,
   offscreenIds,
   onToggle,
   onOpacityChange,
+  onBlendChange,
   onZoom,
 }: PlansPanelProps) {
   const anyShown = sheets.some((sheet) => shown[sheet.id]);
@@ -78,19 +82,30 @@ export function PlansPanel({
           </ul>
 
           {anyShown && (
-            <label className="mt-3 block text-xs text-muted-foreground">
-              Opacity
-              <input
-                type="range"
-                min={0.2}
-                max={1}
-                step={0.05}
-                value={opacity}
-                onChange={(e) => onOpacityChange(Number(e.target.value))}
-                className="mt-1 w-full"
-                data-testid="plan-opacity"
-              />
-            </label>
+            <>
+              <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={blend}
+                  onChange={(e) => onBlendChange(e.target.checked)}
+                  data-testid="plan-blend"
+                />
+                Blend into map
+              </label>
+              <label className="mt-3 block text-xs text-muted-foreground">
+                Opacity
+                <input
+                  type="range"
+                  min={0.2}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  onChange={(e) => onOpacityChange(Number(e.target.value))}
+                  className="mt-1 w-full"
+                  data-testid="plan-opacity"
+                />
+              </label>
+            </>
           )}
         </>
       )}
