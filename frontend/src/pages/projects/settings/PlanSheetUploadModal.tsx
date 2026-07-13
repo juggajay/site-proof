@@ -12,7 +12,7 @@ import {
   ModalBody,
   ModalFooter,
 } from '@/components/ui/Modal';
-import { COORDINATE_SYSTEM_OPTIONS } from '@/lib/spatial/coordinateSystems';
+import { COORDINATE_SYSTEM_OPTIONS, isGda94 } from '@/lib/spatial/coordinateSystems';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { createPlanSheet } from './planSheetsData';
@@ -240,6 +240,16 @@ export function PlanSheetUploadModal({
                 </option>
               ))}
             </NativeSelect>
+            {isGda94(coordinateSystem) && (
+              <p
+                className="mt-2 rounded-md bg-warning/10 p-2 text-xs text-warning"
+                role="status"
+                data-testid="gda94-warning"
+              >
+                GDA94 coordinates sit about 1.8 m off current satellite imagery. Use GDA2020 if your
+                survey data supports it.
+              </p>
+            )}
           </div>
 
           {preview && (

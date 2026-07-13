@@ -1,8 +1,11 @@
-import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { MapPin, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import type { PointResidual } from './planSheetRegistration';
+import { positionFromChainage, type ControlPoint } from './controlPointsParsing';
 
 export const WARN_RESIDUAL_M = 2;
 
@@ -11,6 +14,14 @@ export interface EditablePoint {
   py: number;
   eastingText: string;
   northingText: string;
+}
+
+/** Minimal control-line shape needed to interpolate a grid position. */
+export interface ChainageControlLine {
+  id: string;
+  name: string;
+  coordinateSystem: string;
+  points: ControlPoint[];
 }
 
 /** Live registration fit summary passed down from the modal. */
@@ -26,12 +37,114 @@ interface PointRowProps {
   point: EditablePoint;
   index: number;
   residual: PointResidual | undefined;
+  controlLines: ChainageControlLine[];
+  sheetCoordinateSystem: string;
   onRemove: (index: number) => void;
   onUpdateCoord: (index: number, field: 'eastingText' | 'northingText', value: string) => void;
 }
 
-function PointRow({ point, index, residual, onRemove, onUpdateCoord }: PointRowProps) {
+// Optional per-point entry: pick a control line + chainage (+ offset) and fill
+// the grid easting/northing by interpolating the line. The fields stay editable
+// afterwards; grid-coordinate typing remains the default.
+function ChainageEntry({
+  index,
+  controlLines,
+  sheetCoordinateSystem,
+  onUpdateCoord,
+}: {
+  index: number;
+  controlLines: ChainageControlLine[];
+  sheetCoordinateSystem: string;
+  onUpdateCoord: (index: number, field: 'eastingText' | 'northingText', value: string) => void;
+}) {
+  const [lineId, setLineId] = useState(controlLines[0]?.id ?? '');
+  const [chainageText, setChainageText] = useState('');
+  const [offsetText, setOffsetText] = useState('0');
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedLine = controlLines.find((l) => l.id === lineId) ?? controlLines[0];
+  const crsMismatch =
+    selectedLine != null && selectedLine.coordinateSystem !== sheetCoordinateSystem;
+
+  const apply = () => {
+    if (!selectedLine) return;
+    const chainage = Number(chainageText.trim());
+    const offset = offsetText.trim() === '' ? 0 : Number(offsetText.trim());
+    if (!Number.isFinite(chainage)) {
+      setError('Enter a numeric chainage.');
+      return;
+    }
+    if (!Number.isFinite(offset)) {
+      setError('Offset must be a number.');
+      return;
+    }
+    const position = positionFromChainage(selectedLine.points, chainage, offset);
+    if (!position) {
+      setError('Chainage is outside this control line’s range.');
+      return;
+    }
+    setError(null);
+    onUpdateCoord(index, 'eastingText', position.easting.toFixed(3));
+    onUpdateCoord(index, 'northingText', position.northing.toFixed(3));
+  };
+
+  return (
+    <div className="mt-2 rounded-md border border-dashed p-2">
+      <NativeSelect
+        value={lineId}
+        onChange={(e) => setLineId(e.target.value)}
+        aria-label={`Control line for point ${index + 1}`}
+        className="mb-2"
+      >
+        {controlLines.map((line) => (
+          <option key={line.id} value={line.id}>
+            {line.name}
+          </option>
+        ))}
+      </NativeSelect>
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          type="number"
+          step="any"
+          value={chainageText}
+          onChange={(e) => setChainageText(e.target.value)}
+          placeholder="Chainage"
+          aria-label={`Chainage for point ${index + 1}`}
+        />
+        <Input
+          type="number"
+          step="any"
+          value={offsetText}
+          onChange={(e) => setOffsetText(e.target.value)}
+          placeholder="Offset (+left)"
+          aria-label={`Offset for point ${index + 1}`}
+        />
+      </div>
+      <Button type="button" size="sm" variant="outline" className="mt-2" onClick={apply}>
+        Fill easting / northing
+      </Button>
+      {crsMismatch && (
+        <p className="mt-1 text-xs text-warning">
+          Control line CRS ({selectedLine.coordinateSystem}) differs from this sheet&apos;s (
+          {sheetCoordinateSystem}). Check they match.
+        </p>
+      )}
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function PointRow({
+  point,
+  index,
+  residual,
+  controlLines,
+  sheetCoordinateSystem,
+  onRemove,
+  onUpdateCoord,
+}: PointRowProps) {
   const warn = residual != null && residual.residualM > WARN_RESIDUAL_M;
+  const [showChainage, setShowChainage] = useState(false);
   return (
     <li className="rounded-md border p-2">
       <div className="mb-2 flex items-center justify-between">
@@ -70,6 +183,26 @@ function PointRow({ point, index, residual, onRemove, onUpdateCoord }: PointRowP
           aria-label={`Northing for point ${index + 1}`}
         />
       </div>
+      {controlLines.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowChainage((open) => !open)}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <MapPin className="h-3 w-3" />
+            {showChainage ? 'Hide chainage entry' : 'From chainage…'}
+          </button>
+          {showChainage && (
+            <ChainageEntry
+              index={index}
+              controlLines={controlLines}
+              sheetCoordinateSystem={sheetCoordinateSystem}
+              onUpdateCoord={onUpdateCoord}
+            />
+          )}
+        </>
+      )}
       {residual != null && (
         <p className={`mt-1 text-xs ${warn ? 'text-warning' : 'text-muted-foreground'}`}>
           Residual: {residual.residualM.toFixed(2)} m{warn ? ' — high' : ''}
@@ -88,6 +221,8 @@ interface RegistrationSidePanelProps {
   canSave: boolean;
   saving: boolean;
   hasRegistration: boolean;
+  controlLines: ChainageControlLine[];
+  sheetCoordinateSystem: string;
   onRemovePoint: (index: number) => void;
   onUpdateCoord: (index: number, field: 'eastingText' | 'northingText', value: string) => void;
   onSave: () => void;
@@ -109,6 +244,8 @@ export function RegistrationSidePanel({
   canSave,
   saving,
   hasRegistration,
+  controlLines,
+  sheetCoordinateSystem,
   onRemovePoint,
   onUpdateCoord,
   onSave,
@@ -143,6 +280,8 @@ export function RegistrationSidePanel({
               point={point}
               index={index}
               residual={residualByIndex.get(index)}
+              controlLines={controlLines}
+              sheetCoordinateSystem={sheetCoordinateSystem}
               onRemove={onRemovePoint}
               onUpdateCoord={onUpdateCoord}
             />

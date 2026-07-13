@@ -161,3 +161,11 @@ export function filterGeometriesByLotIds(
 ): ProjectLotGeometry[] {
   return geometries.filter((g) => lotIds.has(g.lotId));
 }
+
+// True when a drawn box has a meaningful extent — used to ignore a bare tap/click
+// (no drag) so find-by-area does not fire on a zero-area box. Kept pure so both
+// the mouse and touch draw paths share one degeneracy test.
+const MIN_DRAG_DEGREES = 1e-9;
+export function boundsHasArea(b: SearchBounds): boolean {
+  return b.east - b.west >= MIN_DRAG_DEGREES && b.north - b.south >= MIN_DRAG_DEGREES;
+}

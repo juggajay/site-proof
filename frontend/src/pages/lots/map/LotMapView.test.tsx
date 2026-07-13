@@ -19,12 +19,16 @@ vi.mock('react-leaflet', () => {
       <div data-testid="map-container">{children}</div>
     ),
     TileLayer: () => <div data-testid="tile-layer" />,
+    ScaleControl: () => <div data-testid="scale-control" />,
     LayersControl,
     Polygon: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="polygon">{children}</div>
     ),
     Polyline: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="polyline">{children}</div>
+    ),
+    Circle: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="circle">{children}</div>
     ),
     CircleMarker: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="circle-marker">{children}</div>
