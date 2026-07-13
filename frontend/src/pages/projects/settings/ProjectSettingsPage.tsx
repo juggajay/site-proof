@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { canDeleteProjects } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { apiFetch } from '@/lib/api';
-import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle, Spline } from 'lucide-react';
+import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle, Spline, Map } from 'lucide-react';
 import type {
   EnabledModules,
   HpApprovalRequirement,
@@ -40,6 +40,9 @@ const TeamTab = lazy(() => import('./components/TeamTab').then((m) => ({ default
 const AreasTab = lazy(() => import('./components/AreasTab').then((m) => ({ default: m.AreasTab })));
 const ControlLinesTab = lazy(() =>
   import('./components/ControlLinesTab').then((m) => ({ default: m.ControlLinesTab })),
+);
+const PlanSheetsTab = lazy(() =>
+  import('./components/PlanSheetsTab').then((m) => ({ default: m.PlanSheetsTab })),
 );
 const ITPTemplatesTab = lazy(() =>
   import('./components/ITPTemplatesTab').then((m) => ({ default: m.ITPTemplatesTab })),
@@ -197,6 +200,7 @@ const TABS = [
   { id: 'team' as SettingsTab, label: 'Team', icon: Users },
   { id: 'areas' as SettingsTab, label: 'Areas', icon: MapPin },
   { id: 'control-lines' as SettingsTab, label: 'Control Lines', icon: Spline },
+  { id: 'plan-sheets' as SettingsTab, label: 'Plan Sheets', icon: Map },
   { id: 'itp-templates' as SettingsTab, label: 'ITP Templates', icon: ClipboardList },
   { id: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
   { id: 'modules' as SettingsTab, label: 'Modules', icon: Puzzle },
@@ -289,6 +293,8 @@ function SettingsTabPanels({
       {activeTab === 'control-lines' && (
         <ControlLinesTab projectId={projectId} readOnly={readOnly} />
       )}
+
+      {activeTab === 'plan-sheets' && <PlanSheetsTab projectId={projectId} readOnly={readOnly} />}
 
       {activeTab === 'itp-templates' && (
         <ITPTemplatesTab projectId={projectId} readOnly={readOnly} />

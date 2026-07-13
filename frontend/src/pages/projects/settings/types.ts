@@ -41,6 +41,7 @@ export type SettingsTab =
   | 'team'
   | 'areas'
   | 'control-lines'
+  | 'plan-sheets'
   | 'itp-templates'
   | 'notifications'
   | 'modules';
