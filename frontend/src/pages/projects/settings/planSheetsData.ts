@@ -149,6 +149,21 @@ export async function createPlanSheet(
 }
 
 /**
+ * Download an existing project document's bytes as a File, so a stored PDF can
+ * run through the same client-side rasterise pipeline as a fresh upload. Goes
+ * through the authenticated backend file route — the stored `fileUrl` is a
+ * Supabase object locator and must never be fetched directly.
+ */
+export async function downloadDocumentFile(documentId: string, filename: string): Promise<File> {
+  const response = await authFetch(`/api/documents/file/${encodeURIComponent(documentId)}`);
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || 'application/pdf' });
+}
+
+/**
  * Imperative PATCH for the upload flow (georeference auto-registration), which
  * runs outside React Query's hook lifecycle. Mirrors useUpdatePlanSheet's call.
  */
