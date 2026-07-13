@@ -30,6 +30,8 @@ interface PlanSheetRegistrationModalProps {
   sheet: PlanSheetListItem;
   onClose: () => void;
   onSaved: () => void;
+  /** Fires only after a successful register (not clear), for the guided perimeter step. */
+  onRegistered?: () => void;
 }
 
 function toNumber(text: string): number | null {
@@ -62,6 +64,7 @@ export function PlanSheetRegistrationModal({
   sheet,
   onClose,
   onSaved,
+  onRegistered,
 }: PlanSheetRegistrationModalProps) {
   const [points, setPoints] = useState<EditablePoint[]>([]);
   const [loadingSheet, setLoadingSheet] = useState(true);
@@ -164,6 +167,7 @@ export function PlanSheetRegistrationModal({
       });
       toast({ title: 'Sheet registered', description: `${sheet.name} is now georeferenced.` });
       onSaved();
+      onRegistered?.();
       onClose();
     } catch (err) {
       logError('Failed to save registration:', err);

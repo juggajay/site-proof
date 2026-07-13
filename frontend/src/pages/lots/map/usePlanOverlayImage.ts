@@ -3,21 +3,44 @@ import { useEffect, useState } from 'react';
 import { authFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import type { PlanSheetListItem } from '@/pages/projects/settings/planSheetsData';
-import { clipImageToPerimeter } from './clipImageToPerimeter';
+import { clipImageToPerimeter, whiteToAlpha } from './clipImageToPerimeter';
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
+function drawImageToCanvas(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d')?.drawImage(source, 0, 0, width, height);
+  return canvas;
+}
+
+/** Key the sheet's paper white to transparent in place on an existing canvas. */
+function blendWhiteToAlpha(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  whiteToAlpha(imageData.data);
+  ctx.putImageData(imageData, 0, 0);
+}
+
 /**
- * Loads a plan-sheet image as an object URL for map overlay, clipping it to the
- * stored perimeter ring when the sheet has one. Same authenticated-fetch pattern
- * as usePlanSheetImage; the (possibly clipped) object URL is revoked on unmount /
- * sheet change.
+ * Loads a plan-sheet image as an object URL for map overlay. Clips it to the
+ * stored perimeter ring when the sheet has one, and — when `blend` is set —
+ * keys the paper white to transparent so only the linework overlays the map.
+ * Same authenticated-fetch pattern as usePlanSheetImage; the (possibly
+ * processed) object URL is revoked on unmount / sheet change / option change.
  */
 export function usePlanOverlayImage(
   projectId: string | undefined,
   sheet: PlanSheetListItem,
+  blend: boolean,
 ): { url: string | null; error: boolean } {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -47,18 +70,23 @@ export function usePlanOverlayImage(
         const blob = await response.blob();
         if (cancelled) return;
 
-        if (perimeter && perimeter.length >= 3) {
+        const hasPerimeter = Boolean(perimeter && perimeter.length >= 3);
+        if (hasPerimeter || blend) {
           const bitmap = await createImageBitmap(blob);
           if (cancelled) {
             bitmap.close();
             return;
           }
-          const canvas = clipImageToPerimeter(bitmap, imageWidth, imageHeight, perimeter);
+          const canvas =
+            hasPerimeter && perimeter
+              ? clipImageToPerimeter(bitmap, imageWidth, imageHeight, perimeter)
+              : drawImageToCanvas(bitmap, imageWidth, imageHeight);
           bitmap.close();
-          const clipped = await canvasToBlob(canvas);
+          if (blend) blendWhiteToAlpha(canvas);
+          const processed = await canvasToBlob(canvas);
           if (cancelled) return;
-          if (!clipped) throw new Error('Could not clip the plan sheet to its perimeter');
-          objectUrl = URL.createObjectURL(clipped);
+          if (!processed) throw new Error('Could not process the plan sheet overlay');
+          objectUrl = URL.createObjectURL(processed);
         } else {
           objectUrl = URL.createObjectURL(blob);
         }
@@ -78,7 +106,7 @@ export function usePlanOverlayImage(
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [projectId, sheetId, imageWidth, imageHeight, perimeter]);
+  }, [projectId, sheetId, imageWidth, imageHeight, perimeter, blend]);
 
   return { url, error };
 }
