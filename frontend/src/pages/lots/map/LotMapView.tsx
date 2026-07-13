@@ -23,6 +23,7 @@ import {
   Camera,
   Crosshair,
   ExternalLink,
+  History,
   Layers,
   Map as MapIcon,
   PencilRuler,
@@ -49,7 +50,9 @@ import { PlansPanel } from './PlansPanel';
 import { PlanSheetOverlay } from './PlanSheetOverlay';
 import { DrawLotLayer } from './DrawLotLayer';
 import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
+import { HistoryPanel } from './HistoryPanel';
 import { useSpatialSearch } from './spatialSearchData';
+import { historicalStatusByLot, useLotStatusTimeline } from './statusTimelineData';
 import {
   ALL_WORK_TYPES,
   selectCoverageGroup,
@@ -461,6 +464,11 @@ export function LotMapView({
   const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
   const [zoomTarget, setZoomTarget] = useState<[LatLng, LatLng] | null>(null);
 
+  // History time scrubber. Timeline is fetched lazily only when History opens.
+  const [historyArmed, setHistoryArmed] = useState(false);
+  const [historyDateKey, setHistoryDateKey] = useState(() => formatDateKey());
+  const timelineQuery = useLotStatusTimeline(projectId, historyArmed);
+
   // Draw-new-lot.
   const [drawLotArmed, setDrawLotArmed] = useState(false);
   const [pendingDraw, setPendingDraw] = useState<{
@@ -568,6 +576,7 @@ export function LotMapView({
     setCoverageArmed(false);
     setGapFocusBounds(null);
     setDrawLotArmed(false);
+    setHistoryArmed(false);
     setDrawArmed(true);
   }, [drawArmed, clearSearch]);
 
@@ -579,6 +588,7 @@ export function LotMapView({
       }
       clearSearch();
       setDrawLotArmed(false);
+      setHistoryArmed(false);
       return true;
     });
   }, [clearSearch]);
@@ -590,6 +600,23 @@ export function LotMapView({
       clearSearch();
       setCoverageArmed(false);
       setGapFocusBounds(null);
+      setHistoryArmed(false);
+      return true;
+    });
+  }, [clearSearch]);
+
+  // History (time scrubber) is mutually exclusive with the draw/find/coverage
+  // tools — entering it disarms them and closes the Plans panel so nothing that
+  // does not make sense against a past date stays open.
+  const toggleHistory = useCallback(() => {
+    setHistoryArmed((armed) => {
+      if (armed) return false;
+      clearSearch();
+      setCoverageArmed(false);
+      setGapFocusBounds(null);
+      setDrawLotArmed(false);
+      setPlansOpen(false);
+      setHistoryDateKey(formatDateKey());
       return true;
     });
   }, [clearSearch]);
@@ -704,6 +731,28 @@ export function LotMapView({
     () => filterGeometriesByLotIds(allGeometries ?? [], filteredLotIds),
     [allGeometries, filteredLotIds],
   );
+
+  // History mode: lotId → status as of the selected date. null = not in history
+  // mode; a lot absent from the map means it did not exist yet (hide it).
+  const historicalStatus = useMemo(() => {
+    if (!historyArmed || !timelineQuery.data) return null;
+    return historicalStatusByLot(timelineQuery.data, historyDateKey);
+  }, [historyArmed, timelineQuery.data, historyDateKey]);
+
+  const displayGeometries = useMemo(() => {
+    if (!historicalStatus) return filteredGeometries;
+    const out: ProjectLotGeometry[] = [];
+    for (const g of filteredGeometries) {
+      const status = historicalStatus.get(g.lotId);
+      if (status === undefined) continue; // not created as of the selected date
+      out.push(status === g.status ? g : { ...g, status });
+    }
+    return out;
+  }, [filteredGeometries, historicalStatus]);
+
+  const earliestKey = timelineQuery.data?.earliest
+    ? formatDateKey(new Date(timelineQuery.data.earliest))
+    : null;
 
   const bounds = useMemo(() => {
     const fromShapes = computeBounds([
@@ -918,6 +967,15 @@ export function LotMapView({
                   compact={isMobile}
                   testId="locate-me-button"
                 />
+                <ToolbarButton
+                  icon={History}
+                  label="History"
+                  text={historyArmed ? 'Exit history' : 'History'}
+                  onClick={toggleHistory}
+                  pressed={historyArmed}
+                  compact={isMobile}
+                  testId="history-button"
+                />
               </div>
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
@@ -945,6 +1003,17 @@ export function LotMapView({
                   onOpacityChange={setPlanOpacity}
                   onBlendChange={setPlanBlend}
                   onZoom={zoomToSheet}
+                />
+              )}
+              {historyArmed && (
+                <HistoryPanel
+                  earliestKey={earliestKey}
+                  todayKey={formatDateKey()}
+                  valueKey={historyDateKey}
+                  onChange={setHistoryDateKey}
+                  isLoading={timelineQuery.isLoading}
+                  error={timelineQuery.error}
+                  onRetry={() => timelineQuery.refetch()}
                 />
               )}
             </div>
@@ -1000,7 +1069,7 @@ export function LotMapView({
                 );
               })}
 
-              {filteredGeometries.map((geometry) => (
+              {displayGeometries.map((geometry) => (
                 <LotGeometryLayer
                   key={geometry.id}
                   geometry={geometry}

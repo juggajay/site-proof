@@ -11,6 +11,7 @@ export const queryKeys = {
   projectLotGeometries: (projectId: string) => ['project-lot-geometries', projectId] as const,
   lotGeometries: (lotId: string) => ['lot-geometries', lotId] as const,
   spatialSearch: (projectId: string) => ['spatial-search', projectId] as const,
+  lotStatusTimeline: (projectId: string) => ['lot-status-timeline', projectId] as const,
   projectCoverage: (projectId: string) => ['project-coverage', projectId] as const,
   lotReadiness: (id: string) => ['lot-readiness', id] as const,
   lotQualityAccess: (projectId: string) => ['lot-quality-access', projectId] as const,

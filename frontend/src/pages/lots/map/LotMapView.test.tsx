@@ -93,6 +93,19 @@ vi.mock('./coverageData', async (importOriginal) => {
   return { ...actual, useProjectCoverage: () => coverageQuery };
 });
 
+// The status-timeline hook calls useQuery; stub it so LotMapView renders without
+// a QueryClientProvider. The pure replay/date helpers stay real.
+const timelineQuery = {
+  data: undefined as import('./statusTimelineData').StatusTimeline | undefined,
+  isLoading: false,
+  error: null as unknown,
+  refetch: vi.fn(),
+};
+vi.mock('./statusTimelineData', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./statusTimelineData')>();
+  return { ...actual, useLotStatusTimeline: () => timelineQuery };
+});
+
 const useProjectLotGeometries = vi.fn();
 const useProjectControlLines = vi.fn();
 const backfillLotGeometries = vi.fn();
@@ -174,6 +187,9 @@ function mockQueries({
 beforeEach(() => {
   vi.clearAllMocks();
   isMobileValue = false;
+  timelineQuery.data = undefined;
+  timelineQuery.isLoading = false;
+  timelineQuery.error = null;
 });
 
 describe('LotMapView', () => {
@@ -279,6 +295,66 @@ describe('LotMapView', () => {
       <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
     );
     expect(screen.getByTestId('draw-lot-button')).toBeInTheDocument();
+  });
+
+  it('toggles History mode, showing the scrubber panel and pressing the button', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+
+    expect(screen.queryByTestId('history-panel')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('history-button'));
+    expect(screen.getByTestId('history-button')).toHaveAttribute('aria-pressed', 'true');
+    // No timeline data yet -> empty-history hint.
+    expect(
+      within(screen.getByTestId('history-panel')).getByText(/No recorded history/i),
+    ).toBeInTheDocument();
+  });
+
+  it('entering History closes the Plans panel (mutually exclusive tools)', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('plans-button'));
+    expect(screen.getByTestId('plans-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('history-button'));
+    expect(screen.queryByTestId('plans-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('history-panel')).toBeInTheDocument();
+  });
+
+  it('renders the date slider once the timeline has loaded', () => {
+    timelineQuery.data = {
+      earliest: '2026-01-10T00:00:00.000Z',
+      lots: [
+        {
+          lotId: 'lot-1',
+          createdAt: '2026-01-10T00:00:00.000Z',
+          currentStatus: 'in_progress',
+          events: [],
+        },
+      ],
+    };
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('history-button'));
+    expect(screen.getByTestId('history-slider')).toBeInTheDocument();
+    expect(screen.getByTestId('history-date')).toBeInTheDocument();
   });
 
   it('shows an access-denied message on a 403', () => {
