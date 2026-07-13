@@ -911,13 +911,15 @@ export function LotMapView({
               </div>
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                  Drag a box on the map. Press Esc to cancel.
+                  {isMobile
+                    ? 'Drag a box on the map. Tap the button again to cancel.'
+                    : 'Drag a box on the map. Press Esc to cancel.'}
                 </p>
               )}
               {drawLotArmed && (
                 <p className="mt-1 max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
                   {isMobile
-                    ? 'Tap to place polygon corners; double-tap to finish. Press Esc to cancel.'
+                    ? 'Tap to place polygon corners; double-tap to finish. Tap the button again to cancel.'
                     : 'Click to place polygon corners; double-click to finish. Press Esc to cancel.'}
                 </p>
               )}
