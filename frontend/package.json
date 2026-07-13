@@ -26,6 +26,7 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@geoman-io/leaflet-geoman-free": "^2.20.0",
     "@hookform/resolvers": "^3.3.4",
     "@radix-ui/react-accordion": "^1.1.2",
     "@radix-ui/react-alert-dialog": "^1.0.5",
@@ -47,6 +48,7 @@
     "html-to-image": "^1.11.13",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
+    "leaflet-imageoverlay-rotated": "^0.2.1",
     "lucide-react": "^0.303.0",
     "pdfjs-dist": "5.4.296",
     "qrcode": "^1.5.4",

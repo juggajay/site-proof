@@ -6,8 +6,10 @@ import {
   collectLatLngs,
   computeBounds,
   cornersToBounds,
+  cornersToLatLngBounds,
   featureToShape,
   filterGeometriesByLotIds,
+  polygonAreaM2,
 } from './lotMapHelpers';
 
 function feature(geometry: GeoJsonFeature['geometry']): GeoJsonFeature {
@@ -134,5 +136,49 @@ describe('boundsToLatLngRect', () => {
       [-33.81, 151.0],
       [-33.8, 151.01],
     ]);
+  });
+});
+
+describe('polygonAreaM2', () => {
+  it('is ~0 for a degenerate ring', () => {
+    expect(polygonAreaM2([[151, -33]])).toBe(0);
+  });
+
+  it('computes ~1 ha for a ~100 m square near Sydney', () => {
+    // 100 m ≈ 0.0009 deg lat; lng scaled by cos(33.87°) ≈ 0.831 → 0.001083 deg.
+    const lat0 = -33.87;
+    const dLat = 0.0009; // ~100.1 m
+    const dLng = 0.0009 / Math.cos((lat0 * Math.PI) / 180); // ~100 m east
+    const ring: [number, number][] = [
+      [151.2, lat0],
+      [151.2 + dLng, lat0],
+      [151.2 + dLng, lat0 + dLat],
+      [151.2, lat0 + dLat],
+      [151.2, lat0],
+    ];
+    const area = polygonAreaM2(ring);
+    // ~10,000 m² within 3%.
+    expect(area).toBeGreaterThan(9700);
+    expect(area).toBeLessThan(10300);
+  });
+});
+
+describe('cornersToLatLngBounds', () => {
+  it('spans four [lng,lat] corners as [[minLat,minLng],[maxLat,maxLng]]', () => {
+    expect(
+      cornersToLatLngBounds([
+        [151.0, -33.8],
+        [151.01, -33.8],
+        [151.01, -33.81],
+        [151.0, -33.81],
+      ]),
+    ).toEqual([
+      [-33.81, 151.0],
+      [-33.8, 151.01],
+    ]);
+  });
+
+  it('returns null with no corners', () => {
+    expect(cornersToLatLngBounds([])).toBeNull();
   });
 });

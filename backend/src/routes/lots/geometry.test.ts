@@ -241,6 +241,70 @@ describe('Lot geometry API', () => {
     }
   });
 
+  const DRAWN_RING = [
+    [151.0, -33.8],
+    [151.001, -33.8],
+    [151.001, -33.801],
+    [151.0, -33.801],
+    [151.0, -33.8],
+  ];
+  const drawnBody = (ring: number[][]) => ({
+    kind: 'drawn',
+    geometryWgs84: {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [ring] },
+    },
+  });
+
+  it('creates a drawn polygon with server-computed area and no control line', async () => {
+    const res = await request(app)
+      .post(`/api/lots/${lotA}/geometries`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(drawnBody(DRAWN_RING));
+    expect(res.status).toBe(201);
+    const geom = res.body.geometry;
+    expect(geom.kind).toBe('drawn');
+    expect(geom.geometryWgs84.geometry.type).toBe('Polygon');
+    expect(geom.controlLineId).toBeNull();
+    expect(geom.chainageStart).toBeNull();
+    expect(geom.lengthM).toBeNull();
+    expect(geom.areaM2).toBeGreaterThan(0);
+  });
+
+  it('rejects a drawn polygon whose ring is not closed', async () => {
+    const openRing = DRAWN_RING.slice(0, 4); // drop the closing position
+    const res = await request(app)
+      .post(`/api/lots/${lotA}/geometries`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(drawnBody(openRing));
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/closed/i);
+  });
+
+  it('rejects a drawn ring with out-of-range coordinates', async () => {
+    const badRing = [
+      [999, -33.8],
+      [151.001, -33.8],
+      [151.001, -33.801],
+      [999, -33.8],
+    ];
+    const res = await request(app)
+      .post(`/api/lots/${lotA}/geometries`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send(drawnBody(badRing));
+    expect(res.status).toBe(400);
+  });
+
+  it('applies the same LOT_EDITORS gate to drawn geometries', async () => {
+    for (const token of [foremanToken, viewerToken, subbieToken, outsiderToken]) {
+      const res = await request(app)
+        .post(`/api/lots/${lotA}/geometries`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(drawnBody(DRAWN_RING));
+      expect(res.status).toBe(403);
+    }
+  });
+
   it('rejects a control line from another project with 400', async () => {
     const res = await request(app)
       .post(`/api/lots/${lotA}/geometries`)

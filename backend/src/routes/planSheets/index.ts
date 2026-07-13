@@ -21,6 +21,7 @@ import {
   sendPlanSheetImage,
   storePlanSheetImage,
 } from './storage.js';
+import { computeCornersWgs84 } from './corners.js';
 import { createPlanSheetTextSchema, updatePlanSheetSchema } from './validation.js';
 
 // Plan-sheet setup mirrors control-line permissions exactly: owner/admin/
@@ -32,7 +33,19 @@ const planSheetsRouter = Router();
 
 planSheetsRouter.use(requireAuth);
 
-// List rows omit registration/perimeter payloads; hasRegistration is a boolean.
+// Derive the WGS84 overlay corners from the stored registration + pixel size.
+function cornersFor(sheet: PlanSheet) {
+  return computeCornersWgs84(
+    sheet.registration as { transform: number[] } | null,
+    sheet.imageWidth,
+    sheet.imageHeight,
+    sheet.coordinateSystem,
+  );
+}
+
+// List rows omit the raw registration payload but DO carry cornersWgs84 +
+// perimeter: the map overlay needs both to place and clip a sheet without a
+// second round-trip per shown sheet.
 function mapListItem(sheet: PlanSheet) {
   return {
     id: sheet.id,
@@ -42,6 +55,8 @@ function mapListItem(sheet: PlanSheet) {
     imageHeight: sheet.imageHeight,
     coordinateSystem: sheet.coordinateSystem,
     hasRegistration: sheet.registration != null,
+    cornersWgs84: cornersFor(sheet),
+    perimeter: sheet.perimeter,
     createdAt: sheet.createdAt.toISOString(),
     updatedAt: sheet.updatedAt.toISOString(),
   };
@@ -61,6 +76,7 @@ function mapFull(sheet: PlanSheet) {
     coordinateSystem: sheet.coordinateSystem,
     registration: sheet.registration,
     perimeter: sheet.perimeter,
+    cornersWgs84: cornersFor(sheet),
     hasRegistration: sheet.registration != null,
     createdById: sheet.createdById,
     createdAt: sheet.createdAt.toISOString(),

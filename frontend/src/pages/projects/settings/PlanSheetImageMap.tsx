@@ -2,7 +2,7 @@ import 'leaflet/dist/leaflet.css';
 
 import { useEffect, useMemo } from 'react';
 import L from 'leaflet';
-import { ImageOverlay, MapContainer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { ImageOverlay, MapContainer, Marker, Polygon, useMap, useMapEvents } from 'react-leaflet';
 
 export interface ImagePoint {
   px: number;
@@ -16,6 +16,8 @@ interface PlanSheetImageMapProps {
   points: ImagePoint[];
   onAddPoint: (point: ImagePoint) => void;
   onMovePoint: (index: number, point: ImagePoint) => void;
+  /** Draw a closed polygon through the points (perimeter mode). */
+  polygon?: boolean;
 }
 
 // CRS.Simple maps LatLng (lat, lng) directly to (y, x). We place the image with
@@ -73,6 +75,7 @@ export function PlanSheetImageMap({
   points,
   onAddPoint,
   onMovePoint,
+  polygon = false,
 }: PlanSheetImageMapProps) {
   const bounds = useMemo<L.LatLngBoundsExpression>(
     () => [
@@ -94,6 +97,12 @@ export function PlanSheetImageMap({
       <ImageOverlay url={imageUrl} bounds={bounds} />
       <FitImage width={imageWidth} height={imageHeight} />
       <ClickCapture imageHeight={imageHeight} onAddPoint={onAddPoint} />
+      {polygon && points.length >= 2 && (
+        <Polygon
+          positions={points.map((point) => pixelToLatLng(point, imageHeight))}
+          pathOptions={{ color: '#2563eb', weight: 2, fillColor: '#2563eb', fillOpacity: 0.15 }}
+        />
+      )}
       {points.map((point, index) => (
         <Marker
           key={index}

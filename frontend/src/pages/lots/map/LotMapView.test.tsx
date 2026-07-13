@@ -5,6 +5,12 @@ import type { ProjectControlLine, ProjectLotGeometry } from './lotMapData';
 
 // jsdom cannot run real Leaflet — mock the react-leaflet primitives as
 // passthrough elements so we can assert our own layer/popup/empty-state logic.
+const fakeMap = {
+  fitBounds: vi.fn(),
+  getBounds: () => ({ intersects: () => true }),
+  on: vi.fn(),
+  off: vi.fn(),
+};
 vi.mock('react-leaflet', () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   const LayersControl = Object.assign(Passthrough, { BaseLayer: Passthrough });
@@ -28,9 +34,23 @@ vi.mock('react-leaflet', () => {
     Rectangle: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="rectangle">{children}</div>
     ),
-    useMap: () => ({ fitBounds: vi.fn() }),
+    useMap: () => fakeMap,
+    useMapEvents: () => fakeMap,
   };
 });
+
+// usePlanSheets hits useQuery; the map renders without a QueryClientProvider, so
+// stub it. DrawLotLayer/overlays only mount when armed/shown, so no leaflet.
+const planSheetsQuery = { data: [] as unknown[] };
+vi.mock('@/pages/projects/settings/planSheetsData', () => ({
+  usePlanSheets: () => planSheetsQuery,
+}));
+
+// createDrawnLotGeometry is exercised via its own path; the map only needs the
+// invalidate on success. QueryClient is stubbed below.
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
@@ -219,6 +239,39 @@ describe('LotMapView', () => {
     const link = screen.getByRole('link', { name: /Project Settings/i });
     expect(link).toHaveAttribute('href', '/projects/proj-1/settings');
     expect(screen.queryByTestId('backfill-run')).not.toBeInTheDocument();
+  });
+
+  it('toggles the Plans panel and shows the no-registered-sheets hint', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+
+    expect(screen.queryByTestId('plans-panel')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('plans-button'));
+    const panel = screen.getByTestId('plans-panel');
+    expect(within(panel).getByText(/No registered plan sheets yet/i)).toBeInTheDocument();
+  });
+
+  it('shows the Draw lot button only when the user can manage settings', () => {
+    mockQueries({ geometries: [polygonGeometry()] });
+    const { rerender } = render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+    expect(screen.queryByTestId('draw-lot-button')).not.toBeInTheDocument();
+
+    rerender(
+      <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+    );
+    expect(screen.getByTestId('draw-lot-button')).toBeInTheDocument();
   });
 
   it('shows an access-denied message on a 403', () => {

@@ -12,21 +12,30 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
+import L from 'leaflet';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Camera, ExternalLink, Layers, Square } from 'lucide-react';
+import { Camera, ExternalLink, Layers, Map as MapIcon, PencilRuler, Square } from 'lucide-react';
 
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import { formatDateKey } from '@/lib/localDate';
 import { authFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
 import { FindByAreaPanel } from './FindByAreaPanel';
 import { CoveragePanel } from './CoveragePanel';
+import { PlansPanel } from './PlansPanel';
+import { PlanSheetOverlay } from './PlanSheetOverlay';
+import { DrawLotLayer } from './DrawLotLayer';
+import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
 import { useSpatialSearch } from './spatialSearchData';
 import {
   ALL_WORK_TYPES,
@@ -36,8 +45,10 @@ import {
 } from './coverageData';
 import {
   backfillLotGeometries,
+  createDrawnLotGeometry,
   useProjectControlLines,
   useProjectLotGeometries,
+  type GeoJsonFeature,
   type ProjectLotGeometry,
 } from './lotMapData';
 import {
@@ -45,8 +56,10 @@ import {
   AU_DEFAULT_ZOOM,
   boundsToLatLngRect,
   computeBounds,
+  cornersToLatLngBounds,
   featureToShape,
   filterGeometriesByLotIds,
+  polygonAreaM2,
   type LatLng,
   type SearchBounds,
 } from './lotMapHelpers';
@@ -57,12 +70,19 @@ const CONTROL_LINE_COLOR = '#f59e0b'; // amber — neutral against status fills
 const GAP_COLOR = '#dc2626';
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
 
+export interface MapLot {
+  id: string;
+  lotNumber: string;
+}
+
 interface LotMapViewProps {
   projectId: string;
   filteredLotIds: Set<string>;
   canManageSettings: boolean;
   /** For the snapshot document caption; falls back to the id when absent. */
   projectName?: string;
+  /** Project lots, for assigning a drawn polygon. Optional so tests stay lean. */
+  lots?: MapLot[];
 }
 
 function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
@@ -72,6 +92,19 @@ function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
     }
   }, [map, bounds]);
+  return null;
+}
+
+// Lifts the map's current bounds up so the Plans panel can tell which shown
+// sheets sit off-screen (and offer "Zoom to sheet").
+function MapBoundsWatcher({ onBounds }: { onBounds: (bounds: L.LatLngBounds) => void }) {
+  const map = useMapEvents({
+    moveend: () => onBounds(map.getBounds()),
+    zoomend: () => onBounds(map.getBounds()),
+  });
+  useEffect(() => {
+    onBounds(map.getBounds());
+  }, [map, onBounds]);
   return null;
 }
 
@@ -285,12 +318,15 @@ export function LotMapView({
   filteredLotIds,
   canManageSettings,
   projectName,
+  lots = [],
 }: LotMapViewProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
   const [snapshotting, setSnapshotting] = useState(false);
   const geometriesQuery = useProjectLotGeometries(projectId);
   const controlLinesQuery = useProjectControlLines(projectId);
+  const planSheetsQuery = usePlanSheets(projectId);
 
   const search = useSpatialSearch(projectId);
   const { mutate: runSearch, reset: resetSearch } = search;
@@ -301,6 +337,28 @@ export function LotMapView({
   const [coverageSelection, setCoverageSelection] = useState<Record<string, string>>({});
   const [gapFocusBounds, setGapFocusBounds] = useState<[LatLng, LatLng] | null>(null);
   const coverageQuery = useProjectCoverage(projectId, coverageArmed);
+
+  // Plan overlays.
+  const [plansOpen, setPlansOpen] = useState(false);
+  const [planShown, setPlanShown] = useState<Record<string, boolean>>({});
+  const [planOpacity, setPlanOpacity] = useState(0.85);
+  const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
+  const [zoomTarget, setZoomTarget] = useState<[LatLng, LatLng] | null>(null);
+
+  // Draw-new-lot.
+  const [drawLotArmed, setDrawLotArmed] = useState(false);
+  const [pendingDraw, setPendingDraw] = useState<{
+    feature: GeoJsonFeature;
+    areaM2: number;
+  } | null>(null);
+  const [savingDraw, setSavingDraw] = useState(false);
+
+  const registeredSheets = useMemo(
+    () => (planSheetsQuery.data ?? []).filter((s) => s.hasRegistration && s.cornersWgs84),
+    [planSheetsQuery.data],
+  );
+
+  const handleMapBounds = useCallback((bounds: L.LatLngBounds) => setMapBounds(bounds), []);
 
   const handleAreaComplete = useCallback(
     (bounds: SearchBounds) => {
@@ -327,6 +385,7 @@ export function LotMapView({
     clearSearch();
     setCoverageArmed(false);
     setGapFocusBounds(null);
+    setDrawLotArmed(false);
     setDrawArmed(true);
   }, [drawArmed, clearSearch]);
 
@@ -337,9 +396,80 @@ export function LotMapView({
         return false;
       }
       clearSearch();
+      setDrawLotArmed(false);
       return true;
     });
   }, [clearSearch]);
+
+  // Draw-lot is mutually exclusive with the find-by-area / coverage tools.
+  const armDrawLot = useCallback(() => {
+    setDrawLotArmed((armed) => {
+      if (armed) return false;
+      clearSearch();
+      setCoverageArmed(false);
+      setGapFocusBounds(null);
+      return true;
+    });
+  }, [clearSearch]);
+
+  const togglePlanShown = useCallback((id: string) => {
+    setPlanShown((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  const zoomToSheet = useCallback(
+    (id: string) => {
+      const corners = registeredSheets.find((s) => s.id === id)?.cornersWgs84;
+      if (!corners) return;
+      const bounds = cornersToLatLngBounds([
+        corners.topLeft,
+        corners.topRight,
+        corners.bottomRight,
+        corners.bottomLeft,
+      ]);
+      // Fresh tuple each click so FitBounds re-fits even for the same sheet.
+      if (bounds) setZoomTarget([bounds[0], bounds[1]]);
+    },
+    [registeredSheets],
+  );
+
+  const handleDrawComplete = useCallback((feature: GeoJsonFeature) => {
+    setDrawLotArmed(false);
+    const ring =
+      feature.geometry.type === 'Polygon'
+        ? (feature.geometry.coordinates[0] as [number, number][])
+        : [];
+    setPendingDraw({ feature, areaM2: polygonAreaM2(ring) });
+  }, []);
+
+  const handleDrawCancel = useCallback(() => setDrawLotArmed(false), []);
+
+  const confirmAssignDraw = useCallback(
+    async (lotId: string) => {
+      if (!pendingDraw) return;
+      setSavingDraw(true);
+      try {
+        await createDrawnLotGeometry(lotId, pendingDraw.feature);
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.projectLotGeometries(projectId),
+        });
+        toast({
+          title: 'Lot placed',
+          description: 'The drawn footprint was saved to the lot.',
+          variant: 'success',
+        });
+        setPendingDraw(null);
+      } catch (err) {
+        toast({
+          title: 'Could not save lot',
+          description: extractErrorMessage(err, 'Please try again.'),
+          variant: 'error',
+        });
+      } finally {
+        setSavingDraw(false);
+      }
+    },
+    [pendingDraw, projectId, queryClient],
+  );
 
   // Escape cancels an armed draw.
   useEffect(() => {
@@ -353,6 +483,40 @@ export function LotMapView({
 
   const allGeometries = geometriesQuery.data?.geometries;
   const controlLines = useMemo(() => controlLinesQuery.data ?? [], [controlLinesQuery.data]);
+
+  // Split lots by whether they already have geometry — the assign dialog lists
+  // ungeoreferenced lots first (the common draw-a-new-lot case).
+  const geometryLotIds = useMemo(
+    () => new Set((allGeometries ?? []).map((g) => g.lotId)),
+    [allGeometries],
+  );
+  const lotsWithoutGeometry = useMemo(
+    () => lots.filter((lot) => !geometryLotIds.has(lot.id)),
+    [lots, geometryLotIds],
+  );
+  const lotsWithGeometry = useMemo(
+    () => lots.filter((lot) => geometryLotIds.has(lot.id)),
+    [lots, geometryLotIds],
+  );
+
+  // Shown sheets whose footprint is outside the current view → offer a zoom.
+  const offscreenSheetIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!mapBounds) return ids;
+    for (const sheet of registeredSheets) {
+      const corners = sheet.cornersWgs84;
+      if (!planShown[sheet.id] || !corners) continue;
+      const bounds = cornersToLatLngBounds([
+        corners.topLeft,
+        corners.topRight,
+        corners.bottomRight,
+        corners.bottomLeft,
+      ]);
+      if (!bounds) continue;
+      if (!mapBounds.intersects(L.latLngBounds(bounds[0], bounds[1]))) ids.add(sheet.id);
+    }
+    return ids;
+  }, [mapBounds, registeredSheets, planShown]);
 
   const filteredGeometries = useMemo(
     () => filterGeometriesByLotIds(allGeometries ?? [], filteredLotIds),
@@ -526,6 +690,36 @@ export function LotMapView({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setPlansOpen((open) => !open)}
+                  aria-pressed={plansOpen}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
+                    plansOpen
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-muted'
+                  }`}
+                  data-testid="plans-button"
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Plans
+                </button>
+                {canManageSettings && (
+                  <button
+                    type="button"
+                    onClick={armDrawLot}
+                    aria-pressed={drawLotArmed}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm ${
+                      drawLotArmed
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background hover:bg-muted'
+                    }`}
+                    data-testid="draw-lot-button"
+                  >
+                    <PencilRuler className="h-3.5 w-3.5" />
+                    {drawLotArmed ? 'Cancel draw' : 'Draw lot'}
+                  </button>
+                )}
+                <button
+                  type="button"
                   onClick={handleSnapshot}
                   disabled={snapshotting}
                   className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted disabled:opacity-50"
@@ -539,6 +733,23 @@ export function LotMapView({
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
                   Drag a box on the map. Press Esc to cancel.
                 </p>
+              )}
+              {drawLotArmed && (
+                <p className="mt-1 max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
+                  Click to place polygon corners; double-click to finish. Press Esc to cancel.
+                </p>
+              )}
+              {plansOpen && (
+                <PlansPanel
+                  projectId={projectId}
+                  sheets={registeredSheets}
+                  shown={planShown}
+                  opacity={planOpacity}
+                  offscreenIds={offscreenSheetIds}
+                  onToggle={togglePlanShown}
+                  onOpacityChange={setPlanOpacity}
+                  onZoom={zoomToSheet}
+                />
               )}
             </div>
 
@@ -630,6 +841,26 @@ export function LotMapView({
                   }}
                 />
               )}
+
+              <MapBoundsWatcher onBounds={handleMapBounds} />
+              <FitBounds bounds={zoomTarget} />
+
+              {registeredSheets.map((sheet) =>
+                planShown[sheet.id] ? (
+                  <PlanSheetOverlay
+                    key={sheet.id}
+                    projectId={projectId}
+                    sheet={sheet}
+                    opacity={planOpacity}
+                  />
+                ) : null,
+              )}
+
+              <DrawLotLayer
+                active={drawLotArmed}
+                onComplete={handleDrawComplete}
+                onCancel={handleDrawCancel}
+              />
             </MapContainer>
 
             {searchBounds && (
@@ -661,6 +892,17 @@ export function LotMapView({
             )}
           </div>
           <StatusLegend />
+
+          {pendingDraw && (
+            <AssignDrawnLotDialog
+              lotsWithoutGeometry={lotsWithoutGeometry}
+              lotsWithGeometry={lotsWithGeometry}
+              areaM2={pendingDraw.areaM2}
+              saving={savingDraw}
+              onConfirm={(lotId) => void confirmAssignDraw(lotId)}
+              onCancel={() => setPendingDraw(null)}
+            />
+          )}
         </>
       )}
     </div>

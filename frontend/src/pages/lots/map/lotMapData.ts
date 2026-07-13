@@ -98,6 +98,19 @@ export function useProjectControlLines(projectId: string | undefined) {
   });
 }
 
+// Persist a lot footprint traced directly on the map/plan. The backend validates
+// the ring and computes area server-side; the map refetches projectLotGeometries
+// on success.
+export function createDrawnLotGeometry(
+  lotId: string,
+  geometryWgs84: GeoJsonFeature,
+): Promise<{ geometry: LotGeometry }> {
+  return apiFetch<{ geometry: LotGeometry }>(`/api/lots/${encodeURIComponent(lotId)}/geometries`, {
+    method: 'POST',
+    body: JSON.stringify({ kind: 'drawn', geometryWgs84 }),
+  });
+}
+
 export interface BackfillResult {
   created: number;
   skipped: { lotId: string; lotNumber: string; reason: string }[];

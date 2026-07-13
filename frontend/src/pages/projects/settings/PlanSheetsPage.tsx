@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Map, Plus, Trash2, Edit2, Crosshair } from 'lucide-react';
+import { Map, Plus, Trash2, Edit2, Crosshair, Scissors } from 'lucide-react';
 
 import { toast } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import {
 import { DEFAULT_COORDINATE_SYSTEM } from '@/lib/spatial/coordinateSystems';
 import { PlanSheetUploadModal } from './PlanSheetUploadModal';
 import { PlanSheetRegistrationModal } from './PlanSheetRegistrationModal';
+import { PlanSheetPerimeterModal } from './PlanSheetPerimeterModal';
 
 function RegistrationBadge({ sheet }: { sheet: PlanSheetListItem }) {
   if (sheet.hasRegistration) {
@@ -107,6 +108,7 @@ function PlanSheetsTable({
   readOnly,
   deletingId,
   onRegister,
+  onPerimeter,
   onRename,
   onRequestDelete,
 }: {
@@ -115,6 +117,7 @@ function PlanSheetsTable({
   readOnly: boolean;
   deletingId: string | null;
   onRegister: (sheet: PlanSheetListItem) => void;
+  onPerimeter: (sheet: PlanSheetListItem) => void;
   onRename: (sheet: PlanSheetListItem) => void;
   onRequestDelete: (sheet: PlanSheetListItem) => void;
 }) {
@@ -165,6 +168,15 @@ function PlanSheetsTable({
                       </Button>
                       <Button
                         variant="ghost"
+                        size="sm"
+                        onClick={() => onPerimeter(sheet)}
+                        className="text-primary hover:bg-primary/5"
+                      >
+                        <Scissors className="h-4 w-4" />
+                        {sheet.perimeter ? 'Edit perimeter' : 'Perimeter'}
+                      </Button>
+                      <Button
+                        variant="ghost"
                         size="icon"
                         onClick={() => onRename(sheet)}
                         aria-label={`Rename ${sheet.name}`}
@@ -199,6 +211,7 @@ export function PlanSheetsPage() {
   const { projectId } = useParams();
   const [showUpload, setShowUpload] = useState(false);
   const [registerSheet, setRegisterSheet] = useState<PlanSheetListItem | null>(null);
+  const [perimeterSheet, setPerimeterSheet] = useState<PlanSheetListItem | null>(null);
   const [renameSheet, setRenameSheet] = useState<PlanSheetListItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PlanSheetListItem | null>(null);
 
@@ -294,6 +307,7 @@ export function PlanSheetsPage() {
             readOnly={readOnly}
             deletingId={deleteMutation.isLoading ? (pendingDelete?.id ?? null) : null}
             onRegister={setRegisterSheet}
+            onPerimeter={setPerimeterSheet}
             onRename={setRenameSheet}
             onRequestDelete={setPendingDelete}
           />
@@ -314,6 +328,15 @@ export function PlanSheetsPage() {
           projectId={projectId}
           sheet={registerSheet}
           onClose={() => setRegisterSheet(null)}
+          onSaved={() => void sheetsQuery.refetch()}
+        />
+      )}
+
+      {perimeterSheet && projectId && (
+        <PlanSheetPerimeterModal
+          projectId={projectId}
+          sheet={perimeterSheet}
+          onClose={() => setPerimeterSheet(null)}
           onSaved={() => void sheetsQuery.refetch()}
         />
       )}
