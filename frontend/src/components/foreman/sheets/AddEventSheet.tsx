@@ -6,6 +6,7 @@ import { SheetDraftRestoredHint } from './SheetDraftRestoredHint';
 import { SheetErrorBanner } from './SheetErrorBanner';
 import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
+import { DictationMicButton } from '@/components/ui/DictationMicButton';
 
 const EVENT_TYPES = ['Visitor', 'Safety', 'Instruction', 'Variation', 'Other'];
 
@@ -128,7 +129,12 @@ export function AddEventSheet({
         </div>
 
         <div>
-          <label className="text-sm font-medium text-muted-foreground">Notes</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-sm font-medium text-muted-foreground">Notes</label>
+            <DictationMicButton
+              onTranscript={(text) => setNotes((prev) => (prev ? prev + ' ' + text : text))}
+            />
+          </div>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

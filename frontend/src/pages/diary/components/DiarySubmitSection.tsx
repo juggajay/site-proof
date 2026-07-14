@@ -10,6 +10,7 @@ import type { DailyDiaryPDFData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { DictationMicButton } from '@/components/ui/DictationMicButton';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import type { DailyDiary, Addendum } from '../types';
 
@@ -367,7 +368,14 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
 
           {/* Add Addendum Form */}
           <div className="space-y-3">
-            <Label>Add Addendum</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Add Addendum</Label>
+              <DictationMicButton
+                onTranscript={(text) =>
+                  setAddendumContent((prev) => (prev ? prev + ' ' + text : text))
+                }
+              />
+            </div>
             <Textarea
               value={addendumContent}
               onChange={(e) => setAddendumContent(e.target.value)}

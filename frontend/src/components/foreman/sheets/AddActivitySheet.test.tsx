@@ -22,6 +22,18 @@ import {
 import { AddActivitySheet } from './AddActivitySheet';
 import { sheetDraftKey } from './useSheetDraft';
 
+// The mic's SpeechRecognition plumbing is exercised in useDictation.test.ts;
+// here we only need a supported mic whose start() yields a final transcript.
+vi.mock('@/hooks/useDictation', () => ({
+  useDictation: ({ onTranscript }: { onTranscript: (t: string) => void }) => ({
+    supported: true,
+    listening: false,
+    start: () => onTranscript('compacted to spec'),
+    stop: () => {},
+    error: null,
+  }),
+}));
+
 const KEY = sheetDraftKey('proj-1', '2026-06-10', 'activity');
 const LOTS = [{ id: 'lot-1', lotNumber: '001' }];
 
@@ -139,5 +151,15 @@ describe('AddActivitySheet auto-draft', () => {
     view.unmount();
     // The stored fresh-entry draft is untouched by the edit session.
     expect(JSON.parse(readSessionStorageItem(KEY)!)).toMatchObject({ description: 'Fresh draft' });
+  });
+
+  it('appends dictated speech to the notes field when the mic is supported', () => {
+    renderSheet();
+    fireEvent.click(screen.getByText('More details'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+
+    const notes = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    expect(notes).toHaveValue('compacted to spec');
   });
 });

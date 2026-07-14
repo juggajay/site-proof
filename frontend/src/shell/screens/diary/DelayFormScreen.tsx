@@ -28,6 +28,7 @@ import {
 } from '@/pages/diary/diaryNumericInput';
 import { SheetDraftRestoredHint } from '@/components/foreman/sheets/SheetDraftRestoredHint';
 import { SheetErrorBanner } from '@/components/foreman/sheets/SheetErrorBanner';
+import { DictationMicButton } from '@/components/ui/DictationMicButton';
 import { formatDateKey } from '@/lib/localDate';
 
 const DELAY_TYPES = ['Weather', 'Equipment', 'Material', 'Subcontractor', 'Safety', 'Other'];
@@ -177,9 +178,14 @@ export function DelayFormScreen() {
       </div>
 
       <div>
-        <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-[.07em] text-muted-foreground">
-          Description *
-        </label>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <label className="block text-[12px] font-semibold uppercase tracking-[.07em] text-muted-foreground">
+            Description *
+          </label>
+          <DictationMicButton
+            onTranscript={(text) => setDescription((prev) => (prev ? prev + ' ' + text : text))}
+          />
+        </div>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
