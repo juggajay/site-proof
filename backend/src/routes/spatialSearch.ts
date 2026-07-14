@@ -143,6 +143,8 @@ spatialSearchRouter.post(
         caption: true,
         captureTimestamp: true,
         lotId: true,
+        gpsLatitude: true,
+        gpsLongitude: true,
       },
     });
     const visiblePhotos = photoRows.filter((p) => {

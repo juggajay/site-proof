@@ -7,7 +7,13 @@ import type { ProjectControlLine, ProjectLotGeometry } from './lotMapData';
 // passthrough elements so we can assert our own layer/popup/empty-state logic.
 const fakeMap = {
   fitBounds: vi.fn(),
-  getBounds: () => ({ intersects: () => true }),
+  getBounds: () => ({
+    intersects: () => true,
+    getWest: () => 151.0,
+    getSouth: () => -33.81,
+    getEast: () => 151.01,
+    getNorth: () => -33.8,
+  }),
   on: vi.fn(),
   off: vi.fn(),
 };
@@ -42,6 +48,9 @@ vi.mock('react-leaflet', () => {
     CircleMarker: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="circle-marker">{children}</div>
     ),
+    Marker: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="marker">{children}</div>
+    ),
     Popup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Tooltip: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Rectangle: ({ children }: { children?: React.ReactNode }) => (
@@ -68,6 +77,14 @@ vi.mock('@tanstack/react-query', () => ({
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 
+// SecureDocumentImage does an authenticated fetch on mount — stub it so the
+// photo-pin popups render a deterministic thumbnail with no network.
+vi.mock('@/components/documents/SecureDocumentImage', () => ({
+  SecureDocumentImage: ({ documentId, alt }: { documentId: string; alt?: string }) => (
+    <img data-testid={`secure-img-${documentId}`} alt={alt} />
+  ),
+}));
+
 // Capture toasts so the offline suppression of the tile-error toast is testable.
 const toastMock = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
@@ -85,7 +102,7 @@ vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
 const spatialSearchMutation = {
   mutate: vi.fn(),
   reset: vi.fn(),
-  data: undefined,
+  data: undefined as import('./spatialSearchData').SpatialSearchResult | undefined,
   isLoading: false,
   error: null,
 };
@@ -129,6 +146,7 @@ vi.mock('./lotMapData', () => ({
 }));
 
 import { ApiError } from '@/lib/api';
+import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { LotMapView } from './LotMapView';
 
 function polygonGeometry(over: Partial<ProjectLotGeometry> = {}): ProjectLotGeometry {
@@ -208,6 +226,11 @@ beforeEach(() => {
   timelineQuery.data = undefined;
   timelineQuery.isLoading = false;
   timelineQuery.error = null;
+  // clearAllMocks does not reset a plain data property; the photo-pin tests set
+  // it and it must not leak. Reset the persisted Photos toggle via the safe
+  // storage helper (raw localStorage access is banned by a readiness guardrail).
+  spatialSearchMutation.data = undefined;
+  writeLocalStorageItem('siteproof.mapPhotos.proj-1', 'false');
 });
 
 describe('LotMapView', () => {
@@ -462,5 +485,108 @@ describe('LotMapView', () => {
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Map imagery failed to load' }),
     );
+  });
+
+  describe('Photos layer', () => {
+    function setPhotos(photos: import('./spatialSearchData').SpatialPhoto[]) {
+      spatialSearchMutation.data = {
+        lots: [],
+        lotsTruncated: false,
+        photos,
+        photosTruncated: false,
+        testResults: [],
+        testResultsTruncated: false,
+      };
+    }
+    const photo = (
+      over: Partial<import('./spatialSearchData').SpatialPhoto> = {},
+    ): import('./spatialSearchData').SpatialPhoto => ({
+      id: 'photo-1',
+      filename: 'IMG_1.jpg',
+      caption: 'Footing rebar',
+      captureTimestamp: null,
+      lotId: 'lot-1',
+      gpsLatitude: -33.8,
+      gpsLongitude: 151.0,
+      ...over,
+    });
+
+    it('renders pins only for photos with coords once the Photos layer is on', () => {
+      setPhotos([photo(), photo({ id: 'photo-2', gpsLatitude: null, gpsLongitude: null })]);
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+
+      // Off by default — no pins.
+      expect(screen.queryByTestId('photo-pin-photo-1')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('photos-button'));
+      expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('photo-pin-photo-1')).toBeInTheDocument();
+      // The null-coord photo is skipped.
+      expect(screen.queryByTestId('photo-pin-photo-2')).not.toBeInTheDocument();
+    });
+
+    it('routes a pin View through linkTargets so the foreman shell stays under /m', () => {
+      setPhotos([photo()]);
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+          linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('photos-button'));
+      fireEvent.click(screen.getByTestId('photo-pin-view-photo-1'));
+      expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
+    });
+
+    it('renders an unlinked pin (no View) when the shell photo has no lot destination', () => {
+      setPhotos([photo({ lotId: null })]);
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+          linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('photos-button'));
+      expect(screen.getByTestId('photo-pin-photo-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('photo-pin-view-photo-1')).not.toBeInTheDocument();
+    });
+
+    it('persists the Photos toggle per project', () => {
+      mockQueries({ geometries: [polygonGeometry()] });
+      const { unmount } = render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+      expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(screen.getByTestId('photos-button'));
+      expect(readLocalStorageItem('siteproof.mapPhotos.proj-1')).toBe('true');
+
+      // A fresh mount reads the persisted preference back as on.
+      unmount();
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+      expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'true');
+    });
   });
 });

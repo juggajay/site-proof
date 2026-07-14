@@ -80,6 +80,11 @@ export async function uploadItpEvidencePhoto({
   formData.append('documentType', 'photo');
   formData.append('category', 'itp_evidence');
   formData.append('caption', caption);
+  // Persist the capture GPS on the Document itself (not just the attachment) so
+  // ITP evidence photos pin on the lot map's photo layer.
+  if (gpsLocation?.latitude != null) formData.append('gpsLatitude', String(gpsLocation.latitude));
+  if (gpsLocation?.longitude != null)
+    formData.append('gpsLongitude', String(gpsLocation.longitude));
 
   const uploadResponse = await authFetch('/api/documents/upload', {
     method: 'POST',

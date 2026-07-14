@@ -15,6 +15,33 @@ export interface SpatialPhoto {
   caption: string | null;
   captureTimestamp: string | null;
   lotId: string | null;
+  // Prisma Decimal serialises as a string over JSON; normalised to number|null
+  // by normaliseSpatialPhotoCoords before the map layer reads them.
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
+}
+
+// Coerce one coordinate: Prisma Decimal arrives as a string, a number in tests,
+// or null/undefined when absent. Non-finite parses (e.g. '') become null.
+function toCoord(value: string | number | null | undefined): number | null {
+  if (value == null) return null;
+  // Number('') is 0, not NaN — a blank coord must not become (0, 0).
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function normaliseSpatialPhotoCoords(
+  photo: Omit<SpatialPhoto, 'gpsLatitude' | 'gpsLongitude'> & {
+    gpsLatitude?: string | number | null;
+    gpsLongitude?: string | number | null;
+  },
+): SpatialPhoto {
+  return {
+    ...photo,
+    gpsLatitude: toCoord(photo.gpsLatitude),
+    gpsLongitude: toCoord(photo.gpsLongitude),
+  };
 }
 
 export interface SpatialTestResult {
@@ -39,10 +66,14 @@ export interface SpatialSearchResult {
 export function useSpatialSearch(projectId: string) {
   return useMutation({
     mutationKey: queryKeys.spatialSearch(projectId),
-    mutationFn: (bounds: SearchBounds) =>
-      apiFetch<SpatialSearchResult>(
+    mutationFn: async (bounds: SearchBounds) => {
+      const result = await apiFetch<SpatialSearchResult>(
         `/api/projects/${encodeURIComponent(projectId)}/spatial-search`,
         { method: 'POST', body: JSON.stringify({ bounds }) },
-      ),
+      );
+      // Normalise photo coords (Prisma Decimal → number|null) once, here, so both
+      // the find-by-area panel and the map photo layer read plain numbers.
+      return { ...result, photos: result.photos.map(normaliseSpatialPhotoCoords) };
+    },
   });
 }
