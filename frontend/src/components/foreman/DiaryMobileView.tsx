@@ -19,6 +19,8 @@ interface DiaryMobileViewProps {
   lots: Array<{ id: string; lotNumber: string }>;
   activeLotId: string | null;
   onLotChange: (lotId: string | null) => void;
+  /** GPS pre-selected the active lot — show a "change if wrong" hint. */
+  lotAutoDetected?: boolean;
   // Weather
   weather: {
     conditions: string;
@@ -63,6 +65,7 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
     lots,
     activeLotId,
     onLotChange,
+    lotAutoDetected = false,
     weather,
     weatherSource,
     fetchingWeather,
@@ -128,7 +131,14 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
             {!isToday && <p className="text-xs text-muted-foreground">Not today</p>}
             {isSubmitted && <p className="text-xs text-muted-foreground font-medium">Submitted</p>}
           </div>
-          <DiaryLotSelector lots={lots} activeLotId={activeLotId} onLotChange={onLotChange} />
+          <div className="flex flex-col items-end gap-1">
+            <DiaryLotSelector lots={lots} activeLotId={activeLotId} onLotChange={onLotChange} />
+            {lotAutoDetected && activeLotId && (
+              <p className="text-xs text-muted-foreground text-right">
+                Auto-detected from your location — change if wrong
+              </p>
+            )}
+          </div>
         </div>
         {canReviewSubmit && (
           <div className="px-4 pb-3">

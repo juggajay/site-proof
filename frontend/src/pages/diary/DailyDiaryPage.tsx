@@ -155,6 +155,7 @@ export function DailyDiaryPage() {
             lots={data.lots}
             activeLotId={mobile.activeLotId}
             onLotChange={mobile.setActiveLotId}
+            lotAutoDetected={mobile.lotAutoDetected}
             weather={mobileWeather}
             weatherSource={data.weatherSource}
             fetchingWeather={data.fetchingWeather}

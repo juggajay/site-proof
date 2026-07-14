@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGeoLocation } from '@/hooks/useGeoLocation';
+import { useLotAtMyLocation } from '@/hooks/useLotAtMyLocation';
+import { fetchAllLotPages } from '@/lib/lots';
 import { capturePhotoOffline, queueOfflineNcrCreate } from '@/lib/offlineDb';
 import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { useAuth } from '@/lib/auth';
@@ -65,6 +67,7 @@ export function CaptureModal({
 }: CaptureModalProps) {
   const { user } = useAuth();
   const { latitude, longitude } = useGeoLocation();
+  const { suggestion: lotSuggestion } = useLotAtMyLocation(projectId);
 
   const [phase, setPhase] = useState<'capture' | 'categorize'>('capture');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -72,6 +75,10 @@ export function CaptureModal({
 
   const [captureType, setCaptureType] = useState<CaptureType>(defaultCaptureType);
   const [linkedLot, setLinkedLot] = useState<string | null>(defaultLotId || null);
+  // Tracks whether the user has touched the lot select, so the GPS suggestion
+  // never re-overrides their choice; lotAutoDetected drives the hint line.
+  const [lotTouched, setLotTouched] = useState(false);
+  const [lotAutoDetected, setLotAutoDetected] = useState(false);
   const [linkedItp, setLinkedItp] = useState<string | null>(defaultItpId || null);
   const [description, setDescription] = useState('');
   const [lots, setLots] = useState<LotOption[]>([]);
@@ -89,10 +96,12 @@ export function CaptureModal({
     setLotsError('');
 
     try {
-      const data = await apiFetch<{ lots: LotOption[] }>(
+      // Every page — beyond ~20 lots a single page left the picker (and the
+      // GPS suggestion's target) missing from the list.
+      const allLots = await fetchAllLotPages<LotOption>(
         `/api/lots?projectId=${encodeURIComponent(projectId)}`,
       );
-      setLots(data.lots || []);
+      setLots(allLots);
     } catch {
       setLots([]);
       setLotsError('Unable to load lots');
@@ -108,6 +117,8 @@ export function CaptureModal({
       setCapturedFile(null);
       setCaptureType(defaultCaptureType);
       setLinkedLot(defaultLotId || null);
+      setLotTouched(false);
+      setLotAutoDetected(false);
       setLinkedItp(defaultItpId || null);
       setDescription('');
       void loadLots();
@@ -115,6 +126,16 @@ export function CaptureModal({
       return () => clearTimeout(timer);
     }
   }, [isOpen, defaultLotId, defaultItpId, defaultCaptureType, loadLots]);
+
+  // GPS auto-select: when the caller didn't pin a lot and the user hasn't picked
+  // one, pre-select the lot they're standing in. The suggestion can arrive after
+  // open (GPS + geometry fetch), so this runs as its own effect. Silent when it
+  // can't help — no suggestion, no permission, no geometries.
+  useEffect(() => {
+    if (!isOpen || defaultLotId || lotTouched || linkedLot || !lotSuggestion) return;
+    setLinkedLot(lotSuggestion.lotId);
+    setLotAutoDetected(true);
+  }, [isOpen, defaultLotId, lotTouched, linkedLot, lotSuggestion]);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -427,7 +448,11 @@ export function CaptureModal({
                 <NativeSelect
                   id="capture-linked-lot"
                   value={linkedLot || ''}
-                  onChange={(e) => setLinkedLot(e.target.value || null)}
+                  onChange={(e) => {
+                    setLotTouched(true);
+                    setLotAutoDetected(false);
+                    setLinkedLot(e.target.value || null);
+                  }}
                   disabled={lotsLoading}
                   className="h-12 pr-10"
                 >
@@ -446,6 +471,11 @@ export function CaptureModal({
                   <Loader2 className="absolute right-3 top-3.5 h-5 w-5 animate-spin text-muted-foreground" />
                 )}
               </div>
+              {lotAutoDetected && (
+                <p className="text-xs text-muted-foreground">
+                  Auto-detected from your location — change if wrong
+                </p>
+              )}
               {lotsError && (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-destructive">{lotsError}</p>

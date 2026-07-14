@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, isRetriableNetworkFailure } from '@/lib/api';
+import { useLotAtMyLocation } from '@/hooks/useLotAtMyLocation';
 import { toast } from '@/components/ui/toaster';
 import {
   queueDiaryActivityOffline,
@@ -71,6 +72,25 @@ export function useDiaryMobileHandlers({
   const [activeLotId, setActiveLotId] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<QuickAddType | 'weather' | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimelineEntry | null>(null);
+
+  // GPS auto-select: seed the active lot with the one the foreman is standing in
+  // until they pick a lot themselves. userTouchedLot latches on first manual
+  // change so the suggestion never re-overrides. lotAutoDetected drives the hint.
+  const { suggestion: lotSuggestion } = useLotAtMyLocation(projectId);
+  const userTouchedLot = useRef(false);
+  const [lotAutoDetected, setLotAutoDetected] = useState(false);
+
+  const handleLotChange = useCallback((lotId: string | null) => {
+    userTouchedLot.current = true;
+    setLotAutoDetected(false);
+    setActiveLotId(lotId);
+  }, []);
+
+  useEffect(() => {
+    if (userTouchedLot.current || activeLotId || !lotSuggestion) return;
+    setActiveLotId(lotSuggestion.lotId);
+    setLotAutoDetected(true);
+  }, [activeLotId, lotSuggestion]);
 
   // Copy-from-yesterday for personnel and plant. Uses setDiary as the update
   // callback so the mobile timeline reflects new entries without a full refetch.
@@ -475,7 +495,8 @@ export function useDiaryMobileHandlers({
 
   return {
     activeLotId,
-    setActiveLotId,
+    setActiveLotId: handleLotChange,
+    lotAutoDetected,
     activeSheet,
     setActiveSheet,
     editingEntry,

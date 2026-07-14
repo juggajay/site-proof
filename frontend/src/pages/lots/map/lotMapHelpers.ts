@@ -154,6 +154,54 @@ export function cornersToLatLngBounds(corners: [number, number][]): [LatLng, Lat
   ];
 }
 
+// Ray-casting point-in-polygon on one ring of GeoJSON [lng, lat] positions.
+// Boundary membership is undefined (a point exactly on an edge may read either
+// way) — fine for lot auto-select, where a GPS fix is never exactly on a line.
+// Holes are ignored: lots are simple polygons.
+export function pointInPolygon(lng: number, lat: number, ring: [number, number][]): boolean {
+  if (ring.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const straddles = yi > lat !== yj > lat;
+    if (straddles && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// The outer ring(s) of a geometry: one for a Polygon, one per part for a
+// MultiPolygon, none for point/linestring geometries (which can't contain a
+// point). Read type as a bare string so a MultiPolygon in the data isn't a type
+// error against the narrower GeoJsonGeometry union. Holes are ignored.
+function outerRings(
+  geom: { type: string; coordinates: number[][][] | number[][][][] } | undefined,
+): [number, number][][] {
+  if (!geom) return [];
+  if (geom.type === 'Polygon') return [(geom.coordinates as number[][][])[0] as [number, number][]];
+  if (geom.type === 'MultiPolygon') {
+    return (geom.coordinates as number[][][][]).map((poly) => poly[0] as [number, number][]);
+  }
+  return [];
+}
+
+// Which lot footprint contains a WGS84 point, or null. First match wins (lots
+// don't overlap).
+export function lotAtPoint(
+  geometries: ProjectLotGeometry[],
+  lng: number,
+  lat: number,
+): { lotId: string; lotNumber: string } | null {
+  const match = geometries.find((g) =>
+    outerRings(g.geometryWgs84?.geometry as never).some(
+      (ring) => ring && pointInPolygon(lng, lat, ring),
+    ),
+  );
+  return match ? { lotId: match.lotId, lotNumber: match.lotNumber } : null;
+}
+
 // Only geometries whose lot is in the register's current filtered set.
 export function filterGeometriesByLotIds(
   geometries: ProjectLotGeometry[],

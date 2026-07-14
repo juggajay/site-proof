@@ -26,6 +26,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 
+// GPS lot suggestion is isolated here — its own hook test covers point-in-polygon
+// and the accuracy guard. Tests that exercise auto-select set this per-case.
+const lotSuggestion = vi.hoisted(() => ({
+  value: null as { lotId: string; lotNumber: string } | null,
+}));
+vi.mock('@/hooks/useLotAtMyLocation', () => ({
+  useLotAtMyLocation: () => ({ suggestion: lotSuggestion.value, accuracy: null, loading: false }),
+}));
+
 vi.mock('@/lib/offlineDb', () => ({
   queueDiaryActivityOffline: vi.fn(),
   queueDiaryDelayOffline: vi.fn(),
@@ -95,9 +104,33 @@ function renderHandlers(overrides: Partial<Parameters<typeof useDiaryMobileHandl
 
 beforeEach(() => {
   vi.clearAllMocks();
+  lotSuggestion.value = null;
   // isRetriableNetworkFailure short-circuits to retriable whenever the browser
   // reports offline; default to online so each ApiError classifies by status.
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+});
+
+describe('GPS lot auto-select', () => {
+  it('seeds activeLotId from the suggestion when nothing is selected', () => {
+    lotSuggestion.value = { lotId: 'lot-9', lotNumber: '9' };
+    const { result } = renderHandlers();
+    expect(result.current.activeLotId).toBe('lot-9');
+    expect(result.current.lotAutoDetected).toBe(true);
+  });
+
+  it('does not override a lot the user has already picked', () => {
+    lotSuggestion.value = { lotId: 'lot-9', lotNumber: '9' };
+    const { result } = renderHandlers();
+    act(() => result.current.setActiveLotId('lot-user'));
+    expect(result.current.activeLotId).toBe('lot-user');
+    expect(result.current.lotAutoDetected).toBe(false);
+  });
+
+  it('is silent when there is no suggestion', () => {
+    const { result } = renderHandlers();
+    expect(result.current.activeLotId).toBeNull();
+    expect(result.current.lotAutoDetected).toBe(false);
+  });
 });
 
 describe('quick-add success path (unchanged)', () => {
