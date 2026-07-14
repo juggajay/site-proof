@@ -111,6 +111,10 @@ describe('uploadItpEvidencePhoto', () => {
     expect(formData.get('documentType')).toBe('photo');
     expect(formData.get('category')).toBe('itp_evidence');
     expect(String(formData.get('caption'))).toContain('ITP Evidence Photo - ');
+    // The capture GPS is persisted on the Document itself (not just the
+    // attachment) so the evidence photo pins on the lot map's photo layer.
+    expect(formData.get('gpsLatitude')).toBe('-33.8688');
+    expect(formData.get('gpsLongitude')).toBe('151.2093');
   });
 
   it('sends the captured GPS coordinates on the attachment (geotag parity with HC)', async () => {
@@ -147,6 +151,13 @@ describe('uploadItpEvidencePhoto', () => {
     const body = JSON.parse(attachOptions.body as string);
     expect(body.gpsLatitude).toBeNull();
     expect(body.gpsLongitude).toBeNull();
+
+    // With no fix, the Document FormData omits the coordinate fields entirely
+    // (rather than sending an empty string the backend would coerce to 0).
+    const [, uploadOptions] = vi.mocked(authFetch).mock.calls[0] as [string, RequestInit];
+    const formData = uploadOptions.body as FormData;
+    expect(formData.has('gpsLatitude')).toBe(false);
+    expect(formData.has('gpsLongitude')).toBe(false);
   });
 
   it('encodeURIComponent-encodes the completionId in the attachment URL', async () => {

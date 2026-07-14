@@ -6,6 +6,7 @@ import {
   CircleMarker,
   LayersControl,
   MapContainer,
+  Marker,
   Polygon,
   Polyline,
   Popup,
@@ -24,6 +25,7 @@ import {
   Crosshair,
   ExternalLink,
   History,
+  Image as ImageIcon,
   Layers,
   Map as MapIcon,
   PencilRuler,
@@ -31,6 +33,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
@@ -51,7 +54,7 @@ import { PlanSheetOverlay } from './PlanSheetOverlay';
 import { DrawLotLayer } from './DrawLotLayer';
 import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
 import { HistoryPanel } from './HistoryPanel';
-import { useSpatialSearch } from './spatialSearchData';
+import { useSpatialSearch, type SpatialPhoto } from './spatialSearchData';
 import { historicalStatusByLot, useLotStatusTimeline } from './statusTimelineData';
 import {
   ALL_WORK_TYPES,
@@ -90,6 +93,21 @@ const POLYGON_STROKE_COLOR = '#1f2937';
 // patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
 const GAP_COLOR = '#dc2626';
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
+
+// GPS photo pin: a violet camera badge — distinct from the status-coloured lot
+// fills, the amber control line, and the blue search box. Built once (divIcon is
+// immutable) and shared by every marker.
+const PHOTO_PIN_ICON = L.divIcon({
+  className: 'siteproof-photo-pin',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -12],
+  html:
+    '<div style="width:24px;height:24px;border-radius:9999px;background:#7c3aed;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">' +
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>' +
+    '<circle cx="12" cy="13" r="3"/></svg></div>',
+});
 
 export interface MapLot {
   id: string;
@@ -261,6 +279,40 @@ function LotGeometryLayer({
     >
       {popup}
     </CircleMarker>
+  );
+}
+
+// One GPS-tagged photo as a map marker with a thumbnail popup. Coords are
+// guaranteed non-null by the caller. `onView` navigates through linkPaths.photo
+// (null when the photo has no shell/desktop destination → no link rendered).
+function PhotoPin({ photo, onView }: { photo: SpatialPhoto; onView: (() => void) | null }) {
+  const label = photo.caption ?? photo.filename;
+  return (
+    <Marker position={[photo.gpsLatitude!, photo.gpsLongitude!]} icon={PHOTO_PIN_ICON}>
+      <Popup>
+        <div className="w-40" data-testid={`photo-pin-${photo.id}`}>
+          <SecureDocumentImage
+            documentId={photo.id}
+            variant="thumb"
+            alt={label}
+            className="h-28 w-full rounded object-cover"
+          />
+          <div className="mt-1 truncate text-xs font-medium" title={label}>
+            {label}
+          </div>
+          {onView && (
+            <button
+              type="button"
+              onClick={onView}
+              className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              data-testid={`photo-pin-view-${photo.id}`}
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> View photo
+            </button>
+          )}
+        </div>
+      </Popup>
+    </Marker>
   );
 }
 
@@ -460,6 +512,25 @@ export function LotMapView({
   const [drawArmed, setDrawArmed] = useState(false);
   const [searchBounds, setSearchBounds] = useState<SearchBounds | null>(null);
 
+  // Photo pins layer: an independent spatial-search instance (own data, so it
+  // never clobbers find-by-area's results). Toggle persisted per project,
+  // default OFF; when on we refetch the current viewport's photos (debounced).
+  const photoSearch = useSpatialSearch(projectId);
+  const { mutate: runPhotoSearch, reset: resetPhotoSearch } = photoSearch;
+  const photosStorageKey = `siteproof.mapPhotos.${projectId}`;
+  const [photosArmed, setPhotosArmed] = useState<boolean>(
+    () => readLocalStorageItem(photosStorageKey) === 'true',
+  );
+  useEffect(() => {
+    writeLocalStorageItem(photosStorageKey, String(photosArmed));
+  }, [photosStorageKey, photosArmed]);
+  const togglePhotos = useCallback(() => {
+    setPhotosArmed((on) => {
+      if (on) resetPhotoSearch();
+      return !on;
+    });
+  }, [resetPhotoSearch]);
+
   const [coverageArmed, setCoverageArmed] = useState(false);
   const [coverageSelection, setCoverageSelection] = useState<Record<string, string>>({});
   const [gapFocusBounds, setGapFocusBounds] = useState<[LatLng, LatLng] | null>(null);
@@ -570,6 +641,23 @@ export function LotMapView({
   }, [geometriesQuery.isLoading, planSheetsQuery.isLoading, geometryCount, registeredSheets]);
 
   const handleMapBounds = useCallback((bounds: L.LatLngBounds) => setMapBounds(bounds), []);
+
+  // While the photo layer is on, (re)fetch the photos in the current viewport.
+  // MapBoundsWatcher already lifts bounds on move/zoom; a 600ms debounce keeps a
+  // pan-and-zoom from firing a request per frame. Turning the layer off clears
+  // the data via resetPhotoSearch, so no fetch runs here.
+  useEffect(() => {
+    if (!photosArmed || !mapBounds) return;
+    const timer = setTimeout(() => {
+      runPhotoSearch({
+        west: mapBounds.getWest(),
+        south: mapBounds.getSouth(),
+        east: mapBounds.getEast(),
+        north: mapBounds.getNorth(),
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [photosArmed, mapBounds, runPhotoSearch]);
 
   const handleAreaComplete = useCallback(
     (bounds: SearchBounds) => {
@@ -965,6 +1053,14 @@ export function LotMapView({
                   compact={isMobile}
                   testId="plans-button"
                 />
+                <ToolbarButton
+                  icon={ImageIcon}
+                  label="Photos"
+                  onClick={togglePhotos}
+                  pressed={photosArmed}
+                  compact={isMobile}
+                  testId="photos-button"
+                />
                 {canManageSettings && (
                   <ToolbarButton
                     icon={PencilRuler}
@@ -1109,6 +1205,19 @@ export function LotMapView({
                   onViewDetails={() => navigate(linkPaths.lot(geometry.lotId))}
                 />
               ))}
+
+              {photosArmed &&
+                (photoSearch.data?.photos ?? []).map((photo) => {
+                  if (photo.gpsLatitude == null || photo.gpsLongitude == null) return null;
+                  const to = linkPaths.photo(photo);
+                  return (
+                    <PhotoPin
+                      key={photo.id}
+                      photo={photo}
+                      onView={to ? () => navigate(to) : null}
+                    />
+                  );
+                })}
 
               {coverageArmed &&
                 coverageGaps.map(({ key, shape }) =>

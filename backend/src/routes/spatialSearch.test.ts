@@ -266,6 +266,14 @@ describe('POST /api/projects/:projectId/spatial-search', () => {
     const filenames = res.body.photos.map((p: { filename: string }) => p.filename).sort();
     expect(filenames).toEqual(['inside-linked.jpg', 'inside-unlinked.jpg']);
 
+    // Each photo carries its GPS coords so the map can pin it. Prisma Decimal
+    // serialises as a string over JSON — the frontend Number()s it.
+    const linked = res.body.photos.find(
+      (p: { filename: string }) => p.filename === 'inside-linked.jpg',
+    );
+    expect(Number(linked.gpsLatitude)).toBeCloseTo(-33.805, 5);
+    expect(Number(linked.gpsLongitude)).toBeCloseTo(151.002, 5);
+
     // Test results only for the intersecting lots.
     const trLotIds = res.body.testResults.map((t: { lotId: string }) => t.lotId);
     expect(trLotIds).toContain(insideLotId);
