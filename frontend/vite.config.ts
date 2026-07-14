@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import path from 'path';
+import { mapRuntimeCaching } from './src/lib/pwaRuntimeCaching';
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 const PLACEHOLDER_MARKERS = ['example.', 'placeholder', 'your-'];
@@ -265,6 +266,10 @@ export default defineConfig(({ mode }) => {
           ],
           // Import the push notification service worker
           importScripts: ['sw-push.js'],
+          // Offline-graceful lot map: cache viewed tiles, plan-sheet rasters,
+          // and map data. Rules + MapTiler licence constraints live in
+          // src/lib/pwaRuntimeCaching.ts.
+          runtimeCaching: mapRuntimeCaching,
         },
       }),
       ...(uploadSentrySourcemaps
