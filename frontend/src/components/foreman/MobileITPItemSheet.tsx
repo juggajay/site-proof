@@ -50,9 +50,13 @@ export function MobileITPItemSheet({
   // main Photos section — and its inputs — are hidden while a reason is typed).
   const failPhotoInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset state when item changes
+  // Reset state only when a DIFFERENT item opens — never when the same item's
+  // completion refreshes. Adding the (required) fail photo creates/refetches
+  // the completion, and resetting on that object identity closed the fail
+  // panel and wiped the typed reason mid-fail.
+  const itemId = item?.id ?? null;
   useEffect(() => {
-    if (item) {
+    if (itemId) {
       setNotes(completion?.notes || '');
       setNaReason('');
       setFailReason('');
@@ -61,7 +65,10 @@ export function MobileITPItemSheet({
       setSavingStatus(false);
       setStatusError(null);
     }
-  }, [item, completion]);
+    // The completion read is an open-time seed for notes, not a dependency —
+    // re-seeding on completion refreshes is exactly the bug this fixes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
 
   if (!isOpen || !item) return null;
 
