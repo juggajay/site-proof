@@ -24,6 +24,7 @@ import {
   writeAuthToStorage,
   writeRememberMePreference,
 } from './authStorage';
+import { AUTHED_MAP_CACHES } from './pwaRuntimeCaching';
 import { isRecord, readLocalStorageItem } from './storagePreferences';
 
 // Simple user type for local development
@@ -124,6 +125,16 @@ async function clearOfflineDataSafely() {
     await clearAllOfflineData();
   } catch (error) {
     logError('Failed to clear offline data:', error);
+  }
+  // The service worker's map caches hold authed API responses (lot
+  // geometries, plan-sheet rasters) keyed by URL only — drop them so they
+  // cannot leak to the next account on this device. Public imagery tiles stay.
+  if (typeof caches !== 'undefined') {
+    try {
+      await Promise.all(AUTHED_MAP_CACHES.map((name) => caches.delete(name)));
+    } catch (error) {
+      logError('Failed to clear map caches:', error);
+    }
   }
 }
 

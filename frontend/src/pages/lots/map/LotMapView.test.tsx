@@ -14,6 +14,8 @@ const fakeMap = {
 // Captures the options passed to MapContainer (they are Leaflet OPTIONS, not
 // DOM attributes — the mock must record them, never spread them onto the DOM).
 const mapContainerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+// Same capture pattern for TileLayer so tests can fire its tileerror handler.
+const tileLayerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 vi.mock('react-leaflet', () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   const LayersControl = Object.assign(Passthrough, { BaseLayer: Passthrough });
@@ -22,7 +24,10 @@ vi.mock('react-leaflet', () => {
       mapContainerProps.current = props;
       return <div data-testid="map-container">{children}</div>;
     },
-    TileLayer: () => <div data-testid="tile-layer" />,
+    TileLayer: (props: Record<string, unknown>) => {
+      tileLayerProps.current = props;
+      return <div data-testid="tile-layer" />;
+    },
     ScaleControl: () => <div data-testid="scale-control" />,
     LayersControl,
     Polygon: ({ children }: { children?: React.ReactNode }) => (
@@ -62,6 +67,10 @@ vi.mock('@tanstack/react-query', () => ({
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
+
+// Capture toasts so the offline suppression of the tile-error toast is testable.
+const toastMock = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
 
 // Force a deterministic viewport so jsdom doesn't need a matchMedia polyfill.
 // Mutable so individual tests can exercise the mobile branch.
@@ -188,9 +197,14 @@ function mockQueries({
   return { refetch };
 }
 
+function setNavigatorOnline(value: boolean) {
+  Object.defineProperty(window.navigator, 'onLine', { value, configurable: true });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   isMobileValue = false;
+  setNavigatorOnline(true);
   timelineQuery.data = undefined;
   timelineQuery.isLoading = false;
   timelineQuery.error = null;
@@ -418,5 +432,39 @@ describe('LotMapView', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
     expect(mapContainerProps.current.zoomControl).toBe(true);
+  });
+
+  it('shows the offline banner only when the browser is offline', () => {
+    setNavigatorOnline(false);
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    expect(screen.getByTestId('map-offline-banner')).toHaveTextContent(/offline/i);
+  });
+
+  it('hides the offline banner while online', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    expect(screen.queryByTestId('map-offline-banner')).not.toBeInTheDocument();
+  });
+
+  it('suppresses the tile-error toast while offline (banner already explains grey tiles)', () => {
+    setNavigatorOnline(false);
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    const handlers = tileLayerProps.current.eventHandlers as { tileerror: () => void };
+    handlers.tileerror();
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  it('still toasts on tile errors while online', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    const handlers = tileLayerProps.current.eventHandlers as { tileerror: () => void };
+    handlers.tileerror();
+    handlers.tileerror();
+    expect(toastMock).toHaveBeenCalledTimes(1);
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Map imagery failed to load' }),
+    );
   });
 });
