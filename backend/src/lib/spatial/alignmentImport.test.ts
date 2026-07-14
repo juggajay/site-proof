@@ -34,6 +34,21 @@ describe('segmentsToControlPoints', () => {
     expect(points[2].chainage).toBeCloseTo((10 * Math.PI) / 2, 6);
   });
 
+  it('rejects a pathological arc before it allocates millions of chords', () => {
+    // Huge radius + near-full sweep would demand >100k chords; must be rejected
+    // loudly up front, not silently coarsened and not left to exhaust memory
+    // before the downstream point cap.
+    const R = 1e10;
+    const arc: Segment = {
+      kind: 'arc',
+      start: { e: R, n: 0 },
+      end: { e: R * Math.cos(-0.001), n: R * Math.sin(-0.001) },
+      center: { e: 0, n: 0 },
+      clockwise: false,
+    };
+    expect(() => segmentsToControlPoints([arc], 0)).toThrow(/too finely divided|implausible/i);
+  });
+
   it('rejects an alignment that exceeds the point cap', () => {
     // 2001 unit line segments ⇒ 2002 points, past MAX_IMPORT_POINTS (2000).
     const segments: Segment[] = [];
