@@ -295,7 +295,7 @@ The diary QA auto-events sync (#1461) swallows all errors by design (a diary
 read must never fail because enrichment failed). Consequence: a regression
 anywhere in its chain (endpoint calls sync → mapping carries `source` →
 badge renders) ships 200-green and surfaces only as a silently empty
-section. The core function had 7 unit tests; the chain had zero. **Rule:**
+section. The core function had 6 unit tests; the chain had zero. **Rule:**
 when a feature is deliberately best-effort/silent, add at least one
 integration test through its full chain in the same PR (route-level
 DB-backed test + a seeded-journey step); unit tests on the core cannot see
