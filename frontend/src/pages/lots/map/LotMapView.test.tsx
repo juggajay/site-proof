@@ -434,20 +434,7 @@ describe('LotMapView', () => {
     expect(mapContainerProps.current.zoomControl).toBe(true);
   });
 
-  it('shows the offline banner only when the browser is offline', () => {
-    setNavigatorOnline(false);
-    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
-    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
-    expect(screen.getByTestId('map-offline-banner')).toHaveTextContent(/offline/i);
-  });
-
-  it('hides the offline banner while online', () => {
-    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
-    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
-    expect(screen.queryByTestId('map-offline-banner')).not.toBeInTheDocument();
-  });
-
-  it('suppresses the tile-error toast while offline (banner already explains grey tiles)', () => {
+  it('suppresses the tile-error toast while offline (the global OfflineIndicator pill covers it)', () => {
     setNavigatorOnline(false);
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
