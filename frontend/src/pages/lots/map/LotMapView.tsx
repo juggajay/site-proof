@@ -932,7 +932,12 @@ export function LotMapView({
               No lots in the current filter have geometry.
             </p>
           )}
-          <div className="relative">
+          {/* isolate: Leaflet panes and the toolbar use z-index 400–1000, far
+              above the app chrome's z-50 (OfflineIndicator, dialog overlays,
+              toasts). Containing them in their own stacking context keeps the
+              map from painting over fixed page-level UI — the offline pill was
+              80% hidden behind the map before this. */}
+          <div className="relative isolate" data-testid="lot-map-stacking-root">
             <div className="absolute left-3 top-3 z-[1000] pointer-events-auto">
               <div className="flex flex-wrap items-center gap-2">
                 <ToolbarButton

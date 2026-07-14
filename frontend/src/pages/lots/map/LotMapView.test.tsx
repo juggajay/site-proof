@@ -434,6 +434,15 @@ describe('LotMapView', () => {
     expect(mapContainerProps.current.zoomControl).toBe(true);
   });
 
+  it('isolates the map stacking context so leaflet z-indexes cannot paint over app chrome', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    // The wrapper's `isolate` keeps the internal z-400–1000 (leaflet panes,
+    // toolbar) below fixed z-50 page UI like OfflineIndicator and dialog
+    // overlays. Removing it re-breaks the offline pill on the map page.
+    expect(screen.getByTestId('lot-map-stacking-root')).toHaveClass('isolate');
+  });
+
   it('suppresses the tile-error toast while offline (the global OfflineIndicator pill covers it)', () => {
     setNavigatorOnline(false);
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
