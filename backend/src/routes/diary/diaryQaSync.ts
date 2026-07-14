@@ -23,7 +23,13 @@ import {
  * `source: 'manual'` are never touched (H11).
  *
  * Legal-record safety: only draft, unlocked diaries are synced. A submitted or
- * locked diary is a legal record — skip silently, never mutate or error.
+ * locked diary is a legal record — skip silently, never mutate or error. The
+ * entry guard checks a snapshot the read handler fetched; because a concurrent
+ * submit can land between that snapshot and these writes, the write block re-
+ * reads the live diary row `SELECT ... FOR UPDATE` inside a transaction (same
+ * idiom as diarySubmission's reopen) and aborts if it is now submitted/locked.
+ * That serialises against the submit path's own row-updating transaction, so a
+ * submit committed before the writes makes this sync a no-op.
  */
 
 const MAX_DESCRIPTION_SNIPPET = 80;
@@ -198,42 +204,60 @@ export async function syncDiaryQaEvents(diary: SyncableDiary): Promise<void> {
     const desired = await computeDesiredEvents(diary.projectId, start, end);
     const desiredRefs = desired.map((e) => e.sourceRef);
 
-    // Drop QA rows whose source record no longer qualifies (voided / un-failed).
-    // Never touches source='manual'.
-    await prisma.diaryEvent.deleteMany({
-      where: {
-        diaryId: diary.id,
-        source: 'qa',
-        sourceRef: desiredRefs.length > 0 ? { notIn: desiredRefs } : undefined,
-      },
-    });
+    // Re-check the LIVE diary row before writing: the entry guard above only saw
+    // the read handler's snapshot, so a concurrent submit could have locked this
+    // record since. `SELECT ... FOR UPDATE` (mirrors diarySubmission's reopen)
+    // serialises against the submit path's row-updating transaction — either we
+    // hold the lock and write while it is still draft, or the submit committed
+    // first and we abort. The child-table writes stay inside the same tx so the
+    // lock is held across them.
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ status: string; lockedAt: Date | null }>>`
+        SELECT status, locked_at AS "lockedAt"
+        FROM daily_diaries
+        WHERE id = ${diary.id}
+        FOR UPDATE
+      `;
+      const live = rows[0];
+      // Vanished, submitted, or locked concurrently -> legal record, no-op.
+      if (!live || live.status === 'submitted' || live.lockedAt) return;
 
-    // Upsert each desired row by its stable (diaryId, sourceRef) identity.
-    // ponytail: no surrounding transaction/lock — under a concurrent read race
-    // an upsert may P2002; it self-heals on the next read. Upgrade to a tx if
-    // diary reads ever become highly concurrent per diary.
-    for (const e of desired) {
-      await prisma.diaryEvent.upsert({
-        where: { diaryId_sourceRef: { diaryId: diary.id, sourceRef: e.sourceRef } },
-        create: {
+      // Drop QA rows whose source record no longer qualifies (voided / un-failed).
+      // Never touches source='manual'.
+      await tx.diaryEvent.deleteMany({
+        where: {
           diaryId: diary.id,
-          eventType: e.eventType,
-          description: e.description,
-          notes: e.notes,
-          lotId: e.lotId,
           source: 'qa',
-          sourceRef: e.sourceRef,
-          createdAt: e.createdAt,
-        },
-        update: {
-          // Refresh mutable fields (rollup counts, labels); identity is fixed.
-          eventType: e.eventType,
-          description: e.description,
-          notes: e.notes,
-          lotId: e.lotId,
+          sourceRef: desiredRefs.length > 0 ? { notIn: desiredRefs } : undefined,
         },
       });
-    }
+
+      // Upsert each desired row by its stable (diaryId, sourceRef) identity.
+      // ponytail: an upsert may still P2002 under a concurrent read of the same
+      // draft diary; it self-heals on the next read (errors are swallowed below).
+      for (const e of desired) {
+        await tx.diaryEvent.upsert({
+          where: { diaryId_sourceRef: { diaryId: diary.id, sourceRef: e.sourceRef } },
+          create: {
+            diaryId: diary.id,
+            eventType: e.eventType,
+            description: e.description,
+            notes: e.notes,
+            lotId: e.lotId,
+            source: 'qa',
+            sourceRef: e.sourceRef,
+            createdAt: e.createdAt,
+          },
+          update: {
+            // Refresh mutable fields (rollup counts, labels); identity is fixed.
+            eventType: e.eventType,
+            description: e.description,
+            notes: e.notes,
+            lotId: e.lotId,
+          },
+        });
+      }
+    });
   } catch (error) {
     logError('Failed to sync QA events into diary', { diaryId: diary.id, error });
   }
