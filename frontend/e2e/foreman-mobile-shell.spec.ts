@@ -529,6 +529,13 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
+    // GPS lot auto-select (useLotAtMyLocation) fetches the project's lot
+    // footprints from capture surfaces; the shell has none in this fixture.
+    if (path === `/api/projects/${encodeURIComponent(PROJECT_ID)}/lot-geometries`) {
+      await fulfillJson(route, { geometries: [] });
+      return;
+    }
+
     await fulfillJson(route, { message: `Unhandled E2E API route: ${path}` }, 404);
   });
 
