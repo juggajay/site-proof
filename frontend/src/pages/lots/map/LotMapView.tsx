@@ -28,6 +28,7 @@ import {
   Image as ImageIcon,
   Layers,
   Map as MapIcon,
+  Navigation,
   PencilRuler,
   Square,
   type LucideIcon,
@@ -78,6 +79,7 @@ import {
   boundsToLatLngRect,
   computeBounds,
   cornersToLatLngBounds,
+  featureCentroid,
   featureToShape,
   filterGeometriesByLotIds,
   polygonAreaM2,
@@ -186,6 +188,7 @@ function LotPopup({
   geometry: ProjectLotGeometry;
   onViewDetails: () => void;
 }) {
+  const destination = featureCentroid(geometry.geometryWgs84);
   return (
     <Popup>
       <div className="min-w-[180px]" data-testid={`lot-popup-${geometry.lotId}`}>
@@ -211,14 +214,32 @@ function LotPopup({
             )}
           </div>
         )}
-        <button
-          type="button"
-          onClick={onViewDetails}
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          data-testid={`lot-popup-view-${geometry.lotId}`}
-        >
-          <ExternalLink className="h-3.5 w-3.5" /> View Details
-        </button>
+        <div className="mt-2 flex flex-col items-start gap-1.5">
+          <button
+            type="button"
+            onClick={onViewDetails}
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            data-testid={`lot-popup-view-${geometry.lotId}`}
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> View Details
+          </button>
+          {/* Turn-by-turn to the lot in the phone's native maps app. The Google
+              Maps universal URL opens the app on iOS/Android and the web on
+              desktop. It is a genuine external link (not in-app nav), so it is
+              identical in the classic map and the foreman shell — no linkPaths
+              plumbing. Only shown when the geometry yields a destination. */}
+          {destination && (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${destination[0]},${destination[1]}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              data-testid={`lot-popup-directions-${geometry.lotId}`}
+            >
+              <Navigation className="h-3.5 w-3.5" /> Directions
+            </a>
+          )}
+        </div>
       </div>
     </Popup>
   );

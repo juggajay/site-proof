@@ -259,6 +259,48 @@ describe('LotMapView', () => {
     expect(screen.getByTestId('lot-popup-view-lot-1')).toBeInTheDocument();
   });
 
+  it('renders a Directions link to the lot centroid for a lot with geometry', () => {
+    mockQueries({ geometries: [polygonGeometry()] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+    const link = screen.getByTestId('lot-popup-directions-lot-1');
+    // Centroid of the fixture ring [[151,-33.8],[151.001,-33.8],[151.001,-33.801],[151,-33.8]]
+    // is a degenerate/triangular ring; assert the Google Maps universal URL shape.
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    const href = link.getAttribute('href') ?? '';
+    expect(href).toMatch(
+      /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=-?\d+\.?\d*,-?\d+\.?\d*$/,
+    );
+  });
+
+  it('omits the Directions link when the lot has no geometry to route to', () => {
+    // An empty ring yields no renderable shape (and no centroid) -> no dead button.
+    mockQueries({
+      geometries: [
+        polygonGeometry({
+          geometryWgs84: {
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [[]] },
+          },
+        }),
+      ],
+    });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+    expect(screen.queryByTestId('lot-popup-directions-lot-1')).not.toBeInTheDocument();
+  });
+
   it('navigates to the lot detail page from the popup', () => {
     mockQueries({ geometries: [polygonGeometry()] });
     render(

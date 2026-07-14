@@ -172,6 +172,64 @@ export function pointInPolygon(lng: number, lat: number, ring: [number, number][
   return inside;
 }
 
+// Area-weighted centroid of a WGS84 ring of [lng, lat] positions (shoelace
+// formula). Falls back to the vertex average for a degenerate (zero-area) ring
+// so a sliver/collinear footprint still yields a sensible point. Returns
+// [lng, lat], or null for an empty ring. Pure so "navigate to lot" can pick a
+// destination without a map.
+export function polygonCentroid(ring: [number, number][]): [number, number] | null {
+  if (ring.length === 0) return null;
+  let twiceArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xj, yj] = ring[j];
+    const [xi, yi] = ring[i];
+    const cross = xj * yi - xi * yj;
+    twiceArea += cross;
+    cx += (xj + xi) * cross;
+    cy += (yj + yi) * cross;
+  }
+  if (twiceArea === 0) {
+    let sx = 0;
+    let sy = 0;
+    for (const [x, y] of ring) {
+      sx += x;
+      sy += y;
+    }
+    return [sx / ring.length, sy / ring.length];
+  }
+  return [cx / (3 * twiceArea), cy / (3 * twiceArea)];
+}
+
+// A single [lat, lng] point to route "navigate to lot" to: a polygon's centroid,
+// a line's midpoint vertex, or a point itself. null when there is no usable
+// geometry. Reuses polygonCentroid for the polygon case.
+export function featureCentroid(feature: GeoJsonFeature | null | undefined): LatLng | null {
+  const geometry = feature?.geometry;
+  if (!geometry) return null;
+  switch (geometry.type) {
+    case 'Polygon': {
+      const ring = geometry.coordinates[0] as [number, number][] | undefined;
+      if (!ring || ring.length === 0) return null;
+      const c = polygonCentroid(ring);
+      return c ? [c[1], c[0]] : null;
+    }
+    case 'LineString': {
+      const pts = geometry.coordinates;
+      if (pts.length === 0) return null;
+      const mid = pts[Math.floor(pts.length / 2)];
+      return [mid[1], mid[0]];
+    }
+    case 'Point':
+      return geometry.coordinates.length >= 2
+        ? [geometry.coordinates[1], geometry.coordinates[0]]
+        : null;
+    default:
+      return null;
+  }
+}
+
 // The outer ring(s) of a geometry: one for a Polygon, one per part for a
 // MultiPolygon, none for point/linestring geometries (which can't contain a
 // point). Read type as a bare string so a MultiPolygon in the data isn't a type
