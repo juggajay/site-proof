@@ -341,6 +341,38 @@ describe('MobileITPChecklist Fail requires photo evidence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark as Failed' }));
     await waitFor(() => expect(onMarkFailed).toHaveBeenCalledWith('item-2', 'Out of spec'));
   });
+
+  it('keeps the fail panel and typed reason when the completion refreshes (photo attach)', () => {
+    // Attaching the required photo creates/refetches the completion — a NEW
+    // object for the SAME item. That refresh must not reset the sheet: the
+    // seeded subbie journey lost its typed reason exactly this way.
+    setOnline(true);
+    const { props, rerender } = openFailForItem2();
+
+    rerender(
+      <MobileITPChecklist
+        {...props}
+        completions={[
+          ...completions,
+          makeCompletion({
+            checklistItemId: 'item-2',
+            attachments: [
+              {
+                id: 'att-1',
+                documentId: 'doc-1',
+                document: { id: 'doc-1', fileUrl: null, caption: 'Evidence', filename: 'e.jpg' },
+              },
+            ] as unknown as ITPCompletion['attachments'],
+          }),
+        ]}
+      />,
+    );
+
+    // Panel still open, reason intact, and the affordance reflects the photo.
+    expect(screen.getByPlaceholderText('Describe the issue...')).toHaveValue('Out of spec');
+    expect(screen.getByRole('button', { name: /Photo added \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark as Failed' })).toBeEnabled();
+  });
 });
 
 describe('MobileITPChecklist PASS awaits the save and closes only on success (M57)', () => {
