@@ -72,6 +72,8 @@ interface LotDetailModalsProps {
   submittingFailed: boolean;
   setFailedModal: (modal: ChecklistItemModalTarget | null) => void;
   handleSubmitFailed: ComponentProps<typeof MarkAsFailedModal>['onSubmit'];
+  failedModalAddPhoto: ComponentProps<typeof MarkAsFailedModal>['onAddPhoto'];
+  failedModalPhotoCount: number;
   // Witness point completion
   witnessModal: WitnessModalTarget | null;
   submittingWitness: boolean;
@@ -125,6 +127,8 @@ export function LotDetailModals({
   submittingFailed,
   setFailedModal,
   handleSubmitFailed,
+  failedModalAddPhoto,
+  failedModalPhotoCount,
   witnessModal,
   submittingWitness,
   setWitnessModal,
@@ -218,6 +222,8 @@ export function LotDetailModals({
         onClose={() => setFailedModal(null)}
         onSubmit={handleSubmitFailed}
         isSubmitting={submittingFailed}
+        onAddPhoto={failedModalAddPhoto}
+        photoCount={failedModalPhotoCount}
       />
 
       {/* Witness Point Completion Modal */}

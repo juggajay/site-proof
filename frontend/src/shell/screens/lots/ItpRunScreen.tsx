@@ -225,6 +225,28 @@ export function ItpRunScreen() {
               {reasonError}
             </p>
           )}
+          {/* A failed check must carry photo evidence when online. The photo
+              attaches to this item's pending completion first; the fail then
+              flips it to 'failed'. Offline stays note-only (no attachment path). */}
+          {reasonMode === 'fail' &&
+            (navigator.onLine ? (
+              <button
+                type="button"
+                className="mt-2 shell-photobtn min-h-[48px] w-full"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy}
+                aria-label="Add a photo of the issue (required)"
+              >
+                <Camera size={17} aria-hidden />
+                {photoCount > 0
+                  ? `Photo added (${photoCount})`
+                  : 'Add a photo of the issue (required)'}
+              </button>
+            ) : (
+              <p className="mt-2 text-[13px] text-muted-foreground">
+                Offline — photo can be added after sync.
+              </p>
+            ))}
           <div className="mt-2 flex gap-2">
             <button
               type="button"

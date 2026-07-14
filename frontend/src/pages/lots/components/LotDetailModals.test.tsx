@@ -46,6 +46,8 @@ function renderModals(overrides: Partial<Parameters<typeof LotDetailModals>[0]> 
     submittingFailed: false,
     setFailedModal: vi.fn(),
     handleSubmitFailed: vi.fn().mockResolvedValue(undefined),
+    failedModalAddPhoto: vi.fn().mockResolvedValue(undefined),
+    failedModalPhotoCount: 0,
     witnessModal: null,
     submittingWitness: false,
     setWitnessModal: vi.fn(),
