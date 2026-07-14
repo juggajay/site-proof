@@ -12,6 +12,8 @@ import {
   filterGeometriesByLotIds,
   polygonAreaM2,
   buildMapLinkPaths,
+  pointInPolygon,
+  lotAtPoint,
 } from './lotMapHelpers';
 
 function feature(geometry: GeoJsonFeature['geometry']): GeoJsonFeature {
@@ -196,6 +198,127 @@ describe('cornersToLatLngBounds', () => {
 
   it('returns null with no corners', () => {
     expect(cornersToLatLngBounds([])).toBeNull();
+  });
+});
+
+describe('pointInPolygon', () => {
+  // A unit square from (0,0) to (1,1) in [lng, lat].
+  const square: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+    [0, 0],
+  ];
+
+  it('is true for a point inside', () => {
+    expect(pointInPolygon(0.5, 0.5, square)).toBe(true);
+  });
+
+  it('is false for a point outside', () => {
+    expect(pointInPolygon(2, 0.5, square)).toBe(false);
+    expect(pointInPolygon(0.5, -1, square)).toBe(false);
+  });
+
+  it('respects [lng, lat] order — swapping args lands outside', () => {
+    // A tall skinny box near Sydney: lng ~151, lat ~-33. Passing (lat, lng)
+    // instead of (lng, lat) must NOT read as inside.
+    const box: [number, number][] = [
+      [151.0, -33.81],
+      [151.001, -33.81],
+      [151.001, -33.8],
+      [151.0, -33.8],
+      [151.0, -33.81],
+    ];
+    expect(pointInPolygon(151.0005, -33.805, box)).toBe(true);
+    expect(pointInPolygon(-33.805, 151.0005, box)).toBe(false);
+  });
+
+  it('returns false for a degenerate ring', () => {
+    expect(pointInPolygon(0.5, 0.5, [[0, 0]] as [number, number][])).toBe(false);
+  });
+});
+
+describe('lotAtPoint', () => {
+  function polyLot(id: string, num: string, ring: number[][]): ProjectLotGeometry {
+    return {
+      lotId: id,
+      lotNumber: num,
+      geometryWgs84: feature({ type: 'Polygon', coordinates: [ring] }),
+    } as ProjectLotGeometry;
+  }
+
+  const lotA = polyLot('a', 'A-1', [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+    [0, 0],
+  ]);
+  const lotB = polyLot('b', 'B-2', [
+    [10, 10],
+    [11, 10],
+    [11, 11],
+    [10, 11],
+    [10, 10],
+  ]);
+
+  it('returns the containing lot', () => {
+    expect(lotAtPoint([lotA, lotB], 10.5, 10.5)).toEqual({ lotId: 'b', lotNumber: 'B-2' });
+  });
+
+  it('returns null when the point is in no lot', () => {
+    expect(lotAtPoint([lotA, lotB], 5, 5)).toBeNull();
+  });
+
+  it('skips non-polygon geometries (points / linestrings)', () => {
+    const pointLot = {
+      lotId: 'p',
+      lotNumber: 'P-3',
+      geometryWgs84: feature({ type: 'Point', coordinates: [0.5, 0.5] }),
+    } as ProjectLotGeometry;
+    const lineLot = {
+      lotId: 'l',
+      lotNumber: 'L-4',
+      geometryWgs84: feature({
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      }),
+    } as ProjectLotGeometry;
+    // The point falls "at" the point/line lots but only the polygon can contain it.
+    expect(lotAtPoint([pointLot, lineLot, lotA], 0.5, 0.5)).toEqual({
+      lotId: 'a',
+      lotNumber: 'A-1',
+    });
+  });
+
+  it('handles a MultiPolygon lot', () => {
+    const multi = {
+      lotId: 'm',
+      lotNumber: 'M-5',
+      geometryWgs84: {
+        type: 'Feature',
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [
+            [
+              [
+                [20, 20],
+                [21, 20],
+                [21, 21],
+                [20, 21],
+                [20, 20],
+              ],
+            ],
+          ],
+        },
+      },
+    } as unknown as ProjectLotGeometry;
+    expect(lotAtPoint([multi], 20.5, 20.5)).toEqual({ lotId: 'm', lotNumber: 'M-5' });
+    expect(lotAtPoint([multi], 0.5, 0.5)).toBeNull();
   });
 });
 
