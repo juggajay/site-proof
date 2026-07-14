@@ -63,13 +63,20 @@ export interface SpatialSearchResult {
 }
 
 // Draw-a-box search. A mutation (user-triggered, not cache-keyed by bounds).
-export function useSpatialSearch(projectId: string) {
+// `photosOnly` powers the map's Photos layer, which refetches on every pan and
+// reads only `.photos`; it tells the backend to skip the geometry + test-result
+// work (other collections come back empty).
+export function useSpatialSearch(projectId: string, options?: { photosOnly?: boolean }) {
+  const photosOnly = options?.photosOnly ?? false;
   return useMutation({
     mutationKey: queryKeys.spatialSearch(projectId),
     mutationFn: async (bounds: SearchBounds) => {
       const result = await apiFetch<SpatialSearchResult>(
         `/api/projects/${encodeURIComponent(projectId)}/spatial-search`,
-        { method: 'POST', body: JSON.stringify({ bounds }) },
+        {
+          method: 'POST',
+          body: JSON.stringify(photosOnly ? { bounds, only: 'photos' } : { bounds }),
+        },
       );
       // Normalise photo coords (Prisma Decimal → number|null) once, here, so both
       // the find-by-area panel and the map photo layer read plain numbers.

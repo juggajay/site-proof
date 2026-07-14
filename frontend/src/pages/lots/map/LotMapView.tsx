@@ -536,7 +536,7 @@ export function LotMapView({
   // Photo pins layer: an independent spatial-search instance (own data, so it
   // never clobbers find-by-area's results). Toggle persisted per project,
   // default OFF; when on we refetch the current viewport's photos (debounced).
-  const photoSearch = useSpatialSearch(projectId);
+  const photoSearch = useSpatialSearch(projectId, { photosOnly: true });
   const { mutate: runPhotoSearch, reset: resetPhotoSearch } = photoSearch;
   const photosStorageKey = `siteproof.mapPhotos.${projectId}`;
   const [photosArmed, setPhotosArmed] = useState<boolean>(

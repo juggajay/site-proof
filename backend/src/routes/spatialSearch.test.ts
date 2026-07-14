@@ -305,4 +305,82 @@ describe('POST /api/projects/:projectId/spatial-search', () => {
     // Test results only for the assigned lot.
     expect(res.body.testResults.map((t: { lotId: string }) => t.lotId)).toEqual([insideLotId]);
   });
+
+  it('photos-only mode returns the same photos as full mode, with other collections empty', async () => {
+    const post = (body: object) =>
+      request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${pmToken}`)
+        .send(body);
+
+    const full = await post({ bounds: BOUNDS });
+    const only = await post({ bounds: BOUNDS, only: 'photos' });
+    expect(only.status).toBe(200);
+
+    const names = (r: typeof full) =>
+      r.body.photos.map((p: { filename: string }) => p.filename).sort();
+    expect(names(only)).toEqual(names(full));
+    expect(names(only)).toEqual(['inside-linked.jpg', 'inside-unlinked.jpg']);
+
+    // Coords still present so the map can pin without a second call.
+    const linked = only.body.photos.find(
+      (p: { filename: string }) => p.filename === 'inside-linked.jpg',
+    );
+    expect(Number(linked.gpsLatitude)).toBeCloseTo(-33.805, 5);
+
+    // The skipped collections come back empty (shape unchanged for the layer).
+    expect(only.body.lots).toEqual([]);
+    expect(only.body.testResults).toEqual([]);
+    expect(only.body.lotsTruncated).toBe(false);
+    expect(only.body.testResultsTruncated).toBe(false);
+    expect(only.body.photosTruncated).toBe(false);
+  });
+
+  it('photos-only preserves subcontractor photo scoping (identical set to full mode)', async () => {
+    const post = (body: object) =>
+      request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${subbieToken}`)
+        .send(body);
+
+    const full = await post({ bounds: BOUNDS });
+    const only = await post({ bounds: BOUNDS, only: 'photos' });
+    expect(only.status).toBe(200);
+
+    const names = (r: typeof full) =>
+      r.body.photos.map((p: { filename: string }) => p.filename).sort();
+    // Same scope helper => same photo set: only the photo on the assigned lot;
+    // the unlinked in-box photo stays hidden in both modes.
+    expect(names(only)).toEqual(names(full));
+    expect(names(only)).toEqual(['inside-linked.jpg']);
+    expect(only.body.lots).toEqual([]);
+  });
+
+  it('caps photos server-side at RESULT_CAP and flags truncation', async () => {
+    // 501 in-box photos > RESULT_CAP (500) => DB take bounds the fetch, cap()
+    // slices to 500 and flags truncation from the one extra row.
+    await prisma.document.createMany({
+      data: Array.from({ length: 501 }, (_, i) => ({
+        projectId,
+        documentType: 'photo',
+        filename: `bulk-${i}.jpg`,
+        fileUrl: `supabase://documents/bulk-${i}.jpg`,
+        gpsLatitude: -33.8,
+        gpsLongitude: 151.0,
+      })),
+    });
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${pmToken}`)
+        .send({ bounds: BOUNDS, only: 'photos' });
+      expect(res.status).toBe(200);
+      expect(res.body.photos.length).toBe(500);
+      expect(res.body.photosTruncated).toBe(true);
+    } finally {
+      await prisma.document.deleteMany({
+        where: { projectId, filename: { startsWith: 'bulk-' } },
+      });
+    }
+  });
 });
