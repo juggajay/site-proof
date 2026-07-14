@@ -235,3 +235,41 @@ an audience (foremen on phones), first prove that audience can reach it at
 their viewport/role. (3) Mobile layouts here are separate component branches
 (`if (isMobile) return ...`) — a desktop-only control is invisible to every
 phone user, and desktop-viewport tests will never notice.
+
+## 2026-07-14 — PR CI green ≠ master green: the full-E2E and seeded suites only run on master
+Two features merged with fully green PR CI and broke master back-to-back:
+GPS lot auto-select added an API call to shell surfaces (the foreman-shell
+E2E harness 404-trapped the new route → console-error assertion failed), and
+the ITP fail-photo gate changed a real field flow (the seeded subbie journey
+still failed bare → correctly blocked → timeout). PR CI runs only the smoke
+suite. **Rules:** (1) A feature that adds an API call to any shell/mobile
+surface must add that route to the shell E2E mock harness in the same PR.
+(2) A feature that changes a user flow must update the seeded role journeys
+to the new intended behaviour in the same PR. (3) After merging such PRs,
+watch the MASTER run before calling the work done — and when a seeded test
+fails, download the CI failure screenshot first (`gh run download <run> -n
+playwright-screenshots`); it diagnoses in seconds what logs take minutes to
+suggest.
+
+## 2026-07-14 — reset-effects keyed on object identity wipe user state on refetch
+`MobileITPItemSheet` reset all local state on `[item, completion]` deps. Any
+parent refetch produces a NEW completion object for the SAME item — so when
+attaching the (required) fail photo triggered a refetch, the fail panel
+closed and the typed reason vanished. Unit tests couldn't see it (mocks don't
+change object identity mid-interaction); the seeded E2E suite caught it as a
+real regression. **Rules:** (1) Reset-state effects key on entity IDs, never
+on object references, whenever any code path refetches while the component
+is open. (2) Any flow that mutates-then-refetches mid-interaction (upload →
+refresh) needs a rerender test that swaps prop identity (same ids) and
+asserts in-progress user input survives.
+
+## 2026-07-14 — the prettier pre-commit hook in a worktree without node_modules rejects the commit AND lets the push ship an empty branch
+Worst variant of the known trap: with no node_modules the hook itself errors
+("'prettier' is not recognized"), the commit is silently rejected, and a
+subsequent `git push -u` happily publishes the branch at its base commit —
+`gh pr create` then fails with "No commits between master and branch".
+**Rules:** (1) `npm ci` in a fresh worktree before the first frontend commit,
+not just before running tests. (2) `git log -1` after EVERY commit remains
+non-negotiable. (3) Related: don't copy `.prisma/client` from the main
+checkout into worktrees — the main checkout is ~1000 commits stale (missing
+newer models); `npx prisma generate` works fine inside worktrees.
