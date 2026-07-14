@@ -6,7 +6,7 @@ interface DiaryTabNavProps {
   diary: DailyDiary | null;
 }
 
-const TABS: DiaryTab[] = ['weather', 'personnel', 'plant', 'activities', 'delays'];
+const TABS: DiaryTab[] = ['weather', 'personnel', 'plant', 'activities', 'delays', 'photos'];
 
 const TAB_COUNT_KEYS: Partial<
   Record<DiaryTab, keyof Pick<DailyDiary, 'personnel' | 'plant' | 'activities' | 'delays'>>

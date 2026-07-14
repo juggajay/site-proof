@@ -15,6 +15,7 @@ import { DiaryDesktopHeader } from './components/DiaryDesktopHeader';
 import { DiaryTabNav } from './components/DiaryTabNav';
 import { DiaryEmptyState } from './components/DiaryEmptyState';
 import { DiaryNoDayCard } from './components/DiaryNoDayCard';
+import { DiaryPhotosSection } from './components/DiaryPhotosSection';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -151,6 +152,7 @@ export function DailyDiaryPage() {
           </div>
         ) : (
           <DiaryMobileView
+            projectId={projectId}
             selectedDate={data.selectedDate}
             lots={data.lots}
             activeLotId={mobile.activeLotId}
@@ -306,7 +308,12 @@ export function DailyDiaryPage() {
               and error states never reach here — the branch above already
               renders the spinner or nothing alongside the error banner.
             */}
-            {activeTab !== 'weather' && !data.diary && (
+            {/* Photos are project documents, independent of the day's diary
+                record — show them even before a diary exists. */}
+            {activeTab === 'photos' && (
+              <DiaryPhotosSection projectId={projectId} selectedDate={data.selectedDate} />
+            )}
+            {activeTab !== 'weather' && activeTab !== 'photos' && !data.diary && (
               <DiaryNoDayCard onGoToWeather={() => setActiveTab('weather')} />
             )}
             {activeTab === 'personnel' && data.diary && (
