@@ -185,6 +185,10 @@ const controlLine: ProjectControlLine = {
   projectId: 'proj-1',
   name: 'MC00 Mainline',
   coordinateSystem: 'EPSG:7856',
+  points: [
+    { chainage: 0, easting: 334000, northing: 6252000 },
+    { chainage: 1000, easting: 334000, northing: 6253000 },
+  ],
   geometryWgs84: {
     type: 'Feature',
     geometry: {

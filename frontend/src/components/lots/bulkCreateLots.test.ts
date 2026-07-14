@@ -4,8 +4,10 @@ import {
   INTERVAL_TOO_SMALL_MESSAGE,
   MAX_BULK_LOTS,
   buildBulkLotPreview,
+  controlLineChainageExtent,
   parseChainageInput,
   validateBulkLotRange,
+  validateRangeAgainstControlLine,
 } from './bulkCreateLots';
 
 describe('bulk lot helpers', () => {
@@ -75,5 +77,33 @@ describe('bulk lot helpers', () => {
         },
       ],
     });
+  });
+});
+
+describe('control line chainage helpers', () => {
+  it('computes the extent from ordered or unordered points', () => {
+    expect(
+      controlLineChainageExtent([{ chainage: 0 }, { chainage: 500 }, { chainage: 1200 }]),
+    ).toEqual({ min: 0, max: 1200 });
+    expect(controlLineChainageExtent([{ chainage: 900 }, { chainage: 100 }])).toEqual({
+      min: 100,
+      max: 900,
+    });
+  });
+
+  it('returns null for unusable point sets', () => {
+    expect(controlLineChainageExtent(undefined)).toBeNull();
+    expect(controlLineChainageExtent([])).toBeNull();
+    expect(controlLineChainageExtent([{ chainage: 5 }])).toBeNull();
+    expect(controlLineChainageExtent([{ chainage: 5 }, { chainage: 5 }])).toBeNull();
+    expect(controlLineChainageExtent([{ chainage: 0 }, { chainage: NaN }])).toBeNull();
+  });
+
+  it('accepts ranges inside the extent and rejects ranges outside it', () => {
+    const extent = { min: 0, max: 1000 };
+    expect(validateRangeAgainstControlLine(0, 1000, extent, 'MC00')).toBeNull();
+    expect(validateRangeAgainstControlLine(200, 800, extent, 'MC00')).toBeNull();
+    expect(validateRangeAgainstControlLine(0, 1200, extent, 'MC00')).toContain('MC00');
+    expect(validateRangeAgainstControlLine(0, 1200, extent, 'MC00')).toContain('0–1000');
   });
 });
