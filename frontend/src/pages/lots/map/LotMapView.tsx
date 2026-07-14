@@ -1023,6 +1023,12 @@ export function LotMapView({
               center={AU_DEFAULT_CENTER}
               zoom={AU_DEFAULT_ZOOM}
               scrollWheelZoom
+              // No +/- control on mobile: pinch covers zoom, and the control's
+              // top-left corner is exactly where the toolbar's first button sits
+              // at phone width (it hid "Find by area" under itself on a real
+              // device). Creation-time Leaflet option — set from the viewport at
+              // mount, which is when it matters.
+              zoomControl={!isMobile}
               // Mobile: cap at 60% of the (dynamic) viewport so toolbar + legend
               // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
               style={{ height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }}
