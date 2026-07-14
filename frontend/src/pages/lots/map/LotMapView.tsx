@@ -1,6 +1,6 @@
 import 'leaflet/dist/leaflet.css';
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Circle,
   CircleMarker,
@@ -90,17 +90,6 @@ const POLYGON_STROKE_COLOR = '#1f2937';
 // patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
 const GAP_COLOR = '#dc2626';
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
-
-// Online/offline as an external store so the banner re-renders on the
-// browser's connectivity events without any polling.
-function subscribeToOnlineStatus(callback: () => void) {
-  window.addEventListener('online', callback);
-  window.addEventListener('offline', callback);
-  return () => {
-    window.removeEventListener('online', callback);
-    window.removeEventListener('offline', callback);
-  };
-}
 
 export interface MapLot {
   id: string;
@@ -511,19 +500,12 @@ export function LotMapView({
   const [locating, setLocating] = useState(false);
   const [locatedFix, setLocatedFix] = useState<{ center: LatLng; accuracy: number } | null>(null);
 
-  // Offline: the service worker serves previously viewed tiles/sheets/data
-  // (see lib/pwaRuntimeCaching.ts); the banner explains any gaps.
-  const isOnline = useSyncExternalStore(
-    subscribeToOnlineStatus,
-    () => navigator.onLine,
-    () => true,
-  );
-
   // Tile-error toast: one debounced message per layer, re-armed on layer change.
   const tileErrorShownRef = useRef(false);
   const handleTileError = useCallback(() => {
-    // Offline grey tiles are expected and already explained by the banner —
-    // only toast when errors happen while we believe we're online.
+    // Offline grey tiles are expected — the app-wide OfflineIndicator pill is
+    // already showing, and the SW serves previously viewed tiles/sheets/data
+    // (see lib/pwaRuntimeCaching.ts). Only toast while we believe we're online.
     if (!navigator.onLine) return;
     if (tileErrorShownRef.current) return;
     tileErrorShownRef.current = true;
@@ -951,14 +933,6 @@ export function LotMapView({
             </p>
           )}
           <div className="relative">
-            {!isOnline && (
-              <div
-                className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 whitespace-nowrap rounded-full bg-zinc-900/80 px-3 py-1 text-xs font-medium text-white shadow"
-                data-testid="map-offline-banner"
-              >
-                Offline — showing saved map data
-              </div>
-            )}
             <div className="absolute left-3 top-3 z-[1000] pointer-events-auto">
               <div className="flex flex-wrap items-center gap-2">
                 <ToolbarButton
