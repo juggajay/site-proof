@@ -18,7 +18,9 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { canManageProjectSettings } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
+import type { MapLinkTargets } from '@/pages/lots/map/lotMapHelpers';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useLotsShellContext } from './lotsShellContext';
 
 // Lazy so Leaflet (map engine + tiles) never enters the shell's base bundle —
@@ -33,6 +35,14 @@ export function LotMapScreen() {
 
   const canManageSettings = canManageProjectSettings(getProjectScopedRole(user));
   const filteredLotIds = useMemo(() => new Set(lots.map((lot) => lot.id)), [lots]);
+
+  // Everything the map links to stays inside the shell: lot popups and
+  // find-by-area rows route to the shell lot hub; office-only settings links
+  // render as plain text (see buildMapLinkPaths).
+  const linkTargets = useMemo<MapLinkTargets>(
+    () => ({ lot: (lotId) => withProjectQuery(`/m/lots/${encodeURIComponent(lotId)}`, projectId) }),
+    [projectId],
+  );
 
   // Project NAME for the snapshot caption, from the same cached projects query the
   // home header uses (shared cache key — no extra fetch in practice). Optional in
@@ -95,6 +105,7 @@ export function LotMapScreen() {
             canManageSettings={canManageSettings}
             projectName={projectName}
             lots={lots}
+            linkTargets={linkTargets}
           />
         </Suspense>
       </div>

@@ -231,6 +231,20 @@ describe('LotMapView', () => {
     expect(navigate).toHaveBeenCalledWith('/projects/proj-1/lots/lot-1');
   });
 
+  it('routes popup View Details through linkTargets so the foreman shell never escapes to desktop', () => {
+    mockQueries({ geometries: [polygonGeometry()] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+        linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
+    expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
+  });
+
   it('excludes geometries whose lot is filtered out of the register', () => {
     mockQueries({ geometries: [polygonGeometry({ lotId: 'lot-1' })] });
     render(

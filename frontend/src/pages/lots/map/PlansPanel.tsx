@@ -3,7 +3,8 @@ import { Crosshair } from 'lucide-react';
 import type { PlanSheetListItem } from '@/pages/projects/settings/planSheetsData';
 
 interface PlansPanelProps {
-  projectId: string;
+  /** Settings page href; null (foreman shell) renders the mention as plain text. */
+  settingsHref: string | null;
   sheets: PlanSheetListItem[];
   shown: Record<string, boolean>;
   opacity: number;
@@ -21,7 +22,7 @@ interface PlansPanelProps {
  * shown sheet sits outside the current view.
  */
 export function PlansPanel({
-  projectId,
+  settingsHref,
   sheets,
   shown,
   opacity,
@@ -42,12 +43,13 @@ export function PlansPanel({
       {sheets.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           No registered plan sheets yet. Upload and georeference drawings in{' '}
-          <a
-            href={`/projects/${encodeURIComponent(projectId)}/settings`}
-            className="text-primary hover:underline"
-          >
-            Project settings → Plan sheets
-          </a>{' '}
+          {settingsHref ? (
+            <a href={settingsHref} className="text-primary hover:underline">
+              Project settings → Plan sheets
+            </a>
+          ) : (
+            <span className="font-medium">Project settings → Plan sheets</span>
+          )}{' '}
           to overlay them here.
         </p>
       ) : (
