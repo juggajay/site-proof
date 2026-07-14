@@ -273,3 +273,30 @@ not just before running tests. (2) `git log -1` after EVERY commit remains
 non-negotiable. (3) Related: don't copy `.prisma/client` from the main
 checkout into worktrees — the main checkout is ~1000 commits stale (missing
 newer models); `npx prisma generate` works fine inside worktrees.
+
+## 2026-07-14 — the pre-commit eslint step can OOM; fix with NODE_OPTIONS, don't skip hooks
+On a larger frontend diff the hook's eslint pass died with
+`Fatal process out of memory: Zone` and the commit did not land. Re-running
+the commit with `NODE_OPTIONS=--max-old-space-size=8192` succeeded.
+**Rules:** (1) If a pre-commit hook fails with OOM, raise the Node heap and
+retry — never `--no-verify`. (2) As always, `git log -1` afterwards to
+confirm the commit actually landed.
+
+## 2026-07-14 — the Read tool can serve a stale copy of a repo file on this machine; trust `git show`
+During a review at a pinned checkout, reading a file returned PRE-fix content
+even though `git status` was clean and `git show <sha>:<path>` had the fix —
+most likely OneDrive/Windows file caching under `C:\Users\jayso`. **Rule:**
+when a file's content contradicts git history or a merged PR, verify with
+`git show <commit>:<path>` before concluding anything; prefer `git show` for
+review work at pinned SHAs.
+
+## 2026-07-14 — silent-by-design features need their wiring guarded end-to-end, not just their core function
+The diary QA auto-events sync (#1461) swallows all errors by design (a diary
+read must never fail because enrichment failed). Consequence: a regression
+anywhere in its chain (endpoint calls sync → mapping carries `source` →
+badge renders) ships 200-green and surfaces only as a silently empty
+section. The core function had 7 unit tests; the chain had zero. **Rule:**
+when a feature is deliberately best-effort/silent, add at least one
+integration test through its full chain in the same PR (route-level
+DB-backed test + a seeded-journey step); unit tests on the core cannot see
+wiring loss. Closed by #1465.
