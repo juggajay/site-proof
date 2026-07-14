@@ -637,6 +637,79 @@ test.describe.serial('seeded real-backend role journeys', () => {
     expect(failResult.responseBody.ncr?.ncrNumber).toMatch(/^NCR-/);
   });
 
+  test('an internal role sees the seeded ITP fail auto-compiled into the diary as a QA event', async ({
+    page,
+  }) => {
+    // The prior test failed a seeded ITP item, which auto-raised a real NCR today.
+    // The diary QA pipeline should surface both as source:'qa' auto-events on a
+    // read of TODAY's diary — guarding the end-to-end chain (ITP fail -> NCR ->
+    // diary auto-event) that the unit tests cover only in isolation. Subcontractors
+    // cannot read the diary, so this runs as an internal role (admin).
+    //
+    // The pipeline is READ-triggered and only runs on an existing draft diary, and
+    // the seeded diary is a fixed past date, so we guarantee today's diary exists
+    // first, then read the same timeline endpoint the mobile diary UI renders (it
+    // invokes syncDiaryQaEvents and maps `source` through). We assert against that
+    // endpoint rather than the rendered "Auto" badge because the diary page's
+    // "today" is timezone-sensitive across CI hosts; the badge render itself is
+    // covered by DiaryTimelineEntry.test.tsx.
+    await loginAsAdmin(page);
+
+    // Capture the real API origin + bearer token from the authenticated session.
+    const [apiResponse] = await Promise.all([
+      page.waitForResponse((res) => res.url().includes('/api/'), { timeout: 20000 }),
+      page.goto(`/projects/${E2E_PROJECT_ID}/diary`),
+    ]);
+    const apiBase = new URL(apiResponse.url()).origin;
+    const token = await page.evaluate(() => {
+      const raw =
+        localStorage.getItem('siteproof_auth') ?? sessionStorage.getItem('siteproof_auth');
+      return raw ? ((JSON.parse(raw) as { token?: string }).token ?? null) : null;
+    });
+    expect(token).toBeTruthy();
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    // Use the project's (NSW -> Australia/Sydney) calendar day — the day
+    // syncDiaryQaEvents scopes ITP/NCR activity to — so the just-created fail lands
+    // in range regardless of the CI host timezone.
+    const projectToday = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Australia/Sydney',
+    }).format(new Date());
+
+    const createResponse = await page.request.post(`${apiBase}/api/diary`, {
+      headers: authHeaders,
+      data: { projectId: E2E_PROJECT_ID, date: projectToday },
+    });
+    expect(createResponse.ok()).toBeTruthy();
+    const diary = (await createResponse.json()) as { id: string };
+    expect(diary.id).toBeTruthy();
+
+    // Reading the timeline runs the QA auto-compile; this is the endpoint the
+    // mobile diary renders each auto row (with its "Auto" badge) from.
+    const timelineResponse = await page.request.get(
+      `${apiBase}/api/diary/${encodeURIComponent(diary.id)}/timeline`,
+      { headers: authHeaders },
+    );
+    expect(timelineResponse.ok()).toBeTruthy();
+    const { timeline } = (await timelineResponse.json()) as {
+      timeline: Array<{
+        type: string;
+        description: string;
+        data: { source?: string; eventType?: string };
+      }>;
+    };
+
+    // Robust to ordering: find by content, not index. The seeded fail yields both
+    // an ITP progress rollup and an NCR-raised row, each carried as source:'qa'.
+    const autoEvents = timeline.filter((e) => e.type === 'event' && e.data.source === 'qa');
+    expect(autoEvents.length).toBeGreaterThan(0);
+    expect(
+      autoEvents.some(
+        (e) => e.data.eventType === 'itp_progress' || e.data.eventType === 'ncr_raised',
+      ),
+    ).toBe(true);
+  });
+
   test('seeded foreman reaches the mobile shell against the real backend', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, 'foreman@example.com', /\/(dashboard|m|projects)/);
