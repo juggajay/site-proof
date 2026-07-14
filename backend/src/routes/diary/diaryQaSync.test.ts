@@ -230,6 +230,30 @@ describe('syncDiaryQaEvents', () => {
     expect(remaining[0].eventType).toBe('itp_progress');
   });
 
+  it('aborts writes when the diary is submitted AFTER the snapshot was taken (TOCTOU)', async () => {
+    await seedItpActivity(2, 1);
+    // Snapshot fetched while draft (what the read handler would pass in)...
+    const staleSnapshot = await freshDiary('draft');
+    // Seed a manual row to prove nothing gets touched either.
+    const manual = await prisma.diaryEvent.create({
+      data: { diaryId: staleSnapshot.id, eventType: 'safety', description: 'Toolbox talk' },
+    });
+
+    // ...then a concurrent submit locks the diary before the sync's writes run.
+    await prisma.dailyDiary.update({
+      where: { id: staleSnapshot.id },
+      data: { status: 'submitted', submittedAt: now(), lockedAt: now() },
+    });
+
+    // Sync called with the STALE draft snapshot must write zero QA rows.
+    await syncDiaryQaEvents(staleSnapshot);
+
+    expect(await qaEvents(staleSnapshot.id)).toHaveLength(0);
+    const stillThere = await prisma.diaryEvent.findUnique({ where: { id: manual.id } });
+    expect(stillThere).not.toBeNull();
+    expect(stillThere!.description).toBe('Toolbox talk');
+  });
+
   it('skips submitted or locked diaries (legal record — never mutated)', async () => {
     await seedItpActivity(2, 1);
 
