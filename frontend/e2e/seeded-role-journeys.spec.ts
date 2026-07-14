@@ -603,6 +603,20 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await page.getByText('Subcontractor FAIL ordinary item').click();
     await page.getByRole('button', { name: /FAIL/ }).click();
     await page.getByPlaceholder('Describe the issue...').fill('Edge restraint is damaged.');
+    // Failing online requires photo evidence: the photo attaches to the item's
+    // pending completion first, then the fail flips that completion to failed.
+    await page.getByRole('button', { name: 'Add a photo of the issue (required)' }).waitFor();
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: 'edge-restraint.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    });
+    await expect(page.getByRole('button', { name: /Photo added \(1\)/ })).toBeVisible({
+      timeout: 20000,
+    });
     const failResult = await waitForItpCompletionPost(page, () =>
       page.getByRole('button', { name: 'Mark as Failed' }).click(),
     );
