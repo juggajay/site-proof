@@ -12,9 +12,11 @@ import { Loader2 } from 'lucide-react';
 import type { DailyDiary } from '@/pages/diary/types';
 import { formatDateKey } from '@/lib/localDate';
 import { shouldShowCopyFromYesterday } from './diaryCopyAffordance';
+import { DiaryPhotosSection } from '@/pages/diary/components/DiaryPhotosSection';
 
 interface DiaryMobileViewProps {
   // Date & lot
+  projectId?: string;
   selectedDate: string;
   lots: Array<{ id: string; lotNumber: string }>;
   activeLotId: string | null;
@@ -61,6 +63,7 @@ interface DiaryMobileViewProps {
 
 export function DiaryMobileView(props: DiaryMobileViewProps) {
   const {
+    projectId,
     selectedDate,
     lots,
     activeLotId,
@@ -272,6 +275,14 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
               isSubmitted={isSubmitted}
             />
           ))}
+
+          {/* Today's photos — the day's field captures, no extra effort. */}
+          {!loading && projectId && (
+            <section className="pt-2">
+              <h2 className="mb-2 px-1 text-sm font-semibold text-muted-foreground">Photos</h2>
+              <DiaryPhotosSection projectId={projectId} selectedDate={selectedDate} />
+            </section>
+          )}
         </div>
       </div>
 

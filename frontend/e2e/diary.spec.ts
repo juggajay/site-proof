@@ -407,6 +407,14 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
       return;
     }
 
+    // "Today's photos" diary section fetches the day's photos from the
+    // documents list endpoint. Mocked empty so the section renders its quiet
+    // empty state instead of a 404.
+    if (url.pathname === `/api/documents/${E2E_PROJECT_ID}`) {
+      await json({ documents: [] });
+      return;
+    }
+
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 

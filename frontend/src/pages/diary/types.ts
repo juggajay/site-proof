@@ -126,7 +126,7 @@ export interface Lot {
   lotNumber: string;
 }
 
-export type DiaryTab = 'weather' | 'personnel' | 'plant' | 'activities' | 'delays';
+export type DiaryTab = 'weather' | 'personnel' | 'plant' | 'activities' | 'delays' | 'photos';
 
 export interface WeatherFormState {
   weatherConditions: string;
