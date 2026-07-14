@@ -17,6 +17,7 @@ import {
   requireDiaryWriteAccess,
   requireEditableDiaryForWrite,
 } from './diaryAccess.js';
+import { syncDiaryQaEvents } from './diaryQaSync.js';
 import {
   buildDiaryListResponse,
   buildPreviousPersonnelEmptyResponse,
@@ -243,6 +244,15 @@ router.get(
 
       throw AppError.notFound('No diary entry for this date');
     }
+
+    // Auto-compile the day's QA activity into the diary, then re-read events so
+    // freshly-synced rows are returned. Best-effort + no-op on submitted/locked
+    // diaries (see syncDiaryQaEvents).
+    await syncDiaryQaEvents(diary);
+    diary.events = await prisma.diaryEvent.findMany({
+      where: { diaryId: diary.id },
+      include: { lot: { select: { id: true, lotNumber: true } } },
+    });
 
     res.json(diary);
   }),

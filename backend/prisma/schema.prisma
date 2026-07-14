@@ -1121,12 +1121,20 @@ model DiaryEvent {
   description String
   notes       String?
   lotId       String?  @map("lot_id")
+  // Provenance: 'manual' (typed by a user) or 'qa' (auto-compiled from the day's
+  // QA activity). sourceRef is the stable identity of the source record for that
+  // auto row (e.g. "ncr_raised:<id>", "itp:<lotId>"), used for idempotent upsert
+  // and reconciliation. Manual rows leave sourceRef null. Copy-forward / any diary
+  // machinery must exclude source != 'manual' rows (H11).
+  source      String   @default("manual")
+  sourceRef   String?  @map("source_ref")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
   lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
+  @@unique([diaryId, sourceRef])
   @@map("diary_events")
 }
 

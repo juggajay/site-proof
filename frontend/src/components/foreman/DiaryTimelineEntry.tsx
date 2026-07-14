@@ -11,6 +11,7 @@ export interface TimelineEntryData {
   quantity?: number | string;
   unit?: string;
   eventType?: string;
+  source?: string;
   lotId?: string;
   docketNumber?: string;
   notes?: string;
@@ -82,6 +83,9 @@ export function DiaryTimelineEntry({
 }: DiaryTimelineEntryProps) {
   const config = typeConfig[entry.type] || typeConfig.activity;
   const Icon = config.icon;
+  // Auto-compiled QA events (source !== 'manual') are read-only rows the system
+  // wrote from the day's ITP/hold-point/NCR activity — badge them as such.
+  const isAuto = Boolean(entry.data.source && entry.data.source !== 'manual');
 
   const time = new Date(entry.createdAt).toLocaleTimeString('en-AU', {
     hour: '2-digit',
@@ -108,6 +112,11 @@ export function DiaryTimelineEntry({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className={cn('text-xs font-medium', config.color)}>{config.label}</span>
+          {isAuto && (
+            <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
+              Auto
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">{time}</span>
           {entry.lot && (
             <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
@@ -129,7 +138,9 @@ export function DiaryTimelineEntry({
           </p>
         )}
         {entry.type === 'event' && entry.data.eventType && (
-          <p className="text-xs text-muted-foreground mt-0.5 capitalize">{entry.data.eventType}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+            {entry.data.eventType.replace(/_/g, ' ')}
+          </p>
         )}
       </div>
     </div>

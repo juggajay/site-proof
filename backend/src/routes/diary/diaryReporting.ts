@@ -5,6 +5,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildCsv } from '../../lib/csvSafe.js';
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 import { parseDiaryDate, parseDiaryRouteParam, requireDiaryReadAccess } from './diaryAccess.js';
+import { syncDiaryQaEvents } from './diaryQaSync.js';
 import {
   buildDiaryDelaysResponse,
   buildDiaryTimelineResponse,
@@ -478,6 +479,15 @@ router.get(
     if (!diary) throw AppError.notFound('Diary not found');
 
     await requireDiaryReadAccess(req.user!, diary.projectId, 'Access denied');
+
+    // Auto-compile the day's QA activity into the diary, then re-read events so
+    // freshly-synced rows appear in the timeline. Best-effort + no-op on
+    // submitted/locked diaries (see syncDiaryQaEvents).
+    await syncDiaryQaEvents(diary);
+    diary.events = await prisma.diaryEvent.findMany({
+      where: { diaryId: diary.id },
+      include: { lot: { select: { id: true, lotNumber: true } } },
+    });
 
     const timeline = [
       ...diary.activities.map((a) => ({
