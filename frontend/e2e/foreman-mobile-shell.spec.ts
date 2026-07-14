@@ -536,6 +536,34 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
+    // Shell lot map (LotMapView) data layers. Empty payloads keep the map on its
+    // benign empty-state (no lot geometry, no registered plan sheet -> no Leaflet
+    // tiles) so the screen mounts without any unmocked-route 404 console noise.
+    if (pathProject(path, '/api/projects/', '/control-lines') === PROJECT_ID) {
+      await fulfillJson(route, { controlLines: [] });
+      return;
+    }
+
+    if (pathProject(path, '/api/projects/', '/plan-sheets') === PROJECT_ID) {
+      await fulfillJson(route, { planSheets: [] });
+      return;
+    }
+
+    if (pathProject(path, '/api/projects/', '/coverage') === PROJECT_ID) {
+      await fulfillJson(route, { controlLines: [], unmappedLotCount: 0 });
+      return;
+    }
+
+    if (pathProject(path, '/api/projects/', '/spatial-search') === PROJECT_ID) {
+      await fulfillJson(route, { photos: [] });
+      return;
+    }
+
+    if (pathProject(path, '/api/projects/', '/lots/status-timeline') === PROJECT_ID) {
+      await fulfillJson(route, { earliest: null, lots: [] });
+      return;
+    }
+
     await fulfillJson(route, { message: `Unhandled E2E API route: ${path}` }, 404);
   });
 
@@ -762,6 +790,33 @@ test.describe('Foreman mobile shell', () => {
         await expect(page.getByLabel(/Plant hours/i)).toHaveValue('6');
       }
     }
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('the shell lot map screen mounts with mocked map data and no console errors', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    await mockForemanShellApi(page);
+
+    await page.goto(`/m/lots/map?projectId=${encodeURIComponent(PROJECT_ID)}`);
+
+    // ShellScreen header renders the title as a heading.
+    await expect(page.getByRole('heading', { name: 'Map', exact: true })).toBeVisible();
+    // The lazy LotMapView chunk mounts. With zero geometries and zero registered
+    // plan sheets it renders its empty-state (no Leaflet tile requests), but the
+    // root testid is present in both the empty and populated branches.
+    await expect(page.getByTestId('lot-map-view')).toBeVisible();
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
