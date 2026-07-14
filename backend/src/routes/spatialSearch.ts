@@ -47,6 +47,11 @@ const searchBodySchema = z.object({
     .object({ west: lng, south: lat, east: lng, north: lat })
     .refine((b) => b.west < b.east, { message: 'west must be less than east' })
     .refine((b) => b.south < b.north, { message: 'south must be less than north' }),
+  // Photos-only mode: the map's Photos layer refetches on every pan and reads
+  // only `.photos`. This skips the geometry scan + intersection + test-result
+  // load, returning empty arrays for those collections (shape unchanged). Absent
+  // => full find-by-area behaviour for the draw-a-box search.
+  only: z.literal('photos').optional(),
 });
 
 function cap<T>(items: T[]): { items: T[]; truncated: boolean } {
@@ -64,6 +69,7 @@ spatialSearchRouter.post(
       throw AppError.fromZodError(parsed.error);
     }
     const bounds: SearchBounds = parsed.data.bounds;
+    const photosOnly = parsed.data.only === 'photos';
 
     if (!(await checkProjectAccess(user.id, projectId))) {
       throw AppError.forbidden('Access denied');
@@ -107,13 +113,18 @@ spatialSearchRouter.post(
 
     // Lots: load the project's (scoped) geometries and keep those whose Feature
     // intersects the box. One row per lot (first intersecting geometry wins).
-    const geometries = await prisma.lotGeometry.findMany({
-      where: { lot: lotWhere },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        lot: { select: { id: true, lotNumber: true, status: true, activityType: true } },
-      },
-    });
+    // Photos-only mode skips this scan entirely — with no geometries the
+    // intersection loop and the test-result guard below yield empty arrays, so
+    // the response shape is unchanged for the map's Photos layer.
+    const geometries = photosOnly
+      ? []
+      : await prisma.lotGeometry.findMany({
+          where: { lot: lotWhere },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            lot: { select: { id: true, lotNumber: true, status: true, activityType: true } },
+          },
+        });
 
     const seenLotIds = new Set<string>();
     const intersectingLots: ReturnType<typeof mapGeometry>[] = [];
@@ -128,7 +139,9 @@ spatialSearchRouter.post(
     // Photos: project photo documents with GPS inside the box. GPS range filter
     // runs in the DB; subbie scoping (lot must be visible; unlinked photos are
     // internal-only) is applied in app.
-    // ponytail: load-then-filter at project scale, same as the geometries scan.
+    // Bounded server-side with `take` (CAP + 1 so cap() can still detect
+    // truncation from the one extra row); the app-side subbie filter + cap()
+    // below stay as a belt (a scoped subbie may see fewer than RESULT_CAP).
     const photoRows = await prisma.document.findMany({
       where: {
         projectId,
@@ -137,6 +150,7 @@ spatialSearchRouter.post(
         gpsLongitude: { gte: bounds.west, lte: bounds.east },
       },
       orderBy: { captureTimestamp: 'desc' },
+      take: RESULT_CAP + 1,
       select: {
         id: true,
         filename: true,
