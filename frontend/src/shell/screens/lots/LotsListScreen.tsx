@@ -10,9 +10,10 @@
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { HubTile } from '../../components/HubTile';
 import { withProjectQuery } from '../../shellPaths';
 import { useLotsShellContext } from './lotsShellContext';
 import {
@@ -115,6 +116,7 @@ export function LotsListScreen() {
   );
 
   const lotHref = (lotId: string) => withProjectQuery(`/m/lots/${lotId}`, projectId);
+  const mapHref = withProjectQuery('/m/lots/map', projectId);
 
   if (loading) {
     return (
@@ -128,6 +130,13 @@ export function LotsListScreen() {
 
   return (
     <ShellScreen variant="inner" title="Lots" parent="/m" sub={sub}>
+      <HubTile
+        icon={MapIcon}
+        title="Map"
+        onPress={() => navigate(mapHref)}
+        ariaLabel="Open the lot map"
+      />
+
       {error && (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
           Couldn’t load lots. Pull back and try again.
