@@ -312,6 +312,11 @@ export function LandingPage() {
           <a className="lnk" href="#faq">
             FAQ
           </a>
+          {/* Secondary CTA — returning users. Stays a .btn (not .lnk) so it
+              survives the 760px nav collapse where section links hide. */}
+          <a className={'btn' + (navLite ? '' : ' ghost-night')} href="/login">
+            Log in
+          </a>
           <a className={'btn' + (navLite ? ' primary' : ' night')} href="#early-access">
             Request early access
           </a>
