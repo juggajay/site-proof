@@ -27,6 +27,7 @@ import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
+import { DictationMicButton } from '@/components/ui/DictationMicButton';
 import {
   getDocketDisplayLabourEntryCost,
   getDocketDisplayLabourEntryHours,
@@ -698,6 +699,12 @@ export function DocketScreen() {
         <>
           <div className="shell-sect" style={{ marginTop: 6 }}>
             <span className="t">NOTES</span>
+            {canWrite && (
+              <DictationMicButton
+                className="self-center"
+                onTranscript={(text) => setNotes((prev) => (prev ? prev + ' ' + text : text))}
+              />
+            )}
           </div>
           {canWrite ? (
             <textarea

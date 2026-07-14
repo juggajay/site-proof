@@ -7,7 +7,7 @@ interface SpeechToTextOptions {
   interimResults?: boolean;
   language?: string;
   onResult?: (transcript: string, isFinal: boolean) => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, code?: string) => void;
 }
 
 interface SpeechToTextReturn {
@@ -171,7 +171,7 @@ export function useSpeechToText(options: SpeechToTextOptions = {}): SpeechToText
 
       setError(errorMessage);
       setIsListening(false);
-      onError?.(errorMessage);
+      onError?.(errorMessage, event.error);
     };
 
     return recognition;
