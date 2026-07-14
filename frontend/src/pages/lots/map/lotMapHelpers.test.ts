@@ -11,6 +11,8 @@ import {
   featureToShape,
   filterGeometriesByLotIds,
   polygonAreaM2,
+  polygonCentroid,
+  featureCentroid,
   buildMapLinkPaths,
   pointInPolygon,
   lotAtPoint,
@@ -319,6 +321,112 @@ describe('lotAtPoint', () => {
     } as unknown as ProjectLotGeometry;
     expect(lotAtPoint([multi], 20.5, 20.5)).toEqual({ lotId: 'm', lotNumber: 'M-5' });
     expect(lotAtPoint([multi], 0.5, 0.5)).toBeNull();
+  });
+});
+
+describe('polygonCentroid', () => {
+  it('returns the centre of a unit square', () => {
+    const c = polygonCentroid([
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
+    ]);
+    expect(c).not.toBeNull();
+    expect(c![0]).toBeCloseTo(1, 10);
+    expect(c![1]).toBeCloseTo(1, 10);
+  });
+
+  it('is unaffected by a repeated closing vertex', () => {
+    const open = polygonCentroid([
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]);
+    const closed = polygonCentroid([
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+      [0, 0],
+    ]);
+    expect(closed![0]).toBeCloseTo(open![0], 10);
+    expect(closed![1]).toBeCloseTo(open![1], 10);
+  });
+
+  it('handles realistic WGS84 lng/lat rings', () => {
+    const c = polygonCentroid([
+      [151.0, -33.8],
+      [151.002, -33.8],
+      [151.002, -33.802],
+      [151.0, -33.802],
+    ]);
+    // 4 dp (~11 m) — FP cancellation at 151°/-33° magnitudes adds sub-metre noise.
+    expect(c![0]).toBeCloseTo(151.001, 4);
+    expect(c![1]).toBeCloseTo(-33.801, 4);
+  });
+
+  it('returns null for an empty ring', () => {
+    expect(polygonCentroid([])).toBeNull();
+  });
+
+  it('falls back to the vertex average for a degenerate (zero-area) ring', () => {
+    // Collinear points -> zero area; must not divide by zero.
+    const c = polygonCentroid([
+      [0, 0],
+      [2, 0],
+      [4, 0],
+    ]);
+    expect(c).toEqual([2, 0]);
+  });
+
+  it('returns the single vertex for a one-point ring', () => {
+    expect(polygonCentroid([[5, 7]])).toEqual([5, 7]);
+  });
+});
+
+describe('featureCentroid', () => {
+  it('returns a polygon centroid as [lat, lng]', () => {
+    const c = featureCentroid(
+      feature({
+        type: 'Polygon',
+        coordinates: [
+          [
+            [151.0, -33.8],
+            [151.002, -33.8],
+            [151.002, -33.802],
+            [151.0, -33.802],
+          ],
+        ],
+      }),
+    );
+    expect(c![0]).toBeCloseTo(-33.801, 4);
+    expect(c![1]).toBeCloseTo(151.001, 4);
+  });
+
+  it('returns the middle vertex of a line as [lat, lng]', () => {
+    const c = featureCentroid(
+      feature({
+        type: 'LineString',
+        coordinates: [
+          [151.0, -33.8],
+          [151.01, -33.81],
+          [151.02, -33.82],
+        ],
+      }),
+    );
+    expect(c).toEqual([-33.81, 151.01]);
+  });
+
+  it('returns a point as [lat, lng]', () => {
+    const c = featureCentroid(feature({ type: 'Point', coordinates: [151.5, -33.5] }));
+    expect(c).toEqual([-33.5, 151.5]);
+  });
+
+  it('returns null for a missing feature', () => {
+    expect(featureCentroid(null)).toBeNull();
+    expect(featureCentroid(undefined)).toBeNull();
   });
 });
 
