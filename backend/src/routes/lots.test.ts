@@ -3389,6 +3389,206 @@ describe('Lot Bulk Operations', () => {
     expect(res.status).toBe(201);
     expect(res.body.lots.length).toBe(2);
     expect(res.body.count).toBe(2);
+    expect(res.body.itpInstancesCreated).toBe(0);
+    expect(res.body.geometriesCreated).toBe(0);
+  });
+
+  describe('chainage-interval generation (bulk + ITP + geometry)', () => {
+    let templateId: string;
+    let controlLineId: string;
+
+    beforeAll(async () => {
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: 'Bulk Gen Drainage ITP',
+          activityType: 'Drainage',
+          checklistItems: {
+            create: [
+              { sequenceNumber: 1, description: 'Trench excavated to design line' },
+              { sequenceNumber: 2, description: 'Bedding placed and compacted' },
+            ],
+          },
+        },
+      });
+      templateId = template.id;
+
+      // 1000m straight GDA2020 MGA56 centreline heading due north.
+      const controlLine = await prisma.controlLine.create({
+        data: {
+          projectId,
+          name: 'Bulk Gen MC00',
+          coordinateSystem: 'EPSG:7856',
+          points: [
+            { chainage: 0, easting: 334000, northing: 6252000 },
+            { chainage: 1000, easting: 334000, northing: 6253000 },
+          ],
+        },
+      });
+      controlLineId = controlLine.id;
+    });
+
+    afterAll(async () => {
+      await prisma.lotGeometry.deleteMany({ where: { controlLineId } });
+      await prisma.controlLine.delete({ where: { id: controlLineId } }).catch(() => {});
+      await prisma.iTPInstance.deleteMany({ where: { templateId } });
+      await prisma.lot.deleteMany({ where: { projectId, itpTemplateId: templateId } });
+      await prisma.iTPTemplate.delete({ where: { id: templateId } }).catch(() => {});
+    });
+
+    it('creates lots with ITP instances and chainage geometries in one call', async () => {
+      const prefix = `GEN-${Date.now()}`;
+      const res = await request(app)
+        .post('/api/lots/bulk')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          itpTemplateId: templateId,
+          geometry: { controlLineId, offsetLeft: 5, offsetRight: 5 },
+          lots: [
+            { lotNumber: `${prefix}-001`, chainageStart: 0, chainageEnd: 250, lotType: 'chainage' },
+            {
+              lotNumber: `${prefix}-002`,
+              chainageStart: 250,
+              chainageEnd: 500,
+              lotType: 'chainage',
+            },
+            {
+              lotNumber: `${prefix}-003`,
+              chainageStart: 500,
+              chainageEnd: 750,
+              lotType: 'chainage',
+            },
+          ],
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.count).toBe(3);
+      expect(res.body.itpInstancesCreated).toBe(3);
+      expect(res.body.geometriesCreated).toBe(3);
+
+      const lotIds = res.body.lots.map((lot: { id: string }) => lot.id);
+      const instances = await prisma.iTPInstance.findMany({ where: { lotId: { in: lotIds } } });
+      expect(instances).toHaveLength(3);
+      for (const instance of instances) {
+        expect(instance.templateId).toBe(templateId);
+        expect(instance.status).toBe('not_started');
+        const snapshot = JSON.parse(instance.templateSnapshot ?? '{}') as {
+          checklistItems: unknown[];
+        };
+        expect(snapshot.checklistItems).toHaveLength(2);
+      }
+
+      const geometries = await prisma.lotGeometry.findMany({
+        where: { lotId: { in: lotIds } },
+      });
+      expect(geometries).toHaveLength(3);
+      for (const geometry of geometries) {
+        expect(geometry.kind).toBe('chainage_offset');
+        expect(geometry.controlLineId).toBe(controlLineId);
+        // 250m long × 10m wide straight lot ≈ 2500 m².
+        expect(Number(geometry.areaM2)).toBeGreaterThan(2000);
+        expect(Number(geometry.areaM2)).toBeLessThan(3000);
+        expect(Number(geometry.lengthM)).toBe(250);
+      }
+    });
+
+    it('rejects the whole batch when a chainage is outside the control line', async () => {
+      const prefix = `GENBAD-${Date.now()}`;
+      const res = await request(app)
+        .post('/api/lots/bulk')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          geometry: { controlLineId, offsetLeft: 5, offsetRight: 5 },
+          lots: [
+            { lotNumber: `${prefix}-001`, chainageStart: 0, chainageEnd: 500 },
+            { lotNumber: `${prefix}-002`, chainageStart: 500, chainageEnd: 1500 },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.details.code).toBe('GEOMETRY_OUT_OF_RANGE');
+      expect(res.body.error.message).toContain(`${prefix}-002`);
+      // All-or-nothing: the in-range lot must not have been created either.
+      const created = await prisma.lot.count({
+        where: { projectId, lotNumber: { startsWith: prefix } },
+      });
+      expect(created).toBe(0);
+    });
+
+    it('rejects geometry generation when a lot has no chainage range', async () => {
+      const prefix = `GENNOCH-${Date.now()}`;
+      const res = await request(app)
+        .post('/api/lots/bulk')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          geometry: { controlLineId, offsetLeft: 5, offsetRight: 5 },
+          lots: [{ lotNumber: `${prefix}-001` }],
+        });
+
+      expect(res.status).toBe(400);
+      const created = await prisma.lot.count({
+        where: { projectId, lotNumber: { startsWith: prefix } },
+      });
+      expect(created).toBe(0);
+    });
+
+    it('maps duplicate lot numbers to an actionable error and creates nothing', async () => {
+      const prefix = `GENDUP-${Date.now()}`;
+      const first = await request(app)
+        .post('/api/lots/bulk')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lots: [{ lotNumber: `${prefix}-001` }],
+        });
+      expect(first.status).toBe(201);
+
+      const res = await request(app)
+        .post('/api/lots/bulk')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          itpTemplateId: templateId,
+          lots: [
+            { lotNumber: `${prefix}-001`, chainageStart: 0, chainageEnd: 100 },
+            { lotNumber: `${prefix}-002`, chainageStart: 100, chainageEnd: 200 },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.details.code).toBe('LOT_NUMBER_TAKEN');
+      const created = await prisma.lot.count({
+        where: { projectId, lotNumber: `${prefix}-002` },
+      });
+      expect(created).toBe(0);
+
+      await prisma.lot.deleteMany({ where: { projectId, lotNumber: { startsWith: prefix } } });
+    });
+
+    it('rejects an archived template', async () => {
+      const archived = await prisma.iTPTemplate.create({
+        data: { projectId, name: 'Archived Gen Template', isActive: false },
+      });
+      const prefix = `GENARCH-${Date.now()}`;
+      const res = await request(app)
+        .post('/api/lots/bulk')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          itpTemplateId: archived.id,
+          lots: [{ lotNumber: `${prefix}-001` }],
+        });
+
+      expect(res.status).toBe(400);
+      const created = await prisma.lot.count({
+        where: { projectId, lotNumber: { startsWith: prefix } },
+      });
+      expect(created).toBe(0);
+      await prisma.iTPTemplate.delete({ where: { id: archived.id } });
+    });
   });
 
   it('should allow bulk lot mutations based on active project manager role', async () => {

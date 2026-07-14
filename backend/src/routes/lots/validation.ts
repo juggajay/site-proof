@@ -132,9 +132,34 @@ const createLotSchema = z
   });
 
 // Schema for bulk creating lots
+// Offsets mirror the single-geometry route's 0–1000m bounds (geometryRoutes.ts).
+const bulkLotGeometrySchema = z
+  .object({
+    controlLineId: requiredIdSchema('controlLineId'),
+    offsetLeft: finiteNumberSchema('offsetLeft')
+      .min(0, 'offsetLeft must not be negative')
+      .max(1000, 'offsetLeft must be 1000m or less'),
+    offsetRight: finiteNumberSchema('offsetRight')
+      .min(0, 'offsetRight must not be negative')
+      .max(1000, 'offsetRight must be 1000m or less'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.offsetLeft + data.offsetRight <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A lot needs a non-zero offset on at least one side',
+        path: ['offsetLeft'],
+      });
+    }
+  });
+
 const bulkCreateLotsSchema = z
   .object({
     projectId: requiredIdSchema('projectId'),
+    // One template applied to every generated lot (Lot has a single
+    // itpTemplateId FK; per-lot templates would need a different payload).
+    itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
+    geometry: bulkLotGeometrySchema.optional(),
     lots: z
       .array(
         z
@@ -169,6 +194,17 @@ const bulkCreateLotsSchema = z
       }
       seen.add(lot.lotNumber);
     });
+    if (data.geometry) {
+      data.lots.forEach((lot, index) => {
+        if (lot.chainageStart == null || lot.chainageEnd == null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Every lot needs a chainage range when generating map geometry',
+            path: ['lots', index, 'chainageStart'],
+          });
+        }
+      });
+    }
   });
 
 // Schema for cloning a lot

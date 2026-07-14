@@ -48,6 +48,42 @@ export function parseChainageInput(value: string): number | null {
   return parseOptionalNonNegativeDecimalInput(value);
 }
 
+export interface ChainageExtent {
+  min: number;
+  max: number;
+}
+
+/** Chainage extent of a control line's ordered points, or null when unusable. */
+export function controlLineChainageExtent(
+  points: { chainage: number }[] | undefined,
+): ChainageExtent | null {
+  if (!points || points.length < 2) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const point of points) {
+    if (!Number.isFinite(point.chainage)) return null;
+    if (point.chainage < min) min = point.chainage;
+    if (point.chainage > max) max = point.chainage;
+  }
+  return min < max ? { min, max } : null;
+}
+
+/**
+ * Generating geometry needs every lot's chainage window inside the control
+ * line — the server rejects the whole batch otherwise, so catch it here.
+ */
+export function validateRangeAgainstControlLine(
+  start: number,
+  end: number,
+  extent: ChainageExtent,
+  lineName: string,
+): string | null {
+  if (start < extent.min || end > extent.max) {
+    return `${lineName} covers CH ${extent.min}–${extent.max}. Adjust the chainage range to fit inside it, or create the lots without map geometry.`;
+  }
+  return null;
+}
+
 function roundChainage(value: number): number {
   return Number(value.toFixed(6));
 }

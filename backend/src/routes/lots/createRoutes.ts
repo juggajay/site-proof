@@ -46,8 +46,87 @@ import {
 } from './coreResponses.js';
 import { buildTemplateSnapshot, type TemplateSnapshot } from '../itp/helpers/templateSnapshot.js';
 import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
+import { generateChainageOffsetPolygon } from '../../lib/spatial/lotGeometry.js';
+import type { ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
+import type { Prisma } from '@prisma/client';
 
 export const lotCreateRouter = Router();
+
+interface BulkGeometryInput {
+  controlLineId: string;
+  offsetLeft: number;
+  offsetRight: number;
+}
+
+interface BulkGeometryPlanEntry {
+  lotNumber: string;
+  row: Omit<Prisma.LotGeometryCreateManyInput, 'lotId'>;
+}
+
+// Pre-computes every polygon before any write (the generator is pure), so a
+// chainage outside the control line rejects the whole batch with the lot
+// numbers named instead of failing mid-transaction. Same skip-vs-throw split
+// as the backfill route's planBackfill, except failures here are fatal — a
+// generated batch promised N mapped lots, so it's all-or-nothing.
+async function planBulkLotGeometry(
+  projectId: string,
+  lotsData: { lotNumber: string; chainageStart?: number | null; chainageEnd?: number | null }[],
+  geometry: BulkGeometryInput,
+): Promise<BulkGeometryPlanEntry[]> {
+  const controlLine = await prisma.controlLine.findFirst({
+    where: { id: geometry.controlLineId, projectId },
+    select: { coordinateSystem: true, points: true },
+  });
+  if (!controlLine) {
+    throw AppError.notFound('Control line');
+  }
+  const points = controlLine.points as unknown as ControlPoint[];
+
+  const plan: BulkGeometryPlanEntry[] = [];
+  const failures: string[] = [];
+  for (const lot of lotsData) {
+    // Schema guarantees chainageStart/End when geometry is requested.
+    try {
+      const generated = generateChainageOffsetPolygon({
+        points,
+        epsg: controlLine.coordinateSystem,
+        chainageStart: lot.chainageStart!,
+        chainageEnd: lot.chainageEnd!,
+        offsetLeft: geometry.offsetLeft,
+        offsetRight: geometry.offsetRight,
+      });
+      plan.push({
+        lotNumber: lot.lotNumber,
+        row: {
+          kind: 'chainage_offset',
+          controlLineId: geometry.controlLineId,
+          chainageStart: lot.chainageStart!,
+          chainageEnd: lot.chainageEnd!,
+          offsetLeft: geometry.offsetLeft,
+          offsetRight: geometry.offsetRight,
+          geometryWgs84: generated.feature as unknown as Prisma.InputJsonValue,
+          areaM2: generated.areaM2,
+          lengthM: generated.lengthM,
+        },
+      });
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 400) {
+        failures.push(`${lot.lotNumber}: ${err.message}`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (failures.length > 0) {
+    throw AppError.badRequest(
+      `Cannot generate map geometry for ${failures.length} lot(s): ${failures
+        .slice(0, 5)
+        .join('; ')}${failures.length > 5 ? ' …' : ''}`,
+      { code: 'GEOMETRY_OUT_OF_RANGE' },
+    );
+  }
+  return plan;
+}
 
 // POST /api/lots - Create a new lot (requires creator role in project)
 lotCreateRouter.post(
@@ -220,7 +299,7 @@ lotCreateRouter.post(
     if (!validation.success) {
       throw AppError.fromZodError(validation.error);
     }
-    const { projectId, lots: lotsData } = validation.data;
+    const { projectId, lots: lotsData, itpTemplateId, geometry } = validation.data;
 
     await requireProjectRole(
       projectId,
@@ -230,11 +309,31 @@ lotCreateRouter.post(
       { requireWritable: true },
     );
 
-    // Create all lots in a transaction
-    const createdLots = await prisma.$transaction(
-      lotsData.map((lot) =>
-        prisma.lot.create({
-          data: {
+    // One frozen template snapshot shared by every generated instance — same
+    // snapshot semantics as single create, built once instead of per lot.
+    let templateSnapshotJson: string | null = null;
+    if (itpTemplateId) {
+      await requireItpTemplateForProject(itpTemplateId, projectId);
+      const template = await prisma.iTPTemplate.findUnique({
+        where: { id: itpTemplateId },
+        include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+      });
+      if (!template) {
+        throw AppError.notFound('ITP template');
+      }
+      templateSnapshotJson = JSON.stringify(buildTemplateSnapshot(template));
+    }
+
+    const geometryPlan = geometry ? await planBulkLotGeometry(projectId, lotsData, geometry) : [];
+
+    // Three bulk statements (lots, ITP instances, geometries) instead of N
+    // individual creates — keeps a 500-lot batch well inside the interactive
+    // transaction window. All-or-nothing: the preview count is what you get.
+    let createdLots;
+    try {
+      createdLots = await prisma.$transaction(async (tx) => {
+        const created = await tx.lot.createManyAndReturn({
+          data: lotsData.map((lot) => ({
             projectId,
             lotNumber: lot.lotNumber,
             description: lot.description || null,
@@ -243,7 +342,8 @@ lotCreateRouter.post(
             chainageStart: lot.chainageStart ?? null,
             chainageEnd: lot.chainageEnd ?? null,
             layer: lot.layer || null,
-          },
+            itpTemplateId: itpTemplateId || null,
+          })),
           select: {
             id: true,
             lotNumber: true,
@@ -254,9 +354,46 @@ lotCreateRouter.post(
             chainageEnd: true,
             createdAt: true,
           },
-        }),
-      ),
-    );
+        });
+
+        if (templateSnapshotJson && itpTemplateId) {
+          await tx.iTPInstance.createMany({
+            data: created.map((lot) => ({
+              lotId: lot.id,
+              templateId: itpTemplateId,
+              templateSnapshot: templateSnapshotJson,
+              status: 'not_started',
+            })),
+          });
+        }
+
+        if (geometryPlan.length > 0) {
+          const idByNumber = new Map(created.map((lot) => [lot.lotNumber, lot.id]));
+          await tx.lotGeometry.createMany({
+            data: geometryPlan.map((plan) => ({
+              ...plan.row,
+              lotId: idByNumber.get(plan.lotNumber)!,
+            })),
+          });
+        }
+
+        return created;
+      });
+    } catch (err) {
+      // Unique [projectId, lotNumber] violation → actionable message instead of a 500.
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code?: string }).code === 'P2002'
+      ) {
+        throw AppError.badRequest(
+          'One or more of these lot numbers already exist in this project — change the prefix or numbering and try again.',
+          { code: 'LOT_NUMBER_TAKEN' },
+        );
+      }
+      throw err;
+    }
 
     await Promise.all(
       createdLots.map((lot) =>
@@ -271,6 +408,8 @@ lotCreateRouter.post(
             activityType: lot.activityType,
             status: lot.status,
             bulkCreate: true,
+            itpTemplateId: itpTemplateId || null,
+            generatedGeometry: geometryPlan.length > 0,
           },
           req,
         }),
@@ -293,7 +432,11 @@ lotCreateRouter.post(
       })),
     );
 
-    res.status(201).json(buildLotsCreatedResponse(createdLots));
+    res.status(201).json({
+      ...buildLotsCreatedResponse(createdLots),
+      itpInstancesCreated: templateSnapshotJson ? createdLots.length : 0,
+      geometriesCreated: geometryPlan.length,
+    });
   }),
 );
 

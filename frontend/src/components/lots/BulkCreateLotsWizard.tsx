@@ -1,16 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
+import { useProjectControlLines } from '@/pages/lots/map/lotMapData';
 import {
   ACTIVITY_TYPES,
   LAYERS,
   buildBulkLotPreview,
+  controlLineChainageExtent,
   parseChainageInput,
   validateBulkLotRange,
+  validateRangeAgainstControlLine,
   type LotPreview,
   type WizardStep,
 } from './bulkCreateLots';
+
+interface ItpTemplateOption {
+  id: string;
+  name: string;
+  activityType?: string | null;
+  isActive?: boolean;
+}
 
 interface BulkCreateLotsWizardProps {
   projectId: string;
@@ -19,6 +31,7 @@ interface BulkCreateLotsWizardProps {
 }
 
 export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCreateLotsWizardProps) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<WizardStep>('chainage');
   const [creating, setCreating] = useState(false);
 
@@ -32,6 +45,34 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
   const [activityType, setActivityType] = useState('Earthworks');
   const [layer, setLayer] = useState('');
   const [descriptionTemplate, setDescriptionTemplate] = useState('{prefix}-{start}-{end}');
+  // Generation extras: one ITP template applied to every lot, and optional map
+  // geometry generated from a control line (empty string = none, for both).
+  const [itpTemplateId, setItpTemplateId] = useState('');
+  const [controlLineId, setControlLineId] = useState('');
+  const [offsetLeft, setOffsetLeft] = useState('5');
+  const [offsetRight, setOffsetRight] = useState('5');
+
+  const controlLinesQuery = useProjectControlLines(projectId);
+  const controlLines = controlLinesQuery.data ?? [];
+  const [itpTemplates, setItpTemplates] = useState<ItpTemplateOption[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ templates: ItpTemplateOption[] }>(
+      `/api/itp/templates?projectId=${encodeURIComponent(projectId)}&includeGlobal=true&activeOnly=true`,
+    )
+      .then((data) => {
+        if (!cancelled) setItpTemplates((data.templates || []).filter((t) => t.isActive !== false));
+      })
+      .catch(() => {
+        // Template list is optional sugar — the wizard still works without it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const selectedControlLine = controlLines.find((line) => line.id === controlLineId) ?? null;
+  const selectedTemplate = itpTemplates.find((t) => t.id === itpTemplateId) ?? null;
 
   // Generated lots preview
   const [lotsPreview, setLotsPreview] = useState<LotPreview[]>([]);
@@ -50,6 +91,27 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
     if (end <= start) {
       toast({ variant: 'error', description: 'End chainage must be greater than start chainage' });
       return;
+    }
+
+    if (selectedControlLine) {
+      const extent = controlLineChainageExtent(selectedControlLine.points);
+      if (!extent) {
+        toast({
+          variant: 'error',
+          description: `${selectedControlLine.name} has no usable chainage extent — pick another control line or skip map geometry.`,
+        });
+        return;
+      }
+      const extentError = validateRangeAgainstControlLine(
+        start,
+        end,
+        extent,
+        selectedControlLine.name,
+      );
+      if (extentError) {
+        toast({ variant: 'error', description: extentError });
+        return;
+      }
     }
 
     const { lots, error } = buildBulkLotPreview({
@@ -74,10 +136,26 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
   const createLots = async () => {
     setCreating(true);
     try {
-      const data = await apiFetch<{ count: number }>('/api/lots/bulk', {
+      const parsedOffsetLeft = parseChainageInput(offsetLeft) ?? 0;
+      const parsedOffsetRight = parseChainageInput(offsetRight) ?? 0;
+      const data = await apiFetch<{
+        count: number;
+        itpInstancesCreated: number;
+        geometriesCreated: number;
+      }>('/api/lots/bulk', {
         method: 'POST',
         body: JSON.stringify({
           projectId,
+          ...(itpTemplateId ? { itpTemplateId } : {}),
+          ...(controlLineId
+            ? {
+                geometry: {
+                  controlLineId,
+                  offsetLeft: parsedOffsetLeft,
+                  offsetRight: parsedOffsetRight,
+                },
+              }
+            : {}),
           lots: lotsPreview.map((lot) => ({
             lotNumber: lot.lotNumber,
             description: lot.description,
@@ -90,7 +168,20 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
         }),
       });
 
-      toast({ variant: 'success', description: `Successfully created ${data.count} lots` });
+      const extras = [
+        data.itpInstancesCreated > 0 ? `${data.itpInstancesCreated} ITPs assigned` : null,
+        data.geometriesCreated > 0 ? `${data.geometriesCreated} mapped` : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      toast({
+        variant: 'success',
+        description: `Successfully created ${data.count} lots${extras ? ` (${extras})` : ''}`,
+      });
+      if (data.geometriesCreated > 0) {
+        // New footprints exist — make the map view pick them up immediately.
+        void queryClient.invalidateQueries(queryKeys.projectLotGeometries(projectId));
+      }
       onSuccess();
     } catch (error) {
       handleApiError(error, 'Failed to create lots');
@@ -115,7 +206,21 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
     parsedLotInterval > 0 &&
     parsedChainageEnd > parsedChainageStart &&
     chainageRangeValidation.error === null;
-  const canProceedFromParameters = lotPrefix.trim() !== '';
+  const parsedOffsets =
+    controlLineId === ''
+      ? null
+      : {
+          left: parseChainageInput(offsetLeft),
+          right: parseChainageInput(offsetRight),
+        };
+  const offsetsValid =
+    parsedOffsets === null ||
+    (parsedOffsets.left !== null &&
+      parsedOffsets.right !== null &&
+      parsedOffsets.left + parsedOffsets.right > 0 &&
+      parsedOffsets.left <= 1000 &&
+      parsedOffsets.right <= 1000);
+  const canProceedFromParameters = lotPrefix.trim() !== '' && offsetsValid;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -338,6 +443,105 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                     Variables: {'{prefix}'}, {'{start}'}, {'{end}'}, {'{num}'}
                   </p>
                 </div>
+                <div>
+                  <label
+                    htmlFor="bulk-itp-template"
+                    className="block text-sm font-medium text-foreground mb-1"
+                  >
+                    ITP Template (optional)
+                  </label>
+                  <select
+                    id="bulk-itp-template"
+                    value={itpTemplateId}
+                    onChange={(e) => setItpTemplateId(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
+                  >
+                    <option value="">No ITP template</option>
+                    {itpTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                        {template.activityType ? ` (${template.activityType})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Assigned to every lot, ready to inspect.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4 space-y-3">
+                <div>
+                  <label
+                    htmlFor="bulk-control-line"
+                    className="block text-sm font-medium text-foreground mb-1"
+                  >
+                    Map Geometry (optional)
+                  </label>
+                  <select
+                    id="bulk-control-line"
+                    value={controlLineId}
+                    onChange={(e) => setControlLineId(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
+                  >
+                    <option value="">No map geometry</option>
+                    {controlLines.map((line) => {
+                      const extent = controlLineChainageExtent(line.points);
+                      return (
+                        <option key={line.id} value={line.id}>
+                          {line.name}
+                          {extent ? ` (CH ${extent.min}–${extent.max})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Draws every lot on the satellite map along this control line.
+                  </p>
+                </div>
+                {controlLineId && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="bulk-offset-left"
+                        className="block text-sm font-medium text-foreground mb-1"
+                      >
+                        Offset Left (m)
+                      </label>
+                      <input
+                        id="bulk-offset-left"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={offsetLeft}
+                        onChange={(e) => setOffsetLeft(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="bulk-offset-right"
+                        className="block text-sm font-medium text-foreground mb-1"
+                      >
+                        Offset Right (m)
+                      </label>
+                      <input
+                        id="bulk-offset-right"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={offsetRight}
+                        onChange={(e) => setOffsetRight(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
+                      />
+                    </div>
+                  </div>
+                )}
+                {controlLineId && !offsetsValid && (
+                  <p className="text-sm text-destructive" role="alert">
+                    Offsets must be 0–1000m with a non-zero width on at least one side.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -394,6 +598,8 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
               </div>
               <p className="text-sm font-medium text-foreground">
                 Total: {lotsPreview.length} lots will be created
+                {selectedTemplate ? `, each with the "${selectedTemplate.name}" ITP` : ''}
+                {selectedControlLine ? `, drawn on the map along ${selectedControlLine.name}` : ''}
               </p>
             </div>
           )}
@@ -414,6 +620,13 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                   <li>Lot interval: {lotInterval}m</li>
                   <li>Activity type: {activityType}</li>
                   {layer && <li>Layer: {layer}</li>}
+                  {selectedTemplate && <li>ITP template: {selectedTemplate.name} (every lot)</li>}
+                  {selectedControlLine && (
+                    <li>
+                      Map geometry: along {selectedControlLine.name}, {offsetLeft}m left /{' '}
+                      {offsetRight}m right
+                    </li>
+                  )}
                 </ul>
               </div>
               <p className="text-sm text-muted-foreground">

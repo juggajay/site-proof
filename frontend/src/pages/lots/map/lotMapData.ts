@@ -31,11 +31,20 @@ export interface ProjectLotGeometry {
   chainageEnd: number | null;
 }
 
+export interface ControlLinePoint {
+  chainage: number;
+  easting: number;
+  northing: number;
+}
+
 export interface ProjectControlLine {
   id: string;
   projectId: string;
   name: string;
   coordinateSystem: string;
+  // Ordered control points — the API has always returned these; typed now so
+  // the bulk-create wizard can validate chainage ranges against the line.
+  points: ControlLinePoint[];
   geometryWgs84: GeoJsonFeature | null;
 }
 
