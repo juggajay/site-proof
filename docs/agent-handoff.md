@@ -9,7 +9,8 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `7ddec84 refactor(lots): move ITP completion mutations into useItpInstance (#316)`
+  `086a02e7 docs(lessons): field-wins campaign — master-only E2E gap, identity-keyed resets, worktree hook trap (#1455)`
+- Backend is on Prisma 6 (`^6.19.3`) since #1408.
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -723,11 +724,48 @@ Status: closed — fully built, reviewed, merged, and live-verified on prod.
   on phones). All live-verified on prod via the QA-owner harness (note: the
   QA owner has no SYD-roads membership — QA scripts must target the QA
   DOGFOOD project).
+- Offline stage 1 (#1444–#1446): the lot map now degrades gracefully offline.
+  Workbox runtime caching on the existing VitePWA service worker caches only
+  the tiles, plan sheets, and map data the user has already viewed
+  (`mapRuntimeCaching` in `frontend/vite.config.ts`). MapTiler licence caps are
+  enforced by test — there is NO bulk tile prefetch and none may be added. The
+  duplicate offline banner was dropped (#1445) because the app-wide
+  `OfflineIndicator` already covers it, and the map's stacking context was
+  isolated so it can't paint over app chrome (#1446).
 - Known limits (deliberate): ObjStm-compressed GeoPDF page dicts fall back
   to manual registration; touch interactions verified by browser emulation,
-  not physical hardware; offline map tiles skipped by explicit product
-  decision; plan-sheet document picker searches the most-recent 100 project
-  PDFs client-side.
+  not physical hardware; offline is view-cached only (no bulk pre-download —
+  MapTiler licence); plan-sheet document picker searches the most-recent 100
+  project PDFs client-side.
+
+### Field-Wins Campaign (2026-07-14)
+
+Status: closed — five field features plus the flagship lot generator, all
+merged and live-verified (#1447–#1455).
+
+- Voice dictation on field note textareas (#1447): `useDictation` +
+  `DictationMicButton` (wrapping the existing `lib/useSpeechToText`) sit on
+  diary/docket note fields. Compact mic, tap to dictate.
+- GPS lot auto-select (#1448): `useLotAtMyLocation` picks the lot you're
+  standing in when filing records, via a ray-cast point-in-polygon test in
+  `frontend/src/pages/lots/map/lotMapHelpers.ts`. Wired into `CaptureModal`
+  and the diary mobile handlers.
+- Photo GPS pins on the map (#1449): a "Photos" toggle on the satellite lot
+  map drops pins for geotagged photos (`LotMapView`).
+- FLAGSHIP chainage-interval lot generator (#1450): `POST /api/lots/bulk`
+  (`backend/src/routes/lots/createRoutes.ts`) now takes optional
+  `itpTemplateId` and `geometry { controlLineId, offsetLeft, offsetRight }`.
+  One transaction creates the lots, their ITP instances, and their map
+  polygons together. Frontend flow is `BulkCreateLotsWizard`.
+- ITP fail-photo gate (#1451, #1453, #1454): failing an ITP checklist item
+  online requires at least one attached photo (attach-first, then fail) —
+  enforced by `MarkAsFailedModal`. Auto-NCR on fail already existed. #1454
+  fixed the fail panel closing when the completion refreshed mid-fail.
+- Master-only E2E rule recorded in `tasks/lessons.md` (#1455): the full E2E
+  and seeded suites run only on pushes to `master`, never on PRs. Shell-surface
+  API calls need mock routes in `foreman-mobile-shell.spec.ts` (#1452), and any
+  change to a user flow must update `seeded-role-journeys.spec.ts` in the same
+  PR (#1453). Watch the master push run before calling field work done.
 
 ## Open Follow-Ups
 
@@ -743,6 +781,15 @@ Status: closed — fully built, reviewed, merged, and live-verified on prod.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 through 2026-05-28 reports have been
    closed by PRs #99-#278.
+5. Field-wins polish (post-#1455, all deferred, not blockers):
+   - Add the dictation mic to ITP note fields (only diary/docket note
+     textareas carry it today).
+   - Unify the docket note voice control: `CreateDocketModal` still uses the
+     older `VoiceInputButton`; converge it on `DictationMicButton`.
+   - Extract `BulkCreateLotsWizard` — it grew with the chainage lot generator
+     and is a refactor target (characterize first, behavior-preserving).
+   - Add the GPS "lot you're standing in" hint to docket lot allocations, the
+     way capture/diary flows already use `useLotAtMyLocation`.
 
 ## Handoff Checklist For The Next Agent
 
