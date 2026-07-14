@@ -11,13 +11,17 @@ const fakeMap = {
   on: vi.fn(),
   off: vi.fn(),
 };
+// Captures the options passed to MapContainer (they are Leaflet OPTIONS, not
+// DOM attributes — the mock must record them, never spread them onto the DOM).
+const mapContainerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 vi.mock('react-leaflet', () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   const LayersControl = Object.assign(Passthrough, { BaseLayer: Passthrough });
   return {
-    MapContainer: ({ children }: { children?: React.ReactNode }) => (
-      <div data-testid="map-container">{children}</div>
-    ),
+    MapContainer: ({ children, ...props }: { children?: React.ReactNode }) => {
+      mapContainerProps.current = props;
+      return <div data-testid="map-container">{children}</div>;
+    },
     TileLayer: () => <div data-testid="tile-layer" />,
     ScaleControl: () => <div data-testid="scale-control" />,
     LayersControl,
@@ -387,5 +391,18 @@ describe('LotMapView', () => {
     expect(
       screen.getByText(/Tap to place polygon corners; double-tap to finish/i),
     ).toBeInTheDocument();
+  });
+
+  it('drops the +/- zoom control on mobile (pinch zooms; the control hid the first toolbar button)', () => {
+    isMobileValue = true;
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    expect(mapContainerProps.current.zoomControl).toBe(false);
+  });
+
+  it('keeps the +/- zoom control on desktop', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    expect(mapContainerProps.current.zoomControl).toBe(true);
   });
 });
