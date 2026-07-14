@@ -8,6 +8,7 @@
  *
  * Route map:
  *   /m/lots                    → LotsListScreen
+ *   /m/lots/map                → LotMapScreen (satellite lot map)
  *   /m/lots/:lotId             → LotHubScreen
  *   /m/lots/:lotId/itp         → ItpRunScreen
  *   /m/lots/:lotId/details     → LotDetailsScreen
@@ -16,6 +17,7 @@ import { useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { LotsListScreen } from './LotsListScreen';
+import { LotMapScreen } from './LotMapScreen';
 import { LotHubScreen } from './LotHubScreen';
 import { ItpRunScreen } from './ItpRunScreen';
 import { LotDetailsScreen } from './LotDetailsScreen';
@@ -34,6 +36,8 @@ export function LotsShellRoutes() {
     <LotsShellProvider>
       <Routes>
         <Route index element={<LotsListScreen />} />
+        {/* Static `map` before the dynamic `:lotId` so it never parses as a lot id. */}
+        <Route path="map" element={<LotMapScreen />} />
         <Route path=":lotId" element={<LotHubScreen />} />
         <Route path=":lotId/itp" element={<ItpRunScreen />} />
         <Route path=":lotId/details" element={<LotDetailsScreen />} />

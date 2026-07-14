@@ -6,7 +6,7 @@
  * ShellScreen mounts SyncChip → useOfflineStatus.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { Lot } from '@/pages/lots/lotsPageTypes';
 
@@ -58,6 +58,7 @@ function renderScreen() {
     <MemoryRouter initialEntries={['/m/lots']}>
       <Routes>
         <Route path="/m/lots" element={<LotsListScreen />} />
+        <Route path="/m/lots/map" element={<div>map screen</div>} />
         <Route path="/m/lots/:lotId" element={<div>lot hub</div>} />
       </Routes>
     </MemoryRouter>,
@@ -119,6 +120,14 @@ describe('LotsListScreen', () => {
     _data = { ...makeData([]), error: true };
     renderScreen();
     expect(screen.getByText(/Couldn’t load lots/i)).toBeInTheDocument();
+  });
+
+  it('shows a Map action and navigates to the map route', () => {
+    _data = makeData([makeLot({ id: 'a', lotNumber: 'LOT-001' })]);
+    renderScreen();
+    const mapBtn = screen.getByRole('button', { name: /open the lot map/i });
+    fireEvent.click(mapBtn);
+    expect(screen.getByText('map screen')).toBeInTheDocument();
   });
 
   it('has NO create/edit affordances (foreman read-only)', () => {
