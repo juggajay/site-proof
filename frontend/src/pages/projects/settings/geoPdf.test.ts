@@ -101,6 +101,22 @@ describe('matchCrs', () => {
     expect(matchCrs('')).toBeNull();
     expect(matchCrs('PROJCS["Some State Plane"]')).toBeNull();
   });
+
+  it('is not fooled by a GPTS longitude colliding with an MGA code', () => {
+    // The viewport blob concatenates /GPTS (lat/lng corners) BEFORE the GCS. A
+    // Sydney longitude 151.28349 contains "28349" (GDA94 MGA zone 49) — the true
+    // EPSG 7856 must still win because only prefixed codes are honoured.
+    const blob =
+      '/GPTS [ -33.86 151.28349 -33.87 151.28912 -33.87 151.29001 ] ' +
+      '/GCS << /WKT (PROJCS["GDA2020 / MGA zone 56",AUTHORITY["EPSG","7856"]]) >>';
+    expect(matchCrs(blob)).toEqual({ epsg: 'EPSG:7856', zone: 56 });
+  });
+
+  it('returns null for a GPTS-only blob with no CRS declaration', () => {
+    // Corner coordinates but no EPSG/AUTHORITY token and no MGA zone name → we
+    // never guess a zone from bare coordinate digits.
+    expect(matchCrs('/GPTS [ -33.86 151.28349 -33.87 151.28912 -33.87 151.29001 ]')).toBeNull();
+  });
 });
 
 describe('numberArray + objectBody (byte scanner primitives)', () => {

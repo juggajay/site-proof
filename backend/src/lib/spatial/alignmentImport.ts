@@ -83,6 +83,19 @@ function densifyArc(seg: Extract<Segment, { kind: 'arc' }>): { point: Vec; along
   const thetaMax = ratio <= -1 ? Math.PI : 2 * Math.acos(Math.max(-1, ratio));
   const steps = Math.max(1, Math.ceil(sweep / thetaMax));
 
+  // Guard before the loop allocates: an enormous radius + near-full sweep
+  // (crafted or corrupt LandXML/DXF) can demand tens of millions of chords,
+  // which would exhaust memory before the downstream MAX_IMPORT_POINTS cap runs.
+  // A single legit arc feeding a ≤2000-point alignment never needs this many.
+  const MAX_ARC_STEPS = 100_000;
+  if (steps > MAX_ARC_STEPS) {
+    throw AppError.badRequest(
+      `Arc too finely divided (radius ${radius.toFixed(1)} m, sweep ` +
+        `${((sweep * 180) / Math.PI).toFixed(1)}° needs ${steps} chords) — ` +
+        'implausible geometry, check the file',
+    );
+  }
+
   const sign = clockwise ? -1 : 1;
   const arcPerStep = (radius * sweep) / steps;
   const out: { point: Vec; along: number }[] = [];

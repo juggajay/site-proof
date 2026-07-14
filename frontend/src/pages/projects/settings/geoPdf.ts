@@ -78,10 +78,12 @@ function epsgToZoneCrs(code: number): ZoneCrs | null {
  * Resolve a GCS blob (a WKT string or an EPSG authority code) to one of our
  * supported MGA systems, or null. Two independent signals, either sufficient:
  *
- *  1. An explicit EPSG code in a supported range. Datum/ellipsoid authority
- *     codes (4283, 7844, 7019, …) never fall in 7849–7856 or 28349–28356, so
- *     scanning every code in the WKT and accepting the first supported one is
- *     safe.
+ *  1. An explicit EPSG code carrying an authority prefix. Real WKT writes
+ *     `AUTHORITY["EPSG","7856"]` and PDF GEO dicts write `/EPSG 7856`, so we
+ *     only accept a 4–5 digit code that follows an `EPSG`/`AUTHORITY` token.
+ *     A bare digit run is NOT enough: the viewport blob concatenates the
+ *     `/GPTS` lat/lng corner array (e.g. a longitude `151.28349`) ahead of the
+ *     GCS, and `28349` there would otherwise be mis-read as GDA94 MGA zone 49.
  *  2. A "GDA2020/GDA94 … MGA zone N" projection name.
  *
  * Anything else (UTM on WGS84, a state plane, an unknown datum) → null. We never
@@ -90,8 +92,9 @@ function epsgToZoneCrs(code: number): ZoneCrs | null {
 export function matchCrs(gcsText: string): ZoneCrs | null {
   if (!gcsText) return null;
 
-  // (1) explicit EPSG authority code anywhere in the blob.
-  for (const m of gcsText.matchAll(/(\d{4,5})/g)) {
+  // (1) explicit EPSG authority code — must carry an EPSG/AUTHORITY prefix so a
+  // bare digit run inside a GPTS coordinate can't be mistaken for a zone code.
+  for (const m of gcsText.matchAll(/(?:EPSG|AUTHORITY)[^0-9]{0,20}(\d{4,5})/gi)) {
     const crs = epsgToZoneCrs(Number(m[1]));
     if (crs) return crs;
   }
