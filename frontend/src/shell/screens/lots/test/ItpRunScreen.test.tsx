@@ -8,7 +8,7 @@
  *
  * MOCKS @/lib/useOfflineStatus for CI coverage parity (ShellScreen → SyncChip).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { ITPChecklistItem, ITPCompletion, ITPInstance } from '@/pages/lots/types';
@@ -158,7 +158,19 @@ describe('ItpRunScreen — active item', () => {
   });
 
   it('FAIL opens reason capture and reuses the existing fail flow', async () => {
-    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    // The item carries a photo so the online required-evidence gate is satisfied
+    // and this test exercises the fail dispatch itself (the gate has its own suite).
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          makeCompletion({
+            checklistItemId: 'a',
+            attachments: [{ id: 'att-1' }] as ITPCompletion['attachments'],
+          }),
+        ],
+      ),
+    );
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: /Fail this check/i }));
     const textarea = screen.getByPlaceholderText(/Describe the issue/i);
@@ -293,6 +305,68 @@ describe('ItpRunScreen — photo evidence guard', () => {
 
     await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
     expect(screen.queryByText(/requires photo evidence/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('ItpRunScreen — FAIL requires photo evidence', () => {
+  function setOnline(value: boolean) {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value });
+  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setOnline(true);
+  });
+  afterEach(() => setOnline(true));
+
+  function openFailAndType() {
+    fireEvent.click(screen.getByRole('button', { name: /Fail this check/i }));
+    fireEvent.change(screen.getByPlaceholderText(/Describe the issue/i), {
+      target: { value: 'Out of spec' },
+    });
+  }
+
+  it('online: blocks the fail submit until a photo is attached', () => {
+    setOnline(true);
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    renderRun();
+    openFailAndType();
+    fireEvent.click(screen.getByRole('button', { name: /^Mark failed$/i }));
+
+    expect(markFailed).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Add a photo of the issue/i);
+    // The required-evidence affordance is surfaced in the fail panel.
+    expect(
+      screen.getByRole('button', { name: /Add a photo of the issue \(required\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('online: allows the fail submit once the item has a photo', async () => {
+    setOnline(true);
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          makeCompletion({
+            checklistItemId: 'a',
+            attachments: [{ id: 'att-1' }] as ITPCompletion['attachments'],
+          }),
+        ],
+      ),
+    );
+    renderRun();
+    openFailAndType();
+    fireEvent.click(screen.getByRole('button', { name: /^Mark failed$/i }));
+    await waitFor(() => expect(markFailed).toHaveBeenCalledWith('a', 'Out of spec'));
+  });
+
+  it('offline: allows a note-only fail with no photo', async () => {
+    setOnline(false);
+    _run = makeRun(makeInstance([makeItem({ id: 'a' })]));
+    renderRun();
+    openFailAndType();
+    expect(screen.getByText(/Offline — photo can be added after sync/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Mark failed$/i }));
+    await waitFor(() => expect(markFailed).toHaveBeenCalledWith('a', 'Out of spec'));
   });
 });
 

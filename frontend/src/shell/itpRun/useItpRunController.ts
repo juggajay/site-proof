@@ -206,6 +206,18 @@ export function useItpRunController(run: ItpRunSource) {
       );
       return;
     }
+    // Online FAIL requires photo evidence. Photos attach to the item's pending
+    // completion via run.addPhoto BEFORE the fail flips it to 'failed', so the
+    // attachment count reflects reality here. Offline stays note-only: the ITP
+    // offline sync path carries no attachments, so a photo can't be required.
+    const failNeedsPhoto =
+      reasonMode === 'fail' &&
+      navigator.onLine &&
+      (currentCompletion?.attachments?.length ?? 0) === 0;
+    if (failNeedsPhoto) {
+      setReasonError('Add a photo of the issue (required)');
+      return;
+    }
     setSubmitting(true);
     const ok =
       reasonMode === 'na'

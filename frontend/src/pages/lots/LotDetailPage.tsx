@@ -565,6 +565,16 @@ export function LotDetailPage() {
         submittingFailed={submittingFailed}
         setFailedModal={setFailedModal}
         handleSubmitFailed={handleSubmitFailed}
+        failedModalAddPhoto={(file) =>
+          failedModal ? handleMobileAddPhoto(failedModal.checklistItemId, file) : undefined
+        }
+        failedModalPhotoCount={
+          failedModal
+            ? (itpInstance?.completions.find(
+                (c) => c.checklistItemId === failedModal.checklistItemId,
+              )?.attachments?.length ?? 0)
+            : 0
+        }
         witnessModal={witnessModal}
         submittingWitness={submittingWitness}
         setWitnessModal={setWitnessModal}

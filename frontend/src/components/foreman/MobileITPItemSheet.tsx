@@ -46,6 +46,9 @@ export function MobileITPItemSheet({
   const [statusError, setStatusError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  // Separate input for the required-evidence capture inside the FAIL panel (the
+  // main Photos section — and its inputs — are hidden while a reason is typed).
+  const failPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when item changes
   useEffect(() => {
@@ -339,6 +342,37 @@ export function MobileITPItemSheet({
                 {statusError}
               </p>
             )}
+            {/* A failed item must carry photo evidence when online. The photo
+                attaches to this item's pending completion first; the fail then
+                flips it to 'failed'. Offline stays note-only (the ITP offline
+                sync path carries no attachments). */}
+            {navigator.onLine ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => failPhotoInputRef.current?.click()}
+                  disabled={savingStatus}
+                  className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2 px-3 bg-primary/10 text-primary rounded-lg text-sm font-medium touch-manipulation disabled:opacity-60"
+                >
+                  <Camera className="w-4 h-4" />
+                  {photos.length > 0
+                    ? `Photo added (${photos.length})`
+                    : 'Add a photo of the issue (required)'}
+                </button>
+                <input
+                  ref={failPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handlePhotoSelected}
+                />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Offline — photo can be added after sync.
+              </p>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => {
@@ -352,7 +386,7 @@ export function MobileITPItemSheet({
               </button>
               <button
                 onClick={() => submitStatus(onFail, failReason)}
-                disabled={savingStatus}
+                disabled={savingStatus || (navigator.onLine && photos.length === 0)}
                 className="flex-1 py-3 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium touch-manipulation disabled:opacity-60"
               >
                 {savingStatus ? 'Saving...' : 'Mark as Failed'}

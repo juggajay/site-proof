@@ -241,7 +241,24 @@ describe('MobileITPChecklist N/A and Fail keep failure context', () => {
 
   it('keeps the sheet open with the typed defect reason when the Fail save fails', async () => {
     const onMarkFailed = vi.fn().mockResolvedValue(false);
-    renderChecklist({ onMarkFailed });
+    // item-2 already carries a photo so the online required-evidence gate is
+    // satisfied and this test can exercise the save-failure path.
+    renderChecklist({
+      onMarkFailed,
+      completions: [
+        ...completions,
+        makeCompletion({
+          checklistItemId: 'item-2',
+          attachments: [
+            {
+              id: 'att-1',
+              documentId: 'doc-1',
+              document: { id: 'doc-1', fileUrl: null, caption: 'Evidence', filename: 'e.jpg' },
+            },
+          ] as unknown as ITPCompletion['attachments'],
+        }),
+      ],
+    });
 
     fireEvent.click(screen.getByText(/Compact subgrade/i));
     fireEvent.click(screen.getByRole('button', { name: /FAIL/i }));
@@ -256,6 +273,73 @@ describe('MobileITPChecklist N/A and Fail keep failure context', () => {
     expect(screen.getByPlaceholderText('Describe the issue...')).toHaveValue(
       'Pumping under proof roll near CH 420',
     );
+  });
+});
+
+describe('MobileITPChecklist Fail requires photo evidence', () => {
+  function setOnline(value: boolean) {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value });
+  }
+  afterEach(() => setOnline(true));
+
+  // Open item-2's fail panel and type a reason. item-2 has no completion (and so
+  // no photo) unless the test provides one.
+  function openFailForItem2(overrides: Partial<Parameters<typeof MobileITPChecklist>[0]> = {}) {
+    const rendered = renderChecklist(overrides);
+    fireEvent.click(screen.getByText(/Compact subgrade/i));
+    fireEvent.click(screen.getByRole('button', { name: /FAIL/i }));
+    fireEvent.change(screen.getByPlaceholderText('Describe the issue...'), {
+      target: { value: 'Out of spec' },
+    });
+    return rendered;
+  }
+
+  it('online: blocks the Fail save until a photo is attached', () => {
+    setOnline(true);
+    const onMarkFailed = vi.fn().mockResolvedValue(true);
+    openFailForItem2({ onMarkFailed });
+
+    expect(screen.getByRole('button', { name: 'Mark as Failed' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as Failed' }));
+    expect(onMarkFailed).not.toHaveBeenCalled();
+    // The required-evidence affordance is surfaced in the fail panel.
+    expect(
+      screen.getByRole('button', { name: /Add a photo of the issue \(required\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('online: allows the Fail save once the item has a photo', async () => {
+    setOnline(true);
+    const onMarkFailed = vi.fn().mockResolvedValue(true);
+    openFailForItem2({
+      onMarkFailed,
+      completions: [
+        ...completions,
+        makeCompletion({
+          checklistItemId: 'item-2',
+          attachments: [
+            {
+              id: 'att-1',
+              documentId: 'doc-1',
+              document: { id: 'doc-1', fileUrl: null, caption: 'Evidence', filename: 'e.jpg' },
+            },
+          ] as unknown as ITPCompletion['attachments'],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as Failed' }));
+    await waitFor(() => expect(onMarkFailed).toHaveBeenCalledWith('item-2', 'Out of spec'));
+  });
+
+  it('offline: allows a note-only Fail with no photo', async () => {
+    setOnline(false);
+    const onMarkFailed = vi.fn().mockResolvedValue(true);
+    openFailForItem2({ onMarkFailed });
+
+    expect(screen.getByText(/Offline — photo can be added after sync/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as Failed' }));
+    await waitFor(() => expect(onMarkFailed).toHaveBeenCalledWith('item-2', 'Out of spec'));
   });
 });
 

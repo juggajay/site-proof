@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { Camera } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,6 +23,14 @@ interface MarkAsFailedModalProps {
   onClose: () => void;
   onSubmit: (description: string, category: string, severity: string) => Promise<void>;
   isSubmitting: boolean;
+  /**
+   * Attach an evidence photo to this item. Creates the item's pending completion
+   * and attaches the photo (the same create-then-attach flow the checklist photo
+   * button uses); the fail below then flips that completion to 'failed'.
+   */
+  onAddPhoto: (file: File) => void | Promise<void>;
+  /** Photos already attached to this item's completion (drives the required gate). */
+  photoCount: number;
 }
 
 export function MarkAsFailedModal({
@@ -30,7 +39,15 @@ export function MarkAsFailedModal({
   onClose,
   onSubmit,
   isSubmitting,
+  onAddPhoto,
+  photoCount,
 }: MarkAsFailedModalProps) {
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  // Online FAIL requires photo evidence; offline stays note-only (the ITP offline
+  // sync path carries no attachments). Read at render for the UI and re-checked in
+  // the disabled gate below.
+  const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+  const photoMissing = online && photoCount === 0;
   const {
     register,
     handleSubmit,
@@ -118,6 +135,43 @@ export function MarkAsFailedModal({
                 <option value="major">Major (requires QM approval to close)</option>
               </NativeSelect>
             </div>
+
+            <div>
+              <Label>
+                Photo evidence <span className="text-destructive">*</span>
+              </Label>
+              {online ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-1 w-full justify-center gap-2"
+                    disabled={isSubmitting}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4" />
+                    {photoCount > 0
+                      ? `Photo added (${photoCount})`
+                      : 'Add a photo of the issue (required)'}
+                  </Button>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void onAddPhoto(file);
+                      e.target.value = '';
+                    }}
+                  />
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Offline — photo can be added after sync.
+                </p>
+              )}
+            </div>
           </div>
         </form>
       </ModalBody>
@@ -125,7 +179,12 @@ export function MarkAsFailedModal({
         <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" form="mark-failed-form" variant="destructive" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          form="mark-failed-form"
+          variant="destructive"
+          disabled={isSubmitting || photoMissing}
+        >
           {isSubmitting ? 'Creating NCR...' : 'Mark as Failed & Raise NCR'}
         </Button>
       </ModalFooter>
