@@ -261,6 +261,14 @@
   .sp-lp .nav a.lnk {
     display: none;
   }
+  /* Section links are gone; only brand + Log in + Request early access remain.
+     Tighten the gap and button padding so both CTAs fit narrow phones. */
+  .sp-lp .nav {
+    gap: 12px;
+  }
+  .sp-lp .nav .btn {
+    padding: 0 13px;
+  }
 }
 
 /* ---------- hero ---------- */
