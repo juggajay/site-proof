@@ -169,3 +169,43 @@ const MIN_DRAG_DEGREES = 1e-9;
 export function boundsHasArea(b: SearchBounds): boolean {
   return b.east - b.west >= MIN_DRAG_DEGREES && b.north - b.south >= MIN_DRAG_DEGREES;
 }
+
+// Where map entities link. Classic surfaces link into the desktop app; the
+// foreman shell passes a lot-path builder and everything stays under /m/* —
+// photos and test results route to their LOT (the shell is lot-centric and has
+// no documents/tests registers), and office-only settings links disappear.
+export interface MapLinkTargets {
+  lot: (lotId: string) => string;
+}
+
+export interface MapLinkPaths {
+  lot: (lotId: string) => string;
+  /** null → render the row unlinked (no shell destination exists). */
+  photo: (photo: { lotId: string | null }) => string | null;
+  test: (tr: { id: string; lotId: string | null }) => string | null;
+  /** null → render settings mentions as plain text (no link out of the shell). */
+  settings: string | null;
+}
+
+export function buildMapLinkPaths(
+  projectId: string,
+  linkTargets: MapLinkTargets | undefined,
+): MapLinkPaths {
+  const project = encodeURIComponent(projectId);
+  if (linkTargets) {
+    const { lot } = linkTargets;
+    return {
+      lot,
+      photo: (photo) => (photo.lotId ? lot(photo.lotId) : null),
+      test: (tr) => (tr.lotId ? lot(tr.lotId) : null),
+      settings: null,
+    };
+  }
+  return {
+    lot: (lotId) => `/projects/${project}/lots/${encodeURIComponent(lotId)}`,
+    photo: (photo) =>
+      `/projects/${project}/documents${photo.lotId ? `?lotId=${encodeURIComponent(photo.lotId)}` : ''}`,
+    test: (tr) => `/projects/${project}/tests?test=${encodeURIComponent(tr.id)}`,
+    settings: `/projects/${project}/settings`,
+  };
+}

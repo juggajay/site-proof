@@ -11,6 +11,7 @@ import {
   featureToShape,
   filterGeometriesByLotIds,
   polygonAreaM2,
+  buildMapLinkPaths,
 } from './lotMapHelpers';
 
 function feature(geometry: GeoJsonFeature['geometry']): GeoJsonFeature {
@@ -195,5 +196,26 @@ describe('cornersToLatLngBounds', () => {
 
   it('returns null with no corners', () => {
     expect(cornersToLatLngBounds([])).toBeNull();
+  });
+});
+
+describe('buildMapLinkPaths', () => {
+  it('builds classic desktop routes when no linkTargets given', () => {
+    const paths = buildMapLinkPaths('p 1', undefined);
+    expect(paths.lot('l/1')).toBe('/projects/p%201/lots/l%2F1');
+    expect(paths.photo({ lotId: 'l1' })).toBe('/projects/p%201/documents?lotId=l1');
+    expect(paths.photo({ lotId: null })).toBe('/projects/p%201/documents');
+    expect(paths.test({ id: 't1', lotId: null })).toBe('/projects/p%201/tests?test=t1');
+    expect(paths.settings).toBe('/projects/p%201/settings');
+  });
+
+  it('routes everything through the shell lot builder and drops settings links', () => {
+    const paths = buildMapLinkPaths('p1', { lot: (id) => `/m/lots/${id}?projectId=p1` });
+    expect(paths.lot('l1')).toBe('/m/lots/l1?projectId=p1');
+    expect(paths.photo({ lotId: 'l1' })).toBe('/m/lots/l1?projectId=p1');
+    expect(paths.photo({ lotId: null })).toBeNull();
+    expect(paths.test({ id: 't1', lotId: 'l2' })).toBe('/m/lots/l2?projectId=p1');
+    expect(paths.test({ id: 't1', lotId: null })).toBeNull();
+    expect(paths.settings).toBeNull();
   });
 });

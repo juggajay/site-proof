@@ -124,4 +124,13 @@ describe('LotMapScreen', () => {
     expect(screen.getByText(/No project selected/i)).toBeInTheDocument();
     expect(screen.queryByTestId('lot-map-view')).toBeNull();
   });
+
+  it('passes shell linkTargets so every map link stays under /m', async () => {
+    _data = makeData([makeLot({ id: 'a' })]);
+    renderScreen();
+
+    await screen.findByTestId('lot-map-view');
+    const linkTargets = capturedProps?.linkTargets as { lot: (lotId: string) => string };
+    expect(linkTargets.lot('lot-9')).toBe('/m/lots/lot-9?projectId=proj-1');
+  });
 });

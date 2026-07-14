@@ -6,14 +6,16 @@ import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
 
+import type { MapLinkPaths } from './lotMapHelpers';
 import type { SpatialSearchResult } from './spatialSearchData';
 
 interface FindByAreaPanelProps {
-  projectId: string;
   result: SpatialSearchResult | undefined;
   isLoading: boolean;
   error: unknown;
   isMobile: boolean;
+  /** Where result rows link (classic vs foreman-shell paths; null → unlinked). */
+  linkPaths: MapLinkPaths;
   onClear: () => void;
   onRetry: () => void;
 }
@@ -35,11 +37,11 @@ function chainageLabel(start: number | null, end: number | null): string | null 
 }
 
 export function FindByAreaPanel({
-  projectId,
   result,
   isLoading,
   error,
   isMobile,
+  linkPaths,
   onClear,
   onRetry,
 }: FindByAreaPanelProps) {
@@ -102,9 +104,7 @@ export function FindByAreaPanel({
                   {result.lots.map((lot) => (
                     <li key={lot.lotId} className="border-b">
                       <Link
-                        to={`/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(
-                          lot.lotId,
-                        )}`}
+                        to={linkPaths.lot(lot.lotId)}
                         className="flex items-center gap-2 px-3 py-2 hover:bg-muted"
                         data-testid={`find-by-area-lot-${lot.lotId}`}
                       >
@@ -139,24 +139,36 @@ export function FindByAreaPanel({
                 <p className="px-3 py-2 text-sm text-muted-foreground">No photos in this area.</p>
               ) : (
                 <div className="grid grid-cols-3 gap-1 p-2">
-                  {result.photos.map((photo) => (
-                    <Link
-                      key={photo.id}
-                      to={`/projects/${encodeURIComponent(projectId)}/documents${
-                        photo.lotId ? `?lotId=${encodeURIComponent(photo.lotId)}` : ''
-                      }`}
-                      className="group relative aspect-square overflow-hidden rounded border"
-                      title={photo.caption ?? photo.filename}
-                      data-testid={`find-by-area-photo-${photo.id}`}
-                    >
+                  {result.photos.map((photo) => {
+                    const to = linkPaths.photo(photo);
+                    const thumb = (
                       <SecureDocumentImage
                         documentId={photo.id}
                         variant="thumb"
                         alt={photo.caption ?? photo.filename}
                         className="h-full w-full object-cover"
                       />
-                    </Link>
-                  ))}
+                    );
+                    const className = 'group relative aspect-square overflow-hidden rounded border';
+                    const title = photo.caption ?? photo.filename;
+                    const testId = `find-by-area-photo-${photo.id}`;
+                    // No destination (shell, photo not filed to a lot) → unlinked tile.
+                    return to ? (
+                      <Link
+                        key={photo.id}
+                        to={to}
+                        className={className}
+                        title={title}
+                        data-testid={testId}
+                      >
+                        {thumb}
+                      </Link>
+                    ) : (
+                      <div key={photo.id} className={className} title={title} data-testid={testId}>
+                        {thumb}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -173,15 +185,10 @@ export function FindByAreaPanel({
                 </p>
               ) : (
                 <ul>
-                  {result.testResults.map((tr) => (
-                    <li key={tr.id} className="border-b">
-                      <Link
-                        to={`/projects/${encodeURIComponent(projectId)}/tests?test=${encodeURIComponent(
-                          tr.id,
-                        )}`}
-                        className="flex items-center gap-2 px-3 py-2 hover:bg-muted"
-                        data-testid={`find-by-area-test-${tr.id}`}
-                      >
+                  {result.testResults.map((tr) => {
+                    const to = linkPaths.test(tr);
+                    const row = (
+                      <>
                         <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="font-medium">{tr.testType}</span>
                         <span className="text-xs text-muted-foreground">
@@ -190,9 +197,25 @@ export function FindByAreaPanel({
                         <span className="ml-auto truncate text-xs text-muted-foreground">
                           {tr.lotNumber ?? tr.testRequestNumber ?? ''}
                         </span>
-                      </Link>
-                    </li>
-                  ))}
+                      </>
+                    );
+                    const className = 'flex items-center gap-2 px-3 py-2 hover:bg-muted';
+                    const testId = `find-by-area-test-${tr.id}`;
+                    // No destination (shell, test not tied to a lot) → unlinked row.
+                    return (
+                      <li key={tr.id} className="border-b">
+                        {to ? (
+                          <Link to={to} className={className} data-testid={testId}>
+                            {row}
+                          </Link>
+                        ) : (
+                          <div className={className} data-testid={testId}>
+                            {row}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>

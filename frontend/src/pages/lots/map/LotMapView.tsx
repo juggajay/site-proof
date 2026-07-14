@@ -69,6 +69,8 @@ import {
 } from './lotMapData';
 import {
   AU_DEFAULT_CENTER,
+  buildMapLinkPaths,
+  type MapLinkTargets,
   AU_DEFAULT_ZOOM,
   boundsToLatLngRect,
   computeBounds,
@@ -102,6 +104,12 @@ interface LotMapViewProps {
   projectName?: string;
   /** Project lots, for assigning a drawn polygon. Optional so tests stay lean. */
   lots?: MapLot[];
+  /**
+   * Where map entities link. The foreman shell passes a /m/* lot-path builder so
+   * navigation never escapes the shell; classic surfaces omit it and get the
+   * desktop routes (see buildMapLinkPaths).
+   */
+  linkTargets?: MapLinkTargets;
 }
 
 function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
@@ -277,12 +285,15 @@ function EmptyStateCallout({
   hasControlLines,
   controlLineId,
   canManageSettings,
+  settingsHref,
   onBackfilled,
 }: {
   projectId: string;
   hasControlLines: boolean;
   controlLineId: string | null;
   canManageSettings: boolean;
+  /** null (foreman shell): mention settings as plain text, never link out. */
+  settingsHref: string | null;
   onBackfilled: () => void;
 }) {
   const [offsetLeft, setOffsetLeft] = useState(6);
@@ -366,12 +377,13 @@ function EmptyStateCallout({
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">
           Add a control line in{' '}
-          <a
-            href={`/projects/${encodeURIComponent(projectId)}/settings`}
-            className="text-primary hover:underline"
-          >
-            Project Settings → Control Lines
-          </a>{' '}
+          {settingsHref ? (
+            <a href={settingsHref} className="text-primary hover:underline">
+              Project Settings → Control Lines
+            </a>
+          ) : (
+            <span className="font-medium">Project Settings → Control Lines</span>
+          )}{' '}
           to place lots on the map.
         </p>
       )}
@@ -429,9 +441,14 @@ export function LotMapView({
   canManageSettings,
   projectName,
   lots = [],
+  linkTargets,
 }: LotMapViewProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const linkPaths = useMemo(
+    () => buildMapLinkPaths(projectId, linkTargets),
+    [projectId, linkTargets],
+  );
   const queryClient = useQueryClient();
   const [snapshotting, setSnapshotting] = useState(false);
   const geometriesQuery = useProjectLotGeometries(projectId);
@@ -898,6 +915,7 @@ export function LotMapView({
           hasControlLines={controlLines.length > 0}
           controlLineId={controlLines[0]?.id ?? null}
           canManageSettings={canManageSettings}
+          settingsHref={linkPaths.settings}
           onBackfilled={() => geometriesQuery.refetch()}
         />
       ) : (
@@ -993,7 +1011,7 @@ export function LotMapView({
               )}
               {plansOpen && (
                 <PlansPanel
-                  projectId={projectId}
+                  settingsHref={linkPaths.settings}
                   sheets={registeredSheets}
                   shown={planShown}
                   opacity={planOpacity}
@@ -1079,13 +1097,7 @@ export function LotMapView({
                 <LotGeometryLayer
                   key={geometry.id}
                   geometry={geometry}
-                  onViewDetails={() =>
-                    navigate(
-                      `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(
-                        geometry.lotId,
-                      )}`,
-                    )
-                  }
+                  onViewDetails={() => navigate(linkPaths.lot(geometry.lotId))}
                 />
               ))}
 
@@ -1169,7 +1181,7 @@ export function LotMapView({
 
             {searchBounds && (
               <FindByAreaPanel
-                projectId={projectId}
+                linkPaths={linkPaths}
                 result={search.data}
                 isLoading={search.isLoading}
                 error={search.error}
