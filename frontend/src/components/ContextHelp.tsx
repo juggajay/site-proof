@@ -20,7 +20,8 @@ Key Features:
 • Filter lots by status, activity type, or search term
 • Save custom filters for quick access
 • Export lot data to CSV
-• Bulk create multiple lots at once
+• Bulk create multiple lots at once - optionally assigning an ITP template and drawing map geometry from a control line
+• Switch to Map view to see lots on satellite imagery, coloured by status
 
 Lot Statuses:
 • Not Started - Work hasn't begun
@@ -56,7 +57,8 @@ ITP Structure:
 Tips:
 • Set up ITPs before creating lots
 • Link ITPs to lots for automatic tracking
-• Upload evidence directly to inspection points`,
+• Upload evidence directly to inspection points
+• Failing a checklist item online requires a photo of the issue first, and still raises an NCR automatically`,
   },
   'hold-points': {
     title: 'Hold Points',
@@ -144,7 +146,9 @@ Sections:
 Tips:
 • Complete diary entries daily
 • Include weather delays for claims
-• Generate daily reports for stakeholders`,
+• Generate daily reports for stakeholders
+• Tap the mic on note fields to dictate instead of type (Australian English)
+• Capture pre-selects the lot you are standing in from GPS - you can still change it`,
   },
   dockets: {
     title: 'Docket Approvals',

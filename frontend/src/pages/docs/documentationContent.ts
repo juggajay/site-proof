@@ -12,6 +12,7 @@ import {
   FileText,
   FolderKanban,
   GitPullRequest,
+  Map as MapIcon,
   MapPin,
   TestTube,
   Upload,
@@ -99,6 +100,40 @@ export const documentationSections: DocumentationSection[] = [
       'Use lot numbers that match site records and progress claim schedules.',
       'Add budgets before conformance if the lot will be claimed.',
       'Assign subcontractors at lot level when they need portal work or docket access.',
+      'Bulk Create Lots can assign an ITP template to every lot and draw its map footprint from a control line and chainage in one pass.',
+    ],
+  },
+  {
+    id: 'site-map',
+    title: 'Site map and lot geometry',
+    summary:
+      'See lots on a satellite map, place them from control lines or plan sheets, and check coverage.',
+    icon: MapIcon,
+    route: '/projects',
+    routeLabel: 'Open projects',
+    steps: [
+      {
+        title: 'Open the map view',
+        description:
+          'Switch the Lot Register to Map to see each lot as a shape on satellite imagery, coloured by status, with control lines and a status legend.',
+      },
+      {
+        title: 'Place lots on the map',
+        description:
+          'Generate lot footprints from a control line and chainage, import an alignment from LandXML or DXF, trace a lot off a plan sheet, or draw one by hand.',
+      },
+      {
+        title: 'Read coverage, photos, and history',
+        description:
+          'Use Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and History to scrub lot status by date.',
+      },
+    ],
+    tips: [
+      'Overlay registered plan sheets on the imagery and blend the paper away so only the linework shows.',
+      'Tiles, plan sheets, and map data you have already viewed stay available offline; there is no bulk pre-download.',
+      'Snapshot the map to save it into project Documents, ready to attach to a conformance pack or claim.',
+      'Subcontractors see only the lots assigned to their company on the map.',
+      'The satellite lot map is also available in the foreman mobile shell.',
     ],
   },
   {
@@ -158,6 +193,7 @@ export const documentationSections: DocumentationSection[] = [
       'Assigned the wrong ITP? It can be unassigned from the lot until work is recorded against it.',
       'Test results count toward conformance once linked to their ITP checklist item and verified.',
       'Verified ITP and test records are protected from unsafe edits.',
+      'Failing an ITP checklist item online requires a photo of the issue first, and still raises an NCR automatically.',
       'Hold point release and request events are written to the audit log.',
     ],
   },
@@ -219,6 +255,8 @@ export const documentationSections: DocumentationSection[] = [
       'Unsupported file types return a specific rejection reason.',
       'Production storage uses Supabase Storage through backend-controlled uploads.',
       'Avoid uploading credentials, private keys, or unrelated personal data.',
+      'Photo capture and the daily diary pre-select the lot you are standing in from GPS — you can still change it.',
+      'GPS-tagged photos appear as pins on the site map when the Photos layer is on.',
     ],
   },
   {
@@ -248,6 +286,7 @@ export const documentationSections: DocumentationSection[] = [
       'NCR state changes and evidence events are audited.',
       'Diary submission locks the main record and uses addendums for later notes.',
       'Docket approval can feed diary labour and plant where configured.',
+      'Tap the mic on diary and docket note fields to dictate instead of type (Australian English).',
     ],
   },
   {
@@ -319,6 +358,7 @@ export const documentationSections: DocumentationSection[] = [
 export const quickReference: QuickReferenceItem[] = [
   { label: 'Projects', icon: FolderKanban, href: '/projects' },
   { label: 'Lots', icon: MapPin, href: '/projects' },
+  { label: 'Site map', icon: MapIcon, href: '/docs#site-map' },
   { label: 'ITPs', icon: ClipboardCheck, href: '/projects' },
   { label: 'Test Results', icon: TestTube, href: '/projects' },
   { label: 'Docket Approvals', icon: FileCheck, href: '/projects' },
