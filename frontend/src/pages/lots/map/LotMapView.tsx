@@ -1,6 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import {
   Circle,
   CircleMarker,
@@ -202,7 +203,7 @@ function LotPopup({
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
           {formatStatusLabel(geometry.status)}
-          {geometry.activityType ? ` · ${geometry.activityType}` : ''}
+          {geometry.activityType ? ` · ${formatActivityLabel(geometry.activityType)}` : ''}
           {(() => {
             // With dozens of identical strips, the chainage range is what tells a
             // human WHICH bit of road this is — the number alone doesn't.

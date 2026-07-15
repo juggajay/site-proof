@@ -28,6 +28,7 @@
     "auth:password-hash-report": "tsx scripts/migrate-passwords.ts",
     "auth:password-hash-ready": "tsx scripts/migrate-passwords.ts --fail-on-non-bcrypt",
     "seed:itp": "node scripts/seeds/itp-templates/index.mjs",
+    "retag:activities": "tsx scripts/retag-template-activities.ts",
     "smoke:production": "node scripts/smoke-production.mjs",
     "preflight:integrations": "tsx scripts/preflight-production-integrations.ts",
     "reports:send-due": "tsx scripts/process-scheduled-reports.ts",
@@ -37,8 +38,8 @@
     "migrate:deploy": "tsx scripts/migrate.ts deploy",
     "migrate:history": "tsx scripts/migrate.ts history",
     "seed:e2e": "node scripts/seed-e2e.mjs",
-    "lint": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/smoke-production.mjs",
-    "lint:fix": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/smoke-production.mjs --fix",
+    "lint": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/retag-template-activities.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/smoke-production.mjs",
+    "lint:fix": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/retag-template-activities.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/smoke-production.mjs --fix",
     "format": "prettier --write \"src/**/*.{ts,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,css,json}\"",
     "type-check": "tsc --noEmit && tsc -p tsconfig.scripts.json"

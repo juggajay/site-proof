@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, MapPin, Eye } from 'lucide-react';
@@ -178,7 +179,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   {lot.activityType && (
                     <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
-                      {lot.activityType}
+                      {formatActivityLabel(lot.activityType)}
                     </span>
                   )}
                   {(lot.chainageStart != null || lot.chainageEnd != null) && (

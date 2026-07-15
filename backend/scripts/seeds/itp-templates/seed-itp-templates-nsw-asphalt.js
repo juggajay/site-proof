@@ -20,7 +20,7 @@ const prisma = new PrismaClient()
 const nswDenseGradedAsphaltTemplate = {
   name: 'Dense Graded Asphalt (DGA)',
   description: 'TfNSW heavy duty dense graded asphalt construction per R116 including material supply, placement, and acceptance testing',
-  activityType: 'asphalt',
+  activityType: 'asphalt_dga',
   specificationReference: 'TfNSW R116',
   stateSpec: 'TfNSW',
   checklistItems: [
@@ -392,7 +392,7 @@ const nswDenseGradedAsphaltTemplate = {
 const nswPrimersealTemplate = {
   name: 'Prime and Primerseal',
   description: 'TfNSW primer and primerseal application for pavement surface preparation',
-  activityType: 'asphalt_prep',
+  activityType: 'prime_primerseal',
   specificationReference: 'TfNSW Asphalt Specs',
   stateSpec: 'TfNSW',
   checklistItems: [

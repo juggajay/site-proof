@@ -30,7 +30,7 @@ const prisma = new PrismaClient()
 const saStructuralConcreteTemplate = {
   name: 'Structural Concrete (DIT ST-SC-S7/C7/C6)',
   description: 'DIT Structural Concrete covering supply of concrete (ST-SC-S7), placement of concrete (ST-SC-C7), and formwork (ST-SC-C6). Includes mix design approval, temperature limits 5-35°C, curing, crack assessment, blowholes/honeycombing non-conformance criteria, and pre-pour hold points.',
-  activityType: 'structures',
+  activityType: 'structural_concrete',
   specificationReference: 'ST-SC-S7/C7/C6',
   stateSpec: 'DIT',
   checklistItems: [
@@ -300,7 +300,7 @@ const saStructuralConcreteTemplate = {
 const saReinforcementTemplate = {
   name: 'Reinforcement Placement (DIT ST-SC-S6)',
   description: 'DIT Steel Reinforcement per ST-SC-S6 (formerly Part CC05). Covers scheduling, cutting, bending, fixing, cover verification with ±5mm tolerance for bridge deck slabs, and pre-pour hold point for reinforcement acceptance.',
-  activityType: 'structures',
+  activityType: 'reinforcement',
   specificationReference: 'ST-SC-S6',
   stateSpec: 'DIT',
   checklistItems: [
@@ -450,7 +450,7 @@ const saReinforcementTemplate = {
 const saPilingTemplate = {
   name: 'Piling (DIT ST-PI-C1/C2/C3/C4)',
   description: 'DIT Piling covering driven piles (ST-PI-C1), cast-in-place/bored piles (ST-PI-C2), CFA piles (ST-PI-C3), and diaphragm walls (ST-PI-C4). Includes pile set-out hold point, integrity testing (PDA/PIT/CSL), load testing per AS 2159, and test results hold point.',
-  activityType: 'structures',
+  activityType: 'piling',
   specificationReference: 'ST-PI-C1/C2/C3/C4',
   stateSpec: 'DIT',
   checklistItems: [
@@ -711,7 +711,7 @@ const saPilingTemplate = {
 const saSteelworkTemplate = {
   name: 'Structural Steelwork (DIT ST-SS-S1/S2/C1)',
   description: 'DIT Structural Steelwork covering fabrication (ST-SS-S1), protective treatment (ST-SS-S2), and transportation/erection (ST-SS-C1). Includes mock set-up hold point, 2mm flange edge radius, NDE welding inspection, DFT measurement per TP 913, and 95% single point DFT compliance.',
-  activityType: 'structures',
+  activityType: 'structural_steelwork',
   specificationReference: 'ST-SS-S1/S2/C1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -933,7 +933,7 @@ const saSteelworkTemplate = {
 const saBridgeBearingsTemplate = {
   name: 'Bridge Bearings (DIT ST-SD-D1 / AS 5100.4)',
   description: 'DIT Bridge Bearings per ST-SD-D1 Design of Structures and AS 5100.4. Covers bearing supply, installation, accessibility for inspection/maintenance/replacement, jacking provisions, drainage protection, and deck joints. [VERIFY] SA does not publish standalone bearing construction spec — requirements from design spec and project-specific specifications.',
-  activityType: 'structures',
+  activityType: 'bridge_bearings',
   specificationReference: 'ST-SD-D1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -1083,7 +1083,7 @@ const saBridgeBearingsTemplate = {
 const saPrecastConcreteTemplate = {
   name: 'Precast Concrete Elements (DIT ST-SC-S3/C1)',
   description: 'DIT Precast Concrete covering precast units (ST-SC-S3) and pre-tensioned concrete (ST-SC-C1). Includes factory QA, storage, transport, erection via ST-SS-C1, tendon materials compliance hold point per AS 4672.1, and load-extension testing.',
-  activityType: 'structures',
+  activityType: 'precast_elements',
   specificationReference: 'ST-SC-S3/C1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -1269,7 +1269,7 @@ const saPrecastConcreteTemplate = {
 const saPostTensioningTemplate = {
   name: 'Post-Tensioning (DIT ST-SC-C2)',
   description: 'DIT Post-Tensioned Concrete per ST-SC-C2. Covers duct installation (corrugated galvanized), tendon installation, stressing operations with 10% initial force, anchorage compliance per AS/NZS 1314, grouting, and multiple hold points for materials compliance and stressing release.',
-  activityType: 'structures',
+  activityType: 'post_tensioning',
   specificationReference: 'ST-SC-C2',
   stateSpec: 'DIT',
   checklistItems: [
@@ -1477,7 +1477,7 @@ const saPostTensioningTemplate = {
 const saWaterproofingTemplate = {
   name: 'Bridge Deck Waterproofing (DIT ST-SD-D1 / Project Specific)',
   description: 'DIT Bridge Deck Waterproofing per ST-SD-D1 Design of Structures and project-specific specifications. [VERIFY] SA does not publish standalone waterproofing membrane spec — requirements from design specification and project-specific documents. Covers surface preparation, membrane application, drainage provisions, and protection.',
-  activityType: 'structures',
+  activityType: 'bridge_deck_waterproofing',
   specificationReference: 'ST-SD-D1',
   stateSpec: 'DIT',
   checklistItems: [

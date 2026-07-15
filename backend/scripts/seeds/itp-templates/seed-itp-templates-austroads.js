@@ -20,7 +20,7 @@ const prisma = new PrismaClient();
 const austroadsEarthworksTemplate = {
   name: 'Earthworks - Austroads Base',
   description: 'Generic earthworks template based on Austroads guidelines and Australian Standards. Covers clearing, foundation prep, fill placement, compaction and testing.',
-  activityType: 'earthworks',
+  activityType: 'earthworks_general',
   specificationReference: 'Austroads AGPT / AS 1289 Series',
   stateSpec: 'Austroads',
   checklistItems: [
@@ -274,7 +274,7 @@ const austroadsEarthworksTemplate = {
 const austroadsUnboundPavementTemplate = {
   name: 'Unbound Granular Pavement - Austroads Base',
   description: 'Generic unbound granular pavement template for base and subbase layers based on Austroads Guide to Pavement Technology Part 4 and AS 1289/1141.',
-  activityType: 'pavement',
+  activityType: 'pavement_unbound',
   specificationReference: 'Austroads AGPT Part 4 / AS 1141',
   stateSpec: 'Austroads',
   checklistItems: [
@@ -474,7 +474,7 @@ const austroadsUnboundPavementTemplate = {
 const austroadsStabilisedPavementTemplate = {
   name: 'Cement Stabilised Pavement - Austroads Base',
   description: 'Generic cement treated base (CTB) template based on Austroads Guide to Pavement Technology. Covers insitu and plant mixed stabilisation.',
-  activityType: 'pavement',
+  activityType: 'pavement_stabilisation',
   specificationReference: 'Austroads AGPT Part 4D',
   stateSpec: 'Austroads',
   checklistItems: [
@@ -683,7 +683,7 @@ const austroadsStabilisedPavementTemplate = {
 const austroadsAsphaltTemplate = {
   name: 'Dense Graded Asphalt - Austroads Base',
   description: 'Generic dense graded asphalt (DGA) template based on Austroads Guide to Pavement Technology Part 4B. Covers manufacturing, placement and testing.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_dga',
   specificationReference: 'Austroads AGPT Part 4B / AS 2150',
   stateSpec: 'Austroads',
   checklistItems: [
@@ -957,7 +957,7 @@ const austroadsAsphaltTemplate = {
 const austroadsConcreteTemplate = {
   name: 'Structural Concrete - Austroads Base',
   description: 'Generic structural concrete template based on AS 3600 and Austroads guidelines. Covers footings, piers, abutments, and general structural elements.',
-  activityType: 'concrete',
+  activityType: 'structural_concrete',
   specificationReference: 'AS 3600 / AS 1379 / Austroads',
   stateSpec: 'Austroads',
   checklistItems: [
@@ -1248,7 +1248,7 @@ const austroadsConcreteTemplate = {
 const austroadsDrainageTemplate = {
   name: 'Pipe Drainage Installation - Austroads Base',
   description: 'Generic pipe drainage installation template based on AS/NZS 3725 and Austroads guidelines. Covers rigid and flexible pipe installation.',
-  activityType: 'drainage',
+  activityType: 'pipe_drainage',
   specificationReference: 'AS/NZS 3725 / Austroads',
   stateSpec: 'Austroads',
   checklistItems: [

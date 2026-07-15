@@ -19,7 +19,7 @@ const prisma = new PrismaClient()
 const qldESCTemplate = {
   name: 'Erosion and Sediment Control',
   description: 'QLD TMR erosion and sediment control including EMP/ESCP preparation, ESC device installation and maintenance, water quality monitoring, and progressive stabilisation per MRTS52 and MRTS51',
-  activityType: 'environmental',
+  activityType: 'erosion_sediment_control',
   specificationReference: 'TMR MRTS52 / MRTS51',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -258,7 +258,7 @@ const qldESCTemplate = {
 const qldLandscapingTemplate = {
   name: 'Landscaping and Revegetation Works',
   description: 'QLD TMR landscaping and revegetation works including soil management, seed and plant supply, topsoil placement, seeding, planting, and establishment maintenance per MRTS16',
-  activityType: 'environmental',
+  activityType: 'landscaping',
   specificationReference: 'TMR MRTS16',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -501,7 +501,7 @@ const qldLandscapingTemplate = {
 const qldGeosyntheticsTemplate = {
   name: 'Geosynthetics (Geotextiles, Geogrids, Geomembranes)',
   description: 'QLD TMR geosynthetics installation including geotextiles for separation/filtration (MRTS27), geogrids for subgrade/pavement reinforcement (MRTS58), and high-strength geosynthetic reinforcement for embankments (MRTS100)',
-  activityType: 'environmental',
+  activityType: 'geosynthetics',
   specificationReference: 'TMR MRTS27 / MRTS58 / MRTS100 / MRTS04',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -695,7 +695,7 @@ const qldGeosyntheticsTemplate = {
 const qldReinforcedSoilWallsTemplate = {
   name: 'Reinforced Soil Walls (MSE Walls / Reinforced Soil Structures)',
   description: 'QLD TMR reinforced soil wall construction including MSE walls with steel strip or geosynthetic reinforcement, facing units, reinforced fill placement, drainage, and monitoring per MRTS06 aligned with ATS5120',
-  activityType: 'environmental',
+  activityType: 'reinforced_soil_walls',
   specificationReference: 'TMR MRTS06',
   stateSpec: 'MRTS',
   checklistItems: [

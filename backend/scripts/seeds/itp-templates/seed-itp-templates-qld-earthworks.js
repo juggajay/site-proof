@@ -24,7 +24,7 @@ const prisma = new PrismaClient()
 const qldEarthworksTemplate = {
   name: 'Earthworks',
   description: 'TMR General Earthworks including clearing, excavation, fill placement, compaction, subgrade preparation, and backfill to structures per MRTS04 (March 2025). Covers embankment construction, cut operations, acid sulfate soil management, amelioration of dispersive soils, and pavement subgrade works.',
-  activityType: 'earthworks',
+  activityType: 'earthworks_general',
   specificationReference: 'MRTS04',
   stateSpec: 'MRTS',
   checklistItems: [

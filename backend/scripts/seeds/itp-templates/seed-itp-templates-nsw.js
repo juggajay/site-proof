@@ -21,7 +21,7 @@ const prisma = new PrismaClient()
 const nswEarthworksTemplate = {
   name: 'Earthworks',
   description: 'TfNSW Earthworks construction including clearing, excavation, embankment construction, and compaction verification per R44 Ed 6 Rev 0',
-  activityType: 'earthworks',
+  activityType: 'earthworks_general',
   specificationReference: 'TfNSW R44 Ed 6 Rev 0',
   stateSpec: 'TfNSW',
   checklistItems: [

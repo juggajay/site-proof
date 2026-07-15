@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
 import type { ITPTemplate } from '../itpPageData';
 import {
-  TEMPLATE_ACTIVITY_TYPES,
   buildValidChecklistItems,
   createEmptyChecklistItem,
   type ChecklistEditorItem,
@@ -136,11 +136,7 @@ export function EditTemplateModal({
                 required
               >
                 <option value="">Select activity type</option>
-                {TEMPLATE_ACTIVITY_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
+                <ActivityTypeOptions currentValue={activityType} />
               </select>
             </div>
           </div>

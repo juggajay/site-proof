@@ -22,7 +22,7 @@ const prisma = new PrismaClient()
 const saWireRopeBarrierTemplate = {
   name: 'Wire Rope Safety Barrier (DIT RD-BF-C2)',
   description: 'DIT Wire Rope Safety Barrier Systems per RD-BF-C2 (formerly Part R43). Covers DIT Approved Products, manufacturer supervision, post installation, cable tensioning, anchor blocks, and MASH-compliant end terminals.',
-  activityType: 'road_furniture',
+  activityType: 'wire_rope_barrier',
   specificationReference: 'RD-BF-C2',
   stateSpec: 'DIT',
   checklistItems: [
@@ -240,7 +240,7 @@ const saWireRopeBarrierTemplate = {
 const saWBeamGuardFenceTemplate = {
   name: 'W-Beam Guard Fence (DIT RD-BF-C1)',
   description: 'DIT Steel Beam Safety Barrier Systems per RD-BF-C1 (formerly Part R42). Covers AS 1594 Grade HA350 steel rails, post embedment, rail fixing, end treatments, and delineation.',
-  activityType: 'road_furniture',
+  activityType: 'w_beam_guardrail',
   specificationReference: 'RD-BF-C1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -454,7 +454,7 @@ const saWBeamGuardFenceTemplate = {
 const saConcreteBarrierTemplate = {
   name: 'Concrete Barrier (DIT RD-BF-C3)',
   description: 'DIT Concrete Safety Barrier installation per RD-BF-C3. Covers foundation preparation, barrier placement or casting, joint treatment, reflectors, and alignment verification.',
-  activityType: 'road_furniture',
+  activityType: 'concrete_barrier',
   specificationReference: 'RD-BF-C3',
   stateSpec: 'DIT',
   checklistItems: [
@@ -677,7 +677,7 @@ const saConcreteBarrierTemplate = {
 const saPavementMarkingTemplate = {
   name: 'Pavement Marking (DIT RD-LM-C1/S1)',
   description: 'DIT Pavement marking application including thermoplastic, cold-applied plastic, paint, and raised pavement markers per RD-LM-C1 (Application) and RD-LM-S1 (Materials for Pavement Marking).',
-  activityType: 'road_furniture',
+  activityType: 'pavement_marking',
   specificationReference: 'RD-LM-C1 / RD-LM-S1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -945,7 +945,7 @@ const saPavementMarkingTemplate = {
 const saFencingTemplate = {
   name: 'Fencing (DIT RD-BF-C4)',
   description: 'DIT Fencing and Gates per RD-BF-C4. Covers boundary fencing, fauna fencing, property fencing, and gate installation.',
-  activityType: 'road_furniture',
+  activityType: 'fencing_noise_walls',
   specificationReference: 'RD-BF-C4',
   stateSpec: 'DIT',
   checklistItems: [

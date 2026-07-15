@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '@/lib/api';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import {
@@ -133,7 +134,7 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
               {lot.activityType && (
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Layers className="h-3.5 w-3.5" />
-                  <span className="capitalize">{lot.activityType}</span>
+                  <span>{formatActivityLabel(lot.activityType)}</span>
                 </div>
               )}
               {(lot.chainageStart || lot.chainageEnd) && (

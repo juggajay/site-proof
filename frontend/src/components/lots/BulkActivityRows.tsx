@@ -1,4 +1,5 @@
-import { ACTIVITY_TYPES, type BulkActivity } from './bulkCreateLots';
+import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
+import { type BulkActivity } from './bulkCreateLots';
 
 export interface ItpTemplateOption {
   id: string;
@@ -29,7 +30,7 @@ export function BulkActivityRows({
     onChange(activities.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
   const addRow = () => {
-    onChange([...activities, { activityType: 'Earthworks', itpTemplateId: '' }]);
+    onChange([...activities, { activityType: 'earthworks_general', itpTemplateId: '' }]);
   };
   const removeRow = (index: number) => {
     if (activities.length <= 1) return;
@@ -68,11 +69,7 @@ export function BulkActivityRows({
               onChange={(e) => updateRow(index, { activityType: e.target.value })}
               className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
             >
-              {ACTIVITY_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
+              <ActivityTypeOptions currentValue={row.activityType} />
             </select>
           </div>
           <div>

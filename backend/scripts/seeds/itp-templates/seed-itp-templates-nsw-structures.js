@@ -21,7 +21,7 @@ const prisma = new PrismaClient()
 const nswPilingTemplate = {
   name: 'Piling (Bored/CFA/Driven)',
   description: 'TfNSW piling construction including bored piles, CFA piles, and driven piles per B51 and related specifications',
-  activityType: 'structures',
+  activityType: 'piling',
   specificationReference: 'TfNSW B51',
   stateSpec: 'TfNSW',
   checklistItems: [
@@ -371,7 +371,7 @@ const nswPilingTemplate = {
 const nswStructuralConcreteTemplate = {
   name: 'Structural Concrete',
   description: 'TfNSW structural concrete construction for bridges, retaining walls, and other structures per B80',
-  activityType: 'structures',
+  activityType: 'structural_concrete',
   specificationReference: 'TfNSW B80',
   stateSpec: 'TfNSW',
   checklistItems: [
@@ -759,7 +759,7 @@ const nswStructuralConcreteTemplate = {
 const nswReinforcementTemplate = {
   name: 'Reinforcement Placement',
   description: 'TfNSW reinforcement steel placement for structural concrete including supply, fabrication, and installation',
-  activityType: 'structures',
+  activityType: 'reinforcement',
   specificationReference: 'TfNSW B80 / AS 3600',
   stateSpec: 'TfNSW',
   checklistItems: [

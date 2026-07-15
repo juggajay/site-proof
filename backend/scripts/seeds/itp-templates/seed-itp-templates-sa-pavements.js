@@ -26,7 +26,7 @@ const prisma = new PrismaClient()
 const saUnboundGranularPavementTemplate = {
   name: 'Unbound Granular Pavements (DIT RD-PV-C1/S1)',
   description: 'DIT unbound granular pavement construction including crushed rock base and subbase per RD-PV-C1 (Construction of Unstabilised Granular Pavements) and RD-PV-S1 (Supply of Pavement Materials, formerly Part R15). Covers PM1/20, PM2/20, PM3 material classes.',
-  activityType: 'pavements',
+  activityType: 'pavement_unbound',
   specificationReference: 'RD-PV-C1 / RD-PV-S1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -331,7 +331,7 @@ const saUnboundGranularPavementTemplate = {
 const saCementTreatedTemplate = {
   name: 'Cement Treated Crushed Rock (DIT RD-PV-S2)',
   description: 'DIT plant mixed stabilised pavement using cementitious binders (cement, lime, fly ash, blended cement) per RD-PV-S2 (Plant Mixed Stabilised Pavement). Covers PM1/20 or PM2/20 treated with ≥4% blended cement (GB), retarder requirement, UCS testing.',
-  activityType: 'pavements',
+  activityType: 'pavement_bound',
   specificationReference: 'RD-PV-S2',
   stateSpec: 'DIT',
   checklistItems: [
@@ -623,7 +623,7 @@ const saCementTreatedTemplate = {
 const saStabilisedPavementTemplate = {
   name: 'Stabilised Pavements — In-situ (DIT RD-PV-C3)',
   description: 'DIT in-situ pavement stabilisation using lime, cement, or other binders per RD-PV-C3 (In-situ Pavement Stabilisation, formerly Part R23). Covers trial section (1,000m²), binder spread rate, mixing depth, compaction, and UCS/CBR testing.',
-  activityType: 'pavements',
+  activityType: 'pavement_stabilisation',
   specificationReference: 'RD-PV-C3',
   stateSpec: 'DIT',
   checklistItems: [
@@ -901,7 +901,7 @@ const saStabilisedPavementTemplate = {
 const saConcretePavementTemplate = {
   name: 'Concrete Pavement (DIT RD-PV-D3)',
   description: 'DIT concrete road pavement (rigid pavement) per RD-PV-D3 (Concrete Road Pavements). Covers subbase preparation, formwork/slipform, dowels, placement, texturing, curing (7 days minimum, compound within 15 min), and joint sawing (not within 7 days).',
-  activityType: 'pavements',
+  activityType: 'pavement_concrete',
   specificationReference: 'RD-PV-D3',
   stateSpec: 'DIT',
   checklistItems: [

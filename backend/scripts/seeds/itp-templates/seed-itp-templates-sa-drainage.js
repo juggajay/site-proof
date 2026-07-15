@@ -21,7 +21,7 @@ const prisma = new PrismaClient()
 const saPipeInstallationTemplate = {
   name: 'Drainage — Pipe Installation (DIT RD-DK-C1)',
   description: 'DIT stormwater drainage pipe installation including RCP, PVC, HDPE per RD-DK-C1 (Installation of Stormwater Drainage, formerly Part R04). Covers bedding (Sa-C Type C Sand), laying, jointing, backfill per RD-EW-C2, and testing.',
-  activityType: 'drainage',
+  activityType: 'pipe_drainage',
   specificationReference: 'RD-DK-C1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -375,7 +375,7 @@ const saPipeInstallationTemplate = {
 const saPitsChambersTemplate = {
   name: 'Drainage — Pits & Chambers (DIT RD-DK-C1)',
   description: 'DIT drainage pits, junction pits, inlet/outlet structures per RD-DK-C1. Covers excavation, formwork, concrete, grates/covers, pipe connections, and invert channels.',
-  activityType: 'drainage',
+  activityType: 'drainage_pits',
   specificationReference: 'RD-DK-C1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -656,7 +656,7 @@ const saPitsChambersTemplate = {
 const saCulvertsTemplate = {
   name: 'Drainage — Culverts (DIT RD-DK-C1/S1)',
   description: 'DIT culvert installation including precast box culverts and pipe culverts per RD-DK-C1 and RD-DK-S1 (Supply of Pipes and Culverts). Covers foundation, placement, jointing, waterproofing, and backfill.',
-  activityType: 'drainage',
+  activityType: 'culverts',
   specificationReference: 'RD-DK-C1 / RD-DK-S1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -982,7 +982,7 @@ const saCulvertsTemplate = {
 const saSubsoilDrainageTemplate = {
   name: 'Drainage — Subsoil/Subsurface (DIT RD-DK-C1)',
   description: 'DIT subsoil and subsurface drainage including agricultural drains, filter drains, and UPVC drain connections per RD-DK-C1 and RD-DK-D1 (Road Drainage Design).',
-  activityType: 'drainage',
+  activityType: 'subsoil_drainage',
   specificationReference: 'RD-DK-C1 / RD-DK-D1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -1197,7 +1197,7 @@ const saSubsoilDrainageTemplate = {
 const saKerbChannelTemplate = {
   name: 'Kerb & Channel (DIT RD-DK-C2)',
   description: 'DIT kerb and channel construction including barrier, semi-mountable, and mountable profiles per RD-DK-C2 (Kerbing, formerly Part R05). Covers subgrade preparation, formwork/extrusion, concrete, joints, and curing.',
-  activityType: 'drainage',
+  activityType: 'kerb_channel',
   specificationReference: 'RD-DK-C2',
   stateSpec: 'DIT',
   checklistItems: [

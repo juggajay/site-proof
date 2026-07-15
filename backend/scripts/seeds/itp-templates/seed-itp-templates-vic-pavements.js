@@ -25,7 +25,7 @@ const prisma = new PrismaClient()
 const vicUnboundGranularPavementTemplate = {
   name: 'Unbound Granular Pavements',
   description: 'VicRoads unbound flexible pavement construction per Section 304, with crushed rock material requirements per Section 812. Covers Class 2 (base) and Class 3 (subbase) crushed rock placement, compaction, and acceptance testing.',
-  activityType: 'pavements',
+  activityType: 'pavement_unbound',
   specificationReference: 'Sec 304',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -327,7 +327,7 @@ const vicUnboundGranularPavementTemplate = {
 const vicCTCRTemplate = {
   name: 'CTCR - Cement Treated Crushed Rock',
   description: 'VicRoads cementitious treated pavement subbase construction per Section 306, with CTCR material requirements per Section 815. Covers mix design registration, production, placement, compaction, curing, and UCS strength verification.',
-  activityType: 'pavements',
+  activityType: 'pavement_bound',
   specificationReference: 'Sec 306',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -767,7 +767,7 @@ const vicCTCRTemplate = {
 const vicStabilisedPavementTemplate = {
   name: 'Stabilised Pavements (In-Situ)',
   description: 'VicRoads in-situ stabilisation of pavements with cementitious binders per Section 307. Covers lime pre-treatment where required, cementitious binder application, mixing, compaction within working time, and curing.',
-  activityType: 'pavements',
+  activityType: 'pavement_stabilisation',
   specificationReference: 'Sec 307',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1140,7 +1140,7 @@ const vicStabilisedPavementTemplate = {
 const vicConcretePavementTemplate = {
   name: 'Concrete Pavement',
   description: 'VicRoads concrete pavement construction per Section 503 (Concrete Base and Lean Mix Concrete Subbase), with references to Section 703 (General Concrete Paving) and Section 610 (Structural Concrete). Covers PCP, JRCP, and CRCP pavement types including dowels, reinforcement, joint sawing, curing, and ride quality.',
-  activityType: 'pavements',
+  activityType: 'pavement_concrete',
   specificationReference: 'Sec 503',
   stateSpec: 'VicRoads',
   checklistItems: [

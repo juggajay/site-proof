@@ -25,7 +25,7 @@ const prisma = new PrismaClient()
 const vicEarthworksTemplate = {
   name: 'Earthworks (VicRoads Sec 201/204)',
   description: 'VicRoads Earthworks including site clearing, grubbing, foundation preparation, fill placement, compaction, subgrade treatment, excavation in cut, and post-construction documentation per Section 204 (Earthworks) and Section 201 (Site Clearing). Covers Type A/B/C fill classification, proof rolling, characteristic density ratio assessment per RC 500.05, and subgrade acceptance.',
-  activityType: 'earthworks',
+  activityType: 'earthworks_general',
   specificationReference: 'Sec 201/204',
   stateSpec: 'VicRoads',
   checklistItems: [

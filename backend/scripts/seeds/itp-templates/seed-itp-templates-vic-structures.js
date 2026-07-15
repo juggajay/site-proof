@@ -20,7 +20,7 @@ const prisma = new PrismaClient()
 const vicStructuralConcreteTemplate = {
   name: 'VIC Structural Concrete (Sec 610/614)',
   description: 'VicRoads structural concrete for bridges, culverts, and retaining structures per Section 610 (Structural Concrete) and Section 614 (Formwork). Covers mix design registration, formwork, placement, curing, and strength acceptance for 100-year design life bridges.',
-  activityType: 'structural',
+  activityType: 'structural_concrete',
   specificationReference: 'VicRoads Section 610 (Structural Concrete) v18 (Feb 2020), Section 614 (Formwork)',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -574,7 +574,7 @@ const vicStructuralConcreteTemplate = {
 const vicReinforcementTemplate = {
   name: 'VIC Reinforcement Placement (Sec 611)',
   description: 'VicRoads reinforcement placement for structural concrete elements per Section 611 (Steel Reinforcement). Covers material certification, bar schedule review, fixing inspection, cover verification, and mechanical coupler/welding requirements.',
-  activityType: 'structural',
+  activityType: 'reinforcement',
   specificationReference: 'VicRoads Section 611 (Steel Reinforcement) v8 (Jan 2021)',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -849,7 +849,7 @@ const vicReinforcementTemplate = {
 const vicPilingTemplate = {
   name: 'VIC Piling - Driven, Bored, CFA & Socketed (Sec 605-608)',
   description: 'VicRoads piling for bridge/structure foundations covering driven piles (Sec 605), bored cast-in-place piles (Sec 606), CFA piles (Sec 607), and socketed piles with permanent casing (Sec 608). Per AS 2159 and AS 5100.3.',
-  activityType: 'structural',
+  activityType: 'piling',
   specificationReference: 'VicRoads Section 605/606/607/608, AS 2159',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1379,7 +1379,7 @@ const vicPilingTemplate = {
 const vicSteelworkTemplate = {
   name: 'VIC Structural Steelwork (Sec 630)',
   description: 'VicRoads structural steelwork for bridges and road structures per Section 630 (Fabrication of Steelwork), TB 46 (Surveillance of Structural Steelwork), and TB 48 (Protective Coatings). Covers fabrication, welding, NDE, coatings and erection.',
-  activityType: 'structural',
+  activityType: 'structural_steelwork',
   specificationReference: 'VicRoads Section 630, TB 46, TB 48, AS/NZS 5131',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1612,7 +1612,7 @@ const vicSteelworkTemplate = {
 const vicBearingsTemplate = {
   name: 'VIC Bridge Bearings (Sec 656)',
   description: 'VicRoads bridge bearing installation per Section 656 (Installation of Bridge Bearings and Pads) and BTN 024. Covers bearing procurement, pedestal preparation, installation, grouting, load transfer and documentation.',
-  activityType: 'structural',
+  activityType: 'bridge_bearings',
   specificationReference: 'VicRoads Section 656, BTN 024, AS 5100.4',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1779,7 +1779,7 @@ const vicBearingsTemplate = {
 const vicPrecastTemplate = {
   name: 'VIC Precast Concrete Elements (Sec 620)',
   description: 'VicRoads precast concrete elements per Section 620 (Precast Concrete Units) and TB 47 (Surveillance of Precast Concrete Units). Covers factory QA, production, transport, erection and completion for beams, planks, culverts and other structural units.',
-  activityType: 'structural',
+  activityType: 'precast_elements',
   specificationReference: 'VicRoads Section 620, TB 47/47B, AS 5100.5',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -2003,7 +2003,7 @@ const vicPrecastTemplate = {
 const vicPostTensioningTemplate = {
   name: 'VIC Post-Tensioning (Sec 612)',
   description: 'VicRoads post-tensioning of concrete units per Section 612. Covers PT system approval, material certification, duct installation, tendon placement, stressing, grouting and anchorage protection. High-risk specialist activity.',
-  activityType: 'structural',
+  activityType: 'post_tensioning',
   specificationReference: 'VicRoads Section 612 (Post-Tensioning) v8 (Jan 2021), AS 5100.5, AS/NZS 4672',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -2227,7 +2227,7 @@ const vicPostTensioningTemplate = {
 const vicWaterproofingTemplate = {
   name: 'VIC Bridge Deck Waterproofing (Sec 691)',
   description: 'VicRoads bridge deck waterproofing per Section 691 (Waterproofing of Concrete Bridge Decks). Covers membrane types (I, II, III), surface preparation, application, testing, protection course and completion.',
-  activityType: 'structural',
+  activityType: 'bridge_deck_waterproofing',
   specificationReference: 'VicRoads Section 691 (Waterproofing of Concrete Bridge Decks)',
   stateSpec: 'VicRoads',
   checklistItems: [
