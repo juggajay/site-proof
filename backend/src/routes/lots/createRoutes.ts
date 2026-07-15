@@ -30,6 +30,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { createLotSchema, bulkCreateLotsSchema, cloneLotSchema } from './validation.js';
 import { requireProjectRole } from './access.js';
+import { planBulkItpTemplates } from './bulkItpPlan.js';
 import { parseLotRouteParam } from './requestParsing.js';
 import {
   requireSubcontractorInProject,
@@ -309,19 +310,22 @@ lotCreateRouter.post(
       { requireWritable: true },
     );
 
-    // One frozen template snapshot shared by every generated instance — same
-    // snapshot semantics as single create, built once instead of per lot.
-    let templateSnapshotJson: string | null = null;
-    if (itpTemplateId) {
-      await requireItpTemplateForProject(itpTemplateId, projectId);
+    // Resolve which template each lot receives (its own, else the batch
+    // default) and snapshot each distinct template once — the same frozen
+    // snapshot semantics as single create. Single-template batches map every
+    // lot to the batch default, unchanged from before per-lot templates.
+    const itpPlan = planBulkItpTemplates(lotsData, itpTemplateId);
+    const snapshotByTemplateId = new Map<string, string>();
+    for (const templateId of itpPlan.distinctTemplateIds) {
+      await requireItpTemplateForProject(templateId, projectId);
       const template = await prisma.iTPTemplate.findUnique({
-        where: { id: itpTemplateId },
+        where: { id: templateId },
         include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
       });
       if (!template) {
         throw AppError.notFound('ITP template');
       }
-      templateSnapshotJson = JSON.stringify(buildTemplateSnapshot(template));
+      snapshotByTemplateId.set(templateId, JSON.stringify(buildTemplateSnapshot(template)));
     }
 
     const geometryPlan = geometry ? await planBulkLotGeometry(projectId, lotsData, geometry) : [];
@@ -342,7 +346,7 @@ lotCreateRouter.post(
             chainageStart: lot.chainageStart ?? null,
             chainageEnd: lot.chainageEnd ?? null,
             layer: lot.layer || null,
-            itpTemplateId: itpTemplateId || null,
+            itpTemplateId: itpPlan.templateIdByLotNumber.get(lot.lotNumber) ?? null,
           })),
           select: {
             id: true,
@@ -356,15 +360,20 @@ lotCreateRouter.post(
           },
         });
 
-        if (templateSnapshotJson && itpTemplateId) {
-          await tx.iTPInstance.createMany({
-            data: created.map((lot) => ({
+        const itpInstanceData = created.flatMap((lot) => {
+          const templateId = itpPlan.templateIdByLotNumber.get(lot.lotNumber);
+          if (!templateId) return [];
+          return [
+            {
               lotId: lot.id,
-              templateId: itpTemplateId,
-              templateSnapshot: templateSnapshotJson,
+              templateId,
+              templateSnapshot: snapshotByTemplateId.get(templateId)!,
               status: 'not_started',
-            })),
-          });
+            },
+          ];
+        });
+        if (itpInstanceData.length > 0) {
+          await tx.iTPInstance.createMany({ data: itpInstanceData });
         }
 
         if (geometryPlan.length > 0) {
@@ -408,7 +417,7 @@ lotCreateRouter.post(
             activityType: lot.activityType,
             status: lot.status,
             bulkCreate: true,
-            itpTemplateId: itpTemplateId || null,
+            itpTemplateId: itpPlan.templateIdByLotNumber.get(lot.lotNumber) ?? null,
             generatedGeometry: geometryPlan.length > 0,
           },
           req,
@@ -434,7 +443,7 @@ lotCreateRouter.post(
 
     res.status(201).json({
       ...buildLotsCreatedResponse(createdLots),
-      itpInstancesCreated: templateSnapshotJson ? createdLots.length : 0,
+      itpInstancesCreated: [...itpPlan.templateIdByLotNumber.values()].filter(Boolean).length,
       geometriesCreated: geometryPlan.length,
     });
   }),

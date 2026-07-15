@@ -6,23 +6,17 @@ import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import { useProjectControlLines } from '@/pages/lots/map/lotMapData';
 import {
-  ACTIVITY_TYPES,
   LAYERS,
   buildBulkLotPreview,
   controlLineChainageExtent,
   parseChainageInput,
   validateBulkLotRange,
   validateRangeAgainstControlLine,
+  type BulkActivity,
   type LotPreview,
   type WizardStep,
 } from './bulkCreateLots';
-
-interface ItpTemplateOption {
-  id: string;
-  name: string;
-  activityType?: string | null;
-  isActive?: boolean;
-}
+import { BulkActivityRows, type ItpTemplateOption } from './BulkActivityRows';
 
 interface BulkCreateLotsWizardProps {
   projectId: string;
@@ -42,12 +36,15 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
 
   // Step 2: Lot parameters
   const [lotPrefix, setLotPrefix] = useState('LOT');
-  const [activityType, setActivityType] = useState('Earthworks');
+  // One row per activity, each with its own ITP template (empty = none). Thin
+  // lots: N activities × M intervals = N×M lots. Defaults to a single row so
+  // the simple case looks unchanged.
+  const [activities, setActivities] = useState<BulkActivity[]>([
+    { activityType: 'Earthworks', itpTemplateId: '' },
+  ]);
   const [layer, setLayer] = useState('');
   const [descriptionTemplate, setDescriptionTemplate] = useState('{prefix}-{start}-{end}');
-  // Generation extras: one ITP template applied to every lot, and optional map
-  // geometry generated from a control line (empty string = none, for both).
-  const [itpTemplateId, setItpTemplateId] = useState('');
+  // Optional map geometry generated from a control line (empty string = none).
   const [controlLineId, setControlLineId] = useState('');
   const [offsetLeft, setOffsetLeft] = useState('5');
   const [offsetRight, setOffsetRight] = useState('5');
@@ -72,7 +69,10 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
   }, [projectId]);
 
   const selectedControlLine = controlLines.find((line) => line.id === controlLineId) ?? null;
-  const selectedTemplate = itpTemplates.find((t) => t.id === itpTemplateId) ?? null;
+  const activitySummaries = activities.map((row) => ({
+    activityType: row.activityType,
+    templateName: itpTemplates.find((t) => t.id === row.itpTemplateId)?.name ?? null,
+  }));
 
   // Generated lots preview
   const [lotsPreview, setLotsPreview] = useState<LotPreview[]>([]);
@@ -120,7 +120,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
       interval,
       lotPrefix,
       descriptionTemplate,
-      activityType,
+      activities,
       layer,
     });
     if (error) {
@@ -146,7 +146,6 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
         method: 'POST',
         body: JSON.stringify({
           projectId,
-          ...(itpTemplateId ? { itpTemplateId } : {}),
           ...(controlLineId
             ? {
                 geometry: {
@@ -164,6 +163,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
             activityType: lot.activityType,
             layer: lot.layer || null,
             lotType: 'chainage',
+            ...(lot.itpTemplateId ? { itpTemplateId: lot.itpTemplateId } : {}),
           })),
         }),
       });
@@ -197,8 +197,17 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
     parsedChainageStart,
     parsedChainageEnd,
     parsedLotInterval,
+    activities.length,
   );
   const approximateLotCount = chainageRangeValidation.lotCount;
+  const intervalCount =
+    parsedChainageStart !== null &&
+    parsedChainageEnd !== null &&
+    parsedLotInterval !== null &&
+    parsedLotInterval > 0 &&
+    parsedChainageEnd > parsedChainageStart
+      ? Math.ceil((parsedChainageEnd - parsedChainageStart) / parsedLotInterval)
+      : 0;
   const canProceedFromChainage =
     parsedChainageStart !== null &&
     parsedChainageEnd !== null &&
@@ -220,7 +229,11 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
       parsedOffsets.left + parsedOffsets.right > 0 &&
       parsedOffsets.left <= 1000 &&
       parsedOffsets.right <= 1000);
-  const canProceedFromParameters = lotPrefix.trim() !== '' && offsetsValid;
+  const canProceedFromParameters =
+    lotPrefix.trim() !== '' &&
+    offsetsValid &&
+    activities.length >= 1 &&
+    chainageRangeValidation.error === null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -385,26 +398,6 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                 </div>
                 <div>
                   <label
-                    htmlFor="bulk-activity-type"
-                    className="block text-sm font-medium text-foreground mb-1"
-                  >
-                    Activity Type
-                  </label>
-                  <select
-                    id="bulk-activity-type"
-                    value={activityType}
-                    onChange={(e) => setActivityType(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
-                  >
-                    {ACTIVITY_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label
                     htmlFor="bulk-layer"
                     className="block text-sm font-medium text-foreground mb-1"
                   >
@@ -443,32 +436,19 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                     Variables: {'{prefix}'}, {'{start}'}, {'{end}'}, {'{num}'}
                   </p>
                 </div>
-                <div>
-                  <label
-                    htmlFor="bulk-itp-template"
-                    className="block text-sm font-medium text-foreground mb-1"
-                  >
-                    ITP Template (optional)
-                  </label>
-                  <select
-                    id="bulk-itp-template"
-                    value={itpTemplateId}
-                    onChange={(e) => setItpTemplateId(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
-                  >
-                    <option value="">No ITP template</option>
-                    {itpTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                        {template.activityType ? ` (${template.activityType})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Assigned to every lot, ready to inspect.
-                  </p>
-                </div>
               </div>
+
+              <BulkActivityRows
+                activities={activities}
+                onChange={setActivities}
+                itpTemplates={itpTemplates}
+                intervalCount={intervalCount}
+              />
+              {chainageRangeValidation.error && (
+                <p className="text-sm text-destructive" role="alert">
+                  {chainageRangeValidation.error}
+                </p>
+              )}
 
               <div className="border-t border-border pt-4 space-y-3">
                 <div>
@@ -596,11 +576,21 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                   </div>
                 )}
               </div>
-              <p className="text-sm font-medium text-foreground">
-                Total: {lotsPreview.length} lots will be created
-                {selectedTemplate ? `, each with the "${selectedTemplate.name}" ITP` : ''}
-                {selectedControlLine ? `, drawn on the map along ${selectedControlLine.name}` : ''}
-              </p>
+              <div className="text-sm text-foreground">
+                <p className="font-medium">
+                  Total: {lotsPreview.length} lots will be created
+                  {selectedControlLine
+                    ? `, drawn on the map along ${selectedControlLine.name}`
+                    : ''}
+                </p>
+                <ul className="mt-1 text-muted-foreground list-disc list-inside">
+                  {activitySummaries.map((summary, i) => (
+                    <li key={i}>
+                      {summary.activityType}: {summary.templateName ?? 'No ITP template'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
 
@@ -618,9 +608,15 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                     Chainage range: {chainageStart}m - {chainageEnd}m
                   </li>
                   <li>Lot interval: {lotInterval}m</li>
-                  <li>Activity type: {activityType}</li>
+                  <li>
+                    Activities:{' '}
+                    {activitySummaries
+                      .map(
+                        (s) => `${s.activityType}${s.templateName ? ` (${s.templateName})` : ''}`,
+                      )
+                      .join(', ')}
+                  </li>
                   {layer && <li>Layer: {layer}</li>}
-                  {selectedTemplate && <li>ITP template: {selectedTemplate.name} (every lot)</li>}
                   {selectedControlLine && (
                     <li>
                       Map geometry: along {selectedControlLine.name}, {offsetLeft}m left /{' '}

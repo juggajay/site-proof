@@ -7,6 +7,17 @@ export interface LotPreview {
   chainageEnd: number;
   activityType: string;
   layer: string;
+  itpTemplateId?: string;
+}
+
+/**
+ * AU civil lots are thin: one lot = one activity/layer = one ITP. A run spans
+ * one or more activities, each with its own optional ITP template, generated as
+ * the cross product of activities × chainage intervals.
+ */
+export interface BulkActivity {
+  activityType: string;
+  itpTemplateId?: string;
 }
 
 export type WizardStep = 'chainage' | 'parameters' | 'preview' | 'confirm';
@@ -35,7 +46,7 @@ interface BuildBulkLotPreviewInput {
   interval: number;
   lotPrefix: string;
   descriptionTemplate: string;
-  activityType: string;
+  activities: BulkActivity[];
   layer: string;
 }
 
@@ -92,15 +103,19 @@ export function validateBulkLotRange(
   start: number | null,
   end: number | null,
   interval: number | null,
+  activityCount = 1,
 ): BulkLotRangeValidation {
   if (start === null || end === null || interval === null || interval <= 0 || end <= start) {
     return { lotCount: null, error: null };
   }
 
-  const lotCount = Math.ceil((end - start) / interval);
-  if (!Number.isFinite(lotCount) || lotCount <= 0) {
+  const intervalCount = Math.ceil((end - start) / interval);
+  if (!Number.isFinite(intervalCount) || intervalCount <= 0) {
     return { lotCount: null, error: 'Invalid chainage values' };
   }
+
+  // One lot per activity per interval — the cap is on the total generated.
+  const lotCount = intervalCount * Math.max(activityCount, 1);
 
   if (roundChainage(start + interval) <= roundChainage(start)) {
     return { lotCount, error: INTERVAL_TOO_SMALL_MESSAGE };
@@ -122,41 +137,54 @@ export function buildBulkLotPreview({
   interval,
   lotPrefix,
   descriptionTemplate,
-  activityType,
+  activities,
   layer,
 }: BuildBulkLotPreviewInput): BuildBulkLotPreviewResult {
-  const rangeValidation = validateBulkLotRange(start, end, interval);
+  const activityList = activities.length > 0 ? activities : [{ activityType: 'Earthworks' }];
+  const rangeValidation = validateBulkLotRange(start, end, interval, activityList.length);
   if (rangeValidation.error) {
     return { lots: [], error: rangeValidation.error };
   }
-  if (rangeValidation.lotCount === null) {
+  if (rangeValidation.lotCount === null || start === null || end === null || interval === null) {
     return { lots: [], error: 'Invalid chainage values' };
   }
 
+  const intervalCount = Math.ceil((end - start) / interval);
+  // Only multi-activity runs disambiguate descriptions with an activity suffix,
+  // so a single-activity run reproduces the pre-activity output byte for byte.
+  const multiActivity = activityList.length > 1;
+
   const lots: LotPreview[] = [];
-  for (let index = 0; index < rangeValidation.lotCount; index++) {
-    const lotNum = index + 1;
+  let seq = 0;
+  for (let index = 0; index < intervalCount; index++) {
     const ch = roundChainage(start + index * interval);
-    const lotEnd = roundChainage(Math.min(start + lotNum * interval, end));
+    const lotEnd = roundChainage(Math.min(start + (index + 1) * interval, end));
     if (lotEnd <= ch) {
       return { lots: [], error: INTERVAL_TOO_SMALL_MESSAGE };
     }
 
-    const lotNumber = `${lotPrefix}-${String(lotNum).padStart(3, '0')}`;
-    const description = descriptionTemplate
-      .replace('{prefix}', lotPrefix)
-      .replace('{start}', String(ch))
-      .replace('{end}', String(lotEnd))
-      .replace('{num}', String(lotNum));
+    for (const activity of activityList) {
+      seq += 1;
+      const lotNumber = `${lotPrefix}-${String(seq).padStart(3, '0')}`;
+      let description = descriptionTemplate
+        .replace('{prefix}', lotPrefix)
+        .replace('{start}', String(ch))
+        .replace('{end}', String(lotEnd))
+        .replace('{num}', String(seq));
+      if (multiActivity) {
+        description += ` — ${activity.activityType}`;
+      }
 
-    lots.push({
-      lotNumber,
-      description,
-      chainageStart: ch,
-      chainageEnd: lotEnd,
-      activityType,
-      layer,
-    });
+      lots.push({
+        lotNumber,
+        description,
+        chainageStart: ch,
+        chainageEnd: lotEnd,
+        activityType: activity.activityType,
+        layer,
+        ...(activity.itpTemplateId ? { itpTemplateId: activity.itpTemplateId } : {}),
+      });
+    }
   }
 
   return { lots, error: null };
