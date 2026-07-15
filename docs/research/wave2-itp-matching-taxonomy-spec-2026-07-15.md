@@ -147,6 +147,25 @@ calibrated by failure cost: wrong ITP = wrong hold points/test frequencies
 signed off → NCR/uncovering/rework (rework ≈9% of project cost in cited
 industry data).
 
+**Custom templates (Jay's question, 2026-07-15).** User-created templates
+are first-class in matching, with these rules:
+- The hard filter already includes project-scoped templates, and
+  **project-scoped beats global on the same activity** — a contractor's
+  job-approved ITP always outranks the library default.
+- Post-W2-PR1, the template creation/edit form uses the SAME canonical
+  family→slug picker as the lot forms, so new custom templates are matchable
+  from birth.
+- Existing custom templates with legacy/free-text activity values: fold
+  through the §1 normalization map where clean; anything unmappable becomes
+  **"unclassified"** with a one-time classification prompt (same mechanism as
+  the Concrete-lot reclassification). Unclassified templates are never
+  invisible — they surface in the Tier-B shortlist for their own project
+  (name-similarity ranked) but can never Tier-A auto-fill.
+- Genuinely novel activities (no slug fits): manual attach always remains;
+  matching reports the gap honestly rather than forcing a fit. If the same
+  custom activity keeps appearing, that's a signal to extend the taxonomy —
+  a deliberate, evidenced change, not an ad-hoc string.
+
 **Insertion point (already built):** #1475's `BulkActivity { activityType,
 itpTemplateId? }` — Wave 2 populates `itpTemplateId` per activity row. No
 schema change.
