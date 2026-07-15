@@ -5,6 +5,7 @@ import { AppError, ErrorCodes } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 import { logWarn } from '../../lib/serverLogger.js';
+import { AI_EXTRACTION_TIMEOUT_MS } from '../testResults/certificateExtraction.js';
 import {
   buildDocumentClassificationResponse,
   buildDocumentResponse,
@@ -220,34 +221,36 @@ export function createDocumentClassificationRouter({
 
       try {
         // Call Anthropic API for multi-label image classification
-        const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY!,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model:
-              process.env.ANTHROPIC_DOCUMENT_CLASS_MODEL ||
-              process.env.ANTHROPIC_MODEL ||
-              'claude-3-5-haiku-20241022',
-            max_tokens: 200,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'image',
-                    source: {
-                      type: 'base64',
-                      media_type: mediaType,
-                      data: base64Image,
+        const response = await fetchWithTimeout(
+          'https://api.anthropic.com/v1/messages',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': process.env.ANTHROPIC_API_KEY!,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+              model:
+                process.env.ANTHROPIC_DOCUMENT_CLASS_MODEL ||
+                process.env.ANTHROPIC_MODEL ||
+                'claude-3-5-haiku-20241022',
+              max_tokens: 200,
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'image',
+                      source: {
+                        type: 'base64',
+                        media_type: mediaType,
+                        data: base64Image,
+                      },
                     },
-                  },
-                  {
-                    type: 'text',
-                    text: `Classify this civil construction photo. A photo may show multiple things happening.
+                    {
+                      type: 'text',
+                      text: `Classify this civil construction photo. A photo may show multiple things happening.
 
 Available categories: ${PHOTO_CLASSIFICATION_CATEGORIES.join(', ')}
 
@@ -260,12 +263,14 @@ Safety|75
 Plant/Equipment|60
 
 Respond with ONLY the category lines, nothing else.`,
-                  },
-                ],
-              },
-            ],
-          }),
-        });
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+          AI_EXTRACTION_TIMEOUT_MS,
+        );
 
         if (!response.ok) {
           throw new Error(`Anthropic API request failed with status ${response.status}`);

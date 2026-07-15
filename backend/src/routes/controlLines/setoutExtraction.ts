@@ -6,6 +6,7 @@ import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 import { logWarn } from '../../lib/serverLogger.js';
 import { isSupportedEpsg, listSupportedEpsg } from '../../lib/spatial/crs.js';
 import {
+  AI_EXTRACTION_TIMEOUT_MS,
   extractJsonObject,
   getCertificateContentBlock,
   isAnthropicConfigured,
@@ -150,27 +151,33 @@ export async function extractSetoutRawCandidate(file: Express.Multer.File): Prom
 
   let response: Response;
   try {
-    response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
+    response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY!,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+          // A dense setout sheet can run hundreds of rows (~18 output tokens
+          // each); 4096 truncated the JSON mid-array on real sheets.
+          max_tokens: 16384,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                getCertificateContentBlock(file),
+                { type: 'text', text: buildSetoutPrompt() },
+              ],
+            },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
-        max_tokens: 4096,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              getCertificateContentBlock(file),
-              { type: 'text', text: buildSetoutPrompt() },
-            ],
-          },
-        ],
-      }),
-    });
+      AI_EXTRACTION_TIMEOUT_MS,
+    );
   } catch (error) {
     logWarn('AI setout extraction request failed:', error);
     throw new AppError(
