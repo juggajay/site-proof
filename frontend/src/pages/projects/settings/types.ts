@@ -20,6 +20,7 @@ export interface Project {
   workingHoursStart?: string | null;
   workingHoursEnd?: string | null;
   workingDays?: string[] | null;
+  state?: string | null;
   specificationSet?: string | null;
   settings?: string | Record<string, unknown> | null;
   currentUserRole?: string | null;

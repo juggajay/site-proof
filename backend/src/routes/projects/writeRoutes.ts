@@ -78,6 +78,19 @@ export function getDefaultProjectSpecificationSet(state: string | null | undefin
   return PROJECT_SPECIFICATION_SET_BY_STATE[normalizedState] ?? AUSTROADS_SPECIFICATION_SET;
 }
 
+/**
+ * Resolve the specification set for a new project: an explicitly-chosen set
+ * always wins; otherwise derive it from the state. When state is also omitted
+ * this yields the neutral 'Austroads' set rather than silently defaulting to
+ * NSW/TfNSW (which handed non-NSW users the wrong ITP templates).
+ */
+export function resolveProjectSpecificationSet(
+  specificationSet: string | null | undefined,
+  state: string | null | undefined,
+): string {
+  return specificationSet || getDefaultProjectSpecificationSet(state);
+}
+
 function nonZeroRetainedProjectCounts(
   counts: RetainedProjectCounts,
 ): Partial<RetainedProjectCounts> {
@@ -262,9 +275,11 @@ export function createProjectWriteRouter({
         'Specification set',
         projectSpecificationSetMaxLength,
       );
-      const effectiveState = state || 'NSW';
-      const effectiveSpecificationSet =
-        specificationSet || getDefaultProjectSpecificationSet(effectiveState);
+      // No silent NSW default: an omitted state stores as '' (schema requires a
+      // non-null string) and derives the neutral 'Austroads' spec set, so
+      // non-NSW users are never handed NSW ITP templates by accident.
+      const effectiveState = state ?? '';
+      const effectiveSpecificationSet = resolveProjectSpecificationSet(specificationSet, state);
 
       if (await hasSubcontractorProjectIdentity(user)) {
         throw AppError.forbidden('Subcontractor portal users cannot create company projects');

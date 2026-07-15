@@ -192,7 +192,7 @@ describe('ProjectsPage company-onboarding gating', () => {
     renderWithProviders(<ProjectsPage />);
 
     await user.click(await screen.findByRole('button', { name: 'New Project' }));
-    const stateSelect = screen.getByLabelText('State') as HTMLSelectElement;
+    const stateSelect = screen.getByLabelText('State *') as HTMLSelectElement;
     const specSelect = screen.getByLabelText('Specification Set') as HTMLSelectElement;
 
     await user.selectOptions(stateSelect, 'QLD');
@@ -221,7 +221,7 @@ describe('ProjectsPage company-onboarding gating', () => {
     renderWithProviders(<ProjectsPage />);
 
     await user.click(await screen.findByRole('button', { name: 'New Project' }));
-    const stateSelect = screen.getByLabelText('State') as HTMLSelectElement;
+    const stateSelect = screen.getByLabelText('State *') as HTMLSelectElement;
     const specSelect = screen.getByLabelText('Specification Set') as HTMLSelectElement;
 
     await user.selectOptions(stateSelect, 'NSW');

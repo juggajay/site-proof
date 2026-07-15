@@ -60,6 +60,11 @@ interface ControlLineFormModalProps {
   saving: boolean;
   onSubmit: (input: ControlLineInput) => void;
   onClose: () => void;
+  /**
+   * CRS suggested for a NEW line — the existing line's CRS or a state-derived
+   * zone. An edited line always keeps its own `initial.coordinateSystem`.
+   */
+  defaultCoordinateSystem?: string;
 }
 
 export function ControlLineFormModal({
@@ -67,10 +72,11 @@ export function ControlLineFormModal({
   saving,
   onSubmit,
   onClose,
+  defaultCoordinateSystem,
 }: ControlLineFormModalProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [coordinateSystem, setCoordinateSystem] = useState(
-    initial?.coordinateSystem ?? DEFAULT_COORDINATE_SYSTEM,
+    initial?.coordinateSystem ?? defaultCoordinateSystem ?? DEFAULT_COORDINATE_SYSTEM,
   );
   const [rows, setRows] = useState<PointRow[]>(() => pointsToRows(initial?.points ?? []));
   const [pasteText, setPasteText] = useState('');
