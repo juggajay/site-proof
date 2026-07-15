@@ -4,7 +4,6 @@ import { FileUp, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { NativeSelect } from '@/components/ui/native-select';
 import {
   Modal,
   ModalHeader,
@@ -19,7 +18,13 @@ import {
   COORDINATE_SYSTEM_OPTIONS,
   DEFAULT_COORDINATE_SYSTEM,
 } from '@/lib/spatial/coordinateSystems';
-import type { ControlPoint } from './controlPointsParsing';
+import {
+  AlignmentReviewList,
+  CrsSelect,
+  PointsTable,
+  WarningList,
+  type AlignmentReviewRow,
+} from './AlignmentReviewList';
 import { useCreateControlLine, useExtractSetoutPoints } from './controlLinesData';
 
 interface SetoutImportModalProps {
@@ -39,83 +44,10 @@ function fileStem(name: string): string {
   return name.replace(/\.[^./\\]+$/, '').trim();
 }
 
-// One editable alignment in the review UI. `status` tracks per-alignment saves so
-// a partial failure keeps the failed rows for retry while the saved ones drop out.
-interface AlignmentRow {
-  name: string;
-  coordinateSystem: string;
-  points: ControlPoint[];
-  warnings: string[];
-  checked: boolean;
-  status: 'idle' | 'saved' | 'error';
-  errorMessage?: string;
-}
-
-function PointsTable({ points }: { points: ControlPoint[] }) {
-  return (
-    <div className="max-h-64 overflow-auto rounded-md border">
-      <table className="w-full min-w-[420px] text-sm">
-        <thead className="sticky top-0 border-b bg-muted/50">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">Chainage</th>
-            <th className="px-3 py-2 text-left font-medium">Easting</th>
-            <th className="px-3 py-2 text-left font-medium">Northing</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {points.map((point, index) => (
-            <tr key={`${point.chainage}-${index}`}>
-              <td className="px-3 py-1.5">{point.chainage.toLocaleString()}</td>
-              <td className="px-3 py-1.5 text-muted-foreground">
-                {point.easting.toLocaleString()}
-              </td>
-              <td className="px-3 py-1.5 text-muted-foreground">
-                {point.northing.toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function CrsSelect({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <NativeSelect id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-      {COORDINATE_SYSTEM_OPTIONS.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </NativeSelect>
-  );
-}
-
-function WarningList({ warnings, testId }: { warnings: string[]; testId: string }) {
-  if (warnings.length === 0) return null;
-  return (
-    <div
-      role="status"
-      className="rounded-md bg-warning/10 p-3 text-xs text-warning"
-      data-testid={testId}
-    >
-      <ul className="list-disc space-y-1 pl-4">
-        {warnings.map((w) => (
-          <li key={w}>{w}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// One editable alignment in the review UI. Reuses the shared row shape; here
+// `status` always tracks per-alignment saves (a partial failure keeps the failed
+// rows for retry while the saved ones drop out).
+type AlignmentRow = AlignmentReviewRow & { status: 'idle' | 'saved' | 'error' };
 
 export function SetoutImportModal({
   projectId,
@@ -157,6 +89,7 @@ export function SetoutImportModal({
               : (defaultCoordinateSystem ?? DEFAULT_COORDINATE_SYSTEM),
           points: alignment.points,
           warnings: alignment.warnings,
+          page: alignment.page ?? null,
           checked: true,
           status: 'idle',
         })),
@@ -327,7 +260,8 @@ export function SetoutImportModal({
               <div>
                 <p className="mb-2 text-sm text-muted-foreground">
                   {rows[0].points.length} point{rows[0].points.length === 1 ? '' : 's'} read from
-                  the sheet. Check these against the drawing before saving.
+                  the sheet{rows[0].page ? ` (p.${rows[0].page})` : ''}. Check these against the
+                  drawing before saving.
                 </p>
                 <PointsTable points={rows[0].points} />
               </div>
@@ -335,82 +269,12 @@ export function SetoutImportModal({
           )}
 
           {rows && rows.length > 1 && (
-            <>
-              <p className="text-sm text-muted-foreground">
-                {rows.length} alignments found on this sheet. Each becomes its own control line —
-                untick any you do not want, and check the points against the drawing before saving.
-              </p>
-
-              <WarningList warnings={documentWarnings} testId="setout-document-warnings" />
-
-              <div className="space-y-3">
-                {rows.map((row, index) => (
-                  <div
-                    key={index}
-                    className="rounded-lg border p-4"
-                    data-testid={`setout-alignment-${index}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        className="mt-2.5 h-4 w-4"
-                        checked={row.checked}
-                        disabled={row.status === 'saved' || busy}
-                        onChange={(e) => updateRow(index, { checked: e.target.checked })}
-                        aria-label={`Include ${row.name || `alignment ${index + 1}`}`}
-                      />
-                      <div className="flex-1 space-y-3">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div>
-                            <Label htmlFor={`setout-name-${index}`} className="mb-1">
-                              Name *
-                            </Label>
-                            <Input
-                              id={`setout-name-${index}`}
-                              type="text"
-                              value={row.name}
-                              disabled={row.status === 'saved'}
-                              onChange={(e) => updateRow(index, { name: e.target.value })}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`setout-crs-${index}`} className="mb-1">
-                              Coordinate system *
-                            </Label>
-                            <CrsSelect
-                              id={`setout-crs-${index}`}
-                              value={row.coordinateSystem}
-                              onChange={(value) => updateRow(index, { coordinateSystem: value })}
-                            />
-                          </div>
-                        </div>
-
-                        <WarningList warnings={row.warnings} testId={`setout-warnings-${index}`} />
-
-                        {row.status === 'saved' && (
-                          <p className="text-xs font-medium text-emerald-600">Saved.</p>
-                        )}
-                        {row.status === 'error' && (
-                          <p className="text-xs font-medium text-destructive">
-                            {row.errorMessage ?? 'Failed to save — try again.'}
-                          </p>
-                        )}
-
-                        <details>
-                          <summary className="cursor-pointer text-sm text-muted-foreground">
-                            {row.points.length} point{row.points.length === 1 ? '' : 's'} — show
-                            table
-                          </summary>
-                          <div className="mt-2">
-                            <PointsTable points={row.points} />
-                          </div>
-                        </details>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
+            <AlignmentReviewList
+              rows={rows}
+              documentWarnings={documentWarnings}
+              onUpdateRow={updateRow}
+              busy={busy}
+            />
           )}
         </div>
       </ModalBody>

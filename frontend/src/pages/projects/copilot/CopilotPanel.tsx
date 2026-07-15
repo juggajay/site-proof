@@ -13,8 +13,8 @@ export interface StageCard extends StageMeta {
 interface CopilotPanelProps {
   cards: StageCard[];
   aiConfigured: boolean;
-  /** Open the project-facts read/review flow. */
-  onProjectFactsAction: () => void;
+  /** Open the read/review flow for an active stage (project_facts, control_line). */
+  onStageAction: (stage: StageCard['stage']) => void;
   onRollback: (proposalId: string) => void;
   rollbackBusy: boolean;
 }
@@ -35,7 +35,7 @@ function StatusChip({ status }: { status: StageStatus }) {
   );
 }
 
-function ProjectFactsActions({
+function StageActions({
   card,
   aiConfigured,
   onAction,
@@ -76,7 +76,7 @@ function ProjectFactsActions({
           ? 'Review'
           : card.status === 'done'
             ? 'Read again'
-            : 'Read from drawing'}
+            : card.readLabel}
       </Button>
     </div>
   );
@@ -90,7 +90,7 @@ function ProjectFactsActions({
 export function CopilotPanel({
   cards,
   aiConfigured,
-  onProjectFactsAction,
+  onStageAction,
   onRollback,
   rollbackBusy,
 }: CopilotPanelProps) {
@@ -116,11 +116,11 @@ export function CopilotPanel({
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">{card.description}</span>
             </span>
-            {card.stage === 'project_facts' ? (
-              <ProjectFactsActions
+            {card.active ? (
+              <StageActions
                 card={card}
                 aiConfigured={aiConfigured}
-                onAction={onProjectFactsAction}
+                onAction={() => onStageAction(card.stage)}
                 onRollback={onRollback}
                 rollbackBusy={rollbackBusy}
               />

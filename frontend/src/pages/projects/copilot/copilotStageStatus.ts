@@ -6,37 +6,43 @@ export interface StageMeta {
   stage: CopilotStage;
   title: string;
   description: string;
-  /** Stage 1 ships its extractor in this PR; 2–4 render status but no extract CTA yet. */
+  /** Active stages ship an extractor + review flow; inactive ones show "Coming soon". */
   active: boolean;
+  /** The "not started" read CTA label (only meaningful for active stages). */
+  readLabel: string;
 }
 
-// The four Wave-1 stages, in setup order. Only project_facts is wired to an
-// extractor in this PR — the rest show "Coming soon" for their read CTA but
-// still surface any proposal/data status (forward-compatible).
+// The four Wave-1 stages, in setup order. project_facts and control_line are
+// wired to extractors; plan_sheets/lot_breakdown show "Coming soon" for their
+// read CTA but still surface any proposal/data status (forward-compatible).
 export const STAGE_META: StageMeta[] = [
   {
     stage: 'project_facts',
     title: 'Project facts',
     description: 'Read the project name, number, client, and state from a drawing title block.',
     active: true,
+    readLabel: 'Read from drawing',
   },
   {
     stage: 'control_line',
     title: 'Control line',
     description: 'Import the survey control line from a setout sheet.',
-    active: false,
+    active: true,
+    readLabel: 'Read from setout sheet',
   },
   {
     stage: 'plan_sheets',
     title: 'Plan sheets',
     description: 'Register plan sheets to the project map.',
     active: false,
+    readLabel: '',
   },
   {
     stage: 'lot_breakdown',
     title: 'Lot breakdown',
     description: 'Generate lots along the alignment.',
     active: false,
+    readLabel: '',
   },
 ];
 

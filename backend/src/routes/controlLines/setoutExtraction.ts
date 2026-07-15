@@ -47,6 +47,8 @@ export interface SetoutAlignment {
   coordinateSystem: string | null;
   points: SetoutPoint[];
   warnings: string[];
+  /** 1-based PDF page this alignment's table was read from, if determinable. */
+  page: number | null;
 }
 
 export interface SetoutCandidate {
@@ -61,6 +63,17 @@ const rawPointSchema = z.object({
   easting: z.coerce.number().finite(),
   northing: z.coerce.number().finite(),
 });
+
+// Defensive parse of the model's page number: a positive integer, whether it
+// came back as a number or a numeric string. Anything else → null.
+function normalizePage(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) return raw;
+  if (typeof raw === 'string') {
+    const n = Number.parseInt(raw, 10);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return null;
+}
 
 function collectStringWarnings(raw: unknown, into: string[]): void {
   if (!Array.isArray(raw)) return;
@@ -110,7 +123,7 @@ export function cleanSetoutCandidate(raw: unknown): SetoutCandidate {
 
   const rawAlignments: unknown[] = Array.isArray(root.alignments)
     ? root.alignments
-    : [{ name: null, coordinateSystem: null, points: root.points }];
+    : [{ name: null, coordinateSystem: null, points: root.points, page: root.page }];
 
   const alignments: SetoutAlignment[] = [];
   let totalPoints = 0;
@@ -126,6 +139,7 @@ export function cleanSetoutCandidate(raw: unknown): SetoutCandidate {
     const name = typeof a.name === 'string' && a.name.trim() ? a.name.trim() : null;
     const label = name ?? `Alignment ${index + 1}`;
     const coordinateSystem = normalizeEpsgGuess(a.coordinateSystem, warnings) ?? documentCrs;
+    const page = normalizePage(a.page);
 
     const rawPoints = Array.isArray(a.points) ? a.points : [];
     const points: SetoutPoint[] = [];
@@ -166,7 +180,7 @@ export function cleanSetoutCandidate(raw: unknown): SetoutCandidate {
     }
 
     totalPoints += points.length;
-    alignments.push({ name, coordinateSystem, points, warnings });
+    alignments.push({ name, coordinateSystem, points, warnings, page });
   });
 
   if (alignments.length === 0) {
@@ -195,6 +209,7 @@ Extract into JSON. Return ONLY valid JSON with these exact keys:
     - name: the printed alignment / street / control-line name if one is visible (e.g. "MC01", "Weinam Creek Rd"), otherwise null.
     - coordinateSystem: EPSG string for THIS alignment only if it differs from the sheet-wide one above; otherwise null.
     - points: array of { "chainage": number, "easting": number, "northing": number }, one row per coordinate in this alignment's table, in table order.
+    - page: the 1-based page number of the sheet this alignment's table appears on, if determinable; otherwise null.
     - warnings: array of strings for anything ambiguous or unreadable in this alignment.
 - warnings: array of strings for document-level issues.
 
