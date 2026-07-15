@@ -2,43 +2,43 @@ import { useSyncExternalStore } from 'react';
 
 import { apiFetch, ApiError } from '@/lib/api';
 
-export type JackRole = 'user' | 'assistant';
+export type ClancyRole = 'user' | 'assistant';
 
-export type JackAction =
+export type ClancyAction =
   | { type: 'navigate'; to: string }
   | { type: 'open_stage'; stage: string; projectId: string };
 
-export interface JackMessage {
+export interface ClancyMessage {
   id: string;
-  role: JackRole;
+  role: ClancyRole;
   content: string;
   ts: number;
   /** Present on assistant messages that failed; `retryOf` is the user text to resend. */
   error?: boolean;
   retryOf?: string;
-  actions?: JackAction[];
+  actions?: ClancyAction[];
 }
 
-interface JackState {
+interface ClancyState {
   open: boolean;
-  messages: JackMessage[];
+  messages: ClancyMessage[];
   inFlight: boolean;
-  /** An unread Jack reply arrived while the panel was closed. */
+  /** An unread Clancy reply arrived while the panel was closed. */
   unseen: boolean;
 }
 
 /** Wire response shape — LOCKED contract with the copilot chat backend. */
 interface ChatResponse {
   message: string;
-  actions?: JackAction[];
+  actions?: ClancyAction[];
 }
 
 // ponytail: one module-level store, not context — the widget is a singleton and
 // the transcript is deliberately per-session (resets on reload).
-let state: JackState = { open: false, messages: [], inFlight: false, unseen: false };
+let state: ClancyState = { open: false, messages: [], inFlight: false, unseen: false };
 const listeners = new Set<() => void>();
 
-function setState(patch: Partial<JackState>) {
+function setState(patch: Partial<ClancyState>) {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
 }
@@ -48,12 +48,12 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-export function useJackStore(): JackState {
+export function useClancyStore(): ClancyState {
   return useSyncExternalStore(subscribe, () => state);
 }
 
 /** Test-only: reset module state between cases. */
-export function resetJackStore() {
+export function resetClancyStore() {
   state = { open: false, messages: [], inFlight: false, unseen: false };
   listeners.forEach((l) => l());
 }
@@ -61,25 +61,25 @@ export function resetJackStore() {
 let idSeq = 0;
 function nextId(): string {
   idSeq += 1;
-  return `jack-${Date.now()}-${idSeq}`;
+  return `clancy-${Date.now()}-${idSeq}`;
 }
 
-export function openJack() {
+export function openClancy() {
   setState({ open: true, unseen: false });
 }
 
-export function closeJack() {
+export function closeClancy() {
   setState({ open: false });
 }
 
-export function toggleJack() {
-  if (state.open) closeJack();
-  else openJack();
+export function toggleClancy() {
+  if (state.open) closeClancy();
+  else openClancy();
 }
 
 const MAX_TRANSCRIPT = 20;
 
-function trim(messages: JackMessage[]): JackMessage[] {
+function trim(messages: ClancyMessage[]): ClancyMessage[] {
   return messages.length > MAX_TRANSCRIPT ? messages.slice(-MAX_TRANSCRIPT) : messages;
 }
 
@@ -87,15 +87,15 @@ const RATE_LIMIT_COPY = 'Give me a second — a bit much on at once. Tap retry i
 const UNAVAILABLE_COPY = "I can't reach my brain right now. Give it another go in a minute.";
 
 /**
- * Append the user's message, call the copilot backend, and append Jack's reply
+ * Append the user's message, call the copilot backend, and append Clancy's reply
  * (or an error bubble with a retry affordance). Sends the last ≤20 turns with
  * the user message last, per the locked wire contract.
  */
-export async function sendJack(content: string, projectId?: string): Promise<void> {
+export async function sendClancy(content: string, projectId?: string): Promise<void> {
   const text = content.trim();
   if (!text || state.inFlight) return;
 
-  const userMessage: JackMessage = { id: nextId(), role: 'user', content: text, ts: Date.now() };
+  const userMessage: ClancyMessage = { id: nextId(), role: 'user', content: text, ts: Date.now() };
   // Drop any prior error bubble — the retry supersedes it.
   const base = state.messages.filter((m) => !m.error);
   const messages = trim([...base, userMessage]);
@@ -134,7 +134,7 @@ export async function sendJack(content: string, projectId?: string): Promise<voi
   }
 }
 
-function appendAssistant(message: JackMessage) {
+function appendAssistant(message: ClancyMessage) {
   setState({
     messages: trim([...state.messages, message]),
     inFlight: false,

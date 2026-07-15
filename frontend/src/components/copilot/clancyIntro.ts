@@ -1,23 +1,23 @@
 import type { User } from '@/lib/auth';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 
-export const JACK_INTRO_FLAG = 'jack-intro-seen';
+export const CLANCY_INTRO_FLAG = 'clancy-intro-seen';
 
 /**
  * Scripted (client-side, never the model) first-run introduction. Also the
  * empty-transcript state shown whenever there are no messages.
  */
-export function jackIntro(firstName?: string): string {
+export function clancyIntro(firstName?: string): string {
   const hi = firstName ? `G'day ${firstName}` : "G'day";
   return (
-    `${hi} — I'm Jack, your SiteProof copilot. I can read your drawings to set up ` +
+    `${hi} — I'm Clancy, your CIVOS copilot. I can read your drawings to set up ` +
     `projects, tell you what needs doing next, and take you straight to the right place. ` +
     `Everything I prepare goes to you for review before it's saved. I'm always down here ` +
     `if you need me.`
   );
 }
 
-export const JACK_SUGGESTED_PROMPTS = [
+export const CLANCY_SUGGESTED_PROMPTS = [
   'What should I do first?',
   "What's waiting for my review?",
   'Read my drawings for me',
@@ -35,9 +35,9 @@ export function projectIdFromPath(pathname: string): string | undefined {
 }
 
 export function hasSeenIntro(): boolean {
-  return readLocalStorageItem(JACK_INTRO_FLAG) != null;
+  return readLocalStorageItem(CLANCY_INTRO_FLAG) != null;
 }
 
 export function markIntroSeen() {
-  writeLocalStorageItem(JACK_INTRO_FLAG, '1');
+  writeLocalStorageItem(CLANCY_INTRO_FLAG, '1');
 }

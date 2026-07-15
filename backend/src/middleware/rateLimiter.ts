@@ -581,7 +581,7 @@ async function handleChatRateLimit(req: Request, res: Response, next: NextFuncti
 }
 
 /**
- * Per-user limiter for the Jack chat copilot endpoint.
+ * Per-user limiter for the Clancy chat copilot endpoint.
  */
 export function chatRateLimiter(req: Request, res: Response, next: NextFunction) {
   void handleChatRateLimit(req, res, next).catch(next);

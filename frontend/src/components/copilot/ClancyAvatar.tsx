@@ -1,11 +1,11 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Jack's mark: a clean "J" monogram on a zinc-900 chip with the CIVOS brand-blue
+ * Clancy's mark: a clean "C" monogram on a zinc-900 chip with the CIVOS brand-blue
  * accent. Deliberately dark in both themes — it reads as a persistent brand
  * object, not a themed surface. No emoji, no face.
  */
-export function JackAvatar({
+export function ClancyAvatar({
   className,
   letterClassName,
 }: {
@@ -20,7 +20,7 @@ export function JackAvatar({
       )}
       aria-hidden="true"
     >
-      <span className={cn('font-semibold leading-none tracking-tight', letterClassName)}>J</span>
+      <span className={cn('font-semibold leading-none tracking-tight', letterClassName)}>C</span>
       <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-[#2563EB]" />
     </span>
   );

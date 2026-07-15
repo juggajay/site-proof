@@ -1,5 +1,5 @@
-// Jack's tool surface. Every tool is READ-ONLY: three read the project state,
-// two queue a client-side action (navigate / open_stage) that Jack cannot
+// Clancy's tool surface. Every tool is READ-ONLY: three read the project state,
+// two queue a client-side action (navigate / open_stage) that Clancy cannot
 // execute himself. Access failures return an error string to the model rather
 // than throwing, so one bad projectId doesn't abort the turn.
 
@@ -205,7 +205,7 @@ async function getProjectQaSummary(user: AuthUser, projectId: string): Promise<T
     return { result: NO_ACCESS };
   }
   // Same load shape as the hold-point register route (GET /project/:projectId
-  // in holdpoints/readRoutes.ts), so Jack's counts always equal the page.
+  // in holdpoints/readRoutes.ts), so Clancy's counts always equal the page.
   const [lots, openNcrs] = await Promise.all([
     prisma.lot.findMany({
       where: { projectId },

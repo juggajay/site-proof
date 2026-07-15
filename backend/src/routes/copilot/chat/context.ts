@@ -1,7 +1,7 @@
 // Builds the compact CURRENT STATE block injected ahead of the client
 // transcript. Deterministic, read-only, and kept small (well under ~1500
 // tokens): the model narrates this rather than round-tripping a tool for the
-// basics. Reuses the dashboard's project-access helper so Jack sees exactly
+// basics. Reuses the dashboard's project-access helper so Clancy sees exactly
 // the projects the dashboard would.
 
 import { prisma } from '../../../lib/prisma.js';

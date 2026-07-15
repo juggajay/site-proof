@@ -14,7 +14,7 @@ function anthropicResponse(body: unknown) {
   return { ok: true, json: async () => body } as unknown as Response;
 }
 
-const messages: ChatMessage[] = [{ role: 'user', content: 'hi jack' }];
+const messages: ChatMessage[] = [{ role: 'user', content: 'hi clancy' }];
 const noopExecutor = async (): Promise<ToolOutcome> => ({ result: 'ok' });
 
 function lastRequestBody(): Record<string, unknown> {

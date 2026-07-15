@@ -1,4 +1,4 @@
-// Deterministic project-state Jack narrates. Mirrors the frontend
+// Deterministic project-state Clancy narrates. Mirrors the frontend
 // copilotStageStatus semantics (deriveStageStatus + the per-stage dataExists
 // checks in CopilotPage) so the chat copilot and the copilot page agree on
 // what "done" / "review ready" / "not started" means.

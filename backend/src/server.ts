@@ -170,7 +170,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/webhooks', webhooksRouter); // Feature #746: Webhook external integration
   app.use('/api/push', pushNotificationsRouter); // Feature #657: Mobile push notifications
   app.use('/api/ai', aiStatusRouter); // Wave 0: expose AI-extraction availability to the UI
-  app.use('/api/copilot', chatRouter); // Jack: company-level chat copilot (works before any project)
+  app.use('/api/copilot', chatRouter); // Clancy: company-level chat copilot (works before any project)
 
   // Error handling
   app.use(errorHandler);
