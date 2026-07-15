@@ -29,7 +29,9 @@ const registrationPointSchema = z.object({
 });
 
 // transform = [a,b,c,d,e,f] affine, exactly 6 finite numbers. See PlanSheet model.
-const registrationSchema = z.object({
+// Exported so the copilot plan-sheet executor re-validates an accepted
+// registration against the exact same rules as the manual PATCH save path.
+export const registrationSchema = z.object({
   points: z.array(registrationPointSchema).min(2).max(12),
   transform: z.array(finiteNumber).length(6),
   rmsErrorM: finiteNumber.min(0),

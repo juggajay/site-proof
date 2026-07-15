@@ -12,9 +12,9 @@ export interface StageMeta {
   readLabel: string;
 }
 
-// The four Wave-1 stages, in setup order. project_facts and control_line are
-// wired to extractors; plan_sheets/lot_breakdown show "Coming soon" for their
-// read CTA but still surface any proposal/data status (forward-compatible).
+// The four Wave-1 stages, in setup order. project_facts, control_line and
+// plan_sheets are wired to extractors; lot_breakdown shows "Coming soon" for its
+// read CTA but still surfaces any proposal/data status (forward-compatible).
 export const STAGE_META: StageMeta[] = [
   {
     stage: 'project_facts',
@@ -34,8 +34,8 @@ export const STAGE_META: StageMeta[] = [
     stage: 'plan_sheets',
     title: 'Plan sheets',
     description: 'Register plan sheets to the project map.',
-    active: false,
-    readLabel: '',
+    active: true,
+    readLabel: 'Register a plan sheet',
   },
   {
     stage: 'lot_breakdown',

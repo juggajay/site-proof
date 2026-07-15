@@ -2097,6 +2097,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/copilot/projectFactsExtraction.ts', import.meta.url),
       'utf8',
     );
+    const planSheetExtractionSource = await readFile(
+      new URL('../../backend/src/routes/copilot/planSheetExtraction.ts', import.meta.url),
+      'utf8',
+    );
     const webhookDeliverySource = await readFile(
       new URL('../../backend/src/routes/webhooks/delivery.ts', import.meta.url),
       'utf8',
@@ -2142,6 +2146,10 @@ test.describe('production readiness guardrails', () => {
       /fetchWithTimeout\(\s*'https:\/\/api\.anthropic\.com\/v1\/messages'/,
     );
     expect(projectFactsExtractionSource).toContain('AI_EXTRACTION_TIMEOUT_MS,');
+    expect(planSheetExtractionSource).toMatch(
+      /fetchWithTimeout\(\s*'https:\/\/api\.anthropic\.com\/v1\/messages'/,
+    );
+    expect(planSheetExtractionSource).toContain('AI_EXTRACTION_TIMEOUT_MS,');
     expect(webhookDeliverySource).toContain('const timeout = setTimeout(');
     expect(webhookDeliverySource).toContain('new AbortController()');
     expect(webhookDeliverySource).toContain('clearTimeout(timeout)');

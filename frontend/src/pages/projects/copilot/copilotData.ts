@@ -173,6 +173,51 @@ export function useExtractControlLine(projectId: string | undefined) {
   });
 }
 
+/** One AI-read coordinate mark on a plan sheet (stage 3). */
+export interface PlanSheetCandidatePoint {
+  easting: number;
+  northing: number;
+  label: string | null;
+  /** Approximate normalized position on the sheet (0..1), or null if unreadable. */
+  approxX: number | null;
+  approxY: number | null;
+}
+
+/** The reviewed plan-sheet registration candidate the stage-3 extractor returns. */
+export interface PlanSheetCandidate {
+  planSheetId: string;
+  coordinateSystem: string | null;
+  points: PlanSheetCandidatePoint[];
+}
+
+export interface PlanSheetExtractionResult {
+  proposalId: string;
+  candidate: PlanSheetCandidate;
+  warnings: string[];
+}
+
+/**
+ * Read printed coordinate marks off an already-stored plan sheet's raster. Plain
+ * JSON body (the image is server-side already, unlike stages 1-2's uploads).
+ * Writes nothing — it persists a 'proposed' proposal for review and returns the
+ * approximate marker candidate the review UI seeds draggable points from.
+ */
+export function useExtractPlanSheet(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (planSheetId: string): Promise<PlanSheetExtractionResult> =>
+      apiFetch<PlanSheetExtractionResult>(`${copilotPath(projectId!)}/plan_sheets/extract`, {
+        method: 'POST',
+        body: JSON.stringify({ planSheetId }),
+      }),
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.copilotProposals(projectId) });
+      }
+    },
+  });
+}
+
 /** Accept (optionally with edits) or reject a proposal via the decision endpoint. */
 export function useDecideProposal(projectId: string | undefined) {
   const queryClient = useQueryClient();
@@ -229,6 +274,7 @@ function invalidateAfterDecision(
   void queryClient.invalidateQueries({ queryKey: queryKeys.copilotLotPresence(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.projectLotGeometries(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.planSheets(projectId) });
 }
 
 /** Newest proposal for a stage, or null. Proposals arrive newest-first. */

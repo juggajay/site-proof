@@ -103,18 +103,11 @@ export async function storePlanSheetImage(
   return `uploads/${PLAN_SHEETS_SUBDIR}/${projectId}/${sheetId}/page.png`;
 }
 
-// Stream the stored PNG with private, no-store headers (mirrors sendDocumentFile).
-export async function sendPlanSheetImage(
-  imageRef: string,
-  projectId: string,
-  res: Response,
-): Promise<void> {
-  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-
+// Read the stored PNG into a Buffer from whichever backend holds it. This is the
+// one server-side fetch path for a plan-sheet raster — the copilot AI reader and
+// the image-streaming route both go through it, so ownership + storage-mode
+// handling live in one place.
+export async function readPlanSheetImage(imageRef: string, projectId: string): Promise<Buffer> {
   const storagePath = ownedSupabasePath(imageRef, projectId);
   if (storagePath) {
     if (!isSupabaseConfigured()) {
@@ -127,19 +120,32 @@ export async function sendPlanSheetImage(
       logWarn('Supabase plan-sheet download failed:', error);
       throw AppError.notFound('Plan sheet image');
     }
-    const buffer = Buffer.from(await data.arrayBuffer());
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Length', String(buffer.length));
-    res.send(buffer);
-    return;
+    return Buffer.from(await data.arrayBuffer());
   }
 
   const filePath = resolveUploadPath(imageRef, PLAN_SHEETS_SUBDIR);
   if (!fs.existsSync(filePath)) {
     throw AppError.notFound('Plan sheet image');
   }
+  return fs.promises.readFile(filePath);
+}
+
+// Stream the stored PNG with private, no-store headers (mirrors sendDocumentFile).
+export async function sendPlanSheetImage(
+  imageRef: string,
+  projectId: string,
+  res: Response,
+): Promise<void> {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+  const buffer = await readPlanSheetImage(imageRef, projectId);
   res.setHeader('Content-Type', 'image/png');
-  res.sendFile(filePath);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.send(buffer);
 }
 
 // Best-effort storage cleanup on delete. Logs and swallows all errors — a stray

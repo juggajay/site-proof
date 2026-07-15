@@ -220,6 +220,8 @@ interface RegistrationSidePanelProps {
   allPlacedComplete: boolean;
   canSave: boolean;
   saving: boolean;
+  /** Save-button copy when idle (defaults to "Save registration"). */
+  submitLabel?: string;
   hasRegistration: boolean;
   controlLines: ChainageControlLine[];
   sheetCoordinateSystem: string;
@@ -243,6 +245,7 @@ export function RegistrationSidePanel({
   allPlacedComplete,
   canSave,
   saving,
+  submitLabel = 'Save registration',
   hasRegistration,
   controlLines,
   sheetCoordinateSystem,
@@ -329,7 +332,7 @@ export function RegistrationSidePanel({
 
       <div className="mt-4 flex flex-col gap-2">
         <Button type="button" onClick={onSave} disabled={!canSave}>
-          {saving ? 'Saving…' : 'Save registration'}
+          {saving ? 'Saving…' : submitLabel}
         </Button>
         {hasRegistration && (
           <Button

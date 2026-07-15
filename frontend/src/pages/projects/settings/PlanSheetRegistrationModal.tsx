@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { fetchPlanSheet, useUpdatePlanSheet, type PlanSheetListItem } from './planSheetsData';
+import {
+  fetchPlanSheet,
+  useUpdatePlanSheet,
+  type PlanSheetListItem,
+  type PlanSheetRegistration,
+} from './planSheetsData';
 import { useControlLines } from './controlLinesData';
 import { usePlanSheetImage } from './usePlanSheetImage';
 import {
@@ -32,6 +37,19 @@ interface PlanSheetRegistrationModalProps {
   onSaved: () => void;
   /** Fires only after a successful register (not clear), for the guided perimeter step. */
   onRegistered?: () => void;
+  /**
+   * Copilot review mode. When set, the editor seeds its control points from
+   * `initialPoints` (the AI's approximate marker positions) instead of the
+   * sheet's stored registration, and Save routes the fitted registration through
+   * `onSubmitRegistration` (the proposal decision endpoint) rather than the manual
+   * PATCH. All three are optional so the manual flow is unchanged.
+   */
+  initialPoints?: EditablePoint[];
+  onSubmitRegistration?: (registration: PlanSheetRegistration) => Promise<void>;
+  /** Reject the suggestion (copilot mode); renders a Dismiss action in the header. */
+  onDismiss?: () => void;
+  /** Whether the external decision mutation is in flight (copilot mode). */
+  submitting?: boolean;
 }
 
 function toNumber(text: string): number | null {
@@ -65,14 +83,22 @@ export function PlanSheetRegistrationModal({
   onClose,
   onSaved,
   onRegistered,
+  initialPoints,
+  onSubmitRegistration,
+  onDismiss,
+  submitting = false,
 }: PlanSheetRegistrationModalProps) {
-  const [points, setPoints] = useState<EditablePoint[]>([]);
-  const [loadingSheet, setLoadingSheet] = useState(true);
+  const copilotMode = onSubmitRegistration != null;
+  const [points, setPoints] = useState<EditablePoint[]>(() => initialPoints ?? []);
+  const [loadingSheet, setLoadingSheet] = useState(!initialPoints);
   const { url: imageUrl, error: imageError } = usePlanSheetImage(projectId, sheet.id);
   const updateMutation = useUpdatePlanSheet(projectId);
+  const busy = updateMutation.isLoading || submitting;
 
-  // Prefill existing registration points (if any) from the full sheet.
+  // Copilot mode seeds points from the AI candidate (initialPoints); the manual
+  // flow prefills existing registration points from the full sheet.
   useEffect(() => {
+    if (initialPoints) return;
     let cancelled = false;
     setLoadingSheet(true);
     void (async () => {
@@ -96,7 +122,7 @@ export function PlanSheetRegistrationModal({
     return () => {
       cancelled = true;
     };
-  }, [projectId, sheet.id]);
+  }, [projectId, sheet.id, initialPoints]);
 
   const addPoint = (point: ImagePoint) => {
     setPoints((prev) =>
@@ -150,20 +176,28 @@ export function PlanSheetRegistrationModal({
     points.length >= 2 &&
     points.length <= 12 &&
     allPlacedComplete &&
-    !updateMutation.isLoading;
+    !busy;
 
   const handleSave = async () => {
     if (!registration?.ok || !canSave) return;
+    const registrationPayload: PlanSheetRegistration = {
+      points: fitPoints,
+      transform: registration.transform,
+      rmsErrorM: registration.rmsErrorM,
+    };
     try {
+      if (onSubmitRegistration) {
+        // Copilot review: the decision endpoint applies the registration and the
+        // wrapper owns the success toast. We just close on success.
+        await onSubmitRegistration(registrationPayload);
+        onSaved();
+        onRegistered?.();
+        onClose();
+        return;
+      }
       await updateMutation.mutateAsync({
         id: sheet.id,
-        input: {
-          registration: {
-            points: fitPoints,
-            transform: registration.transform,
-            rmsErrorM: registration.rmsErrorM,
-          },
-        },
+        input: { registration: registrationPayload },
       });
       toast({ title: 'Sheet registered', description: `${sheet.name} is now georeferenced.` });
       onSaved();
@@ -211,17 +245,21 @@ export function PlanSheetRegistrationModal({
         <div>
           <h2 className="text-lg font-semibold">Register &quot;{sheet.name}&quot;</h2>
           <p className="text-xs text-muted-foreground">
-            Click the drawing to drop a control point, then enter its grid easting/northing.
+            {copilotMode
+              ? 'The AI dropped these markers approximately — drag each one exactly onto its mark, then apply. A few pixels here is metres on the ground.'
+              : 'Click the drawing to drop a control point, then enter its grid easting/northing.'}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onClose}
-          disabled={updateMutation.isLoading}
-        >
-          Close
-        </Button>
+        <div className="flex items-center gap-2">
+          {onDismiss && (
+            <Button type="button" variant="ghost" onClick={onDismiss} disabled={busy}>
+              Dismiss suggestion
+            </Button>
+          )}
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+            Close
+          </Button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
@@ -261,8 +299,9 @@ export function PlanSheetRegistrationModal({
           loadingSheet={loadingSheet}
           allPlacedComplete={allPlacedComplete}
           canSave={canSave}
-          saving={updateMutation.isLoading}
-          hasRegistration={sheet.hasRegistration}
+          saving={busy}
+          submitLabel={copilotMode ? 'Apply registration' : undefined}
+          hasRegistration={!copilotMode && sheet.hasRegistration}
           controlLines={controlLinesQuery.data ?? []}
           sheetCoordinateSystem={sheet.coordinateSystem}
           onRemovePoint={removePoint}
