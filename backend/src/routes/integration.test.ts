@@ -413,7 +413,9 @@ describe('Full Workflow Integration', () => {
         offset: 'left',
         layer: 'Subgrade',
         areaZone: 'Zone A',
-        assignedSubcontractorId: subcontractorCompany.id,
+        // Retired legacy write path: the clone carries the subbie as a modern
+        // LotSubcontractorAssignment row (asserted below), never a new legacy FK.
+        assignedSubcontractorId: null,
       });
       expect(Number(cloneRes.body.lot.chainageStart)).toBe(25);
       expect(Number(cloneRes.body.lot.chainageEnd)).toBe(40);
@@ -434,7 +436,7 @@ describe('Full Workflow Integration', () => {
         lotNumber: `CLONE-${suffix}-002`,
         lotType: 'chainage',
         offsetCustom: 'left shoulder',
-        assignedSubcontractorId: subcontractorCompany.id,
+        assignedSubcontractorId: null,
       });
 
       const clonedAssignment = await prisma.lotSubcontractorAssignment.findUnique({
