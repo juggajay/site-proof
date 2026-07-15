@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseChainageInput, parseLotsCsv, validateLots, type ParsedLot } from './importLotsCsv';
+import {
+  canonicalizeActivityValue,
+  parseChainageInput,
+  parseLotsCsv,
+  validateLots,
+  type ParsedLot,
+} from './importLotsCsv';
 
 const validLot = (overrides: Partial<ParsedLot> = {}): ParsedLot => ({
   row: 2,
@@ -56,18 +62,36 @@ describe('importLotsCsv', () => {
     ]);
   });
 
-  it('warns for empty descriptions and missing or unknown activity types', () => {
+  it('warns for empty descriptions, broad families, and unknown activity types', () => {
     const result = validateLots([
       validLot({ description: '', activityType: '' }),
       validLot({ row: 3, lotNumber: 'LOT-002', activityType: 'Tunnelling' }),
+      validLot({ row: 4, lotNumber: 'LOT-003', activityType: 'Drainage' }),
     ]);
 
     expect(result.isValid).toBe(true);
     expect(result.warnings.map((warning) => warning.message)).toEqual([
       'Description is empty - lot will be created without description',
-      'Activity Type is empty - will default to "Earthworks"',
-      'Unknown activity type "Tunnelling" - will default to "Earthworks"',
+      'Activity Type is empty - will default to "earthworks_general"',
+      'Unknown activity type "Tunnelling" - will default to "earthworks_general"',
+      'Activity type "Drainage" is a broad family - kept as-is; choose the specific activity on the lot after import',
     ]);
+  });
+
+  it('an exact canonical or legacy activity value produces no warning', () => {
+    const result = validateLots([
+      validLot({ activityType: 'culverts' }),
+      validLot({ row: 3, lotNumber: 'LOT-002', activityType: 'Earthworks' }),
+    ]);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it('canonicalizeActivityValue folds exact, keeps families, and defaults the rest', () => {
+    expect(canonicalizeActivityValue('Earthworks')).toBe('earthworks_general');
+    expect(canonicalizeActivityValue('culverts')).toBe('culverts');
+    expect(canonicalizeActivityValue('Drainage')).toBe('Drainage');
+    expect(canonicalizeActivityValue('Tunnelling')).toBe('earthworks_general');
+    expect(canonicalizeActivityValue('')).toBe('earthworks_general');
   });
 
   it('parses optional non-negative chainage values without changing null semantics', () => {

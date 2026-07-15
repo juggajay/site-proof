@@ -19,6 +19,9 @@ vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn().mockResolvedValue({ templates: [] }) }));
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  // BulkActivityRow calls useTemplateMatch (useQuery); no match data here means
+  // the picker just shows the full template list.
+  useQuery: () => ({ data: undefined }),
 }));
 
 const CONTROL_LINES: ControlLine[] = [

@@ -440,6 +440,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
               </div>
 
               <BulkActivityRows
+                projectId={projectId}
                 activities={activities}
                 onChange={setActivities}
                 itpTemplates={itpTemplates}

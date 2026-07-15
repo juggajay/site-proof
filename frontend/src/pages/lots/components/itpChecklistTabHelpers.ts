@@ -1,3 +1,4 @@
+import { foldActivityValue } from '@/lib/activityTaxonomy';
 import type { ITPAttachment, ITPChecklistItem, ITPCompletion, ITPTemplate } from '../types';
 
 export type ItpStatusFilter = 'all' | 'pending' | 'completed' | 'na' | 'failed';
@@ -217,13 +218,22 @@ export function getAdjacentItpAttachment(
   return null;
 }
 
+/**
+ * Whether a template's activity matches the lot's, after folding both through
+ * the canonical taxonomy. Folding fixes the case/vocabulary mismatch (lot forms
+ * once wrote Title-Case, seeders lowercase) that made a raw string compare never
+ * boost. Matches on shared canonical slug — an exact Level-2 slug or a shared
+ * family slug; unmappable values ('none') never match.
+ */
 export function isItpTemplateActivityMatch(
   template: ITPTemplate,
   lotActivityType: string | null,
 ): boolean {
-  return Boolean(
-    lotActivityType && template.activityType?.toLowerCase() === lotActivityType.toLowerCase(),
-  );
+  if (!lotActivityType) return false;
+  const lot = foldActivityValue(lotActivityType);
+  const tpl = foldActivityValue(template.activityType);
+  if (lot.confidence === 'none' || tpl.confidence === 'none') return false;
+  return lot.slug === tpl.slug;
 }
 
 export function sortItpTemplatesForLotActivity(

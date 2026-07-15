@@ -10,6 +10,9 @@ vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
 const invalidateQueries = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries }),
+  // BulkActivityRow calls useTemplateMatch (useQuery); no match data in this test
+  // means the picker just shows the full template list.
+  useQuery: () => ({ data: undefined }),
 }));
 
 // One 1000m control line so the wizard can offer map geometry.
