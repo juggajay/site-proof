@@ -35,10 +35,19 @@ function mockApi({
   role = 'admin',
   status = 'active',
   controlLines = [] as unknown[],
-}: { role?: string; status?: string; controlLines?: unknown[] } = {}) {
+  aiConfigured = true,
+}: {
+  role?: string;
+  status?: string;
+  controlLines?: unknown[];
+  aiConfigured?: boolean;
+} = {}) {
   apiFetchMock.mockImplementation(async (path: string, options?: RequestInit) => {
     if (path === '/api/projects/project-1') {
       return { project: { id: 'project-1', name: 'QA Project', status, currentUserRole: role } };
+    }
+    if (path === '/api/ai/status') {
+      return { aiConfigured };
     }
     if (path === '/api/projects/project-1/control-lines' && options?.method === 'POST') {
       return { controlLine: { ...CONTROL_LINE, id: 'cl-new' } };
@@ -113,6 +122,26 @@ describe('ControlLinesPage', () => {
         }),
       },
     ]);
+  });
+
+  it('disables the setout-import button when AI is not configured', async () => {
+    mockApi({ controlLines: [CONTROL_LINE], aiConfigured: false });
+    renderPage();
+
+    const setoutButton = await screen.findByRole('button', { name: /Import from setout sheet/ });
+    await waitFor(() => expect(setoutButton).toBeDisabled());
+    expect(setoutButton).toHaveAttribute(
+      'title',
+      expect.stringContaining("AI extraction isn't configured"),
+    );
+  });
+
+  it('keeps the setout-import button enabled when AI is configured', async () => {
+    mockApi({ controlLines: [CONTROL_LINE], aiConfigured: true });
+    renderPage();
+
+    const setoutButton = await screen.findByRole('button', { name: /Import from setout sheet/ });
+    expect(setoutButton).toBeEnabled();
   });
 
   it('hides write actions for a read-only internal role', async () => {

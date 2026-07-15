@@ -36,7 +36,13 @@ function mockApi({
   role = 'admin',
   status = 'active',
   planSheets = [] as unknown[],
-}: { role?: string; status?: string; planSheets?: unknown[] } = {}) {
+  controlLines = [] as unknown[],
+}: {
+  role?: string;
+  status?: string;
+  planSheets?: unknown[];
+  controlLines?: unknown[];
+} = {}) {
   apiFetchMock.mockImplementation(async (path: string, options?: RequestInit) => {
     if (path === '/api/projects/project-1') {
       return { project: { id: 'project-1', name: 'QA Project', status, currentUserRole: role } };
@@ -51,7 +57,7 @@ function mockApi({
       return { planSheets };
     }
     if (path === '/api/projects/project-1/control-lines') {
-      return { controlLines: [] };
+      return { controlLines };
     }
     return {};
   });
@@ -107,6 +113,25 @@ describe('PlanSheetsPage', () => {
       expect(patch).toBeTruthy();
       expect(JSON.parse((patch![1] as RequestInit).body as string)).toEqual({ name: 'Renamed' });
     });
+  });
+
+  it('shows the control-line-first ordering tip when there are no control lines', async () => {
+    mockApi({ planSheets: [SHEET], controlLines: [] });
+    renderPage();
+
+    expect(
+      await screen.findByText(/to register a sheet by chainage, add a control line first/i),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the ordering tip once a control line exists', async () => {
+    mockApi({ planSheets: [SHEET], controlLines: [{ id: 'cl-1', coordinateSystem: 'EPSG:7856' }] });
+    renderPage();
+
+    expect(await screen.findByText('C-101 Rev D')).toBeInTheDocument();
+    expect(
+      screen.queryByText(/to register a sheet by chainage, add a control line first/i),
+    ).not.toBeInTheDocument();
   });
 
   it('hides write actions for a read-only internal role', async () => {
