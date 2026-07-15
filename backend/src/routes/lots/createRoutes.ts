@@ -32,7 +32,6 @@ import { createLotSchema, bulkCreateLotsSchema, cloneLotSchema } from './validat
 import { requireProjectRole } from './access.js';
 import { parseLotRouteParam } from './requestParsing.js';
 import {
-  requireSubcontractorInProject,
   requireItpTemplateForProject,
   syncPrimaryLotSubcontractorAssignment,
 } from './assignmentHelpers.js';
@@ -148,13 +147,10 @@ lotCreateRouter.post(
       chainageEnd,
       lotType,
       itpTemplateId,
-      assignedSubcontractorId,
       areaZone,
       structureId,
       structureElement,
       budgetAmount,
-      canCompleteITP,
-      itpRequiresVerification,
     } = validation.data;
 
     // Feature #853: Area zone required for area lot type
@@ -199,10 +195,6 @@ lotCreateRouter.post(
       templateSnapshot = buildTemplateSnapshot(template);
     }
 
-    if (assignedSubcontractorId) {
-      await requireSubcontractorInProject(assignedSubcontractorId, projectId);
-    }
-
     const lot = await prisma.$transaction(async (tx) => {
       const createdLot = await tx.lot.create({
         data: {
@@ -214,7 +206,6 @@ lotCreateRouter.post(
           chainageStart,
           chainageEnd,
           itpTemplateId: itpTemplateId || null,
-          assignedSubcontractorId: assignedSubcontractorId || null,
           areaZone: areaZone || null,
           structureId: structureId || null, // Feature #854
           structureElement: structureElement || null, // Feature #854
@@ -241,17 +232,6 @@ lotCreateRouter.post(
             templateSnapshot: JSON.stringify(templateSnapshot),
             status: 'not_started',
           },
-        });
-      }
-
-      if (assignedSubcontractorId) {
-        await syncPrimaryLotSubcontractorAssignment(tx, {
-          lotId: createdLot.id,
-          projectId,
-          subcontractorId: assignedSubcontractorId,
-          canCompleteITP,
-          itpRequiresVerification,
-          assignedById: user.id,
         });
       }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link2, Check, RefreshCw, Users, Printer, MoreVertical } from 'lucide-react';
+import { Link2, Check, RefreshCw, Printer, MoreVertical } from 'lucide-react';
 import { LotQRCode } from '@/components/lots/LotQRCode';
 import type { Lot, LotSubcontractorAssignment } from '../types';
 import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
@@ -29,7 +29,6 @@ export interface LotHeaderProps {
   onCopyLink: () => void;
   onPrint: () => void;
   onEdit: () => void;
-  onAssignSubcontractorLegacy: () => void;
   onOverrideStatus: () => void;
   onAddSubcontractor: () => void;
   onEditAssignment: (assignment: LotSubcontractorAssignment) => void;
@@ -74,7 +73,6 @@ export function LotHeader({
   onCopyLink,
   onPrint,
   onEdit,
-  onAssignSubcontractorLegacy,
   onOverrideStatus,
   onAddSubcontractor,
   onEditAssignment,
@@ -125,20 +123,6 @@ export function LotHeader({
         },
       },
     ];
-
-    if (canManageLot && lot.status !== 'claimed') {
-      overflowActions.push({
-        key: 'assign-sub',
-        icon: <Users className="h-5 w-5" />,
-        label: lot.assignedSubcontractor
-          ? lot.assignedSubcontractor.companyName
-          : 'Assign Subcontractor',
-        handler: () => {
-          onAssignSubcontractorLegacy();
-          setMoreSheetOpen(false);
-        },
-      });
-    }
 
     if (canConformLots && lot.status !== 'claimed') {
       overflowActions.push({
@@ -300,25 +284,9 @@ export function LotHeader({
               Edit Lot
             </button>
           )}
-          {/* Assign Subcontractor Button - only for PMs and above, not claimed lots */}
-          {canManageLot && lot.status !== 'claimed' && (
-            <button
-              onClick={onAssignSubcontractorLegacy}
-              className="flex items-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-sm text-primary hover:bg-primary/5"
-              title={
-                lot.assignedSubcontractor
-                  ? `Assigned to ${lot.assignedSubcontractor.companyName}`
-                  : 'Assign to subcontractor'
-              }
-            >
-              <Users className="h-4 w-4" />
-              <span>
-                {lot.assignedSubcontractor
-                  ? lot.assignedSubcontractor.companyName
-                  : 'Assign Subcontractor'}
-              </span>
-            </button>
-          )}
+          {/* Subcontractor assignment lives in the Subcontractor Assignments
+              section below (per-lot permissions, many companies). The legacy
+              single-assignment header button is retired. */}
           {/* Override Workflow Status Button - only for quality managers and above */}
           {canConformLots && lot.status !== 'claimed' && (
             <button

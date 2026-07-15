@@ -61,9 +61,6 @@ export const createLotSchema = z
       .string()
       .trim()
       .refine(isValidOptionalBudgetAmount, 'Budget Amount must be a valid number'),
-    assignedSubcontractorId: z.string().trim(),
-    canCompleteITP: z.boolean(),
-    itpRequiresVerification: z.boolean(),
   })
   .refine(
     (data) => {
@@ -115,7 +112,4 @@ export const CREATE_LOT_DEFAULT_VALUES: CreateLotFormData = {
   chainageStart: '',
   chainageEnd: '',
   budgetAmount: '',
-  assignedSubcontractorId: '',
-  canCompleteITP: false,
-  itpRequiresVerification: true,
 };
