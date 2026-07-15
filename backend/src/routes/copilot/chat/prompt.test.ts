@@ -69,6 +69,39 @@ describe('PROJECT_PAGES', () => {
     expect(paths).toContain('itp');
     expect(paths).toContain('variations');
     expect(paths).toContain('hold-points');
+    expect(paths).toContain('subcontractors');
+  });
+
+  it('covers every project-scoped read page from App.tsx', () => {
+    // Manually mirrored from frontend/src/App.tsx /projects/:projectId routes.
+    // Excluded on purpose: 'foreman' (legacy path, redirects to /m) and
+    // 'lots/<lotId>/edit' (an edit surface, not a navigation destination).
+    // If a new project page ships, add it BOTH there and to PROJECT_PAGES.
+    const expected = [
+      'lots',
+      'lots/<lotId>',
+      'copilot',
+      'control-lines',
+      'plan-sheets',
+      'itp',
+      'hold-points',
+      'ncr',
+      'tests',
+      'diary',
+      'dockets',
+      'documents',
+      'reports',
+      'claims',
+      'variations',
+      'users',
+      'subcontractors',
+      'drawings',
+      'costs',
+      'delays',
+      'areas',
+      'settings',
+    ];
+    expect(PROJECT_PAGES.map((page) => page.path).sort()).toEqual([...expected].sort());
   });
 });
 

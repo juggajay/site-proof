@@ -48,6 +48,15 @@ export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   { path: 'claims', label: 'progress claims' },
   { path: 'variations', label: 'variation register' },
   { path: 'users', label: 'project team' },
+  {
+    path: 'subcontractors',
+    label: 'subcontractor companies — invite and manage subbies on the project',
+  },
+  { path: 'drawings', label: 'project drawings' },
+  { path: 'costs', label: 'project costs' },
+  { path: 'delays', label: 'delay register' },
+  { path: 'areas', label: 'project areas setup' },
+  { path: 'settings', label: 'project settings' },
 ];
 
 const ID = '[A-Za-z0-9_-]+';
