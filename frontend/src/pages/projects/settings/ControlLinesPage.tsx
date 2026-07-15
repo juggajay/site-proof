@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Spline, Plus, Trash2, Edit2, FileUp } from 'lucide-react';
+import { Spline, Plus, Trash2, Edit2, FileUp, ScanText } from 'lucide-react';
 
 import { toast } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import {
 } from './ProjectAdminPageState';
 import { ControlLineFormModal } from './ControlLineFormModal';
 import { ControlLineImportModal } from './ControlLineImportModal';
+import { SetoutImportModal } from './SetoutImportModal';
 import {
   useControlLines,
   useControlLinesAccess,
@@ -127,6 +128,7 @@ export function ControlLinesPage() {
   const { projectId } = useParams();
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showSetoutImport, setShowSetoutImport] = useState(false);
   const [editingLine, setEditingLine] = useState<ControlLine | null>(null);
   const [linePendingDelete, setLinePendingDelete] = useState<ControlLine | null>(null);
 
@@ -219,6 +221,15 @@ export function ControlLinesPage() {
               <FileUp className="h-4 w-4" />
               Import from file
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSetoutImport(true)}
+              disabled={readOnly}
+            >
+              <ScanText className="h-4 w-4" />
+              Import from setout sheet
+            </Button>
             <Button type="button" onClick={openAddModal} disabled={readOnly}>
               <Plus className="h-4 w-4" />
               Add Control Line
@@ -269,6 +280,14 @@ export function ControlLinesPage() {
           projectId={projectId}
           defaultCoordinateSystem={controlLines[0]?.coordinateSystem}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {showSetoutImport && projectId && (
+        <SetoutImportModal
+          projectId={projectId}
+          defaultCoordinateSystem={controlLines[0]?.coordinateSystem}
+          onClose={() => setShowSetoutImport(false)}
         />
       )}
 

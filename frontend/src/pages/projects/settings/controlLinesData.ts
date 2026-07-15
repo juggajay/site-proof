@@ -84,6 +84,38 @@ export function useImportAlignments(projectId: string | undefined) {
   });
 }
 
+/** A reviewed control-line candidate extracted by AI from a setout sheet. */
+export interface SetoutExtractionCandidate {
+  /** Guessed EPSG (already mapped to a supported code) or null if undetermined. */
+  coordinateSystem: string | null;
+  points: ControlPoint[];
+  warnings: string[];
+}
+
+/**
+ * Upload a setout-sheet PDF/image and get back one AI-extracted candidate (points
+ * + a guessed EPSG + warnings). authFetch (not apiFetch) so the browser sets the
+ * multipart boundary itself. No DB write — the user reviews the candidate, then
+ * saves it via useCreateControlLine (same server-side create validation).
+ */
+export function useExtractSetoutPoints(projectId: string | undefined) {
+  return useMutation({
+    mutationFn: async (file: File): Promise<SetoutExtractionCandidate> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const response = await authFetch(`${controlLinesPath(projectId!)}/extract-points`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!response.ok) {
+        throw new ApiError(response.status, await response.text());
+      }
+      const data = (await response.json()) as { candidate: SetoutExtractionCandidate };
+      return data.candidate;
+    },
+  });
+}
+
 export function useControlLines(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.controlLines(projectId ?? 'none'),
