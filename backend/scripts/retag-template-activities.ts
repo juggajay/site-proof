@@ -11,8 +11,9 @@ import { runScript } from './lib/run-script.js';
 // default: it only rewrites rows whose stored value folds to an EXACT canonical
 // slug (e.g. 'earthworks' -> 'earthworks_general', 'concrete' -> structural_
 // concrete, 'asphalt_prep' -> prime_primerseal). Family-level values
-// ('drainage', 'structural', 'pavements', 'asphalt', 'road_furniture',
-// 'environmental') and unclassifiable values are NEVER auto-rewritten — folding
+// ('drainage', 'structural', 'pavements', bare 'pavement', 'asphalt',
+// 'road_furniture', 'environmental') and unclassifiable values are NEVER
+// auto-rewritten — folding
 // them needs the template name, which this script does not judge. Those are
 // left for a name-driven pass / review. It never touches Lot.activityType.
 //

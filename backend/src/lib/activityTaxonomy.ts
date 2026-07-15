@@ -240,7 +240,12 @@ const LEGACY_FOLD: Record<string, FoldResult> = {
   landscaping: { slug: 'landscaping', confidence: 'exact' },
   asphalt_prep: { slug: 'prime_primerseal', confidence: 'exact' },
   concrete: { slug: 'structural_concrete', confidence: 'exact' }, // austroads seeder
-  pavement: { slug: 'pavement_unbound', confidence: 'exact' }, // austroads bare
+  // Austroads bare 'pavement' spans BOTH the unbound-granular and the
+  // cement-stabilised templates (see the seeder), so the value alone cannot
+  // decide a Level-2 slug — family only. (The spec §1 line mapping it to
+  // pavement_unbound predates the second template and is contradicted by the
+  // seeder re-tag table.)
+  pavement: { slug: 'pavements', confidence: 'family' },
   pavements: { slug: 'pavements', confidence: 'family' },
   drainage: { slug: 'drainage', confidence: 'family' },
   asphalt: { slug: 'surfacing', confidence: 'family' },

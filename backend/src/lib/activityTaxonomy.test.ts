@@ -150,7 +150,6 @@ describe('foldActivityValue — exact one-to-one legacy values', () => {
     ['pavement_bound', 'pavement_bound'],
     ['pavement_concrete', 'pavement_concrete'],
     ['concrete', 'structural_concrete'], // austroads seeder (lowercase)
-    ['pavement', 'pavement_unbound'], // austroads bare
   ];
   it.each(exact)('%s → %s (exact)', (raw, slug) => {
     expect(foldActivityValue(raw)).toEqual({ slug, confidence: 'exact' });
@@ -161,6 +160,7 @@ describe('foldActivityValue — family-level legacy values', () => {
   const family: [string, string][] = [
     ['Pavement', 'pavements'],
     ['pavements', 'pavements'],
+    ['pavement', 'pavements'], // austroads bare — spans two templates, family only
     ['Drainage', 'drainage'],
     ['drainage', 'drainage'],
     ['Structures', 'structures'],
