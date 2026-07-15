@@ -99,6 +99,7 @@ vi.mock('./appLazyPages', () => ({
   ProjectUsersPage: () => <div>Project users</div>,
   ProjectAreasPage: () => <div>Project areas</div>,
   ControlLinesPage: () => <div>Control lines</div>,
+  CopilotPage: () => <div>Copilot</div>,
   PlanSheetsPage: () => <div>Plan sheets</div>,
   LotsPage: () => <div>Lots</div>,
   LotDetailPage: () => <div>Lot detail</div>,

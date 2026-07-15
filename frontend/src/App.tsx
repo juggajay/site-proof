@@ -33,6 +33,7 @@ import {
   CompanyOnboardingPage,
   CompanySettingsPage,
   ControlLinesPage,
+  CopilotPage,
   PlanSheetsPage,
   CostsPage,
   DailyDiaryPage,
@@ -357,6 +358,17 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <ControlLinesPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              {/* Setup copilot: AI-assisted project setup (facts, control line,
+                  plan sheets, lots). Admin-only, matching Project Settings — the
+                  backend gates every decision to the lot-setup write roles. */}
+              <Route
+                path="/projects/:projectId/copilot"
+                element={
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
+                    <CopilotPage />
                   </ProjectProtectedRoute>
                 }
               />

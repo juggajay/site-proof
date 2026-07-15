@@ -59,6 +59,9 @@ export const PlanSheetsPage = lazy(() =>
     default: m.PlanSheetsPage,
   })),
 );
+export const CopilotPage = lazy(() =>
+  import('@/pages/projects/copilot/CopilotPage').then((m) => ({ default: m.CopilotPage })),
+);
 export const LotsPage = lazy(() =>
   import('@/pages/lots/LotsPage').then((m) => ({ default: m.LotsPage })),
 );

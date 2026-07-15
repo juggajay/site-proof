@@ -220,4 +220,8 @@ export const queryKeys = {
 
   // AI availability
   aiStatus: ['ai-status'] as const,
+
+  // Copilot (AI setup proposals)
+  copilotProposals: (projectId: string) => ['copilot-proposals', projectId] as const,
+  copilotLotPresence: (projectId: string) => ['copilot-lot-presence', projectId] as const,
 } as const;

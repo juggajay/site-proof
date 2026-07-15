@@ -1,10 +1,21 @@
 import { useCallback, useEffect, lazy, Suspense, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { canDeleteProjects } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { apiFetch } from '@/lib/api';
-import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle, Spline, Map } from 'lucide-react';
+import {
+  Settings,
+  Users,
+  ClipboardList,
+  Bell,
+  MapPin,
+  Puzzle,
+  Spline,
+  Map,
+  Sparkles,
+  ChevronRight,
+} from 'lucide-react';
 import type {
   EnabledModules,
   HpApprovalRequirement,
@@ -467,6 +478,23 @@ export function ProjectSettingsPage() {
       <p className="text-muted-foreground mb-6">
         {project ? project.name : `Project ID: ${projectId}`}
       </p>
+
+      {projectId && (
+        <Link
+          to={`/projects/${projectId}/copilot`}
+          className="mb-6 flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
+        >
+          <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">Setup copilot</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Read project facts, control lines, plan sheets, and lots from your drawings — reviewed
+              before anything is applied.
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Link>
+      )}
 
       {loadError && (
         <div

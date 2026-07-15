@@ -12,7 +12,14 @@ import {
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { LOT_CREATORS } from '../lots/roles.js';
 import { parseProjectRouteParam } from '../controlLines/validation.js';
-import { decideProposal, rollbackProposal } from './proposalService.js';
+import { createProposal, decideProposal, rollbackProposal } from './proposalService.js';
+// Importing this module registers the project_facts apply/rollback handlers.
+import {
+  PROJECT_FACTS_STAGE,
+  cleanProjectFactsCandidate,
+  extractProjectFactsRawCandidate,
+  projectFactsUpload,
+} from './projectFactsExtraction.js';
 
 // Deciding a proposal applies its stage's handler (creating lots, control lines,
 // etc.), so it needs the same write-capable role set as lot setup. Reads are
@@ -60,6 +67,48 @@ function mapProposal(proposal: AiProposal) {
 const copilotRouter = Router();
 
 copilotRouter.use(requireAuth);
+
+// Stage 1 executor: read the four project facts off a drawing title block and
+// persist them as a 'proposed' proposal for human review. Writes NOTHING to the
+// project — the AI candidate only becomes real through the decision endpoint.
+// Same write-capable role set as decisions (deciding this proposal edits the
+// project). Multipart PDF/image upload, kept in memory, streamed to the AI.
+copilotRouter.post(
+  '/:projectId/copilot/project_facts/extract',
+  projectFactsUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      LOT_CREATORS,
+      DECIDE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+
+    if (!req.file) {
+      throw AppError.badRequest('A drawing file is required.');
+    }
+
+    const raw = await extractProjectFactsRawCandidate(req.file);
+    const { candidate, warnings, page } = cleanProjectFactsCandidate(raw);
+    const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022';
+
+    const proposal = await createProposal({
+      projectId,
+      stage: PROJECT_FACTS_STAGE,
+      requestedById: req.user!.id,
+      model,
+      sourceRefs: [
+        { fileName: req.file.originalname, page: page ?? undefined, note: 'Read from title block' },
+      ],
+      payload: candidate,
+      warnings,
+    });
+
+    res.json({ proposalId: proposal.id, candidate, warnings });
+  }),
+);
 
 copilotRouter.get(
   '/:projectId/copilot/proposals',
