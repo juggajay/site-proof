@@ -17,6 +17,7 @@ import {
   extractSetoutRawCandidate,
   setoutUpload,
 } from '../controlLines/setoutExtraction.js';
+import { readPlanSheetImage } from '../planSheets/storage.js';
 import { createProposal, decideProposal, rollbackProposal } from './proposalService.js';
 // Importing this module registers the project_facts apply/rollback handlers.
 import {
@@ -27,6 +28,9 @@ import {
 } from './projectFactsExtraction.js';
 // Importing this module registers the control_line apply/rollback handlers.
 import { CONTROL_LINE_STAGE } from './controlLineExecutor.js';
+// Importing this module registers the plan_sheets apply/rollback handlers.
+import { PLAN_SHEETS_STAGE } from './planSheetExecutor.js';
+import { cleanPlanSheetCandidate, extractPlanSheetRawCandidate } from './planSheetExtraction.js';
 
 // Deciding a proposal applies its stage's handler (creating lots, control lines,
 // etc.), so it needs the same write-capable role set as lot setup. Reads are
@@ -51,6 +55,10 @@ const listQuerySchema = z.object({
   stage: z.string().trim().min(1).max(120).optional(),
   status: z.string().trim().min(1).max(40).optional(),
 });
+
+// Stage-3 extract targets an already-stored sheet by id (not a fresh upload), so
+// the body is plain JSON rather than multipart.
+const planSheetExtractSchema = z.object({ planSheetId: z.string().uuid() });
 
 function mapProposal(proposal: AiProposal) {
   return {
@@ -155,6 +163,56 @@ copilotRouter.post(
     });
 
     res.json({ proposalId: proposal.id, candidate, warnings: candidate.warnings });
+  }),
+);
+
+// Stage 3 executor: read printed coordinate marks off an already-stored plan
+// sheet's raster and persist them as a 'proposed' proposal for human review.
+// The AI positions are APPROXIMATE — the review UI seeds draggable markers the
+// user snaps onto each mark before applying. Writes NO registration here; the
+// candidate only becomes real through the decision endpoint's apply handler.
+copilotRouter.post(
+  '/:projectId/copilot/plan_sheets/extract',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      LOT_CREATORS,
+      DECIDE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+
+    const body = planSheetExtractSchema.safeParse(req.body);
+    if (!body.success) {
+      throw AppError.fromZodError(body.error);
+    }
+
+    const sheet = await prisma.planSheet.findFirst({
+      where: { id: body.data.planSheetId, projectId },
+      select: { id: true, name: true, imageRef: true },
+    });
+    if (!sheet) {
+      throw AppError.notFound('Plan sheet');
+    }
+
+    const png = await readPlanSheetImage(sheet.imageRef, projectId);
+    const raw = await extractPlanSheetRawCandidate(png);
+    const { candidate, warnings } = cleanPlanSheetCandidate(raw);
+    const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022';
+
+    const payload = { planSheetId: sheet.id, ...candidate };
+    const proposal = await createProposal({
+      projectId,
+      stage: PLAN_SHEETS_STAGE,
+      requestedById: req.user!.id,
+      model,
+      sourceRefs: [{ fileName: sheet.name, note: 'Read from sheet raster' }],
+      payload,
+      warnings,
+    });
+
+    res.json({ proposalId: proposal.id, candidate: payload, warnings });
   }),
 );
 

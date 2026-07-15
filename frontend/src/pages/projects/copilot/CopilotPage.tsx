@@ -15,6 +15,7 @@ import type { Project } from '../settings/types';
 import { CopilotPanel, type StageCard } from './CopilotPanel';
 import { ProjectFactsReviewModal, type ProjectFactsCurrent } from './ProjectFactsReviewModal';
 import { ControlLineReviewModal } from './ControlLineReviewModal';
+import { PlanSheetRegistrationReviewModal } from './PlanSheetRegistrationReviewModal';
 import {
   newestProposalForStage,
   useCopilotProposals,
@@ -52,7 +53,9 @@ export function CopilotPage() {
     const dataExists: Record<string, boolean> = {
       project_facts: Boolean(project?.name && project?.state),
       control_line: (controlLinesQuery.data?.length ?? 0) > 0,
-      plan_sheets: (planSheetsQuery.data?.length ?? 0) > 0,
+      // "Done" means at least one sheet is registered — an unregistered upload is
+      // not yet on the map, which is what this stage delivers.
+      plan_sheets: (planSheetsQuery.data ?? []).some((sheet) => sheet.hasRegistration),
       lot_breakdown: Boolean(lotPresenceQuery.data),
     };
     return STAGE_META.map((meta) => {
@@ -83,6 +86,8 @@ export function CopilotPage() {
   const controlLineProposal = newestProposalForStage(proposals, 'control_line');
   // Seed the review modal's fallback zone from an existing control line's datum.
   const defaultCoordinateSystem = controlLinesQuery.data?.[0]?.coordinateSystem;
+
+  const planSheetProposal = newestProposalForStage(proposals, 'plan_sheets');
 
   const handleRollback = async (proposalId: string) => {
     try {
@@ -132,6 +137,15 @@ export function CopilotPage() {
           projectId={projectId}
           defaultCoordinateSystem={defaultCoordinateSystem}
           existingProposal={controlLineProposal?.status === 'proposed' ? controlLineProposal : null}
+          onClose={() => setOpenStage(null)}
+        />
+      )}
+
+      {openStage === 'plan_sheets' && projectId && (
+        <PlanSheetRegistrationReviewModal
+          projectId={projectId}
+          sheets={planSheetsQuery.data ?? []}
+          existingProposal={planSheetProposal?.status === 'proposed' ? planSheetProposal : null}
           onClose={() => setOpenStage(null)}
         />
       )}
