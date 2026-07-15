@@ -112,10 +112,12 @@ export function controlLineExtent(points: ControlPoint[] | undefined): {
   return min < max ? { min, max } : null;
 }
 
-// A lot prefix from the project number (falling back to the control-line name):
-// alphanumeric-and-dash, upper-cased, so generated lot numbers look hand-made.
+// A lot prefix from the CONTROL LINE name (falling back to the project number):
+// "MC10-014" tells a foreman which alignment a strip belongs to; a project
+// number ("100901-014") tells them nothing — Jay hit exactly this on the map
+// popup during the Wave 1 test drive.
 export function deriveLotPrefix(projectNumber: string | null, controlLineName: string): string {
-  const source = (projectNumber && projectNumber.trim()) || controlLineName || 'LOT';
+  const source = (controlLineName && controlLineName.trim()) || projectNumber || 'LOT';
   const cleaned = source
     .toUpperCase()
     .replace(/[^A-Z0-9-]+/g, '-')

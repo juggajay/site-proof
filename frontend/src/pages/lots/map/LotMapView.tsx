@@ -65,6 +65,7 @@ import {
 } from './coverageData';
 import {
   backfillLotGeometries,
+  chainageLabel,
   createDrawnLotGeometry,
   useProjectControlLines,
   useProjectLotGeometries,
@@ -202,6 +203,12 @@ function LotPopup({
         <div className="mt-1 text-xs text-muted-foreground">
           {formatStatusLabel(geometry.status)}
           {geometry.activityType ? ` · ${geometry.activityType}` : ''}
+          {(() => {
+            // With dozens of identical strips, the chainage range is what tells a
+            // human WHICH bit of road this is — the number alone doesn't.
+            const ch = chainageLabel(geometry.chainageStart, geometry.chainageEnd);
+            return ch ? ` · ${ch}` : '';
+          })()}
         </div>
         {(geometry.areaM2 != null || geometry.lengthM != null) && (
           <div className="mt-1 text-xs text-muted-foreground">

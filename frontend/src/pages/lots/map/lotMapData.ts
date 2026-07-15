@@ -31,6 +31,14 @@ export interface ProjectLotGeometry {
   chainageEnd: number | null;
 }
 
+/** "Ch 1,300–1,400" label for a lot's chainage extent; null when unknown. */
+export function chainageLabel(start: number | null, end: number | null): string | null {
+  if (start == null && end == null) return null;
+  const fmt = (n: number) => Math.round(n).toLocaleString();
+  if (start != null && end != null) return `Ch ${fmt(start)}–${fmt(end)}`;
+  return `Ch ${fmt((start ?? end) as number)}`;
+}
+
 export interface ControlLinePoint {
   chainage: number;
   easting: number;

@@ -37,11 +37,12 @@ describe('controlLineExtent', () => {
 });
 
 describe('deriveLotPrefix', () => {
-  it('prefers the project number, upper-cased and dash-cleaned', () => {
-    expect(deriveLotPrefix('mc-2024/road 5', 'MC01')).toBe('MC-2024-ROAD-5');
+  it('prefers the control line name — the alignment is what a foreman recognises', () => {
+    expect(deriveLotPrefix('100901', 'MC10')).toBe('MC10');
+    expect(deriveLotPrefix('100901', 'Main Road')).toBe('MAIN-ROAD');
   });
-  it('falls back to the control line name, then LOT', () => {
-    expect(deriveLotPrefix(null, 'Main Road')).toBe('MAIN-ROAD');
+  it('falls back to the project number, upper-cased and dash-cleaned, then LOT', () => {
+    expect(deriveLotPrefix('mc-2024/road 5', '')).toBe('MC-2024-ROAD-5');
     expect(deriveLotPrefix('', '')).toBe('LOT');
   });
 });
