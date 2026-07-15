@@ -75,20 +75,18 @@ function classifyActivityMatch(
 
   const lotFamily = familyForFold(lotFold);
   const tplFamily = familyForFold(tplFold);
-  if (!lotFamily || !tplFamily) return null;
+  if (!lotFamily || !tplFamily || lotFamily !== tplFamily) return null;
 
-  const lotExact = lotFold.confidence === 'exact';
-  const tplExact = tplFold.confidence === 'exact';
+  // Both sides fold to a precise Level-2 slug → exact only if the slugs agree.
+  // Two *different* Level-2 slugs in the same family are deliberately NOT a
+  // match; the taxonomy discriminates within a family.
+  if (lotFold.confidence === 'exact' && tplFold.confidence === 'exact') {
+    return lotFold.slug === tplFold.slug ? 'exact' : null;
+  }
 
-  // Precise Level-2 agreement — the only Tier-A-eligible kind.
-  if (lotExact && tplExact && lotFold.slug === tplFold.slug) return 'exact';
-
-  // Same family, but at least one side only folds to a family (e.g. a template
-  // not yet re-tagged to a Level-2 slug). Two *different* exact Level-2 slugs in
-  // the same family are deliberately NOT a match — the taxonomy discriminates.
-  if (lotFamily === tplFamily && (!lotExact || !tplExact)) return 'family';
-
-  return null;
+  // Same family, at least one side only folds to a family (e.g. a template not
+  // yet re-tagged to a Level-2 slug) → Tier-B family candidate.
+  return 'family';
 }
 
 const KIND_ORDER: Record<ActivityMatchKind, number> = {
