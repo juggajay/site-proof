@@ -15,7 +15,7 @@ vi.mock('../../dashboard/access.js', () => ({
 
 import { getDashboardProjectAccess } from '../../dashboard/access.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
-import { createChatToolExecutor } from './tools.js';
+import { createChatToolExecutor, summariseHoldPoints } from './tools.js';
 
 const user = { id: 'u1', companyId: 'c1', roleInCompany: 'project_manager' } as AuthUser;
 
@@ -101,5 +101,40 @@ describe('chat tool executor', () => {
     const execute = createChatToolExecutor(user);
     const outcome = await execute('get_project_overview', {});
     expect(outcome.result).toBe('A projectId is required.');
+  });
+
+  it('returns a tool error for get_project_qa_summary on an inaccessible project', async () => {
+    vi.mocked(hasInternalProjectAccess).mockResolvedValue(false);
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_project_qa_summary', { projectId: 'other' });
+    expect(outcome.result).toContain("don't have access");
+  });
+
+  it('requires a projectId for get_project_qa_summary', async () => {
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_project_qa_summary', {});
+    expect(outcome.result).toBe('A projectId is required.');
+  });
+});
+
+describe('summariseHoldPoints', () => {
+  it('counts released, awaiting, and ready-to-request hold points', () => {
+    expect(
+      summariseHoldPoints([
+        { status: 'released', canRequestRelease: true },
+        { status: 'pending', canRequestRelease: true },
+        { status: 'pending', canRequestRelease: false },
+        { status: 'requested', canRequestRelease: true },
+      ]),
+    ).toEqual({ total: 4, released: 1, awaitingRelease: 3, readyToRequest: 2 });
+  });
+
+  it('returns zeros for a project with no hold points', () => {
+    expect(summariseHoldPoints([])).toEqual({
+      total: 0,
+      released: 0,
+      awaitingRelease: 0,
+      readyToRequest: 0,
+    });
   });
 });

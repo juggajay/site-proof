@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHAT_STAGES, isAllowedNavigateTarget, isChatStage, MAX_ACTIONS } from './prompt.js';
+import {
+  CHAT_STAGES,
+  isAllowedNavigateTarget,
+  isChatStage,
+  JACK_SYSTEM_PROMPT,
+  MAX_ACTIONS,
+  PROJECT_PAGES,
+} from './prompt.js';
 
 describe('isAllowedNavigateTarget', () => {
   it('accepts whitelisted in-app paths', () => {
@@ -42,6 +49,26 @@ describe('isAllowedNavigateTarget', () => {
     expect(isAllowedNavigateTarget(undefined)).toBe(false);
     expect(isAllowedNavigateTarget(42)).toBe(false);
     expect(isAllowedNavigateTarget(null)).toBe(false);
+  });
+});
+
+describe('PROJECT_PAGES', () => {
+  // Live-probe regression: the whitelist allowed /itp and /variations but Jack
+  // refused to navigate because the prompt never told him those pages exist.
+  // One table must drive both, and this pins it.
+  it('every page is both navigable and described in the system prompt', () => {
+    for (const page of PROJECT_PAGES) {
+      const concrete = `/projects/abc-123/${page.path.replace('<lotId>', 'lot-9')}`;
+      expect(isAllowedNavigateTarget(concrete)).toBe(true);
+      expect(JACK_SYSTEM_PROMPT).toContain(`- /projects/<id>/${page.path} — ${page.label}`);
+    }
+  });
+
+  it('covers the pages from the live-probe refusals', () => {
+    const paths = PROJECT_PAGES.map((page) => page.path);
+    expect(paths).toContain('itp');
+    expect(paths).toContain('variations');
+    expect(paths).toContain('hold-points');
   });
 });
 
