@@ -218,6 +218,68 @@ export function useExtractPlanSheet(projectId: string | undefined) {
   });
 }
 
+/** One activity in a lot-breakdown candidate (stage 4). */
+export interface LotBreakdownActivity {
+  activityType: string;
+  /** ITP template the human picks in review (Wave 2 automates it). */
+  itpTemplateId?: string | null;
+}
+
+/** The reviewed thin-lot breakdown candidate the stage-4 extractor returns. */
+export interface LotBreakdownCandidate {
+  controlLineId: string;
+  startChainage: number;
+  endChainage: number;
+  interval: number;
+  lotPrefix: string;
+  activities: LotBreakdownActivity[];
+  offsetLeft: number;
+  offsetRight: number;
+}
+
+export interface LotBreakdownExtractionResult {
+  proposalId: string;
+  candidate: LotBreakdownCandidate;
+  warnings: string[];
+}
+
+/**
+ * Propose a thin-lot breakdown for a control line. An optional sheet lets the AI
+ * read the activities present; without one, a deterministic candidate is built
+ * server-side (works with AI unconfigured). Always multipart so the optional file
+ * and controlLineId ride together; authFetch sets the boundary. Writes nothing —
+ * it persists a 'proposed' proposal and returns the candidate to review.
+ */
+export function useExtractLotBreakdown(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      controlLineId,
+      file,
+    }: {
+      controlLineId: string;
+      file?: File | null;
+    }): Promise<LotBreakdownExtractionResult> => {
+      const form = new FormData();
+      form.append('controlLineId', controlLineId);
+      if (file) form.append('file', file, file.name);
+      const response = await authFetch(`${copilotPath(projectId!)}/lot_breakdown/extract`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!response.ok) {
+        throw new ApiError(response.status, await response.text());
+      }
+      return (await response.json()) as LotBreakdownExtractionResult;
+    },
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.copilotProposals(projectId) });
+      }
+    },
+  });
+}
+
 /** Accept (optionally with edits) or reject a proposal via the decision endpoint. */
 export function useDecideProposal(projectId: string | undefined) {
   const queryClient = useQueryClient();

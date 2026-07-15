@@ -155,61 +155,78 @@ const bulkLotGeometrySchema = z
     }
   });
 
-const bulkCreateLotsSchema = z
-  .object({
-    projectId: requiredIdSchema('projectId'),
-    // Batch-level default template, applied to any lot that omits its own
-    // per-lot itpTemplateId below (activity-aware batches set one per lot so
-    // each activity gets its correct ITP).
-    itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
-    geometry: bulkLotGeometrySchema.optional(),
-    lots: z
-      .array(
-        z
-          .object({
-            lotNumber: requiredTextSchema('lotNumber', MAX_LOT_NUMBER_LENGTH),
-            description: optionalNullableTextSchema('description', MAX_DESCRIPTION_LENGTH),
-            activityType: optionalNullableTextSchema('activityType', MAX_SHORT_TEXT_LENGTH),
-            lotType: z.enum(validLotTypes).optional(),
-            chainageStart: finiteNumberSchema('chainageStart').optional().nullable(),
-            chainageEnd: finiteNumberSchema('chainageEnd').optional().nullable(),
-            layer: optionalNullableTextSchema('layer', MAX_SHORT_TEXT_LENGTH),
-            itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
-          })
-          .superRefine((data, ctx) => {
-            validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {
-              ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
-            });
-          }),
-      )
-      .min(1, 'lots array is required and must not be empty')
-      .max(MAX_BULK_LOTS, `Cannot create more than ${MAX_BULK_LOTS} lots at once`),
-  })
-  .superRefine((data, ctx) => {
-    const seen = new Set<string>();
+// The bulk-create body minus projectId. Shared verbatim between the /bulk route
+// (which adds projectId from the body) and the copilot lot_breakdown apply
+// handler (which takes projectId from the proposal) so the two validate lot
+// rows, geometry and the 500-cap identically.
+const bulkCreateLotsShape = {
+  // Batch-level default template, applied to any lot that omits its own
+  // per-lot itpTemplateId below (activity-aware batches set one per lot so
+  // each activity gets its correct ITP).
+  itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
+  geometry: bulkLotGeometrySchema.optional(),
+  lots: z
+    .array(
+      z
+        .object({
+          lotNumber: requiredTextSchema('lotNumber', MAX_LOT_NUMBER_LENGTH),
+          description: optionalNullableTextSchema('description', MAX_DESCRIPTION_LENGTH),
+          activityType: optionalNullableTextSchema('activityType', MAX_SHORT_TEXT_LENGTH),
+          lotType: z.enum(validLotTypes).optional(),
+          chainageStart: finiteNumberSchema('chainageStart').optional().nullable(),
+          chainageEnd: finiteNumberSchema('chainageEnd').optional().nullable(),
+          layer: optionalNullableTextSchema('layer', MAX_SHORT_TEXT_LENGTH),
+          itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
+        })
+        .superRefine((data, ctx) => {
+          validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
+          });
+        }),
+    )
+    .min(1, 'lots array is required and must not be empty')
+    .max(MAX_BULK_LOTS, `Cannot create more than ${MAX_BULK_LOTS} lots at once`),
+} as const;
+
+// No-duplicate lot numbers + a chainage range on every lot when geometry is on.
+function refineBulkCreateLots(
+  data: {
+    lots: { lotNumber: string; chainageStart?: number | null; chainageEnd?: number | null }[];
+    geometry?: unknown;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const seen = new Set<string>();
+  data.lots.forEach((lot, index) => {
+    if (seen.has(lot.lotNumber)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Duplicate lotNumber values are not allowed',
+        path: ['lots', index, 'lotNumber'],
+      });
+      return;
+    }
+    seen.add(lot.lotNumber);
+  });
+  if (data.geometry) {
     data.lots.forEach((lot, index) => {
-      if (seen.has(lot.lotNumber)) {
+      if (lot.chainageStart == null || lot.chainageEnd == null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Duplicate lotNumber values are not allowed',
-          path: ['lots', index, 'lotNumber'],
+          message: 'Every lot needs a chainage range when generating map geometry',
+          path: ['lots', index, 'chainageStart'],
         });
-        return;
       }
-      seen.add(lot.lotNumber);
     });
-    if (data.geometry) {
-      data.lots.forEach((lot, index) => {
-        if (lot.chainageStart == null || lot.chainageEnd == null) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'Every lot needs a chainage range when generating map geometry',
-            path: ['lots', index, 'chainageStart'],
-          });
-        }
-      });
-    }
-  });
+  }
+}
+
+const bulkCreateLotsSchema = z
+  .object({ projectId: requiredIdSchema('projectId'), ...bulkCreateLotsShape })
+  .superRefine(refineBulkCreateLots);
+
+// projectId-less variant for the copilot lot_breakdown apply handler.
+const bulkCreateLotsCoreSchema = z.object(bulkCreateLotsShape).superRefine(refineBulkCreateLots);
 
 // Schema for cloning a lot
 const cloneLotSchema = z
@@ -332,6 +349,7 @@ export {
   lotIdArraySchema,
   createLotSchema,
   bulkCreateLotsSchema,
+  bulkCreateLotsCoreSchema,
   cloneLotSchema,
   updateLotSchema,
   bulkDeleteSchema,

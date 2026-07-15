@@ -251,9 +251,11 @@ describe('Copilot proposals API', () => {
   });
 
   it('returns 400 when accepting a stage with no apply handler', async () => {
-    // plan_sheets now has a registered handler (this PR); lot_breakdown is the
-    // next still-unhandled stage.
-    const proposal = await seedProposal(projectId, pmUserId, 'lot_breakdown', { lots: 2 });
+    // Every Wave-1 stage now has a registered handler; use a synthetic
+    // never-registered stage to exercise the missing-handler guard.
+    const proposal = await seedProposal(projectId, pmUserId, 'nonexistent_stage_for_test', {
+      lots: 2,
+    });
     const res = await request(app)
       .post(`/api/projects/${projectId}/copilot/proposals/${proposal.id}/decision`)
       .set('Authorization', `Bearer ${pmToken}`)

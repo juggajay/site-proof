@@ -50,6 +50,9 @@ function StageActions({
 }) {
   const applied =
     card.proposal && (card.proposal.status === 'accepted' || card.proposal.status === 'edited');
+  // Only AI-dependent stages are gated on server AI config; lot_breakdown has a
+  // deterministic path and stays actionable regardless.
+  const aiBlocked = card.requiresAi && !aiConfigured;
 
   return (
     <div className="flex items-center gap-2">
@@ -68,8 +71,8 @@ function StageActions({
         type="button"
         variant={card.status === 'review_ready' ? 'default' : 'outline'}
         size="sm"
-        disabled={!aiConfigured}
-        title={aiConfigured ? undefined : 'AI reading is not configured on this server'}
+        disabled={aiBlocked}
+        title={aiBlocked ? 'AI reading is not configured on this server' : undefined}
         onClick={onAction}
       >
         {card.status === 'review_ready'
@@ -84,8 +87,8 @@ function StageActions({
 
 /**
  * The copilot rail: a quiet card per Wave-1 setup stage in order. Each card shows
- * its derived status; only Project facts is actionable in this PR (stages 2–4
- * show "Coming soon" but still surface their status if a proposal exists).
+ * its derived status and a read/review CTA. AI-dependent stages are disabled when
+ * the server has no AI configured; lot_breakdown stays actionable regardless.
  */
 export function CopilotPanel({
   cards,
