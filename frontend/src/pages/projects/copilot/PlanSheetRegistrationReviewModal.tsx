@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Loader2, MapPin } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -10,9 +11,12 @@ import {
   ModalFooter,
 } from '@/components/ui/Modal';
 import { toast } from '@/components/ui/toaster';
+import { queryKeys } from '@/lib/queryKeys';
+import { DEFAULT_COORDINATE_SYSTEM } from '@/lib/spatial/coordinateSystems';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { PlanSheetRegistrationModal } from '../settings/PlanSheetRegistrationModal';
+import { PlanSheetUploadModal } from '../settings/PlanSheetUploadModal';
 import type { EditablePoint } from '../settings/RegistrationSidePanel';
 import type { PlanSheetListItem, PlanSheetRegistration } from '../settings/planSheetsData';
 import {
@@ -25,8 +29,12 @@ import {
 interface PlanSheetRegistrationReviewModalProps {
   projectId: string;
   sheets: PlanSheetListItem[];
+  /** Datum for the in-flow upload's coordinate-system default (usually the control line's). */
+  defaultCoordinateSystem?: string;
   /** A live 'proposed' plan-sheet proposal to review directly (skips the picker). */
   existingProposal?: CopilotProposal | null;
+  /** Fired once a sheet is registered (drives the next-step hand-off). */
+  onApplied?: () => void;
   onClose: () => void;
 }
 
@@ -62,7 +70,9 @@ function toEditablePoints(
 export function PlanSheetRegistrationReviewModal({
   projectId,
   sheets,
+  defaultCoordinateSystem,
   existingProposal,
+  onApplied,
   onClose,
 }: PlanSheetRegistrationReviewModalProps) {
   const [review, setReview] = useState<ReviewState | null>(() =>
@@ -71,6 +81,7 @@ export function PlanSheetRegistrationReviewModal({
       : null,
   );
 
+  const queryClient = useQueryClient();
   const extractMutation = useExtractPlanSheet(projectId);
   const decideMutation = useDecideProposal(projectId);
 
@@ -106,6 +117,7 @@ export function PlanSheetRegistrationReviewModal({
       title: 'Sheet registered',
       description: `${reviewSheet?.name ?? 'The sheet'} is now on the project map.`,
     });
+    onApplied?.();
   };
 
   const handleDismiss = async () => {
@@ -163,6 +175,23 @@ export function PlanSheetRegistrationReviewModal({
     );
   }
 
+  // In-flow upload: with no sheets yet, offer the same upload machinery the Plan
+  // Sheets settings tab uses so the user never has to leave the copilot. Once a
+  // sheet lands the query invalidates, `sheets` fills, and this falls through to
+  // the picker — continuing straight into extraction.
+  if (sheets.length === 0) {
+    return (
+      <PlanSheetUploadModal
+        projectId={projectId}
+        defaultCoordinateSystem={defaultCoordinateSystem ?? DEFAULT_COORDINATE_SYSTEM}
+        onUploaded={() =>
+          void queryClient.invalidateQueries({ queryKey: queryKeys.planSheets(projectId) })
+        }
+        onClose={onClose}
+      />
+    );
+  }
+
   // Picker step: choose which sheet to read. Extract targets an already-stored
   // sheet, so this is a plain list — not an upload.
   return (
@@ -177,48 +206,42 @@ export function PlanSheetRegistrationReviewModal({
         markers you snap onto each mark before applying.
       </ModalDescription>
       <ModalBody>
-        {sheets.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No plan sheets yet. Upload one under Plan Sheets first, then come back to register it.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {sheets.map((sheet) => (
-              <li
-                key={sheet.id}
-                className="flex items-center justify-between gap-3 rounded-md border p-3"
-              >
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{sheet.name}</span>
-                  </span>
-                  {sheet.hasRegistration && (
-                    <span className="mt-0.5 block text-xs text-success">Already registered</span>
-                  )}
+        <ul className="space-y-2">
+          {sheets.map((sheet) => (
+            <li
+              key={sheet.id}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{sheet.name}</span>
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={extractMutation.isLoading}
-                  onClick={() => void handleRead(sheet.id)}
-                >
-                  {extractMutation.isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Reading…
-                    </>
-                  ) : sheet.hasRegistration ? (
-                    'Re-read'
-                  ) : (
-                    'Read from sheet'
-                  )}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+                {sheet.hasRegistration && (
+                  <span className="mt-0.5 block text-xs text-success">Already registered</span>
+                )}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={extractMutation.isLoading}
+                onClick={() => void handleRead(sheet.id)}
+              >
+                {extractMutation.isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Reading…
+                  </>
+                ) : sheet.hasRegistration ? (
+                  'Re-read'
+                ) : (
+                  'Read from sheet'
+                )}
+              </Button>
+            </li>
+          ))}
+        </ul>
       </ModalBody>
       <ModalFooter>
         <Button

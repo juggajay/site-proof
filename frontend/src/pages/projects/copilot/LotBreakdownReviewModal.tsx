@@ -43,6 +43,8 @@ interface LotBreakdownReviewModalProps {
   controlLines: ControlLine[];
   /** A live 'proposed' proposal to review directly (skips the propose step). */
   existingProposal?: CopilotProposal | null;
+  /** Fired once the proposal is successfully applied (drives the next-step hand-off). */
+  onApplied?: () => void;
   onClose: () => void;
 }
 
@@ -295,6 +297,7 @@ export function LotBreakdownReviewModal({
   projectId,
   controlLines,
   existingProposal,
+  onApplied,
   onClose,
 }: LotBreakdownReviewModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -410,6 +413,7 @@ export function LotBreakdownReviewModal({
       });
       void queryClient.invalidateQueries(queryKeys.projectLotGeometries(projectId));
       toast({ title: 'Lots created', description: `${lots.length} lots added to the register.` });
+      onApplied?.();
       onClose();
     } catch (error) {
       logError('Failed to create lots from breakdown:', error);

@@ -36,6 +36,8 @@ interface ControlLineReviewModalProps {
   defaultCoordinateSystem?: string;
   /** A live 'proposed' proposal to review directly (skips the upload step). */
   existingProposal?: CopilotProposal | null;
+  /** Fired once the proposal is successfully applied (drives the next-step hand-off). */
+  onApplied?: () => void;
   onClose: () => void;
 }
 
@@ -96,6 +98,7 @@ export function ControlLineReviewModal({
   projectId,
   defaultCoordinateSystem,
   existingProposal,
+  onApplied,
   onClose,
 }: ControlLineReviewModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +168,7 @@ export function ControlLineReviewModal({
           ? `${checkedRows[0].name.trim()} has been added.`
           : `${checkedRows.length} control lines added.`,
       });
+      onApplied?.();
       onClose();
     } catch (error) {
       logError('Failed to apply control lines:', error);
