@@ -225,6 +225,7 @@ export function PlanSheetsPage() {
   const deleteMutation = useDeletePlanSheet(projectId);
 
   const sheets = sheetsQuery.data ?? [];
+  const hasControlLines = (controlLinesQuery.data ?? []).length > 0;
   const loading = accessLoading || sheetsQuery.isLoading;
   const loadError = sheetsQuery.error
     ? extractErrorMessage(sheetsQuery.error, 'Could not load plan sheets.')
@@ -299,6 +300,13 @@ export function PlanSheetsPage() {
       />
 
       <ProjectAdminLoadError message={loadError} onRetry={() => void sheetsQuery.refetch()} />
+
+      {canManage && !controlLinesQuery.isLoading && !hasControlLines && (
+        <div className="mb-4 rounded-md border border-dashed bg-muted/40 p-3 text-sm text-muted-foreground">
+          Tip: to register a sheet by chainage, add a control line first under Control Lines. You
+          can still register a sheet by clicking known coordinates on the drawing without one.
+        </div>
+      )}
 
       <ProjectAdminResourceGate loading={loading} loadError={loadError} canManage={true}>
         {sheets.length === 0 ? (

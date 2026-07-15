@@ -270,8 +270,18 @@ export function RegistrationSidePanel({
       ) : points.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Click a known location on the drawing (survey mark, grid cross, title-block corner) to
-          start. You need at least 2. No coordinates printed on the drawing? Click a chainage tick
-          on the control line, then use &ldquo;From chainage&rdquo; to fill them in.
+          start. You need at least 2.{' '}
+          {controlLines.length > 0 ? (
+            <>
+              No coordinates printed on the drawing? Click a chainage tick on the control line, then
+              use &ldquo;From chainage&rdquo; to fill them in.
+            </>
+          ) : (
+            <>
+              No control line yet? Add one under Control Lines to enter points by chainage and
+              offset.
+            </>
+          )}
         </p>
       ) : (
         <ul className="space-y-3">

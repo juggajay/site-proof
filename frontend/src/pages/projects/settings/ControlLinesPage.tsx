@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { useAiStatus } from '@/hooks/useAiStatus';
 import {
   coordinateSystemLabel,
   defaultCoordinateSystemForState,
@@ -136,6 +137,7 @@ export function ControlLinesPage() {
   const [linePendingDelete, setLinePendingDelete] = useState<ControlLine | null>(null);
 
   const { project, canManage, readOnly, loading: accessLoading } = useControlLinesAccess(projectId);
+  const { aiConfigured } = useAiStatus();
   const controlLinesQuery = useControlLines(projectId);
   const createMutation = useCreateControlLine(projectId);
   const updateMutation = useUpdateControlLine(projectId);
@@ -233,7 +235,12 @@ export function ControlLinesPage() {
               type="button"
               variant="outline"
               onClick={() => setShowSetoutImport(true)}
-              disabled={readOnly}
+              disabled={readOnly || !aiConfigured}
+              title={
+                aiConfigured
+                  ? undefined
+                  : "AI extraction isn't configured on this server. Add points with “Import from file” or “Add Control Line” instead."
+              }
             >
               <ScanText className="h-4 w-4" />
               Import from setout sheet
