@@ -30,7 +30,7 @@ interface RateLimitResult {
   resetSeconds: number;
 }
 
-type RateLimitScope = 'api' | 'auth' | 'support' | 'verification-resend';
+type RateLimitScope = 'api' | 'auth' | 'support' | 'verification-resend' | 'chat';
 type AuthLockoutResult = { locked: boolean; remainingSeconds: number };
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
@@ -51,6 +51,8 @@ const VERIFICATION_RESEND_MAX_REQUESTS = readPositiveIntegerEnv(
   3,
 );
 const SUPPORT_WINDOW_MS = 60 * 1000;
+const CHAT_WINDOW_MS = 60 * 1000;
+const CHAT_MAX_REQUESTS = readPositiveIntegerEnv('CHAT_RATE_LIMIT_MAX', 20);
 const CLEANUP_INTERVAL = 5 * 60 * 1000;
 const MAX_MAP_SIZE = 10000;
 const LOCKOUT_THRESHOLD = readPositiveIntegerEnv('AUTH_LOCKOUT_THRESHOLD', 5);
@@ -557,4 +559,30 @@ async function handleSupportRateLimit(req: Request, res: Response, next: NextFun
  */
 export function supportRateLimiter(req: Request, res: Response, next: NextFunction) {
   void handleSupportRateLimit(req, res, next).catch(next);
+}
+
+async function handleChatRateLimit(req: Request, res: Response, next: NextFunction) {
+  // Per-user limit (requireAuth runs first, so req.user is set); fall back to
+  // the source IP if somehow unauthenticated.
+  const identifier = req.user?.id || getClientIp(req);
+  const result = await consumeRateLimit('chat', identifier, CHAT_WINDOW_MS, CHAT_MAX_REQUESTS);
+  setRateLimitHeaders(res, CHAT_MAX_REQUESTS, result.remaining, result.resetSeconds);
+
+  if (!result.allowed) {
+    throw new AppError(
+      429,
+      `Too many chat requests. Maximum ${CHAT_MAX_REQUESTS} per minute. Please try again in ${result.resetSeconds} seconds.`,
+      'RATE_LIMITED',
+      { retryAfter: result.resetSeconds },
+    );
+  }
+
+  next();
+}
+
+/**
+ * Per-user limiter for the Jack chat copilot endpoint.
+ */
+export function chatRateLimiter(req: Request, res: Response, next: NextFunction) {
+  void handleChatRateLimit(req, res, next).catch(next);
 }

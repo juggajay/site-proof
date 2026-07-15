@@ -2105,6 +2105,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/copilot/lotBreakdownExtraction.ts', import.meta.url),
       'utf8',
     );
+    const jackChatLoopSource = await readFile(
+      new URL('../../backend/src/routes/copilot/chat/loop.ts', import.meta.url),
+      'utf8',
+    );
     const webhookDeliverySource = await readFile(
       new URL('../../backend/src/routes/webhooks/delivery.ts', import.meta.url),
       'utf8',
@@ -2158,6 +2162,10 @@ test.describe('production readiness guardrails', () => {
       /fetchWithTimeout\(\s*'https:\/\/api\.anthropic\.com\/v1\/messages'/,
     );
     expect(lotBreakdownExtractionSource).toContain('AI_EXTRACTION_TIMEOUT_MS,');
+    expect(jackChatLoopSource).toMatch(
+      /fetchWithTimeout\(\s*'https:\/\/api\.anthropic\.com\/v1\/messages'/,
+    );
+    expect(jackChatLoopSource).toContain('AI_EXTRACTION_TIMEOUT_MS,');
     expect(webhookDeliverySource).toContain('const timeout = setTimeout(');
     expect(webhookDeliverySource).toContain('new AbortController()');
     expect(webhookDeliverySource).toContain('clearTimeout(timeout)');
