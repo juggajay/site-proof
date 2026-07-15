@@ -9,16 +9,26 @@ vi.mock('./projectStatus.js', () => ({
   hasInternalProjectAccess: vi.fn(),
   getProjectStageStatus: vi.fn(),
 }));
+vi.mock('../../dashboard/access.js', () => ({
+  getDashboardProjectAccess: vi.fn(),
+}));
 
+import { getDashboardProjectAccess } from '../../dashboard/access.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
 import { createChatToolExecutor } from './tools.js';
 
 const user = { id: 'u1', companyId: 'c1', roleInCompany: 'project_manager' } as AuthUser;
 
+const ACCESS = [
+  { projectId: 'p1', project: { name: 'Chandler Ave', projectNumber: '100901' } },
+] as Awaited<ReturnType<typeof getDashboardProjectAccess>>;
+
 describe('chat tool executor', () => {
   beforeEach(() => {
     vi.mocked(hasInternalProjectAccess).mockReset();
     vi.mocked(getProjectStageStatus).mockReset();
+    vi.mocked(getDashboardProjectAccess).mockReset();
+    vi.mocked(getDashboardProjectAccess).mockResolvedValue(ACCESS);
   });
 
   it('queues a navigate action for a whitelisted path', async () => {
@@ -26,6 +36,28 @@ describe('chat tool executor', () => {
     const outcome = await execute('navigate', { to: '/projects/p1/lots' });
     expect(outcome.action).toEqual({ type: 'navigate', to: '/projects/p1/lots' });
     expect(outcome.result).toBe('Navigation queued.');
+  });
+
+  it('rewrites a projectNumber path segment to the project id (live-probe regression)', async () => {
+    // Jack's first prod conversation navigated to /projects/100901/lots — the
+    // human project number, which the router cannot resolve.
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('navigate', { to: '/projects/100901/lots' });
+    expect(outcome.action).toEqual({ type: 'navigate', to: '/projects/p1/lots' });
+  });
+
+  it('refuses navigation into a project the user cannot open', async () => {
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('navigate', { to: '/projects/someone-elses/lots' });
+    expect(outcome.action).toBeUndefined();
+    expect(outcome.result).toContain('list_projects');
+  });
+
+  it('passes non-project paths through without an access lookup', async () => {
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('navigate', { to: '/dashboard' });
+    expect(outcome.action).toEqual({ type: 'navigate', to: '/dashboard' });
+    expect(getDashboardProjectAccess).not.toHaveBeenCalled();
   });
 
   it('rejects a navigate to an external URL without queuing', async () => {
