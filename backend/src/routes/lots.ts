@@ -6,10 +6,6 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { updateLotSchema } from './lots/validation.js';
 import { canViewLotBudget, requireProjectRole } from './lots/access.js';
-import {
-  requireSubcontractorInProject,
-  syncPrimaryLotSubcontractorAssignment,
-} from './lots/assignmentHelpers.js';
 import { parseLotRouteParam } from './lots/requestParsing.js';
 import {
   LOT_EDITORS,
@@ -213,46 +209,35 @@ lotsRouter.patch(
     if (budgetAmount !== undefined && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
       updateData.budgetAmount = budgetAmount;
     }
-    // Only PMs and above can assign subcontractors
-    if (assignedSubcontractorId !== undefined && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
-      if (assignedSubcontractorId) {
-        await requireSubcontractorInProject(assignedSubcontractorId, lot.projectId);
-      }
-      updateData.assignedSubcontractorId = assignedSubcontractorId || null;
+    // Legacy single-FK subcontractor assignment is retired: the modern per-lot
+    // assignments UI is the only way to SET a subcontractor. Editors may still
+    // CLEAR a stale legacy assignment (migration-friendly) — a non-null value is
+    // ignored so a re-sent unchanged field never re-establishes a legacy write.
+    // Clearing does NOT touch modern LotSubcontractorAssignment rows (those are
+    // the source of truth). See docs/research/agentic-setup-synthesis-2026-07-15.md §1.
+    if (assignedSubcontractorId === null && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
+      updateData.assignedSubcontractorId = null;
     }
 
-    const updatedLot = await prisma.$transaction(async (tx) => {
-      const updated = await tx.lot.update({
-        where: { id },
-        data: updateData,
-        select: {
-          id: true,
-          lotNumber: true,
-          description: true,
-          status: true,
-          activityType: true,
-          chainageStart: true,
-          chainageEnd: true,
-          offset: true,
-          offsetCustom: true,
-          layer: true,
-          areaZone: true,
-          budgetAmount: true,
-          assignedSubcontractorId: true,
-          updatedAt: true,
-        },
-      });
-
-      if (assignedSubcontractorId !== undefined && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
-        await syncPrimaryLotSubcontractorAssignment(tx, {
-          lotId: id,
-          projectId: lot.projectId,
-          subcontractorId: assignedSubcontractorId,
-          assignedById: user.id,
-        });
-      }
-
-      return updated;
+    const updatedLot = await prisma.lot.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        lotNumber: true,
+        description: true,
+        status: true,
+        activityType: true,
+        chainageStart: true,
+        chainageEnd: true,
+        offset: true,
+        offsetCustom: true,
+        layer: true,
+        areaZone: true,
+        budgetAmount: true,
+        assignedSubcontractorId: true,
+        updatedAt: true,
+      },
     });
 
     const changedFields = Object.keys(updateData).sort();

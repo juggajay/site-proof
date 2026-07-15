@@ -55,7 +55,9 @@ describe('LotEditFormFields', () => {
 
     expect(screen.getByText('Commercial')).toBeInTheDocument();
     expect(screen.getByLabelText('Budget Amount ($)')).toHaveValue(48000);
-    expect(screen.getByLabelText('Assigned Subcontractor')).toBeInTheDocument();
+    // The Assigned Subcontractor label always renders; with no legacy assignment
+    // it shows a nudge to the modern section rather than a re-assign picker.
+    expect(screen.getByText('Assigned Subcontractor')).toBeInTheDocument();
   });
 
   it('shows the custom offset input only when offset is custom', () => {
@@ -67,14 +69,27 @@ describe('LotEditFormFields', () => {
     expect(screen.getByLabelText('Custom Offset Value')).toHaveValue('+2.5m');
   });
 
-  it('marks pending subcontractor options with (Pending)', () => {
-    renderFields({ subcontractors });
+  it('renders a clear-only control for an existing legacy assignment (no re-assign picker)', () => {
+    renderFields({
+      formData: { ...baseFormData, assignedSubcontractorId: 'sub-2' },
+      subcontractors,
+    });
 
-    // Accessible-name matching normalizes the trailing whitespace the JSX
-    // renders for non-pending options.
-    expect(screen.getByRole('option', { name: 'Apex Civil (Pending)' })).toBeInTheDocument();
+    // Shows the current company plus a Clear option — never the other subbies,
+    // because the legacy write path is retired (assigning is done in the modern
+    // Subcontractor assignments section).
     expect(screen.getByRole('option', { name: 'Bedrock Earthmoving' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'No subcontractor assigned' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Clear assignment' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Apex Civil/ })).not.toBeInTheDocument();
+  });
+
+  it('shows a nudge instead of a picker when there is no legacy assignment', () => {
+    renderFields({ formData: { ...baseFormData, assignedSubcontractorId: '' }, subcontractors });
+
+    expect(screen.queryByLabelText('Assigned Subcontractor')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Assign subcontractors from the Subcontractor assignments/i),
+    ).toBeInTheDocument();
   });
 
   it('forwards field changes to onInputChange', () => {
@@ -90,10 +105,17 @@ describe('LotEditFormFields', () => {
   });
 
   it('disables QA fields when detailsLocked but keeps budget editable when not budgetLocked', () => {
-    renderFields({ detailsLocked: true, budgetLocked: false, canViewBudgets: true });
+    renderFields({
+      formData: { ...baseFormData, assignedSubcontractorId: 'sub-2' },
+      subcontractors,
+      detailsLocked: true,
+      budgetLocked: false,
+      canViewBudgets: true,
+    });
 
     expect(screen.getByLabelText('Lot Number *')).toBeDisabled();
     expect(screen.getByLabelText('Status')).toBeDisabled();
+    // The legacy clear-only control is still gated by detailsLocked.
     expect(screen.getByLabelText('Assigned Subcontractor')).toBeDisabled();
     expect(screen.getByLabelText('Budget Amount ($)')).toBeEnabled();
   });

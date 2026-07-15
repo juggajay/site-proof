@@ -335,27 +335,17 @@ export function LotDetailPage() {
   const {
     assignments,
     myAssignment,
-    showSubcontractorModal,
-    setShowSubcontractorModal,
-    subcontractors,
-    selectedSubcontractor,
-    setSelectedSubcontractor,
-    assigningSubcontractor,
     showAssignSubcontractorModal,
     setShowAssignSubcontractorModal,
     editingAssignment,
     setEditingAssignment,
     removeAssignmentPending,
     removeAssignment,
-    handleAssignSubcontractor,
     handleAssignmentSuccess,
   } = useLotSubcontractorAssignments({
-    projectId,
     lotId,
-    lot,
     isSubcontractor,
     canManageAssignments,
-    setLot,
   });
 
   // Subcontractors need canCompleteITP permission, others can complete by default
@@ -403,10 +393,6 @@ export function LotDetailPage() {
             `/projects/${encodeURIComponent(projectId || '')}/lots/${encodeURIComponent(lotId || '')}/edit`,
           )
         }
-        onAssignSubcontractorLegacy={() => {
-          setSelectedSubcontractor(lot.assignedSubcontractorId || '');
-          setShowSubcontractorModal(true);
-        }}
         onOverrideStatus={() => setShowOverrideModal(true)}
         onAddSubcontractor={() => setShowAssignSubcontractorModal(true)}
         onEditAssignment={(assignment: LotSubcontractorAssignment) => {
@@ -541,13 +527,6 @@ export function LotDetailPage() {
         overriding={overriding}
         setShowOverrideModal={setShowOverrideModal}
         handleOverrideStatus={handleOverrideStatus}
-        showSubcontractorModal={showSubcontractorModal}
-        subcontractors={subcontractors}
-        selectedSubcontractor={selectedSubcontractor}
-        assigningSubcontractor={assigningSubcontractor}
-        setShowSubcontractorModal={setShowSubcontractorModal}
-        setSelectedSubcontractor={setSelectedSubcontractor}
-        handleAssignSubcontractor={handleAssignSubcontractor}
         showAssignSubcontractorModal={showAssignSubcontractorModal}
         editingAssignment={editingAssignment}
         setShowAssignSubcontractorModal={setShowAssignSubcontractorModal}

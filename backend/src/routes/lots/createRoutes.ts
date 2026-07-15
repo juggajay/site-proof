@@ -33,7 +33,6 @@ import { requireProjectRole } from './access.js';
 import { planBulkItpTemplates } from './bulkItpPlan.js';
 import { parseLotRouteParam } from './requestParsing.js';
 import {
-  requireSubcontractorInProject,
   requireItpTemplateForProject,
   syncPrimaryLotSubcontractorAssignment,
 } from './assignmentHelpers.js';
@@ -149,13 +148,10 @@ lotCreateRouter.post(
       chainageEnd,
       lotType,
       itpTemplateId,
-      assignedSubcontractorId,
       areaZone,
       structureId,
       structureElement,
       budgetAmount,
-      canCompleteITP,
-      itpRequiresVerification,
     } = validation.data;
 
     // Feature #853: Area zone required for area lot type
@@ -200,10 +196,6 @@ lotCreateRouter.post(
       templateSnapshot = buildTemplateSnapshot(template);
     }
 
-    if (assignedSubcontractorId) {
-      await requireSubcontractorInProject(assignedSubcontractorId, projectId);
-    }
-
     const lot = await prisma.$transaction(async (tx) => {
       const createdLot = await tx.lot.create({
         data: {
@@ -215,7 +207,6 @@ lotCreateRouter.post(
           chainageStart,
           chainageEnd,
           itpTemplateId: itpTemplateId || null,
-          assignedSubcontractorId: assignedSubcontractorId || null,
           areaZone: areaZone || null,
           structureId: structureId || null, // Feature #854
           structureElement: structureElement || null, // Feature #854
@@ -242,17 +233,6 @@ lotCreateRouter.post(
             templateSnapshot: JSON.stringify(templateSnapshot),
             status: 'not_started',
           },
-        });
-      }
-
-      if (assignedSubcontractorId) {
-        await syncPrimaryLotSubcontractorAssignment(tx, {
-          lotId: createdLot.id,
-          projectId,
-          subcontractorId: assignedSubcontractorId,
-          canCompleteITP,
-          itpRequiresVerification,
-          assignedById: user.id,
         });
       }
 
@@ -527,7 +507,11 @@ lotCreateRouter.post(
       },
     });
 
-    // Create the cloned lot and keep legacy/new subcontractor assignment state aligned.
+    // Carry the source lot's subcontractor forward in MODERN form only: the
+    // legacy Lot.assignedSubcontractorId FK write path is retired, so the clone
+    // starts with a null legacy field and syncPrimaryLotSubcontractorAssignment
+    // (below) creates the LotSubcontractorAssignment join row. See docs/research/
+    // agentic-setup-synthesis-2026-07-15.md §1.
     const clonedLot = await prisma.$transaction(async (tx) => {
       const lot = await tx.lot.create({
         data: {
@@ -542,7 +526,7 @@ lotCreateRouter.post(
           offsetCustom: sourceLot.offsetCustom,
           layer: sourceLot.layer,
           areaZone: sourceLot.areaZone,
-          assignedSubcontractorId: sourceLot.assignedSubcontractorId,
+          assignedSubcontractorId: null,
           itpTemplateId: cloneItpTemplateId,
         },
         select: {

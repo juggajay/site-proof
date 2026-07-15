@@ -1,9 +1,8 @@
 import type { ComponentProps } from 'react';
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
-import type { Lot, SubcontractorCompany, LotSubcontractorAssignment } from '../types';
+import type { Lot, LotSubcontractorAssignment } from '../types';
 import { LOT_OVERRIDE_STATUSES } from '../constants';
 import { StatusOverrideModal } from './StatusOverrideModal';
-import { LegacyAssignSubcontractorModal } from './LegacyAssignSubcontractorModal';
 import { EvidenceWarningModal } from './EvidenceWarningModal';
 import { MarkAsNAModal } from './MarkAsNAModal';
 import { MarkAsFailedModal } from './MarkAsFailedModal';
@@ -37,15 +36,7 @@ interface LotDetailModalsProps {
   overriding: boolean;
   setShowOverrideModal: (open: boolean) => void;
   handleOverrideStatus: ComponentProps<typeof StatusOverrideModal>['onSubmit'];
-  // Assign subcontractor (legacy)
-  showSubcontractorModal: boolean;
-  subcontractors: SubcontractorCompany[];
-  selectedSubcontractor: string;
-  assigningSubcontractor: boolean;
-  setShowSubcontractorModal: (open: boolean) => void;
-  setSelectedSubcontractor: (id: string) => void;
-  handleAssignSubcontractor: () => void;
-  // Assign subcontractor (new permission system)
+  // Assign subcontractor (per-lot permission system)
   showAssignSubcontractorModal: boolean;
   editingAssignment: LotSubcontractorAssignment | null;
   setShowAssignSubcontractorModal: (open: boolean) => void;
@@ -103,13 +94,6 @@ export function LotDetailModals({
   overriding,
   setShowOverrideModal,
   handleOverrideStatus,
-  showSubcontractorModal,
-  subcontractors,
-  selectedSubcontractor,
-  assigningSubcontractor,
-  setShowSubcontractorModal,
-  setSelectedSubcontractor,
-  handleAssignSubcontractor,
   showAssignSubcontractorModal,
   editingAssignment,
   setShowAssignSubcontractorModal,
@@ -158,22 +142,7 @@ export function LotDetailModals({
         isSubmitting={overriding}
       />
 
-      {/* Assign Subcontractor Modal */}
-      <LegacyAssignSubcontractorModal
-        isOpen={showSubcontractorModal}
-        lot={lot}
-        subcontractors={subcontractors}
-        selectedSubcontractor={selectedSubcontractor}
-        isAssigning={assigningSubcontractor}
-        onSelectedChange={setSelectedSubcontractor}
-        onClose={() => {
-          setShowSubcontractorModal(false);
-          setSelectedSubcontractor('');
-        }}
-        onSubmit={handleAssignSubcontractor}
-      />
-
-      {/* Assign Subcontractor Modal (new permission system) */}
+      {/* Assign Subcontractor Modal (per-lot permission system) */}
       {showAssignSubcontractorModal && (
         <AssignSubcontractorModal
           lotId={lotId}

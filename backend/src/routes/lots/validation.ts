@@ -114,7 +114,11 @@ const createLotSchema = z
     chainageEnd: finiteNumberSchema('chainageEnd').optional().nullable(),
     lotType: z.enum(validLotTypes).optional(),
     itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
-    assignedSubcontractorId: requiredIdSchema('assignedSubcontractorId').optional().nullable(),
+    // Legacy single-FK subcontractor assignment is retired on create. The field
+    // is intentionally absent here so any client-sent value is stripped (Zod
+    // drops unknown keys) — subcontractors are assigned through the modern
+    // per-lot assignments UI after the lot exists. See docs/research/
+    // agentic-setup-synthesis-2026-07-15.md §1.
     areaZone: optionalNullableTextSchema('areaZone', MAX_SHORT_TEXT_LENGTH),
     structureId: optionalNullableTextSchema('structureId', MAX_SHORT_TEXT_LENGTH),
     structureElement: optionalNullableTextSchema('structureElement', MAX_SHORT_TEXT_LENGTH),
@@ -122,8 +126,6 @@ const createLotSchema = z
       .nonnegative('budgetAmount cannot be negative')
       .optional()
       .nullable(),
-    canCompleteITP: z.boolean().optional(),
-    itpRequiresVerification: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {

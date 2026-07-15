@@ -37,7 +37,6 @@ interface CreateLotModalProps {
   projectId: string;
   canViewBudgets: boolean;
   initialActivityType?: string;
-  initialAssignedSubcontractorId?: string;
 }
 
 interface ItpTemplateOption {
@@ -47,22 +46,13 @@ interface ItpTemplateOption {
   isActive?: boolean;
 }
 
-interface SubcontractorOption {
-  id: string;
-  companyName: string;
-}
-
-const getInitialFormValues = (
-  initialActivityType?: string,
-  initialAssignedSubcontractorId?: string,
-): CreateLotFormData => ({
+const getInitialFormValues = (initialActivityType?: string): CreateLotFormData => ({
   ...CREATE_LOT_DEFAULT_VALUES,
   activityType:
     initialActivityType &&
     (CREATE_LOT_ACTIVITY_TYPES as readonly string[]).includes(initialActivityType)
       ? initialActivityType
       : CREATE_LOT_DEFAULT_VALUES.activityType,
-  assignedSubcontractorId: initialAssignedSubcontractorId || '',
 });
 
 export function CreateLotModal({
@@ -72,7 +62,6 @@ export function CreateLotModal({
   projectId,
   canViewBudgets,
   initialActivityType,
-  initialAssignedSubcontractorId,
 }: CreateLotModalProps) {
   const [creating, setCreating] = useState(false);
   const [loadingLookups, setLoadingLookups] = useState(false);
@@ -85,9 +74,6 @@ export function CreateLotModal({
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
-  // Subcontractors
-  const [subcontractors, setSubcontractors] = useState<SubcontractorOption[]>([]);
-
   const {
     register,
     handleSubmit,
@@ -99,34 +85,29 @@ export function CreateLotModal({
   } = useForm<CreateLotFormData>({
     resolver: zodResolver(createLotSchema),
     mode: 'onBlur',
-    defaultValues: getInitialFormValues(initialActivityType, initialAssignedSubcontractorId),
+    defaultValues: getInitialFormValues(initialActivityType),
   });
 
   const activityType = watch('activityType');
-  const assignedSubcontractorId = watch('assignedSubcontractorId');
-  const canCompleteITP = watch('canCompleteITP');
 
   const resetFormState = useCallback(() => {
-    reset(getInitialFormValues(initialActivityType, initialAssignedSubcontractorId));
+    reset(getInitialFormValues(initialActivityType));
     setSuggestedTemplate(null);
     setSelectedTemplateId('');
     setLookupError(null);
-  }, [initialActivityType, initialAssignedSubcontractorId, reset]);
+  }, [initialActivityType, reset]);
 
   const fetchLookupData = useCallback(async () => {
     setLoadingLookups(true);
     setLookupError(null);
     try {
       const encodedProjectId = encodeURIComponent(projectId);
-      const [lotData, itpData, subData] = await Promise.all([
+      const [lotData, itpData] = await Promise.all([
         apiFetch<{ suggestedNumber?: string }>(
           `/api/lots/suggest-number?projectId=${encodedProjectId}`,
         ),
         apiFetch<{ templates: ItpTemplateOption[] }>(
           `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true&activeOnly=true`,
-        ),
-        apiFetch<{ subcontractors: SubcontractorOption[] }>(
-          `/api/subcontractors/for-project/${encodedProjectId}`,
         ),
       ]);
 
@@ -143,13 +124,9 @@ export function CreateLotModal({
         setSuggestedTemplate({ id: suggested.id, name: suggested.name });
         setSelectedTemplateId(suggested.id);
       }
-
-      setSubcontractors(subData.subcontractors || []);
     } catch (err) {
       logError('Failed to fetch lot data:', err);
-      setLookupError(
-        extractErrorMessage(err, 'Could not load lot suggestions and assignment options.'),
-      );
+      setLookupError(extractErrorMessage(err, 'Could not load lot suggestions.'));
     } finally {
       setLoadingLookups(false);
     }
@@ -206,11 +183,6 @@ export function CreateLotModal({
           chainageEnd,
           ...(canViewBudgets && budgetAmount !== null ? { budgetAmount } : {}),
           itpTemplateId: selectedTemplateId || null,
-          assignedSubcontractorId: formData.assignedSubcontractorId || null,
-          canCompleteITP: formData.assignedSubcontractorId ? formData.canCompleteITP : undefined,
-          itpRequiresVerification: formData.assignedSubcontractorId
-            ? formData.itpRequiresVerification
-            : undefined,
         }),
       });
 
@@ -248,7 +220,8 @@ export function CreateLotModal({
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Create New Lot</ModalHeader>
       <ModalDescription>
-        Add the lot details and optional ITP or subcontractor assignment.
+        Add the lot details and an optional ITP template. Assign subcontractors from the lot page
+        once it exists.
       </ModalDescription>
       <ModalBody>
         <form id="create-lot-form" onSubmit={handleSubmit(onFormSubmit)}>
@@ -429,58 +402,6 @@ export function CreateLotModal({
                   <p className="text-sm text-destructive mt-1" role="alert" aria-live="assertive">
                     {errors.budgetAmount.message}
                   </p>
-                )}
-              </div>
-            )}
-
-            {/* Subcontractor assignment */}
-            {subcontractors.length > 0 && (
-              <div>
-                <Label htmlFor="lot-subcontractor">Assign to Subcontractor (Optional)</Label>
-                <NativeSelect
-                  id="lot-subcontractor"
-                  {...register('assignedSubcontractorId')}
-                  className="mt-1"
-                >
-                  <option value="">No subcontractor assigned</option>
-                  {subcontractors.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.companyName}
-                    </option>
-                  ))}
-                </NativeSelect>
-
-                {/* ITP permissions - only show when subcontractor is selected */}
-                {assignedSubcontractorId && (
-                  <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-2">
-                    <p className="text-sm font-medium text-foreground">ITP Permissions</p>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="can-complete-itp"
-                        {...register('canCompleteITP')}
-                        className="h-4 w-4 rounded border-border accent-primary focus:ring-primary"
-                      />
-                      <label htmlFor="can-complete-itp" className="text-sm text-foreground">
-                        Allow ITP completion
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="itp-requires-verification"
-                        {...register('itpRequiresVerification')}
-                        disabled={!canCompleteITP}
-                        className="h-4 w-4 rounded border-border accent-primary focus:ring-primary disabled:opacity-50"
-                      />
-                      <label
-                        htmlFor="itp-requires-verification"
-                        className={`text-sm ${canCompleteITP ? 'text-foreground' : 'text-muted-foreground'}`}
-                      >
-                        Require verification (recommended)
-                      </label>
-                    </div>
-                  </div>
                 )}
               </div>
             )}

@@ -489,7 +489,11 @@ describe('Lots API', () => {
       }
     });
 
-    it('should atomically create the legacy and permissioned subcontractor assignment', async () => {
+    it('ignores a legacy assignedSubcontractorId on create (retired write path)', async () => {
+      // The legacy single-FK assignment is retired: subcontractors are assigned
+      // through the modern per-lot assignments UI after the lot exists. Create
+      // must silently ignore the field rather than establish a legacy write or a
+      // modern assignment. See docs/research/agentic-setup-synthesis-2026-07-15.md §1.
       const subcontractor = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -512,7 +516,13 @@ describe('Lots API', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.lot.assignedSubcontractorId).toBe(subcontractor.id);
+      expect(res.body.lot.assignedSubcontractorId).toBeNull();
+
+      const persisted = await prisma.lot.findUnique({
+        where: { id: res.body.lot.id },
+        select: { assignedSubcontractorId: true },
+      });
+      expect(persisted?.assignedSubcontractorId).toBeNull();
 
       const assignment = await prisma.lotSubcontractorAssignment.findUnique({
         where: {
@@ -522,12 +532,56 @@ describe('Lots API', () => {
           },
         },
       });
-      expect(assignment).toMatchObject({
-        projectId,
-        status: 'active',
-        canCompleteITP: true,
-        itpRequiresVerification: false,
+      expect(assignment).toBeNull();
+    });
+
+    it('clones a legacy-assigned lot into a modern assignment, not a new legacy write', async () => {
+      // Cloning a lot that still carries a legacy assignedSubcontractorId must
+      // NOT re-establish the legacy FK on the clone — it carries the subbie
+      // forward as a modern LotSubcontractorAssignment instead.
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Clone Source Subcontractor ${Date.now()}`,
+          primaryContactName: 'Clone Source Subcontractor',
+          primaryContactEmail: `clone-source-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
       });
+      const sourceLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-CLONE-SRC-${Date.now()}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          assignedSubcontractorId: subcontractor.id,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/lots/${sourceLot.id}/clone`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotNumber: `LOT-CLONE-DST-${Date.now()}` });
+
+      expect(res.status).toBe(201);
+      expect(res.body.lot.assignedSubcontractorId).toBeNull();
+
+      const persisted = await prisma.lot.findUnique({
+        where: { id: res.body.lot.id },
+        select: { assignedSubcontractorId: true },
+      });
+      expect(persisted?.assignedSubcontractorId).toBeNull();
+
+      const assignment = await prisma.lotSubcontractorAssignment.findUnique({
+        where: {
+          lotId_subcontractorCompanyId: {
+            lotId: res.body.lot.id,
+            subcontractorCompanyId: subcontractor.id,
+          },
+        },
+      });
+      expect(assignment?.status).toBe('active');
     });
 
     it('should snapshot the assigned ITP template when creating a lot with an ITP', async () => {
@@ -2308,6 +2362,110 @@ describe('Lots API', () => {
       expect(res.body.lot.status).toBe('in_progress');
     });
 
+    it('ignores an attempt to SET a legacy assignedSubcontractorId on update', async () => {
+      // Retired legacy write path: update may only CLEAR the field, never set a
+      // new one. A non-null value is a silent no-op (no legacy write, no modern
+      // assignment). See docs/research/agentic-setup-synthesis-2026-07-15.md §1.
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Update Set Subcontractor ${Date.now()}`,
+          primaryContactName: 'Update Set Subcontractor',
+          primaryContactEmail: `update-set-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      const targetLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-UPDATE-SET-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/lots/${targetLot.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ assignedSubcontractorId: subcontractor.id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.lot.assignedSubcontractorId).toBeNull();
+
+      const persisted = await prisma.lot.findUnique({
+        where: { id: targetLot.id },
+        select: { assignedSubcontractorId: true },
+      });
+      expect(persisted?.assignedSubcontractorId).toBeNull();
+
+      const assignment = await prisma.lotSubcontractorAssignment.findUnique({
+        where: {
+          lotId_subcontractorCompanyId: {
+            lotId: targetLot.id,
+            subcontractorCompanyId: subcontractor.id,
+          },
+        },
+      });
+      expect(assignment).toBeNull();
+    });
+
+    it('allows CLEARING a legacy assignedSubcontractorId without clobbering modern assignments', async () => {
+      // Clearing is migration-friendly. The modern LotSubcontractorAssignment
+      // rows are the source of truth and must survive a legacy-field clear.
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Update Clear Subcontractor ${Date.now()}`,
+          primaryContactName: 'Update Clear Subcontractor',
+          primaryContactEmail: `update-clear-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      const targetLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-UPDATE-CLEAR-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          assignedSubcontractorId: subcontractor.id,
+        },
+      });
+      const modernAssignment = await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: targetLot.id,
+          subcontractorCompanyId: subcontractor.id,
+          canCompleteITP: true,
+          itpRequiresVerification: true,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/lots/${targetLot.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ assignedSubcontractorId: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.lot.assignedSubcontractorId).toBeNull();
+
+      const persisted = await prisma.lot.findUnique({
+        where: { id: targetLot.id },
+        select: { assignedSubcontractorId: true },
+      });
+      expect(persisted?.assignedSubcontractorId).toBeNull();
+
+      // Modern assignment must be untouched (still active).
+      const stillActive = await prisma.lotSubcontractorAssignment.findUnique({
+        where: { id: modernAssignment.id },
+        select: { status: true },
+      });
+      expect(stillActive?.status).toBe('active');
+    });
+
     it('should reject invalid update status and chainage ranges', async () => {
       const invalidStatusRes = await request(app)
         .patch(`/api/lots/${lotId}`)
@@ -2647,6 +2805,53 @@ describe('Lots API', () => {
       });
       expect(assignmentCount).toBe(0);
       expect(unchangedLot?.assignedSubcontractorId).toBeNull();
+    });
+
+    it('assigns through the modern model without writing the legacy FK', async () => {
+      // Retired legacy write path: the (notification-only) direct assign route
+      // creates the modern LotSubcontractorAssignment but never SETs the legacy
+      // FK. See docs/research/agentic-setup-synthesis-2026-07-15.md §1.
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Direct Assign Modern Sub ${Date.now()}`,
+          primaryContactName: 'Direct Assign Modern Sub',
+          primaryContactEmail: `direct-assign-modern-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      const targetLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-DIRECT-ASSIGN-${Date.now()}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/lots/${targetLot.id}/assign`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ subcontractorId: subcontractor.id });
+
+      expect(res.status).toBe(200);
+
+      const persisted = await prisma.lot.findUnique({
+        where: { id: targetLot.id },
+        select: { assignedSubcontractorId: true },
+      });
+      expect(persisted?.assignedSubcontractorId).toBeNull();
+
+      const assignment = await prisma.lotSubcontractorAssignment.findUnique({
+        where: {
+          lotId_subcontractorCompanyId: {
+            lotId: targetLot.id,
+            subcontractorCompanyId: subcontractor.id,
+          },
+        },
+      });
+      expect(assignment?.status).toBe('active');
     });
   });
 
@@ -3830,13 +4035,13 @@ describe('Lot Bulk Operations', () => {
     expect(activeAssignments.every((assignment) => !assignment.canCompleteITP)).toBe(true);
     expect(activeAssignments.every((assignment) => assignment.itpRequiresVerification)).toBe(true);
 
+    // Retired legacy write path: bulk assign creates the modern rows (asserted
+    // above) but never SETs the legacy FK — it stays untouched (null here).
     const assignedLots = await prisma.lot.findMany({
       where: { id: { in: targetLotIds } },
       select: { assignedSubcontractorId: true },
     });
-    expect(assignedLots.every((lot) => lot.assignedSubcontractorId === subcontractor.id)).toBe(
-      true,
-    );
+    expect(assignedLots.every((lot) => lot.assignedSubcontractorId === null)).toBe(true);
 
     const unassignRes = await request(app)
       .post('/api/lots/bulk-assign-subcontractor')

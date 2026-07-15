@@ -261,21 +261,37 @@ export function LotEditFormFields({
               <label htmlFor="assignedSubcontractorId" className="block text-sm font-medium mb-1">
                 Assigned Subcontractor
               </label>
-              <select
-                id="assignedSubcontractorId"
-                name="assignedSubcontractorId"
-                value={formData.assignedSubcontractorId}
-                onChange={onInputChange}
-                disabled={detailsLocked}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
-              >
-                <option value="">No subcontractor assigned</option>
-                {subcontractors.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.companyName} {sub.status === 'pending' ? '(Pending)' : ''}
-                  </option>
-                ))}
-              </select>
+              {/* Legacy single-FK assignment is retired: this control can only
+                  CLEAR a stale assignment, never set a new one. Assigning (with
+                  per-lot ITP permissions) happens in the Subcontractor
+                  assignments section on the lot page. See docs/research/
+                  agentic-setup-synthesis-2026-07-15.md §1. */}
+              {formData.assignedSubcontractorId ? (
+                <>
+                  <select
+                    id="assignedSubcontractorId"
+                    name="assignedSubcontractorId"
+                    value={formData.assignedSubcontractorId}
+                    onChange={onInputChange}
+                    disabled={detailsLocked}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+                  >
+                    <option value={formData.assignedSubcontractorId}>
+                      {subcontractors.find((sub) => sub.id === formData.assignedSubcontractorId)
+                        ?.companyName ?? 'Assigned subcontractor'}
+                    </option>
+                    <option value="">Clear assignment</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Legacy assignment. To change who is assigned, use Subcontractor assignments on
+                    the lot page.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Assign subcontractors from the Subcontractor assignments section on the lot page.
+                </p>
+              )}
             </div>
           </div>
         </div>

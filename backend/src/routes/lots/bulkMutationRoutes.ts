@@ -181,7 +181,10 @@ lotBulkMutationRouter.post(
     // Block lots that cannot be bulk-mutated (conformed or claimed)
     assertLotsBulkMutable(lotsToUpdate);
 
-    // Update all lots and keep assignment records in sync with the legacy field.
+    // Assign through the modern LotSubcontractorAssignment model only. The legacy
+    // Lot.assignedSubcontractorId FK write path is retired: on assign we leave the
+    // legacy field untouched (never SET a company id); on unassign we still clear
+    // it. See docs/research/agentic-setup-synthesis-2026-07-15.md §1.
     const result = await prisma.$transaction(async (tx) => {
       const updateResult = await tx.lot.updateMany({
         where: {
@@ -189,7 +192,7 @@ lotBulkMutationRouter.post(
           status: { notIn: ['conformed', 'claimed'] },
         },
         data: {
-          assignedSubcontractorId: subcontractorId || null,
+          assignedSubcontractorId: subcontractorId ? undefined : null,
           updatedAt: new Date(),
         },
       });
@@ -300,7 +303,10 @@ lotBulkMutationRouter.post(
       await requireSubcontractorInProject(subcontractorId, lot.projectId);
     }
 
-    // Update the lot and keep the new assignment table aligned with the legacy field.
+    // Assign through the modern LotSubcontractorAssignment model only (retired
+    // legacy FK write): leave the legacy field untouched on assign, clear it on
+    // unassign. Notifications below are unchanged. See docs/research/
+    // agentic-setup-synthesis-2026-07-15.md §1.
     const updatedLot = await prisma.$transaction(async (tx) => {
       await syncPrimaryLotSubcontractorAssignment(tx, {
         lotId: id,
@@ -312,7 +318,7 @@ lotBulkMutationRouter.post(
       return tx.lot.update({
         where: { id },
         data: {
-          assignedSubcontractorId: subcontractorId || null,
+          assignedSubcontractorId: subcontractorId ? undefined : null,
           updatedAt: new Date(),
         },
         select: {

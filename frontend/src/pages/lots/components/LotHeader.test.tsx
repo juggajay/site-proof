@@ -63,7 +63,6 @@ function renderHeader(overrides: Partial<LotHeaderProps> = {}) {
     onCopyLink: vi.fn(),
     onPrint: vi.fn(),
     onEdit: vi.fn(),
-    onAssignSubcontractorLegacy: vi.fn(),
     onOverrideStatus: vi.fn(),
     onAddSubcontractor: vi.fn(),
     onEditAssignment: vi.fn(),
@@ -76,11 +75,14 @@ function renderHeader(overrides: Partial<LotHeaderProps> = {}) {
 // ── Desktop permission tests (unchanged behaviour) ──────────────────────────
 
 describe('LotHeader lot-configuration permissions (desktop)', () => {
-  it('hides Edit Lot and Assign Subcontractor for a foreman (canManageLot=false)', () => {
+  it('hides Edit Lot and Add-subcontractor for a foreman (canManageLot=false)', () => {
     renderHeader({ canManageLot: false });
 
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    // The retired legacy "Assign Subcontractor" header button must never appear.
     expect(screen.queryByRole('button', { name: /Assign Subcontractor/i })).not.toBeInTheDocument();
+    // Modern subcontractor management (the Add button in the assignments section) is gated too.
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
 
     // Field/non-configuration controls stay available to every non-viewer.
     expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument();
@@ -88,18 +90,20 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
     expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
 
-  it('shows Edit Lot and Assign Subcontractor for a manager (canManageLot=true)', () => {
+  it('shows Edit Lot and Add-subcontractor for a manager (canManageLot=true)', () => {
     renderHeader({ canManageLot: true });
 
     expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Assign Subcontractor/i })).toBeInTheDocument();
+    // No legacy assign button; subcontractors are managed via the assignments section.
+    expect(screen.queryByRole('button', { name: /Assign Subcontractor/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
-  it('can show Assign Subcontractor without showing Edit Lot', () => {
+  it('can manage subcontractors without showing Edit Lot', () => {
     renderHeader({ canManageLot: true, canEditLot: false });
 
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Assign Subcontractor/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 });
 
@@ -131,10 +135,9 @@ describe('LotHeader mobile overflow menu', () => {
     // Primary Edit Lot button visible since canManageLot=true
     expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
 
-    // Copy Link / Print / Assign Sub / Override should NOT be inline on mobile
+    // Copy Link / Print / Override should NOT be inline on mobile
     expect(screen.queryByRole('button', { name: 'Copy Link' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Assign Subcontractor/i })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /Override Workflow Status/i }),
     ).not.toBeInTheDocument();
@@ -157,10 +160,10 @@ describe('LotHeader mobile overflow menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
 
-    // Sheet renders its action rows
+    // Sheet renders its action rows (no legacy Assign Subcontractor row).
     expect(screen.getByText('Copy Link')).toBeInTheDocument();
     expect(screen.getByText('Print')).toBeInTheDocument();
-    expect(screen.getByText('Assign Subcontractor')).toBeInTheDocument();
+    expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();
     expect(screen.getByText('Override Workflow Status')).toBeInTheDocument();
   });
 
@@ -182,16 +185,6 @@ describe('LotHeader mobile overflow menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByText('Print'));
     expect(onPrint).toHaveBeenCalledTimes(1);
-  });
-
-  it('fires onAssignSubcontractorLegacy handler from the sheet', () => {
-    mockIsMobile = true;
-    const onAssignSubcontractorLegacy = vi.fn();
-    renderHeader({ canManageLot: true, onAssignSubcontractorLegacy });
-
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByText('Assign Subcontractor'));
-    expect(onAssignSubcontractorLegacy).toHaveBeenCalledTimes(1);
   });
 
   it('fires onOverrideStatus handler from the sheet', () => {
@@ -236,15 +229,17 @@ describe('LotHeader mobile overflow menu', () => {
     expect(onEdit).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps Assign Subcontractor in the sheet when mobile edit access is absent', () => {
+  it('shows the modern Add-subcontractor control when mobile edit access is absent', () => {
     mockIsMobile = true;
     renderHeader({ canManageLot: true, canEditLot: false });
 
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    // The legacy Assign Subcontractor sheet action is retired; managing
+    // subcontractors happens through the assignments section's Add button.
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-
-    expect(screen.getByText('Assign Subcontractor')).toBeInTheDocument();
+    expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();
   });
 
   it('hides Edit Lot primary button when canManageLot=false on mobile', () => {

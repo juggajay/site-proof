@@ -134,9 +134,6 @@ export function LotsPage() {
     return columnOrder.filter((colId) => visibleColumns.includes(colId));
   }, [columnOrder, visibleColumns]);
 
-  const initialCreateLotSubcontractorId =
-    subcontractorFilter && subcontractorFilter !== 'unassigned' ? subcontractorFilter : undefined;
-
   const projectLabel = projectName || projectId || 'this project';
 
   const canManageSettings = canManageProjectSettings(projectScopedRole);
@@ -495,7 +492,6 @@ export function LotsPage() {
           projectId={projectId}
           canViewBudgets={canViewBudgets}
           initialActivityType={activityFilter || undefined}
-          initialAssignedSubcontractorId={initialCreateLotSubcontractorId}
         />
       )}
 
