@@ -92,6 +92,27 @@ function readString(input: unknown, key: string): string | null {
 
 const NO_ACCESS = "You don't have access to that project, or it doesn't exist.";
 
+/**
+ * Resolve the project segment of a whitelisted /projects/:id/... path to a
+ * REAL, ACCESSIBLE project id. The model's most natural mistake is putting the
+ * human-facing projectNumber in the path (live probe: /projects/100901/lots) —
+ * accept either id or projectNumber and rewrite to the id. Returns the path
+ * unchanged for non-project paths, or null when the segment matches nothing
+ * this user can open (which also makes project navigation access-checked).
+ */
+async function resolveProjectPath(user: AuthUser, to: string): Promise<string | null> {
+  const match = to.match(/^\/projects\/([A-Za-z0-9_-]+)(\/.*)?$/);
+  if (!match) return to;
+  const [, segment, rest = ''] = match;
+
+  const access = await getDashboardProjectAccess(user);
+  const byId = access.find((a) => a.projectId === segment);
+  if (byId) return to;
+  const byNumber = access.find((a) => a.project.projectNumber === segment);
+  if (byNumber) return `/projects/${byNumber.projectId}${rest}`;
+  return null;
+}
+
 async function listProjects(user: AuthUser): Promise<ToolOutcome> {
   const access = await getDashboardProjectAccess(user);
   const projectIds = access.map((a) => a.projectId);
@@ -170,7 +191,14 @@ export function createChatToolExecutor(user: AuthUser): ToolExecutor {
         if (!isAllowedNavigateTarget(to)) {
           return { result: 'That destination is not allowed. Offer a valid in-app page instead.' };
         }
-        return { result: 'Navigation queued.', action: { type: 'navigate', to } };
+        const resolved = await resolveProjectPath(user, to);
+        if (!resolved) {
+          return {
+            result:
+              'That project is not one you can open — call list_projects and use the project id in the path.',
+          };
+        }
+        return { result: 'Navigation queued.', action: { type: 'navigate', to: resolved } };
       }
 
       case 'open_stage': {
