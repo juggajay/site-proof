@@ -5,6 +5,7 @@
 
 import { prisma } from '../../../lib/prisma.js';
 import { getDashboardProjectAccess, type AuthUser } from '../../dashboard/access.js';
+import { buildHoldPointListItems } from '../../holdpoints/listPresentation.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
 import { isAllowedNavigateTarget, isChatStage, type ChatStage } from './prompt.js';
 
@@ -43,6 +44,17 @@ export const CHAT_TOOLS = [
     name: 'list_pending_proposals',
     description:
       'List AI proposals waiting for the user to review on a project. Call this when the user asks what needs approval or what is waiting for review.',
+    input_schema: {
+      type: 'object',
+      properties: { projectId: { type: 'string', description: 'The project id' } },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_project_qa_summary',
+    description:
+      'Hold point and NCR summary for a project: total / released / awaiting-release / ready-to-request hold point counts (matching the hold point register, including hold points not yet actioned) and the open NCR count. Call this when the user asks about hold points, releases, or non-conformances.',
     input_schema: {
       type: 'object',
       properties: { projectId: { type: 'string', description: 'The project id' } },
@@ -165,6 +177,57 @@ async function listPendingProposals(user: AuthUser, projectId: string): Promise<
 }
 
 /**
+ * Count hold points the way the register page presents them. Pure so it can be
+ * unit-tested DB-free; items come from buildHoldPointListItems, which includes
+ * virtual entries for hold-point checklist items with no persisted row yet —
+ * a bare prisma.holdPoint.count would report 0 on an unactioned project.
+ */
+export function summariseHoldPoints(items: Array<{ status: string; canRequestRelease: boolean }>): {
+  total: number;
+  released: number;
+  awaitingRelease: number;
+  readyToRequest: number;
+} {
+  const released = items.filter((item) => item.status === 'released').length;
+  const readyToRequest = items.filter(
+    (item) => item.status !== 'released' && item.canRequestRelease,
+  ).length;
+  return {
+    total: items.length,
+    released,
+    awaitingRelease: items.length - released,
+    readyToRequest,
+  };
+}
+
+async function getProjectQaSummary(user: AuthUser, projectId: string): Promise<ToolOutcome> {
+  if (!(await hasInternalProjectAccess(user, projectId))) {
+    return { result: NO_ACCESS };
+  }
+  // Same load shape as the hold-point register route (GET /project/:projectId
+  // in holdpoints/readRoutes.ts), so Jack's counts always equal the page.
+  const [lots, openNcrs] = await Promise.all([
+    prisma.lot.findMany({
+      where: { projectId },
+      include: {
+        itpInstance: {
+          include: {
+            template: { include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } } },
+            completions: true,
+          },
+        },
+        holdPoints: true,
+      },
+    }),
+    prisma.nCR.count({
+      where: { projectId, status: { notIn: ['closed', 'closed_concession'] } },
+    }),
+  ]);
+  const holdPoints = summariseHoldPoints(buildHoldPointListItems(lots));
+  return { result: JSON.stringify({ holdPoints, openNcrs }) };
+}
+
+/**
  * Bind an executor to the requesting user. The returned function is what the
  * model loop calls per tool_use block.
  */
@@ -184,6 +247,12 @@ export function createChatToolExecutor(user: AuthUser): ToolExecutor {
         const projectId = readString(input, 'projectId');
         if (!projectId) return { result: 'A projectId is required.' };
         return listPendingProposals(user, projectId);
+      }
+
+      case 'get_project_qa_summary': {
+        const projectId = readString(input, 'projectId');
+        if (!projectId) return { result: 'A projectId is required.' };
+        return getProjectQaSummary(user, projectId);
       }
 
       case 'navigate': {

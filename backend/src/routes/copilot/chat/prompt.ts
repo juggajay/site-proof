@@ -21,31 +21,41 @@ export const MAX_ACTIONS = 3;
 
 // The navigate() tool is NOT executed — it only queues a client-side route
 // change. `to` must match one of these patterns exactly. A route param
-// (:id) matches a single non-empty, non-slash id segment; nothing here can
+// matches a single non-empty, non-slash id segment; nothing here can
 // express an external URL. Keep this to the sensible project-scoped read
 // surfaces from frontend/src/App.tsx — Jack takes people to pages, he never
 // mutates.
+//
+// PROJECT_PAGES drives BOTH the whitelist below and the PAGES section of the
+// system prompt, so what Jack knows exists and what the validator allows can
+// never drift apart (live-probe regression: the whitelist allowed /itp and
+// /variations, but Jack refused because the prompt never told him they exist).
+// `path` is relative to /projects/<id>; `<lotId>` marks a second id segment.
+export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
+  { path: 'lots', label: 'lot register' },
+  { path: 'lots/<lotId>', label: "one lot's detail — its ITP checklist, hold points, and tests" },
+  { path: 'copilot', label: 'AI setup copilot — the four stages and the review queue' },
+  { path: 'control-lines', label: 'control lines (alignments)' },
+  { path: 'plan-sheets', label: 'plan sheet registration' },
+  { path: 'itp', label: "ITP templates — the global library plus this project's own templates" },
+  { path: 'hold-points', label: 'hold point register — every hold point across all lots' },
+  { path: 'ncr', label: 'non-conformance reports' },
+  { path: 'tests', label: 'test results' },
+  { path: 'diary', label: 'daily diaries' },
+  { path: 'dockets', label: 'dockets' },
+  { path: 'documents', label: 'project documents' },
+  { path: 'reports', label: 'reports' },
+  { path: 'claims', label: 'progress claims' },
+  { path: 'variations', label: 'variation register' },
+  { path: 'users', label: 'project team' },
+];
+
 const ID = '[A-Za-z0-9_-]+';
 const NAVIGATE_PATTERNS: RegExp[] = [
   `/dashboard`,
   `/projects`,
   `/projects/${ID}`,
-  `/projects/${ID}/lots`,
-  `/projects/${ID}/lots/${ID}`,
-  `/projects/${ID}/copilot`,
-  `/projects/${ID}/control-lines`,
-  `/projects/${ID}/plan-sheets`,
-  `/projects/${ID}/itp`,
-  `/projects/${ID}/hold-points`,
-  `/projects/${ID}/ncr`,
-  `/projects/${ID}/tests`,
-  `/projects/${ID}/diary`,
-  `/projects/${ID}/dockets`,
-  `/projects/${ID}/documents`,
-  `/projects/${ID}/reports`,
-  `/projects/${ID}/claims`,
-  `/projects/${ID}/variations`,
-  `/projects/${ID}/users`,
+  ...PROJECT_PAGES.map((page) => `/projects/${ID}/${page.path.replace('<lotId>', ID)}`),
 ].map((p) => new RegExp(`^${p}$`));
 
 /**
@@ -63,6 +73,14 @@ export function isAllowedNavigateTarget(to: unknown): to is string {
   return NAVIGATE_PATTERNS.some((pattern) => pattern.test(to));
 }
 
+// Rendered into the system prompt from the same table the whitelist uses.
+const PAGES_SECTION = [
+  '- /dashboard — company dashboard',
+  '- /projects — project list',
+  '- /projects/<id> — project overview',
+  ...PROJECT_PAGES.map((page) => `- /projects/<id>/${page.path} — ${page.label}`),
+].join('\n');
+
 export const JACK_SYSTEM_PROMPT = `You are Jack, the SiteProof copilot for Australian civil construction quality assurance.
 
 You help head-contractor staff (project managers, engineers, foremen, quality managers) get set up and find their way around SiteProof — a platform for lots, ITPs, hold points, NCRs, daily diaries, dockets, progress claims, and documents.
@@ -74,6 +92,11 @@ What you can do:
 - Read drawings on their behalf by OFFERING to open a copilot stage (project_facts, control_line, plan_sheets, lot_breakdown) with the open_stage tool. You do not read files yourself — the stage does.
 - Take the user to a page with the navigate tool.
 - Report what is waiting for review (pending AI proposals).
+- Report hold point and open-NCR counts for a project with the get_project_qa_summary tool.
+
+PAGES — the complete list of pages you can open with navigate (replace <id> with the project id, <lotId> with a lot id):
+${PAGES_SECTION}
+If a page is not on this list, tell the user SiteProof does not have that page rather than guessing a path.
 
 HARD RULES:
 - You never create, change, or delete records. Anything an AI stage prepares goes to the user's review queue — they approve it, not you. Say so plainly; never imply you already did it.
