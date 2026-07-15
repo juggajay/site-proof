@@ -63,19 +63,20 @@ describe('DashboardSetupChecklist', () => {
     expect(getStep('Add plan sheets')).toHaveAttribute('href', '/projects');
     expect(getStep('Add lots')).toHaveAttribute('href', '/projects');
     expect(getStep('Assign an ITP')).toHaveAttribute('href', '/projects');
-    expect(getStep('Invite your team')).toHaveAttribute('href', '/company-settings');
+    expect(getStep('Add your team to the project')).toHaveAttribute('href', '/company-settings');
   });
 
-  it('deep-links spatial steps into the sole project when there is exactly one', () => {
+  it('deep-links spatial and team steps into the sole project when there is exactly one', () => {
     renderChecklist({ counts: { projects: 1 }, soleProjectId: 'p1' });
 
     expect(getStep('Add a control line')).toHaveAttribute('href', '/projects/p1/control-lines');
     expect(getStep('Add plan sheets')).toHaveAttribute('href', '/projects/p1/plan-sheets');
     expect(getStep('Add lots')).toHaveAttribute('href', '/projects/p1/lots');
     expect(getStep('Assign an ITP')).toHaveAttribute('href', '/projects/p1/itp');
-    // Project and team steps keep their fixed routes.
+    // Team links to the project users page (where membership is granted, which is what ticks it).
+    expect(getStep('Add your team to the project')).toHaveAttribute('href', '/projects/p1/users');
+    // Project step keeps its fixed route.
     expect(getStep('Create your first project')).toHaveAttribute('href', '/projects');
-    expect(getStep('Invite your team')).toHaveAttribute('href', '/company-settings');
   });
 
   it('leaves every step unticked for a brand-new company', () => {
@@ -103,7 +104,7 @@ describe('DashboardSetupChecklist', () => {
     expect(within(getStep('Add a control line')).getByText('(done)')).toBeInTheDocument();
     expect(within(getStep('Add plan sheets')).getByText('(done)')).toBeInTheDocument();
     expect(within(getStep('Add lots')).getByText('(done)')).toBeInTheDocument();
-    expect(within(getStep('Invite your team')).getByText('(done)')).toBeInTheDocument();
+    expect(within(getStep('Add your team to the project')).getByText('(done)')).toBeInTheDocument();
     // The numbered marker is replaced by the tick for completed steps.
     expect(within(getStep('Create your first project')).queryByText('1')).not.toBeInTheDocument();
     // ITP has no attached instance yet, so it stays unticked.

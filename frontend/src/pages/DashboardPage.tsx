@@ -317,12 +317,25 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     );
   }
 
-  // A company with zero projects has nothing to chart, so the KPI grid and
-  // export chrome would be an all-zero wall. Show a path to first value
-  // instead: a setup checklist for roles that can create projects, and a
-  // plain "you'll be added" notice for everyone else.
-  const showSetup = canCreateProjects ? setupIncomplete : companyHasNoProjects;
-  if (showSetup) {
+  const setupChecklist = (
+    <DashboardSetupChecklist
+      counts={{
+        projects: knownProjectCount,
+        controlLines: stats.setupProgress.controlLines,
+        planSheets: stats.setupProgress.planSheets,
+        lots: stats.totalLots,
+        lotsWithItp: stats.setupProgress.lotsWithItp,
+        teamMembers: stats.setupProgress.teamMembers,
+      }}
+      soleProjectId={soleProjectId}
+    />
+  );
+
+  // Zero-project companies have nothing to chart, so the KPI grid and export
+  // chrome would be an all-zero wall — fully replace it with a path to first
+  // value: the setup checklist for roles that can create projects, a plain
+  // "you'll be added" notice for everyone else.
+  if (companyHasNoProjects) {
     return (
       <div className="space-y-6 dashboard-content">
         <div className="min-w-0">
@@ -337,24 +350,15 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
 
         <PendingInvitationBanner user={user} />
 
-        {canCreateProjects ? (
-          <DashboardSetupChecklist
-            counts={{
-              projects: knownProjectCount,
-              controlLines: stats.setupProgress.controlLines,
-              planSheets: stats.setupProgress.planSheets,
-              lots: stats.totalLots,
-              lotsWithItp: stats.setupProgress.lotsWithItp,
-              teamMembers: stats.setupProgress.teamMembers,
-            }}
-            soleProjectId={soleProjectId}
-          />
-        ) : (
-          <DashboardMemberSetupNotice />
-        )}
+        {canCreateProjects ? setupChecklist : <DashboardMemberSetupNotice />}
       </div>
     );
   }
+
+  // Company has projects but setup is not finished (no ITP-bearing lot yet):
+  // keep the checklist as a companion ABOVE the real dashboard so active
+  // companies (diaries/dockets-only, no ITP instances) never lose their KPIs.
+  const showChecklistCompanion = canCreateProjects && setupIncomplete;
 
   return (
     <div className="space-y-6 dashboard-content">
@@ -421,6 +425,8 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       </div>
 
       <PendingInvitationBanner user={user} />
+
+      {showChecklistCompanion && setupChecklist}
 
       {statsErrorMessage && (
         <div

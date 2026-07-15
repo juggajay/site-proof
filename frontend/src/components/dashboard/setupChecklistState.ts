@@ -92,9 +92,12 @@ export function deriveSetupSteps(
     },
     {
       key: 'team',
-      title: 'Invite your team',
+      // The tick fires on project membership, so with a sole project we link to
+      // its users page (where you add someone to the project) rather than
+      // /company-settings (which only creates a company user and never ticks).
+      title: 'Add your team to the project',
       description: 'Add the engineers and foremen who will run inspections on site.',
-      to: '/company-settings',
+      to: soleProjectId ? projectLink(soleProjectId, '/users') : '/company-settings',
       done: counts.teamMembers > 0,
     },
   ];

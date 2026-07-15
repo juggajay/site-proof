@@ -85,17 +85,20 @@ describe('deriveSetupSteps deep links', () => {
     expect(links.itp).toBe('/projects');
   });
 
-  it('deep-links spatial/lot/ITP steps into the sole project', () => {
+  it('deep-links spatial/lot/ITP/team steps into the sole project', () => {
     const links = Object.fromEntries(deriveSetupSteps(ZERO, 'proj 1').map((s) => [s.key, s.to]));
     expect(links['control-line']).toBe('/projects/proj%201/control-lines');
     expect(links['plan-sheets']).toBe('/projects/proj%201/plan-sheets');
     expect(links.lots).toBe('/projects/proj%201/lots');
     expect(links.itp).toBe('/projects/proj%201/itp');
+    // Team ticks on project membership, so its link points at the project users page.
+    expect(links.team).toBe('/projects/proj%201/users');
   });
 
-  it('keeps the project and team steps at their fixed routes regardless of project count', () => {
-    const links = Object.fromEntries(deriveSetupSteps(ZERO, 'p1').map((s) => [s.key, s.to]));
-    expect(links.project).toBe('/projects');
-    expect(links.team).toBe('/company-settings');
+  it('keeps the project step fixed and falls back to company settings for team without a sole project', () => {
+    const soleLinks = Object.fromEntries(deriveSetupSteps(ZERO, 'p1').map((s) => [s.key, s.to]));
+    expect(soleLinks.project).toBe('/projects');
+    const genericLinks = Object.fromEntries(deriveSetupSteps(ZERO, null).map((s) => [s.key, s.to]));
+    expect(genericLinks.team).toBe('/company-settings');
   });
 });

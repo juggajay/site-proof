@@ -96,7 +96,7 @@ describe('DashboardPage first-run zero state', () => {
     expect(screen.getByText('Add plan sheets')).toBeInTheDocument();
     expect(screen.getByText('Add lots')).toBeInTheDocument();
     expect(screen.getByText('Assign an ITP')).toBeInTheDocument();
-    expect(screen.getByText('Invite your team')).toBeInTheDocument();
+    expect(screen.getByText('Add your team to the project')).toBeInTheDocument();
 
     // The all-zero KPI grid and export chrome are replaced, not rendered.
     expect(screen.queryByText('Total Projects')).not.toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('DashboardPage first-run zero state', () => {
     expect(screen.queryByText(/once your team adds you/)).not.toBeInTheDocument();
   });
 
-  it('keeps the setup checklist until the first ITP-bearing lot, deep-linked into the sole project', async () => {
+  it('shows the checklist as a companion ABOVE the KPI dashboard until the first ITP-bearing lot', async () => {
     authState.user = {
       id: 'u7',
       email: 'admin@example.com',
@@ -198,14 +198,48 @@ describe('DashboardPage first-run zero state', () => {
 
     renderWithProviders(<DashboardPage />);
 
-    // Checklist, not KPIs, and spatial steps deep-link into the sole project.
-    const controlLineStep = (await screen.findByText('Add a control line')).closest('a');
-    expect(controlLineStep).toHaveAttribute('href', '/projects/proj-1/control-lines');
+    // The real KPI dashboard still renders — the checklist is a companion, not a replacement.
+    expect(await screen.findByText('Total Projects')).toBeInTheDocument();
+    // ...and the checklist appears alongside it, spatial steps deep-linked into the sole project.
+    expect(screen.getByText('Add a control line').closest('a')).toHaveAttribute(
+      'href',
+      '/projects/proj-1/control-lines',
+    );
     expect(screen.getByText('Assign an ITP').closest('a')).toHaveAttribute(
       'href',
       '/projects/proj-1/itp',
     );
-    expect(screen.queryByText('Total Projects')).not.toBeInTheDocument();
+    expect(screen.getByText('Add your team to the project').closest('a')).toHaveAttribute(
+      'href',
+      '/projects/proj-1/users',
+    );
+  });
+
+  it('drops the setup checklist once a lot carries an ITP', async () => {
+    authState.user = {
+      id: 'u8',
+      email: 'admin@example.com',
+      role: 'admin',
+      roleInCompany: 'admin',
+      companyId: 'c1',
+      name: 'Ada Admin',
+    };
+    mockDashboardApi({
+      stats: {
+        ...ZERO_STATS,
+        totalProjects: 1,
+        activeProjects: 1,
+        totalLots: 4,
+        setupProgress: { ...SETUP_COMPLETE, lotsWithItp: 1 },
+      },
+      projects: [{ id: 'proj-1', status: 'active' }],
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Total Projects')).toBeInTheDocument();
+    expect(screen.queryByText('Add a control line')).not.toBeInTheDocument();
+    expect(screen.queryByText('Getting started')).not.toBeInTheDocument();
   });
 
   it('does not offer company settings from KPI tiles to non-company-admin roles', async () => {
