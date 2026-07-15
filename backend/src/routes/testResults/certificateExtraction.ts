@@ -79,6 +79,11 @@ export function createManualReviewExtraction(filename: string): ExtractedCertifi
   return extraction;
 }
 
+// Vision extraction over an A1 drawing or certificate takes 20-60 s of model
+// time; fetchWithTimeout's 15 s default aborted every real call. Shared by all
+// three Anthropic call sites (certificates, setout sheets, doc classification).
+export const AI_EXTRACTION_TIMEOUT_MS = 120_000;
+
 export function isAnthropicConfigured(): boolean {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   return Boolean(
@@ -182,27 +187,29 @@ export async function extractCertificateFields(
   }
 
   try {
-    const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model:
-          process.env.ANTHROPIC_TEST_CERT_MODEL ||
-          process.env.ANTHROPIC_MODEL ||
-          'claude-3-5-haiku-20241022',
-        max_tokens: 1200,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              getCertificateContentBlock(file),
-              {
-                type: 'text',
-                text: `Extract civil construction laboratory test certificate data.
+    const response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY!,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model:
+            process.env.ANTHROPIC_TEST_CERT_MODEL ||
+            process.env.ANTHROPIC_MODEL ||
+            'claude-3-5-haiku-20241022',
+          max_tokens: 1200,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                getCertificateContentBlock(file),
+                {
+                  type: 'text',
+                  text: `Extract civil construction laboratory test certificate data.
 
 Return ONLY valid JSON with these exact keys:
 testType, laboratoryName, laboratoryReportNumber, sampleDate, testDate, resultValue, resultUnit, specificationMin, specificationMax, sampleLocation.
@@ -217,12 +224,14 @@ Rules:
 - resultUnit should contain the unit, such as "% MDD", "%", "mm", or "MPa".
 - sampleLocation should preserve chainage/offset wording when present.
 - Do not infer values that are not visible in the certificate.`,
-              },
-            ],
-          },
-        ],
-      }),
-    });
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      AI_EXTRACTION_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       throw new Error(`Anthropic extraction failed with status ${response.status}`);

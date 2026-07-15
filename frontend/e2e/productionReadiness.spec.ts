@@ -2123,12 +2123,17 @@ test.describe('production readiness guardrails', () => {
     expect(oauthSource).toContain('doesGoogleCallbackUserInfoMatchIdentity');
     expect(oauthSource).toContain('googleUser.id !== verifiedIdentity.providerId');
     expect(oauthSource).toContain('Google callback userinfo did not match verified ID token');
-    expect(documentClassificationSource).toContain(
-      "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
+    // Anthropic vision calls must go through fetchWithTimeout WITH the long
+    // AI-extraction timeout: the 15 s default aborts every real vision read
+    // (20-60 s of model time — prod incident 2026-07-15).
+    expect(documentClassificationSource).toMatch(
+      /fetchWithTimeout\(\s*'https:\/\/api\.anthropic\.com\/v1\/messages'/,
     );
-    expect(testCertificateExtractionSource).toContain(
-      "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
+    expect(documentClassificationSource).toContain('AI_EXTRACTION_TIMEOUT_MS,');
+    expect(testCertificateExtractionSource).toMatch(
+      /fetchWithTimeout\(\s*'https:\/\/api\.anthropic\.com\/v1\/messages'/,
     );
+    expect(testCertificateExtractionSource).toContain('AI_EXTRACTION_TIMEOUT_MS,');
     expect(webhookDeliverySource).toContain('const timeout = setTimeout(');
     expect(webhookDeliverySource).toContain('new AbortController()');
     expect(webhookDeliverySource).toContain('clearTimeout(timeout)');

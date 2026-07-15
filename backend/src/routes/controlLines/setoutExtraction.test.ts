@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppError } from '../../lib/AppError.js';
-import { cleanSetoutCandidate } from './setoutExtraction.js';
+import { AI_EXTRACTION_TIMEOUT_MS } from '../testResults/certificateExtraction.js';
+import { cleanSetoutCandidate, extractSetoutRawCandidate } from './setoutExtraction.js';
+
+vi.mock('../../lib/fetchWithTimeout.js', () => ({
+  fetchWithTimeout: vi.fn(),
+}));
+
+import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 
 describe('cleanSetoutCandidate', () => {
   it('cleans a well-formed candidate, coercing string numbers and sorting by chainage', () => {
@@ -107,5 +114,50 @@ describe('cleanSetoutCandidate', () => {
 
     expect(() => cleanSetoutCandidate('not-an-object')).toThrow(AppError);
     expect(() => cleanSetoutCandidate(null)).toThrow(AppError);
+  });
+});
+
+describe('extractSetoutRawCandidate', () => {
+  const file = {
+    buffer: Buffer.from('%PDF-fake'),
+    mimetype: 'application/pdf',
+    originalname: 'setout.pdf',
+  } as Express.Multer.File;
+
+  beforeEach(() => {
+    process.env.ANTHROPIC_API_KEY = 'sk-test-key';
+    vi.mocked(fetchWithTimeout).mockReset();
+  });
+
+  afterEach(() => {
+    delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it('calls Anthropic with the long AI-extraction timeout, not the 15 s default', async () => {
+    vi.mocked(fetchWithTimeout).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: '{"coordinateSystem":null,"points":[],"warnings":[]}' }],
+      }),
+    } as unknown as Response);
+
+    await extractSetoutRawCandidate(file);
+
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+    const [url, , timeoutMs] = vi.mocked(fetchWithTimeout).mock.calls[0];
+    expect(url).toBe('https://api.anthropic.com/v1/messages');
+    // A vision read of an A1 sheet takes 20-60 s; the default 15 s aborted
+    // every real call (prod incident 2026-07-15).
+    expect(timeoutMs).toBe(AI_EXTRACTION_TIMEOUT_MS);
+    expect(AI_EXTRACTION_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it('maps a fetch abort/failure to the 502 AI_REQUEST_FAILED contract', async () => {
+    vi.mocked(fetchWithTimeout).mockRejectedValue(new Error('Fetch timed out after 120000ms'));
+
+    await expect(extractSetoutRawCandidate(file)).rejects.toMatchObject({
+      statusCode: 502,
+      code: 'AI_REQUEST_FAILED',
+    });
   });
 });
