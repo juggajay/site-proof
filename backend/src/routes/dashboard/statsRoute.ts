@@ -55,6 +55,10 @@ dashboardStatsRouter.get(
       openNCRs,
       overdueNCRs,
       staleHoldPoints,
+      controlLineCount,
+      planSheetCount,
+      lotsWithItpCount,
+      otherTeammates,
     ] = await Promise.all([
       prisma.project.findMany({
         where: {
@@ -156,6 +160,16 @@ dashboardStatsRouter.get(
         },
         orderBy: { createdAt: 'asc' },
         take: 10,
+      }),
+      // Setup-checklist progress counts (company-level, date-range independent):
+      // these drive first-run onboarding ticks, not the windowed KPI metrics.
+      prisma.controlLine.count({ where: { projectId: { in: projectIds } } }),
+      prisma.planSheet.count({ where: { projectId: { in: projectIds } } }),
+      prisma.iTPInstance.count({ where: { lot: { projectId: { in: projectIds } } } }),
+      prisma.projectUser.findMany({
+        where: { projectId: { in: projectIds }, userId: { not: userId } },
+        distinct: ['userId'],
+        select: { userId: true },
       }),
     ]);
 
@@ -273,6 +287,12 @@ dashboardStatsRouter.get(
         overdueNCRs: formattedOverdueNCRs,
         staleHoldPoints: formattedStaleHPs,
         recentActivities,
+        setupProgress: {
+          controlLines: controlLineCount,
+          planSheets: planSheetCount,
+          lotsWithItp: lotsWithItpCount,
+          teamMembers: otherTeammates.length,
+        },
       }),
     );
   }),

@@ -9,6 +9,7 @@ import {
 } from '@/test/renderWithProviders';
 import { apiFetch } from '@/lib/api';
 import { DashboardMemberSetupNotice, DashboardSetupChecklist } from './DashboardSetupChecklist';
+import type { SetupCounts } from './setupChecklistState';
 
 const navigateSpy = vi.fn();
 
@@ -22,11 +23,22 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 
-function renderChecklist(props: { projectCreated?: boolean; lotsAdded?: boolean } = {}) {
+const ZERO_COUNTS: SetupCounts = {
+  projects: 0,
+  controlLines: 0,
+  planSheets: 0,
+  lots: 0,
+  lotsWithItp: 0,
+  teamMembers: 0,
+};
+
+function renderChecklist(
+  props: { counts?: Partial<SetupCounts>; soleProjectId?: string | null } = {},
+) {
   return renderWithProviders(
     <DashboardSetupChecklist
-      projectCreated={props.projectCreated ?? false}
-      lotsAdded={props.lotsAdded ?? false}
+      counts={{ ...ZERO_COUNTS, ...props.counts }}
+      soleProjectId={props.soleProjectId ?? null}
     />,
   );
 }
@@ -42,13 +54,27 @@ afterEach(() => {
 });
 
 describe('DashboardSetupChecklist', () => {
-  it('renders the four setup steps with their navigation targets', () => {
+  it('renders the ordered setup steps with generic targets when there is no sole project', () => {
     renderChecklist();
 
     expect(screen.getByText('Getting started')).toBeInTheDocument();
     expect(getStep('Create your first project')).toHaveAttribute('href', '/projects');
+    expect(getStep('Add a control line')).toHaveAttribute('href', '/projects');
+    expect(getStep('Add plan sheets')).toHaveAttribute('href', '/projects');
     expect(getStep('Add lots')).toHaveAttribute('href', '/projects');
-    expect(getStep('Assign an ITP template')).toHaveAttribute('href', '/projects');
+    expect(getStep('Assign an ITP')).toHaveAttribute('href', '/projects');
+    expect(getStep('Invite your team')).toHaveAttribute('href', '/company-settings');
+  });
+
+  it('deep-links spatial steps into the sole project when there is exactly one', () => {
+    renderChecklist({ counts: { projects: 1 }, soleProjectId: 'p1' });
+
+    expect(getStep('Add a control line')).toHaveAttribute('href', '/projects/p1/control-lines');
+    expect(getStep('Add plan sheets')).toHaveAttribute('href', '/projects/p1/plan-sheets');
+    expect(getStep('Add lots')).toHaveAttribute('href', '/projects/p1/lots');
+    expect(getStep('Assign an ITP')).toHaveAttribute('href', '/projects/p1/itp');
+    // Project and team steps keep their fixed routes.
+    expect(getStep('Create your first project')).toHaveAttribute('href', '/projects');
     expect(getStep('Invite your team')).toHaveAttribute('href', '/company-settings');
   });
 
@@ -58,19 +84,30 @@ describe('DashboardSetupChecklist', () => {
     expect(screen.queryByText('(done)')).not.toBeInTheDocument();
     // Unfinished steps show their position number instead of a tick.
     expect(within(getStep('Create your first project')).getByText('1')).toBeInTheDocument();
-    expect(within(getStep('Add lots')).getByText('2')).toBeInTheDocument();
+    expect(within(getStep('Add a control line')).getByText('2')).toBeInTheDocument();
   });
 
-  it('marks the project and lot steps done as their counts become non-zero', () => {
-    renderChecklist({ projectCreated: true, lotsAdded: true });
+  it('marks each step done from its own count', () => {
+    renderChecklist({
+      counts: {
+        projects: 1,
+        controlLines: 1,
+        planSheets: 1,
+        lots: 3,
+        lotsWithItp: 0,
+        teamMembers: 1,
+      },
+    });
 
     expect(within(getStep('Create your first project')).getByText('(done)')).toBeInTheDocument();
+    expect(within(getStep('Add a control line')).getByText('(done)')).toBeInTheDocument();
+    expect(within(getStep('Add plan sheets')).getByText('(done)')).toBeInTheDocument();
     expect(within(getStep('Add lots')).getByText('(done)')).toBeInTheDocument();
+    expect(within(getStep('Invite your team')).getByText('(done)')).toBeInTheDocument();
     // The numbered marker is replaced by the tick for completed steps.
     expect(within(getStep('Create your first project')).queryByText('1')).not.toBeInTheDocument();
-    // Steps without cheap counts on the dashboard stay as static links.
-    expect(within(getStep('Assign an ITP template')).queryByText('(done)')).not.toBeInTheDocument();
-    expect(within(getStep('Invite your team')).queryByText('(done)')).not.toBeInTheDocument();
+    // ITP has no attached instance yet, so it stays unticked.
+    expect(within(getStep('Assign an ITP')).queryByText('(done)')).not.toBeInTheDocument();
   });
 });
 

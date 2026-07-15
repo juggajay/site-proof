@@ -37,7 +37,12 @@ const ZERO_STATS = {
   openNCRs: 0,
   attentionItems: { total: 0, overdueNCRs: [], staleHoldPoints: [] },
   recentActivities: [],
+  setupProgress: { controlLines: 0, planSheets: 0, lotsWithItp: 0, teamMembers: 0 },
 };
+
+// A company past setup: at least one lot carries an ITP, so the setup checklist
+// graduates to the normal KPI dashboard.
+const SETUP_COMPLETE = { controlLines: 1, planSheets: 1, lotsWithItp: 6, teamMembers: 2 };
 
 const NO_PROJECT_FOREMAN_DATA = {
   todayDiary: { exists: false, status: null, id: null },
@@ -87,8 +92,10 @@ describe('DashboardPage first-run zero state', () => {
     renderWithProviders(<DashboardPage />);
 
     expect(await screen.findByText('Create your first project')).toBeInTheDocument();
+    expect(screen.getByText('Add a control line')).toBeInTheDocument();
+    expect(screen.getByText('Add plan sheets')).toBeInTheDocument();
     expect(screen.getByText('Add lots')).toBeInTheDocument();
-    expect(screen.getByText('Assign an ITP template')).toBeInTheDocument();
+    expect(screen.getByText('Assign an ITP')).toBeInTheDocument();
     expect(screen.getByText('Invite your team')).toBeInTheDocument();
 
     // The all-zero KPI grid and export chrome are replaced, not rendered.
@@ -149,7 +156,13 @@ describe('DashboardPage first-run zero state', () => {
       name: 'Ada Admin',
     };
     mockDashboardApi({
-      stats: { ...ZERO_STATS, totalProjects: 3, activeProjects: 2, totalLots: 14 },
+      stats: {
+        ...ZERO_STATS,
+        totalProjects: 3,
+        activeProjects: 2,
+        totalLots: 14,
+        setupProgress: SETUP_COMPLETE,
+      },
       projects: [{ id: 'p1', status: 'active' }],
     });
 
@@ -160,6 +173,39 @@ describe('DashboardPage first-run zero state', () => {
     expect(screen.getByRole('button', { name: /Export PDF/ })).toBeInTheDocument();
     expect(screen.queryByText('Create your first project')).not.toBeInTheDocument();
     expect(screen.queryByText(/once your team adds you/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the setup checklist until the first ITP-bearing lot, deep-linked into the sole project', async () => {
+    authState.user = {
+      id: 'u7',
+      email: 'admin@example.com',
+      role: 'admin',
+      roleInCompany: 'admin',
+      companyId: 'c1',
+      name: 'Ada Admin',
+    };
+    // One project with lots but no ITP attached yet — still setting up.
+    mockDashboardApi({
+      stats: {
+        ...ZERO_STATS,
+        totalProjects: 1,
+        activeProjects: 1,
+        totalLots: 4,
+        setupProgress: { controlLines: 1, planSheets: 0, lotsWithItp: 0, teamMembers: 0 },
+      },
+      projects: [{ id: 'proj-1', status: 'active' }],
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    // Checklist, not KPIs, and spatial steps deep-link into the sole project.
+    const controlLineStep = (await screen.findByText('Add a control line')).closest('a');
+    expect(controlLineStep).toHaveAttribute('href', '/projects/proj-1/control-lines');
+    expect(screen.getByText('Assign an ITP').closest('a')).toHaveAttribute(
+      'href',
+      '/projects/proj-1/itp',
+    );
+    expect(screen.queryByText('Total Projects')).not.toBeInTheDocument();
   });
 
   it('does not offer company settings from KPI tiles to non-company-admin roles', async () => {

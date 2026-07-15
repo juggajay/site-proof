@@ -138,6 +138,48 @@ describe('Dashboard Stats API', () => {
       expect(res.body.activeProjects).toBeGreaterThanOrEqual(1);
     });
 
+    it('reports setup-checklist progress: counts control lines and teammates, excludes self, no ITP yet', async () => {
+      // Baseline: 1 project, lots but no ITP attached, only the admin on the project.
+      const before = await request(app)
+        .get('/api/dashboard/stats')
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(before.status).toBe(200);
+      expect(before.body.setupProgress).toMatchObject({
+        controlLines: 0,
+        lotsWithItp: 0,
+        teamMembers: 0, // the requesting admin is excluded from the count
+      });
+
+      const controlLine = await prisma.controlLine.create({
+        data: {
+          projectId,
+          name: 'CL-SETUP-TEST',
+          coordinateSystem: 'EPSG:7856',
+          points: [{ chainage: 0, easting: 0, northing: 0 }],
+        },
+      });
+      const teammate = await registerDashboardUser(
+        'dashboard-setup-mate',
+        'Setup Mate',
+        companyId,
+        'foreman',
+      );
+      await prisma.projectUser.create({
+        data: { projectId, userId: teammate.userId, role: 'foreman', status: 'active' },
+      });
+
+      const after = await request(app)
+        .get('/api/dashboard/stats')
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(after.status).toBe(200);
+      expect(after.body.setupProgress.controlLines).toBe(1);
+      expect(after.body.setupProgress.teamMembers).toBe(1);
+      expect(after.body.setupProgress.lotsWithItp).toBe(0);
+
+      await prisma.controlLine.delete({ where: { id: controlLine.id } });
+      await cleanupDashboardUser(teammate.userId);
+    });
+
     it('should include lot status counts for the real lot lifecycle statuses', async () => {
       const statusLots = await prisma.lot.createMany({
         data: [
