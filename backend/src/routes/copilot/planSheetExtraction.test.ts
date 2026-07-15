@@ -27,6 +27,33 @@ describe('cleanPlanSheetCandidate', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('accepts an EPSG code embedded in the printed CRS label (live-probe regression)', () => {
+    // sheet-02 prints "GDA2020 MGA Zone 56 (EPSG:7856)"; the model returned it
+    // verbatim and the cleaner nulled it, forcing a manual re-pick of a zone
+    // that was printed on the drawing.
+    const { candidate, warnings } = cleanPlanSheetCandidate({
+      coordinateSystem: 'GDA2020 MGA Zone 56 (EPSG:7856)',
+      points: [
+        { easting: 351704.555, northing: 6378958.47, approxX: 0.065, approxY: 0.09 },
+        { easting: 352186.513, northing: 6376167, approxX: 0.405, approxY: 0.965 },
+      ],
+    });
+    expect(candidate.coordinateSystem).toBe('EPSG:7856');
+    expect(warnings).toEqual([]);
+  });
+
+  it('nulls an embedded EPSG code that is not in the supported set', () => {
+    const { candidate, warnings } = cleanPlanSheetCandidate({
+      coordinateSystem: 'WGS 84 / UTM zone 31N (EPSG:32631)',
+      points: [
+        { easting: 1, northing: 2, approxX: 0.2, approxY: 0.2 },
+        { easting: 3, northing: 4, approxX: 0.8, approxY: 0.8 },
+      ],
+    });
+    expect(candidate.coordinateSystem).toBeNull();
+    expect(warnings.join(' ')).toMatch(/coordinate system/i);
+  });
+
   it('nulls an unsupported CRS with a warning but keeps the points', () => {
     const { candidate, warnings } = cleanPlanSheetCandidate({
       coordinateSystem: 'MGA Zone 99',
