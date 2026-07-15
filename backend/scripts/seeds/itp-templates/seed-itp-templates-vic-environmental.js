@@ -19,7 +19,7 @@ const prisma = new PrismaClient()
 const vicESCTemplate = {
   name: 'Erosion & Sediment Control',
   description: 'VIC VicRoads erosion and sediment control including ESCP preparation, ESC device installation, weekly and rain event inspections, water quality monitoring, dust control, progressive stabilisation, and decommissioning per Section 176 (Minor) and Section 177 (Major), supplemented by EPA Victoria Publication 275 and IECA BPESC',
-  activityType: 'environmental',
+  activityType: 'erosion_sediment_control',
   specificationReference: 'Sec 176/177',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -250,7 +250,7 @@ const vicESCTemplate = {
 const vicLandscapingTemplate = {
   name: 'Landscaping & Revegetation',
   description: 'VIC VicRoads landscaping and revegetation works including topsoil management, soil amelioration, planting, seeding, mulching, establishment watering, weed control, and maintenance per Section 720 (Landscape Works), supplemented by AS 4419, AS 4454, and AS 2303',
-  activityType: 'environmental',
+  activityType: 'landscaping',
   specificationReference: 'Sec 720',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -489,7 +489,7 @@ const vicLandscapingTemplate = {
 const vicGeosyntheticsTemplate = {
   name: 'Geosynthetics (Geotextiles, Geogrids, Geomembranes)',
   description: 'VIC VicRoads geosynthetics installation including geotextiles for separation/filtration (Section 210), geogrids for reinforcement, and geomembranes for containment, covering material compliance, subgrade preparation, placement, seaming, cover material placement, compaction, and as-built documentation per Section 210 and AS 3706 series',
-  activityType: 'environmental',
+  activityType: 'geosynthetics',
   specificationReference: 'Sec 210',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -693,7 +693,7 @@ const vicGeosyntheticsTemplate = {
 const vicReinforcedSoilStructuresTemplate = {
   name: 'Reinforced Soil Structures (RSS / MSE Walls)',
   description: 'VIC VicRoads reinforced soil structure construction including MSE walls with precast concrete panel facing, design submissions, QMS, material compliance, foundation preparation, panel erection, reinforcement connection, fill placement and compaction, drainage, survey monitoring, coping, and as-built documentation per Section 682 and BTN 009, aligned with AS 5100 and AS 4678',
-  activityType: 'environmental',
+  activityType: 'reinforced_soil_walls',
   specificationReference: 'Sec 682',
   stateSpec: 'VicRoads',
   checklistItems: [

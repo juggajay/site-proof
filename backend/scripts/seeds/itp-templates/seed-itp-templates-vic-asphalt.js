@@ -22,7 +22,7 @@ const prisma = new PrismaClient()
 const vicDGATemplate = {
   name: 'Dense Graded Asphalt DGA (VIC)',
   description: 'VIC VicRoads dense graded asphalt (DGA) construction per Section 407. Covers mix design registration (RC 500.01), production, transport, placement, compaction, and acceptance testing. Mix types L/N/H/HP/V/VP for wearing course and intermediate course applications.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_dga',
   specificationReference: 'Sec 407',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -587,7 +587,7 @@ const vicDGATemplate = {
 const vicOGATemplate = {
   name: 'Open Graded Asphalt OGA (VIC)',
   description: 'VIC VicRoads open graded asphalt (OGA) construction per Section 417 (v5, 27/12/2018 -- last published standalone version, now superseded). OGA is a functional wearing course with high air voids (18-22%) providing spray reduction and noise benefits. Uses polymer modified binder (PMB) per ATS 3110.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_oga',
   specificationReference: 'Sec 417',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -896,7 +896,7 @@ const vicOGATemplate = {
 const vicSMATemplate = {
   name: 'Stone Mastic Asphalt SMA (VIC)',
   description: 'VIC VicRoads stone mastic asphalt (SMA) construction per Section 404 (v6, 29/08/2018 -- last published standalone version, now superseded). SMA is a gap-graded mix with 70-80% coarse aggregate, 8-12% filler, 6-7% binder, and 0.3% cellulose fibre. Uses PMB per ATS 3110. Design air voids 3-4%.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_sma',
   specificationReference: 'Sec 404',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1209,7 +1209,7 @@ const vicSMATemplate = {
 const vicSprayedSealTemplate = {
   name: 'Sprayed Bituminous Surfacing (VIC)',
   description: 'VIC VicRoads sprayed bituminous surfacing per Section 408 (v13, 26/08/2022). Covers primer, primerseal (initial seal), single/single seal, double/double seal, reseal, and geotextile reinforced seal. Design per Austroads AGPT-04K. Supported by Guide to Section 408, TB-45 (Surfacing Manual), and RC 500.09 (Aggregate Testing).',
-  activityType: 'asphalt',
+  activityType: 'sprayed_seal',
   specificationReference: 'Sec 408',
   stateSpec: 'VicRoads',
   checklistItems: [

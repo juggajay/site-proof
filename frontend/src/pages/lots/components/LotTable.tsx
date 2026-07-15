@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -376,8 +377,8 @@ export const LotTable = React.memo(function LotTable({
                             );
                           case 'activityType':
                             return (
-                              <td key={columnId} className="p-3 capitalize">
-                                {lot.activityType || '\u2014'}
+                              <td key={columnId} className="p-3">
+                                {formatActivityLabel(lot.activityType) || '\u2014'}
                               </td>
                             );
                           case 'status':

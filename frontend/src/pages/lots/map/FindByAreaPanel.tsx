@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MapPin, X } from 'lucide-react';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
@@ -112,7 +113,10 @@ export function FindByAreaPanel({
                           {formatStatusLabel(lot.status)}
                         </span>
                         <span className="ml-auto truncate text-xs text-muted-foreground">
-                          {[lot.activityType, chainageLabel(lot.chainageStart, lot.chainageEnd)]
+                          {[
+                            formatActivityLabel(lot.activityType),
+                            chainageLabel(lot.chainageStart, lot.chainageEnd),
+                          ]
                             .filter(Boolean)
                             .join(' · ')}
                         </span>

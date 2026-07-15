@@ -22,14 +22,6 @@ export interface BulkActivity {
 
 export type WizardStep = 'chainage' | 'parameters' | 'preview' | 'confirm';
 
-export const ACTIVITY_TYPES = [
-  'Earthworks',
-  'Pavement',
-  'Drainage',
-  'Concrete',
-  'Structures',
-  'Rail',
-];
 export const LAYERS = ['Subgrade', 'Subbase', 'Base', 'Surface', 'Wearing Course'];
 export const MAX_BULK_LOTS = 500;
 export const INTERVAL_TOO_SMALL_MESSAGE =
@@ -140,7 +132,8 @@ export function buildBulkLotPreview({
   activities,
   layer,
 }: BuildBulkLotPreviewInput): BuildBulkLotPreviewResult {
-  const activityList = activities.length > 0 ? activities : [{ activityType: 'Earthworks' }];
+  const activityList =
+    activities.length > 0 ? activities : [{ activityType: 'earthworks_general' }];
   const rangeValidation = validateBulkLotRange(start, end, interval, activityList.length);
   if (rangeValidation.error) {
     return { lots: [], error: rangeValidation.error };

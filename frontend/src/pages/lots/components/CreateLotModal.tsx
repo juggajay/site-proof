@@ -17,10 +17,11 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import type { Lot } from '../lotsPageTypes';
 import { logError } from '@/lib/logger';
+import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
+import { isCanonicalActivitySlug } from '@/lib/activityTaxonomy';
 import {
   CHAINAGE_MAX,
   CHAINAGE_MIN,
-  CREATE_LOT_ACTIVITY_TYPES,
   CREATE_LOT_DEFAULT_VALUES,
   LOT_NUMBER_MAX_LENGTH,
   LOT_NUMBER_MIN_LENGTH,
@@ -49,8 +50,7 @@ interface ItpTemplateOption {
 const getInitialFormValues = (initialActivityType?: string): CreateLotFormData => ({
   ...CREATE_LOT_DEFAULT_VALUES,
   activityType:
-    initialActivityType &&
-    (CREATE_LOT_ACTIVITY_TYPES as readonly string[]).includes(initialActivityType)
+    initialActivityType && isCanonicalActivitySlug(initialActivityType)
       ? initialActivityType
       : CREATE_LOT_DEFAULT_VALUES.activityType,
 });
@@ -296,12 +296,7 @@ export function CreateLotModal({
             <div>
               <Label htmlFor="lot-activity">Activity Type</Label>
               <NativeSelect id="lot-activity" {...register('activityType')} className="mt-1">
-                <option value="Earthworks">Earthworks</option>
-                {CREATE_LOT_ACTIVITY_TYPES.filter((type) => type !== 'Earthworks').map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
+                <ActivityTypeOptions currentValue={activityType} />
               </NativeSelect>
             </div>
 

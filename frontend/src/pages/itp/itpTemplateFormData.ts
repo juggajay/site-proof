@@ -1,3 +1,4 @@
+import { activityDisplayName } from '@/lib/activityTaxonomy';
 import type { ChecklistItem } from './itpPageData';
 
 // ---------------------------------------------------------------------------
@@ -38,16 +39,6 @@ export type ChecklistItemChange = <K extends keyof ChecklistEditorItem>(
   value: ChecklistEditorItem[K],
 ) => void;
 
-// Activity types offered in the create/edit template dropdowns.
-export const TEMPLATE_ACTIVITY_TYPES = [
-  'Earthworks',
-  'Drainage',
-  'Pavement',
-  'Concrete',
-  'Structures',
-  'General',
-];
-
 /**
  * A blank checklist row matching the create modal's initial item and the
  * "Add Item" default. Returns a fresh object each call so rows never share a
@@ -79,17 +70,19 @@ export function buildValidChecklistItems<T extends { description: string }>(item
 // Display
 // ---------------------------------------------------------------------------
 
+// Legacy free-text values that are NOT canonical slugs but still deserve a
+// curated label (asphalt_prep folds to prime_primerseal but old rows may linger
+// until the seeder re-tag runs).
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   asphalt_prep: 'Asphalt prep',
-  pavement_bound: 'Pavement (bound)',
-  pavement_concrete: 'Pavement (concrete)',
-  pavement_unbound: 'Pavement (unbound)',
 };
 
 /** Human-readable label for a template's activity type. */
 export function formatActivityTypeLabel(activityType: string): string {
   const trimmed = activityType.trim();
   if (!trimmed) return 'Unspecified';
+  const canonical = activityDisplayName(trimmed);
+  if (canonical !== trimmed) return canonical; // matched a canonical slug
   if (ACTIVITY_TYPE_LABELS[trimmed]) return ACTIVITY_TYPE_LABELS[trimmed];
   if (!/[_-]/.test(trimmed)) return trimmed;
 

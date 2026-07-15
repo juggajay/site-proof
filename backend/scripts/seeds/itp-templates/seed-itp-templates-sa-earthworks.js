@@ -24,7 +24,7 @@ const prisma = new PrismaClient()
 const saEarthworksTemplate = {
   name: 'Earthworks (DIT RD-EW-C1)',
   description: 'DIT Earthworks including site clearing, grubbing, excavation, fill placement, compaction, subgrade preparation, proof rolling, and geotextile placement per RD-EW-C1 (formerly Part R10). Covers material classification, TP 320 compaction testing, and lot acceptance.',
-  activityType: 'earthworks',
+  activityType: 'earthworks_general',
   specificationReference: 'RD-EW-C1',
   stateSpec: 'DIT',
   checklistItems: [

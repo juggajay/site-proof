@@ -152,7 +152,7 @@ describe('BulkCreateLotsWizard generation payload', () => {
     // Add a second activity row: Pavement + its ITP.
     fireEvent.click(screen.getByRole('button', { name: /Add activity/i }));
     const activitySelects = screen.getAllByLabelText('Activity Type');
-    fireEvent.change(activitySelects[1], { target: { value: 'Pavement' } });
+    fireEvent.change(activitySelects[1], { target: { value: 'pavement_unbound' } });
     fireEvent.change(screen.getAllByLabelText('ITP Template')[1], {
       target: { value: 'tpl-pave' },
     });
@@ -171,16 +171,16 @@ describe('BulkCreateLotsWizard generation payload', () => {
     const body = JSON.parse((bulkCall![1] as { body: string }).body);
     expect(body.itpTemplateId).toBeUndefined();
     expect(body.lots).toHaveLength(8);
-    // Activity-inner ordering: [Earthworks, Pavement] repeat per interval.
+    // Activity-inner ordering: [earthworks_general, pavement_unbound] repeat per interval.
     expect(body.lots.map((lot: { activityType: string }) => lot.activityType)).toEqual([
-      'Earthworks',
-      'Pavement',
-      'Earthworks',
-      'Pavement',
-      'Earthworks',
-      'Pavement',
-      'Earthworks',
-      'Pavement',
+      'earthworks_general',
+      'pavement_unbound',
+      'earthworks_general',
+      'pavement_unbound',
+      'earthworks_general',
+      'pavement_unbound',
+      'earthworks_general',
+      'pavement_unbound',
     ]);
     expect(body.lots[0].itpTemplateId).toBe('tpl-earth');
     expect(body.lots[1].itpTemplateId).toBe('tpl-pave');

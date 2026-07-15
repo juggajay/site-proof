@@ -19,7 +19,7 @@ const prisma = new PrismaClient()
 const qldStructuralConcreteTemplate = {
   name: 'QLD Structural Concrete (MRTS70)',
   description: 'TMR structural concrete for bridges, culverts, and retaining structures per MRTS70 (July 2022). Covers mix design approval, formwork, placement, curing, and strength acceptance.',
-  activityType: 'structural',
+  activityType: 'structural_concrete',
   specificationReference: 'TMR MRTS70 Concrete (July 2022)',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -303,7 +303,7 @@ const qldStructuralConcreteTemplate = {
 const qldPilingTemplate = {
   name: 'QLD Piling - Bored, CFA & Driven (MRTS63-66)',
   description: 'TMR piling for bridge/structure foundations covering bored piles (MRTS63), driven tubular steel (MRTS64), precast prestressed (MRTS65), driven steel H-piles (MRTS66), and dynamic testing (MRTS68).',
-  activityType: 'structural',
+  activityType: 'piling',
   specificationReference: 'TMR MRTS63/64/65/66/68 / AS 2159',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -692,7 +692,7 @@ const qldPilingTemplate = {
 const qldReinforcementTemplate = {
   name: 'QLD Reinforcement Placement (MRTS71)',
   description: 'TMR reinforcement supply, fabrication, and placement for all structural concrete per MRTS71 (June 2020, updated July 2025). Covers material acceptance, bending, fixing, cover, couplers, welding, and pre-pour inspection.',
-  activityType: 'structural',
+  activityType: 'reinforcement',
   specificationReference: 'TMR MRTS71 Reinforcing Steel / AS 3600 / AS/NZS 4671',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -952,7 +952,7 @@ const qldReinforcementTemplate = {
 const qldSteelworkTemplate = {
   name: 'QLD Structural Steelwork (MRTS78)',
   description: 'TMR structural steelwork fabrication, coating, and erection for bridges and sign gantries per MRTS78 (November 2020). Covers fabricator qualification, welding, NDE, coatings, and site erection.',
-  activityType: 'structural',
+  activityType: 'structural_steelwork',
   specificationReference: 'TMR MRTS78 Fabrication of Structural Steelwork / AS/NZS 5131 / AS 4100',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1233,7 +1233,7 @@ const qldSteelworkTemplate = {
 const qldBearingsTemplate = {
   name: 'QLD Bridge Bearings (MRTS81)',
   description: 'TMR bridge bearing supply, testing, and installation per MRTS81 (November 2020). Covers elastomeric and sliding bearings — design submission, manufacture, testing, installation, and commissioning.',
-  activityType: 'structural',
+  activityType: 'bridge_bearings',
   specificationReference: 'TMR MRTS81 Bridge Bearings / AS 5100.4 / AS 1523',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1427,7 +1427,7 @@ const qldBearingsTemplate = {
 const qldPrecastTemplate = {
   name: 'QLD Precast Concrete Elements (MRTS72)',
   description: 'TMR precast concrete manufacture, transport, and erection per MRTS72 (July 2019), MRTS70 Section 16, and MRTS74 (November 2023). Covers beams, panels, deck units, and segments.',
-  activityType: 'structural',
+  activityType: 'precast_elements',
   specificationReference: 'TMR MRTS72 / MRTS70 Section 16 / MRTS74',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1690,7 +1690,7 @@ const qldPrecastTemplate = {
 const qldPostTensioningTemplate = {
   name: 'QLD Post-Tensioning (MRTS89)',
   description: 'TMR post-tensioning for bridges and slabs per MRTS89 (July 2017). Covers PT system approval, duct installation, stressing, grouting, and anchorage protection.',
-  activityType: 'structural',
+  activityType: 'post_tensioning',
   specificationReference: 'TMR MRTS89 Post-Tensioned Concrete / AS/NZS 4672',
   stateSpec: 'MRTS',
   checklistItems: [

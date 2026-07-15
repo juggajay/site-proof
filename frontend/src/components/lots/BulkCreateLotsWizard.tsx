@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
@@ -40,7 +41,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
   // lots: N activities × M intervals = N×M lots. Defaults to a single row so
   // the simple case looks unchanged.
   const [activities, setActivities] = useState<BulkActivity[]>([
-    { activityType: 'Earthworks', itpTemplateId: '' },
+    { activityType: 'earthworks_general', itpTemplateId: '' },
   ]);
   const [layer, setLayer] = useState('');
   const [descriptionTemplate, setDescriptionTemplate] = useState('{prefix}-{start}-{end}');
@@ -561,7 +562,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                           {lot.chainageStart} - {lot.chainageEnd}
                         </td>
                         <td className="px-4 py-2 text-sm text-muted-foreground">
-                          {lot.activityType}
+                          {formatActivityLabel(lot.activityType)}
                         </td>
                         <td className="px-4 py-2 text-sm text-muted-foreground">
                           {lot.layer || '-'}
@@ -586,7 +587,8 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                 <ul className="mt-1 text-muted-foreground list-disc list-inside">
                   {activitySummaries.map((summary, i) => (
                     <li key={i}>
-                      {summary.activityType}: {summary.templateName ?? 'No ITP template'}
+                      {formatActivityLabel(summary.activityType)}:{' '}
+                      {summary.templateName ?? 'No ITP template'}
                     </li>
                   ))}
                 </ul>
@@ -612,7 +614,8 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                     Activities:{' '}
                     {activitySummaries
                       .map(
-                        (s) => `${s.activityType}${s.templateName ? ` (${s.templateName})` : ''}`,
+                        (s) =>
+                          `${formatActivityLabel(s.activityType)}${s.templateName ? ` (${s.templateName})` : ''}`,
                       )
                       .join(', ')}
                   </li>

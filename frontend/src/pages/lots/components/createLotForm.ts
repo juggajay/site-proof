@@ -10,19 +10,6 @@ export const LOT_NUMBER_MAX_LENGTH = 50;
 export const CHAINAGE_MIN = 0;
 export const CHAINAGE_MAX = 999999;
 
-export const CREATE_LOT_ACTIVITY_TYPES = [
-  'Earthworks',
-  'Concrete',
-  'Drainage',
-  'Pavement',
-  'Structures',
-  'Utilities',
-  'Landscaping',
-  'Rail',
-  'Services',
-  'Other',
-] as const;
-
 export const parseChainageInput = (value: string): number | null => {
   return parseOptionalNonNegativeDecimalInput(value);
 };
@@ -108,7 +95,7 @@ export type CreateLotFormData = z.infer<typeof createLotSchema>;
 export const CREATE_LOT_DEFAULT_VALUES: CreateLotFormData = {
   lotNumber: '',
   description: '',
-  activityType: 'Earthworks',
+  activityType: 'earthworks_general',
   chainageStart: '',
   chainageEnd: '',
   budgetAmount: '',

@@ -1,3 +1,4 @@
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import type { Lot } from '../types';
 
 export interface LotSummaryCardsProps {
@@ -17,7 +18,7 @@ export function LotSummaryCards({ lot }: LotSummaryCardsProps) {
       </div>
       <div className="rounded-lg border p-4">
         <span className="text-sm text-muted-foreground">Activity Type</span>
-        <p className="font-medium text-lg capitalize">{lot.activityType || '—'}</p>
+        <p className="font-medium text-lg">{formatActivityLabel(lot.activityType) || '—'}</p>
       </div>
       <div className="rounded-lg border p-4">
         <span className="text-sm text-muted-foreground">Layer</span>

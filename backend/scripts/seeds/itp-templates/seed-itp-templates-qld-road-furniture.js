@@ -21,7 +21,7 @@ const prisma = new PrismaClient()
 const qldWireRopeBarrierTemplate = {
   name: 'Steel Wire Rope Safety Barrier',
   description: 'TMR wire rope barrier installation including system acceptance, post/cable installation, tensioning, end terminals, and delineation per MRTS14 Road Furniture. Covers proprietary MASH-tested systems (e.g. Brifen, MashFlex).',
-  activityType: 'road_furniture',
+  activityType: 'wire_rope_barrier',
   specificationReference: 'TMR MRTS14 Road Furniture',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -296,7 +296,7 @@ const qldWireRopeBarrierTemplate = {
 const qldWBeamGuardrailTemplate = {
   name: 'W-Beam Steel Guard Fence (Guardrail)',
   description: 'TMR W-beam guardrail installation including system acceptance, post driving/installation, rail erection, bolt torque, end terminals, transitions, and delineation per MRTS14 Road Furniture. Covers proprietary MASH-tested systems (e.g. RAMSHIELD, Flexbeam).',
-  activityType: 'road_furniture',
+  activityType: 'w_beam_guardrail',
   specificationReference: 'TMR MRTS14 Road Furniture',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -553,7 +553,7 @@ const qldWBeamGuardrailTemplate = {
 const qldConcreteBarrierTemplate = {
   name: 'Concrete Road Safety Barrier (Single Slope / F-Type)',
   description: 'TMR concrete barrier construction including precast and in-situ (extruded) methods, foundation preparation, reinforcement, concrete placement, joint treatment, transitions, and delineation per MRTS14 Road Furniture and MRTS70 Concrete. References SD1468, SD1469, SD1470, SD1473, SD1486.',
-  activityType: 'road_furniture',
+  activityType: 'concrete_barrier',
   specificationReference: 'TMR MRTS14 Road Furniture + MRTS70 Concrete',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -854,7 +854,7 @@ const qldConcreteBarrierTemplate = {
 const qldPavementMarkingTemplate = {
   name: 'Pavement Marking - Linemarking and Raised Pavement Markers',
   description: 'TMR pavement marking including paint (waterborne/thermoplastic), raised pavement markers, audio tactile line marking, retroreflectivity testing, and geometric compliance per MRTS45 Road Surface Delineation (harmonised with Austroads ATS 4110).',
-  activityType: 'road_furniture',
+  activityType: 'pavement_marking',
   specificationReference: 'TMR MRTS45 Road Surface Delineation',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1115,7 +1115,7 @@ const qldPavementMarkingTemplate = {
 const qldFencingTemplate = {
   name: 'Fencing - Boundary, Fauna Exclusion, and Noise Walls',
   description: 'TMR fencing installation covering boundary rural fencing, chain link fencing, fauna exclusion fencing, and noise fences/walls per MRTS14 Road Furniture and MRTS15 Noise Fences. References SD1600-SD1604, SD1615.',
-  activityType: 'road_furniture',
+  activityType: 'fencing_noise_walls',
   specificationReference: 'TMR MRTS14 Road Furniture + MRTS15 Noise Fences',
   stateSpec: 'MRTS',
   checklistItems: [

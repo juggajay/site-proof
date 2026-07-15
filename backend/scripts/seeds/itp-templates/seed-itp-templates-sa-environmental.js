@@ -19,7 +19,7 @@ const prisma = new PrismaClient()
 const saESCTemplate = {
   name: 'Erosion & Sediment Control (DIT EHTM / EPA SA)',
   description: 'DIT Erosion and Sediment Control per the Environment and Heritage Technical Manual (EHTM), EPA SA stormwater guidelines, and PR-LS-C5 (Erosion Control Matting). SA uses a multi-document approach — no single ESC specification. Covers silt fences, sediment basins, rock check dams, stabilised entries, and monitoring.',
-  activityType: 'environmental',
+  activityType: 'erosion_sediment_control',
   specificationReference: 'EHTM / EPA SA / PR-LS-C5',
   stateSpec: 'DIT',
   checklistItems: [
@@ -277,7 +277,7 @@ const saESCTemplate = {
 const saLandscapingTemplate = {
   name: 'Landscaping & Revegetation (DIT PR-LS Series)',
   description: 'DIT Landscaping and Revegetation per the Public Realm Landscape (PR-LS) specification series — SA has the most granular landscaping specs of any state (12+ separate parts). Key specs: PR-LS-C2 (Planting), PR-LS-C6 (Seeding), PR-LS-C7 (Topsoil), plus PR-LS-C1 (Soft Landscape), PR-LS-C3 (Mulching), PR-LS-C4 (Irrigation), PR-LS-C5 (Erosion Control Matting), PR-LS-C8 (Turf), PR-LS-C9 (Tree Relocation).',
-  activityType: 'environmental',
+  activityType: 'landscaping',
   specificationReference: 'PR-LS-C1 to C9',
   stateSpec: 'DIT',
   checklistItems: [
@@ -555,7 +555,7 @@ const saLandscapingTemplate = {
 const saGeosyntheticsTemplate = {
   name: 'Geosynthetics (DIT RD-EW-S1)',
   description: 'DIT Geosynthetics supply and installation per RD-EW-S1 (Supply of Geotextiles). Covers geotextiles, geogrids, and geomembranes for separation, filtration, reinforcement, and drainage applications.',
-  activityType: 'environmental',
+  activityType: 'geosynthetics',
   specificationReference: 'RD-EW-S1',
   stateSpec: 'DIT',
   checklistItems: [
@@ -750,7 +750,7 @@ const saGeosyntheticsTemplate = {
 const saReinforcedSoilStructuresTemplate = {
   name: 'Reinforced Soil Structures (DIT ST-RE-C1)',
   description: 'DIT Reinforced Soil Structures including MSE walls and reinforced slopes per ST-RE-C1 (Reinforced Soil Structures). Covers foundation preparation, reinforcement layers, facing panels, compaction, and drainage.',
-  activityType: 'environmental',
+  activityType: 'reinforced_soil_walls',
   specificationReference: 'ST-RE-C1',
   stateSpec: 'DIT',
   checklistItems: [

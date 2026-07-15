@@ -23,7 +23,7 @@ const prisma = new PrismaClient()
 const saDGATemplate = {
   name: 'Dense Graded Asphalt (DIT RD-BP-S2/C3)',
   description: 'DIT Dense Graded Asphalt including mix design approval, supply verification, placement, compaction, and surface characteristic assessment per RD-BP-S2 (Supply of Asphalt, formerly Part R27) and RD-BP-C3 (Construction of Asphalt Pavement, formerly Part R28). Covers AC7, AC10, AC14, AC20 mix types.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_dga',
   specificationReference: 'RD-BP-S2 / RD-BP-C3',
   stateSpec: 'DIT',
   checklistItems: [
@@ -527,7 +527,7 @@ const saDGATemplate = {
 const saOGATemplate = {
   name: 'Open Graded Asphalt (DIT RD-BP-S2/C3)',
   description: 'DIT Open Graded Asphalt (OG10/OG14) for permeable wearing course. Mix design, A15E modified binder, placement, and permeability verification per RD-BP-S2 and RD-BP-C3.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_oga',
   specificationReference: 'RD-BP-S2 / RD-BP-C3',
   stateSpec: 'DIT',
   checklistItems: [
@@ -743,7 +743,7 @@ const saOGATemplate = {
 const saSMATemplate = {
   name: 'Stone Mastic Asphalt (DIT RD-BP-S2/C3)',
   description: 'DIT Stone Mastic Asphalt (SMA10) wearing course. Mix design including fibre content, drain-down testing, modified binder, and construction per RD-BP-S2 and RD-BP-C3.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_sma',
   specificationReference: 'RD-BP-S2 / RD-BP-C3',
   stateSpec: 'DIT',
   checklistItems: [
@@ -989,7 +989,7 @@ const saSMATemplate = {
 const saSprayedSealTemplate = {
   name: 'Sprayed Bituminous Surfacing (DIT RD-BP-D2)',
   description: 'DIT Sprayed Bituminous Surfacing including priming, primer sealing, and resealing per RD-BP-D2 (Design and Application of Sprayed Bituminous Surfacing, formerly Part R26/R26DA). Covers binder application, aggregate spreading, and embedment.',
-  activityType: 'asphalt',
+  activityType: 'sprayed_seal',
   specificationReference: 'RD-BP-D2',
   stateSpec: 'DIT',
   checklistItems: [

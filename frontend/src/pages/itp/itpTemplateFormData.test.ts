@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TEMPLATE_ACTIVITY_TYPES,
   buildValidChecklistItems,
   createEmptyChecklistItem,
   formatActivityTypeLabel,
@@ -66,9 +65,13 @@ describe('itp template form helpers', () => {
   });
 
   describe('formatActivityTypeLabel', () => {
-    it('maps known activity codes to their curated labels', () => {
+    it('renders canonical slugs as their taxonomy display name', () => {
+      expect(formatActivityTypeLabel('pavement_bound')).toBe('Bound/stabilised pavement');
+      expect(formatActivityTypeLabel('culverts')).toBe('Culverts (box/pipe)');
+    });
+
+    it('keeps a curated label for legacy non-canonical codes', () => {
       expect(formatActivityTypeLabel('asphalt_prep')).toBe('Asphalt prep');
-      expect(formatActivityTypeLabel('pavement_bound')).toBe('Pavement (bound)');
     });
 
     it('falls back to "Unspecified" for blank input', () => {
@@ -87,19 +90,6 @@ describe('itp template form helpers', () => {
 
     it('trims surrounding whitespace before formatting', () => {
       expect(formatActivityTypeLabel('  asphalt_prep  ')).toBe('Asphalt prep');
-    });
-  });
-
-  describe('TEMPLATE_ACTIVITY_TYPES', () => {
-    it('lists the activity types offered in the create/edit dropdowns', () => {
-      expect(TEMPLATE_ACTIVITY_TYPES).toEqual([
-        'Earthworks',
-        'Drainage',
-        'Pavement',
-        'Concrete',
-        'Structures',
-        'General',
-      ]);
     });
   });
 });

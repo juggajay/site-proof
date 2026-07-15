@@ -20,7 +20,7 @@ const prisma = new PrismaClient()
 const qldPipeInstallationTemplate = {
   name: 'Drainage - Pipe Installation (QLD)',
   description: 'TMR pipe culvert installation including RCP and PVC pipes per MRTS03 (March 2025) and AS/NZS 3725:2007. Covers trench excavation, bedding, pipe laying, jointing, backfill, CCTV inspection, and as-built survey.',
-  activityType: 'drainage',
+  activityType: 'pipe_drainage',
   specificationReference: 'TMR MRTS03 / AS/NZS 3725:2007',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -401,7 +401,7 @@ const qldPipeInstallationTemplate = {
 const qldPitsChambersTemplate = {
   name: 'Drainage - Pits & Chambers (QLD)',
   description: 'TMR pit and chamber construction including precast and cast-in-situ options per MRTS03 (March 2025) and MRTS70 (July 2022). Covers foundation, formwork, concrete, connections, benching, and backfill.',
-  activityType: 'drainage',
+  activityType: 'drainage_pits',
   specificationReference: 'TMR MRTS03 / MRTS70',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -692,7 +692,7 @@ const qldPitsChambersTemplate = {
 const qldBoxCulvertsTemplate = {
   name: 'Drainage - Box Culverts (QLD)',
   description: 'TMR box culvert construction including precast RCBC and cast-in-situ options per MRTS03 (March 2025), MRTS24 (July 2025), and MRTS70 (July 2022). Covers foundation, placement, jointing, waterproofing, backfill, and post-construction verification.',
-  activityType: 'drainage',
+  activityType: 'culverts',
   specificationReference: 'TMR MRTS03 / MRTS24 / MRTS70',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1135,7 +1135,7 @@ const qldBoxCulvertsTemplate = {
 const qldSubsoilDrainsTemplate = {
   name: 'Drainage - Subsoil/Subsurface Drainage (QLD)',
   description: 'TMR subsoil and subsurface drainage installation per MRTS03 (March 2025), Clauses 27-29. Covers trench excavation, geotextile wrapping, filter aggregate, pipe laying, outlet connections, and functional testing.',
-  activityType: 'drainage',
+  activityType: 'subsoil_drainage',
   specificationReference: 'TMR MRTS03 (Clauses 27-29)',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1364,7 +1364,7 @@ const qldSubsoilDrainsTemplate = {
 const qldKerbChannelTemplate = {
   name: 'Drainage - Kerb & Channel (QLD)',
   description: 'TMR kerb and channel construction (cast-in-place concrete) per MRTS03 Sections 20-21 (March 2025) and MRTS70 (July 2022). Covers subgrade preparation, formwork/slipform, concrete placement, joints, finishing, curing, and testing. Profiles per TMR SD1033.',
-  activityType: 'drainage',
+  activityType: 'kerb_channel',
   specificationReference: 'TMR MRTS03 (Sections 20-21) / MRTS70 / SD1033',
   stateSpec: 'MRTS',
   checklistItems: [

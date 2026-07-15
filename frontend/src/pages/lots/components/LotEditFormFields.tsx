@@ -2,19 +2,8 @@
 // Location, and Commercial sections). All form state, validation, submit,
 // offline-save, and lock derivation stay in LotEditPage; values and the
 // change handler come down as props.
+import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
 import type { LotEditFormData, Subcontractor } from '../lotEditData';
-
-const ACTIVITY_TYPES = [
-  'Earthworks',
-  'Drainage',
-  'Pavement',
-  'Concrete',
-  'Structures',
-  'Landscaping',
-  'Rail',
-  'Services',
-  'Other',
-];
 
 const OFFSET_OPTIONS = ['left', 'right', 'full', 'custom'];
 
@@ -118,11 +107,7 @@ export function LotEditFormFields({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
           >
             <option value="">Select activity type</option>
-            {ACTIVITY_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
+            <ActivityTypeOptions currentValue={formData.activityType} />
           </select>
         </div>
       </div>

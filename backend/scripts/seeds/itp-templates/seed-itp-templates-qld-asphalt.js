@@ -21,7 +21,7 @@ const prisma = new PrismaClient()
 const qldAsphaltDGATemplate = {
   name: 'Asphalt Surfacing / DGA (QLD)',
   description: 'QLD TMR dense graded asphalt (DGA) construction per MRTS30 (March 2024). Covers mix design, production, placement, compaction, and acceptance testing. Includes mandatory WMA additive and reduced manufacturing temperatures per March 2024 amendment.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_dga',
   specificationReference: 'TMR MRTS30 Asphalt Pavements (March 2024)',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -376,7 +376,7 @@ const qldAsphaltDGATemplate = {
 const qldSprayedSealsTemplate = {
   name: 'Sprayed Bituminous Surfacing (QLD)',
   description: 'QLD TMR sprayed bituminous treatments (seals, reseals, enrichments) per MRTS11 (July 2025). Covers binder preparation, cover aggregate, spraying operations, rolling, and acceptance testing. Standalone template separated from asphalt for usability.',
-  activityType: 'asphalt',
+  activityType: 'sprayed_seal',
   specificationReference: 'TMR MRTS11 Sprayed Bituminous Treatments (July 2025)',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -669,7 +669,7 @@ const qldSprayedSealsTemplate = {
 const qldPrimingTemplate = {
   name: 'Priming and Primersealing (QLD)',
   description: 'QLD TMR priming and primersealing (initial seals) per MRTS11 (July 2025). Covers surface preparation, ball penetration testing, prime coat application, primerseal operations, and curing. Prime coat provides moisture barrier and adhesion; primerseal combines priming and sealing in one operation.',
-  activityType: 'asphalt',
+  activityType: 'prime_primerseal',
   specificationReference: 'TMR MRTS11 Sprayed Bituminous Treatments (July 2025) / TN175 / Austroads AGPT04K',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -971,7 +971,7 @@ const qldPrimingTemplate = {
 const qldSMATemplate = {
   name: 'Stone Mastic Asphalt - SMA (QLD)',
   description: 'QLD TMR Stone Mastic Asphalt (SMA) per MRTS30 (March 2024). SMA has distinct requirements within MRTS30 including mandatory cellulose fibre (>= 0.3%), crushed fine aggregate only, no recycled glass fines, PMB binder, lab air voids 3-5%, and drain-down testing. Includes mandatory WMA additive and reduced manufacturing temperatures.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_sma',
   specificationReference: 'TMR MRTS30 Asphalt Pavements — SMA Clauses (March 2024)',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1260,7 +1260,7 @@ const qldSMATemplate = {
 const qldEME2Template = {
   name: 'EME2 High Modulus Asphalt (QLD)',
   description: 'QLD TMR High Modulus Asphalt (EME2) per MRTS32 and MRTS102. EME2 is a high modulus asphalt base/binder course for heavy-duty pavements. Includes mandatory WMA additive (MRTS30 March 2024) and RAP provisions (up to 15% per MRTS102 November 2025). Hard grade bitumen with 14mm nominal aggregate.',
-  activityType: 'asphalt',
+  activityType: 'asphalt_eme',
   specificationReference: 'TMR MRTS32 High Modulus Asphalt (EME2) / MRTS102 Reclaimed Asphalt Pavement Material (November 2025)',
   stateSpec: 'MRTS',
   checklistItems: [

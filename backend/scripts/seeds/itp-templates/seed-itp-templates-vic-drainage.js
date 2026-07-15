@@ -21,7 +21,7 @@ const prisma = new PrismaClient()
 const vicPipeInstallationTemplate = {
   name: 'Drainage - Pipe Installation (VIC)',
   description: 'VicRoads pipe installation for underground stormwater drains per Section 701 (February 2023). Covers RCP (AS 4058), FRC (AS 4139), PVC, HDPE, and corrugated metal pipes. Includes trench excavation, bedding, pipe laying, jointing, backfill, CCTV inspection (WSA 05:2020), and as-built survey.',
-  activityType: 'drainage',
+  activityType: 'pipe_drainage',
   specificationReference: 'Sec 701',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -455,7 +455,7 @@ const vicPipeInstallationTemplate = {
 const vicPitsChambersTemplate = {
   name: 'Drainage - Pits & Chambers (VIC)',
   description: 'VicRoads drainage pit and chamber construction per Section 705 (June 2021) and BTN 033. Covers precast and cast-in-situ options including foundation, formwork, concrete (VR330/32 steel RC, VR450/50 FRC), connections, benching, covers/grates (AS 3996), step irons, and backfill.',
-  activityType: 'drainage',
+  activityType: 'drainage_pits',
   specificationReference: 'Sec 705',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -759,7 +759,7 @@ const vicPitsChambersTemplate = {
 const vicCulvertsTemplate = {
   name: 'Drainage - Culverts (VIC)',
   description: 'VicRoads culvert construction (box culverts, pipe culverts, headwalls/wingwalls) per Section 701, Section 610, and BTN 016 (v2.0 June 2023). Covers pipe culverts (AS 4058/AS 4139), precast box culverts (AS 1597.1/1597.2), cast-in-situ concrete (VR450/50), endwalls/wingwalls (SD 1700-1990 series), and post-installation inspection.',
-  activityType: 'drainage',
+  activityType: 'culverts',
   specificationReference: 'Sec 610/BTN016',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1311,7 +1311,7 @@ const vicCulvertsTemplate = {
 const vicSubsoilDrainageTemplate = {
   name: 'Drainage - Subsoil/Subsurface (VIC)',
   description: 'VicRoads subsurface drainage installation per Section 702 (February 2023). Covers Category 1/2/3 drain pipes, granular filter materials (Table 702.051), geotextile filters (Table 702.061), geocomposite drains, trench excavation, pipe laying, filter placement, access points, outlet connections, and flushing test.',
-  activityType: 'drainage',
+  activityType: 'subsoil_drainage',
   specificationReference: 'Sec 702',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -1527,7 +1527,7 @@ const vicSubsoilDrainageTemplate = {
 const vicKerbChannelTemplate = {
   name: 'Drainage - Kerb & Channel (VIC)',
   description: 'VicRoads kerb and channel construction per Section 703 v14 (August 2021). Covers concrete paving for kerbs, channels, footpaths, and edgings. Kerb profiles per SD 2001 (Barrier, Semi-Mountable, Mountable), SD 2100-2103. Concrete per AS 1379, kerbs per AS 2876. Includes extruded and hand-placed methods, subgrade preparation, formwork, concrete placement, finishing, joints, curing, and dimensional verification.',
-  activityType: 'drainage',
+  activityType: 'kerb_channel',
   specificationReference: 'Sec 703',
   stateSpec: 'VicRoads',
   checklistItems: [

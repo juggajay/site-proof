@@ -22,7 +22,7 @@ const prisma = new PrismaClient()
 const nswPipeInstallationTemplate = {
   name: 'Pipe Installation (Stormwater/Drainage)',
   description: 'TfNSW drainage pipe installation including RCP, RCBC, PVC, and HDPE pipes per R11 and related specifications',
-  activityType: 'drainage',
+  activityType: 'pipe_drainage',
   specificationReference: 'TfNSW R11',
   stateSpec: 'TfNSW',
   checklistItems: [
@@ -318,7 +318,7 @@ const nswPipeInstallationTemplate = {
 const nswPitConstructionTemplate = {
   name: 'Drainage Pit & Chamber Construction',
   description: 'TfNSW drainage pit and chamber construction including inlet pits, junction pits, and access chambers',
-  activityType: 'drainage',
+  activityType: 'drainage_pits',
   specificationReference: 'TfNSW R11 / Standard Drawings',
   stateSpec: 'TfNSW',
   checklistItems: [
@@ -538,7 +538,7 @@ const nswPitConstructionTemplate = {
 const nswBoxCulvertTemplate = {
   name: 'Box Culvert Construction',
   description: 'TfNSW box culvert construction including precast and in-situ reinforced concrete box culverts',
-  activityType: 'drainage',
+  activityType: 'culverts',
   specificationReference: 'TfNSW R11 / B80',
   stateSpec: 'TfNSW',
   checklistItems: [
@@ -848,7 +848,7 @@ const nswBoxCulvertTemplate = {
 const nswSubsoilDrainageTemplate = {
   name: 'Subsoil Drainage',
   description: 'TfNSW subsoil drainage installation including slotted/perforated pipe, geotextile, and aggregate drain',
-  activityType: 'drainage',
+  activityType: 'subsoil_drainage',
   specificationReference: 'TfNSW R11 / R44',
   stateSpec: 'TfNSW',
   checklistItems: [

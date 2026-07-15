@@ -1,5 +1,6 @@
 // Feature #151 - Linear Map Visualization for Lots
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import {
   ChevronLeft,
   ChevronRight,
@@ -451,7 +452,7 @@ export function LinearMapView({ lots, onLotClick, areas = [] }: LinearMapViewPro
               {popup.lot.activityType && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Activity:</span>
-                  <span className="font-medium">{popup.lot.activityType}</span>
+                  <span className="font-medium">{formatActivityLabel(popup.lot.activityType)}</span>
                 </div>
               )}
               {popup.lot.layer && (

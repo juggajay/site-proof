@@ -20,7 +20,7 @@ const prisma = new PrismaClient()
 const qldUnboundPavementTemplate = {
   name: 'Unbound Granular Pavement',
   description: 'TMR unbound granular pavement base and subbase construction per MRTS05 (July 2022). Covers Type 1, 2, and 3 materials for base and subbase layers.',
-  activityType: 'pavements',
+  activityType: 'pavement_unbound',
   specificationReference: 'MRTS05',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -271,7 +271,7 @@ const qldUnboundPavementTemplate = {
 const qldStabilisedLimeTemplate = {
   name: 'Stabilised Pavement - Lime',
   description: 'TMR in-situ lime stabilised subgrade construction per MRTS07A (July 2024). Covers quicklime and hydrated lime treatment of subgrade soils.',
-  activityType: 'pavements',
+  activityType: 'pavement_stabilisation',
   specificationReference: 'MRTS07A',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -531,7 +531,7 @@ const qldStabilisedLimeTemplate = {
 const qldStabilisedCementTemplate = {
   name: 'Stabilised Pavement - Cement',
   description: 'TMR in-situ cement stabilised pavement construction per MRTS07B (July 2024). Covers cement-treated base and subbase layers.',
-  activityType: 'pavements',
+  activityType: 'pavement_stabilisation',
   specificationReference: 'MRTS07B',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -809,7 +809,7 @@ const qldStabilisedCementTemplate = {
 const qldConcretePavementTemplate = {
   name: 'Concrete Pavement',
   description: 'TMR concrete pavement base construction per MRTS40 (November 2018). Covers Plain Concrete Pavements (PCP), Jointed Reinforced (JRCP), Continuously Reinforced (CRCP), and Steel Fibre Reinforced (SFCP).',
-  activityType: 'pavements',
+  activityType: 'pavement_concrete',
   specificationReference: 'MRTS40',
   stateSpec: 'MRTS',
   checklistItems: [
@@ -1230,7 +1230,7 @@ const qldConcretePavementTemplate = {
 const qldPlantMixedStabilisedTemplate = {
   name: 'Plant-Mixed Stabilised Pavement',
   description: 'TMR plant-mixed heavily bound (cemented) pavement construction per MRTS08 (November 2022). Covers Category 1 (UCS > 4 MPa at 28 days) and Category 2 (UCS > 2 MPa at 28 days) materials.',
-  activityType: 'pavements',
+  activityType: 'pavement_bound',
   specificationReference: 'MRTS08',
   stateSpec: 'MRTS',
   checklistItems: [

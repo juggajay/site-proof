@@ -22,7 +22,7 @@ const prisma = new PrismaClient()
 const vicWireRopeBarrierTemplate = {
   name: 'Wire Rope Safety Barrier (WRSB)',
   description: 'VicRoads wire rope safety barrier installation including product compliance, post foundations, side-load testing, cable installation, tensioning, end terminals, delineation, and compliance audit per Section 711. Four wire rope proprietary system meeting NCHRP 350 TL-4 (main sections) and TL-3 (terminals).',
-  activityType: 'road_furniture',
+  activityType: 'wire_rope_barrier',
   specificationReference: 'Sec 711',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -213,7 +213,7 @@ const vicWireRopeBarrierTemplate = {
 const vicWBeamGuardFenceTemplate = {
   name: 'W-Beam Guard Fence (Steel Beam Guard Fence)',
   description: 'VicRoads steel beam guard fence (W-beam) installation including material verification, post installation and foundation testing, rail erection, bolt torque, end terminals (trailing and leading), delineation, and compliance audit per Section 708. References SD 3661, SD 3671, SD 3544, SD 3545, SD 3562, SD 3503.',
-  activityType: 'road_furniture',
+  activityType: 'w_beam_guardrail',
   specificationReference: 'Sec 708',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -377,7 +377,7 @@ const vicWBeamGuardFenceTemplate = {
 const vicConcreteBarrierTemplate = {
   name: 'Concrete Barrier (F-Shape / New Jersey)',
   description: 'VicRoads concrete barrier construction including precast, cast-in-place, and slipform methods. Covers foundation preparation, reinforcement, formwork, concrete placement, curing, precast segment placement, joints and connections, delineation, and final inspection per SD 3901-3906, Sections 610/703, and BTN 001 (Traffic Barriers for Structures).',
-  activityType: 'road_furniture',
+  activityType: 'concrete_barrier',
   specificationReference: 'Sec 610/BTN001',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -576,7 +576,7 @@ const vicConcreteBarrierTemplate = {
 const vicPavementMarkingTemplate = {
   name: 'Pavement Marking',
   description: 'VicRoads pavement marking including thermoplastic, waterborne paint, and cold-applied markings, glass bead application, raised pavement markers (RPMs), retroreflectivity testing, and geometric compliance per Sections 721, 722, and 710. Test Method RC 424.01 for retroreflectivity measurement.',
-  activityType: 'road_furniture',
+  activityType: 'pavement_marking',
   specificationReference: 'Sec 721/722',
   stateSpec: 'VicRoads',
   checklistItems: [
@@ -789,7 +789,7 @@ const vicPavementMarkingTemplate = {
 const vicFencingTemplate = {
   name: 'Fencing incl. Noise Walls',
   description: 'VicRoads fencing installation covering boundary fencing (post and wire, chain wire mesh), gates, and noise attenuation walls per Section 707 (Fencing), Section 765 (Noise Attenuation Walls), and BTN 007. Fence types include Type A (post and wire), Type B (sheep fence), Type H (wire mesh), Type K (chain wire mesh). Standard Drawings SD 3101-3161.',
-  activityType: 'road_furniture',
+  activityType: 'fencing_noise_walls',
   specificationReference: 'Sec 707/765',
   stateSpec: 'VicRoads',
   checklistItems: [
