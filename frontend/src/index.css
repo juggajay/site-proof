@@ -1318,3 +1318,88 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Jack copilot chat widget. The global reduced-motion block above neutralises
+   these animations automatically. */
+.jack-bubble {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 40;
+  animation: jack-bubble-in 0.35s cubic-bezier(0.32, 1.15, 0.35, 1);
+  transition:
+    transform 0.15s ease-out,
+    box-shadow 0.15s ease-out;
+}
+.jack-bubble:hover {
+  transform: translateY(-2px);
+}
+/* On mobile the classic layout shows a bottom nav (h-16 + safe area); lift the
+   bubble clear of it. */
+@media (max-width: 767px) {
+  .jack-bubble {
+    right: 1rem;
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+@keyframes jack-bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.jack-panel {
+  animation: jack-panel-in 0.28s cubic-bezier(0.32, 1.15, 0.35, 1);
+  transform-origin: bottom right;
+}
+@media (max-width: 767px) {
+  .jack-panel {
+    animation-name: jack-sheet-in;
+    transform-origin: bottom center;
+  }
+}
+@keyframes jack-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes jack-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.jack-dot {
+  animation: jack-dot 1.2s ease-in-out infinite;
+}
+.jack-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.jack-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes jack-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}

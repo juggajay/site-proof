@@ -5,6 +5,7 @@ import {
   KeyboardShortcutsHelp,
   useKeyboardShortcutsHelp,
 } from '@/components/KeyboardShortcutsHelp';
+import { JackWidget } from '@/components/copilot/JackWidget';
 import { OnboardingTour } from '@/components/OnboardingTour';
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { useAuth } from '@/lib/auth';
@@ -71,6 +72,7 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
       <KeyboardShortcutsHelp isOpen={isOpen} onClose={closeHelp} />
       <OnboardingTour enabled={showGeneralOnboarding} autoShow={autoShowGeneralOnboarding} />
       <SessionTimeoutWarning />
+      <JackWidget />
     </>
   );
 }
