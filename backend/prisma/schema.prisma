@@ -404,6 +404,7 @@ model Project {
   scheduledReports            ScheduledReport[]
   scheduledReportRuns         ScheduledReportRun[]
   scheduledReportDeliveries   ScheduledReportRecipientDelivery[]
+  aiProposals                 AiProposal[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -1844,4 +1845,32 @@ model CommentAttachment {
 
   @@index([commentId])
   @@map("comment_attachments")
+}
+
+// Immutable audit log of AI-assisted proposals: user request -> AI candidate ->
+// sources -> human decision (accept/edit/reject, by whom, when) -> applied
+// records. The `payload` is the AI's original proposal and is NEVER updated;
+// human edits are stored separately in `editedPayload`. This trail is what keeps
+// an AI-assisted QA pack insurable (Verisk 2026 PI exclusions for un-audited AI).
+model AiProposal {
+  id               String    @id @default(uuid())
+  projectId        String    @map("project_id")
+  stage            String // 'project_facts' | 'control_line' | 'plan_sheets' | 'lot_breakdown' (open set)
+  status           String    @default("proposed") // proposed|accepted|edited|rejected|superseded|rolled_back
+  requestedById    String    @map("requested_by_id")
+  model            String // anthropic model id used for the extraction
+  sourceRefs       Json      @map("source_refs") // citations: [{documentId?, fileName?, page?, note?}]
+  payload          Json // the proposed candidate — IMMUTABLE, never updated
+  warnings         Json?
+  decidedById      String?   @map("decided_by_id")
+  decidedAt        DateTime? @map("decided_at")
+  editedPayload    Json?     @map("edited_payload") // what was actually applied when action=accept-with-edits
+  appliedRecordIds Json?     @map("applied_record_ids") // [{model, ids}] created on apply — rollback target
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, stage])
+  @@index([projectId, status])
+  @@map("ai_proposals")
 }
