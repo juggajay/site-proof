@@ -20,6 +20,7 @@ import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 import { useCreateSampleProject } from '@/hooks/useCreateSampleProject';
 import { SPECIFICATION_SET_HELPER_TEXT } from './settings/types';
 import {
+  getDefaultSpecificationSetForState,
   getSpecificationSetForStateChange,
   getSpecificationSetOptionsForState,
 } from './projectSpecifications';
@@ -183,6 +184,7 @@ export function ProjectsPage() {
       creating ||
       !formData.name.trim() ||
       !formData.projectNumber.trim() ||
+      !formData.state ||
       scheduleError ||
       contractValueError
     )
@@ -192,7 +194,11 @@ export function ProjectsPage() {
 
   const creating = createProjectMutation.isPending;
   const canCreateProject = Boolean(
-    formData.name.trim() && formData.projectNumber.trim() && !scheduleError && !contractValueError,
+    formData.name.trim() &&
+    formData.projectNumber.trim() &&
+    formData.state &&
+    !scheduleError &&
+    !contractValueError,
   );
 
   // Self-signup users have no company yet, so the backend rejects project
@@ -412,13 +418,14 @@ export function ProjectsPage() {
 
               <div>
                 <Label htmlFor="project-create-state" className="mb-1">
-                  State
+                  State *
                 </Label>
                 <NativeSelect
                   id="project-create-state"
                   name="state"
                   value={formData.state}
                   onChange={handleInputChange}
+                  required
                 >
                   <option value="">Select state</option>
                   {STATE_OPTIONS.map((opt) => (
@@ -427,6 +434,12 @@ export function ProjectsPage() {
                     </option>
                   ))}
                 </NativeSelect>
+                {formData.state && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Specification set: {getDefaultSpecificationSetForState(formData.state)} —
+                    derived from {formData.state}, editable below.
+                  </p>
+                )}
               </div>
 
               <div>

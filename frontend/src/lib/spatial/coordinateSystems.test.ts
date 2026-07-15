@@ -3,6 +3,7 @@ import {
   COORDINATE_SYSTEM_OPTIONS,
   DEFAULT_COORDINATE_SYSTEM,
   coordinateSystemLabel,
+  defaultCoordinateSystemForState,
   isGda94,
 } from './coordinateSystems';
 
@@ -72,5 +73,36 @@ describe('isGda94', () => {
   it('returns false for unparseable values', () => {
     expect(isGda94('')).toBe(false);
     expect(isGda94('GDA94')).toBe(false);
+  });
+});
+
+describe('defaultCoordinateSystemForState', () => {
+  it('suggests the GDA2020 MGA zone of each state/territory capital', () => {
+    expect(defaultCoordinateSystemForState('NSW')).toBe('EPSG:7856');
+    expect(defaultCoordinateSystemForState('ACT')).toBe('EPSG:7855');
+    expect(defaultCoordinateSystemForState('VIC')).toBe('EPSG:7855');
+    expect(defaultCoordinateSystemForState('QLD')).toBe('EPSG:7856');
+    expect(defaultCoordinateSystemForState('SA')).toBe('EPSG:7854');
+    expect(defaultCoordinateSystemForState('WA')).toBe('EPSG:7850');
+    expect(defaultCoordinateSystemForState('TAS')).toBe('EPSG:7855');
+    expect(defaultCoordinateSystemForState('NT')).toBe('EPSG:7852');
+  });
+
+  it('normalises case and whitespace', () => {
+    expect(defaultCoordinateSystemForState('  qld ')).toBe('EPSG:7856');
+  });
+
+  it('falls back to the default for unknown/empty state', () => {
+    expect(defaultCoordinateSystemForState('')).toBe(DEFAULT_COORDINATE_SYSTEM);
+    expect(defaultCoordinateSystemForState(null)).toBe(DEFAULT_COORDINATE_SYSTEM);
+    expect(defaultCoordinateSystemForState(undefined)).toBe(DEFAULT_COORDINATE_SYSTEM);
+    expect(defaultCoordinateSystemForState('Overseas')).toBe(DEFAULT_COORDINATE_SYSTEM);
+  });
+
+  it('only suggests supported coordinate systems', () => {
+    for (const state of ['NSW', 'ACT', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT']) {
+      const suggestion = defaultCoordinateSystemForState(state);
+      expect(COORDINATE_SYSTEM_OPTIONS.some((o) => o.value === suggestion)).toBe(true);
+    }
   });
 });

@@ -39,6 +39,33 @@ export const COORDINATE_SYSTEM_OPTIONS: CoordinateSystemOption[] = buildOptions(
 // setout datum for our pilot region, so it is the sensible default.
 export const DEFAULT_COORDINATE_SYSTEM = 'EPSG:7856';
 
+// GDA2020 MGA zone of each state/territory capital — a *suggestion* only.
+// States span multiple MGA zones, so the picker always lets the user confirm
+// or change this. Derived from the capital: NSW/Sydney z56, ACT/Canberra z55,
+// VIC/Melbourne z55, QLD/Brisbane z56, SA/Adelaide z54, WA/Perth z50,
+// TAS/Hobart z55, NT/Darwin z52.
+const COORDINATE_SYSTEM_BY_STATE: Record<string, string> = {
+  NSW: 'EPSG:7856',
+  ACT: 'EPSG:7855',
+  VIC: 'EPSG:7855',
+  QLD: 'EPSG:7856',
+  SA: 'EPSG:7854',
+  WA: 'EPSG:7850',
+  TAS: 'EPSG:7855',
+  NT: 'EPSG:7852',
+};
+
+/**
+ * Suggested GDA2020 MGA coordinate system for an AU state/territory, based on
+ * its capital's zone. A suggestion, never truth — states span zones, so the
+ * user must always be able to confirm/override. Unknown/empty state falls back
+ * to {@link DEFAULT_COORDINATE_SYSTEM}.
+ */
+export function defaultCoordinateSystemForState(state: string | null | undefined): string {
+  const normalizedState = state?.trim().toUpperCase() ?? '';
+  return COORDINATE_SYSTEM_BY_STATE[normalizedState] ?? DEFAULT_COORDINATE_SYSTEM;
+}
+
 const LABEL_BY_VALUE = new Map(COORDINATE_SYSTEM_OPTIONS.map((o) => [o.value, o.label]));
 
 /** Label for an EPSG code, falling back to the raw code if unrecognised. */

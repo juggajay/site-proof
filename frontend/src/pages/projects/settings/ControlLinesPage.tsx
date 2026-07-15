@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { coordinateSystemLabel } from '@/lib/spatial/coordinateSystems';
+import {
+  coordinateSystemLabel,
+  defaultCoordinateSystemForState,
+} from '@/lib/spatial/coordinateSystems';
 import type { ControlPoint } from './controlPointsParsing';
 import {
   ProjectAdminLoadError,
@@ -139,6 +142,11 @@ export function ControlLinesPage() {
   const deleteMutation = useDeleteControlLine(projectId);
 
   const controlLines = controlLinesQuery.data ?? [];
+  // CRS suggested for new geometry: an existing control line's CRS wins (keep
+  // geometry consistent), otherwise suggest the zone derived from the project's
+  // state. Always user-confirmable in each modal.
+  const suggestedCoordinateSystem =
+    controlLines[0]?.coordinateSystem ?? defaultCoordinateSystemForState(project?.state);
   const loading = accessLoading || controlLinesQuery.isLoading;
   const loadError = controlLinesQuery.error
     ? extractErrorMessage(controlLinesQuery.error, 'Could not load control lines.')
@@ -272,13 +280,14 @@ export function ControlLinesPage() {
           saving={saving}
           onSubmit={(input) => void handleSubmit(input)}
           onClose={closeModal}
+          defaultCoordinateSystem={suggestedCoordinateSystem}
         />
       )}
 
       {showImport && projectId && (
         <ControlLineImportModal
           projectId={projectId}
-          defaultCoordinateSystem={controlLines[0]?.coordinateSystem}
+          defaultCoordinateSystem={suggestedCoordinateSystem}
           onClose={() => setShowImport(false)}
         />
       )}
@@ -286,7 +295,7 @@ export function ControlLinesPage() {
       {showSetoutImport && projectId && (
         <SetoutImportModal
           projectId={projectId}
-          defaultCoordinateSystem={controlLines[0]?.coordinateSystem}
+          defaultCoordinateSystem={suggestedCoordinateSystem}
           onClose={() => setShowSetoutImport(false)}
         />
       )}
