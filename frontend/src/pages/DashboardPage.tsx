@@ -38,6 +38,7 @@ import {
   DashboardMemberSetupNotice,
   DashboardSetupChecklist,
 } from '@/components/dashboard/DashboardSetupChecklist';
+import { resolveSoleProjectId } from '@/components/dashboard/setupChecklistState';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
@@ -59,6 +60,20 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
+interface DashboardSetupProgress {
+  controlLines: number;
+  planSheets: number;
+  lotsWithItp: number;
+  teamMembers: number;
+}
+
+const EMPTY_SETUP_PROGRESS: DashboardSetupProgress = {
+  controlLines: 0,
+  planSheets: 0,
+  lotsWithItp: 0,
+  teamMembers: 0,
+};
+
 interface DashboardStats {
   totalProjects: number;
   activeProjects: number;
@@ -68,6 +83,7 @@ interface DashboardStats {
   openNCRs: number;
   attentionItems: DashboardAttentionItems;
   recentActivities: DashboardRecentActivity[];
+  setupProgress: DashboardSetupProgress;
 }
 
 interface DashboardProject {
@@ -177,6 +193,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       total: 0,
     },
     recentActivities: [],
+    setupProgress: EMPTY_SETUP_PROGRESS,
   };
 
   const { visibleWidgets, isWidgetVisible, toggleWidget } = useDashboardWidgets();
@@ -214,6 +231,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
           total: 0,
         },
         recentActivities: result.recentActivities || [],
+        setupProgress: result.setupProgress || EMPTY_SETUP_PROGRESS,
       } as DashboardStats;
     },
   });
@@ -225,9 +243,16 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
   // First-run detection: only ever decided from loaded stats (never while the
   // query is still in flight) so an established company never sees the setup
   // state flash before its real numbers arrive. The projects list feeds the
-  // checklist's "done" ticks because it refreshes independently of stats.
-  const knownProjectCount = projectsData?.projects.length ?? 0;
-  const showFirstRunSetup = hasStatsData && stats.totalProjects === 0;
+  // checklist's "done" ticks and deep links because it refreshes independently
+  // of stats.
+  const projectList = projectsData?.projects ?? [];
+  const knownProjectCount = projectList.length;
+  const soleProjectId = resolveSoleProjectId(projectList.map((p) => p.id));
+  // Creators keep the setup checklist as a companion until they reach their
+  // first ITP-bearing lot (setup complete); everyone else only sees the empty
+  // "no projects" notice when the company genuinely has none.
+  const companyHasNoProjects = hasStatsData && stats.totalProjects === 0;
+  const setupIncomplete = hasStatsData && stats.setupProgress.lotsWithItp === 0;
   const companyRole = getCompanyRole(user);
   const canCreateProjects = hasRoleInGroup(companyRole, ROLE_GROUPS.ADMIN);
   const canManageCompanySettings = companyRole === 'owner' || companyRole === 'admin';
@@ -292,11 +317,25 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     );
   }
 
-  // A company with zero projects has nothing to chart, so the KPI grid and
-  // export chrome would be an all-zero wall. Show a path to first value
-  // instead: a setup checklist for roles that can create projects, and a
-  // plain "you'll be added" notice for everyone else.
-  if (showFirstRunSetup) {
+  const setupChecklist = (
+    <DashboardSetupChecklist
+      counts={{
+        projects: knownProjectCount,
+        controlLines: stats.setupProgress.controlLines,
+        planSheets: stats.setupProgress.planSheets,
+        lots: stats.totalLots,
+        lotsWithItp: stats.setupProgress.lotsWithItp,
+        teamMembers: stats.setupProgress.teamMembers,
+      }}
+      soleProjectId={soleProjectId}
+    />
+  );
+
+  // Zero-project companies have nothing to chart, so the KPI grid and export
+  // chrome would be an all-zero wall — fully replace it with a path to first
+  // value: the setup checklist for roles that can create projects, a plain
+  // "you'll be added" notice for everyone else.
+  if (companyHasNoProjects) {
     return (
       <div className="space-y-6 dashboard-content">
         <div className="min-w-0">
@@ -304,24 +343,22 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
           <p className="mt-1 text-sm text-muted-foreground">
             Welcome{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}!{' '}
             {canCreateProjects
-              ? "Let's get your first project set up."
+              ? "Let's get your project set up."
               : 'Your dashboard fills in once you are working on a project.'}
           </p>
         </div>
 
         <PendingInvitationBanner user={user} />
 
-        {canCreateProjects ? (
-          <DashboardSetupChecklist
-            projectCreated={knownProjectCount > 0}
-            lotsAdded={stats.totalLots > 0}
-          />
-        ) : (
-          <DashboardMemberSetupNotice />
-        )}
+        {canCreateProjects ? setupChecklist : <DashboardMemberSetupNotice />}
       </div>
     );
   }
+
+  // Company has projects but setup is not finished (no ITP-bearing lot yet):
+  // keep the checklist as a companion ABOVE the real dashboard so active
+  // companies (diaries/dockets-only, no ITP instances) never lose their KPIs.
+  const showChecklistCompanion = canCreateProjects && setupIncomplete;
 
   return (
     <div className="space-y-6 dashboard-content">
@@ -388,6 +425,8 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       </div>
 
       <PendingInvitationBanner user={user} />
+
+      {showChecklistCompanion && setupChecklist}
 
       {statsErrorMessage && (
         <div

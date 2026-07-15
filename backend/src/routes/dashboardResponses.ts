@@ -19,6 +19,25 @@ export function buildProjectsAtRiskResponse(projectsAtRisk: unknown[]) {
   return { projectsAtRisk };
 }
 
+/**
+ * First-run setup progress counts (company-level), used by the dashboard setup
+ * checklist to tick each onboarding step. Zeroed for companies with no projects.
+ */
+export interface DashboardSetupProgress {
+  controlLines: number;
+  planSheets: number;
+  lotsWithItp: number;
+  /** Distinct teammates on the company's projects excluding the current user. */
+  teamMembers: number;
+}
+
+const EMPTY_SETUP_PROGRESS: DashboardSetupProgress = {
+  controlLines: 0,
+  planSheets: 0,
+  lotsWithItp: 0,
+  teamMembers: 0,
+};
+
 export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecentActivity>({
   totalProjects,
   activeProjects,
@@ -29,6 +48,7 @@ export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecen
   overdueNCRs,
   staleHoldPoints,
   recentActivities,
+  setupProgress = EMPTY_SETUP_PROGRESS,
 }: {
   totalProjects: number;
   activeProjects: number;
@@ -39,6 +59,7 @@ export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecen
   overdueNCRs: TOverdueNcr[];
   staleHoldPoints: TStaleHoldPoint[];
   recentActivities: TRecentActivity[];
+  setupProgress?: DashboardSetupProgress;
 }) {
   return {
     totalProjects,
@@ -53,6 +74,7 @@ export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecen
       total: overdueNCRs.length + staleHoldPoints.length,
     },
     recentActivities,
+    setupProgress,
   };
 }
 

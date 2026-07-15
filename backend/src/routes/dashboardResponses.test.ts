@@ -56,6 +56,7 @@ describe('dashboardResponses', () => {
         overdueNCRs: [{ id: 'ncr-1' }],
         staleHoldPoints: [{ id: 'hp-1' }, { id: 'hp-2' }],
         recentActivities: [{ id: 'activity-1' }],
+        setupProgress: { controlLines: 1, planSheets: 2, lotsWithItp: 3, teamMembers: 4 },
       }),
     ).toEqual({
       totalProjects: 3,
@@ -70,6 +71,27 @@ describe('dashboardResponses', () => {
         total: 3,
       },
       recentActivities: [{ id: 'activity-1' }],
+      setupProgress: { controlLines: 1, planSheets: 2, lotsWithItp: 3, teamMembers: 4 },
+    });
+  });
+
+  it('zeroes setup progress when it is not supplied', () => {
+    const response = buildDashboardStatsResponse({
+      totalProjects: 1,
+      activeProjects: 1,
+      totalLots: 0,
+      lotStatusCounts: {},
+      openHoldPoints: 0,
+      openNCRs: 0,
+      overdueNCRs: [],
+      staleHoldPoints: [],
+      recentActivities: [],
+    });
+    expect(response.setupProgress).toEqual({
+      controlLines: 0,
+      planSheets: 0,
+      lotsWithItp: 0,
+      teamMembers: 0,
     });
   });
 
@@ -87,6 +109,12 @@ describe('dashboardResponses', () => {
         total: 0,
       },
       recentActivities: [],
+      setupProgress: {
+        controlLines: 0,
+        planSheets: 0,
+        lotsWithItp: 0,
+        teamMembers: 0,
+      },
     });
   });
 

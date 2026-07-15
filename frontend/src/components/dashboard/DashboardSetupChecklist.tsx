@@ -3,72 +3,31 @@ import { Check, ChevronRight, FolderKanban, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { useCreateSampleProject } from '@/hooks/useCreateSampleProject';
-
-interface SetupStep {
-  key: string;
-  title: string;
-  description: string;
-  to: string;
-  done: boolean;
-}
+import { deriveSetupSteps, type SetupCounts } from './setupChecklistState';
 
 interface DashboardSetupChecklistProps {
-  /** True once the company has at least one project. */
-  projectCreated: boolean;
-  /** True once the company has at least one lot. */
-  lotsAdded: boolean;
+  /** Company-level counts driving each step's tick. */
+  counts: SetupCounts;
+  /** The sole project id when the company has exactly one, else null (deep links). */
+  soleProjectId: string | null;
 }
 
 /**
  * First-run setup checklist shown on the dashboard instead of an all-zero KPI
- * grid when the company has no projects yet. Steps tick off as the underlying
- * counts become non-zero; the ITP-template and team steps are static links
- * because the dashboard does not fetch template or member counts.
+ * grid while the company is still setting up. Every step's tick and link is
+ * derived from company counts by `deriveSetupSteps` — nothing is hardcoded.
  */
-export function DashboardSetupChecklist({
-  projectCreated,
-  lotsAdded,
-}: DashboardSetupChecklistProps) {
+export function DashboardSetupChecklist({ counts, soleProjectId }: DashboardSetupChecklistProps) {
   const createSampleProject = useCreateSampleProject();
-
-  const steps: SetupStep[] = [
-    {
-      key: 'project',
-      title: 'Create your first project',
-      description: 'Projects hold your lots, quality records, diaries, and reports.',
-      to: '/projects',
-      done: projectCreated,
-    },
-    {
-      key: 'lots',
-      title: 'Add lots',
-      description: 'Break the work into lots so conformance is tracked lot by lot.',
-      to: '/projects',
-      done: lotsAdded,
-    },
-    {
-      key: 'itp',
-      title: 'Assign an ITP template',
-      description:
-        'Attach an inspection and test plan to a lot so hold points and inspections are ready for the crew.',
-      to: '/projects',
-      done: false,
-    },
-    {
-      key: 'team',
-      title: 'Invite your team',
-      description: 'Add the engineers and foremen who will run inspections on site.',
-      to: '/company-settings',
-      done: false,
-    },
-  ];
+  const steps = deriveSetupSteps(counts, soleProjectId);
 
   return (
     <section aria-label="Setup checklist" className="rounded-lg border bg-card">
       <div className="border-b p-4">
         <h2 className="text-sm font-semibold">Getting started</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Four steps to your first conformed lot. Your dashboard fills in as work is recorded.
+          Set up your first project through to a conformed lot. Your dashboard fills in as work is
+          recorded.
         </p>
       </div>
       <ol className="divide-y">
