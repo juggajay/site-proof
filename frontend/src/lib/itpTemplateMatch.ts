@@ -13,6 +13,8 @@ export interface MatchCandidate {
   scope: 'project' | 'global';
   stateSpec: string | null;
   matchKind: ActivityMatchKind;
+  /** True for an Austroads national-baseline template offered as a gap-fill. */
+  baseline?: boolean;
   checklistItemCount: number;
   holdPointCount: number;
 }

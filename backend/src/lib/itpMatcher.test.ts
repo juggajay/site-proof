@@ -183,3 +183,72 @@ describe('routeTemplateMatch — candidate payload', () => {
     });
   });
 });
+
+describe('routeTemplateMatch — spec-set vocabulary normalization', () => {
+  it("matches an 'rms' project to TfNSW globals (RMS = TfNSW pre-2019 name)", () => {
+    const result = routeTemplateMatch(
+      [tpl({ id: 'tfnsw-culverts', stateSpec: 'TfNSW', activityType: 'culverts' })],
+      { projectId: PROJECT, specificationSet: 'rms', activityValue: 'culverts' },
+    );
+    expect(result.tier).toBe('A');
+    expect(result.suggestedTemplateId).toBe('tfnsw-culverts');
+  });
+
+  it('compares spec sets case- and whitespace-insensitively', () => {
+    const result = routeTemplateMatch(
+      [tpl({ id: 't1', stateSpec: ' MRTS ', activityType: 'culverts' })],
+      { projectId: PROJECT, specificationSet: 'mrts', activityValue: 'culverts' },
+    );
+    expect(result.tier).toBe('A');
+  });
+});
+
+describe('routeTemplateMatch — Austroads baseline gap-fill', () => {
+  const austroads = tpl({
+    id: 'austroads-culverts',
+    stateSpec: 'Austroads',
+    activityType: 'culverts',
+  });
+
+  it('stays invisible while a state-matched exact candidate exists', () => {
+    const result = match(
+      [austroads, tpl({ id: 'state-culverts', activityType: 'culverts' })],
+      'culverts',
+    );
+    expect(result.tier).toBe('A');
+    expect(result.suggestedTemplateId).toBe('state-culverts');
+    expect(result.candidates.map((c) => c.id)).toEqual(['state-culverts']);
+  });
+
+  it('fills the gap as Tier B (never Tier A) when no state candidate exists', () => {
+    const result = match([austroads], 'culverts');
+    expect(result.tier).toBe('B');
+    expect(result.suggestedTemplateId).toBeNull();
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ id: 'austroads-culverts', baseline: true, matchKind: 'exact' }),
+    ]);
+  });
+
+  it('serves AUS-SPEC projects (no state templates at all) via the baseline pool', () => {
+    const result = routeTemplateMatch([austroads], {
+      projectId: PROJECT,
+      specificationSet: 'AUS-SPEC',
+      activityValue: 'culverts',
+    });
+    expect(result.tier).toBe('B');
+    expect(result.candidates[0].id).toBe('austroads-culverts');
+  });
+
+  it('sorts a baseline exact after state-matched exacts of the same scope', () => {
+    const result = match(
+      [
+        austroads,
+        tpl({ id: 'state-family', activityType: 'drainage' }), // family fold
+      ],
+      'culverts',
+    );
+    // No state exact -> baseline joins; baseline exact (order 1) beats state family (order 2).
+    expect(result.tier).toBe('B');
+    expect(result.candidates.map((c) => c.id)).toEqual(['austroads-culverts', 'state-family']);
+  });
+});

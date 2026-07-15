@@ -35,6 +35,8 @@ export interface MatchCandidate {
   scope: 'project' | 'global';
   stateSpec: string | null;
   matchKind: ActivityMatchKind;
+  /** True for an Austroads national-baseline template offered as a gap-fill. */
+  baseline?: boolean;
   checklistItemCount: number;
   holdPointCount: number;
 }
@@ -47,6 +49,33 @@ export interface MatchResult {
 }
 
 const SLUG_TO_FAMILY = new Map<string, string>(CANONICAL_ACTIVITIES.map((a) => [a.slug, a.family]));
+
+// Spec-set vocabulary normalization. Prod (2026-07-16) holds project
+// specificationSet values {TfNSW, MRTS, rms, AUS-SPEC} against template
+// stateSpec values {TfNSW, MRTS, VicRoads, DIT, Austroads}: 'rms' is simply
+// TfNSW's pre-2019 name (9 live projects carry it), so strict equality would
+// silently match those projects to nothing — the original case-mismatch bug in
+// a new coat. Normalize case/whitespace and fold known synonyms before
+// comparing.
+const SPEC_SET_SYNONYMS: Record<string, string> = {
+  rms: 'tfnsw',
+};
+
+function normalizeSpecSet(value: string | null): string | null {
+  if (!value) return null;
+  const lower = value.trim().toLowerCase();
+  if (!lower) return null;
+  return SPEC_SET_SYNONYMS[lower] ?? lower;
+}
+
+// Austroads is the national baseline the state specs derive from (AGPT Part 8
+// is the taxonomy's own anchor), not a state — no project selects it, so a
+// strict state filter would leave the 6 seeded Austroads templates permanently
+// unreachable. They participate as GAP-FILL only: offered when the project +
+// state-matched pool has no exact-slug candidate, never displacing a state
+// template and never auto-filling (a baseline suggestion is always Tier B —
+// the reviewer affirms it knowingly).
+const AUSTROADS = 'austroads';
 
 /**
  * The family a fold result belongs to: an exact Level-2 slug maps to its
@@ -91,17 +120,20 @@ function classifyActivityMatch(
 
 const KIND_ORDER: Record<ActivityMatchKind, number> = {
   exact: 0,
-  family: 1,
-  unclassified: 2,
+  family: 2,
+  unclassified: 4,
 };
 
 /**
  * Deterministic candidate order (spec §2): project-scoped before global, then
- * exact before family before unclassified, then name ascending.
+ * exact before family before unclassified (a baseline template sorts just
+ * after its state-matched peers of the same kind), then name ascending.
  */
 function compareCandidates(a: MatchCandidate, b: MatchCandidate): number {
   if (a.scope !== b.scope) return a.scope === 'project' ? -1 : 1;
-  if (a.matchKind !== b.matchKind) return KIND_ORDER[a.matchKind] - KIND_ORDER[b.matchKind];
+  const aKind = KIND_ORDER[a.matchKind] + (a.baseline ? 1 : 0);
+  const bKind = KIND_ORDER[b.matchKind] + (b.baseline ? 1 : 0);
+  if (aKind !== bKind) return aKind - bKind;
   return a.name.localeCompare(b.name);
 }
 
@@ -119,38 +151,55 @@ export function routeTemplateMatch(
 ): MatchResult {
   const { projectId, specificationSet, activityValue } = opts;
   const lotFold = foldActivityValue(activityValue);
+  const projectSpec = normalizeSpecSet(specificationSet);
 
   const candidates: MatchCandidate[] = [];
+  const baselinePool: MatchCandidate[] = [];
   for (const t of templates) {
-    // HARD FILTER: project-scoped template, OR a global whose state spec matches
-    // this project. A wrong-state global must NEVER pass, even with a matching
-    // activity slug — this boundary is an audit rule, not AI-negotiable.
+    // HARD FILTER: project-scoped template, OR a global whose (normalized)
+    // state spec matches this project. A wrong-state global must NEVER pass,
+    // even with a matching activity slug — this boundary is an audit rule, not
+    // AI-negotiable. Austroads globals are held aside as the gap-fill pool.
     const isProjectScoped = t.projectId === projectId;
-    const isMatchingGlobal = t.projectId === null && t.stateSpec === specificationSet;
-    if (!isProjectScoped && !isMatchingGlobal) continue;
+    const templateSpec = t.projectId === null ? normalizeSpecSet(t.stateSpec) : null;
+    const isMatchingGlobal = t.projectId === null && templateSpec === projectSpec;
+    const isBaselineGlobal =
+      t.projectId === null && !isMatchingGlobal && templateSpec === AUSTROADS;
+    if (!isProjectScoped && !isMatchingGlobal && !isBaselineGlobal) continue;
 
     const kind = classifyActivityMatch(lotFold, foldActivityValue(t.activityType), isProjectScoped);
     if (!kind) continue;
 
-    candidates.push({
+    const candidate: MatchCandidate = {
       id: t.id,
       name: t.name,
       scope: isProjectScoped ? 'project' : 'global',
       stateSpec: t.stateSpec,
       matchKind: kind,
+      ...(isBaselineGlobal ? { baseline: true } : {}),
       checklistItemCount: t.checklistItemCount,
       holdPointCount: t.holdPointCount,
-    });
+    };
+    (isBaselineGlobal ? baselinePool : candidates).push(candidate);
+  }
+
+  // Baseline gap-fill: Austroads templates join only when nothing project- or
+  // state-matched folds to the exact slug — they fill gaps, never compete.
+  const primaryExact = candidates.filter((c) => c.matchKind === 'exact');
+  if (primaryExact.length === 0) {
+    candidates.push(...baselinePool);
   }
 
   candidates.sort(compareCandidates);
 
-  const exact = candidates.filter((c) => c.matchKind === 'exact');
   if (candidates.length === 0) {
     return { tier: 'C', suggestedTemplateId: null, candidates: [] };
   }
-  if (exact.length === 1) {
-    return { tier: 'A', suggestedTemplateId: exact[0].id, candidates };
+  // Tier A demands exactly one exact-slug candidate from the project/state
+  // pool; a baseline (Austroads) suggestion is always Tier B — the reviewer
+  // affirms a national-baseline fallback knowingly, it is never auto-filled.
+  if (primaryExact.length === 1) {
+    return { tier: 'A', suggestedTemplateId: primaryExact[0].id, candidates };
   }
   return { tier: 'B', suggestedTemplateId: null, candidates };
 }
