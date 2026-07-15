@@ -35,6 +35,12 @@ const chatBodySchema = z.object({
 
 const chatRouter = Router();
 
+// Jack is for the office roles — owner, admin, project manager (owner
+// decision 2026-07-16): field roles get the mobile shells, not the chat
+// copilot. Mirrors JACK_ROLES in the frontend JackWidget — this is the
+// server-side enforcement of that gate.
+const JACK_CHAT_ROLES = new Set(['owner', 'admin', 'project_manager']);
+
 // Route-wide auth: satisfies routeAuthCoverage and gives chatRateLimiter a
 // req.user to key on.
 chatRouter.use(requireAuth);
@@ -49,6 +55,10 @@ chatRouter.post(
     }
     const { projectId, messages } = parsed.data;
     const user = req.user!;
+
+    if (!JACK_CHAT_ROLES.has(user.roleInCompany || '')) {
+      throw AppError.forbidden('The AI assistant is available to owner and admin accounts.');
+    }
 
     if (!isAnthropicConfigured()) {
       throw new AppError(503, 'The AI assistant is not available right now.', 'AI_UNAVAILABLE');

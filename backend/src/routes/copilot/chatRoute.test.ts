@@ -3,16 +3,18 @@ import request from 'supertest';
 import express from 'express';
 
 // Stub auth: inject a user (id taken from a header so each test can key its own
-// rate-limit bucket). No JWT stack, no DB.
+// rate-limit bucket; role from x-test-role so the owner/admin gate can be
+// exercised — defaults to owner, the happy path). No JWT stack, no DB.
 vi.mock('../../middleware/authMiddleware.js', () => ({
   requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    const role = (req.headers['x-test-role'] as string) || 'owner';
     req.user = {
       id: (req.headers['x-test-user'] as string) || 'user-default',
       userId: 'user-default',
       email: 'u@example.com',
       fullName: 'Test User',
-      roleInCompany: 'project_manager',
-      role: 'project_manager',
+      roleInCompany: role,
+      role,
       companyId: 'company-1',
     };
     next();
@@ -57,6 +59,26 @@ describe('POST /api/copilot/chat', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ message: 'G’day', actions: [] });
+  });
+
+  it('returns 403 for roles outside owner/admin/project_manager (owner decision 2026-07-16)', async () => {
+    for (const role of ['quality_manager', 'foreman', 'site_manager', 'subcontractor']) {
+      const res = await request(app)
+        .post('/api/copilot/chat')
+        .set('x-test-user', `user-role-${role}`)
+        .set('x-test-role', role)
+        .send({ messages: [userMessage] });
+      expect(res.status).toBe(403);
+    }
+
+    for (const role of ['admin', 'project_manager']) {
+      const res = await request(app)
+        .post('/api/copilot/chat')
+        .set('x-test-user', `user-role-${role}`)
+        .set('x-test-role', role)
+        .send({ messages: [userMessage] });
+      expect(res.status).toBe(200);
+    }
   });
 
   it('returns 503 AI_UNAVAILABLE when no Anthropic key is configured', async () => {
