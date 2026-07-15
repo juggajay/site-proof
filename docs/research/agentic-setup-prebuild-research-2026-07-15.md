@@ -102,3 +102,49 @@ pass), which the staged review-queue copilot shape absorbs by design.
    accuracy baseline in this doc's companion eval notes.
 2. Taxonomy unification PR(s) precede or open Wave 2.
 3. Subdivision template gap-filling scheduled as its own reviewed seeding wave.
+
+---
+
+## 4. Baseline eval results (2026-07-15, live prod, claude-sonnet-5)
+
+Corpus downloaded to `C:\Users\jayso\siteproof-test-plans\corpus\` — 12 of 13
+sets (118 MB). #2 Pennant Hills was a genuine 404 (stale URL). Hornsby +
+Blacktown required a real browser (WAF blocks curl); the NSW Planning Portal
+token URL was captured before expiry.
+
+### 01-hornsby-chandler-ave.pdf (vector, 12 sheets, GDA94) — PERFECT
+
+Whole 4.8 MB set uploaded (the AI had to find the table itself; page 4 also
+carries a survey-stations table and page 9 kerb-return/footpath tables — it
+chose the control-line table correctly).
+
+- **21/21 points extracted, digit-for-digit exact** against the printed table
+  (verified by eye on a rendered page 4): CH 0.000 `330105.815, 6281831.538`
+  … IP2 CH 191.491 `330134.128, 6282020.924`.
+- **Datum trap passed:** drawing note "ALL COORDINATES ARE ON MGA94 ZONE 56
+  DATUM" → correctly mapped to **EPSG:28356 (GDA94)**, not GDA2020's 7856.
+- 25.4 s (the pre-#1470 15 s timeout would have killed this exact request).
+- Note: this table's digits are **vector line-work, not PDF text** — pdfjs text
+  extraction returns zero coordinates. Text-scraping approaches are dead on
+  arrival for CAD plots; vision is genuinely required.
+
+### 08-qld-weinam-creek.pdf (scanned/raster, ~162 pages) — honest + 1 design gap
+
+- Read the scanned tables fine: 31 points in 49.1 s.
+- **Refused to guess the datum with sound reasoning**: eastings ~30,000 are
+  outside MGA range → flagged as local/site grid → `coordinateSystem: null`
+  plus an explanatory warning. Exactly the honest behaviour the review flow
+  needs.
+- **Design gap found (Wave 1 requirement):** the document holds setout tables
+  for MULTIPLE streets; the endpoint returns them merged into one candidate
+  (repeated CH-0 rows), and `cleanSetoutCandidate` sorts by chainage — which
+  would interleave different roads into one zigzag alignment. The extraction
+  schema needs **per-alignment grouping** (mirror the LandXML importer's
+  per-alignment preview → user picks which alignment(s) to save).
+
+### Baseline verdict
+
+Real-world accuracy on legible tables is excellent (exact on vector, usable on
+scan); the model's self-reported warnings are trustworthy signals for
+confidence routing; the one structural fix needed before the copilot executor
+wave is multi-alignment grouping in the setout extraction contract.
