@@ -13,10 +13,15 @@ export interface ProposalSourceRef {
   note?: string;
 }
 
-// One group of records created when a proposal is applied — the rollback target.
+// One group of records created (or, for update-type stages, mutated) when a
+// proposal is applied — the rollback target. `meta` is stage-defined rollback
+// state: create-type stages (control_line, lot_breakdown, ...) leave it unset
+// and rollback deletes `ids`; update-type stages (project_facts) store the prior
+// field values here so rollback can restore them instead of deleting the record.
 export interface AppliedRecordGroup {
   model: string;
   ids: string[];
+  meta?: unknown;
 }
 
 // Applies an accepted proposal's payload inside the deciding transaction and
