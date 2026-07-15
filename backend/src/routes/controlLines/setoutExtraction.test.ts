@@ -11,24 +11,44 @@ vi.mock('../../lib/fetchWithTimeout.js', () => ({
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 
 describe('cleanSetoutCandidate', () => {
-  it('cleans a well-formed candidate, coercing string numbers and sorting by chainage', () => {
+  it('groups multiple alignments, coercing string numbers and sorting each by chainage', () => {
     const candidate = cleanSetoutCandidate({
       coordinateSystem: 'EPSG:7856',
-      points: [
-        { chainage: 100, easting: '500100', northing: 6000000 },
-        { chainage: '0', easting: 500000, northing: '6000000' },
+      alignments: [
+        {
+          name: 'Weinam Creek Rd',
+          points: [
+            { chainage: 100, easting: '500100', northing: 6000000 },
+            { chainage: '0', easting: 500000, northing: '6000000' },
+          ],
+        },
+        {
+          name: 'Boat Harbour Dr',
+          coordinateSystem: 'EPSG:7855',
+          points: [
+            { chainage: 0, easting: 300000, northing: 5800000 },
+            { chainage: 60, easting: 300060, northing: 5800000 },
+          ],
+        },
       ],
     });
 
-    expect(candidate.coordinateSystem).toBe('EPSG:7856');
-    expect(candidate.points).toEqual([
+    expect(candidate.alignments).toHaveLength(2);
+    expect(candidate.alignments[0]).toMatchObject({
+      name: 'Weinam Creek Rd',
+      // Falls back to the sheet-wide CRS when the alignment gave none.
+      coordinateSystem: 'EPSG:7856',
+    });
+    expect(candidate.alignments[0].points).toEqual([
       { chainage: 0, easting: 500000, northing: 6000000 },
       { chainage: 100, easting: 500100, northing: 6000000 },
     ]);
+    // A per-alignment CRS overrides the document default.
+    expect(candidate.alignments[1].coordinateSystem).toBe('EPSG:7855');
     expect(candidate.warnings).toEqual([]);
   });
 
-  it('maps a descriptive EPSG guess and drops non-numeric rows into warnings', () => {
+  it('wraps the old flat shape as a single unnamed alignment', () => {
     const candidate = cleanSetoutCandidate({
       coordinateSystem: 'EPSG: 7855 (GDA2020 MGA55)',
       points: [
@@ -38,13 +58,15 @@ describe('cleanSetoutCandidate', () => {
       ],
     });
 
-    expect(candidate.coordinateSystem).toBe('EPSG:7855');
-    expect(candidate.points).toHaveLength(2);
-    expect(candidate.warnings).toHaveLength(1);
-    expect(candidate.warnings[0]).toMatch(/Row 2 dropped/);
+    expect(candidate.alignments).toHaveLength(1);
+    const [alignment] = candidate.alignments;
+    expect(alignment.name).toBeNull();
+    expect(alignment.coordinateSystem).toBe('EPSG:7855');
+    expect(alignment.points).toHaveLength(2);
+    expect(alignment.warnings.some((w) => /Row 2 dropped/.test(w))).toBe(true);
   });
 
-  it('nulls an unsupported EPSG guess and records a warning', () => {
+  it('nulls an unsupported EPSG guess and records a document warning', () => {
     const candidate = cleanSetoutCandidate({
       coordinateSystem: 'EPSG:9999',
       points: [
@@ -53,7 +75,7 @@ describe('cleanSetoutCandidate', () => {
       ],
     });
 
-    expect(candidate.coordinateSystem).toBeNull();
+    expect(candidate.alignments[0].coordinateSystem).toBeNull();
     expect(candidate.warnings.some((w) => w.includes('EPSG:9999'))).toBe(true);
   });
 
@@ -66,39 +88,70 @@ describe('cleanSetoutCandidate', () => {
       ],
     });
 
-    expect(candidate.coordinateSystem).toBeNull();
+    expect(candidate.alignments[0].coordinateSystem).toBeNull();
     expect(candidate.warnings).toEqual([]);
   });
 
-  it('rejects a candidate with fewer than 2 valid points', () => {
-    expect(() =>
-      cleanSetoutCandidate({
-        coordinateSystem: 'EPSG:7856',
-        points: [{ chainage: 0, easting: 1, northing: 2 }],
-      }),
-    ).toThrow(AppError);
+  it('drops a sub-2-point alignment into document warnings instead of failing', () => {
+    const candidate = cleanSetoutCandidate({
+      coordinateSystem: 'EPSG:7856',
+      alignments: [
+        {
+          name: 'Good Rd',
+          points: [
+            { chainage: 0, easting: 1, northing: 2 },
+            { chainage: 5, easting: 3, northing: 4 },
+          ],
+        },
+        { name: 'Stub St', points: [{ chainage: 0, easting: 1, northing: 2 }] },
+      ],
+    });
 
+    expect(candidate.alignments).toHaveLength(1);
+    expect(candidate.alignments[0].name).toBe('Good Rd');
+    expect(candidate.warnings.some((w) => /Stub St skipped/.test(w))).toBe(true);
+  });
+
+  it('rejects a sheet where NO alignment has at least 2 valid points', () => {
     try {
       cleanSetoutCandidate({ points: [{ chainage: 'x', easting: 'y', northing: 'z' }] });
+      expect.unreachable('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(AppError);
       expect((err as AppError).statusCode).toBe(400);
-      expect((err as AppError).details).toMatchObject({ found: 0 });
+      expect((err as AppError).details).toMatchObject({ alignments: 0 });
     }
+
+    expect(() =>
+      cleanSetoutCandidate({
+        alignments: [{ points: [{ chainage: 0, easting: 1, northing: 2 }] }],
+      }),
+    ).toThrow(AppError);
   });
 
-  it('caps output at 2000 points and warns', () => {
-    const points = Array.from({ length: 2100 }, (_, i) => ({
-      chainage: 2100 - i,
-      easting: i,
-      northing: i,
-    }));
-    const candidate = cleanSetoutCandidate({ coordinateSystem: 'EPSG:7856', points });
+  it('caps total output at 2000 points across all alignments', () => {
+    const makePoints = (count: number, base: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        chainage: count - i,
+        easting: base + i,
+        northing: base + i,
+      }));
+    const candidate = cleanSetoutCandidate({
+      coordinateSystem: 'EPSG:7856',
+      alignments: [
+        { name: 'A', points: makePoints(1500, 0) },
+        { name: 'B', points: makePoints(1000, 100000) },
+      ],
+    });
 
-    expect(candidate.points).toHaveLength(2000);
-    // sorted ascending: first kept point is the lowest chainage
-    expect(candidate.points[0].chainage).toBe(1);
-    expect(candidate.warnings.some((w) => w.includes('2100'))).toBe(true);
+    const total = candidate.alignments.reduce((n, a) => n + a.points.length, 0);
+    expect(total).toBe(2000);
+    expect(candidate.alignments[0].points).toHaveLength(1500);
+    // sorted ascending within the alignment: first kept point is the lowest chainage
+    expect(candidate.alignments[0].points[0].chainage).toBe(1);
+    // B is trimmed to the remaining 500 and warns.
+    expect(candidate.alignments[1].points).toHaveLength(500);
+    expect(candidate.alignments[1].warnings.some((w) => w.includes('2000'))).toBe(true);
   });
 
   it('passes through model-supplied warnings and tolerates a garbage root', () => {

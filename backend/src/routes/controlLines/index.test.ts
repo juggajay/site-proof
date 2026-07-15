@@ -264,11 +264,13 @@ describe('Control Lines API', () => {
 
       const res = await extractReq(pmToken);
       expect(res.status).toBe(200);
-      expect(res.body.candidate.coordinateSystem).toBe('EPSG:7856');
+      // Flat model output is wrapped as a single unnamed alignment.
+      expect(res.body.candidate.alignments).toHaveLength(1);
+      const [alignment] = res.body.candidate.alignments;
+      expect(alignment.coordinateSystem).toBe('EPSG:7856');
       // sorted ascending by chainage
-      expect(res.body.candidate.points.map((p: { chainage: number }) => p.chainage)).toEqual([
-        0, 100,
-      ]);
+      expect(alignment.points.map((p: { chainage: number }) => p.chainage)).toEqual([0, 100]);
+      expect(alignment.warnings).toEqual([]);
       expect(res.body.candidate.warnings).toEqual([]);
     });
 
@@ -284,9 +286,13 @@ describe('Control Lines API', () => {
 
       const res = await extractReq(pmToken);
       expect(res.status).toBe(200);
-      expect(res.body.candidate.coordinateSystem).toBeNull();
-      expect(res.body.candidate.points).toHaveLength(2);
-      expect(res.body.candidate.warnings.length).toBeGreaterThanOrEqual(2);
+      const [alignment] = res.body.candidate.alignments;
+      expect(alignment.coordinateSystem).toBeNull();
+      expect(alignment.points).toHaveLength(2);
+      // The unsupported-EPSG warning is document-level; the dropped row is on the
+      // alignment.
+      expect(res.body.candidate.warnings.length).toBeGreaterThanOrEqual(1);
+      expect(alignment.warnings.length).toBeGreaterThanOrEqual(1);
     });
 
     it('returns 400 when fewer than 2 valid points are extracted', async () => {

@@ -96,7 +96,10 @@ describe('controlLinesData hooks', () => {
   });
 
   it('useExtractSetoutPoints posts the file as multipart and returns the candidate', async () => {
-    const candidate = { coordinateSystem: 'EPSG:7856', points: POINTS, warnings: [] };
+    const candidate = {
+      alignments: [{ name: null, coordinateSystem: 'EPSG:7856', points: POINTS, warnings: [] }],
+      warnings: [],
+    };
     authFetchMock.mockResolvedValue({ ok: true, json: async () => ({ candidate }) });
     const { result } = renderHook(() => useExtractSetoutPoints('project-1'), {
       wrapper: wrapper(),

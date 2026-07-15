@@ -84,8 +84,10 @@ export function useImportAlignments(projectId: string | undefined) {
   });
 }
 
-/** A reviewed control-line candidate extracted by AI from a setout sheet. */
-export interface SetoutExtractionCandidate {
+/** One AI-extracted alignment (control line) from a setout sheet. */
+export interface SetoutAlignmentCandidate {
+  /** Printed alignment/street name if the AI could read one, else null. */
+  name: string | null;
   /** Guessed EPSG (already mapped to a supported code) or null if undetermined. */
   coordinateSystem: string | null;
   points: ControlPoint[];
@@ -93,10 +95,21 @@ export interface SetoutExtractionCandidate {
 }
 
 /**
- * Upload a setout-sheet PDF/image and get back one AI-extracted candidate (points
- * + a guessed EPSG + warnings). authFetch (not apiFetch) so the browser sets the
- * multipart boundary itself. No DB write — the user reviews the candidate, then
- * saves it via useCreateControlLine (same server-side create validation).
+ * A reviewed extraction from a setout sheet. A sheet often carries several
+ * alignments (one table per street), so the candidate is a list of them plus any
+ * document-level warnings.
+ */
+export interface SetoutExtractionCandidate {
+  alignments: SetoutAlignmentCandidate[];
+  warnings: string[];
+}
+
+/**
+ * Upload a setout-sheet PDF/image and get back an AI-extracted candidate
+ * (per-alignment points + guessed EPSG + warnings). authFetch (not apiFetch) so
+ * the browser sets the multipart boundary itself. No DB write — the user reviews
+ * the candidate, then saves each alignment via useCreateControlLine (same
+ * server-side create validation).
  */
 export function useExtractSetoutPoints(projectId: string | undefined) {
   return useMutation({
