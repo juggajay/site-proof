@@ -61,8 +61,8 @@ describe('POST /api/copilot/chat', () => {
     expect(res.body).toEqual({ message: 'G’day', actions: [] });
   });
 
-  it('returns 403 for roles outside owner/admin (owner decision 2026-07-16)', async () => {
-    for (const role of ['project_manager', 'foreman', 'site_manager', 'subcontractor']) {
+  it('returns 403 for roles outside owner/admin/project_manager (owner decision 2026-07-16)', async () => {
+    for (const role of ['quality_manager', 'foreman', 'site_manager', 'subcontractor']) {
       const res = await request(app)
         .post('/api/copilot/chat')
         .set('x-test-user', `user-role-${role}`)
@@ -71,12 +71,14 @@ describe('POST /api/copilot/chat', () => {
       expect(res.status).toBe(403);
     }
 
-    const admin = await request(app)
-      .post('/api/copilot/chat')
-      .set('x-test-user', 'user-role-admin')
-      .set('x-test-role', 'admin')
-      .send({ messages: [userMessage] });
-    expect(admin.status).toBe(200);
+    for (const role of ['admin', 'project_manager']) {
+      const res = await request(app)
+        .post('/api/copilot/chat')
+        .set('x-test-user', `user-role-${role}`)
+        .set('x-test-role', role)
+        .send({ messages: [userMessage] });
+      expect(res.status).toBe(200);
+    }
   });
 
   it('returns 503 AI_UNAVAILABLE when no Anthropic key is configured', async () => {

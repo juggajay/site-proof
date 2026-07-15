@@ -69,18 +69,21 @@ describe('JackWidget', () => {
     expect(screen.queryByLabelText('Open Jack, your copilot')).not.toBeInTheDocument();
   });
 
-  it('renders only for owner/admin — field roles never see Jack', () => {
+  it('renders only for office roles — field roles never see Jack', () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
-    for (const role of ['foreman', 'site_manager', 'project_manager', 'subcontractor']) {
+    for (const role of ['foreman', 'site_manager', 'quality_manager', 'subcontractor']) {
       authState.roleInCompany = role;
       const { unmount } = renderWidget();
       expect(screen.queryByLabelText('Open Jack, your copilot')).not.toBeInTheDocument();
       unmount();
     }
 
-    authState.roleInCompany = 'admin';
-    renderWidget();
-    expect(screen.getByLabelText('Open Jack, your copilot')).toBeInTheDocument();
+    for (const role of ['admin', 'project_manager']) {
+      authState.roleInCompany = role;
+      const { unmount } = renderWidget();
+      expect(screen.getByLabelText('Open Jack, your copilot')).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it('does not auto-open the first-run intro for a non-admin role', () => {

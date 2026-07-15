@@ -35,10 +35,11 @@ function navLabel(to: string): string {
   return NAV_LABELS.find(([re]) => re.test(to))?.[1] ?? 'where you need to be';
 }
 
-// Jack is an office copilot for the roles that own company setup — owner and
-// admin only (owner decision 2026-07-16). Field roles (foreman, subbie) get
-// the mobile shells instead; the chat route enforces the same set server-side.
-const JACK_ROLES = new Set(['owner', 'admin']);
+// Jack is an office copilot for the roles that own company setup — owner,
+// admin, and project manager (owner decision 2026-07-16). Field roles
+// (foreman, subbie) get the mobile shells instead; the chat route enforces
+// the same set server-side.
+const JACK_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 /**
  * Jack — the in-app chat copilot. Mounted once in the classic authenticated
