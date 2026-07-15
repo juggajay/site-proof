@@ -535,6 +535,55 @@ describe('Lots API', () => {
       expect(assignment).toBeNull();
     });
 
+    it('clones a legacy-assigned lot into a modern assignment, not a new legacy write', async () => {
+      // Cloning a lot that still carries a legacy assignedSubcontractorId must
+      // NOT re-establish the legacy FK on the clone — it carries the subbie
+      // forward as a modern LotSubcontractorAssignment instead.
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Clone Source Subcontractor ${Date.now()}`,
+          primaryContactName: 'Clone Source Subcontractor',
+          primaryContactEmail: `clone-source-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      const sourceLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-CLONE-SRC-${Date.now()}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          assignedSubcontractorId: subcontractor.id,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/lots/${sourceLot.id}/clone`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotNumber: `LOT-CLONE-DST-${Date.now()}` });
+
+      expect(res.status).toBe(201);
+      expect(res.body.lot.assignedSubcontractorId).toBeNull();
+
+      const persisted = await prisma.lot.findUnique({
+        where: { id: res.body.lot.id },
+        select: { assignedSubcontractorId: true },
+      });
+      expect(persisted?.assignedSubcontractorId).toBeNull();
+
+      const assignment = await prisma.lotSubcontractorAssignment.findUnique({
+        where: {
+          lotId_subcontractorCompanyId: {
+            lotId: res.body.lot.id,
+            subcontractorCompanyId: subcontractor.id,
+          },
+        },
+      });
+      expect(assignment?.status).toBe('active');
+    });
+
     it('should snapshot the assigned ITP template when creating a lot with an ITP', async () => {
       const suffix = Date.now();
       const template = await prisma.iTPTemplate.create({

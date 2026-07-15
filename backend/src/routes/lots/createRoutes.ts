@@ -498,7 +498,11 @@ lotCreateRouter.post(
       },
     });
 
-    // Create the cloned lot and keep legacy/new subcontractor assignment state aligned.
+    // Carry the source lot's subcontractor forward in MODERN form only: the
+    // legacy Lot.assignedSubcontractorId FK write path is retired, so the clone
+    // starts with a null legacy field and syncPrimaryLotSubcontractorAssignment
+    // (below) creates the LotSubcontractorAssignment join row. See docs/research/
+    // agentic-setup-synthesis-2026-07-15.md §1.
     const clonedLot = await prisma.$transaction(async (tx) => {
       const lot = await tx.lot.create({
         data: {
@@ -513,7 +517,7 @@ lotCreateRouter.post(
           offsetCustom: sourceLot.offsetCustom,
           layer: sourceLot.layer,
           areaZone: sourceLot.areaZone,
-          assignedSubcontractorId: sourceLot.assignedSubcontractorId,
+          assignedSubcontractorId: null,
           itpTemplateId: cloneItpTemplateId,
         },
         select: {
