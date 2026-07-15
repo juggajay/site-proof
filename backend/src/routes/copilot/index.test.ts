@@ -251,7 +251,7 @@ describe('Copilot proposals API', () => {
   });
 
   it('returns 400 when accepting a stage with no apply handler', async () => {
-    const proposal = await seedProposal(projectId, pmUserId, 'control_line', { epsg: 7856 });
+    const proposal = await seedProposal(projectId, pmUserId, 'plan_sheets', { sheets: 2 });
     const res = await request(app)
       .post(`/api/projects/${projectId}/copilot/proposals/${proposal.id}/decision`)
       .set('Authorization', `Bearer ${pmToken}`)

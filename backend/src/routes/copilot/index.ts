@@ -12,6 +12,11 @@ import {
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { LOT_CREATORS } from '../lots/roles.js';
 import { parseProjectRouteParam } from '../controlLines/validation.js';
+import {
+  cleanSetoutCandidate,
+  extractSetoutRawCandidate,
+  setoutUpload,
+} from '../controlLines/setoutExtraction.js';
 import { createProposal, decideProposal, rollbackProposal } from './proposalService.js';
 // Importing this module registers the project_facts apply/rollback handlers.
 import {
@@ -20,6 +25,8 @@ import {
   extractProjectFactsRawCandidate,
   projectFactsUpload,
 } from './projectFactsExtraction.js';
+// Importing this module registers the control_line apply/rollback handlers.
+import { CONTROL_LINE_STAGE } from './controlLineExecutor.js';
 
 // Deciding a proposal applies its stage's handler (creating lots, control lines,
 // etc.), so it needs the same write-capable role set as lot setup. Reads are
@@ -107,6 +114,47 @@ copilotRouter.post(
     });
 
     res.json({ proposalId: proposal.id, candidate, warnings });
+  }),
+);
+
+// Stage 2 executor: read the survey control line(s) off a "Geometric Setout
+// Details" sheet and persist them as a 'proposed' proposal for human review.
+// Reuses the existing setout extraction (extractSetoutRawCandidate +
+// cleanSetoutCandidate); a 400 SETOUT_EXTRACTION_INSUFFICIENT propagates before
+// any proposal is persisted. Writes NO control lines — the candidate only
+// becomes real through the decision endpoint's apply handler.
+copilotRouter.post(
+  '/:projectId/copilot/control_line/extract',
+  setoutUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      LOT_CREATORS,
+      DECIDE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+
+    if (!req.file) {
+      throw AppError.badRequest('A setout sheet is required.');
+    }
+
+    const raw = await extractSetoutRawCandidate(req.file);
+    const candidate = cleanSetoutCandidate(raw);
+    const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022';
+
+    const proposal = await createProposal({
+      projectId,
+      stage: CONTROL_LINE_STAGE,
+      requestedById: req.user!.id,
+      model,
+      sourceRefs: [{ fileName: req.file.originalname, note: 'Read from setout sheet' }],
+      payload: candidate,
+      warnings: candidate.warnings,
+    });
+
+    res.json({ proposalId: proposal.id, candidate, warnings: candidate.warnings });
   }),
 );
 

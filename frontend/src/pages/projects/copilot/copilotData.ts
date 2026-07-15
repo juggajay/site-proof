@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import type { SetoutExtractionCandidate } from '../settings/controlLinesData';
 
 /** The Wave-1 copilot stages, in setup order. */
 export const COPILOT_STAGES = [
@@ -137,6 +138,41 @@ export function useExtractProjectFacts(projectId: string | undefined) {
   });
 }
 
+/** The reviewed control-line candidate the stage-2 extractor returns. */
+export interface ControlLineExtractionResult {
+  proposalId: string;
+  candidate: SetoutExtractionCandidate;
+  warnings: string[];
+}
+
+/**
+ * Read the survey control line(s) off a setout sheet. authFetch (not apiFetch)
+ * so the browser sets the multipart boundary itself. Writes nothing — it
+ * persists a 'proposed' proposal for review and returns the candidate to show.
+ */
+export function useExtractControlLine(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File): Promise<ControlLineExtractionResult> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const response = await authFetch(`${copilotPath(projectId!)}/control_line/extract`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!response.ok) {
+        throw new ApiError(response.status, await response.text());
+      }
+      return (await response.json()) as ControlLineExtractionResult;
+    },
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.copilotProposals(projectId) });
+      }
+    },
+  });
+}
+
 /** Accept (optionally with edits) or reject a proposal via the decision endpoint. */
 export function useDecideProposal(projectId: string | undefined) {
   const queryClient = useQueryClient();
@@ -180,8 +216,9 @@ export function useRollbackProposal(projectId: string | undefined) {
   });
 }
 
-// A decision/rollback can change the project record and lot presence, and always
-// changes proposal status — refresh every consumer the rail reads.
+// A decision/rollback can change the project record, control lines (+ the lot
+// geometries a control line drives), and lot presence, and always changes
+// proposal status — refresh every consumer the rail reads.
 function invalidateAfterDecision(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string | undefined,
@@ -190,6 +227,8 @@ function invalidateAfterDecision(
   void queryClient.invalidateQueries({ queryKey: queryKeys.copilotProposals(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.project(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.copilotLotPresence(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.projectLotGeometries(projectId) });
 }
 
 /** Newest proposal for a stage, or null. Proposals arrive newest-first. */

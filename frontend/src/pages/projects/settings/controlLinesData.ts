@@ -92,6 +92,8 @@ export interface SetoutAlignmentCandidate {
   coordinateSystem: string | null;
   points: ControlPoint[];
   warnings: string[];
+  /** 1-based sheet page this alignment's table was read from, if determinable. */
+  page?: number | null;
 }
 
 /**

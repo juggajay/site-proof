@@ -154,6 +154,42 @@ describe('cleanSetoutCandidate', () => {
     expect(candidate.alignments[1].warnings.some((w) => w.includes('2000'))).toBe(true);
   });
 
+  it('threads a per-alignment page citation, defensively parsing strings and rejecting junk', () => {
+    const candidate = cleanSetoutCandidate({
+      coordinateSystem: 'EPSG:7856',
+      alignments: [
+        {
+          name: 'A',
+          page: 3,
+          points: [
+            { chainage: 0, easting: 1, northing: 2 },
+            { chainage: 1, easting: 3, northing: 4 },
+          ],
+        },
+        {
+          name: 'B',
+          page: '5',
+          points: [
+            { chainage: 0, easting: 1, northing: 2 },
+            { chainage: 1, easting: 3, northing: 4 },
+          ],
+        },
+        {
+          name: 'C',
+          page: 'cover',
+          points: [
+            { chainage: 0, easting: 1, northing: 2 },
+            { chainage: 1, easting: 3, northing: 4 },
+          ],
+        },
+      ],
+    });
+
+    expect(candidate.alignments[0].page).toBe(3);
+    expect(candidate.alignments[1].page).toBe(5);
+    expect(candidate.alignments[2].page).toBeNull();
+  });
+
   it('passes through model-supplied warnings and tolerates a garbage root', () => {
     const candidate = cleanSetoutCandidate({
       coordinateSystem: 'EPSG:7856',

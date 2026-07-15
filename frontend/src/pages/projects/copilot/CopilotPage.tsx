@@ -14,11 +14,13 @@ import { fetchProjectForAdminPage } from '../settings/projectPageAccess';
 import type { Project } from '../settings/types';
 import { CopilotPanel, type StageCard } from './CopilotPanel';
 import { ProjectFactsReviewModal, type ProjectFactsCurrent } from './ProjectFactsReviewModal';
+import { ControlLineReviewModal } from './ControlLineReviewModal';
 import {
   newestProposalForStage,
   useCopilotProposals,
   useProjectLotPresence,
   useRollbackProposal,
+  type CopilotStage,
 } from './copilotData';
 import { STAGE_META, deriveStageStatus } from './copilotStageStatus';
 
@@ -28,7 +30,7 @@ type CopilotProject = Project & { clientName?: string | null };
 
 export function CopilotPage() {
   const { projectId } = useParams();
-  const [factsOpen, setFactsOpen] = useState(false);
+  const [openStage, setOpenStage] = useState<CopilotStage | null>(null);
 
   const projectQuery = useQuery({
     queryKey: queryKeys.project(projectId ?? 'none'),
@@ -78,6 +80,10 @@ export function CopilotPage() {
     state: project?.state ?? null,
   };
 
+  const controlLineProposal = newestProposalForStage(proposals, 'control_line');
+  // Seed the review modal's fallback zone from an existing control line's datum.
+  const defaultCoordinateSystem = controlLinesQuery.data?.[0]?.coordinateSystem;
+
   const handleRollback = async (proposalId: string) => {
     try {
       await rollbackMutation.mutateAsync(proposalId);
@@ -107,17 +113,26 @@ export function CopilotPage() {
       <CopilotPanel
         cards={cards}
         aiConfigured={aiConfigured}
-        onProjectFactsAction={() => setFactsOpen(true)}
+        onStageAction={(stage) => setOpenStage(stage)}
         onRollback={(id) => void handleRollback(id)}
         rollbackBusy={rollbackMutation.isLoading}
       />
 
-      {factsOpen && projectId && (
+      {openStage === 'project_facts' && projectId && (
         <ProjectFactsReviewModal
           projectId={projectId}
           current={factsCurrent}
           existingProposal={factsProposal?.status === 'proposed' ? factsProposal : null}
-          onClose={() => setFactsOpen(false)}
+          onClose={() => setOpenStage(null)}
+        />
+      )}
+
+      {openStage === 'control_line' && projectId && (
+        <ControlLineReviewModal
+          projectId={projectId}
+          defaultCoordinateSystem={defaultCoordinateSystem}
+          existingProposal={controlLineProposal?.status === 'proposed' ? controlLineProposal : null}
+          onClose={() => setOpenStage(null)}
         />
       )}
     </div>
