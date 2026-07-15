@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
 
 import { PlanSheetRegistrationReviewModal } from './PlanSheetRegistrationReviewModal';
 import type { PlanSheetListItem } from '../settings/planSheetsData';
@@ -10,6 +12,8 @@ const decideMutateAsync = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => vi.fn());
 // Captures the props the (mocked) full-screen registration editor is seeded with.
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
+// Captures the props passed to the (mocked) in-flow upload modal.
+const uploadProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
 
 vi.mock('./copilotData', () => ({
   useExtractPlanSheet: () => ({ mutateAsync: extractMutateAsync, isLoading: false }),
@@ -17,6 +21,29 @@ vi.mock('./copilotData', () => ({
 }));
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
 vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
+
+// The real upload modal pulls in the PDF rasteriser + document picker; stub it to
+// expose its wiring (upload triggers onUploaded; Close triggers onClose).
+vi.mock('../settings/PlanSheetUploadModal', () => ({
+  PlanSheetUploadModal: (props: Record<string, unknown>) => {
+    uploadProps.current = props;
+    return (
+      <div data-testid="upload-modal">
+        <button type="button" onClick={() => (props.onUploaded as () => void)()}>
+          upload
+        </button>
+        <button type="button" onClick={() => (props.onClose as () => void)()}>
+          close-upload
+        </button>
+      </div>
+    );
+  },
+}));
+
+function renderWithClient(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 // The real editor pulls in leaflet + data hooks; stub it to expose the seeded
 // points and the two decision callbacks so we can assert wiring cheaply.
@@ -78,12 +105,13 @@ describe('PlanSheetRegistrationReviewModal', () => {
     decideMutateAsync.mockReset();
     toastMock.mockReset();
     editorProps.current = null;
+    uploadProps.current = null;
   });
 
   it('reads a picked sheet then seeds markers at the AI positions (null → sheet centre)', async () => {
     extractMutateAsync.mockResolvedValue({ proposalId: 'p-1', candidate: CANDIDATE, warnings: [] });
 
-    render(
+    renderWithClient(
       <PlanSheetRegistrationReviewModal projectId="project-1" sheets={[SHEET]} onClose={vi.fn()} />,
     );
 
@@ -105,7 +133,7 @@ describe('PlanSheetRegistrationReviewModal', () => {
     const onClose = vi.fn();
     const proposal = { id: 'p-9', payload: CANDIDATE } as unknown as CopilotProposal;
 
-    render(
+    renderWithClient(
       <PlanSheetRegistrationReviewModal
         projectId="project-1"
         sheets={[SHEET]}
@@ -134,7 +162,7 @@ describe('PlanSheetRegistrationReviewModal', () => {
     const onClose = vi.fn();
     const proposal = { id: 'p-9', payload: CANDIDATE } as unknown as CopilotProposal;
 
-    render(
+    renderWithClient(
       <PlanSheetRegistrationReviewModal
         projectId="project-1"
         sheets={[SHEET]}
@@ -150,10 +178,32 @@ describe('PlanSheetRegistrationReviewModal', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
-  it('shows an empty state when there are no sheets to register', () => {
-    render(
+  it('offers the in-flow upload when there are no sheets yet', () => {
+    renderWithClient(
       <PlanSheetRegistrationReviewModal projectId="project-1" sheets={[]} onClose={vi.fn()} />,
     );
-    expect(screen.getByText(/No plan sheets yet/)).toBeInTheDocument();
+    // The picker is replaced by the reused upload machinery — no tab-hop required.
+    expect(screen.getByTestId('upload-modal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Read from sheet' })).not.toBeInTheDocument();
+    expect(uploadProps.current?.defaultCoordinateSystem).toBe('EPSG:7856');
+  });
+
+  it('applying a registration fires onApplied for the hand-off', async () => {
+    decideMutateAsync.mockResolvedValue({ id: 'p-9', status: 'edited' });
+    const onApplied = vi.fn();
+    const proposal = { id: 'p-9', payload: CANDIDATE } as unknown as CopilotProposal;
+
+    renderWithClient(
+      <PlanSheetRegistrationReviewModal
+        projectId="project-1"
+        sheets={[SHEET]}
+        existingProposal={proposal}
+        onApplied={onApplied}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'apply' }));
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
   });
 });

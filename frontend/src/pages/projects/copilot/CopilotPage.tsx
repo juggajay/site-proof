@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/queryKeys';
@@ -24,15 +24,69 @@ import {
   useRollbackProposal,
   type CopilotStage,
 } from './copilotData';
+import { Button } from '@/components/ui/button';
 import { STAGE_META, deriveStageStatus } from './copilotStageStatus';
 
 // The project detail endpoint returns clientName even though the shared settings
 // `Project` type omits it; widen locally for the facts diff.
 type CopilotProject = Project & { clientName?: string | null };
 
+/**
+ * After a stage's proposal is applied, offer the next incomplete stage so the
+ * user never has to hunt for what's next. Skips the just-applied stage because
+ * its card status may still lag the query invalidation.
+ */
+function HandoffCard({
+  appliedTitle,
+  next,
+  onGo,
+  onDismiss,
+}: {
+  appliedTitle: string;
+  next: StageCard | null;
+  onGo: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      className="mt-4 flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-4"
+    >
+      <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+      {next ? (
+        <>
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="font-medium">{appliedTitle} done.</span>{' '}
+            <span className="text-muted-foreground">Next: {next.title.toLowerCase()}.</span>
+          </p>
+          <Button type="button" size="sm" onClick={onGo}>
+            Go
+            <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        </>
+      ) : (
+        <p className="min-w-0 flex-1 text-sm font-medium">
+          Setup complete — your project is field-ready.
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
 export function CopilotPage() {
   const { projectId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [openStage, setOpenStage] = useState<CopilotStage | null>(null);
+  // The stage whose proposal was just applied, driving the next-step hand-off.
+  const [appliedStage, setAppliedStage] = useState<CopilotStage | null>(null);
+  const deepLinkConsumed = useRef(false);
 
   const projectQuery = useQuery({
     queryKey: queryKeys.project(projectId ?? 'none'),
@@ -49,6 +103,34 @@ export function CopilotPage() {
 
   const project = projectQuery.data ?? null;
   const proposals = proposalsQuery.data;
+
+  const openStageFlow = (stage: CopilotStage) => {
+    setAppliedStage(null);
+    setOpenStage(stage);
+  };
+
+  // Deep link (`?stage=…`): open that stage's flow as if its CTA was clicked, then
+  // strip the param (replace) so refresh/back doesn't re-fire. Wait for proposals so
+  // a pending proposal routes to review, matching a real CTA click. Ignore junk or
+  // an AI-gated stage on a server with no AI — the page just renders normally.
+  useEffect(() => {
+    if (deepLinkConsumed.current) return;
+    const stageParam = searchParams.get('stage');
+    if (!stageParam) return;
+    if (proposalsQuery.isLoading) return;
+    deepLinkConsumed.current = true;
+
+    const meta = STAGE_META.find((m) => m.stage === stageParam);
+    if (meta?.active && !(meta.requiresAi && !aiConfigured)) {
+      openStageFlow(meta.stage as CopilotStage);
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('stage');
+    setSearchParams(next, { replace: true });
+    // openStageFlow is stable enough for this one-shot; deps cover the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, proposalsQuery.isLoading, aiConfigured, setSearchParams]);
 
   const cards: StageCard[] = useMemo(() => {
     const dataExists: Record<string, boolean> = {
@@ -75,6 +157,13 @@ export function CopilotPage() {
     lotPresenceQuery.data,
     proposals,
   ]);
+
+  const appliedCard = appliedStage ? (cards.find((c) => c.stage === appliedStage) ?? null) : null;
+  // The next thing to do after the applied stage: first incomplete stage in order,
+  // skipping the one just applied (its "done" may still be settling in the cache).
+  const nextIncomplete = appliedStage
+    ? (cards.find((c) => c.status !== 'done' && c.stage !== appliedStage) ?? null)
+    : null;
 
   const factsProposal = newestProposalForStage(proposals, 'project_facts');
   const factsCurrent: ProjectFactsCurrent = {
@@ -121,16 +210,26 @@ export function CopilotPage() {
       <CopilotPanel
         cards={cards}
         aiConfigured={aiConfigured}
-        onStageAction={(stage) => setOpenStage(stage)}
+        onStageAction={openStageFlow}
         onRollback={(id) => void handleRollback(id)}
         rollbackBusy={rollbackMutation.isLoading}
       />
+
+      {appliedStage && appliedCard && (
+        <HandoffCard
+          appliedTitle={appliedCard.title}
+          next={nextIncomplete}
+          onGo={() => nextIncomplete && openStageFlow(nextIncomplete.stage)}
+          onDismiss={() => setAppliedStage(null)}
+        />
+      )}
 
       {openStage === 'project_facts' && projectId && (
         <ProjectFactsReviewModal
           projectId={projectId}
           current={factsCurrent}
           existingProposal={factsProposal?.status === 'proposed' ? factsProposal : null}
+          onApplied={() => setAppliedStage('project_facts')}
           onClose={() => setOpenStage(null)}
         />
       )}
@@ -140,6 +239,7 @@ export function CopilotPage() {
           projectId={projectId}
           defaultCoordinateSystem={defaultCoordinateSystem}
           existingProposal={controlLineProposal?.status === 'proposed' ? controlLineProposal : null}
+          onApplied={() => setAppliedStage('control_line')}
           onClose={() => setOpenStage(null)}
         />
       )}
@@ -148,7 +248,9 @@ export function CopilotPage() {
         <PlanSheetRegistrationReviewModal
           projectId={projectId}
           sheets={planSheetsQuery.data ?? []}
+          defaultCoordinateSystem={defaultCoordinateSystem}
           existingProposal={planSheetProposal?.status === 'proposed' ? planSheetProposal : null}
+          onApplied={() => setAppliedStage('plan_sheets')}
           onClose={() => setOpenStage(null)}
         />
       )}
@@ -160,6 +262,7 @@ export function CopilotPage() {
           existingProposal={
             lotBreakdownProposal?.status === 'proposed' ? lotBreakdownProposal : null
           }
+          onApplied={() => setAppliedStage('lot_breakdown')}
           onClose={() => setOpenStage(null)}
         />
       )}

@@ -41,6 +41,8 @@ interface ProjectFactsReviewModalProps {
   current: ProjectFactsCurrent;
   /** A live 'proposed' proposal to review directly (skips the upload step). */
   existingProposal?: CopilotProposal | null;
+  /** Fired once the proposal is successfully applied (drives the next-step hand-off). */
+  onApplied?: () => void;
   onClose: () => void;
 }
 
@@ -89,6 +91,7 @@ export function ProjectFactsReviewModal({
   projectId,
   current,
   existingProposal,
+  onApplied,
   onClose,
 }: ProjectFactsReviewModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +157,7 @@ export function ProjectFactsReviewModal({
         editedPayload: buildEditedPayload(review.candidate),
       });
       toast({ title: 'Project facts applied', description: 'The project has been updated.' });
+      onApplied?.();
       onClose();
     } catch (error) {
       logError('Failed to apply project facts:', error);
