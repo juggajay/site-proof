@@ -17,6 +17,7 @@ import diaryRouter from './routes/diary/index.js';
 import claimsRouter from './routes/claims.js';
 import { controlLinesRouter } from './routes/controlLines/index.js';
 import { copilotRouter } from './routes/copilot/index.js';
+import { chatRouter } from './routes/copilot/chatRoute.js';
 import { planSheetsRouter } from './routes/planSheets/index.js';
 import { projectCoverageRouter } from './routes/projectCoverage.js';
 import { projectLotGeometriesRouter } from './routes/projectLotGeometries.js';
@@ -169,6 +170,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/webhooks', webhooksRouter); // Feature #746: Webhook external integration
   app.use('/api/push', pushNotificationsRouter); // Feature #657: Mobile push notifications
   app.use('/api/ai', aiStatusRouter); // Wave 0: expose AI-extraction availability to the UI
+  app.use('/api/copilot', chatRouter); // Jack: company-level chat copilot (works before any project)
 
   // Error handling
   app.use(errorHandler);
