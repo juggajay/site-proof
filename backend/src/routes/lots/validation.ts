@@ -156,8 +156,9 @@ const bulkLotGeometrySchema = z
 const bulkCreateLotsSchema = z
   .object({
     projectId: requiredIdSchema('projectId'),
-    // One template applied to every generated lot (Lot has a single
-    // itpTemplateId FK; per-lot templates would need a different payload).
+    // Batch-level default template, applied to any lot that omits its own
+    // per-lot itpTemplateId below (activity-aware batches set one per lot so
+    // each activity gets its correct ITP).
     itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
     geometry: bulkLotGeometrySchema.optional(),
     lots: z
@@ -171,6 +172,7 @@ const bulkCreateLotsSchema = z
             chainageStart: finiteNumberSchema('chainageStart').optional().nullable(),
             chainageEnd: finiteNumberSchema('chainageEnd').optional().nullable(),
             layer: optionalNullableTextSchema('layer', MAX_SHORT_TEXT_LENGTH),
+            itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
           })
           .superRefine((data, ctx) => {
             validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {

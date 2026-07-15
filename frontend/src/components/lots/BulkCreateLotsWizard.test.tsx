@@ -78,10 +78,18 @@ describe('BulkCreateLotsWizard generation payload', () => {
     const bulkCall = apiFetch.mock.calls.find(([path]) => path === '/api/lots/bulk');
     expect(bulkCall).toBeDefined();
     const body = JSON.parse((bulkCall![1] as { body: string }).body);
-    expect(body.itpTemplateId).toBe('tpl-1');
+    // Templates now ride per-lot, not batch-level, so each activity carries its own.
+    expect(body.itpTemplateId).toBeUndefined();
     expect(body.geometry).toEqual({ controlLineId: 'cl-1', offsetLeft: 4, offsetRight: 6 });
     expect(body.lots).toHaveLength(4);
-    expect(body.lots[0]).toMatchObject({ chainageStart: 0, chainageEnd: 250 });
+    expect(body.lots[0]).toMatchObject({
+      chainageStart: 0,
+      chainageEnd: 250,
+      itpTemplateId: 'tpl-1',
+    });
+    expect(
+      body.lots.every((lot: { itpTemplateId?: string }) => lot.itpTemplateId === 'tpl-1'),
+    ).toBe(true);
 
     expect(invalidateQueries).toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith(
@@ -110,8 +118,82 @@ describe('BulkCreateLotsWizard generation payload', () => {
     const bulkCall = apiFetch.mock.calls.find(([path]) => path === '/api/lots/bulk');
     const body = JSON.parse((bulkCall![1] as { body: string }).body);
     expect(body.itpTemplateId).toBeUndefined();
+    expect(body.lots[0].itpTemplateId).toBeUndefined();
     expect(body.geometry).toBeUndefined();
     expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('generates one lot per activity per interval with per-activity templates', async () => {
+    // Set the template mock BEFORE render so the mount effect loads these.
+    apiFetch.mockImplementation((path: string) => {
+      if (path.startsWith('/api/itp/templates')) {
+        return Promise.resolve({
+          templates: [
+            { id: 'tpl-earth', name: 'Earthworks ITP', activityType: 'Earthworks' },
+            { id: 'tpl-pave', name: 'Pavement ITP', activityType: 'Pavement' },
+          ],
+        });
+      }
+      return Promise.resolve({ count: 8, itpInstancesCreated: 8, geometriesCreated: 0 });
+    });
+    render(<BulkCreateLotsWizard projectId="proj-1" onClose={vi.fn()} onSuccess={vi.fn()} />);
+
+    fillChainageStep(); // 0–1000 @ 250 = 4 intervals
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    // Row 0: Earthworks + its ITP (wait for the async template option to load).
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: /Earthworks ITP/ })).toBeInTheDocument(),
+    );
+    fireEvent.change(screen.getAllByLabelText('ITP Template')[0], {
+      target: { value: 'tpl-earth' },
+    });
+
+    // Add a second activity row: Pavement + its ITP.
+    fireEvent.click(screen.getByRole('button', { name: /Add activity/i }));
+    const activitySelects = screen.getAllByLabelText('Activity Type');
+    fireEvent.change(activitySelects[1], { target: { value: 'Pavement' } });
+    fireEvent.change(screen.getAllByLabelText('ITP Template')[1], {
+      target: { value: 'tpl-pave' },
+    });
+
+    // Live count: 2 activities × 4 intervals = 8 lots.
+    expect(screen.getByText(/2 activities × 4 intervals = 8 lots/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })); // → preview
+    expect(screen.getByText(/Total: 8 lots will be created/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })); // → confirm
+    fireEvent.click(screen.getByRole('button', { name: 'Create Lots' }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    const bulkCall = apiFetch.mock.calls.find(([path]) => path === '/api/lots/bulk');
+    const body = JSON.parse((bulkCall![1] as { body: string }).body);
+    expect(body.itpTemplateId).toBeUndefined();
+    expect(body.lots).toHaveLength(8);
+    // Activity-inner ordering: [Earthworks, Pavement] repeat per interval.
+    expect(body.lots.map((lot: { activityType: string }) => lot.activityType)).toEqual([
+      'Earthworks',
+      'Pavement',
+      'Earthworks',
+      'Pavement',
+      'Earthworks',
+      'Pavement',
+      'Earthworks',
+      'Pavement',
+    ]);
+    expect(body.lots[0].itpTemplateId).toBe('tpl-earth');
+    expect(body.lots[1].itpTemplateId).toBe('tpl-pave');
+    expect(body.lots.map((lot: { lotNumber: string }) => lot.lotNumber)).toEqual([
+      'LOT-001',
+      'LOT-002',
+      'LOT-003',
+      'LOT-004',
+      'LOT-005',
+      'LOT-006',
+      'LOT-007',
+      'LOT-008',
+    ]);
   });
 
   it('blocks preview when the range falls outside the selected control line', async () => {
