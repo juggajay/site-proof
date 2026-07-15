@@ -139,7 +139,10 @@ vi.mock('./statusTimelineData', async (importOriginal) => {
 const useProjectLotGeometries = vi.fn();
 const useProjectControlLines = vi.fn();
 const backfillLotGeometries = vi.fn();
-vi.mock('./lotMapData', () => ({
+// Spread the real module so pure helpers (chainageLabel, …) keep working; only
+// the data hooks are stubbed.
+vi.mock('./lotMapData', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lotMapData')>()),
   useProjectLotGeometries: (...args: unknown[]) => useProjectLotGeometries(...args),
   useProjectControlLines: (...args: unknown[]) => useProjectControlLines(...args),
   backfillLotGeometries: (...args: unknown[]) => backfillLotGeometries(...args),
@@ -254,8 +257,10 @@ describe('LotMapView', () => {
 
     const popup = screen.getByTestId('lot-popup-lot-1');
     expect(within(popup).getByText('LOT-001')).toBeInTheDocument();
-    // formatStatusLabel turns in_progress -> "In Progress"
-    expect(within(popup).getByText(/In Progress/)).toBeInTheDocument();
+    // formatStatusLabel turns in_progress -> "In Progress"; the chainage range
+    // is what locates a strip among dozens of identical ones (Wave 1 test-drive
+    // feedback).
+    expect(within(popup).getByText(/In Progress.*Ch 0–100/)).toBeInTheDocument();
     expect(screen.getByTestId('lot-popup-view-lot-1')).toBeInTheDocument();
   });
 

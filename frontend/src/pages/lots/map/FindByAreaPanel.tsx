@@ -6,6 +6,7 @@ import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
 
+import { chainageLabel } from './lotMapData';
 import type { MapLinkPaths } from './lotMapHelpers';
 import type { SpatialSearchResult } from './spatialSearchData';
 
@@ -27,13 +28,6 @@ function TruncatedNote({ show }: { show: boolean }) {
       Showing the first 500 results — draw a smaller area to narrow the search.
     </p>
   );
-}
-
-function chainageLabel(start: number | null, end: number | null): string | null {
-  if (start == null && end == null) return null;
-  const fmt = (n: number) => Math.round(n).toLocaleString();
-  if (start != null && end != null) return `Ch ${fmt(start)}–${fmt(end)}`;
-  return `Ch ${fmt((start ?? end) as number)}`;
 }
 
 export function FindByAreaPanel({
