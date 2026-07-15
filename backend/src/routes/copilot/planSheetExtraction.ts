@@ -90,8 +90,17 @@ export function cleanPlanSheetCandidate(raw: unknown): PlanSheetExtraction {
   const rawCrs = typeof root.coordinateSystem === 'string' ? root.coordinateSystem.trim() : '';
   let coordinateSystem: string | null = null;
   if (rawCrs) {
-    if (isSupportedEpsg(rawCrs)) {
-      coordinateSystem = rawCrs;
+    // Sheets print the full label ("GDA2020 MGA Zone 56 (EPSG:7856)") and the
+    // model often returns it verbatim — accept an embedded EPSG code, not just
+    // a bare one.
+    const embedded = rawCrs.match(/EPSG:\s*(\d{4,5})/i);
+    const candidateCrs = isSupportedEpsg(rawCrs)
+      ? rawCrs
+      : embedded && isSupportedEpsg(`EPSG:${embedded[1]}`)
+        ? `EPSG:${embedded[1]}`
+        : null;
+    if (candidateCrs) {
+      coordinateSystem = candidateCrs;
     } else {
       warnings.push(
         `Could not match the printed coordinate system "${rawCrs}" — confirm the sheet's zone.`,
