@@ -10,11 +10,14 @@ export interface StageMeta {
   active: boolean;
   /** The "not started" read CTA label (only meaningful for active stages). */
   readLabel: string;
+  /**
+   * Whether the stage's read flow needs AI configured. lot_breakdown has a
+   * deterministic (no-file) path, so it stays actionable without AI.
+   */
+  requiresAi: boolean;
 }
 
-// The four Wave-1 stages, in setup order. project_facts, control_line and
-// plan_sheets are wired to extractors; lot_breakdown shows "Coming soon" for its
-// read CTA but still surfaces any proposal/data status (forward-compatible).
+// The four Wave-1 stages, in setup order, all wired to extractors + review flows.
 export const STAGE_META: StageMeta[] = [
   {
     stage: 'project_facts',
@@ -22,6 +25,7 @@ export const STAGE_META: StageMeta[] = [
     description: 'Read the project name, number, client, and state from a drawing title block.',
     active: true,
     readLabel: 'Read from drawing',
+    requiresAi: true,
   },
   {
     stage: 'control_line',
@@ -29,6 +33,7 @@ export const STAGE_META: StageMeta[] = [
     description: 'Import the survey control line from a setout sheet.',
     active: true,
     readLabel: 'Read from setout sheet',
+    requiresAi: true,
   },
   {
     stage: 'plan_sheets',
@@ -36,13 +41,15 @@ export const STAGE_META: StageMeta[] = [
     description: 'Register plan sheets to the project map.',
     active: true,
     readLabel: 'Register a plan sheet',
+    requiresAi: true,
   },
   {
     stage: 'lot_breakdown',
     title: 'Lot breakdown',
-    description: 'Generate lots along the alignment.',
-    active: false,
-    readLabel: '',
+    description: 'Break the alignment into thin lots by chainage and activity.',
+    active: true,
+    readLabel: 'Break into lots',
+    requiresAi: false,
   },
 ];
 

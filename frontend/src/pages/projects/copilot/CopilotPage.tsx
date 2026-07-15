@@ -16,6 +16,7 @@ import { CopilotPanel, type StageCard } from './CopilotPanel';
 import { ProjectFactsReviewModal, type ProjectFactsCurrent } from './ProjectFactsReviewModal';
 import { ControlLineReviewModal } from './ControlLineReviewModal';
 import { PlanSheetRegistrationReviewModal } from './PlanSheetRegistrationReviewModal';
+import { LotBreakdownReviewModal } from './LotBreakdownReviewModal';
 import {
   newestProposalForStage,
   useCopilotProposals,
@@ -89,6 +90,8 @@ export function CopilotPage() {
 
   const planSheetProposal = newestProposalForStage(proposals, 'plan_sheets');
 
+  const lotBreakdownProposal = newestProposalForStage(proposals, 'lot_breakdown');
+
   const handleRollback = async (proposalId: string) => {
     try {
       await rollbackMutation.mutateAsync(proposalId);
@@ -146,6 +149,17 @@ export function CopilotPage() {
           projectId={projectId}
           sheets={planSheetsQuery.data ?? []}
           existingProposal={planSheetProposal?.status === 'proposed' ? planSheetProposal : null}
+          onClose={() => setOpenStage(null)}
+        />
+      )}
+
+      {openStage === 'lot_breakdown' && projectId && (
+        <LotBreakdownReviewModal
+          projectId={projectId}
+          controlLines={controlLinesQuery.data ?? []}
+          existingProposal={
+            lotBreakdownProposal?.status === 'proposed' ? lotBreakdownProposal : null
+          }
           onClose={() => setOpenStage(null)}
         />
       )}
