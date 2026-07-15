@@ -1,7 +1,11 @@
 # Wave 2 spec — canonical activity taxonomy + lot→ITP matching
 
-**Date:** 2026-07-15 · **Status:** research synthesis; Jay reviews the two
-contested calls, everything else is evidence-derived
+**Date:** 2026-07-15 · **Status:** APPROVED — Jay accepted both recommended
+calls same day ("I'm happy to go with what your rec is"): kerb_channel stays
+in `drainage`; `Concrete` retired as an activity value (existing Concrete
+lots flagged for one-time re-classification). §4 records the evidence. This
+spec is build-ready for Wave 2; remaining Jay input is the foreman-naming
+gut check on display names during W2-PR1 review.
 **Inputs:** two Opus research passes run 2026-07-15 (A: taxonomy from
 published spec structures; B: matching rules from QA practice + the seeded
 library), both grounded in repo state at `9235d084`. Full agent reports in
