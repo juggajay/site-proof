@@ -39,9 +39,18 @@ export interface SetoutPoint {
   northing: number;
 }
 
-export interface SetoutCandidate {
+// One control line's worth of points. A sheet often carries several (one table
+// per street/alignment), so extraction returns a list of these plus any
+// document-level warnings.
+export interface SetoutAlignment {
+  name: string | null;
   coordinateSystem: string | null;
   points: SetoutPoint[];
+  warnings: string[];
+}
+
+export interface SetoutCandidate {
+  alignments: SetoutAlignment[];
   warnings: string[];
 }
 
@@ -52,6 +61,13 @@ const rawPointSchema = z.object({
   easting: z.coerce.number().finite(),
   northing: z.coerce.number().finite(),
 });
+
+function collectStringWarnings(raw: unknown, into: string[]): void {
+  if (!Array.isArray(raw)) return;
+  for (const w of raw) {
+    if (typeof w === 'string' && w.trim()) into.push(w.trim());
+  }
+}
 
 function normalizeEpsgGuess(raw: unknown, warnings: string[]): string | null {
   if (typeof raw !== 'string') {
@@ -77,63 +93,120 @@ function normalizeEpsgGuess(raw: unknown, warnings: string[]): string | null {
 
 // Pure server-side validation/cleaning of the model's JSON. No I/O, no AI — this
 // is the trust boundary that turns untrusted model output into a safe candidate.
+//
+// The model may return either the grouped shape ({ alignments: [...] }) or the
+// old flat shape ({ points: [...] }); the flat shape is wrapped as one unnamed
+// alignment so a prompt/model drift never 500s. Each alignment is cleaned
+// independently: bad rows drop into that alignment's warnings, and an alignment
+// with <2 valid points is dropped into document warnings rather than aborting
+// the whole sheet. Only a sheet with NO surviving alignment 400s.
 export function cleanSetoutCandidate(raw: unknown): SetoutCandidate {
   const root = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const warnings: string[] = [];
+  const documentWarnings: string[] = [];
+  collectStringWarnings(root.warnings, documentWarnings);
 
-  if (Array.isArray(root.warnings)) {
-    for (const w of root.warnings) {
-      if (typeof w === 'string' && w.trim()) warnings.push(w.trim());
+  // Sheet-wide CRS; an alignment without its own CRS falls back to this.
+  const documentCrs = normalizeEpsgGuess(root.coordinateSystem, documentWarnings);
+
+  const rawAlignments: unknown[] = Array.isArray(root.alignments)
+    ? root.alignments
+    : [{ name: null, coordinateSystem: null, points: root.points }];
+
+  const alignments: SetoutAlignment[] = [];
+  let totalPoints = 0;
+
+  rawAlignments.forEach((rawAlignment, index) => {
+    const a =
+      rawAlignment && typeof rawAlignment === 'object'
+        ? (rawAlignment as Record<string, unknown>)
+        : {};
+    const warnings: string[] = [];
+    collectStringWarnings(a.warnings, warnings);
+
+    const name = typeof a.name === 'string' && a.name.trim() ? a.name.trim() : null;
+    const label = name ?? `Alignment ${index + 1}`;
+    const coordinateSystem = normalizeEpsgGuess(a.coordinateSystem, warnings) ?? documentCrs;
+
+    const rawPoints = Array.isArray(a.points) ? a.points : [];
+    const points: SetoutPoint[] = [];
+    rawPoints.forEach((row, rowIndex) => {
+      const parsed = rawPointSchema.safeParse(row);
+      if (parsed.success) {
+        points.push(parsed.data);
+      } else {
+        warnings.push(
+          `Row ${rowIndex + 1} dropped: could not read numeric chainage/easting/northing.`,
+        );
+      }
+    });
+
+    if (points.length < 2) {
+      documentWarnings.push(
+        `${label} skipped: only ${points.length} valid point${points.length === 1 ? '' : 's'} found (needs at least 2).`,
+      );
+      return;
     }
-  }
 
-  const coordinateSystem = normalizeEpsgGuess(root.coordinateSystem, warnings);
+    points.sort((p, q) => p.chainage - q.chainage);
 
-  const rawPoints = Array.isArray(root.points) ? root.points : [];
-  const points: SetoutPoint[] = [];
-  rawPoints.forEach((row, index) => {
-    const parsed = rawPointSchema.safeParse(row);
-    if (parsed.success) {
-      points.push(parsed.data);
-    } else {
-      warnings.push(`Row ${index + 1} dropped: could not read numeric chainage/easting/northing.`);
+    // Total point cap across ALL alignments, so a huge sheet can never blow past
+    // the ControlLine points ceiling. Trim the tail once the budget is spent.
+    if (totalPoints + points.length > MAX_SETOUT_POINTS) {
+      const keep = MAX_SETOUT_POINTS - totalPoints;
+      if (keep < 2) {
+        documentWarnings.push(
+          `${label} skipped: the ${MAX_SETOUT_POINTS}-point total was already reached.`,
+        );
+        return;
+      }
+      warnings.push(
+        `Kept the first ${keep} of ${points.length} points; the ${MAX_SETOUT_POINTS}-point total across all alignments was exceeded.`,
+      );
+      points.length = keep;
     }
+
+    totalPoints += points.length;
+    alignments.push({ name, coordinateSystem, points, warnings });
   });
 
-  if (points.length < 2) {
+  if (alignments.length === 0) {
     throw new AppError(
       400,
-      `Could not extract at least 2 valid setout points (found ${points.length}). ` +
+      'Could not extract any alignment with at least 2 valid setout points. ' +
         'Check that the uploaded sheet shows a coordinate table, or enter the points manually.',
       'SETOUT_EXTRACTION_INSUFFICIENT',
-      { found: points.length },
+      { alignments: 0 },
     );
   }
 
-  points.sort((a, b) => a.chainage - b.chainage);
-
-  if (points.length > MAX_SETOUT_POINTS) {
-    warnings.push(
-      `Extraction returned ${points.length} points; kept the first ${MAX_SETOUT_POINTS} by chainage.`,
-    );
-    points.length = MAX_SETOUT_POINTS;
-  }
-
-  return { coordinateSystem, points, warnings };
+  return { alignments, warnings: documentWarnings };
 }
 
 function buildSetoutPrompt(): string {
   return `You are reading a civil engineering "Geometric Setout Details" / control-line coordinate sheet.
 
-Extract the survey control table into JSON. Return ONLY valid JSON with these exact keys:
-- coordinateSystem: string or null. The projected coordinate system from the title block or notes, mapped to one of these EPSG codes: ${listSupportedEpsg().join(', ')}. Use the EPSG code string (e.g. "EPSG:7856"). GDA2020 MGA zone NN maps to EPSG:78(49-56), GDA94 MGA zone NN maps to EPSG:283(49-56). Return null if you cannot determine it.
-- points: array of objects, each { "chainage": number, "easting": number, "northing": number }. One row per coordinate in the table, in table order.
-- warnings: array of strings for anything ambiguous or unreadable.
+A single sheet often contains setout tables for SEVERAL different alignments (one
+per street, road, or control line). Group the coordinate rows by the alignment
+they belong to — do not merge separate streets into one list.
+
+Extract into JSON. Return ONLY valid JSON with these exact keys:
+- coordinateSystem: string or null. The projected coordinate system for the WHOLE sheet, from the title block or notes, mapped to one of these EPSG codes: ${listSupportedEpsg().join(', ')}. Use the EPSG code string (e.g. "EPSG:7856"). GDA2020 MGA zone NN maps to EPSG:78(49-56), GDA94 MGA zone NN maps to EPSG:283(49-56). Return null if you cannot determine it.
+- alignments: array of alignment objects. Each object has:
+    - name: the printed alignment / street / control-line name if one is visible (e.g. "MC01", "Weinam Creek Rd"), otherwise null.
+    - coordinateSystem: EPSG string for THIS alignment only if it differs from the sheet-wide one above; otherwise null.
+    - points: array of { "chainage": number, "easting": number, "northing": number }, one row per coordinate in this alignment's table, in table order.
+    - warnings: array of strings for anything ambiguous or unreadable in this alignment.
+- warnings: array of strings for document-level issues.
+
+How to group into alignments:
+- Each labelled table / street heading is its own alignment.
+- A chainage that RESETS to ~0 partway down the sheet is a strong signal that a new alignment begins — start a new alignment object there.
+- If the sheet has a single table, return exactly one alignment.
 
 Rules:
 - Numbers only for chainage/easting/northing — no units, no commas, no "CH" prefix.
-- Do NOT invent rows or coordinates that are not printed on the sheet.
-- If a value is unreadable, omit that row and note it in warnings.`;
+- Do NOT invent rows, alignments, or coordinates that are not printed on the sheet.
+- If a value is unreadable, omit that row and note it in that alignment's warnings.`;
 }
 
 // Calls Anthropic exactly as the certificate extractor does (same client, auth,
