@@ -269,8 +269,9 @@ export function RegistrationSidePanel({
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : points.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Click a known location on the drawing (survey mark, lot corner, control point) to start.
-          You need at least 2.
+          Click a known location on the drawing (survey mark, grid cross, title-block corner) to
+          start. You need at least 2. No coordinates printed on the drawing? Click a chainage tick
+          on the control line, then use &ldquo;From chainage&rdquo; to fill them in.
         </p>
       ) : (
         <ul className="space-y-3">
@@ -303,7 +304,8 @@ export function RegistrationSidePanel({
           <span className="font-semibold">RMS error: {(fit.rmsErrorM ?? 0).toFixed(2)} m</span>
           {overWarn && (
             <p className="mt-1 text-xs">
-              Over {WARN_RESIDUAL_M} m — check your points. You can still save; the choice is yours.
+              Over {WARN_RESIDUAL_M} m — zoom in and re-drop each marker exactly on its mark. A few
+              pixels off here is metres on the ground. You can still save; the choice is yours.
             </p>
           )}
         </div>
