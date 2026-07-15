@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/toaster';
 import { useAiStatus } from '@/hooks/useAiStatus';
 import { useAuth } from '@/lib/auth';
+import { getCompanyRole } from '@/lib/subcontractorIdentity';
 import { JackPanel } from './JackPanel';
 import {
   closeJack,
@@ -34,9 +35,15 @@ function navLabel(to: string): string {
   return NAV_LABELS.find(([re]) => re.test(to))?.[1] ?? 'where you need to be';
 }
 
+// Jack is an office copilot for the roles that own company setup — owner and
+// admin only (owner decision 2026-07-16). Field roles (foreman, subbie) get
+// the mobile shells instead; the chat route enforces the same set server-side.
+const JACK_ROLES = new Set(['owner', 'admin']);
+
 /**
  * Jack — the in-app chat copilot. Mounted once in the classic authenticated
- * shell. Renders nothing when AI is not configured on the server.
+ * shell. Renders nothing when AI is not configured on the server or the user
+ * is not an owner/admin.
  */
 export function JackWidget() {
   const { aiConfigured } = useAiStatus();
@@ -47,15 +54,16 @@ export function JackWidget() {
   const bubbleRef = useRef<HTMLButtonElement>(null);
   const handledNavId = useRef<string | null>(null);
 
+  const jackEnabled = aiConfigured && JACK_ROLES.has(getCompanyRole(user));
   const projectId = projectIdFromPath(location.pathname);
   const firstName = firstNameOf(user);
 
   // First-run: auto-open once after a beat so the intro greets a new user.
   useEffect(() => {
-    if (!aiConfigured || hasSeenIntro()) return;
+    if (!jackEnabled || hasSeenIntro()) return;
     const t = setTimeout(() => openJack(), 1500);
     return () => clearTimeout(t);
-  }, [aiConfigured]);
+  }, [jackEnabled]);
 
   // Execute a `navigate` action the moment Jack's newest message carries one.
   useEffect(() => {
@@ -71,7 +79,7 @@ export function JackWidget() {
     }
   }, [messages, navigate]);
 
-  if (!aiConfigured) return null;
+  if (!jackEnabled) return null;
 
   const handleClose = () => {
     markIntroSeen();

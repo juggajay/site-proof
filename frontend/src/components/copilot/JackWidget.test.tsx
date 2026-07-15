@@ -16,6 +16,7 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => vi.fn());
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const aiState = vi.hoisted(() => ({ configured: true }));
+const authState = vi.hoisted(() => ({ roleInCompany: 'owner' }));
 
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router-dom')>()),
@@ -24,7 +25,9 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 vi.mock('@/hooks/useAiStatus', () => ({
   useAiStatus: () => ({ aiConfigured: aiState.configured }),
 }));
-vi.mock('@/lib/auth', () => ({ useAuth: () => ({ user: { fullName: 'Jayson Ryan' } }) }));
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ user: { fullName: 'Jayson Ryan', roleInCompany: authState.roleInCompany } }),
+}));
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -46,6 +49,7 @@ beforeEach(() => {
   toastMock.mockReset();
   apiFetchMock.mockReset();
   aiState.configured = true;
+  authState.roleInCompany = 'owner';
 });
 
 afterEach(() => {
@@ -63,6 +67,30 @@ describe('JackWidget', () => {
     aiState.configured = false;
     renderWidget();
     expect(screen.queryByLabelText('Open Jack, your copilot')).not.toBeInTheDocument();
+  });
+
+  it('renders only for owner/admin — field roles never see Jack', () => {
+    writeLocalStorageItem(INTRO_FLAG, '1');
+    for (const role of ['foreman', 'site_manager', 'project_manager', 'subcontractor']) {
+      authState.roleInCompany = role;
+      const { unmount } = renderWidget();
+      expect(screen.queryByLabelText('Open Jack, your copilot')).not.toBeInTheDocument();
+      unmount();
+    }
+
+    authState.roleInCompany = 'admin';
+    renderWidget();
+    expect(screen.getByLabelText('Open Jack, your copilot')).toBeInTheDocument();
+  });
+
+  it('does not auto-open the first-run intro for a non-admin role', () => {
+    vi.useFakeTimers();
+    authState.roleInCompany = 'foreman';
+    renderWidget();
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('auto-opens once for a first-run user and sets the seen flag on close', () => {
