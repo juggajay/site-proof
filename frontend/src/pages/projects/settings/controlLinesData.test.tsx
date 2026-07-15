@@ -8,13 +8,31 @@ import {
   useControlLinesAccess,
   useCreateControlLine,
   useDeleteControlLine,
+  useExtractSetoutPoints,
   useUpdateControlLine,
 } from './controlLinesData';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
+const authFetchMock = vi.hoisted(() => vi.fn());
 const fetchProjectMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/lib/api', () => ({ apiFetch: apiFetchMock }));
+const TestApiError = vi.hoisted(
+  () =>
+    class TestApiError extends Error {
+      constructor(
+        public status: number,
+        public body: string,
+      ) {
+        super(body);
+      }
+    },
+);
+
+vi.mock('@/lib/api', () => ({
+  apiFetch: apiFetchMock,
+  authFetch: authFetchMock,
+  ApiError: TestApiError,
+}));
 vi.mock('./projectPageAccess', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./projectPageAccess')>();
   return { ...actual, fetchProjectForAdminPage: fetchProjectMock };
@@ -48,6 +66,7 @@ function invalidatedKeys(spy: { mock: { calls: unknown[][] } }): unknown[] {
 describe('controlLinesData hooks', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
+    authFetchMock.mockReset();
     fetchProjectMock.mockReset();
   });
 
@@ -74,6 +93,38 @@ describe('controlLinesData hooks', () => {
       method: 'POST',
       body: JSON.stringify({ name: 'MC00', coordinateSystem: 'EPSG:7856', points: POINTS }),
     });
+  });
+
+  it('useExtractSetoutPoints posts the file as multipart and returns the candidate', async () => {
+    const candidate = { coordinateSystem: 'EPSG:7856', points: POINTS, warnings: [] };
+    authFetchMock.mockResolvedValue({ ok: true, json: async () => ({ candidate }) });
+    const { result } = renderHook(() => useExtractSetoutPoints('project-1'), {
+      wrapper: wrapper(),
+    });
+
+    const file = new File(['%PDF-1.4'], 'setout.pdf', { type: 'application/pdf' });
+    const returned = await result.current.mutateAsync(file);
+
+    expect(returned).toEqual(candidate);
+    const [url, init] = authFetchMock.mock.calls[0];
+    expect(url).toBe('/api/projects/project-1/control-lines/extract-points');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('file')).toBeInstanceOf(File);
+  });
+
+  it('useExtractSetoutPoints throws the backend message on a non-ok response', async () => {
+    authFetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => 'AI setout extraction is not configured on this server.',
+    });
+    const { result } = renderHook(() => useExtractSetoutPoints('project-1'), {
+      wrapper: wrapper(),
+    });
+
+    const file = new File(['%PDF-1.4'], 'setout.pdf', { type: 'application/pdf' });
+    await expect(result.current.mutateAsync(file)).rejects.toThrow('not configured');
   });
 
   it('useUpdateControlLine patches a specific line', async () => {
