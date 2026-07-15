@@ -33,6 +33,8 @@ export const queryKeys = {
     ['itp-templates', projectId, includeGlobal] as const,
   itpCrossProjectTemplates: (currentProjectId: string) =>
     ['itp-cross-project-templates', currentProjectId] as const,
+  itpTemplateMatch: (projectId: string, activity: string) =>
+    ['itp-template-match', projectId, activity] as const,
   itpInstanceByLot: (lotId: string) => ['itp', 'instance', 'lot', lotId] as const,
 
   // Diary

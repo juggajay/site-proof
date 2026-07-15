@@ -14,6 +14,7 @@ import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
 import { downloadCsv } from '@/lib/csv';
 import {
+  canonicalizeActivityValue,
   parseChainageInput,
   parseLotsCsv,
   validateLots,
@@ -74,9 +75,9 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
       'activity_type',
     ];
     const exampleRows = [
-      ['LOT-001', 'Example lot description', '0', '100', 'Earthworks'],
-      ['LOT-002', 'Another lot with drainage', '100', '200', 'Drainage'],
-      ['LOT-003', 'Pavement section', '200', '350', 'Pavement'],
+      ['LOT-001', 'Example lot description', '0', '100', 'earthworks_general'],
+      ['LOT-002', 'Another lot with drainage', '100', '200', 'pipe_drainage'],
+      ['LOT-003', 'Pavement section', '200', '350', 'pavement_unbound'],
     ];
 
     downloadCsv('lot-import-template.csv', [headers, ...exampleRows]);
@@ -104,7 +105,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
           description: lot.description || null,
           chainageStart: parseChainageInput(lot.chainageStart),
           chainageEnd: parseChainageInput(lot.chainageEnd),
-          activityType: lot.activityType || 'Earthworks',
+          activityType: canonicalizeActivityValue(lot.activityType),
         }));
 
         const data = await apiFetch<{ count: number }>('/api/lots/bulk', {
@@ -153,7 +154,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             description: lot.description || null,
             chainageStart: parseChainageInput(lot.chainageStart),
             chainageEnd: parseChainageInput(lot.chainageEnd),
-            activityType: lot.activityType || 'Earthworks',
+            activityType: canonicalizeActivityValue(lot.activityType),
             status: lot.status || 'pending',
           }),
         });
@@ -234,8 +235,9 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                   <code className="bg-muted px-1 rounded">chainage_end</code>
                 </li>
                 <li>
-                  <code className="bg-muted px-1 rounded">activity_type</code> (Earthworks,
-                  Pavement, Drainage, Concrete, Structures)
+                  <code className="bg-muted px-1 rounded">activity_type</code> (e.g.
+                  earthworks_general, pipe_drainage, pavement_unbound; broad names like "Drainage"
+                  import as-is and can be refined per lot)
                 </li>
               </ul>
             </div>

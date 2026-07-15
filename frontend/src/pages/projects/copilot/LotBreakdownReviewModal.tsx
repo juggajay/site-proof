@@ -195,12 +195,14 @@ function ProposePanel({
 
 // The editable review: chainage/interval/offset grid + activity rows + notices.
 function ReviewFields({
+  projectId,
   review,
   patch,
   itpTemplates,
   intervalCount,
   errorText,
 }: {
+  projectId: string;
   review: ReviewState;
   patch: (p: Partial<ReviewState>) => void;
   itpTemplates: ItpTemplateOption[];
@@ -244,6 +246,7 @@ function ReviewFields({
       </div>
 
       <BulkActivityRows
+        projectId={projectId}
         activities={review.activities}
         onChange={(activities) => patch({ activities })}
         itpTemplates={itpTemplates}
@@ -476,6 +479,7 @@ export function LotBreakdownReviewModal({
 
           {review && (
             <ReviewFields
+              projectId={projectId}
               review={review}
               patch={patch}
               itpTemplates={itpTemplates}

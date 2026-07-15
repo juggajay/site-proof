@@ -1,4 +1,23 @@
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import { foldActivityValue } from '@/lib/activityTaxonomy';
+
+/** Fallback activity slug for empty or unmappable imported values. */
+export const DEFAULT_IMPORT_ACTIVITY = 'earthworks_general';
+
+/**
+ * The activity value to STORE for an imported lot. Values that fold to an exact
+ * canonical slug are stored as that slug; family-level values are kept as-is so
+ * the specific activity can be chosen on the lot after import; empty or
+ * unmappable values default to `earthworks_general`.
+ */
+export function canonicalizeActivityValue(raw: string | null | undefined): string {
+  const cleaned = (raw ?? '').trim();
+  if (!cleaned) return DEFAULT_IMPORT_ACTIVITY;
+  const fold = foldActivityValue(cleaned);
+  if (fold.confidence === 'exact') return fold.slug;
+  if (fold.confidence === 'family') return cleaned;
+  return DEFAULT_IMPORT_ACTIVITY;
+}
 
 export interface ValidationError {
   row: number;
@@ -177,33 +196,31 @@ export function validateLots(lots: ParsedLot[]): ValidationResult {
       });
     }
 
-    if (!lot.activityType.trim()) {
+    const activityRaw = lot.activityType.trim();
+    if (!activityRaw) {
       warnings.push({
         row: lot.row,
         field: 'Activity Type',
-        message: 'Activity Type is empty - will default to "Earthworks"',
+        message: `Activity Type is empty - will default to "${DEFAULT_IMPORT_ACTIVITY}"`,
         type: 'warning',
       });
-    }
-
-    const validActivityTypes = [
-      'Earthworks',
-      'Pavement',
-      'Drainage',
-      'Concrete',
-      'Structures',
-      'Rail',
-    ];
-    if (
-      lot.activityType &&
-      !validActivityTypes.some((t) => t.toLowerCase() === lot.activityType.toLowerCase())
-    ) {
-      warnings.push({
-        row: lot.row,
-        field: 'Activity Type',
-        message: `Unknown activity type "${lot.activityType}" - will default to "Earthworks"`,
-        type: 'warning',
-      });
+    } else {
+      const fold = foldActivityValue(activityRaw);
+      if (fold.confidence === 'family') {
+        warnings.push({
+          row: lot.row,
+          field: 'Activity Type',
+          message: `Activity type "${activityRaw}" is a broad family - kept as-is; choose the specific activity on the lot after import`,
+          type: 'warning',
+        });
+      } else if (fold.confidence === 'none') {
+        warnings.push({
+          row: lot.row,
+          field: 'Activity Type',
+          message: `Unknown activity type "${activityRaw}" - will default to "${DEFAULT_IMPORT_ACTIVITY}"`,
+          type: 'warning',
+        });
+      }
     }
   }
 

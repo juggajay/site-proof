@@ -18,7 +18,8 @@ import { NativeSelect } from '@/components/ui/native-select';
 import type { Lot } from '../lotsPageTypes';
 import { logError } from '@/lib/logger';
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
-import { isCanonicalActivitySlug } from '@/lib/activityTaxonomy';
+import { formatActivityLabel, isCanonicalActivitySlug } from '@/lib/activityTaxonomy';
+import { splitSuggestedTemplates, useTemplateMatch } from '@/lib/itpTemplateMatch';
 import {
   CHAINAGE_MAX,
   CHAINAGE_MIN,
@@ -69,9 +70,6 @@ export function CreateLotModal({
 
   // ITP template suggestion state
   const [itpTemplates, setItpTemplates] = useState<ItpTemplateOption[]>([]);
-  const [suggestedTemplate, setSuggestedTemplate] = useState<{ id: string; name: string } | null>(
-    null,
-  );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   const {
@@ -89,10 +87,14 @@ export function CreateLotModal({
   });
 
   const activityType = watch('activityType');
+  const templateMatch = useTemplateMatch(projectId, activityType);
+  const { suggested: suggestedTemplates, rest: otherTemplates } = splitSuggestedTemplates(
+    itpTemplates,
+    templateMatch.data,
+  );
 
   const resetFormState = useCallback(() => {
     reset(getInitialFormValues(initialActivityType));
-    setSuggestedTemplate(null);
     setSelectedTemplateId('');
     setLookupError(null);
   }, [initialActivityType, reset]);
@@ -117,13 +119,6 @@ export function CreateLotModal({
 
       const templates = itpData.templates || [];
       setItpTemplates(templates.filter((t) => t.isActive !== false));
-      const suggested = templates.find(
-        (t) => t.activityType?.toLowerCase() === 'earthworks' && t.isActive !== false,
-      );
-      if (suggested) {
-        setSuggestedTemplate({ id: suggested.id, name: suggested.name });
-        setSelectedTemplateId(suggested.id);
-      }
     } catch (err) {
       logError('Failed to fetch lot data:', err);
       setLookupError(extractErrorMessage(err, 'Could not load lot suggestions.'));
@@ -132,19 +127,14 @@ export function CreateLotModal({
     }
   }, [projectId, setValue]);
 
-  // Update suggested ITP template when activity type changes
+  // Tier A: preselect the single exact-slug suggestion (still editable). Tier
+  // B/C: no auto-selection. Re-runs when the activity (and thus its match)
+  // changes, so switching activity re-suggests rather than keeping a stale pick.
+  const suggestedTemplateId =
+    templateMatch.data?.tier === 'A' ? templateMatch.data.suggestedTemplateId : null;
   useEffect(() => {
-    const suggested = itpTemplates.find(
-      (t) => t.activityType?.toLowerCase() === activityType.toLowerCase(),
-    );
-    if (suggested) {
-      setSuggestedTemplate({ id: suggested.id, name: suggested.name });
-      setSelectedTemplateId(suggested.id);
-    } else {
-      setSuggestedTemplate(null);
-      setSelectedTemplateId('');
-    }
-  }, [activityType, itpTemplates]);
+    setSelectedTemplateId(suggestedTemplateId ?? '');
+  }, [suggestedTemplateId, activityType]);
 
   // Fetch data when modal opens
   useEffect(() => {
@@ -155,7 +145,6 @@ export function CreateLotModal({
   }, [isOpen, resetFormState, fetchLookupData]);
 
   const handleClose = () => {
-    setSuggestedTemplate(null);
     setSelectedTemplateId('');
     setLookupError(null);
     reset();
@@ -300,31 +289,7 @@ export function CreateLotModal({
               </NativeSelect>
             </div>
 
-            {/* ITP Template suggestion */}
-            {suggestedTemplate && (
-              <div className="rounded-lg border border-primary bg-primary/5 p-3">
-                <p className="text-sm text-primary">
-                  <span className="font-medium">Suggested ITP Template:</span>{' '}
-                  {suggestedTemplate.name}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="use-suggested-itp"
-                    checked={selectedTemplateId === suggestedTemplate.id}
-                    onChange={(e) =>
-                      setSelectedTemplateId(e.target.checked ? suggestedTemplate.id : '')
-                    }
-                    className="h-4 w-4 rounded border-border accent-primary focus:ring-primary"
-                  />
-                  <label htmlFor="use-suggested-itp" className="text-sm text-primary">
-                    Assign this ITP template to the lot
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* ITP template dropdown for manual selection */}
+            {/* ITP template dropdown — suggested matches first, then all others */}
             <div>
               <Label htmlFor="lot-itp-template">ITP Template (Optional)</Label>
               <NativeSelect
@@ -334,11 +299,22 @@ export function CreateLotModal({
                 className="mt-1"
               >
                 <option value="">No ITP template</option>
-                {itpTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} ({template.activityType})
-                  </option>
-                ))}
+                {suggestedTemplates.length > 0 && (
+                  <optgroup label="Suggested">
+                    {suggestedTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} ({formatActivityLabel(template.activityType)})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label={suggestedTemplates.length > 0 ? 'All templates' : 'Templates'}>
+                  {otherTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} ({formatActivityLabel(template.activityType)})
+                    </option>
+                  ))}
+                </optgroup>
               </NativeSelect>
             </div>
 
