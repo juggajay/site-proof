@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetJackStore, sendJack, useJackStore } from './jackChatState';
+import { resetClancyStore, sendClancy, useClancyStore } from './clancyChatState';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 
@@ -11,21 +11,21 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
-  resetJackStore();
+  resetClancyStore();
   apiFetchMock.mockReset();
 });
 
 afterEach(() => {
-  resetJackStore();
+  resetClancyStore();
 });
 
-describe('jackChatState', () => {
-  it('appends the user turn and Jack reply, and posts the transcript', async () => {
+describe('clancyChatState', () => {
+  it('appends the user turn and Clancy reply, and posts the transcript', async () => {
     apiFetchMock.mockResolvedValue({ message: 'On it.', actions: [] });
-    const { result } = renderHook(() => useJackStore());
+    const { result } = renderHook(() => useClancyStore());
 
     await act(async () => {
-      await sendJack('What should I do first?', 'project-1');
+      await sendClancy('What should I do first?', 'project-1');
     });
 
     expect(result.current.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
@@ -40,11 +40,11 @@ describe('jackChatState', () => {
 
   it('trims the transcript to the last 20 turns', async () => {
     apiFetchMock.mockResolvedValue({ message: 'ok' });
-    const { result } = renderHook(() => useJackStore());
+    const { result } = renderHook(() => useClancyStore());
 
     for (let i = 0; i < 12; i += 1) {
       await act(async () => {
-        await sendJack(`message ${i}`);
+        await sendClancy(`message ${i}`);
       });
     }
 
@@ -57,15 +57,15 @@ describe('jackChatState', () => {
   it('locks out a second send while one is in flight', async () => {
     let resolve!: (v: unknown) => void;
     apiFetchMock.mockReturnValue(new Promise((r) => (resolve = r)));
-    const { result } = renderHook(() => useJackStore());
+    const { result } = renderHook(() => useClancyStore());
 
     act(() => {
-      void sendJack('first');
+      void sendClancy('first');
     });
     await waitFor(() => expect(result.current.inFlight).toBe(true));
 
     act(() => {
-      void sendJack('second (ignored)');
+      void sendClancy('second (ignored)');
     });
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
 
@@ -78,10 +78,10 @@ describe('jackChatState', () => {
   it('shows an honest error bubble with retry on a 503', async () => {
     const { ApiError } = await import('@/lib/api');
     apiFetchMock.mockRejectedValue(new ApiError(503, 'unavailable'));
-    const { result } = renderHook(() => useJackStore());
+    const { result } = renderHook(() => useClancyStore());
 
     await act(async () => {
-      await sendJack('help', 'p1');
+      await sendClancy('help', 'p1');
     });
 
     const last = result.current.messages.at(-1)!;
@@ -94,10 +94,10 @@ describe('jackChatState', () => {
   it('shows a gentle rate-limit message on a 429', async () => {
     const { ApiError } = await import('@/lib/api');
     apiFetchMock.mockRejectedValue(new ApiError(429, 'slow down'));
-    const { result } = renderHook(() => useJackStore());
+    const { result } = renderHook(() => useClancyStore());
 
     await act(async () => {
-      await sendJack('help');
+      await sendClancy('help');
     });
 
     expect(result.current.messages.at(-1)!.content).toMatch(/give me a second/i);

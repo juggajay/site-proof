@@ -7,10 +7,10 @@ import {
   removeLocalStorageItem,
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
-import { JackWidget } from './JackWidget';
-import { resetJackStore } from './jackChatState';
+import { ClancyWidget } from './ClancyWidget';
+import { resetClancyStore } from './clancyChatState';
 
-const INTRO_FLAG = 'jack-intro-seen';
+const INTRO_FLAG = 'clancy-intro-seen';
 
 const navigateMock = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => vi.fn());
@@ -37,13 +37,13 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 function renderWidget() {
   return render(
     <MemoryRouter initialEntries={['/projects/project-1/lots']}>
-      <JackWidget />
+      <ClancyWidget />
     </MemoryRouter>,
   );
 }
 
 beforeEach(() => {
-  resetJackStore();
+  resetClancyStore();
   removeLocalStorageItem(INTRO_FLAG);
   navigateMock.mockReset();
   toastMock.mockReset();
@@ -54,34 +54,34 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
-  resetJackStore();
+  resetClancyStore();
 });
 
-describe('JackWidget', () => {
+describe('ClancyWidget', () => {
   it('renders the bubble only when AI is configured', () => {
     writeLocalStorageItem(INTRO_FLAG, '1'); // suppress auto-open
     const { unmount } = renderWidget();
-    expect(screen.getByLabelText('Open Jack, your copilot')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open Clancy, your copilot')).toBeInTheDocument();
     unmount();
 
     aiState.configured = false;
     renderWidget();
-    expect(screen.queryByLabelText('Open Jack, your copilot')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Open Clancy, your copilot')).not.toBeInTheDocument();
   });
 
-  it('renders only for office roles — field roles never see Jack', () => {
+  it('renders only for office roles — field roles never see Clancy', () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
     for (const role of ['foreman', 'site_manager', 'quality_manager', 'subcontractor']) {
       authState.roleInCompany = role;
       const { unmount } = renderWidget();
-      expect(screen.queryByLabelText('Open Jack, your copilot')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Open Clancy, your copilot')).not.toBeInTheDocument();
       unmount();
     }
 
     for (const role of ['admin', 'project_manager']) {
       authState.roleInCompany = role;
       const { unmount } = renderWidget();
-      expect(screen.getByLabelText('Open Jack, your copilot')).toBeInTheDocument();
+      expect(screen.getByLabelText('Open Clancy, your copilot')).toBeInTheDocument();
       unmount();
     }
   });
@@ -105,9 +105,9 @@ describe('JackWidget', () => {
       vi.advanceTimersByTime(1500);
     });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText(/I'm Jack, your SiteProof copilot/)).toBeInTheDocument();
+    expect(screen.getByText(/I'm Clancy, your CIVOS copilot/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Close Jack'));
+    fireEvent.click(screen.getByLabelText('Close Clancy'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(readLocalStorageItem(INTRO_FLAG)).toBe('1');
   });
@@ -117,7 +117,7 @@ describe('JackWidget', () => {
     apiFetchMock.mockResolvedValue({ message: 'Start with the control line.' });
     renderWidget();
 
-    fireEvent.click(screen.getByLabelText('Open Jack, your copilot'));
+    fireEvent.click(screen.getByLabelText('Open Clancy, your copilot'));
     fireEvent.click(screen.getByText('What should I do first?'));
 
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
@@ -126,7 +126,7 @@ describe('JackWidget', () => {
     expect(await screen.findByText('Start with the control line.')).toBeInTheDocument();
   });
 
-  it('executes a navigate action with a toast when Jack replies', async () => {
+  it('executes a navigate action with a toast when Clancy replies', async () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
     apiFetchMock.mockResolvedValue({
       message: 'Opening plan sheets.',
@@ -134,7 +134,7 @@ describe('JackWidget', () => {
     });
     renderWidget();
 
-    fireEvent.click(screen.getByLabelText('Open Jack, your copilot'));
+    fireEvent.click(screen.getByLabelText('Open Clancy, your copilot'));
     fireEvent.click(screen.getByText('Read my drawings for me'));
 
     await waitFor(() =>
@@ -151,7 +151,7 @@ describe('JackWidget', () => {
     });
     renderWidget();
 
-    fireEvent.click(screen.getByLabelText('Open Jack, your copilot'));
+    fireEvent.click(screen.getByLabelText('Open Clancy, your copilot'));
     fireEvent.click(screen.getByText('What should I do first?'));
 
     const chip = await screen.findByText(/Open: Read setout sheets/);
@@ -162,7 +162,7 @@ describe('JackWidget', () => {
   it('closes on Escape and returns focus to the bubble', () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
     renderWidget();
-    const bubble = screen.getByLabelText('Open Jack, your copilot');
+    const bubble = screen.getByLabelText('Open Clancy, your copilot');
 
     fireEvent.click(bubble);
     const dialog = screen.getByRole('dialog');

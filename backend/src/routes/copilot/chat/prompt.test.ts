@@ -4,7 +4,7 @@ import {
   CHAT_STAGES,
   isAllowedNavigateTarget,
   isChatStage,
-  JACK_SYSTEM_PROMPT,
+  CLANCY_SYSTEM_PROMPT,
   MAX_ACTIONS,
   PROJECT_PAGES,
 } from './prompt.js';
@@ -53,14 +53,14 @@ describe('isAllowedNavigateTarget', () => {
 });
 
 describe('PROJECT_PAGES', () => {
-  // Live-probe regression: the whitelist allowed /itp and /variations but Jack
+  // Live-probe regression: the whitelist allowed /itp and /variations but Clancy
   // refused to navigate because the prompt never told him those pages exist.
   // One table must drive both, and this pins it.
   it('every page is both navigable and described in the system prompt', () => {
     for (const page of PROJECT_PAGES) {
       const concrete = `/projects/abc-123/${page.path.replace('<lotId>', 'lot-9')}`;
       expect(isAllowedNavigateTarget(concrete)).toBe(true);
-      expect(JACK_SYSTEM_PROMPT).toContain(`- /projects/<id>/${page.path} — ${page.label}`);
+      expect(CLANCY_SYSTEM_PROMPT).toContain(`- /projects/<id>/${page.path} — ${page.label}`);
     }
   });
 

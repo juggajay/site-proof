@@ -81,10 +81,10 @@ export async function mockAuthenticatedUserState(
     localStorage.setItem('siteproof_onboarding_completed', 'true');
     localStorage.setItem('siteproof_hide_dev_role_switcher', 'true');
     localStorage.setItem('siteproof_last_seen_version', '1.3.0');
-    // Jack's first-run intro auto-opens a dialog ~1.5s after mount (#1491)
+    // Clancy's first-run intro auto-opens a dialog ~1.5s after mount (#1491)
     // and swallows clicks under it — 37 master E2E failures. Tests that want
     // the intro clear this flag themselves.
-    localStorage.setItem('jack-intro-seen', '1');
+    localStorage.setItem('clancy-intro-seen', '1');
     localStorage.setItem(
       'cookie_consent',
       JSON.stringify({

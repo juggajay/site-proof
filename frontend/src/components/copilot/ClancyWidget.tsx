@@ -5,16 +5,16 @@ import { toast } from '@/components/ui/toaster';
 import { useAiStatus } from '@/hooks/useAiStatus';
 import { useAuth } from '@/lib/auth';
 import { getCompanyRole } from '@/lib/subcontractorIdentity';
-import { JackPanel } from './JackPanel';
+import { ClancyPanel } from './ClancyPanel';
 import {
-  closeJack,
-  openJack,
-  sendJack,
-  toggleJack,
-  useJackStore,
-  type JackAction,
-} from './jackChatState';
-import { firstNameOf, hasSeenIntro, markIntroSeen, projectIdFromPath } from './jackIntro';
+  closeClancy,
+  openClancy,
+  sendClancy,
+  toggleClancy,
+  useClancyStore,
+  type ClancyAction,
+} from './clancyChatState';
+import { firstNameOf, hasSeenIntro, markIntroSeen, projectIdFromPath } from './clancyIntro';
 
 const NAV_LABELS: Array<[RegExp, string]> = [
   [/\/copilot/, 'Setup copilot'],
@@ -35,44 +35,44 @@ function navLabel(to: string): string {
   return NAV_LABELS.find(([re]) => re.test(to))?.[1] ?? 'where you need to be';
 }
 
-// Jack is an office copilot for the roles that own company setup — owner,
+// Clancy is an office copilot for the roles that own company setup — owner,
 // admin, and project manager (owner decision 2026-07-16). Field roles
 // (foreman, subbie) get the mobile shells instead; the chat route enforces
 // the same set server-side.
-const JACK_ROLES = new Set(['owner', 'admin', 'project_manager']);
+const CLANCY_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 /**
- * Jack — the in-app chat copilot. Mounted once in the classic authenticated
+ * Clancy — the in-app chat copilot. Mounted once in the classic authenticated
  * shell. Renders nothing when AI is not configured on the server or the user
  * is not an owner/admin.
  */
-export function JackWidget() {
+export function ClancyWidget() {
   const { aiConfigured } = useAiStatus();
   const { user } = useAuth();
-  const { open, messages, unseen } = useJackStore();
+  const { open, messages, unseen } = useClancyStore();
   const location = useLocation();
   const navigate = useNavigate();
   const bubbleRef = useRef<HTMLButtonElement>(null);
   const handledNavId = useRef<string | null>(null);
 
-  const jackEnabled = aiConfigured && JACK_ROLES.has(getCompanyRole(user));
+  const clancyEnabled = aiConfigured && CLANCY_ROLES.has(getCompanyRole(user));
   const projectId = projectIdFromPath(location.pathname);
   const firstName = firstNameOf(user);
 
   // First-run: auto-open once after a beat so the intro greets a new user.
   useEffect(() => {
-    if (!jackEnabled || hasSeenIntro()) return;
-    const t = setTimeout(() => openJack(), 1500);
+    if (!clancyEnabled || hasSeenIntro()) return;
+    const t = setTimeout(() => openClancy(), 1500);
     return () => clearTimeout(t);
-  }, [jackEnabled]);
+  }, [clancyEnabled]);
 
-  // Execute a `navigate` action the moment Jack's newest message carries one.
+  // Execute a `navigate` action the moment Clancy's newest message carries one.
   useEffect(() => {
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant' || handledNavId.current === last.id) return;
     handledNavId.current = last.id;
     const nav = last.actions?.find(
-      (a): a is Extract<JackAction, { type: 'navigate' }> => a.type === 'navigate',
+      (a): a is Extract<ClancyAction, { type: 'navigate' }> => a.type === 'navigate',
     );
     if (nav) {
       toast({ description: `Taking you to ${navLabel(nav.to)}` });
@@ -80,20 +80,20 @@ export function JackWidget() {
     }
   }, [messages, navigate]);
 
-  if (!jackEnabled) return null;
+  if (!clancyEnabled) return null;
 
   const handleClose = () => {
     markIntroSeen();
-    closeJack();
+    closeClancy();
     bubbleRef.current?.focus();
   };
 
   const handleSend = (text: string) => {
     markIntroSeen();
-    void sendJack(text, projectId);
+    void sendClancy(text, projectId);
   };
 
-  const handleOpenStage = (action: Extract<JackAction, { type: 'open_stage' }>) => {
+  const handleOpenStage = (action: Extract<ClancyAction, { type: 'open_stage' }>) => {
     navigate(`/projects/${action.projectId}/copilot?stage=${action.stage}`);
   };
 
@@ -102,10 +102,10 @@ export function JackWidget() {
       <button
         ref={bubbleRef}
         type="button"
-        onClick={toggleJack}
-        aria-label={open ? 'Close Jack, your copilot' : 'Open Jack, your copilot'}
+        onClick={toggleClancy}
+        aria-label={open ? 'Close Clancy, your copilot' : 'Open Clancy, your copilot'}
         aria-expanded={open}
-        className="jack-bubble flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg ring-1 ring-white/10 ui-chrome"
+        className="clancy-bubble flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg ring-1 ring-white/10 ui-chrome"
       >
         <span className="text-xl font-semibold leading-none tracking-tight" aria-hidden="true">
           J
@@ -120,7 +120,7 @@ export function JackWidget() {
       </button>
 
       {open && (
-        <JackPanel
+        <ClancyPanel
           firstName={firstName}
           onClose={handleClose}
           onOpenStage={handleOpenStage}

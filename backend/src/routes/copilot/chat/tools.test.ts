@@ -39,7 +39,7 @@ describe('chat tool executor', () => {
   });
 
   it('rewrites a projectNumber path segment to the project id (live-probe regression)', async () => {
-    // Jack's first prod conversation navigated to /projects/100901/lots — the
+    // Clancy's first prod conversation navigated to /projects/100901/lots — the
     // human project number, which the router cannot resolve.
     const execute = createChatToolExecutor(user);
     const outcome = await execute('navigate', { to: '/projects/100901/lots' });

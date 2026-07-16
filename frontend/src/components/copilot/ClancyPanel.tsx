@@ -1,20 +1,20 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
-import { JackAvatar } from './JackAvatar';
-import { JackComposer } from './JackComposer';
-import { JackMessageRow } from './JackMessage';
-import { JACK_SUGGESTED_PROMPTS, jackIntro } from './jackIntro';
-import { useJackStore, type JackAction } from './jackChatState';
+import { ClancyAvatar } from './ClancyAvatar';
+import { ClancyComposer } from './ClancyComposer';
+import { ClancyMessageRow } from './ClancyMessage';
+import { CLANCY_SUGGESTED_PROMPTS, clancyIntro } from './clancyIntro';
+import { useClancyStore, type ClancyAction } from './clancyChatState';
 
 const FOCUSABLE = 'a[href],button:not([disabled]),textarea,input,[tabindex]:not([tabindex="-1"])';
 
 /**
- * The Jack conversation surface. Desktop: a card anchored above the bubble.
+ * The Clancy conversation surface. Desktop: a card anchored above the bubble.
  * Mobile (<768px): a full-width bottom sheet. Focus is trapped while open and
  * Esc closes; the widget restores focus to the bubble.
  */
-export function JackPanel({
+export function ClancyPanel({
   firstName,
   onClose,
   onOpenStage,
@@ -22,10 +22,10 @@ export function JackPanel({
 }: {
   firstName: string;
   onClose: () => void;
-  onOpenStage: (action: Extract<JackAction, { type: 'open_stage' }>) => void;
+  onOpenStage: (action: Extract<ClancyAction, { type: 'open_stage' }>) => void;
   onSend: (text: string) => void;
 }) {
-  const { messages, inFlight } = useJackStore();
+  const { messages, inFlight } = useClancyStore();
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerFocusRef = useRef<HTMLTextAreaElement | null>(null);
@@ -110,9 +110,9 @@ export function JackPanel({
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="Jack, your SiteProof copilot"
+      aria-label="Clancy, your CIVOS copilot"
       className={cn(
-        'jack-panel pointer-events-auto flex flex-col overflow-hidden border border-border bg-card shadow-2xl',
+        'clancy-panel pointer-events-auto flex flex-col overflow-hidden border border-border bg-card shadow-2xl',
         // Desktop: anchored card above the bubble.
         'fixed bottom-24 right-4 z-40 h-[560px] max-h-[calc(100dvh-7rem)] w-[380px] max-w-[calc(100vw-2rem)] rounded-xl',
         // Mobile: full-width bottom sheet.
@@ -126,15 +126,15 @@ export function JackPanel({
 
       {/* Header */}
       <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-        <JackAvatar className="h-9 w-9" letterClassName="text-base" />
+        <ClancyAvatar className="h-9 w-9" letterClassName="text-base" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight text-foreground">Jack</p>
-          <p className="truncate text-xs text-muted-foreground">Your SiteProof copilot</p>
+          <p className="text-sm font-semibold leading-tight text-foreground">Clancy</p>
+          <p className="truncate text-xs text-muted-foreground">Your CIVOS copilot</p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close Jack"
+          aria-label="Close Clancy"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <svg
@@ -160,10 +160,10 @@ export function JackPanel({
           {isEmpty ? (
             <div className="flex flex-col items-start gap-3">
               <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-muted px-3.5 py-2 text-sm leading-relaxed text-foreground">
-                {jackIntro(firstName)}
+                {clancyIntro(firstName)}
               </div>
               <div className="flex flex-col items-start gap-1.5">
-                {JACK_SUGGESTED_PROMPTS.map((prompt) => (
+                {CLANCY_SUGGESTED_PROMPTS.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -177,7 +177,7 @@ export function JackPanel({
             </div>
           ) : (
             messages.map((message) => (
-              <JackMessageRow
+              <ClancyMessageRow
                 key={message.id}
                 message={message}
                 onOpenStage={onOpenStage}
@@ -189,9 +189,9 @@ export function JackPanel({
           {inFlight && (
             <div className="flex flex-col items-start gap-1">
               <div className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-muted px-3.5 py-3">
-                <span className="jack-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                <span className="jack-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                <span className="jack-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                <span className="clancy-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                <span className="clancy-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                <span className="clancy-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" />
               </div>
               {slowHint && (
                 <span className="px-1 text-[11px] text-muted-foreground">
@@ -213,7 +213,7 @@ export function JackPanel({
         </button>
       )}
 
-      <JackComposer disabled={inFlight} onSend={onSend} />
+      <ClancyComposer disabled={inFlight} onSend={onSend} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import type { JackAction, JackMessage as JackMessageType } from './jackChatState';
+import type { ClancyAction, ClancyMessage as ClancyMessageType } from './clancyChatState';
 
 const STAGE_CHIP_LABEL: Record<string, string> = {
   project_facts: 'Read project facts',
@@ -17,22 +17,22 @@ function formatTime(ts: number): string {
 }
 
 /**
- * One transcript row. User messages sit right in a brand-tinted bubble; Jack's
+ * One transcript row. User messages sit right in a brand-tinted bubble; Clancy's
  * sit left on a muted surface. Only `open_stage` actions render as chips —
  * `navigate` actions are executed by the widget the moment they arrive.
  */
-export function JackMessageRow({
+export function ClancyMessageRow({
   message,
   onOpenStage,
   onRetry,
 }: {
-  message: JackMessageType;
-  onOpenStage: (action: Extract<JackAction, { type: 'open_stage' }>) => void;
+  message: ClancyMessageType;
+  onOpenStage: (action: Extract<ClancyAction, { type: 'open_stage' }>) => void;
   onRetry: (text: string) => void;
 }) {
   const isUser = message.role === 'user';
   const stageActions = (message.actions ?? [])
-    .filter((a): a is Extract<JackAction, { type: 'open_stage' }> => a.type === 'open_stage')
+    .filter((a): a is Extract<ClancyAction, { type: 'open_stage' }> => a.type === 'open_stage')
     .slice(0, 3);
 
   return (

@@ -1,4 +1,4 @@
-// POST /api/copilot/chat — Jack, the company-level chat copilot. Company-level
+// POST /api/copilot/chat — Clancy, the company-level chat copilot. Company-level
 // (not project-scoped) so he works on the dashboard before any project exists;
 // a projectId is optional and, when given, gates on internal project access
 // (404 on no-access, matching the copilot reads). Rate-limited per user.
@@ -13,7 +13,7 @@ import { chatRateLimiter } from '../../middleware/rateLimiter.js';
 import { isAnthropicConfigured } from '../testResults/certificateExtraction.js';
 import { buildChatContext } from './chat/context.js';
 import { runChatModelLoop } from './chat/loop.js';
-import { JACK_SYSTEM_PROMPT } from './chat/prompt.js';
+import { CLANCY_SYSTEM_PROMPT } from './chat/prompt.js';
 import { hasInternalProjectAccess } from './chat/projectStatus.js';
 import { CHAT_TOOLS, createChatToolExecutor } from './chat/tools.js';
 
@@ -35,11 +35,11 @@ const chatBodySchema = z.object({
 
 const chatRouter = Router();
 
-// Jack is for the office roles — owner, admin, project manager (owner
+// Clancy is for the office roles — owner, admin, project manager (owner
 // decision 2026-07-16): field roles get the mobile shells, not the chat
-// copilot. Mirrors JACK_ROLES in the frontend JackWidget — this is the
+// copilot. Mirrors CLANCY_ROLES in the frontend ClancyWidget — this is the
 // server-side enforcement of that gate.
-const JACK_CHAT_ROLES = new Set(['owner', 'admin', 'project_manager']);
+const CLANCY_CHAT_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 // Route-wide auth: satisfies routeAuthCoverage and gives chatRateLimiter a
 // req.user to key on.
@@ -56,7 +56,7 @@ chatRouter.post(
     const { projectId, messages } = parsed.data;
     const user = req.user!;
 
-    if (!JACK_CHAT_ROLES.has(user.roleInCompany || '')) {
+    if (!CLANCY_CHAT_ROLES.has(user.roleInCompany || '')) {
       throw AppError.forbidden('The AI assistant is available to owner and admin accounts.');
     }
 
@@ -71,7 +71,7 @@ chatRouter.post(
     }
 
     const contextText = await buildChatContext(user, projectId);
-    const system = `${JACK_SYSTEM_PROMPT}\n\n<current_state>\n${contextText}\n</current_state>`;
+    const system = `${CLANCY_SYSTEM_PROMPT}\n\n<current_state>\n${contextText}\n</current_state>`;
     const model = process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022';
 
     const { message, actions } = await runChatModelLoop({

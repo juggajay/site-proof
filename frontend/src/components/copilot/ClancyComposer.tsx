@@ -7,7 +7,7 @@ const COUNTER_AT = 1800;
 const MAX_ROWS = 5;
 
 /** Single-line auto-growing composer. Enter sends, Shift+Enter newlines. */
-export function JackComposer({
+export function ClancyComposer({
   disabled,
   onSend,
 }: {
@@ -54,8 +54,8 @@ export function JackComposer({
           maxLength={MAX_CHARS}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Ask Jack…"
-          aria-label="Message Jack"
+          placeholder="Ask Clancy…"
+          aria-label="Message Clancy"
           className="flex-1 resize-none bg-transparent text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground"
         />
         <button

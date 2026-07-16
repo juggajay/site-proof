@@ -1,4 +1,4 @@
-// The server-side tool-use loop for Jack. Calls the Anthropic messages API
+// The server-side tool-use loop for Clancy. Calls the Anthropic messages API
 // (tool-use variant) with the same raw-HTTP + fetchWithTimeout pattern the
 // vision extractors use, executes any tool_use blocks against the injected
 // executor, and loops up to maxIterations before forcing a final text reply.
@@ -94,7 +94,7 @@ function joinText(content: AnthropicBlock[] | undefined): string {
 }
 
 /**
- * Drive the tool-use loop and return Jack's final text plus any queued client
+ * Drive the tool-use loop and return Clancy's final text plus any queued client
  * actions (capped at MAX_ACTIONS). At most `maxIterations` model calls; the
  * last one forbids tools so a reply is always produced.
  */
@@ -111,7 +111,7 @@ export async function runChatModelLoop(params: RunChatModelLoopParams): Promise<
       response = await callAnthropic(model, system, convo, tools, isLast);
     } catch (error) {
       if (error instanceof AppError) throw error;
-      logWarn('Jack chat model call failed', error);
+      logWarn('Clancy chat model call failed', error);
       throw new AppError(502, 'The AI assistant could not be reached.', 'AI_REQUEST_FAILED');
     }
 
@@ -130,7 +130,7 @@ export async function runChatModelLoop(params: RunChatModelLoopParams): Promise<
         if (actions.length < MAX_ACTIONS) {
           actions.push(action);
         } else {
-          logWarn(`Jack dropped an action past the ${MAX_ACTIONS}-action cap`);
+          logWarn(`Clancy dropped an action past the ${MAX_ACTIONS}-action cap`);
         }
       }
       toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: result });

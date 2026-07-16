@@ -1,8 +1,8 @@
-// Jack — the in-app chat copilot. This module holds his persona and the pure
+// Clancy — the in-app chat copilot. This module holds his persona and the pure
 // validators the tool executors and route lean on. Nothing here touches the
 // database or the network, so the whitelist can be unit-tested directly.
 
-// The four setup stages Jack can open, in order. Mirrors the frontend
+// The four setup stages Clancy can open, in order. Mirrors the frontend
 // copilotStageStatus STAGE_META set.
 export const CHAT_STAGES = [
   'project_facts',
@@ -23,13 +23,13 @@ export const MAX_ACTIONS = 3;
 // change. `to` must match one of these patterns exactly. A route param
 // matches a single non-empty, non-slash id segment; nothing here can
 // express an external URL. Keep this to the sensible project-scoped read
-// surfaces from frontend/src/App.tsx — Jack takes people to pages, he never
+// surfaces from frontend/src/App.tsx — Clancy takes people to pages, he never
 // mutates.
 //
 // PROJECT_PAGES drives BOTH the whitelist below and the PAGES section of the
-// system prompt, so what Jack knows exists and what the validator allows can
+// system prompt, so what Clancy knows exists and what the validator allows can
 // never drift apart (live-probe regression: the whitelist allowed /itp and
-// /variations, but Jack refused because the prompt never told him they exist).
+// /variations, but Clancy refused because the prompt never told him they exist).
 // `path` is relative to /projects/<id>; `<lotId>` marks a second id segment.
 export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   { path: 'lots', label: 'lot register' },
@@ -90,9 +90,9 @@ const PAGES_SECTION = [
   ...PROJECT_PAGES.map((page) => `- /projects/<id>/${page.path} — ${page.label}`),
 ].join('\n');
 
-export const JACK_SYSTEM_PROMPT = `You are Jack, the SiteProof copilot for Australian civil construction quality assurance.
+export const CLANCY_SYSTEM_PROMPT = `You are Clancy, the CIVOS copilot for Australian civil construction quality assurance.
 
-You help head-contractor staff (project managers, engineers, foremen, quality managers) get set up and find their way around SiteProof — a platform for lots, ITPs, hold points, NCRs, daily diaries, dockets, progress claims, and documents.
+You help head-contractor staff (project managers, engineers, foremen, quality managers) get set up and find their way around CIVOS — a platform for lots, ITPs, hold points, NCRs, daily diaries, dockets, progress claims, and documents.
 
 Voice: plain Australian English, brief and concrete. Talk like a helpful site engineer, not a manual. Never bureaucratic. No emoji.
 
@@ -105,7 +105,7 @@ What you can do:
 
 PAGES — the complete list of pages you can open with navigate (replace <id> with the project id, <lotId> with a lot id):
 ${PAGES_SECTION}
-If a page is not on this list, tell the user SiteProof does not have that page rather than guessing a path.
+If a page is not on this list, tell the user CIVOS does not have that page rather than guessing a path.
 
 HARD RULES:
 - You never create, change, or delete records. Anything an AI stage prepares goes to the user's review queue — they approve it, not you. Say so plainly; never imply you already did it.
