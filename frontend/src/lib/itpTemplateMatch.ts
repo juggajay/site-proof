@@ -43,6 +43,62 @@ export function useTemplateMatch(projectId: string, activity: string | null | un
   });
 }
 
+/**
+ * A Tier-B match after AI ranking: the candidates are in the AI's order and a
+ * `ranking` block carries the per-candidate reasons + overall note. Shape-
+ * compatible with TemplateMatchResult so splitSuggestedTemplates works on it.
+ */
+export interface TemplateRankResult extends TemplateMatchResult {
+  ranking?: { reasons: Record<string, string>; note: string };
+}
+
+/**
+ * AI ranking of a Tier-B shortlist. Only enabled once the deterministic match
+ * is Tier B AND AI is available (reuse useAiStatus) — Tier A/C never rank. On
+ * any error/503 the query fails and the caller keeps the deterministic order,
+ * so there is no error UI. `retry: false` keeps a failed AI call from hammering.
+ */
+export function useTemplateRank(
+  projectId: string,
+  activity: string | null | undefined,
+  tier: MatchTier | undefined,
+  aiConfigured: boolean,
+  lotContext?: string,
+) {
+  const cleanedActivity = activity?.trim() ?? '';
+  return useQuery({
+    queryKey: queryKeys.itpTemplateRank(projectId, cleanedActivity),
+    queryFn: () =>
+      apiFetch<TemplateRankResult>('/api/itp/templates/rank', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, activity: cleanedActivity, lotContext }),
+      }),
+    enabled: Boolean(projectId && cleanedActivity && tier === 'B' && aiConfigured),
+    staleTime: 5 * 60 * 1000,
+    cacheTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+/**
+ * Effective match to render: prefer the AI-ranked result (Tier B, with reasons)
+ * when it loaded; otherwise fall back to the deterministic match with no reasons.
+ * This is the quiet-fallback boundary the surfaces lean on.
+ */
+export function resolveRankedMatch(
+  match: TemplateMatchResult | undefined,
+  rank: TemplateRankResult | undefined,
+): {
+  match: TemplateMatchResult | undefined;
+  reasons: Record<string, string>;
+  note: string | null;
+} {
+  if (rank && rank.tier === 'B') {
+    return { match: rank, reasons: rank.ranking?.reasons ?? {}, note: rank.ranking?.note ?? null };
+  }
+  return { match, reasons: {}, note: null };
+}
+
 export interface SuggestedGrouping<T> {
   /** Candidate templates in the matcher's deterministic order. */
   suggested: T[];

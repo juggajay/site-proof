@@ -27,7 +27,13 @@ export async function requireProjectTemplateAccess(
   const [project, projectUser] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, companyId: true, name: true, projectNumber: true },
+      select: {
+        id: true,
+        companyId: true,
+        name: true,
+        projectNumber: true,
+        specificationSet: true,
+      },
     }),
     isSubcontractor
       ? null

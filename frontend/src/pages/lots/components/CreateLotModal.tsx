@@ -19,7 +19,13 @@ import type { Lot } from '../lotsPageTypes';
 import { logError } from '@/lib/logger';
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
 import { formatActivityLabel, isCanonicalActivitySlug } from '@/lib/activityTaxonomy';
-import { splitSuggestedTemplates, useTemplateMatch } from '@/lib/itpTemplateMatch';
+import { useAiStatus } from '@/hooks/useAiStatus';
+import {
+  resolveRankedMatch,
+  splitSuggestedTemplates,
+  useTemplateMatch,
+  useTemplateRank,
+} from '@/lib/itpTemplateMatch';
 import {
   CHAINAGE_MAX,
   CHAINAGE_MIN,
@@ -88,10 +94,27 @@ export function CreateLotModal({
 
   const activityType = watch('activityType');
   const templateMatch = useTemplateMatch(projectId, activityType);
+  const { aiConfigured } = useAiStatus();
+  // ponytail: lotContext left undefined — wiring the live description field would
+  // refetch the AI ranking per keystroke. Pass it here once a stable (debounced/
+  // onBlur) value is available.
+  const templateRank = useTemplateRank(
+    projectId,
+    activityType,
+    templateMatch.data?.tier,
+    aiConfigured,
+  );
+  const { match: effectiveMatch, reasons: templateReasons } = resolveRankedMatch(
+    templateMatch.data,
+    templateRank.data,
+  );
   const { suggested: suggestedTemplates, rest: otherTemplates } = splitSuggestedTemplates(
     itpTemplates,
-    templateMatch.data,
+    effectiveMatch,
   );
+  const topTemplateReason = suggestedTemplates[0]
+    ? templateReasons[suggestedTemplates[0].id]
+    : undefined;
 
   const resetFormState = useCallback(() => {
     reset(getInitialFormValues(initialActivityType));
@@ -302,7 +325,11 @@ export function CreateLotModal({
                 {suggestedTemplates.length > 0 && (
                   <optgroup label="Suggested">
                     {suggestedTemplates.map((template) => (
-                      <option key={template.id} value={template.id}>
+                      <option
+                        key={template.id}
+                        value={template.id}
+                        title={templateReasons[template.id]}
+                      >
                         {template.name} ({formatActivityLabel(template.activityType)})
                       </option>
                     ))}
@@ -316,6 +343,9 @@ export function CreateLotModal({
                   ))}
                 </optgroup>
               </NativeSelect>
+              {topTemplateReason && (
+                <p className="mt-1 text-xs text-muted-foreground">{topTemplateReason}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
