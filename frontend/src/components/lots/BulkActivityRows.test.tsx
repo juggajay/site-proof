@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TemplateMatchResult } from '@/lib/itpTemplateMatch';
 
 const useTemplateMatch = vi.hoisted(() => vi.fn());
+const useTemplateRank = vi.hoisted(() => vi.fn(() => ({ data: undefined })));
 vi.mock('@/lib/itpTemplateMatch', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/itpTemplateMatch')>();
-  return { ...actual, useTemplateMatch };
+  return { ...actual, useTemplateMatch, useTemplateRank };
 });
+vi.mock('@/hooks/useAiStatus', () => ({ useAiStatus: () => ({ aiConfigured: true }) }));
 
 import { BulkActivityRows, type ItpTemplateOption } from './BulkActivityRows';
 

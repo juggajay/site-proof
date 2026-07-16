@@ -12,8 +12,12 @@ vi.mock('./projectStatus.js', () => ({
 vi.mock('../../dashboard/access.js', () => ({
   getDashboardProjectAccess: vi.fn(),
 }));
+vi.mock('../../../lib/itpMatcher.js', () => ({
+  matchTemplatesForProject: vi.fn(),
+}));
 
 import { getDashboardProjectAccess } from '../../dashboard/access.js';
+import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
 import { createChatToolExecutor, summariseHoldPoints } from './tools.js';
 
@@ -28,6 +32,7 @@ describe('chat tool executor', () => {
     vi.mocked(hasInternalProjectAccess).mockReset();
     vi.mocked(getProjectStageStatus).mockReset();
     vi.mocked(getDashboardProjectAccess).mockReset();
+    vi.mocked(matchTemplatesForProject).mockReset();
     vi.mocked(getDashboardProjectAccess).mockResolvedValue(ACCESS);
   });
 
@@ -114,6 +119,67 @@ describe('chat tool executor', () => {
     const execute = createChatToolExecutor(user);
     const outcome = await execute('get_project_qa_summary', {});
     expect(outcome.result).toBe('A projectId is required.');
+  });
+
+  it('returns the ITP shortlist for an accessible project (get_itp_suggestion)', async () => {
+    vi.mocked(hasInternalProjectAccess).mockResolvedValue(true);
+    vi.mocked(matchTemplatesForProject).mockResolvedValue({
+      tier: 'B',
+      suggestedTemplateId: null,
+      candidates: [
+        {
+          id: 't1',
+          name: 'Pipe Drainage',
+          scope: 'global',
+          stateSpec: 'TfNSW',
+          matchKind: 'family',
+          checklistItemCount: 5,
+          holdPointCount: 2,
+        },
+      ],
+    });
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_itp_suggestion', { projectId: 'p1', activity: 'drainage' });
+    expect(matchTemplatesForProject).toHaveBeenCalledWith({
+      projectId: 'p1',
+      activity: 'drainage',
+    });
+    const parsed = JSON.parse(outcome.result);
+    expect(parsed.tier).toBe('B');
+    expect(parsed.candidates).toEqual([
+      {
+        id: 't1',
+        name: 'Pipe Drainage',
+        scope: 'global',
+        stateSpec: 'TfNSW',
+        matchKind: 'family',
+        baseline: false,
+        checklistItemCount: 5,
+        holdPointCount: 2,
+      },
+    ]);
+  });
+
+  it('refuses get_itp_suggestion on a project the user cannot access', async () => {
+    vi.mocked(hasInternalProjectAccess).mockResolvedValue(false);
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_itp_suggestion', {
+      projectId: 'other',
+      activity: 'drainage',
+    });
+    expect(outcome.result).toContain("don't have access");
+    expect(matchTemplatesForProject).not.toHaveBeenCalled();
+  });
+
+  it('requires both projectId and activity for get_itp_suggestion', async () => {
+    const execute = createChatToolExecutor(user);
+    expect((await execute('get_itp_suggestion', { projectId: 'p1' })).result).toBe(
+      'A projectId and activity are required.',
+    );
+    expect((await execute('get_itp_suggestion', { activity: 'drainage' })).result).toBe(
+      'A projectId and activity are required.',
+    );
+    expect(hasInternalProjectAccess).not.toHaveBeenCalled();
   });
 });
 

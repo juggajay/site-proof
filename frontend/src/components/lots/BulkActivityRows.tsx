@@ -1,7 +1,13 @@
 import { useEffect } from 'react';
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
 import { formatActivityLabel } from '@/lib/activityTaxonomy';
-import { splitSuggestedTemplates, useTemplateMatch } from '@/lib/itpTemplateMatch';
+import { useAiStatus } from '@/hooks/useAiStatus';
+import {
+  resolveRankedMatch,
+  splitSuggestedTemplates,
+  useTemplateMatch,
+  useTemplateRank,
+} from '@/lib/itpTemplateMatch';
 import { type BulkActivity } from './bulkCreateLots';
 
 export interface ItpTemplateOption {
@@ -102,7 +108,11 @@ function BulkActivityRow({
   onRemove,
 }: BulkActivityRowProps) {
   const match = useTemplateMatch(projectId, row.activityType);
-  const { suggested, rest } = splitSuggestedTemplates(itpTemplates, match.data);
+  const { aiConfigured } = useAiStatus();
+  const rank = useTemplateRank(projectId, row.activityType, match.data?.tier, aiConfigured);
+  const { match: effectiveMatch, reasons } = resolveRankedMatch(match.data, rank.data);
+  const { suggested, rest } = splitSuggestedTemplates(itpTemplates, effectiveMatch);
+  const topReason = suggested[0] ? reasons[suggested[0].id] : undefined;
 
   // Tier A: prefill this row's template with the single exact-slug suggestion,
   // still editable. Only overrides when the current pick isn't a valid candidate
@@ -154,7 +164,7 @@ function BulkActivityRow({
           {suggested.length > 0 && (
             <optgroup label="Suggested">
               {suggested.map((template) => (
-                <option key={template.id} value={template.id}>
+                <option key={template.id} value={template.id} title={reasons[template.id]}>
                   {template.name}
                   {template.activityType ? ` (${formatActivityLabel(template.activityType)})` : ''}
                 </option>
@@ -170,6 +180,7 @@ function BulkActivityRow({
             ))}
           </optgroup>
         </select>
+        {topReason && <p className="mt-1 text-xs text-muted-foreground">{topReason}</p>}
       </div>
       <button
         type="button"

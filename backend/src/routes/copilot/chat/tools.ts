@@ -4,6 +4,7 @@
 // than throwing, so one bad projectId doesn't abort the turn.
 
 import { prisma } from '../../../lib/prisma.js';
+import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getDashboardProjectAccess, type AuthUser } from '../../dashboard/access.js';
 import { buildHoldPointListItems } from '../../holdpoints/listPresentation.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
@@ -59,6 +60,23 @@ export const CHAT_TOOLS = [
       type: 'object',
       properties: { projectId: { type: 'string', description: 'The project id' } },
       required: ['projectId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_itp_suggestion',
+    description:
+      'Suggest which ITP template a lot should get for a construction activity on a project. Returns the match tier (A = one clear template, B = a shortlist the lot form will rank, C = no library match) and the matching templates. Call this when the user asks which ITP, template, or checklist a lot or activity needs. `activity` may be a plain description like "box culvert" or "asphalt wearing course".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project id' },
+        activity: {
+          type: 'string',
+          description: 'The construction activity — a canonical slug or free text',
+        },
+      },
+      required: ['projectId', 'activity'],
       additionalProperties: false,
     },
   },
@@ -228,6 +246,42 @@ async function getProjectQaSummary(user: AuthUser, projectId: string): Promise<T
 }
 
 /**
+ * Deterministic ITP-template shortlist for an activity — the same matcher the
+ * lot forms use, no AI call inside chat. `matchTemplatesForProject` folds a
+ * free-text or slug activity through the §1 taxonomy and applies the hard
+ * state/spec filter. Tier B returns the shortlist; the prompt tells Clancy the
+ * lot form ranks it. `activity` free text is unbounded from the model, so cap it
+ * before the DB round-trip.
+ */
+async function getItpSuggestion(
+  user: AuthUser,
+  projectId: string,
+  activity: string,
+): Promise<ToolOutcome> {
+  if (!(await hasInternalProjectAccess(user, projectId))) {
+    return { result: NO_ACCESS };
+  }
+  const match = await matchTemplatesForProject({ projectId, activity: activity.slice(0, 200) });
+  const candidates = match.candidates.map((c) => ({
+    id: c.id,
+    name: c.name,
+    scope: c.scope,
+    stateSpec: c.stateSpec,
+    matchKind: c.matchKind,
+    baseline: c.baseline ?? false,
+    checklistItemCount: c.checklistItemCount,
+    holdPointCount: c.holdPointCount,
+  }));
+  return {
+    result: JSON.stringify({
+      tier: match.tier,
+      suggestedTemplateId: match.suggestedTemplateId,
+      candidates,
+    }),
+  };
+}
+
+/**
  * Bind an executor to the requesting user. The returned function is what the
  * model loop calls per tool_use block.
  */
@@ -253,6 +307,15 @@ export function createChatToolExecutor(user: AuthUser): ToolExecutor {
         const projectId = readString(input, 'projectId');
         if (!projectId) return { result: 'A projectId is required.' };
         return getProjectQaSummary(user, projectId);
+      }
+
+      case 'get_itp_suggestion': {
+        const projectId = readString(input, 'projectId');
+        const activity = readString(input, 'activity');
+        if (!projectId || !activity) {
+          return { result: 'A projectId and activity are required.' };
+        }
+        return getItpSuggestion(user, projectId, activity);
       }
 
       case 'navigate': {
