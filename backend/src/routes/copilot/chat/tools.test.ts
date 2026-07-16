@@ -17,9 +17,10 @@ vi.mock('../../../lib/itpMatcher.js', () => ({
 }));
 
 import { getDashboardProjectAccess } from '../../dashboard/access.js';
+import { CANONICAL_ACTIVITIES } from '../../../lib/activityTaxonomy.js';
 import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
-import { createChatToolExecutor, summariseHoldPoints } from './tools.js';
+import { CHAT_TOOLS, createChatToolExecutor, summariseHoldPoints } from './tools.js';
 
 const user = { id: 'u1', companyId: 'c1', roleInCompany: 'project_manager' } as AuthUser;
 
@@ -158,6 +159,27 @@ describe('chat tool executor', () => {
         holdPointCount: 2,
       },
     ]);
+  });
+
+  it('rejects free-text activity with a retry hint instead of a fake no-match (live-probe regression)', async () => {
+    // Prod probe: "box culvert" folded to nothing and Clancy narrated
+    // "no library match" while a Box Culvert template existed (Tier A).
+    vi.mocked(hasInternalProjectAccess).mockResolvedValue(true);
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_itp_suggestion', {
+      projectId: 'p1',
+      activity: 'box culvert',
+    });
+    expect(outcome.result).toContain('not a canonical activity slug');
+    expect(outcome.result).toContain('culverts');
+    expect(matchTemplatesForProject).not.toHaveBeenCalled();
+  });
+
+  it('exposes exactly the 38 canonical slugs as the activity enum', async () => {
+    const tool = CHAT_TOOLS.find((t) => t.name === 'get_itp_suggestion')!;
+    const activitySchema = (tool.input_schema.properties as Record<string, { enum?: string[] }>)
+      .activity;
+    expect(activitySchema.enum).toEqual(CANONICAL_ACTIVITIES.map((a) => a.slug));
   });
 
   it('refuses get_itp_suggestion on a project the user cannot access', async () => {
