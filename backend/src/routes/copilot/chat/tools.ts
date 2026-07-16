@@ -4,6 +4,7 @@
 // than throwing, so one bad projectId doesn't abort the turn.
 
 import { prisma } from '../../../lib/prisma.js';
+import { CANONICAL_ACTIVITIES, foldActivityValue } from '../../../lib/activityTaxonomy.js';
 import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getDashboardProjectAccess, type AuthUser } from '../../dashboard/access.js';
 import { buildHoldPointListItems } from '../../holdpoints/listPresentation.js';
@@ -66,14 +67,19 @@ export const CHAT_TOOLS = [
   {
     name: 'get_itp_suggestion',
     description:
-      'Suggest which ITP template a lot should get for a construction activity on a project. Returns the match tier (A = one clear template, B = a shortlist the lot form will rank, C = no library match) and the matching templates. Call this when the user asks which ITP, template, or checklist a lot or activity needs. `activity` may be a plain description like "box culvert" or "asphalt wearing course".',
+      'Suggest which ITP template a lot should get for a construction activity on a project. Returns the match tier (A = one clear template, B = a shortlist the lot form will rank, C = no library match) and the matching templates. Call this when the user asks which ITP, template, or checklist a lot or activity needs. Map what the user described to the closest canonical activity slug yourself (e.g. "box culvert" → culverts, "asphalt wearing course" → asphalt_dga) — the matcher only understands the listed slugs.',
     input_schema: {
       type: 'object',
       properties: {
         projectId: { type: 'string', description: 'The project id' },
         activity: {
           type: 'string',
-          description: 'The construction activity — a canonical slug or free text',
+          // Live-probe regression: free text ("box culvert") folds to nothing
+          // and reads as a false "no library match". Constrain to the canonical
+          // slugs — derived from the taxonomy so the list can never drift — and
+          // let the model do the natural-language → slug mapping.
+          enum: CANONICAL_ACTIVITIES.map((a) => a.slug),
+          description: 'The canonical activity slug closest to what the user described',
         },
       },
       required: ['projectId', 'activity'],
@@ -247,11 +253,10 @@ async function getProjectQaSummary(user: AuthUser, projectId: string): Promise<T
 
 /**
  * Deterministic ITP-template shortlist for an activity — the same matcher the
- * lot forms use, no AI call inside chat. `matchTemplatesForProject` folds a
- * free-text or slug activity through the §1 taxonomy and applies the hard
- * state/spec filter. Tier B returns the shortlist; the prompt tells Clancy the
- * lot form ranks it. `activity` free text is unbounded from the model, so cap it
- * before the DB round-trip.
+ * lot forms use, no AI call inside chat. The tool schema constrains `activity`
+ * to the canonical slugs (live-probe regression: free text like "box culvert"
+ * folds to nothing and read as a false "no library match"); if a non-slug
+ * still arrives, return an instructive retry error rather than a fake Tier C.
  */
 async function getItpSuggestion(
   user: AuthUser,
@@ -260,6 +265,11 @@ async function getItpSuggestion(
 ): Promise<ToolOutcome> {
   if (!(await hasInternalProjectAccess(user, projectId))) {
     return { result: NO_ACCESS };
+  }
+  if (foldActivityValue(activity).confidence === 'none') {
+    return {
+      result: `"${activity.slice(0, 80)}" is not a canonical activity slug. Retry with the closest slug from the tool's list (e.g. culverts, asphalt_dga, pipe_drainage).`,
+    };
   }
   const match = await matchTemplatesForProject({ projectId, activity: activity.slice(0, 200) });
   const candidates = match.candidates.map((c) => ({
