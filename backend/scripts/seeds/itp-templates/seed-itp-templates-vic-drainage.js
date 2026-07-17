@@ -1526,7 +1526,7 @@ const vicSubsoilDrainageTemplate = {
 
 const vicKerbChannelTemplate = {
   name: 'Drainage - Kerb & Channel (VIC)',
-  description: 'VicRoads kerb and channel construction per Section 703 v14 (August 2021). Covers concrete paving for kerbs, channels, footpaths, and edgings. Kerb profiles per SD 2001 (Barrier, Semi-Mountable, Mountable), SD 2100-2103. Concrete per AS 1379, kerbs per AS 2876. Includes extruded and hand-placed methods, subgrade preparation, formwork, concrete placement, finishing, joints, curing, and dimensional verification.',
+  description: 'VicRoads/DTP kerb and channel construction. NOTE: Section 703 was renamed "Light Duty Concrete Paving" (SS 703:15.0, December 2025) and is now a thin amendment layer over Austroads Technical Specification ATS 4610 "Light Duty Concrete Paving" Edition 1.1 (November 2025), which is external/paywalled and not reproduced here. This template was built from the superseded Section 703 v14 "General Concrete Paving" (August 2021); the material, strength, tolerance and hold/witness requirements below must be reconciled against ATS 4610 Ed 1.1 for current work. Kerb profiles per SD 2001 (Barrier, Semi-Mountable, Mountable), SD 2100-2103; concrete per AS 1379; kerbs per AS 2876. Covers extruded and hand-placed methods, subgrade preparation, formwork, placement, finishing, joints, curing, and dimensional verification.',
   activityType: 'kerb_channel',
   specificationReference: 'Sec 703',
   stateSpec: 'VicRoads',

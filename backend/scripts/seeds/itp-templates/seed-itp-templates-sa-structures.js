@@ -10,7 +10,7 @@
  *   2. Reinforcement Placement (ST-SC-S6)
  *   3. Piling (ST-PI-C1/C2/C3/C4)
  *   4. Structural Steelwork (ST-SS-S1/S2/C1)
- *   5. Bridge Bearings (ST-SD-D1 / AS 5100.4)
+ *   5. Bridge Bearings (ST-BF-C1)
  *   6. Precast Concrete Elements (ST-SC-S3/C1)
  *   7. Post-Tensioning (ST-SC-C2)
  *   8. Bridge Deck Waterproofing (ST-SD-D1 / Project Specific)
@@ -927,151 +927,126 @@ const saSteelworkTemplate = {
 }
 
 // =============================================================================
-// TEMPLATE 5: BRIDGE BEARINGS (ST-SD-D1 / AS 5100.4)
+// TEMPLATE 5: BRIDGE BEARINGS (ST-BF-C1)
 // =============================================================================
+// Rebuilt from the ST-BF-C1 "Bearings" construction spec (v1, 30/09/2024).
+// The prior template cited ST-SD-D1, which is a DESIGN part — wrong document
+// for a construction ITP. ST-BF-C1 is the construction part (2 Hold Points).
 
-const saBridgeBearingsTemplate = {
-  name: 'Bridge Bearings (DIT ST-SD-D1 / AS 5100.4)',
-  description: 'DIT Bridge Bearings per ST-SD-D1 Design of Structures and AS 5100.4. Covers bearing supply, installation, accessibility for inspection/maintenance/replacement, jacking provisions, drainage protection, and deck joints. [VERIFY] SA does not publish standalone bearing construction spec — requirements from design spec and project-specific specifications.',
+const saBridgeBearingsC1Template = {
+  name: 'Bridge Bearings (DIT ST-BF-C1)',
+  description: 'DIT bridge bearing supply, testing and installation per ST-BF-C1 "Bearings" (Structures Master Specification, v1, 30/09/2024). Replaces a prior template that cited ST-SD-D1 — a design part, not a construction spec. Covers elastomeric/spherical/PTFE/ASM bearings to AS 5100.4 (pot bearings prohibited, spherical used in lieu), third-party testing, friction-coefficient limits, and installation at correct mean structure temperature. Two Hold Points apply: nominated third party (6.1c) and pre-installation QM records (2.2b).',
   activityType: 'bridge_bearings',
-  specificationReference: 'ST-SD-D1',
+  specificationReference: 'ST-BF-C1',
   stateSpec: 'DIT',
   checklistItems: [
-    // =========================================================================
-    // PRE-WORK SUBMISSIONS
-    // =========================================================================
     {
-      description: 'Submit bearing product details and manufacturer data',
-      acceptanceCriteria: 'Bearing product complies with AS 5100.4 Clause 7 General Design Requirements; data sheets submitted',
-      pointType: 'hold_point',
+      description: 'Confirm bearing types comply with AS 5100.4 (no pot bearings; spherical in lieu) and submit ASM details',
+      acceptanceCriteria: 'Bearing types (elastomeric/spherical/PTFE/ASM/stainless) comply with AS 5100.4; pot bearings not permitted (spherical used in lieu); ASM details submitted in Construction Documentation per ST-BF-C1 §1d, §3.1',
+      pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: 'AS 5100.4',
-      notes: 'ST-SD-D1 / AS 5100.4 — Bearings designed per AS 5100.4 Clause 7. [VERIFY specific clause numbers from project spec]'
+      notes: 'ST-BF-C1 §1d, §3.1. Neoprene strip durometer hardness 53; PTFE 100% virgin (relative density 2.13–2.23, hardness 50–65); stainless plate ASTM A240 Type 304+.'
     },
     {
-      description: 'Submit bearing installation procedure',
-      acceptanceCriteria: 'Installation procedure accepted by Principal\'s Authorised Person; includes levelling, grouting, and load transfer sequence',
+      description: 'Apply protective treatment to steel surfaces, protecting stainless steel sliding surfaces',
+      acceptanceCriteria: 'Steel surfaces protectively treated per ST-SS-S2, excluding (and protecting from damage) stainless steel sliding surfaces',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'ST-BF-C1 §4a (per ST-SS-S2).'
+    },
+    {
+      description: 'Submit nominated third party for approval at least 10 Business Days before testing/inspection',
+      acceptanceCriteria: 'Details of the nominated third party present for all testing submitted to the Principal at least 10 Business Days prior; Hold Point released (5 Business Days review) before testing or inspection commences',
       pointType: 'hold_point',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'ST-SD-D1 / ST-SS-C1 — Installation covered under erection procedures.'
+      notes: 'ST-BF-C1 §6.1c. HOLD POINT (Table 9-1) — 10 Business Days notice, 5 Business Days review; testing must not commence until released.'
     },
     {
-      description: 'Submit deck joint product details (if applicable)',
-      acceptanceCriteria: 'Deck joint details submitted; finger plate type preferred for bridges >100m; bonded steel/rubber joints not permitted',
+      description: 'Have each spherical bearing dismantled by manufacturer and visually inspected by nominated third party before delivery',
+      acceptanceCriteria: 'Each spherical bearing dismantled by the manufacturer and visually inspected by the nominated third party prior to delivery; no signs of failure per §6.5a',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'ST-BF-C1 §5a, §6.1k.'
+    },
+    {
+      description: 'Test one representative bearing per 10 (or part thereof) for each size and type, third party present',
+      acceptanceCriteria: 'One bearing from every 10 (or part thereof) for each size and type selected and tested with the nominated third party present alongside the manufacturer per ST-BF-C1 §6.1j',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: null,
+      notes: 'ST-BF-C1 §6.1j. Test equipment calibrated — loads to ±3%, deflections to ±1% (§6.1h–i).'
+    },
+    {
+      description: 'Perform elastomeric compression/stiffness/shear and spherical load tests per AS 5100.4',
+      acceptanceCriteria: 'Elastomeric bearings tested for compression, compression stiffness and shear stiffness per AS 5100.4; spherical bearings load-tested per AS 5100.4; bearings resisting horizontal forces tested at 1.5× rated SLS horizontal load (concurrent SLS vertical) held 3 minutes without failure',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 5100.4',
+      notes: 'ST-BF-C1 §6.2. No signs of failure per §6.5a.'
+    },
+    {
+      description: 'Determine PTFE and ASM friction coefficients against Table 6-1 / 6-2 limits',
+      acceptanceCriteria: 'PTFE and ASM sliding-surface friction coefficients (average of 5 tests at min & max vertical SLS loads) do not exceed Table 6-1 (PTFE: 0.08 @ 5 MPa … 0.03 @ ≥30 MPa) / Table 6-2 (ASM: 0.08 @ 15 MPa … 0.03 @ ≥90 MPa), interpolating for intermediate pressures',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 5100.4 (friction coefficient, ST-BF-C1 Tables 6-1/6-2)',
+      notes: 'ST-BF-C1 §6.3, §6.4. Up to 2 preliminary runs allowed.'
+    },
+    {
+      description: 'On any failure sign, test 2 additional bearings from the batch; escalate to full-batch testing if either fails',
+      acceptanceCriteria: 'If a bearing shows any failure sign (§6.5a), 2 additional bearings from the same batch tested; if either fails, all remaining bearings in the batch tested per ST-BF-C1 §6.5b–c',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: null,
+      notes: 'ST-BF-C1 §6.5. Failure signs include elastomer splitting/bond failure, PTFE tearing/cracking, spherical indentation/abrasion/guide-bar failure.'
+    },
+    {
+      description: 'After load testing, dismantle and examine spherical bearings before delivery',
+      acceptanceCriteria: 'Spherical bearings dismantled and examined after load testing, before delivery, with no signs of failure per §6.5a',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'ST-BF-C1 §6.1k, §6.2c.'
+    },
+    {
+      description: 'Submit NATA-endorsed pre-installation QM records at least 5 Business Days before delivery',
+      acceptanceCriteria: 'Pre-installation Quality Management Records (NATA-endorsed test certificates and elastomer sample results) submitted at least 5 Business Days prior to delivery; Hold Point released before installation of the relevant bearings commences',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'ST-BF-C1 §2.2b. HOLD POINT (Table 9-1) — records at least 5 Business Days prior to delivery; installation must not commence until released.'
+    },
+    {
+      description: 'On delivery, verify dimensions, bolt/hole sizes and offsets; keep spherical bearings assembled',
+      acceptanceCriteria: 'Contractor inspects delivered bearings for dimensions, bolt sizes, hole sizes and offsets; sets held together and spherical bearings held with erection straps at correct offsets; spherical bearings not separated/dismantled after delivery',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'ST-BF-C1 §7, §5b, §8.1b–c. Post-delivery position/alignment must not be changed.'
+    },
+    {
+      description: 'Install at correct mean structure temperature and record install date, temperature and setting dimension',
+      acceptanceCriteria: 'Bearings installed per Design Documentation and manufacturer specs at the actual mean structure temperature (fallback: 2-day shade-temp average for concrete / 1-day for steel or steel-composite); install date, temperature and setting dimension recorded in QM Records',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'ST-SD-D1 — Joints minimised where practical. Bridges >100m: joints required. Free draining finger plate preferred. Bonded steel/rubber type must not be used.'
-    },
-
-    // =========================================================================
-    // BEARING INSTALLATION
-    // =========================================================================
-    {
-      description: 'Verify bearing seat preparation',
-      acceptanceCriteria: 'Bearing seats level, clean, and dimensionally correct per design',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'Bearing seats must provide uniform contact surface.'
-    },
-    {
-      description: 'Inspect bearing installation — Hold Point',
-      acceptanceCriteria: 'Bearings correctly positioned, oriented, and levelled; Hold Point released before load application',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'Hold Point. Bearings must be inspected before superstructure load is applied.'
-    },
-    {
-      description: 'Verify jacking provisions per AS 5100.4',
-      acceptanceCriteria: 'Provisions allow for jacking of components per AS 5100.4 for future bearing replacement',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'ST-SD-D1 — Must allow for jacking of components in accordance with AS 5100.4.'
-    },
-    {
-      description: 'Verify bearing accessibility for inspection, maintenance, and replacement',
-      acceptanceCriteria: 'Bearings readily accessible for inspection, maintenance, and replacement',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'ST-SD-D1 — Bearings must be readily accessible.'
-    },
-    {
-      description: 'Complete bearing grouting and levelling',
-      acceptanceCriteria: 'Grouting complete; bearing level and stable under design loads',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Grouting per approved procedure and material.'
-    },
-
-    // =========================================================================
-    // DRAINAGE AND PROTECTION
-    // =========================================================================
-    {
-      description: 'Verify drainage provisions prevent water damage to bearings',
-      acceptanceCriteria: 'Adequate drainage measures prevent water from staining piers/abutments, damaging bearings, or causing corrosion',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'ST-SD-D1 — Adequate measures must prevent water from staining, damaging bearings, or causing corrosion.'
-    },
-
-    // =========================================================================
-    // DECK JOINTS (IF APPLICABLE)
-    // =========================================================================
-    {
-      description: 'Install deck joints per specification',
-      acceptanceCriteria: 'Deck joints installed per approved details; accessible for inspection, maintenance, and replacement',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'ST-SD-D1 — Joints must be readily accessible for inspection, maintenance, and replacement.'
-    },
-    {
-      description: 'Verify deck joint drainage provisions',
-      acceptanceCriteria: 'Drainage provisions prevent water passing through joints from causing damage below',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'ST-SD-D1 — Where plate joints used, adequate drainage measures required.'
-    },
-
-    // =========================================================================
-    // LOT CLOSE-OUT
-    // =========================================================================
-    {
-      description: 'Compile bearing conformance documentation',
-      acceptanceCriteria: 'Product certificates, installation records, photos, survey data compiled',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'Include product data, installation records, photos, level surveys.'
-    },
-    {
-      description: 'Lot conformance review and sign-off',
-      acceptanceCriteria: 'All acceptance criteria met, NCRs closed or dispositioned, lot approved by Principal\'s Authorised Person',
-      pointType: 'hold_point',
-      responsibleParty: 'superintendent',
-      evidenceRequired: 'signature',
-      testType: null,
-      notes: 'Final lot approval by Principal\'s Authorised Person.'
+      notes: 'ST-BF-C1 §8.2.'
     }
   ]
 }
@@ -1696,7 +1671,7 @@ async function main() {
     saReinforcementTemplate,
     saPilingTemplate,
     saSteelworkTemplate,
-    saBridgeBearingsTemplate,
+    saBridgeBearingsC1Template,
     saPrecastConcreteTemplate,
     saPostTensioningTemplate,
     saWaterproofingTemplate,

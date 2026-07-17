@@ -1140,7 +1140,7 @@ const vicStabilisedPavementTemplate = {
 
 const vicConcretePavementTemplate = {
   name: 'Concrete Pavement',
-  description: 'VicRoads concrete pavement construction per Section 503 (Concrete Base and Lean Mix Concrete Subbase), with references to Section 703 (General Concrete Paving) and Section 610 (Structural Concrete). Covers PCP, JRCP, and CRCP pavement types including dowels, reinforcement, joint sawing, curing, and ride quality.',
+  description: 'VicRoads concrete pavement construction per Section 503 (Concrete Base and Lean Mix Concrete Subbase, DoT November 2018) and Section 610 (Structural Concrete). Covers PCP, JRCP, and CRCP pavement types including dowels, reinforcement, joint sawing, curing, and ride quality. Some checklist items cite the former Section 703 "General Concrete Paving" (April 2019); Section 703 has since been renamed "Light Duty Concrete Paving" (v15.0, December 2025) and no longer covers concrete road pavements — reconcile those clause references against the current Section 503.',
   activityType: 'pavement_concrete',
   specificationReference: 'Sec 503',
   stateSpec: 'VicRoads',

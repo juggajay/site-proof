@@ -234,16 +234,15 @@ const nswConcreteBarrierTemplate = {
 // =============================================================================
 // NSW PAVEMENT MARKING (TfNSW R145, performance-based) + R142 RRPM items
 // R145: Ed 4 / Rev 0 (Feb 2016), vendor mirror of the RMS-era edition.
-// R142 items are DERIVED FROM the TfNSW Delineation Manual Section 15
-// (RRPMs, v1.3 Feb 2010) — the R142 QA spec PDF could not be obtained, so those
-// items carry NO clause references and must be verified against the real R142.
+// R142 (RRPM) items are sourced from TfNSW R142 Ed 4 Rev 7 (Jun 2020,
+// IC-QA-R142), the current published QA spec, with clause references.
 // =============================================================================
 
 const nswPavementMarkingTemplate = {
   name: 'Pavement Marking (TfNSW R145)',
-  description: 'TfNSW performance-based pavement marking per R145 (Ed 4 Rev 0; vendor mirror) with raised pavement marker (RRPM) items derived from the TfNSW Delineation Manual Section 15 in lieu of the unobtainable R142 QA spec',
+  description: 'TfNSW performance-based pavement marking per R145 (Ed 4 Rev 0; vendor mirror) with raised pavement marker (RRPM) items per TfNSW R142 Ed 4 Rev 7 (Jun 2020, IC-QA-R142).',
   activityType: 'pavement_marking',
-  specificationReference: 'TfNSW/RMS R145 Ed 4 Rev 0 (+ R142 RRPMs, Delineation Manual S15)',
+  specificationReference: 'TfNSW R145 Ed 4 Rev 0 (+ R142 Ed 4 Rev 7 RRPMs)',
   stateSpec: 'TfNSW',
   checklistItems: [
     {
@@ -345,33 +344,33 @@ const nswPavementMarkingTemplate = {
       testType: null,
       notes: 'R145 Cl 5'
     },
-    // --- RRPM items (R142) — derived from Delineation Manual S15; verify vs R142 ---
+    // --- RRPM items (TfNSW R142 Ed 4 Rev 7, Jun 2020, IC-QA-R142) ---
     {
-      description: 'Select RRPMs and adhesive from approved lists',
-      acceptanceCriteria: 'RRPMs on TfNSW/RTA approved-supplier list; adhesive on approved list per RTA Spec 3354',
-      pointType: 'standard',
+      description: 'Set out RRPMs then hold for Principal before fixing',
+      acceptanceCriteria: 'RRPMs set out to drawings and tolerances; notify Principal that set-out is complete; markers not fixed until the Hold Point is released (Principal may inspect the set out first)',
+      pointType: 'hold_point',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'R142 (LOW CONFIDENCE — derived from TfNSW Delineation Manual S15, RRPMs; verify against R142 QA spec; no clause ref available)'
+      notes: 'R142 §3.1, Annexure R142/C1 — R142\'s only Hold Point. TfNSW R142 Ed 4 Rev 7 (Jun 2020, IC-QA-R142).'
     },
     {
-      description: 'Confirm RRPM retroreflectivity by approved laboratory',
-      acceptanceCriteria: 'Meets minimum initial RL for the approved product',
+      description: 'Use only prequalified AS/NZS 1906.3 markers with TfNSW 3354 adhesive; installer PCCP Class 25 accredited',
+      acceptanceCriteria: 'Markers Principal-prequalified (ATD 2015/01), comply with AS/NZS 1906.3 and identifiable ≥12 months; adhesive to TfNSW 3354; installer PCCP Class 25 accreditation evidence provided; signed materials statement with NATA test results (≤36 months old) submitted ≥7 days before use',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'AS/NZS 1906.3',
+      notes: 'R142 §1.4, §2.1–2.3. TfNSW R142 Ed 4 Rev 7 (Jun 2020, IC-QA-R142).'
+    },
+    {
+      description: 'Fix RRPMs to position/rotation tolerance and verify retroreflective performance',
+      acceptanceCriteria: 'Longitudinal ≤100 mm, transverse ≤25 mm (and ≤25 mm from any RRPM in the same line within 1.5 m), rotation ±4° along centreline; bonded per manufacturer recommendations; CIL ≥ White 10 / Yellow 5 / Red 5 mcd/lx; ≥80% effective for 12 months with ≤3 consecutive ineffective (new install), or 100% effective within 30 days (partial replacement)',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'test',
-      testType: 'AS 1906.3',
-      notes: 'R142 (LOW CONFIDENCE — Delineation Manual S15 substitute; verify against R142 QA spec)'
-    },
-    {
-      description: 'Install RRPMs — surface clean/dry, correct adhesive, spacing per delineation figures',
-      acceptanceCriteria: 'Surface free of dirt/grease/oil/moisture; adhesive coverage complete but not excessive; spacing/placement per applicable delineation table/figures',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'R142 (LOW CONFIDENCE — Delineation Manual S15 substitute; verify against R142 QA spec)'
+      testType: 'CIL (RPM retroreflectometer, AS/NZS 1906.3)',
+      notes: 'R142 §3.2, §3.3, §4.1–4.2. TfNSW R142 Ed 4 Rev 7 (Jun 2020, IC-QA-R142).'
     }
   ]
 }

@@ -30,7 +30,7 @@ const prisma = new PrismaClient()
 
 const saConduitsAndPitsTemplate = {
   name: 'Conduits and Pits (DIT RD-EL-C3)',
-  description: 'DIT supply and installation of electrical and communications conduits and pits per RD-EL-C3. Sequential design -> trench/bore -> bedding -> conduit -> cover -> pit -> pre-backfill inspection -> witness -> backfill -> post-construction internal inspection. Genuinely 0 Hold Points / 1 Witness Point in this Part. Derived from Document Version 2 (30/09/2024); DIT lists a later v4 (30/04/2026) which was unobtainable — verify currency before relying.',
+  description: 'DIT supply and installation of electrical and communications conduits and pits per RD-EL-C3. Sequential design -> trench/bore -> bedding -> conduit -> cover -> pit -> pre-backfill inspection -> witness -> backfill -> post-construction internal inspection. Genuinely 0 Hold Points / 1 Witness Point in this Part. Verified against Document Version 4 (30/04/2026): v3 made the pit concrete apron explicit (200 mm thickness AND 200 mm width from each pit side, N12 bars) and v4 rewrote §4.3 (comms conduit white to AS/CA S008/S009; flexible conduit prohibited except subducting or above-ground equipment connections). Holds, witness, cover, bedding and draw-cord values unchanged from v2.',
   activityType: 'conduit_trenching',
   specificationReference: 'RD-EL-C3',
   stateSpec: 'DIT',
@@ -83,6 +83,15 @@ const saConduitsAndPitsTemplate = {
     // CONDUIT INSTALLATION
     // =========================================================================
     {
+      description: 'Confirm conduit materials — electrical rigid PVC (orange); communications rigid PVC (white) to AS/CA S008/S009; flexible conduit only where permitted',
+      acceptanceCriteria: 'Electrical conduit heavy-duty rigid PVC to AS 2053, orange underground / UV-stabilised above ground; communications conduit heavy-duty rigid PVC to AS/CA S008 and AS/CA S009, white underground / UV-stabilised above ground; flexible conduit NOT used except (i) subducting within an underground conduit for segregation or (ii) an above-ground connection to post/wall-mounted equipment — where flexible is used above ground, up to 2.5 m above finished ground level it must be steel-reinforced or enclosed by >= 1.6 mm thick galvanized steel cover; conduit diameter per RD-EL-D3',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'RD-EL-C3 §4.3 (v4 30/04/2026): comms conduit white to AS/CA S008/S009; flexible conduit prohibited except subducting-for-segregation or above-ground equipment connection (above-ground flexible <=2.5 m must be steel-reinforced or >=1.6 mm galv cover).'
+    },
+    {
       description: 'Lay conduit — straight lines, correct bends/curvature, cemented joints, draw cords and bell mouths',
       acceptanceCriteria: 'Conduit laid in straight lines; cumulative bends between pits <= 90 degrees; direction-change curvature radius >= 130 x conduit diameter; joints cemented; draw cords installed (>= 3 m tails, >= 4 mm dia polyethylene mono rope, 5 kN breaking load); bell mouths fitted in P4+ pits; marking tape at correct height',
       pointType: 'standard',
@@ -123,13 +132,13 @@ const saConduitsAndPitsTemplate = {
       notes: 'RD-EL-C3 §9.1d). Pit bedding + bowing check before/after compaction.'
     },
     {
-      description: 'Pour reinforced concrete apron (min 200 mm) and check lid fit before and after pour',
-      acceptanceCriteria: 'Reinforced concrete apron min 200 mm thickness and width from each pit side (min grade N20 where concrete used for conduit protection); apron template >= 25 mm and slightly larger than the pit lid; multiple-pit shared aprons >= 100 mm spacing + 100 mm concrete + reinforcing between pits; lid fit checked before and after the concrete apron pour',
+      description: 'Pour reinforced concrete apron (min 200 mm thickness AND 200 mm width, N12 bars) and check lid fit before and after pour',
+      acceptanceCriteria: 'Reinforced concrete apron min 200 mm thickness AND min 200 mm width measured from each pit side, with N12 reinforcement bars (min grade N20 where concrete used for conduit protection); apron template >= 25 mm and slightly larger than the pit lid; multiple-pit shared aprons >= 100 mm spacing + 100 mm concrete + reinforcing between pits; lid fit checked before and after the concrete apron pour',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'inspection',
       testType: null,
-      notes: 'RD-EL-C3 §9.1e)–f), §4.5a). Apron min 200 mm; template >=25 mm; shared apron spacing; concrete grade >= N20.'
+      notes: 'RD-EL-C3 §9e)/§9.1e)–f), §4.5a) (v3 31/10/2025: apron 200 mm thickness AND 200 mm width from each pit side, N12 bars). Template >=25 mm; shared apron spacing; concrete grade >= N20.'
     },
     {
       description: 'Set pits flush and draining, gasket lids, and visually check parallel/flush/grade <= 1:14 before backfill',
