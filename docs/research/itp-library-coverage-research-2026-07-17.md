@@ -1,6 +1,29 @@
 # ITP Library Coverage Research — every jurisdiction, every activity
 
-**Date:** 2026-07-17 · **Status:** AWAITING JAY'S REVIEW (gates the seeding wave)
+**Date:** 2026-07-17 · **Status:** EXECUTED same day (waves A–D shipped, #1505–#1512) — see correction below
+
+> **CORRECTION (post-execution, 2026-07-17):** §2's QLD/SA/VIC "S = seedable
+> gap" markers substantially OVERSTATED the gaps — the audit agent verified
+> spec registers but never inspected the seeder files, and the original
+> library already covered most of them under unrecognised template names
+> (SA: 7 of 8 planned Wave-B templates collided with existing coverage;
+> VIC: 7 of 12). Mandatory pre-build collision greps caught every case.
+> Ground truth for what actually shipped is the PR bodies of #1505 (SA
+> seals + seed-lock Prisma-6 fix), #1506 (NSW Wave A), #1508 (QLD), #1509
+> (SA conduits + 7-collision record), #1510 (VIC 5 new + 2 spec-accuracy
+> refreshes: OGA superseded-edition, marking cited WITHDRAWN Sec 722 → Sec
+> 721), #1511 (national flatwork + WSA utilities), #1512 (WA first set).
+> Post-campaign census: all 38 activities have ≥1 active template; 150
+> active globals (VicRoads 37, MRTS 35, DIT 34, TfNSW 25, MRWA 10,
+> Austroads 6, WSA 2, AUS-SPEC 1); 5 stale rows superseded. Other
+> execution-time discoveries: VicRoads' spec portal is decommissioned
+> (current source = content.vic.gov.au docx); VicRoads Sec 703 is now
+> "Light Duty Concrete Paving" (Dec 2025), a thin layer over paywalled
+> Austroads ATS 4610; WA has no "Spec 401" (404 Culverts is the drainage
+> spec); DIT went Cloudflare (Wayback is the working route); flatwork's
+> "convergent 25 MPa" (§1.2 below) is NOT verbatim in either source —
+> AUS-SPEC 0282 says N20, IPWEAQ PCD-101 says N32; the shipped default
+> N25 is a disclosed bracket-middle.
 **Method:** 5 parallel research agents (NSW gaps, WSA utilities, concrete flatwork,
 WA/MRWA mapping, QLD/SA/VIC + small-jurisdiction audit), all working from
 published specifications with per-claim confidence markers. Raw agent reports
