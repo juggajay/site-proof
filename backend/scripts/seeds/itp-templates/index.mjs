@@ -39,6 +39,8 @@ const seeders = [
   { state: 'vic', activity: 'road-furniture', file: 'seed-itp-templates-vic-road-furniture.js', label: 'VIC VicRoads road furniture' },
   { state: 'vic', activity: 'structures', file: 'seed-itp-templates-vic-structures.js', label: 'VIC VicRoads structures' },
   { state: 'vic', activity: 'conduits', file: 'seed-itp-templates-vic-conduits.js', label: 'VIC VicRoads conduits' },
+  { state: 'national', activity: 'flatwork', file: 'seed-itp-templates-national-flatwork.js', label: 'National AUS-SPEC concrete flatwork' },
+  { state: 'national', activity: 'utilities', file: 'seed-itp-templates-national-utilities.js', label: 'National WSA water & sewer utilities' },
 ];
 
 function parseCsv(value) {
@@ -96,9 +98,10 @@ function printHelp() {
 Options:
   --list                    List selected seeders and exit.
   --execute                 Run selected seeders. Without this flag, this is a dry run.
-  --state=<csv>             Filter by state: austroads, nsw, qld, sa, vic.
+  --state=<csv>             Filter by state: austroads, nsw, qld, sa, vic, national.
   --activity=<csv>          Filter by activity: baseline, earthworks, asphalt, seals, drainage,
-                            environmental, pavements, conduits, road-furniture, structures.
+                            environmental, pavements, conduits, road-furniture, structures,
+                            flatwork, utilities.
   --script=<csv>            Filter by exact seeder filename.
   --help                    Show this help.
 
