@@ -68,14 +68,18 @@ function normalizeSpecSet(value: string | null): string | null {
   return SPEC_SET_SYNONYMS[lower] ?? lower;
 }
 
-// Austroads is the national baseline the state specs derive from (AGPT Part 8
-// is the taxonomy's own anchor), not a state — no project selects it, so a
-// strict state filter would leave the 6 seeded Austroads templates permanently
-// unreachable. They participate as GAP-FILL only: offered when the project +
-// state-matched pool has no exact-slug candidate, never displacing a state
-// template and never auto-filling (a baseline suggestion is always Tier B —
-// the reviewer affirms it knowingly).
-const AUSTROADS = 'austroads';
+// National baseline spec sets — not states, so a strict state filter would
+// leave their templates permanently unreachable. Austroads is the national
+// road-authority baseline (AGPT Part 8 anchors the taxonomy); AUS-SPEC/IPWEA
+// carry the national concrete-flatwork family; WSA carries the national
+// utilities family (water/sewer are never road-authority specs in any state).
+// They participate as GAP-FILL only: offered when the project + state-matched
+// pool has no exact-slug candidate, never displacing a state template and
+// never auto-filling (a baseline suggestion is always Tier B — the reviewer
+// affirms it knowingly). A project whose OWN specificationSet is one of these
+// (e.g. the AUS-SPEC council projects) matches them as PRIMARY via the normal
+// state filter, not this pool.
+const NATIONAL_BASELINE_SPECS = new Set(['austroads', 'aus-spec', 'ipwea', 'wsa', 'national']);
 
 /**
  * The family a fold result belongs to: an exact Level-2 slug maps to its
@@ -164,7 +168,10 @@ export function routeTemplateMatch(
     const templateSpec = t.projectId === null ? normalizeSpecSet(t.stateSpec) : null;
     const isMatchingGlobal = t.projectId === null && templateSpec === projectSpec;
     const isBaselineGlobal =
-      t.projectId === null && !isMatchingGlobal && templateSpec === AUSTROADS;
+      t.projectId === null &&
+      !isMatchingGlobal &&
+      templateSpec !== null &&
+      NATIONAL_BASELINE_SPECS.has(templateSpec);
     if (!isProjectScoped && !isMatchingGlobal && !isBaselineGlobal) continue;
 
     const kind = classifyActivityMatch(lotFold, foldActivityValue(t.activityType), isProjectScoped);
