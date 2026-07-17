@@ -28,6 +28,7 @@ const seeders = [
   { state: 'sa', activity: 'drainage', file: 'seed-itp-templates-sa-drainage.js', label: 'SA DIT drainage' },
   { state: 'sa', activity: 'environmental', file: 'seed-itp-templates-sa-environmental.js', label: 'SA DIT environmental' },
   { state: 'sa', activity: 'pavements', file: 'seed-itp-templates-sa-pavements.js', label: 'SA DIT pavements' },
+  { state: 'sa', activity: 'conduits', file: 'seed-itp-templates-sa-conduits.js', label: 'SA DIT conduits' },
   { state: 'sa', activity: 'road-furniture', file: 'seed-itp-templates-sa-road-furniture.js', label: 'SA DIT road furniture' },
   { state: 'sa', activity: 'structures', file: 'seed-itp-templates-sa-structures.js', label: 'SA DIT structures' },
   { state: 'vic', activity: 'earthworks', file: 'seed-itp-templates-vic-earthworks.js', label: 'VIC VicRoads earthworks' },
