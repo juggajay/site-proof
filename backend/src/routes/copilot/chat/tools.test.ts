@@ -20,6 +20,7 @@ import { getDashboardProjectAccess } from '../../dashboard/access.js';
 import { CANONICAL_ACTIVITIES } from '../../../lib/activityTaxonomy.js';
 import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
+import { HELP_TOPIC_SLUGS } from './productKnowledge.js';
 import { CHAT_TOOLS, MODULE_NAMES, createChatToolExecutor, summariseHoldPoints } from './tools.js';
 
 const user = { id: 'u1', companyId: 'c1', roleInCompany: 'project_manager' } as AuthUser;
@@ -258,6 +259,38 @@ describe('chat tool executor', () => {
       'A projectId and lotNumber are required.',
     );
     expect(hasInternalProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('exposes the documentation slugs as the get_help topic enum', () => {
+    const tool = CHAT_TOOLS.find((t) => t.name === 'get_help')!;
+    const topicSchema = (
+      tool.input_schema.properties as Record<string, { enum?: readonly string[] }>
+    ).topic;
+    expect(topicSchema.enum).toEqual(HELP_TOPIC_SLUGS);
+  });
+
+  it('lists help topics as slug + title pairs', async () => {
+    const execute = createChatToolExecutor(user);
+    const parsed = JSON.parse((await execute('list_help_topics', {})).result);
+    expect(parsed.topics.map((t: { slug: string }) => t.slug)).toEqual(HELP_TOPIC_SLUGS);
+    expect(parsed.topics[0]).toHaveProperty('title');
+  });
+
+  it('returns the topic body for a known help topic (happy path)', async () => {
+    const execute = createChatToolExecutor(user);
+    const parsed = JSON.parse((await execute('get_help', { topic: 'readiness' })).result);
+    expect(parsed).toMatchObject({ slug: 'readiness', title: 'Evidence Readiness' });
+    expect(parsed.body).toContain('blockers');
+  });
+
+  it('rejects an unknown help topic with a discovery hint (belt-and-braces to the enum)', async () => {
+    // The tool schema constrains topic to the slug enum, so the API rejects an
+    // off-list value before it reaches the executor; this guards the executor's
+    // own fallback for a value that slips through.
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_help', { topic: 'billing' });
+    expect(outcome.result).toContain('Unknown help topic');
+    expect(outcome.result).toContain('list_help_topics');
   });
 });
 
