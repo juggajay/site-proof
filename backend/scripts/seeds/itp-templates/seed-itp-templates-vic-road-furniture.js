@@ -3,7 +3,7 @@
  *
  * Creates global ITP templates for VIC road furniture activities.
  * Templates: Wire Rope Safety Barrier (Sec 711), W-Beam Guard Fence (Sec 708),
- *            Concrete Barrier (Sec 610/BTN001), Pavement Marking (Sec 721/722),
+ *            Concrete Barrier (Sec 610/BTN001), Pavement Marking (Sec 721),
  *            Fencing incl. Noise Walls (Sec 707/765)
  *
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-road-furniture.js --execute
@@ -569,214 +569,175 @@ const vicConcreteBarrierTemplate = {
 }
 
 // =============================================================================
-// TEMPLATE 20: PAVEMENT MARKING (VicRoads Sec 721/722)
-// Based on: VicRoads Section 721/722/710, RC 424.01, AS 4049, AS/NZS 2009, AS 1742.2
+// TEMPLATE 20: PAVEMENT MARKING (VicRoads Sec 721)
+// VicRoads Section 721 (Pavement Markings) - DoT edition February 2017.
+// Section 721 (Parts A-E, including Part 721.B "Pavement Markings for New
+// Works") is the current marking spec. The former Section 722 "Pavement
+// Markings - New Surfacings" is WITHDRAWN and not in the current DTP library;
+// its new-surfacings scope is now carried by Part 721.B. Retroreflectivity
+// acceptance per RC 424.01. Do not reference Section 722.
 // =============================================================================
 
 const vicPavementMarkingTemplate = {
   name: 'Pavement Marking',
-  description: 'VicRoads pavement marking including thermoplastic, waterborne paint, and cold-applied markings, glass bead application, raised pavement markers (RPMs), retroreflectivity testing, and geometric compliance per Sections 721, 722, and 710. Test Method RC 424.01 for retroreflectivity measurement.',
+  description: 'VIC VicRoads/DTP pavement marking per Section 721 (Pavement Markings, DoT edition February 2017). Section 721 (Parts A General, B New Works, C Maintenance, D Painted, E Long Life) is the current marking specification; the former Section 722 "Pavement Markings - New Surfacings" is withdrawn and its new-surfacings scope is now carried by Part 721.B. Covers paint plus glass beads, thermoplastic and cold-applied plastic, pliant polymer tape, and raised pavement markers, with retroreflectivity acceptance to Test Method RC 424.01. Includes a set-out hold point (721.B05) and a marking-removal hold point (721.A12).',
   activityType: 'pavement_marking',
-  specificationReference: 'Sec 721/722',
+  specificationReference: 'Sec 721',
   stateSpec: 'VicRoads',
   checklistItems: [
     // =========================================================================
-    // PRE-WORK / PLANNING
+    // ACCREDITATION AND MATERIALS
     // =========================================================================
     {
-      description: 'Review approved drawings, specification, and project ITP for pavement marking works',
-      acceptanceCriteria: 'All current revision drawings, Sections 721, 722, 710, and VicRoads Linemarking Guide reviewed and available on site; marking plan showing line types, colours, widths, and RPM locations confirmed',
+      description: 'Verify contractor accreditation and material approvals',
+      acceptanceCriteria: 'Contractor PCCP-accredited for painted markings; all marking materials APAS-approved (paint per AS 4049.1 / AS/NZS 4049.3); glass beads per AS/NZS 2009 and APAS 0042 (Type B-HR >= 450 mcd/lux.m2; heavy metals within APAS 0042 limits)',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
-      testType: null,
-      notes: 'Cl 721.01. Confirm marking materials (thermoplastic, waterborne paint, cold-applied plastic) and line types (longitudinal, transverse, symbols).'
+      testType: 'APAS; AS 4049.1 / AS/NZS 4049.3; AS/NZS 2009 + APAS 0042',
+      notes: 'Clause 721.A / 721.D. PCCP accreditation for painted markings; APAS-approved materials and beads.'
     },
+
+    // =========================================================================
+    // SITE PREPARATION AND SET-OUT
+    // =========================================================================
     {
-      description: 'Submit material compliance certificates for marking materials and glass beads',
-      acceptanceCriteria: 'Marking materials compliant with AS 4049.1 (solvent-borne paint), AS 4049.2 (thermoplastic), or AS 4049.3 (waterborne paint) as applicable; glass beads compliant with AS/NZS 2009; APAS certification (AP-S0041 series) current; certificates submitted before work commences',
+      description: 'Obtain approval of removal method for unsuitable existing markings',
+      acceptanceCriteria: 'Where removal of unsuitable pavement marking is required, the method of removal is subject to the approval of the Superintendent before removal works commence',
       pointType: 'hold_point',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
-      testType: 'AS 4049 series; AS/NZS 2009',
-      notes: 'Cl 721. Materials must have current certification. Superintendent acceptance required before application.'
+      testType: null,
+      notes: 'HP - Clause 721.A12. Removal method approved before removal works commence.'
     },
     {
-      description: 'Verify contractor\'s equipment -- marking machine, bead dispenser, and pre-heater (thermoplastic)',
-      acceptanceCriteria: 'Marking machine calibrated for correct application rate and line width; bead dispenser calibrated for correct drop-on rate; thermoplastic pre-heater operational (material temperature per manufacturer requirements, typically 180-220C); equipment clean and functional',
+      description: 'Manage existing and temporary raised pavement markers around resurfacing',
+      acceptanceCriteria: 'Existing RPMs removed immediately prior to resurfacing; after surfacing, temporary reflective markers placed to maintain delineation until permanent markings applied',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'Clause 721.B. Remove existing RPMs pre-resurface; place temporary reflective markers post-surface.'
+    },
+    {
+      description: 'Obtain consent to the set-out before applying markings',
+      acceptanceCriteria: 'Painting/application of material does not commence until the Superintendent has inspected the set out (to Traffic Engineering Manual Vol 2) and given consent to proceed, unless a written exemption has been granted',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'HP - Clause 721.B05. Set-out inspected and consent given before paint/material application.'
+    },
+
+    // =========================================================================
+    // APPLICATION AND TIMING
+    // =========================================================================
+    {
+      description: 'Apply initial coat and RPMs within the required timeframe',
+      acceptanceCriteria: 'Initial coat paint (or long-life) and RPMs applied within the timeframe by AADT: >= 5000 or M-class 24 hours; 1000-4999 3 days; < 1000 5 days of opening',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'Cl 721. Equipment calibration records to be available on site.'
-    },
-
-    // =========================================================================
-    // SURFACE PREPARATION
-    // =========================================================================
-    {
-      description: 'Inspect pavement surface condition before marking',
-      acceptanceCriteria: 'Surface clean, dry, and free from dust, dirt, oil, grease, loose material, and curing compound residue; surface temperature above dew point; existing markings removed if required (per TN 112 -- Removal of Pavement Markings); surface defects (potholes, cracks) repaired before marking',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 721 / TN 112. Surface preparation is critical for marking adhesion. Wet surfaces will cause adhesion failure.'
+      notes: 'Clause 721.B. Initial coat + RPMs within AADT timeframe (24 h / 3 d / 5 d).'
     },
     {
-      description: 'Remove existing pavement markings (where specified)',
-      acceptanceCriteria: 'Existing markings removed by approved method (grinding, water blasting, or chemical removal per TN 112); no damage to pavement surface; no ghosting (residual marking visible); surface cleaned after removal',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'TN 112 -- Technical Note for Removal of Pavement Markings. Method must not damage the road surface.'
-    },
-
-    // =========================================================================
-    // MARKING APPLICATION -- THERMOPLASTIC
-    // =========================================================================
-    {
-      description: 'Apply thermoplastic marking to specified dimensions, colour, and pattern',
-      acceptanceCriteria: 'Line width, length, gap spacing per design/AS 1742.2; colour (white or yellow) per specification; material applied at correct temperature (per manufacturer, typically 180-220C); uniform thickness across line width',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 721. Thermoplastic material complying with AS 4049.2.'
-    },
-    {
-      description: 'Verify thermoplastic film thickness',
-      acceptanceCriteria: 'Spray-applied thermoplastic: 1.0-2.0mm wet film thickness (WFT) +/- manufacturer tolerance; extruded/preformed thermoplastic: 2.5mm +/- 0.5mm WFT; profiled markings per specific profile dimensions; measured by wet film gauge during application',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Wet film thickness gauge',
-      notes: 'Cl 721. Thickness measurement during application at regular intervals.'
-    },
-    {
-      description: 'Verify glass bead application rate on thermoplastic markings',
-      acceptanceCriteria: 'Drop-on glass beads applied at minimum 400 g/m2 for spray-applied or minimum 300 g/m2 for preformed; beads Type B-HR or D-HR per AS/NZS 2009; beads embedded to approximately 60% diameter; uniform distribution across line width',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Bead rate check (collection tray method)',
-      notes: 'Cl 721. Bead drop-on rate critical for retroreflectivity. Glass beads must have adhesion coating for retention.'
-    },
-
-    // =========================================================================
-    // MARKING APPLICATION -- WATERBORNE PAINT
-    // =========================================================================
-    {
-      description: 'Apply waterborne paint marking to specified dimensions, colour, and pattern',
-      acceptanceCriteria: 'Line dimensions per design/AS 1742.2; colour per specification; paint compliant with AS 4049.3; applied at correct wet film thickness (typically 0.4-0.6mm WFT)',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 721. Waterborne paint for temporary or low-traffic applications, or as re-marking material.'
-    },
-    {
-      description: 'Verify glass bead application rate on paint markings',
-      acceptanceCriteria: 'Drop-on glass beads applied at specified rate per AS/NZS 2009 (Type B or D); beads applied immediately while paint is wet; uniform distribution',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Bead rate check',
-      notes: 'Cl 721. Beads must be applied while paint is still wet for proper embedment.'
-    },
-
-    // =========================================================================
-    // RAISED PAVEMENT MARKERS (RPMs)
-    // =========================================================================
-    {
-      description: 'Inspect pavement surface preparation at RPM locations',
-      acceptanceCriteria: 'Surface clean and dry at each RPM location; surface ground/abraded if required for adhesion; adhesive type per specification (typically two-part epoxy or bituminous adhesive)',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 710. Surface preparation critical for RPM adhesion and longevity.'
-    },
-    {
-      description: 'Install raised pavement markers to correct alignment, spacing, and type',
-      acceptanceCriteria: 'RPM type per design (unidirectional, bidirectional, or non-reflective); colour per specification (white, yellow, or red); spacing per design/AS 1742.2; RPMs aligned within +/-25mm of design line; RPMs level and firmly bonded; adhesive fully cured before opening to traffic',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 710. RPM alignment and spacing critical for lane guidance especially at night and in wet conditions.'
-    },
-    {
-      description: 'Conduct adhesion check on installed RPMs (pull-off test or hammer test)',
-      acceptanceCriteria: 'RPMs firmly bonded to pavement surface; adhesion test passed (if required by specification -- typically visual/manual check or pull-off test); no rocking, spinning, or lifting of RPMs',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Adhesion test',
-      notes: 'Cl 710. Deficient adhesion requires removal and re-installation.'
-    },
-
-    // =========================================================================
-    // RETROREFLECTIVITY TESTING
-    // =========================================================================
-    {
-      description: 'Conduct retroreflectivity testing of completed pavement markings',
-      acceptanceCriteria: 'Retroreflectivity measured per RC 424.01 using Mirolux 30 reflectometer (or equivalent); white markings: minimum 150 mcd/m2/lux (typical intervention level); initial application on new markings may require higher minimum (350 mcd/m2/lux for new thermoplastic); yellow markings: minimum values per specification; mean of 4 readings per 2-5m section',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'RC 424.01 (Retroreflectivity of Pavement Markings)',
-      notes: 'RC 424.01. Retroreflected luminance measured in mcd/m2/lux. Mean retroreflectivity (MR) = mean of 4 individual readings at evenly spaced positions over 2-5m length or within 1m2. Australian standard intervention level is 150 mcd/m2/lux; initial acceptance values are typically higher.'
-    },
-    {
-      description: 'Conduct retroreflectivity testing of raised pavement markers',
-      acceptanceCriteria: 'RPM retroreflectivity per AS/NZS 1906.2 or product certification; retroreflective lens clean, undamaged, and visible; colour correct',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Visual / Product certification',
-      notes: 'Cl 710. RPM retroreflectivity verified by product certification and visual check.'
-    },
-
-    // =========================================================================
-    // FINAL INSPECTION
-    // =========================================================================
-    {
-      description: 'Inspect completed marking layout against design drawings',
-      acceptanceCriteria: 'All line markings, symbols, arrows, and text installed per design; line widths correct (typically 80mm, 100mm, or 150mm per line type); gap and dash lengths per AS 1742.2; no overspray or irregular edges; marking colours correct',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 721. As-built marking layout to be verified against design.'
-    },
-    {
-      description: 'Inspect marking adhesion (tape pull test or visual check)',
-      acceptanceCriteria: 'Markings firmly bonded to pavement surface; no peeling, flaking, or lifting; tape pull test (if required) shows adequate adhesion; markings intact under traffic',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Tape pull test',
-      notes: 'Cl 721. Adhesion failures require re-application.'
-    },
-    {
-      description: 'Verify all RPMs installed, aligned, and correctly coloured',
-      acceptanceCriteria: 'All RPMs per marking plan installed; alignment within +/-25mm; spacing correct; colours correct; all RPMs firmly bonded; no missing or damaged RPMs',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Cl 710. Final check of RPM installation.'
-    },
-    {
-      description: 'Submit marking records and test results',
-      acceptanceCriteria: 'Records include: material batch numbers, application dates, ambient conditions, equipment calibration records, retroreflectivity test results, bead application rates, and as-applied layout',
+      description: 'Apply second/final coat and profiled linemarking within specified intervals',
+      acceptanceCriteria: 'Second/final paint coat applied 2-6 weeks after the initial coat; profiled linemarking applied 2-6 weeks after the final coat',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'Cl 721. Complete marking records for handover.'
+      notes: 'Clause 721.B/721.D. Final coat 2-6 wk after initial; profiled lines 2-6 wk after final.'
+    },
+    {
+      description: 'Verify painted marking film thickness and bead retention',
+      acceptanceCriteria: 'Paint dry film thickness meets Table 721.D021 (linemarking 0.38 mm on seal / 0.35 mm on asphalt; roadmarking 0.35 / 0.30 mm); >= 400 g/m2 glass beads retained',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: '200x100 mm plate dft; bead rate check',
+      notes: 'Clause 721.D, Table 721.D021. Paint dft and >= 400 g/m2 beads retained.'
+    },
+    {
+      description: 'Verify long-life marking thickness and bead embedment',
+      acceptanceCriteria: 'Long-life marking thickness per Table 721.E021 (thermoplastic 2.0 mm lines / 3.0 mm intersections; profiled 8.0 mm; cold-applied 1.0-2.0 mm); >= 400 g/m2 beads embedded to approximately 60% diameter',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Table 721.E021 (thickness); bead rate check',
+      notes: 'Clause 721.E, Table 721.E021. Long-life thickness; beads ~60% embedded.'
+    },
+
+    // =========================================================================
+    // ACCEPTANCE TESTING
+    // =========================================================================
+    {
+      description: 'Verify retroreflectivity of completed markings',
+      acceptanceCriteria: 'Retroreflectivity per RC 424.01 (30 m geometry, 6 sites per lot average): initial >= 350 mcd/lux/m2 (3-5 weeks); additional >= 220 (sprayed seal) / >= 250 (asphalt) at 5-6 months',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'RC 424.01 (retroreflectivity)',
+      notes: 'Clause 721.B06/721.C07. Retroreflectivity >= 350 initial / >= 220-250 additional, 6 sites/lot.'
+    },
+    {
+      description: 'Verify marking colour',
+      acceptanceCriteria: 'White markings whiter than NCS S 2000N; yellow markings approximately NCS S 1070-Y20R (AS 4049.4 Field Method 2, through the Defects Liability Period)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AS 4049.4 Field Method 2 (luminance/colour)',
+      notes: 'Clause 721. White > NCS S 2000N; yellow ~ S 1070-Y20R.'
+    },
+    {
+      description: 'Verify marking geometry is within tolerances',
+      acceptanceCriteria: 'Markings within Table 721.A101 tolerances: centreline vs set-out < 30 mm; vs previous marking < 15 mm; painted width +/-10 mm; long-life width 0/+10 mm; stripe length 0/+10%; RPM transverse +/-25 mm, longitudinal +/-0.5 m; reflective face 85-95 deg to line',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Table 721.A101 (tolerances)',
+      notes: 'Clause 721.A, Table 721.A101. Set-out < 30 mm; painted width +/-10 mm; RPM alignment tolerances.'
+    },
+    {
+      description: 'Verify glass bead compliance',
+      acceptanceCriteria: 'Glass beads comply with AS/NZS 2009 and APAS 0042; Type B-HR beads >= 450 mcd/lux.m2; heavy metals within APAS 0042 limits',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'AS/NZS 2009 + APAS 0042',
+      notes: 'Clause 721. Glass beads AS/NZS 2009 + APAS 0042 (B-HR >= 450 mcd).'
+    },
+    {
+      description: 'Verify profiled line dimensions and adhesion',
+      acceptanceCriteria: 'Profiled line ribs >= 8 mm over >= 90% of the job (>= 10 readings per km); adhesion loss < 1%; thermoplastic profiled width +20/-5 mm, height +2/-0 mm',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Rib height/length/width/spacing readings',
+      notes: 'Clause 721.E. Profiled ribs >= 8 mm over >= 90% of job; adhesion loss < 1%.'
+    },
+
+    // =========================================================================
+    // RECORDS AND RECTIFICATION
+    // =========================================================================
+    {
+      description: 'Submit Job Completion Report and Retroreflectivity Report per lot',
+      acceptanceCriteria: 'Contractor submits the Job Completion Report (Pavement Markings) and Retroreflectivity Report per lot as record verification',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 721.B06/721.C07. Job Completion Report + Retroreflectivity Report per lot.'
+    },
+    {
+      description: 'Rectify failed marking items',
+      acceptanceCriteria: 'Failed items rectified within 4 weeks at the Contractor\'s cost',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 721.A. Failed items rectified within 4 weeks at Contractor cost.'
     }
   ]
 }

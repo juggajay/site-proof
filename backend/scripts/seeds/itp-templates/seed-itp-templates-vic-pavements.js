@@ -9,6 +9,7 @@
  *   3. CTCR - Cement Treated Crushed Rock (VicRoads Sec 306)
  *   4. Stabilised Pavements In-Situ (VicRoads Sec 307)
  *  16. Concrete Pavement (VicRoads Sec 503)
+ *      Insitu Stabilisation - Foamed Bitumen (VicRoads Sec 308)
  *
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-pavements.js --execute
  */
@@ -1497,6 +1498,174 @@ const vicConcretePavementTemplate = {
 }
 
 // =============================================================================
+// TEMPLATE: INSITU STABILISATION - FOAMED BITUMEN (VicRoads Sec 308)
+// VicRoads Section 308 (In Situ Stabilisation with Foamed Bitumen Binder) -
+// DoT edition August 2017. Foamed bitumen +/- supplementary lime binder,
+// mix design per Austroads AGPT Part 4D. 2 hold points. Distinct from the
+// Section 307 cementitious stabilisation template (bitumen foaming regime).
+// =============================================================================
+
+const vicFoamedBitumenStabilisationTemplate = {
+  name: 'Insitu Stabilisation - Foamed Bitumen (VIC Sec 308)',
+  description: 'VIC VicRoads in-situ stabilisation of road pavements with foamed bitumen binder per Section 308 (DoT edition August 2017). Foamed bitumen, with or without supplementary binder (hydrated/quick lime), produces a flexible cohesive bound layer resistant to ravelling before sealing. Mix design is per Austroads AGPT Part 4D. Distinct from Section 307 cementitious stabilisation: this covers the bitumen foaming characteristics (expansion ratio / half-life), modulus targets and relative moisture ratio control. Two Section 308 hold points apply (mix design approval and preliminary trial).',
+  activityType: 'pavement_stabilisation',
+  specificationReference: 'Sec 308',
+  stateSpec: 'VicRoads',
+  checklistItems: [
+    // =========================================================================
+    // MIX DESIGN AND TRIAL
+    // =========================================================================
+    {
+      description: 'Obtain approval of foamed bitumen mix design before commencing work',
+      acceptanceCriteria: 'Work does not commence until all mix design details showing compliance with Clause 308.05 have been presented to the Superintendent and approval given; mix design per AGPT Part 4D with modulus targets (initial > 700 MPa; 3-day cured 2500-4000 MPa; 3-day soaked 1500-2000 MPa; retained ratio > 0.5)',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'AGPT Part 4D (mix design)',
+      notes: 'HP - Clause 308.06. Mix design approved before work commences; modulus targets met.'
+    },
+    {
+      description: 'Complete preliminary trial section before proceeding',
+      acceptanceCriteria: 'Where a preliminary trial (100-200 m) is directed, stabilisation work does not proceed outside the trial section until the Superintendent has reviewed all aspects of the stabilising operation (including foaming test with tanker bitumen)',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'HP - Clause 308.12. Preliminary trial 100-200 m reviewed before proceeding.'
+    },
+    {
+      description: 'Confirm bitumen foaming additive/test certificate on file',
+      acceptanceCriteria: 'Bitumen foaming characteristics certificate on file demonstrating adequate half-life and expansion ratio at the proposed foaming temperature',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 308.05. Foaming characteristics documented for the supply bitumen.'
+    },
+
+    // =========================================================================
+    // CONDITIONS AND MIXING
+    // =========================================================================
+    {
+      description: 'Verify climatic gate before stabilising',
+      acceptanceCriteria: 'Pavement temperature at 50 mm depth >= 10 deg C (>= 10 random points at shift start); air temperature <= 40 deg C; no rain or imminent rain; no strong wind',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 308.09. Pavement >= 10 deg C at 50 mm, air <= 40 deg C, no rain/strong wind.'
+    },
+    {
+      description: 'Complete primary pulverisation',
+      acceptanceCriteria: 'Primary pulverisation carried out with one pass to 50 mm less than target depth; all material passes the 53 mm sieve',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'Clause 308.10. Pulverise to 50 mm less than target depth; passes 53 mm sieve.'
+    },
+    {
+      description: 'Verify supplementary binder condition',
+      acceptanceCriteria: 'Supplementary binder (lime) not more than 3 months old at spreading; quicklime fully slaked and kept friable',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 308.10 (tolerances/gates). Supplementary binder <= 3 months old; quicklime slaked/friable.'
+    },
+    {
+      description: 'Conduct foaming test at start and each tanker load',
+      acceptanceCriteria: 'Foaming test (inspection nozzle) at the start of each operation and each tanker load before use; minimum expansion ratio 10 and minimum half-life 20 s',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Inspection nozzle test (expansion ratio / half-life)',
+      notes: 'Clause 308.11. Foaming test each operation + each tanker: expansion ratio >= 10, half-life >= 20 s.'
+    },
+    {
+      description: 'Verify relative moisture ratio before foam incorporation',
+      acceptanceCriteria: 'Relative Moisture Ratio (RMR) 55-75% of OMC at each compaction sample location before foam incorporation; mixing stopped if streaks or blotches appear',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'In-situ moisture content vs OMC',
+      notes: 'Clause 308.11. RMR 55-75% OMC before foam incorporation; stop on streaks/blotches.'
+    },
+    {
+      description: 'Verify supplementary binder spread rate and uniformity',
+      acceptanceCriteria: 'Average supplementary binder spread rate >= 95% of design (lot rejected if average < 95%); uniformity checked with >= 3 trays (>= 1 m2) over 3 spreader runs per lot; any tray < spec by > 10% requires added binder',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Mat/tray spread-rate check',
+      notes: 'Clause 308.11. Spread >= 95% design; uniformity >= 3 trays/lot.'
+    },
+    {
+      description: 'Verify bitumen application rate per run',
+      acceptanceCriteria: 'Bitumen application rate (tank dip / calibrated device) for each continuous spray run provides the specified residual binder content',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Tank dip / calibrated device',
+      notes: 'Clause 308.11. Application rate gives specified residual binder content.'
+    },
+
+    // =========================================================================
+    // COMPACTION AND CURING
+    // =========================================================================
+    {
+      description: 'Compact immediately after foam mixing',
+      acceptanceCriteria: 'Compaction commences immediately after foam mixing, continuous with trimming, using heavy pad-foot then flat then multi-wheel rollers',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'Clause 308.13. Compaction immediately after foam mixing, continuous with trimming.'
+    },
+    {
+      description: 'Verify compaction density ratio per lot',
+      acceptanceCriteria: 'Density ratio per specified Scale per lot (<= 4000 m2/day): Scale A characteristic >= 98% (reject < 93%); Scale B mean >= 100% (reject < 95%); Scale C procedural; samples taken within 3 hours (Section 173)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Section 173 (density ratio)',
+      notes: 'Clause 308.14. Scale A char >= 98% / Scale B mean >= 100% per lot <= 4000 m2.'
+    },
+    {
+      description: 'Commence water curing and test rolling',
+      acceptanceCriteria: 'Water curing commenced immediately after compaction with drainage maintained; test rolling (Section 173) passed for each layer with unstable areas rectified',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: 'Section 173 (test rolling)',
+      notes: 'Clause 308.15. Water curing immediate; drainage maintained; test rolling passed.'
+    },
+
+    // =========================================================================
+    // GEOMETRY AND MODULUS
+    // =========================================================================
+    {
+      description: 'Verify finished level, shape, thickness and width tolerances',
+      acceptanceCriteria: 'Finished surface level per Table 308.031 (Scale A base -5/+10 mm, subbase -5/+15 mm); shape under 3 m straightedge per Table 308.032; thickness not less than spec by > 15 mm (100 m average >= specified); alignment +/-50 mm; width not less than spec by > 50 mm / not more than spec by > 100 mm',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Survey / 3 m straightedge',
+      notes: 'Clause 308.03, Tables 308.031/308.032. Level/shape/thickness/width tolerances.'
+    },
+    {
+      description: 'Verify design modulus achieved in the field',
+      acceptanceCriteria: 'Design modulus achieved in the field each day of production (initial resilient/design modulus > 700 MPa per AGPT Part 4D)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AGPT Part 4D (resilient/design modulus)',
+      notes: 'Clause 308.05. Field design modulus verified each day of production.'
+    }
+  ]
+}
+
+// =============================================================================
 // SEED FUNCTION
 // =============================================================================
 
@@ -1571,9 +1740,10 @@ async function main() {
     await seedTemplate(vicCTCRTemplate)
     await seedTemplate(vicStabilisedPavementTemplate)
     await seedTemplate(vicConcretePavementTemplate)
+    await seedTemplate(vicFoamedBitumenStabilisationTemplate)
 
     console.log('═══════════════════════════════════════════════════════════════')
-    console.log(' Seeding Complete! (4 pavement templates)')
+    console.log(' Seeding Complete! (5 pavement templates)')
     console.log('═══════════════════════════════════════════════════════════════')
   } catch (error) {
     console.error('❌ Seeding failed:', error)
