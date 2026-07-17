@@ -108,7 +108,7 @@ export function ClancyWidget() {
         className="clancy-bubble flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg ring-1 ring-white/10 ui-chrome"
       >
         <span className="text-xl font-semibold leading-none tracking-tight" aria-hidden="true">
-          J
+          C
         </span>
         <span
           className="absolute bottom-3.5 right-3.5 h-1.5 w-1.5 rounded-full bg-[#2563EB]"
