@@ -12,6 +12,8 @@ const seeders = [
   { state: 'nsw', activity: 'drainage', file: 'seed-itp-templates-nsw-drainage.js', label: 'NSW TfNSW drainage' },
   { state: 'nsw', activity: 'pavements', file: 'seed-itp-templates-nsw-pavements.js', label: 'NSW TfNSW pavements' },
   { state: 'nsw', activity: 'structures', file: 'seed-itp-templates-nsw-structures.js', label: 'NSW TfNSW structures' },
+  { state: 'nsw', activity: 'environmental', file: 'seed-itp-templates-nsw-environmental.js', label: 'NSW TfNSW environmental' },
+  { state: 'nsw', activity: 'road-furniture', file: 'seed-itp-templates-nsw-road-furniture.js', label: 'NSW TfNSW road furniture' },
   { state: 'qld', activity: 'earthworks', file: 'seed-itp-templates-qld-earthworks.js', label: 'QLD TMR earthworks' },
   { state: 'qld', activity: 'asphalt', file: 'seed-itp-templates-qld-asphalt.js', label: 'QLD TMR asphalt' },
   { state: 'qld', activity: 'drainage', file: 'seed-itp-templates-qld-drainage.js', label: 'QLD TMR drainage' },
