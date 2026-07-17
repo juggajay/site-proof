@@ -19,6 +19,7 @@ const seeders = [
   { state: 'qld', activity: 'drainage', file: 'seed-itp-templates-qld-drainage.js', label: 'QLD TMR drainage' },
   { state: 'qld', activity: 'environmental', file: 'seed-itp-templates-qld-environmental.js', label: 'QLD TMR environmental' },
   { state: 'qld', activity: 'pavements', file: 'seed-itp-templates-qld-pavements.js', label: 'QLD TMR pavements' },
+  { state: 'qld', activity: 'conduits', file: 'seed-itp-templates-qld-conduits.js', label: 'QLD TMR conduits' },
   { state: 'qld', activity: 'road-furniture', file: 'seed-itp-templates-qld-road-furniture.js', label: 'QLD TMR road furniture' },
   { state: 'qld', activity: 'structures', file: 'seed-itp-templates-qld-structures.js', label: 'QLD TMR structures' },
   { state: 'sa', activity: 'earthworks', file: 'seed-itp-templates-sa-earthworks.js', label: 'SA DIT earthworks' },
@@ -95,7 +96,7 @@ Options:
   --execute                 Run selected seeders. Without this flag, this is a dry run.
   --state=<csv>             Filter by state: austroads, nsw, qld, sa, vic.
   --activity=<csv>          Filter by activity: baseline, earthworks, asphalt, seals, drainage,
-                            environmental, pavements, road-furniture, structures.
+                            environmental, pavements, conduits, road-furniture, structures.
   --script=<csv>            Filter by exact seeder filename.
   --help                    Show this help.
 
