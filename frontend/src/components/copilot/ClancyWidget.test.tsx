@@ -61,7 +61,13 @@ describe('ClancyWidget', () => {
   it('renders the bubble only when AI is configured', () => {
     writeLocalStorageItem(INTRO_FLAG, '1'); // suppress auto-open
     const { unmount } = renderWidget();
-    expect(screen.getByLabelText('Open Clancy, your copilot')).toBeInTheDocument();
+    const bubble = screen.getByLabelText('Open Clancy, your copilot');
+    expect(bubble).toBeInTheDocument();
+    // Rename regression (live browser test): the bubble hardcoded "J" and
+    // referenced a CSS class that no longer existed, losing its fixed
+    // positioning. Pin the monogram and the class the stylesheet defines.
+    expect(bubble).toHaveTextContent('C');
+    expect(bubble.className).toContain('clancy-bubble');
     unmount();
 
     aiState.configured = false;
