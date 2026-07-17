@@ -7,6 +7,7 @@ import {
   CLANCY_SYSTEM_PROMPT,
   MAX_ACTIONS,
   PROJECT_PAGES,
+  TOP_LEVEL_PAGES,
 } from './prompt.js';
 
 describe('isAllowedNavigateTarget', () => {
@@ -22,6 +23,11 @@ describe('isAllowedNavigateTarget', () => {
       '/projects/abc-123/plan-sheets',
       '/projects/abc-123/itp',
       '/projects/abc-123/diary',
+      '/portfolio',
+      '/notifications',
+      '/company-settings',
+      '/docs',
+      '/invitations',
     ]) {
       expect(isAllowedNavigateTarget(path)).toBe(true);
     }
@@ -36,7 +42,9 @@ describe('isAllowedNavigateTarget', () => {
       '/projects/abc/settings/secret',
       '/projects/abc?redirect=/x',
       '/projects/abc#/x',
-      '/company-settings',
+      '/my-company',
+      '/reports',
+      '/onboarding',
       'javascript:alert(1)',
       '',
       '/projects/abc/lots/lot-9/edit',
@@ -102,6 +110,46 @@ describe('PROJECT_PAGES', () => {
       'settings',
     ];
     expect(PROJECT_PAGES.map((page) => page.path).sort()).toEqual([...expected].sort());
+  });
+});
+
+describe('TOP_LEVEL_PAGES', () => {
+  it('every page is both navigable and described in the system prompt', () => {
+    for (const page of TOP_LEVEL_PAGES) {
+      expect(isAllowedNavigateTarget(`/${page.path}`)).toBe(true);
+      expect(CLANCY_SYSTEM_PROMPT).toContain(`- /${page.path} — ${page.label}`);
+    }
+  });
+
+  it('warns that company-settings is owner/admin only so Clancy can flag it to a PM', () => {
+    const companySettings = TOP_LEVEL_PAGES.find((p) => p.path === 'company-settings');
+    expect(companySettings?.label).toContain('owner/admin only');
+  });
+
+  it('covers the authenticated non-project pages a project_manager can reach in App.tsx', () => {
+    // Manually mirrored from frontend/src/App.tsx's authenticated top-level
+    // routes. Excluded on purpose:
+    //   /dashboard, /projects, /projects/<id> — already hardcoded in the whitelist.
+    //   /reports, /subcontractors, /documentation — redirects to another page,
+    //     not real destinations (project reports live at /projects/<id>/reports).
+    //   /my-company — subcontractor-only (SUBCONTRACTOR_ROLES); a project_manager
+    //     literally cannot open it.
+    //   /onboarding — one-time company onboarding flow, not a nav target.
+    //   /reports/scheduled-runs/:runId/artifact, /subcontractor-portal/* — param
+    //     routes / subcontractor shell, not office-user destinations.
+    // If a new authenticated top-level page ships, add it BOTH there and here.
+    const expected = [
+      'portfolio',
+      'notifications',
+      'audit-log',
+      'company-settings',
+      'docs',
+      'support',
+      'profile',
+      'settings',
+      'invitations',
+    ];
+    expect(TOP_LEVEL_PAGES.map((page) => page.path).sort()).toEqual([...expected].sort());
   });
 });
 

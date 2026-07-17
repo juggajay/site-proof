@@ -59,11 +59,38 @@ export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   { path: 'settings', label: 'project settings' },
 ];
 
+// Company-wide (non-project) pages an office user can open, same shape as
+// PROJECT_PAGES. Each entry is verified against a real authenticated route +
+// its role guard in frontend/src/App.tsx (pinned in prompt.test.ts). Rules:
+// a page a project_manager literally cannot open is EXCLUDED (e.g. /my-company
+// is subcontractor-only); an owner/admin-only page is INCLUDED with the
+// restriction in its label so Clancy can warn a PM before sending them.
+// `path` is relative to the app root (no /projects prefix).
+export const TOP_LEVEL_PAGES: ReadonlyArray<{ path: string; label: string }> = [
+  { path: 'portfolio', label: 'portfolio — cross-project rollup dashboard' },
+  {
+    path: 'notifications',
+    label: 'notifications — pending approvals, queries, and workflow items needing attention',
+  },
+  { path: 'audit-log', label: 'audit log — critical workflow and auth events' },
+  {
+    path: 'company-settings',
+    label:
+      'company settings — company profile, members, and commercial access (owner/admin only; a project manager cannot open this)',
+  },
+  { path: 'docs', label: 'in-app documentation — how CIVOS works, module by module' },
+  { path: 'support', label: 'support — raise a ticket or find contact details' },
+  { path: 'profile', label: 'your profile — name, password, and MFA' },
+  { path: 'settings', label: 'your personal preferences' },
+  { path: 'invitations', label: 'your pending project and company invitations' },
+];
+
 const ID = '[A-Za-z0-9_-]+';
 const NAVIGATE_PATTERNS: RegExp[] = [
   `/dashboard`,
   `/projects`,
   `/projects/${ID}`,
+  ...TOP_LEVEL_PAGES.map((page) => `/${page.path}`),
   ...PROJECT_PAGES.map((page) => `/projects/${ID}/${page.path.replace('<lotId>', ID)}`),
 ].map((p) => new RegExp(`^${p}$`));
 
@@ -82,12 +109,13 @@ export function isAllowedNavigateTarget(to: unknown): to is string {
   return NAVIGATE_PATTERNS.some((pattern) => pattern.test(to));
 }
 
-// Rendered into the system prompt from the same table the whitelist uses.
+// Rendered into the system prompt from the same tables the whitelist uses.
 const PAGES_SECTION = [
   '- /dashboard — company dashboard',
   '- /projects — project list',
   '- /projects/<id> — project overview',
   ...PROJECT_PAGES.map((page) => `- /projects/<id>/${page.path} — ${page.label}`),
+  ...TOP_LEVEL_PAGES.map((page) => `- /${page.path} — ${page.label}`),
 ].join('\n');
 
 export const CLANCY_SYSTEM_PROMPT = `You are Clancy, the CIVOS copilot for Australian civil construction quality assurance.
@@ -102,6 +130,8 @@ What you can do:
 - Take the user to a page with the navigate tool.
 - Report what is waiting for review (pending AI proposals).
 - Report hold point and open-NCR counts for a project with the get_project_qa_summary tool.
+- Report what is in any module — diaries, dockets, claims, tests, NCRs, variations, or documents — with the get_module_summary tool. It returns counts by status and the five most recent items. Call it when the user asks how many of something there are, what the latest is, or the state of a module.
+- Report one lot's detail — status, chainage, activity, ITP template, checklist progress, hold points, and open NCRs — with the get_lot_status tool, given the lot number. Call it when the user asks about a specific lot by its number.
 - Suggest which ITP template a lot needs for an activity with the get_itp_suggestion tool. It returns the match tier and the matching templates; for a Tier B shortlist, tell the user the lot form ranks the options for them. Never name a template the tool did not return.
 
 PAGES — the complete list of pages you can open with navigate (replace <id> with the project id, <lotId> with a lot id):
