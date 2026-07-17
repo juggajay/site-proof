@@ -3,7 +3,9 @@
  *
  * Creates global ITP templates for QLD pavement activities.
  * Templates: Unbound (MRTS05), Stabilised Lime (MRTS07A), Stabilised Cement (MRTS07B),
- *            Concrete Pavement (MRTS40), Plant-Mixed Stabilised (MRTS08)
+ *            Concrete Pavement (MRTS40), Plant-Mixed Stabilised (MRTS08),
+ *            Concrete Pavement Base (MRTS40 May 2026), Concrete Pavement Base Ancillary (MRTS41),
+ *            Heavily Bound Cemented (MRTS08), Lightly Bound (MRTS10)
  *
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-pavements.js --execute
  */
@@ -1582,6 +1584,767 @@ const qldPlantMixedStabilisedTemplate = {
 }
 
 // =============================================================================
+// 6. QLD CONCRETE PAVEMENT BASE (TMR MRTS40 - May 2026)
+// =============================================================================
+
+const qldConcretePavementBaseTemplate = {
+  name: 'Concrete Pavement Base (QLD MRTS40)',
+  description: 'TMR concrete pavement base for large-scale, heavily-trafficked applications per MRTS40 (May 2026; harmonised from ATS 3530). Covers fixed-form and slipform paving, plain/jointed/CRCP, tiebars, joints, texture, curing and trafficking control. In-Works concrete fcMin 35.0 MPa, ffMin 4.5 MPa.',
+  activityType: 'pavement_concrete',
+  specificationReference: 'MRTS40',
+  stateSpec: 'MRTS',
+  checklistItems: [
+    // =========================================================================
+    // MIX APPROVAL & PRODUCTION
+    // =========================================================================
+    {
+      description: 'Submit Quality Plan documentation (Table 4.1) and nominated concrete mix; no concrete production until accepted',
+      acceptanceCriteria: 'Quality Plan per Table 4.1 and nominated mix submission accepted by Administrator before any concrete production',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP1 - Clause 4 / Appendix A MRTS40. Commencement of concrete production held until Quality Plan and nominated mix accepted.'
+    },
+    {
+      description: 'Administrator to witness trial mix before production of each mix',
+      acceptanceCriteria: 'Trial mix witnessed; consistence, air, and strength specimens sampled and demonstrated satisfactory',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: 'AS 1012.3.1 (slump), AS 1012.9 (compressive), AS 1012.11 (flexural)',
+      notes: 'WP1 - Clause ~7 MRTS40. Trial mix witnessed before HP3 release.'
+    },
+    {
+      description: 'Production of each concrete mix released after trial mix',
+      acceptanceCriteria: 'Trial mix results (WP1) accepted; production of the nominated mix authorised by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (compressive), AS 1012.11 (flexural)',
+      notes: 'HP3 - Clause ~7 MRTS40. Production of each concrete mix held until trial mix (WP1) accepted.'
+    },
+    {
+      description: 'Production of concrete for paving (including paving trial) released; records maintained per Appendix B',
+      acceptanceCriteria: 'Concrete for paving authorised; per-load production records maintained per Appendix B',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP6 - MRTS40. Production of concrete for paving held; records per Appendix B.'
+    },
+    {
+      description: 'First concrete base in the Works, including paving trial, released before general paving',
+      acceptanceCriteria: 'First base placement (including paving trial) inspected and released by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'HP7 - MRTS40. First concrete base in the Works, including paving trial, held.'
+    },
+    {
+      description: 'Construct paving trial and have Administrator witness placement, finishing, texturing and curing',
+      acceptanceCriteria: 'Paving trial constructed in continuous operation; surface finish, joint formation, compaction, texturing and curing demonstrated satisfactory',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: 'Coring / surface regularity',
+      notes: 'WP2 - Clause ~19 MRTS40. Construction of a paving trial witnessed before HP10.'
+    },
+    {
+      description: 'Base paving subject to the paving trial released before general paving',
+      acceptanceCriteria: 'Paving trial results (WP2) accepted; general base paving authorised',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP10 - MRTS40. Base paving subject to the trial held until paving trial accepted.'
+    },
+    {
+      description: 'Record pre-numbered delivery docket (identification certificate) for each concrete load',
+      acceptanceCriteria: 'Pre-numbered identification certificate issued and recorded per load per Clause 10.51',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 10.51 MRTS40. Delivery docket pre-numbered and issued per load.'
+    },
+
+    // =========================================================================
+    // FRESH CONCRETE TESTING
+    // =========================================================================
+    {
+      description: 'Test concrete consistence (slump) each sampling',
+      acceptanceCriteria: 'Slump within the nominated mix tolerance',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.3.1 (slump)',
+      notes: 'Clause 10 MRTS40. Consistence sampled per production/load regime.'
+    },
+    {
+      description: 'Test air content of fresh concrete each sampling',
+      acceptanceCriteria: 'Air content within the nominated mix tolerance',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.4.2 (air content)',
+      notes: 'Clause 10 MRTS40. Air content sampled per production regime.'
+    },
+
+    // =========================================================================
+    // PLACEMENT
+    // =========================================================================
+    {
+      description: 'Hold paving of base where high underlying subbase levels exist within the schedule',
+      acceptanceCriteria: 'Where high underlying surface levels exist, base paving held until levels resolved and released',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: 'Survey (levels)',
+      notes: 'HP2 - Clause 6.10 MRTS40. Paving of base held where high underlying surface levels exist.'
+    },
+    {
+      description: 'Verify concrete placement around steel reinforcement/tiebars maintains the spacing constraint',
+      acceptanceCriteria: 'Concrete placement spacing around steel reinforcement <= 0.90 m longitudinal and transverse',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'HP4 - Clause 9.27 MRTS40. Placement of concrete around steel reinforcement held; spacing <= 0.90 m both directions.'
+    },
+    {
+      description: 'Extract tiebar cores for slipform paving where a coring nonconformity is detected',
+      acceptanceCriteria: 'Slipform tiebar cores demonstrate conforming tiebar placement; nonconforming cores rectified',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Coring (tiebar location)',
+      notes: 'HP11 - Clause 9.28 MRTS40. Slipform paving held where tiebar coring nonconformity detected.'
+    },
+
+    // =========================================================================
+    // HARDENED STRENGTH & GEOMETRY
+    // =========================================================================
+    {
+      description: 'Test 7-day and 28-day compressive strength of concrete',
+      acceptanceCriteria: 'Compressive strength >= fcMin 35.0 MPa in the Works',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (cylinders), AS 1012.14 (cores)',
+      notes: 'Clause 10 MRTS40. fcMin 35.0 MPa for in-Works concrete.'
+    },
+    {
+      description: 'Test flexural strength (modulus of rupture) with rolling assessment',
+      acceptanceCriteria: 'Flexural strength >= ffMin 4.5 MPa; rolling standard deviation <= 0.5 MPa; CRCP trial-mix flexural must not exceed 6.5 MPa at nominated age',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.11 (modulus of rupture)',
+      notes: 'Clause 10 MRTS40. ffMin 4.5 MPa. Hold applies (HP) if rolling flexural < ffMin or rolling SD > 0.5 MPa. CRCP trial flexural ceiling 6.5 MPa.'
+    },
+    {
+      description: 'Hold use of the relevant authorised nominated mix where a Clause 10.38 nonconformity condition is met',
+      acceptanceCriteria: 'Use of nominated mix held; released after 7-day compressive and flexural strength review',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (compressive), AS 1012.11 (flexural)',
+      notes: 'HP5 - Clause 10.38 MRTS40. Use of authorised nominated mix held on nonconformity; released after 7-day strength review.'
+    },
+    {
+      description: 'Verify compaction (density) of placed concrete by coring',
+      acceptanceCriteria: 'Compaction conformity per Clause 25 for fixed-form and slipform paving',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Coring / mass per unit volume',
+      notes: 'Clause 25 MRTS40. Compaction conformity per Clause 25 frequency.'
+    },
+    {
+      description: 'Verify geometry and layer thickness by survey and coring',
+      acceptanceCriteria: 'Thickness and geometry conformity per Clause 27',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Survey / coring',
+      notes: 'Clause 27 MRTS40. Geometry and thickness conformity per Clause 27.'
+    },
+    {
+      description: 'Verify surface texture depth',
+      acceptanceCriteria: 'Texture depth per Table 18.4',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Per Table 18.4 method',
+      notes: 'Clause 18 / Table 18.4 MRTS40. Texture depth per lot.'
+    },
+
+    // =========================================================================
+    // CURING, JOINTS & TRAFFICKING
+    // =========================================================================
+    {
+      description: 'Maintain curing membrane after texturing',
+      acceptanceCriteria: 'Curing membrane maintained for 7 days or until in-situ 25 MPa is reached',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'Clause 17 MRTS40. Curing membrane maintained 7 days or until in-situ 25 MPa.'
+    },
+    {
+      description: 'Test joint silicone sealant dimensions and field adhesion',
+      acceptanceCriteria: 'Sealant dimensions and field adhesion meet requirements',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Field adhesion / sealant dimension check',
+      notes: 'WP3 - MRTS40. Testing of joints and silicone sealants witnessed.'
+    },
+    {
+      description: 'Release general trafficking of vehicles at 20 MPa compressive strength with joints sealed',
+      acceptanceCriteria: 'In-situ compressive strength >= 20 MPa and all joints sealed; no access before 20 MPa except saws/coring',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (cylinders or cores)',
+      notes: 'HP8 - Clause 17.13 b) and e) MRTS40. Trafficking held until 20 MPa reached and joints sealed.'
+    },
+    {
+      description: 'Release heavy/full trafficking of vehicles at 25 MPa compressive strength with joints sealed',
+      acceptanceCriteria: 'In-situ compressive strength >= 25 MPa and all joints sealed before heavy axle loads',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (cylinders or cores)',
+      notes: 'HP9 - Clause 17.13 c) MRTS40. Heavy/full trafficking held until 25 MPa reached and joints sealed.'
+    }
+  ]
+}
+
+// =============================================================================
+// 7. QLD CONCRETE PAVEMENT BASE - ANCILLARY WORKS (TMR MRTS41)
+// =============================================================================
+
+const qldConcretePavementBaseAncillaryTemplate = {
+  name: 'Concrete Pavement Base — Ancillary Works (QLD MRTS41)',
+  description: 'TMR concrete pavement base for ancillary works (small-scale: widenings, patches, minor areas) per MRTS41 (July 2023). Lighter hold-point regime than MRTS40 with a self-contained Table 5.1. Design flexural strengths S32/20 = 4.0 MPa, S40/20 = 4.5 MPa.',
+  activityType: 'pavement_concrete',
+  specificationReference: 'MRTS41',
+  stateSpec: 'MRTS',
+  checklistItems: [
+    // =========================================================================
+    // SUBMISSION MILESTONES
+    // =========================================================================
+    {
+      description: 'Milestone: Submit Quality Plan including Construction Procedures (MRTS50 + Table 5.2) 10 business days before work commences',
+      acceptanceCriteria: 'Quality Plan and Construction Procedures submitted at least 10 business days before work commences',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Milestone - Clause 5 / Table 5.2 MRTS41 / MRTS50. Quality Plan due 10 business days prior.'
+    },
+    {
+      description: 'Milestone: Submit proposed concrete mix design 4 weeks prior to placement',
+      acceptanceCriteria: 'Proposed base mix design submitted at least four weeks before placement',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Milestone - MRTS41. Concrete mix design submission due four weeks prior.'
+    },
+    {
+      description: 'Milestone: Submit curing compound details 7 days prior',
+      acceptanceCriteria: 'Curing compound details submitted at least seven days prior',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Milestone - MRTS41. Curing compound details due seven days prior.'
+    },
+    {
+      description: 'Milestone: Submit joint sealant details 7 days prior',
+      acceptanceCriteria: 'Joint sealant details submitted at least seven days prior',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Milestone - MRTS41. Joint sealant details due seven days prior.'
+    },
+
+    // =========================================================================
+    // MIX & TRIAL
+    // =========================================================================
+    {
+      description: 'Obtain approval of base mix design before paving',
+      acceptanceCriteria: 'Base mix design approved by Administrator; design flexural strength 4.0 MPa (S32/20) or 4.5 MPa (S40/20) as specified',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'AS 1012.9 (compressive), flexural strength',
+      notes: 'HP1 - Clause 6.5 / 6.6 / 7.5 MRTS41. Approval of base mix design held.'
+    },
+    {
+      description: 'Administrator to witness mixing of trial batch',
+      acceptanceCriteria: 'Trial batch mixing witnessed; batch demonstrates conforming mix',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'WP1 - MRTS41. Mixing of trial batch witnessed.'
+    },
+    {
+      description: 'Base paving subject to suitable construction procedures released',
+      acceptanceCriteria: 'Construction procedures accepted before base paving',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP3 - MRTS41. Base paving subject to suitable construction procedures held.'
+    },
+    {
+      description: 'Base paving subject to suitable formwork, reinforcement and equipment released',
+      acceptanceCriteria: 'Formwork, reinforcement and equipment inspected and accepted before base paving',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'HP4 - MRTS41. Base paving subject to suitable formwork, reinforcement and equipment held.'
+    },
+    {
+      description: 'Base paving subject to a successful paving trial released (where specified)',
+      acceptanceCriteria: 'Where specified, paving trial successful and accepted before general base paving',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Surface regularity / coring',
+      notes: 'HP2 - MRTS41. Base paving subject to successful paving trial (if specified) held.'
+    },
+    {
+      description: 'Administrator to witness paving trial (where specified)',
+      acceptanceCriteria: 'Paving trial witnessed where specified',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'WP2 - MRTS41. Paving trial witnessed (if specified).'
+    },
+
+    // =========================================================================
+    // PLACEMENT, TESTING & TRAFFICKING
+    // =========================================================================
+    {
+      description: 'Administrator to witness placing and paving',
+      acceptanceCriteria: 'Placing and paving witnessed; continuous placement, consolidation and finishing satisfactory',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'WP3 - MRTS41. Placing and paving witnessed.'
+    },
+    {
+      description: 'Test compressive strength of concrete per nominated grade',
+      acceptanceCriteria: 'Compressive strength meets nominated grade (S32/20 or S40/20); corresponding design flexural strength 4.0 / 4.5 MPa',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (compressive strength)',
+      notes: 'Clause 9 MRTS41. Compressive strength per grade; design flexural 4.0 MPa (S32/20) / 4.5 MPa (S40/20).'
+    },
+    {
+      description: 'Verify relative compaction of base concrete',
+      acceptanceCriteria: 'Relative compaction per Clause 9.2-9.3',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Relative compaction (Cl 9.2-9.3)',
+      notes: 'Clause 9.2-9.3 MRTS41. Relative compaction verified.'
+    },
+    {
+      description: 'Administrator to witness extracted cores',
+      acceptanceCriteria: 'Extracted cores witnessed; thickness and quality demonstrated',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Coring (extracted cores)',
+      notes: 'WP4 - MRTS41. Extracted cores witnessed.'
+    },
+    {
+      description: 'Release trafficking of base at 20 MPa compressive strength',
+      acceptanceCriteria: 'In-situ compressive strength >= 20 MPa before trafficking of base',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (compressive strength)',
+      notes: 'HP5 - MRTS41. Trafficking of base (20 MPa) held.'
+    },
+    {
+      description: 'Release full trafficking of base at 25 MPa compressive strength',
+      acceptanceCriteria: 'In-situ compressive strength >= 25 MPa before full trafficking of base',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1012.9 (compressive strength)',
+      notes: 'HP6 - MRTS41. Trafficking of base (25 MPa) held.'
+    },
+    {
+      description: 'Release removal and replacement of nonconforming concrete base',
+      acceptanceCriteria: 'Removal and replacement of nonconforming base released by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP7 - MRTS41. Removal and replacement of nonconforming concrete base held.'
+    }
+  ]
+}
+
+// =============================================================================
+// 8. QLD HEAVILY BOUND (CEMENTED) PAVEMENT (TMR MRTS08)
+// =============================================================================
+
+const qldHeavilyBoundPavementTemplate = {
+  name: 'Heavily Bound (Cemented) Pavement (QLD MRTS08)',
+  description: 'TMR plant-mixed heavily bound (cemented) pavement construction per MRTS08 (November 2022). High-strength cemented base/subbase. UCS specimens compacted to 100% MDD; relative compaction 100% Standard Compaction; characteristic UCS within nominated 28-day band.',
+  activityType: 'pavement_bound',
+  specificationReference: 'MRTS08',
+  stateSpec: 'MRTS',
+  checklistItems: [
+    {
+      description: 'Milestone: Submit Construction Procedure for heavily bound pavement works 14 days before commencement',
+      acceptanceCriteria: 'Construction Procedure submitted at least 14 days prior to commencement of works',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Milestone - Clause 5.2 MRTS08. Construction Procedure due 14 days prior.'
+    },
+    {
+      description: 'Obtain acceptance of Construction Procedure before heavily bound works commence',
+      acceptanceCriteria: 'Construction Procedure for heavily bound pavement works accepted by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP1 - Clause 5.2 / 5.2.1 / 6.1 MRTS08. Acceptance of Construction Procedure held.'
+    },
+    {
+      description: 'Demonstrate unbound pavement material compliance prior to stabilisation',
+      acceptanceCriteria: 'Unbound material conformance results (grading, PI, CBR, durability) demonstrated compliant no more than the specified age old before stabilisation',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1289.3.6.1 (PSD), AS 1289.3.3.1 (PI), AS 1289.6.1.1 (CBR)',
+      notes: 'HP2 - Clause 7.1 / 8.1 / 9.4.10 MRTS08. Unbound material compliance demonstrated before stabilisation.'
+    },
+    {
+      description: 'Nominate registered stabilised mix design (Stabilised Mix Design Certificate)',
+      acceptanceCriteria: 'Current registered mix design nominated; certificate states standard, stabilising agent and Target Content; conformance results within specified age',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'Q115 (UCS)',
+      notes: 'HP3 - Clause 9.5.1 / 9.5.3 MRTS08. Nomination of registered mix design held.'
+    },
+    {
+      description: 'Construct trial pavement and have Administrator witness construction',
+      acceptanceCriteria: 'Trial pavement constructed and witnessed; placement, compaction and testing demonstrated',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'WP1 - MRTS08. Construction of Trial Pavement witnessed.'
+    },
+    {
+      description: 'Demonstrate ability to manufacture and construct a conforming pavement (trial)',
+      acceptanceCriteria: 'Trial pavement demonstrates ability to manufacture and construct conforming heavily bound pavement; released by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS), Q140A (relative compaction)',
+      notes: 'HP4 - MRTS08. Demonstration of ability to manufacture and construct conforming pavement held.'
+    },
+    {
+      description: 'Verify stabilising agent content against nominated Target Content',
+      acceptanceCriteria: 'Stabilising agent content matches nominated Target Content; frequency 1 per lot (<=100 t), 1 per 300 t (>100 t)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q135A (addition) / Q134 or Q140A (heat of neutralisation)',
+      notes: 'Clause 9 MRTS08. Stabilising agent content per Target Content nominated at HP3.'
+    },
+    {
+      description: 'Verify moisture content at plant and in field',
+      acceptanceCriteria: 'Moisture content within tolerance of target; plant 2 per lot (1 per 500 t), field 4 per lot',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q135B / AS 1289.2.1.1',
+      notes: 'Clause 9 MRTS08. Moisture 2 per lot at plant, 4 per lot in field.'
+    },
+    {
+      description: 'Complete mixing, placement, compaction and trimming within the nominated working time',
+      acceptanceCriteria: 'All compaction and trimming completed within the nominated working time measured from stabilising-agent addition',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'Q061 / Q136A (working time)',
+      notes: 'Clause 7 MRTS08. Working time critical; material exceeding working time may not achieve required UCS.'
+    },
+    {
+      description: 'Verify relative compaction of compacted layer',
+      acceptanceCriteria: 'Relative compaction 100% Standard Compaction (all other cases; higher where design specifies); 4 per lot',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q140A / nuclear (NGTM)',
+      notes: 'Clause 9 MRTS08. 100% Standard Compaction; 1 per 500 m2 normal / 1 per 1000 m2 reduced.'
+    },
+    {
+      description: 'Proof roll pavement in presence of Administrator',
+      acceptanceCriteria: 'No visual deformation or instability under proof rolling; all areas proof-rolled',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q723 (proof rolling)',
+      notes: 'WP2 - MRTS08. Proof rolling witnessed by Administrator.'
+    },
+    {
+      description: 'Verify segregation / particle size distribution',
+      acceptanceCriteria: 'Segregation / PSD within grading envelope; 1 per lot',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1141.3.1 / AS 1289.2.1.x',
+      notes: 'Clause 9 MRTS08. Segregation / PSD 1 per lot.'
+    },
+    {
+      description: 'Mould and test UCS specimens for characteristic strength',
+      acceptanceCriteria: 'UCS specimens compacted to 100% MDD; characteristic UCS within nominated 28-day min/max band; test result = average of 3 specimens',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS)',
+      notes: 'Clause 9 MRTS08. UCS specimens at 100% MDD; test = avg of 3; characteristic UCS within nominated band (UCS7-lower/UCS7-upper 7-day equivalents).'
+    },
+    {
+      description: 'Verify geometrics (level, thickness, straightedge, crossfall, roughness)',
+      acceptanceCriteria: 'Level, thickness, straightedge, crossfall and roughness within the primary tolerance table',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Survey / Q712 / Q103A',
+      notes: 'Clause 9 MRTS08. Geometrics per primary tolerance table.'
+    },
+    {
+      description: 'Hold covering of heavily bound layer until released',
+      acceptanceCriteria: 'Heavily bound layer not covered with subsequent layer/surfacing until all conformance verified and covering released',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: null,
+      notes: 'HP5 - MRTS08. Covering a heavily bound pavement layer held.'
+    },
+    {
+      description: 'Hold on nonconformance of compressive strength or stabilising agent requirements',
+      acceptanceCriteria: 'Any nonconformance of compressive strength or stabilising agent triggers hold; use of mix design ceases until HP3 re-released',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS)',
+      notes: 'HP6 - MRTS08. Nonconformance of compressive strength or stabilising agent; mix use halts until HP3 re-released.'
+    }
+  ]
+}
+
+// =============================================================================
+// 9. QLD LIGHTLY BOUND PAVEMENT (TMR MRTS10)
+// =============================================================================
+
+const qldLightlyBoundPavementTemplate = {
+  name: 'Lightly Bound Pavement (QLD MRTS10)',
+  description: 'TMR plant-mixed lightly bound pavement construction per MRTS10 (November 2022). Sibling of MRTS08 with the same hold-point structure but a UCS ceiling: characteristic 28-day UCS 1.0-2.0 MPa (upper 2.0 MPa limits cracking, lower 1.0 MPa ensures strength).',
+  activityType: 'pavement_bound',
+  specificationReference: 'MRTS10',
+  stateSpec: 'MRTS',
+  checklistItems: [
+    {
+      description: 'Milestone: Submit Construction Procedure for lightly bound pavement works 14 days before commencement',
+      acceptanceCriteria: 'Construction Procedure submitted at least 14 days prior to commencement of works',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Milestone - Clause 5.2 MRTS10. Construction Procedure due 14 days prior.'
+    },
+    {
+      description: 'Obtain acceptance of Construction Procedure before lightly bound works commence',
+      acceptanceCriteria: 'Construction Procedure for lightly bound pavement works accepted by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP1 - Clause 5.2 / 5.2.1 MRTS10. Acceptance of Construction Procedure held.'
+    },
+    {
+      description: 'Demonstrate unbound pavement material compliance prior to stabilisation',
+      acceptanceCriteria: 'Unbound material conformance results demonstrated compliant before stabilisation',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AS 1289.3.6.1 (PSD), AS 1289.3.3.1 (PI), AS 1289.6.1.1 (CBR)',
+      notes: 'HP2 - Clause 6.1 / 7.1 / 8.1 MRTS10. Unbound material compliance demonstrated before stabilisation.'
+    },
+    {
+      description: 'Nominate registered stabilised mix design (Stabilised Mix Design Certificate)',
+      acceptanceCriteria: 'Current registered mix design nominated; certificate states standard, stabilising agent and Target Content',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'Q115 (UCS)',
+      notes: 'HP3 - Clause 9.4.10 / 9.5.1 MRTS10. Nomination of registered mix design held.'
+    },
+    {
+      description: 'Construct trial pavement and have Administrator witness construction',
+      acceptanceCriteria: 'Trial pavement constructed and witnessed; placement, compaction and testing demonstrated',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'WP1 - MRTS10. Construction of Trial Pavement witnessed.'
+    },
+    {
+      description: 'Demonstrate ability to manufacture and construct a conforming pavement (trial)',
+      acceptanceCriteria: 'Trial pavement demonstrates ability to manufacture and construct conforming lightly bound pavement; released by Administrator',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS), Q140A (relative compaction)',
+      notes: 'HP4 - Clause 9.5.3 MRTS10. Demonstration of ability to manufacture and construct conforming pavement held.'
+    },
+    {
+      description: 'Verify stabilising agent content against nominated Target Content',
+      acceptanceCriteria: 'Stabilising agent content matches nominated Target Content; 1 per lot (<=100 t), 1 per 300 t (>100 t)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q135A / heat of neutralisation',
+      notes: 'Clause 9 MRTS10. Stabilising agent content per Target Content.'
+    },
+    {
+      description: 'Verify moisture content at plant and in field pre-compaction',
+      acceptanceCriteria: 'Moisture within tolerance; plant 2 per lot (1 per 500 t), field pre-compaction 4 per lot (1 per 500 m2 / 1 per 1000 m2)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q135B / AS 1289.2.1.1',
+      notes: 'Clause 9 MRTS10. Moisture 2 per lot at plant, 4 per lot in field pre-compaction.'
+    },
+    {
+      description: 'Verify relative compaction of compacted layer',
+      acceptanceCriteria: 'Relative compaction per compaction standard; 4 per lot (1 per 500 m2 / 1 per 1000 m2 reduced)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q140A (relative compaction)',
+      notes: 'Clause 9 MRTS10. Relative compaction 4 per lot.'
+    },
+    {
+      description: 'Proof roll pavement in presence of Administrator',
+      acceptanceCriteria: 'No instability under proof rolling; all areas proof-rolled (4 per lot)',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q723 (proof rolling)',
+      notes: 'WP2 - MRTS10. Proof rolling witnessed by Administrator.'
+    },
+    {
+      description: 'Test characteristic 28-day UCS within the specified band',
+      acceptanceCriteria: 'Characteristic 28-day UCS within 1.0-2.0 MPa (upper 2.0 MPa limits cracking, lower 1.0 MPa ensures strength); 1 test = average of 3 specimens',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS)',
+      notes: 'Clause 9 MRTS10. Characteristic 28-day UCS 1.0-2.0 MPa; >200 t: 1 per 1000 t, 1 per lot; test = avg of 3.'
+    },
+    {
+      description: 'Test and trend 7-day UCS (all materials)',
+      acceptanceCriteria: '7-day UCS reported and trending within band (7-day equivalents UCS7-lower / UCS7-upper)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS)',
+      notes: 'Clause 9 MRTS10. 7-day UCS per lot; early indication of compliance with the 1.0-2.0 MPa band.'
+    },
+    {
+      description: 'Test ball penetration where final surfacing is a sprayed seal',
+      acceptanceCriteria: 'Ball penetration within limit at 5 test chainages per lot (inner and outer wheel path each lane) where final surfacing is sprayed seal',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'AG:PT/T251 (ball penetration)',
+      notes: 'Clause 9 MRTS10. Ball penetration 5 chainages per lot where sprayed-seal surfaced.'
+    },
+    {
+      description: 'Verify segregation / particle size distribution',
+      acceptanceCriteria: 'Segregation / PSD within grading; 1 per lot',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q103A / AS 1289.2.1.4',
+      notes: 'Clause 9 MRTS10. Segregation / PSD 1 per lot.'
+    },
+    {
+      description: 'Verify surface level and total thickness',
+      acceptanceCriteria: 'Surface level (individual) within +/-10 mm (+/-15 mm hard-cut layers); total thickness (average) -20 mm; target mid-point of tolerance',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Survey (levels)',
+      notes: 'Clause 9 MRTS10. Level +/-10 mm (+/-15 mm hard-cut); total thickness -20 mm; 1 per 20 linear m.'
+    },
+    {
+      description: 'Verify deviation from 3 m straightedge on final base',
+      acceptanceCriteria: 'Deviation from 3 m straightedge <= 5 mm on final uppermost base layer',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q712 / 3 m straightedge',
+      notes: 'Clause 9 MRTS10. Deviation from 3 m straightedge max 5 mm on final base; 1 per 20 linear m.'
+    },
+    {
+      description: 'Verify crossfall on final base',
+      acceptanceCriteria: 'Crossfall departs design by <= 0.5% absolute on final base layer',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Survey (crossfall)',
+      notes: 'Clause 9 MRTS10. Crossfall within 0.5% absolute of design on final base; 1 per 20 linear m.'
+    },
+    {
+      description: 'Hold covering of lightly bound layer until released',
+      acceptanceCriteria: 'Lightly bound layer not covered with subsequent layer/surfacing until all conformance verified and covering released',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: null,
+      notes: 'HP5 - MRTS10. Covering a lightly bound pavement layer held.'
+    },
+    {
+      description: 'Hold and cease nominated mix on nonconformance',
+      acceptanceCriteria: 'On nonconformance, use of nominated mix design ceases until HP3 re-released',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Q115 (UCS)',
+      notes: 'HP6 - MRTS10. Cease using nominated mix design on nonconformance; use halts until HP3 re-released.'
+    }
+  ]
+}
+
+// =============================================================================
 // SEED FUNCTION
 // =============================================================================
 
@@ -1657,9 +2420,13 @@ async function main() {
     await seedTemplate(qldStabilisedCementTemplate)
     await seedTemplate(qldConcretePavementTemplate)
     await seedTemplate(qldPlantMixedStabilisedTemplate)
+    await seedTemplate(qldConcretePavementBaseTemplate)
+    await seedTemplate(qldConcretePavementBaseAncillaryTemplate)
+    await seedTemplate(qldHeavilyBoundPavementTemplate)
+    await seedTemplate(qldLightlyBoundPavementTemplate)
 
     console.log('═══════════════════════════════════════════════════════════════')
-    console.log(' Seeding Complete! (5 pavement templates)')
+    console.log(' Seeding Complete! (9 pavement templates)')
     console.log('═══════════════════════════════════════════════════════════════')
   } catch (error) {
     console.error('❌ Seeding failed:', error)
