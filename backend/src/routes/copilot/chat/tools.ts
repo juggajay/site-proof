@@ -4,7 +4,11 @@
 // than throwing, so one bad projectId doesn't abort the turn.
 
 import { prisma } from '../../../lib/prisma.js';
-import { CANONICAL_ACTIVITIES, foldActivityValue } from '../../../lib/activityTaxonomy.js';
+import {
+  CANONICAL_ACTIVITIES,
+  foldActivityValue,
+  formatActivityLabel,
+} from '../../../lib/activityTaxonomy.js';
 import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getDashboardProjectAccess, type AuthUser } from '../../dashboard/access.js';
 import { buildHoldPointListItems } from '../../holdpoints/listPresentation.js';
@@ -21,6 +25,21 @@ export interface ToolOutcome {
 }
 
 export type ToolExecutor = (name: string, input: unknown) => Promise<ToolOutcome>;
+
+// The modules get_module_summary can report on. Each maps to a Prisma model and
+// the status vocabulary of its own list route — see getModuleSummary. `tests`
+// groups by passFail (pass/fail/pending) and `documents` by documentType, since
+// those are the fields those pages count on; every other module groups by status.
+export const MODULE_NAMES = [
+  'diary',
+  'dockets',
+  'claims',
+  'tests',
+  'ncrs',
+  'variations',
+  'documents',
+] as const;
+export type ModuleName = (typeof MODULE_NAMES)[number];
 
 // Anthropic tool definitions. Kept small and prescriptive about WHEN to call —
 // recent models reach for tools conservatively.
@@ -83,6 +102,41 @@ export const CHAT_TOOLS = [
         },
       },
       required: ['projectId', 'activity'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_module_summary',
+    description:
+      'Summarise one module of a project: counts grouped by status and the five most recent items (identifier, short label, status, date). Call this when the user asks how many of something there are, what the latest entries are, or the general state of diaries, dockets, claims, tests, NCRs, variations, or documents. For a QA-specific hold-point/NCR rollup use get_project_qa_summary instead; for a single lot use get_lot_status.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project id' },
+        module: {
+          type: 'string',
+          enum: MODULE_NAMES,
+          description: 'Which module to summarise',
+        },
+      },
+      required: ['projectId', 'module'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_lot_status',
+    description:
+      "Get one lot's detail by its lot number: status, chainage, activity, assigned ITP template, checklist progress, hold points (open/released), and open NCR count. Call this when the user names a specific lot. The lot number match is case-insensitive but must be exact — pass the number as the user said it.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project id' },
+        lotNumber: {
+          type: 'string',
+          description: 'The lot number exactly as the user refers to it',
+        },
+      },
+      required: ['projectId', 'lotNumber'],
       additionalProperties: false,
     },
   },
@@ -291,6 +345,307 @@ async function getItpSuggestion(
   };
 }
 
+// Trim a free-text field to a compact label. Keeps the tool payload small —
+// the model only needs enough to recognise the item, not the full text.
+function trimLabel(value: string | null | undefined, max = 80): string {
+  const text = (value ?? '').trim().replace(/\s+/g, ' ');
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+type ModuleItem = { id: string; label: string; status: string; date: string | null };
+
+// groupBy rows -> { statusValue: count }. Null/empty group keys fold to
+// 'unknown' so a stray null never drops a row from the totals.
+function countsFrom(rows: Array<{ _count: { _all: number } }>, key: (row: never) => unknown) {
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    const value = key(row as never);
+    const label = typeof value === 'string' && value.length > 0 ? value : 'unknown';
+    out[label] = (out[label] ?? 0) + row._count._all;
+  }
+  return out;
+}
+
+/**
+ * Compact per-module rollup: counts grouped by the module's own status field
+ * plus the five most recent items. Each branch mirrors the model + status
+ * vocabulary of that module's list route (do not invent status names). `tests`
+ * groups by passFail and `documents` by documentType; the rest by status.
+ * Cheap by construction: one groupBy + one take:5 findMany per call.
+ */
+async function getModuleSummary(
+  user: AuthUser,
+  projectId: string,
+  module: ModuleName,
+): Promise<ToolOutcome> {
+  if (!(await hasInternalProjectAccess(user, projectId))) {
+    return { result: NO_ACCESS };
+  }
+
+  let counts: Record<string, number>;
+  let recent: ModuleItem[];
+
+  switch (module) {
+    case 'diary': {
+      const [rows, items] = await Promise.all([
+        prisma.dailyDiary.groupBy({ by: ['status'], where: { projectId }, _count: { _all: true } }),
+        prisma.dailyDiary.findMany({
+          where: { projectId },
+          orderBy: { date: 'desc' },
+          take: 5,
+          select: { id: true, date: true, status: true, generalNotes: true },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { status: string }) => r.status);
+      recent = items.map((d) => ({
+        id: d.id,
+        label: trimLabel(`${isoDay(d.date)} ${d.generalNotes ?? ''}`),
+        status: d.status,
+        date: d.date.toISOString(),
+      }));
+      break;
+    }
+    case 'dockets': {
+      const [rows, items] = await Promise.all([
+        prisma.dailyDocket.groupBy({
+          by: ['status'],
+          where: { projectId },
+          _count: { _all: true },
+        }),
+        prisma.dailyDocket.findMany({
+          where: { projectId },
+          orderBy: { date: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            date: true,
+            status: true,
+            subcontractorCompany: { select: { companyName: true } },
+          },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { status: string }) => r.status);
+      recent = items.map((d) => ({
+        id: d.id,
+        label: trimLabel(`${isoDay(d.date)} ${d.subcontractorCompany?.companyName ?? ''}`),
+        status: d.status,
+        date: d.date.toISOString(),
+      }));
+      break;
+    }
+    case 'claims': {
+      const [rows, items] = await Promise.all([
+        prisma.progressClaim.groupBy({
+          by: ['status'],
+          where: { projectId },
+          _count: { _all: true },
+        }),
+        prisma.progressClaim.findMany({
+          where: { projectId },
+          orderBy: { claimNumber: 'desc' },
+          take: 5,
+          select: { id: true, claimNumber: true, status: true, createdAt: true },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { status: string }) => r.status);
+      recent = items.map((c) => ({
+        id: c.id,
+        label: `Claim #${c.claimNumber}`,
+        status: c.status,
+        date: c.createdAt.toISOString(),
+      }));
+      break;
+    }
+    case 'tests': {
+      const [rows, items] = await Promise.all([
+        prisma.testResult.groupBy({
+          by: ['passFail'],
+          where: { projectId },
+          _count: { _all: true },
+        }),
+        prisma.testResult.findMany({
+          where: { projectId },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            testType: true,
+            testRequestNumber: true,
+            passFail: true,
+            createdAt: true,
+          },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { passFail: string }) => r.passFail);
+      recent = items.map((t) => ({
+        id: t.id,
+        label: trimLabel(`${t.testType}${t.testRequestNumber ? ` ${t.testRequestNumber}` : ''}`),
+        status: t.passFail,
+        date: t.createdAt.toISOString(),
+      }));
+      break;
+    }
+    case 'ncrs': {
+      const [rows, items] = await Promise.all([
+        prisma.nCR.groupBy({ by: ['status'], where: { projectId }, _count: { _all: true } }),
+        prisma.nCR.findMany({
+          where: { projectId },
+          orderBy: { raisedAt: 'desc' },
+          take: 5,
+          select: { id: true, ncrNumber: true, description: true, status: true, raisedAt: true },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { status: string }) => r.status);
+      recent = items.map((n) => ({
+        id: n.id,
+        label: trimLabel(`${n.ncrNumber} ${n.description}`),
+        status: n.status,
+        date: n.raisedAt.toISOString(),
+      }));
+      break;
+    }
+    case 'variations': {
+      const [rows, items] = await Promise.all([
+        prisma.variation.groupBy({ by: ['status'], where: { projectId }, _count: { _all: true } }),
+        prisma.variation.findMany({
+          where: { projectId },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { id: true, variationNumber: true, title: true, status: true, createdAt: true },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { status: string }) => r.status);
+      recent = items.map((v) => ({
+        id: v.id,
+        label: trimLabel(`${v.variationNumber} ${v.title}`),
+        status: v.status,
+        date: v.createdAt.toISOString(),
+      }));
+      break;
+    }
+    case 'documents': {
+      // Documents have no status column; documentType is what the page filters
+      // and counts on, so that is the grouping key here.
+      const [rows, items] = await Promise.all([
+        prisma.document.groupBy({
+          by: ['documentType'],
+          where: { projectId },
+          _count: { _all: true },
+        }),
+        prisma.document.findMany({
+          where: { projectId },
+          orderBy: { uploadedAt: 'desc' },
+          take: 5,
+          select: { id: true, filename: true, documentType: true, uploadedAt: true },
+        }),
+      ]);
+      counts = countsFrom(rows, (r: { documentType: string }) => r.documentType);
+      recent = items.map((d) => ({
+        id: d.id,
+        label: trimLabel(d.filename),
+        status: d.documentType,
+        date: d.uploadedAt.toISOString(),
+      }));
+      break;
+    }
+    default:
+      return { result: `Unknown module: ${module}` };
+  }
+
+  return { result: JSON.stringify({ module, counts, recent }) };
+}
+
+// Completion counts as done the same way the lot register does
+// (isAcceptedListCompletion in routes/lots/listPresentation.ts): a done status
+// that has not been kicked back to pending_verification or rejected.
+const DONE_COMPLETION_STATUSES = new Set(['completed', 'not_applicable']);
+const UNACCEPTED_VERIFICATION_STATUSES = new Set(['pending_verification', 'rejected']);
+
+/**
+ * One lot's QA state, matched by lot number case-insensitively (exact). Reuses
+ * the hold-point register presentation so open/released counts equal the page,
+ * and mirrors the lot register's checklist-progress semantics. Not found ->
+ * an instructive error naming a real lot number from the project.
+ */
+async function getLotStatus(
+  user: AuthUser,
+  projectId: string,
+  lotNumber: string,
+): Promise<ToolOutcome> {
+  if (!(await hasInternalProjectAccess(user, projectId))) {
+    return { result: NO_ACCESS };
+  }
+
+  // Same load shape as getProjectQaSummary so buildHoldPointListItems (which
+  // needs the full checklist items to spot hold-point rows) works unchanged and
+  // the lot object satisfies HoldPointListLot without a cast.
+  const lot = await prisma.lot.findFirst({
+    where: { projectId, lotNumber: { equals: lotNumber, mode: 'insensitive' } },
+    include: {
+      itpInstance: {
+        include: {
+          template: { include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } } },
+          completions: true,
+        },
+      },
+      holdPoints: true,
+    },
+  });
+
+  if (!lot) {
+    const example = await prisma.lot.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: 'asc' },
+      select: { lotNumber: true },
+    });
+    return {
+      result: example
+        ? `No lot "${trimLabel(lotNumber)}" on this project. Lot numbers are exact — try one like "${example.lotNumber}", or open the lot register to see them all.`
+        : 'This project has no lots yet.',
+    };
+  }
+
+  const instance = lot.itpInstance;
+  const totalChecklist = instance?.template?.checklistItems.length ?? 0;
+  const completedChecklist = (instance?.completions ?? []).filter(
+    (c) =>
+      DONE_COMPLETION_STATUSES.has(c.status ?? '') &&
+      !UNACCEPTED_VERIFICATION_STATUSES.has(c.verificationStatus ?? ''),
+  ).length;
+
+  const holdPoints = summariseHoldPoints(buildHoldPointListItems([lot]));
+
+  const openNcrs = await prisma.nCR.count({
+    where: {
+      projectId,
+      status: { notIn: ['closed', 'closed_concession'] },
+      ncrLots: { some: { lotId: lot.id } },
+    },
+  });
+
+  const chainage =
+    lot.chainageStart != null && lot.chainageEnd != null
+      ? `${lot.chainageStart}–${lot.chainageEnd}`
+      : null;
+
+  return {
+    result: JSON.stringify({
+      lotNumber: lot.lotNumber,
+      status: lot.status,
+      chainage,
+      activityType: formatActivityLabel(lot.activityType),
+      itpTemplate: instance?.template?.name ?? null,
+      checklist: { completed: completedChecklist, total: totalChecklist },
+      holdPoints: { open: holdPoints.awaitingRelease, released: holdPoints.released },
+      openNcrs,
+    }),
+  };
+}
+
 /**
  * Bind an executor to the requesting user. The returned function is what the
  * model loop calls per tool_use block.
@@ -326,6 +681,29 @@ export function createChatToolExecutor(user: AuthUser): ToolExecutor {
           return { result: 'A projectId and activity are required.' };
         }
         return getItpSuggestion(user, projectId, activity);
+      }
+
+      case 'get_module_summary': {
+        const projectId = readString(input, 'projectId');
+        const module = readString(input, 'module');
+        if (!projectId || !module) {
+          return { result: 'A projectId and module are required.' };
+        }
+        if (!(MODULE_NAMES as readonly string[]).includes(module)) {
+          return {
+            result: `"${module.slice(0, 40)}" is not a known module. Use one of: ${MODULE_NAMES.join(', ')}.`,
+          };
+        }
+        return getModuleSummary(user, projectId, module as ModuleName);
+      }
+
+      case 'get_lot_status': {
+        const projectId = readString(input, 'projectId');
+        const lotNumber = readString(input, 'lotNumber');
+        if (!projectId || !lotNumber) {
+          return { result: 'A projectId and lotNumber are required.' };
+        }
+        return getLotStatus(user, projectId, lotNumber);
       }
 
       case 'navigate': {

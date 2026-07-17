@@ -20,7 +20,7 @@ import { getDashboardProjectAccess } from '../../dashboard/access.js';
 import { CANONICAL_ACTIVITIES } from '../../../lib/activityTaxonomy.js';
 import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
-import { CHAT_TOOLS, createChatToolExecutor, summariseHoldPoints } from './tools.js';
+import { CHAT_TOOLS, MODULE_NAMES, createChatToolExecutor, summariseHoldPoints } from './tools.js';
 
 const user = { id: 'u1', companyId: 'c1', roleInCompany: 'project_manager' } as AuthUser;
 
@@ -200,6 +200,62 @@ describe('chat tool executor', () => {
     );
     expect((await execute('get_itp_suggestion', { activity: 'drainage' })).result).toBe(
       'A projectId and activity are required.',
+    );
+    expect(hasInternalProjectAccess).not.toHaveBeenCalled();
+  });
+
+  // get_module_summary / get_lot_status happy paths hit Prisma and are covered
+  // by the DB-backed tests; here we exercise the validation + access branches.
+  it('refuses get_module_summary on a project the user cannot access', async () => {
+    vi.mocked(hasInternalProjectAccess).mockResolvedValue(false);
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_module_summary', { projectId: 'other', module: 'ncrs' });
+    expect(outcome.result).toContain("don't have access");
+  });
+
+  it('requires projectId and module for get_module_summary', async () => {
+    const execute = createChatToolExecutor(user);
+    expect((await execute('get_module_summary', { projectId: 'p1' })).result).toBe(
+      'A projectId and module are required.',
+    );
+    expect(hasInternalProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown module before any access lookup', async () => {
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_module_summary', { projectId: 'p1', module: 'invoices' });
+    expect(outcome.result).toContain('not a known module');
+    expect(hasInternalProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('exposes exactly the seven module names as the module enum', () => {
+    const tool = CHAT_TOOLS.find((t) => t.name === 'get_module_summary')!;
+    const moduleSchema = (
+      tool.input_schema.properties as Record<string, { enum?: readonly string[] }>
+    ).module;
+    expect(moduleSchema.enum).toEqual([...MODULE_NAMES]);
+    expect(MODULE_NAMES).toEqual([
+      'diary',
+      'dockets',
+      'claims',
+      'tests',
+      'ncrs',
+      'variations',
+      'documents',
+    ]);
+  });
+
+  it('refuses get_lot_status on a project the user cannot access', async () => {
+    vi.mocked(hasInternalProjectAccess).mockResolvedValue(false);
+    const execute = createChatToolExecutor(user);
+    const outcome = await execute('get_lot_status', { projectId: 'other', lotNumber: 'LOT-1' });
+    expect(outcome.result).toContain("don't have access");
+  });
+
+  it('requires projectId and lotNumber for get_lot_status', async () => {
+    const execute = createChatToolExecutor(user);
+    expect((await execute('get_lot_status', { projectId: 'p1' })).result).toBe(
+      'A projectId and lotNumber are required.',
     );
     expect(hasInternalProjectAccess).not.toHaveBeenCalled();
   });
