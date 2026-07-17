@@ -37,6 +37,7 @@ const seeders = [
   { state: 'vic', activity: 'pavements', file: 'seed-itp-templates-vic-pavements.js', label: 'VIC VicRoads pavements' },
   { state: 'vic', activity: 'road-furniture', file: 'seed-itp-templates-vic-road-furniture.js', label: 'VIC VicRoads road furniture' },
   { state: 'vic', activity: 'structures', file: 'seed-itp-templates-vic-structures.js', label: 'VIC VicRoads structures' },
+  { state: 'vic', activity: 'conduits', file: 'seed-itp-templates-vic-conduits.js', label: 'VIC VicRoads conduits' },
 ];
 
 function parseCsv(value) {

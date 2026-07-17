@@ -4,7 +4,7 @@
  * Creates global ITP templates for VIC drainage activities.
  * Templates: Pipe Installation (Sec 701), Pits & Chambers (Sec 705),
  *            Culverts (Sec 610/BTN016), Subsoil/Subsurface (Sec 702),
- *            Kerb & Channel (Sec 703)
+ *            Kerb & Channel (Sec 703), Light Duty Concrete Paving - Paths (Sec 703)
  *
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-drainage.js --execute
  */
@@ -1754,6 +1754,118 @@ const vicKerbChannelTemplate = {
 }
 
 // =============================================================================
+// TEMPLATE: LIGHT DUTY CONCRETE PAVING - PATHS (VicRoads Sec 703)
+// VicRoads Section 703 (Light Duty Concrete Paving) - SS 703:15.0, Dec 2025.
+// v15.0 is a thin DTP AMENDMENT layer over Austroads Technical Specification
+// ATS 4610 "Light Duty Concrete Paving" Edition 1.1 (Nov 2025), which is
+// paywalled and NOT reproduced here. The substantive base requirements
+// (materials, tests, tolerances, full hold/witness list) live in ATS 4610;
+// items below carry only the DTP amendments and honestly cite ATS 4610 for
+// the base spec. Scope: footpaths, shared paths, driveways, traffic islands,
+// median infill, patterned paving, tactile indicators (NOT road pavements).
+// =============================================================================
+
+const vicLightDutyPathsTemplate = {
+  name: 'Light Duty Concrete Paving - Paths (VIC Sec 703)',
+  description: 'VIC VicRoads/DTP light duty concrete paving of paths per Section 703 (SS 703:15.0, December 2025). Scope is footpaths, shared paths, driveways, traffic islands, median infill, patterned paving and tactile indicators (explicitly not concrete road pavements). IMPORTANT DEPENDENCY: Section 703 v15.0 is a thin amendment layer -- the work must be carried out per Austroads Technical Specification ATS 4610 "Light Duty Concrete Paving" Edition 1.1 (November 2025), which is external/paywalled and not reproduced in this template. The items below capture the DTP amendments over ATS 4610; the full ATS 4610 hold/witness points and base material/test/tolerance requirements must be imported from ATS 4610 to complete the ITP.',
+  activityType: 'footpaths_flatwork',
+  specificationReference: 'Sec 703',
+  stateSpec: 'VicRoads',
+  checklistItems: [
+    {
+      description: 'Confirm ATS 4610 Ed 1.1 is the working base spec and apply Section 703 amendments',
+      acceptanceCriteria: 'Austroads ATS 4610 "Light Duty Concrete Paving" Edition 1.1 (November 2025) confirmed as the base specification; Section 703 v15.0 replace/add/remove amendments applied over it (DTP substitutes its own sections for referenced Austroads documents)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'ATS 4610 Ed 1.1',
+      notes: 'Section 703 v15.0 scope note. Base requirements live in ATS 4610 Ed 1.1; 703 is an amendment overlay.'
+    },
+    {
+      description: 'Verify concrete thickness per amended Table 5.1',
+      acceptanceCriteria: 'Concrete thickness per Section 703 amended Table 5.1 (e.g. commercial vehicle crossings / parking bays / non-residential driveways: SL82 mesh, minimum 170 mm)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 5.1 (amended). Commercial/parking/non-residential driveway SL82 @ 170 mm minimum.'
+    },
+    {
+      description: 'Verify concrete grade',
+      acceptanceCriteria: 'Concrete is N32 (Section 885/884), 32 MPa geopolymer (Section 883), or VR330/32 (Section 610) for shared use paths, as amended by Section 703',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'per ATS 4610 Ed 1.1 (base requirements)',
+      notes: 'Clause 703 amendment. N32 / 32 MPa geopolymer / VR330-32 (SUPs). Base concrete requirements per ATS 4610.'
+    },
+    {
+      description: 'Confirm earthworks scope and applicable specification',
+      acceptanceCriteria: 'Clause 7 (minor earthworks) applies only where cut/fill <= 0.5 m and solely for the paving; otherwise Section 204 (Earthworks) applies',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 7. Section 204 applies if cut/fill > 0.5 m or part of roadworks.'
+    },
+    {
+      description: 'Verify earthworks and subbase layer thickness',
+      acceptanceCriteria: 'Earthworks layer <= 200 mm; subbase layer <= 150 mm',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'Clause 7 (amended). Earthworks layer <= 200 mm; subbase <= 150 mm.'
+    },
+    {
+      description: 'Verify compaction where DDR testing is specified',
+      acceptanceCriteria: 'Where Dry Density Ratio testing is specified, compaction to Scale C per Sections 204/304',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Sections 204/304 (DDR, Scale C)',
+      notes: 'Clause 7 (amended). DDR compaction to Scale C where specified.'
+    },
+    {
+      description: 'Notify the Principal of the concrete pour (Witness Point 2)',
+      acceptanceCriteria: 'After set-out, site preparation, subbase and steel reinforcement placement, the Contractor notifies the Principal (Superintendent) of the concrete pour; Witness Point 2 is to remain',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'WP - Clause 10.2 (amended). Witness Point 2 retained: notify Principal of pour after set-out/subbase/reinforcement.'
+    },
+    {
+      description: 'Confirm sprayed concrete is not used',
+      acceptanceCriteria: 'Sprayed concrete is not permitted for the works',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 10.4 (amended). Sprayed concrete prohibited.'
+    },
+    {
+      description: 'Import ATS 4610 hold and witness points into the ITP',
+      acceptanceCriteria: 'The full hold/witness point framework from ATS 4610 Ed 1.1 (external dependency, obtained from Austroads) is imported into the project ITP and released as required',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'per ATS 4610 Ed 1.1 (hold/witness framework)',
+      notes: 'Section 703 v15.0 scope note. Hold/witness framework is inherited from ATS 4610 (not enumerated in the 703 amendment) -- obtain from Austroads.'
+    },
+    {
+      description: 'Verify tactile indicators and patterned paving where specified',
+      acceptanceCriteria: 'Tactile ground surface indicators and patterned/decorative paving installed per ATS 4610 where specified',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: 'per ATS 4610 Ed 1.1',
+      notes: 'Clause 703 scope. Tactile indicators / patterned paving per ATS 4610 where specified.'
+    }
+  ]
+}
+
+// =============================================================================
 // SEED FUNCTION
 // =============================================================================
 
@@ -1823,9 +1935,10 @@ async function main() {
     await seedTemplate(vicCulvertsTemplate)
     await seedTemplate(vicSubsoilDrainageTemplate)
     await seedTemplate(vicKerbChannelTemplate)
+    await seedTemplate(vicLightDutyPathsTemplate)
 
     console.log('\n═══════════════════════════════════════════════════════════════')
-    console.log(' Seeding Complete! (5 drainage templates)')
+    console.log(' Seeding Complete! (6 drainage templates)')
     console.log('═══════════════════════════════════════════════════════════════')
 
   } catch (error) {

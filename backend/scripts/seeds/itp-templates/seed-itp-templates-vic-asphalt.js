@@ -2,8 +2,9 @@
  * Seed Script: VIC (VicRoads) ITP Templates - Asphalt
  *
  * Creates global ITP templates for VIC asphalt and surfacing activities.
- * Templates: DGA (Sec 407), OGA (Sec 417), SMA (Sec 404),
- *            Sprayed Bituminous Surfacing (Sec 408), Warm Mix Asphalt / Recycled (Sec 407/TN107)
+ * Templates: DGA (Sec 407), OGA (Sec 417, SS 417:6.0 Oct 2025), SMA (Sec 404),
+ *            Sprayed Bituminous Surfacing (Sec 408), Warm Mix Asphalt / Recycled (Sec 407/TN107),
+ *            High Modulus Asphalt EME2 (Sec 418), Priming and Primersealing (Sec 408)
  *
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-asphalt.js --execute
  */
@@ -586,301 +587,151 @@ const vicDGATemplate = {
 
 const vicOGATemplate = {
   name: 'Open Graded Asphalt OGA (VIC)',
-  description: 'VIC VicRoads open graded asphalt (OGA) construction per Section 417 (v5, 27/12/2018 -- last published standalone version, now superseded). OGA is a functional wearing course with high air voids (18-22%) providing spray reduction and noise benefits. Uses polymer modified binder (PMB) per ATS 3110.',
+  description: 'VIC VicRoads open graded asphalt (OGA) construction per Section 417 (SS 417:6.0, October 2025 -- current edition, replaces v5.0 of 27/12/2018). Section 417 is an overlay on Section 407 (Dense Graded Asphalt): the hold/witness structure and mix-registration mechanics are inherited from Section 407, while 417 adds OGA-specific material and placement constraints. OGA is a functional wearing course with high air voids (18-25%) for spray reduction and noise benefit, using A10E polymer modified binder (ATS 3110) with no RAP.',
   activityType: 'asphalt_oga',
   specificationReference: 'Sec 417',
   stateSpec: 'VicRoads',
   checklistItems: [
     // =========================================================================
-    // PRE-WORK SUBMISSIONS
+    // MIX REGISTRATION AND MATERIALS
     // =========================================================================
     {
-      description: 'Submit mix design for OGA registered in accordance with RC 500.01, including aggregate grading, binder type/content, and design air voids',
-      acceptanceCriteria: 'Mix registered with VicRoads/DTP per RC 500.01; PMB type compliant with ATS 3110; design air voids typically 18-22%',
-      pointType: 'hold_point',
+      description: 'Register OGA mix design per RC 500.01 including Asphalt Binder Drain Off results and selected maximum mixing temperature',
+      acceptanceCriteria: 'Mix registered with DTP per RC 500.01; registration includes Asphalt Binder Drain Off result and the selected maximum mixing temperature; OGA-specific additions to the registration provided',
+      pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
-      testType: 'RC 500.01 / RC 201.01 or RC 201.12',
-      notes: 'Clause 417.04. Mix must be registered at least 2 months prior to supply. Only "General" registered mixes unless Superintendent approves otherwise. OGA typically uses polymer modified binder (A10E or S45R PMB).'
+      testType: 'RC 500.01',
+      notes: 'Clause 417.06 (stage 1). OGA registration adds Asphalt Binder Drain Off results + selected max mixing temperature over the Section 407 registration.'
     },
     {
-      description: 'Submit Quality Plan for OGA works including placement procedures, plant details, rolling patterns, joint treatment methods, and testing schedule',
-      acceptanceCriteria: 'Quality Plan addresses all requirements of Section 417; approved by Superintendent prior to works commencing',
-      pointType: 'hold_point',
+      description: 'Verify binder is A10E polymer modified binder compliant with ATS 3110',
+      acceptanceCriteria: 'Binder is A10E PMB compliant with ATS 3110; no substitute binder used',
+      pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'Clause 417.03. Must include proposed lot sizes, testing frequencies, corrective action procedures.'
+      notes: 'Clause 417 (tolerances/gates). OGA binder restricted to A10E PMB (ATS 3110); no alternative permitted.'
     },
     {
-      description: 'Submit evidence that asphalt plant is capable of producing OGA to registered mix design including calibration records and plant trial results',
-      acceptanceCriteria: 'Plant production trial demonstrates consistent mix within registered tolerances; binder drain-down test results within limits',
-      pointType: 'hold_point',
+      description: 'Confirm no reclaimed asphalt pavement (RAP) is incorporated in the OGA',
+      acceptanceCriteria: 'No RAP incorporated in the OGA mix',
+      pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
-      testType: 'AS 2891.3.3 (fibre content if applicable) / Schellenberg drain-down test',
-      notes: 'Clause 417.04. OGA is sensitive to production temperature -- plant must demonstrate temperature control capability. Drain-down at production temperature must not exceed 0.3% by mass.'
-    },
-    {
-      description: 'Verify source and quality of coarse aggregate for OGA including polished stone value, Los Angeles abrasion, and particle shape',
-      acceptanceCriteria: 'Aggregate compliant with Section 801 and RC 500.01 requirements; PSV >= 45 for wearing course; LA abrasion <= 30%; flakiness index within limits',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'AS 1141.40 (PSV) / AS 1141.23 (LA) / AS 1141.15 (Flakiness)',
-      notes: 'Clause 417.05. OGA requires premium aggregate due to open texture and direct tyre contact. Aggregate must comply with VicRoads Section 801.'
-    },
-    {
-      description: 'Verify polymer modified binder (PMB) compliance with specification requirements and ATS 3110',
-      acceptanceCriteria: 'PMB meets ATS 3110 Class A10E or S45R; softening point, elastic recovery, and viscosity within specified ranges',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Austroads AGPT/T101 (sampling PMB)',
-      notes: 'Clause 417.05. OGA requires PMB to resist binder drain-down and provide durable adhesion in open matrix.'
-    },
-
-    // =========================================================================
-    // SURFACE PREPARATION
-    // =========================================================================
-    {
-      description: 'Inspect underlying pavement surface (tack coat substrate) for compliance with level and condition requirements prior to OGA placement',
-      acceptanceCriteria: 'Substrate surface within level tolerances per Section 407; free of loose material, dust, and standing water; any repairs completed',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
       testType: null,
-      notes: 'Clause 417.06. The wearing course beneath OGA is critical as it is the structural layer. OGA sits on top as a functional layer only. Superintendent to be notified.'
+      notes: 'Clause 417 (tolerances/gates). RAP is not permitted in OGA.'
     },
     {
-      description: 'Apply tack coat to substrate surface at specified rate and verify uniform coverage and curing',
-      acceptanceCriteria: 'Tack coat applied uniformly at rate specified in design (typically 0.2-0.4 L/m2 residual); adequately cured/broken before OGA placement; no excess pooling',
+      description: 'Verify aggregate and filler grading within the Table 417.061 envelope',
+      acceptanceCriteria: 'Combined aggregate (including filler) grading within Table 417.061 envelope (13.2 mm = 100; 9.5 = 90-100; 6.7 = 50-65; 4.75 = 25-35; 2.36 = 10-20; 0.075 = 3-5)',
       pointType: 'standard',
       responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
+      evidenceRequired: 'test',
+      testType: 'AS sieve analysis',
+      notes: 'Clause 417.06, Table 417.061. Open grading envelope with low fines for permeability.'
+    },
+    {
+      description: 'Verify design air voids of the OGA mix',
+      acceptanceCriteria: 'Air voids 18-25% (mensuration bulk density)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AS/NZS 2891.9.3 (mensuration bulk density)',
+      notes: 'Clause 417.06, Table 417.061. High air voids are the functional requirement of OGA.'
+    },
+    {
+      description: 'Verify binder content and minimum added filler and fibre',
+      acceptanceCriteria: 'Binder content 6.5% +/- 0.3% (production tolerance); minimum 1% hydrated lime added filler by mass; minimum 0.3% fibre additive by mass',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
       testType: null,
-      notes: 'Clause 417.06. Tack coat adhesion is critical for OGA -- delamination is a common failure mode.'
+      notes: 'Clause 417.06, Table 417.061. Hydrated lime (>= 1%) and fibre (>= 0.3%) control drain-off and durability.'
+    },
+    {
+      description: 'Verify binder drain-off at design binder content and maximum mixing temperature',
+      acceptanceCriteria: 'Asphalt Binder Drain Off <= 0.3% of total sample mass (tested at 175 deg C at design binder content)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AGPT/T235 (Asphalt Binder Drain Off)',
+      notes: 'Clause 417.06. Drain-off is the characteristic OGA risk; tested at registration and reported.'
     },
 
     // =========================================================================
-    // TRIAL SECTION / FIRST PRODUCTION
+    // SURFACE PREPARATION AND PLACEMENT
     // =========================================================================
     {
-      description: 'Construct trial section of OGA to demonstrate compliance with mix design, placement procedures, and compaction capability',
-      acceptanceCriteria: 'Trial section meets all specification requirements including air voids, permeability, texture depth, and compaction; Superintendent approves trial results before main works proceed',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'RC 316.00 / RC 317.01 / permeability test',
-      notes: 'Clause 417.07. Trial section typically 200-500 m length. Must demonstrate achievable compaction, acceptable texture depth, and adequate permeability.'
-    },
-    {
-      description: 'Verify OGA temperature at first load delivery to site and confirm within placement temperature range',
-      acceptanceCriteria: 'OGA temperature at delivery within recommended range for PMB type; typically 140-170 deg C depending on binder; not below minimum placement temperature',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Infrared thermometer / calibrated probe',
-      notes: 'Clause 417.08. OGA is more sensitive to temperature than DGA. Too hot causes drain-down; too cold prevents compaction. Superintendent to be notified.'
-    },
-
-    // =========================================================================
-    // DURING PLACEMENT
-    // =========================================================================
-    {
-      description: 'Monitor paver operation for consistent speed, screed settings, material feed, and head of material in hopper',
-      acceptanceCriteria: 'Paver speed consistent (typically 3-5 m/min for OGA); screed temperature adequate; continuous material feed; no segregation visible',
+      description: 'Verify receiving surface is free-draining and apply bituminous water-resistant bond coat',
+      acceptanceCriteria: 'Non-free-draining existing surface first regulated/filled with DGA; bituminous water-resistant bond coat applied at minimum 0.5 L/m2 residual binder using a calibrated sprayer (hand spray only on small irregular areas clear of the traffic path)',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'photo',
       testType: null,
-      notes: 'Clause 417.08. OGA is prone to segregation due to open grading. Paver hopper must be kept at least half full at all times.'
+      notes: 'Clause 417.06 (stage 2). Bond coat >= 0.5 L/m2 residual binder; receiving surface must be free-draining.'
     },
     {
-      description: 'Monitor asphalt temperature during placement at regular intervals behind the paver screed',
-      acceptanceCriteria: 'Mat temperature within specified range; no areas below minimum placement temperature; temperature recorded at minimum every 100 m or per load',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: 'Infrared thermometer',
-      notes: 'Clause 417.08. Temperature monitoring critical for OGA. Low temperature areas indicate potential compaction deficiency.'
-    },
-    {
-      description: 'Monitor weather conditions during OGA placement to ensure compliance with specification limits',
-      acceptanceCriteria: 'Air temperature >= 10 deg C; no rain or standing water on surface; wind speed within acceptable limits; pavement surface temperature >= 10 deg C',
+      description: 'Verify surface temperature before placing OGA',
+      acceptanceCriteria: 'Surface temperature >= 15 deg C over the majority of the area before placing',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'Clause 417.07. OGA must not be placed in rain or on wet surfaces. Minimum temperatures may be higher than DGA due to open texture cooling rapidly.'
+      notes: 'Clause 417.07 (ambient placing gate). Surface temp >= 15 deg C.'
     },
     {
-      description: 'Verify rolling pattern and compaction procedures in accordance with approved Quality Plan and trial section results',
-      acceptanceCriteria: 'Rolling pattern matches approved procedure; static steel roller used (no vibration for OGA); number of passes as per trial; no displacement or cracking of mat',
+      description: 'Verify discharge and rolling-start temperatures',
+      acceptanceCriteria: 'Discharge temperature 155-175 deg C; rolling-start temperature 140-175 deg C; plant storage <= 185 deg C (per Table 417.071)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'Table 417.071',
+      notes: 'Clause 417.07, Table 417.071. Temperature control critical for OGA compaction and drain-off.'
+    },
+    {
+      description: 'Spread OGA to specified layer thickness',
+      acceptanceCriteria: 'Layer thickness >= 25 mm at any point; mean thickness >= specified',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 417.06 (stage 3). Local minimum layer thickness 25 mm.'
+    },
+
+    // =========================================================================
+    // COMPACTION AND JUNCTIONS
+    // =========================================================================
+    {
+      description: 'Compact OGA by the approved procedure with static steel rollers only',
+      acceptanceCriteria: 'Minimum 5 passes with static steel-wheeled roller of >= 6 t overall mass; pneumatic-tyred rollers prohibited',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'photo',
       testType: null,
-      notes: 'Clause 417.08. OGA is typically compacted with static steel rollers only -- pneumatic or vibratory rollers can crush the open matrix.'
+      notes: 'Clause 417.06 (stage 4). >= 5 passes static steel roller >= 6 t; no pneumatic rollers (they crush the open matrix).'
     },
     {
-      description: 'Verify longitudinal and transverse joint construction for OGA including overlap, temperature, and compaction at joints',
-      acceptanceCriteria: 'Joints properly formed with minimal cold joint exposure; hot joint preferred where possible; no segregation or ravelling at joints; joints rolled within temperature requirements',
+      description: 'Form junctions and transitions where insufficient depth',
+      acceptanceCriteria: 'Joints and junctions where insufficient depth transitioned using Size 10 Type H DGA per Section 407.21(e)',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'photo',
       testType: null,
-      notes: 'Clause 417.08. OGA joints are particularly vulnerable to ravelling. Cold longitudinal joints should be cut back to sound material and tack coated.'
+      notes: 'Clause 417.06 (stage 5). Junctions transitioned with Size 10 Type H DGA per 407.21(e).'
     },
 
     // =========================================================================
-    // COMPACTION AND DENSITY TESTING
+    // ACCEPTANCE (INHERITED FROM SECTION 407)
     // =========================================================================
     {
-      description: 'Determine lot boundaries for compaction testing in accordance with specification and approved lot sizes',
-      acceptanceCriteria: 'Lot size as specified (typically 300-500 tonnes or area-based); lot boundaries identified and documented; minimum 6 test locations per lot per RC 316.00',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: 'RC 316.00',
-      notes: 'Clause 417.09. Where total OGA quantity exceeds 300 tonnes, compaction tested on lot basis.'
-    },
-    {
-      description: 'Extract cores and test for in-situ air voids and density of compacted OGA',
-      acceptanceCriteria: 'Characteristic in-situ air voids (CAV) within specified range; OGA design air voids typically 18-22%; CAV = AV + (0.92 x S_AV) per RC 500.05',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'RC 316.00 / AS 2891.14.5 / RC 500.05',
-      notes: 'Clause 417.09. OGA is unique -- high air voids are required for permeability function. Both too-high and too-low air voids are problematic.'
-    },
-
-    // =========================================================================
-    // PERMEABILITY TESTING
-    // =========================================================================
-    {
-      description: 'Test permeability of compacted OGA to confirm adequate drainage function',
-      acceptanceCriteria: 'Permeability meets specification minimum; visual confirmation of water draining through OGA layer; no ponding on surface',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Falling head permeameter or equivalent',
-      notes: 'Clause 417.09. Permeability is the primary functional requirement for OGA. Insufficient permeability defeats the purpose of OGA. Superintendent to be notified.'
-    },
-
-    // =========================================================================
-    // SURFACE QUALITY
-    // =========================================================================
-    {
-      description: 'Measure surface texture depth of completed OGA using sand patch method',
-      acceptanceCriteria: 'Mean texture depth (MTD) >= 1.0 mm; measured at frequency of 1 per 200 m per lane; no areas with excessively smooth or rough texture',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'RC 317.01 (Sand Patch Method)',
-      notes: 'Clause 417.09. OGA should have high macro-texture for spray reduction and noise benefits.'
-    },
-    {
-      description: 'Verify surface level of completed OGA against design levels at specified intervals',
-      acceptanceCriteria: 'Surface level within +/-10 mm of design level at any point; no localised depressions exceeding 5 mm under 3 m straightedge',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Survey / 3m straightedge',
-      notes: 'Clause 417.09. Surface levels checked at centreline, edges, and crown.'
-    },
-    {
-      description: 'Verify thickness of OGA layer from core measurements against design thickness',
-      acceptanceCriteria: 'Mean thickness not less than design thickness; no individual core less than design minus 5 mm; OGA wearing course typically 30-45 mm thick',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Core measurement',
-      notes: 'Clause 417.09. Thickness from cores taken for density testing. Deficient thickness may compromise permeability function.'
-    },
-
-    // =========================================================================
-    // BINDER AND MIX COMPLIANCE TESTING
-    // =========================================================================
-    {
-      description: 'Sample and test OGA production mix for binder content compliance at specified frequency',
-      acceptanceCriteria: 'Binder content within +/-0.3% of registered mix design; tested at minimum 1 per sublot or per 250-500 tonnes',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'AS/NZS 2891.2.1 (Ignition method) or solvent extraction',
-      notes: 'Clause 417.09. OGA binder content is critical -- too low causes ravelling, too high causes drain-down. Typical OGA binder content 4.5-5.5%.'
-    },
-    {
-      description: 'Sample and test OGA production mix for aggregate grading compliance at specified frequency',
-      acceptanceCriteria: 'Aggregate grading within registered mix design envelopes; tested at minimum 1 per sublot; no excess fines (passing 0.075 mm sieve)',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'AS 1141.11 (Sieve analysis)',
-      notes: 'Clause 417.09. Excess fines in OGA will block the air voids and reduce permeability.'
-    },
-    {
-      description: 'Conduct binder drain-down test on OGA production mix to confirm resistance to binder migration',
-      acceptanceCriteria: 'Binder drain-down not exceeding 0.3% by mass at maximum production temperature; tested at plant start-up and when production temperature changes',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test',
-      testType: 'Schellenberg drain-down test',
-      notes: 'Clause 417.05. Drain-down is a characteristic risk for OGA. Test at proposed maximum production temperature.'
-    },
-
-    // =========================================================================
-    // TRAFFIC MANAGEMENT AND CURING
-    // =========================================================================
-    {
-      description: 'Implement traffic management on completed OGA including speed restrictions during initial trafficking period',
-      acceptanceCriteria: 'Speed limit reduced to 60 km/h (or as specified) for initial period; no heavy vehicles until Superintendent approval; surface protected from contamination',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'Clause 417.10. OGA requires careful initial trafficking to embed aggregate and develop stable surface.'
-    },
-    {
-      description: 'Inspect OGA surface after initial trafficking for evidence of ravelling, delamination, or aggregate loss',
-      acceptanceCriteria: 'No excessive stone loss or ravelling; no delamination from substrate; no fat spots or bleeding; surface draining freely',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'photo',
-      testType: null,
-      notes: 'Clause 417.10. Post-trafficking inspection critical for OGA. Superintendent to be notified.'
-    },
-
-    // =========================================================================
-    // DOCUMENTATION AND HANDOVER
-    // =========================================================================
-    {
-      description: 'Compile and submit all production, placement, and testing records for each lot of OGA',
-      acceptanceCriteria: 'Complete records including: mix design certificates, production temperatures, placement records, core results, texture depth, permeability, surface levels, as-built survey',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'Clause 417.11. All test results and inspection records compiled in lot folders and submitted to Superintendent.'
-    },
-    {
-      description: 'Verify defects liability requirements and provide maintenance instructions for OGA surface',
-      acceptanceCriteria: 'Defects liability period as per contract; maintenance requirements for OGA documented (cleaning of voids, avoiding sealcoat, etc.)',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'General contract requirement. OGA requires periodic high-pressure cleaning to maintain permeability. Surface must not be overlaid with slurry seal or fog coat.'
-    },
-    {
-      description: 'Lot conformance review and sign-off',
-      acceptanceCriteria: 'All test results within specification; all hold points released; all non-conformances resolved or accepted; as-built survey complete; lot accepted by Superintendent',
+      description: 'Satisfy all Section 407 hold points for the OGA works',
+      acceptanceCriteria: 'All Section 407 (Dense Graded Asphalt) hold points and acceptance requirements satisfied; Section 417 inherits the 407 ITP hold/witness structure and adds OGA-specific constraints only',
       pointType: 'hold_point',
       responsibleParty: 'superintendent',
       evidenceRequired: 'signature',
       testType: null,
-      notes: 'Clause 417.11. Final lot acceptance by Superintendent.'
+      notes: 'Clause 417 scope note. 417 marks no hold points of its own; the hold/witness structure is inherited from Section 407 and must be released for OGA lot acceptance.'
     }
   ]
 }
@@ -1751,6 +1602,312 @@ const vicWMARecycledTemplate = {
 }
 
 // =============================================================================
+// TEMPLATE: HIGH MODULUS ASPHALT EME2 (VicRoads Sec 418)
+// VicRoads Section 418 (High Modulus Asphalt EME2) - v2.0, 2 Nov 2023.
+// Overlay on Section 407 (DGA); Size 14 mm EME2 only; hard-grade binder
+// (10/20 or 15/25 pen). Not a wearing course. 2 own hold points; the rest
+// of the hold/witness structure is inherited from Section 407.
+// =============================================================================
+
+const vicEME2Template = {
+  name: 'High Modulus Asphalt EME2 (VIC Sec 418)',
+  description: 'VIC VicRoads high modulus asphalt EME2 construction per Section 418 (v2.0, 2 November 2023). Section 418 is an overlay on Section 407 (Dense Graded Asphalt), covering Size 14 mm EME2 only -- a high-modulus French-origin asphalt with a hard-grade binder (10/20 or 15/25 penetration). EME2 is a structural (not wearing) course; volumetric tolerances, plant test frequency and compaction acceptance chain back to Section 407. Two Section 418 hold points apply (mix design nomination and commencement of placing).',
+  activityType: 'asphalt_eme',
+  specificationReference: 'Sec 418',
+  stateSpec: 'VicRoads',
+  checklistItems: [
+    // =========================================================================
+    // MIX DESIGN AND MATERIALS
+    // =========================================================================
+    {
+      description: 'Register EME2 mix design as "General" per RC 500.01 and nominate mixes to the Superintendent at least 7 days prior',
+      acceptanceCriteria: 'Mix design registered by DTP as "General" (unless otherwise approved); documentation nominating the asphalt mixes to be supplied submitted to the Superintendent no less than 7 days prior to use',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'RC 500.01',
+      notes: 'HP - Clause 418.05. Registered "General" mix design; nomination submitted >= 7 days prior to use.'
+    },
+    {
+      description: 'Verify EME2 binder grade and full conformance suite',
+      acceptanceCriteria: 'Binder is 10/20 or 15/25 penetration grade meeting Table 418.041 (penetration, softening point, viscosity at 60 deg C >= 1050 / 900 Pa.s, RTFO etc.); full binder suite tested 3-monthly and at feedstock change',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Table 418.041 (binder suite)',
+      notes: 'Clause 418.04, Table 418.041. Hard-grade 10/20 or 15/25 pen binder.'
+    },
+    {
+      description: 'Conduct binder conformance testing each batch and at point of delivery',
+      acceptanceCriteria: 'Penetration at 25 deg C (AS 2341.12) and softening point (AS 2341.18) tested each batch and at point of delivery each load, and after > 14 days storage; 10/20: pen 10-20, softening 59-79 deg C; 15/25: pen 15-25, softening 56-72 deg C',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AS 2341.12 (penetration), AS 2341.18 (softening point)',
+      notes: 'Clause 418.04, Table 418.041. Binder conformance each batch/delivery.'
+    },
+    {
+      description: 'Verify filler properties',
+      acceptanceCriteria: 'Voids in dry compacted filler 28-45% (AS 1141.17); Delta ring and ball 8-16 deg C (EN 13179-1 + AS 2341.18); tested 1 per month of production',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AS 1141.17, EN 13179-1',
+      notes: 'Clause 418.04. Filler voids 28-45%, Delta R&B 8-16 deg C, monthly.'
+    },
+    {
+      description: 'Verify aggregate compliance and exclusion of RAP and prohibited sands',
+      acceptanceCriteria: 'No RAP; coarse aggregate Type S (Section 407.06) with Flakiness Index <= 25% for the >= 10 mm fractions; no natural or recycled-glass sand in the fines',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 418.06 (tolerances/gates). No RAP; Type S coarse agg FI <= 25%; no natural/glass sand.'
+    },
+    {
+      description: 'Verify EME2 mix meets the performance properties of Table 418.061',
+      acceptanceCriteria: 'Air voids (gyratory 100 cycles) <= 4.5%; water sensitivity (freeze/thaw) >= 80%; wheel tracking at 60 deg C <= 2.0 mm at 5,000 cycles and <= 4.0 mm at 30,000 cycles; flexural stiffness at 15 deg C, 10 Hz >= 14,000 MPa; fatigue at 20 deg C, 10 Hz, 1M cycles >= 150 microstrain; richness modulus >= 3.4',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'AS/NZS 2891.2.2, ATM T232, AGPT/T231, AGPT/T274',
+      notes: 'Clause 418.06, Table 418.061. High-modulus/fatigue performance suite at mix design.'
+    },
+
+    // =========================================================================
+    // PRODUCTION AND PLACEMENT
+    // =========================================================================
+    {
+      description: 'Verify mixing and discharge temperatures within Table 418.071 caps',
+      acceptanceCriteria: 'Binder storage <= 190 deg C; aggregates <= 200 deg C; asphalt discharge <= 190 deg C (Table 418.071)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'Table 418.071',
+      notes: 'Clause 418.07, Table 418.071. Temperature caps for hard-grade binder.'
+    },
+    {
+      description: 'Verify receiving surface condition and temperature before placing',
+      acceptanceCriteria: 'Receiving surface dry and free of surface water; surface temperature >= 5 deg C',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 418.11. Surface dry; surface temp >= 5 deg C.'
+    },
+    {
+      description: 'Obtain Superintendent approval before commencement of placing',
+      acceptanceCriteria: 'Placement of EME2 does not commence until approval is obtained from the Superintendent',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'signature',
+      testType: null,
+      notes: 'HP - Clause 418.11. Superintendent approval before placing commences.'
+    },
+    {
+      description: 'Place EME2 in specified layers and nominate maximum trafficking temperature',
+      acceptanceCriteria: 'Layer thickness 70-130 mm; Contractor nominates the maximum trafficking temperature',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 418.11. Layer 70-130 mm; max trafficking temperature nominated.'
+    },
+    {
+      description: 'Conduct production extraction testing and verify particle coating',
+      acceptanceCriteria: 'Binder content and full sieve (extraction) tested 1 per 150 t of production and reported to the Superintendent (Table 407.151); degree of particle coating >= 99% at discharge (on request)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Table 407.151 (extraction), AS/NZS 2891.11 (particle coating)',
+      notes: 'Clause 418.15. Extraction 1/150 t; particle coating >= 99%.'
+    },
+
+    // =========================================================================
+    // COMPACTION ACCEPTANCE
+    // =========================================================================
+    {
+      description: 'Accept in-situ density and air voids on a lot basis',
+      acceptanceCriteria: 'In-situ density / air voids accepted per Section 407.27 on a lot basis (maximum lot 4000 m2, 6 test sites per lot); characteristic air voids matt <= 5.5%, joints <= 8.5% (Table 418.131)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Section 407.27 (in-situ density/air voids)',
+      notes: 'Clause 418.13, Table 418.131. Lot <= 4000 m2, 6 sites; air voids matt <= 5.5% / joints <= 8.5%.'
+    }
+  ]
+}
+
+// =============================================================================
+// TEMPLATE: PRIMING AND PRIMERSEALING (VicRoads Sec 408)
+// VicRoads Section 408 (Sprayed Bituminous Surfacings) - Aug 2022 edition.
+// This template covers the PRIME / PRIME & SEAL / PRIMERSEAL scope of 408
+// (the sprayed-seal scope is covered by the separate "Sprayed Bituminous
+// Surfacing (VIC)" template). Acceptance is largely performance/visual over
+// the Defects Liability Period; test methods apply in marginal cases.
+// =============================================================================
+
+const vicPrimingTemplate = {
+  name: 'Priming and Primersealing (VIC Sec 408)',
+  description: 'VIC VicRoads priming and primersealing per Section 408 (Sprayed Bituminous Surfacings, August 2022 edition). Covers the prime, prime-and-seal and primerseal scope of Section 408 (initial preparation and sealing of a new pavement surface); the general sprayed-seal / reseal scope is covered separately by the "Sprayed Bituminous Surfacing (VIC)" template. Design is per Austroads AGPT Part 4K and acceptance is largely performance and visual over the Defects Liability Period, with test methods (surface texture, aggregate retention) applied in marginal cases.',
+  activityType: 'prime_primerseal',
+  specificationReference: 'Sec 408',
+  stateSpec: 'VicRoads',
+  checklistItems: [
+    // =========================================================================
+    // PROGRAM AND EQUIPMENT
+    // =========================================================================
+    {
+      description: 'Submit priming/sealing program',
+      acceptanceCriteria: 'Sealing program submitted within 2 weeks of award; detailed weekly program submitted by the preceding Thursday',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 408.03. Program within 2 weeks of award; weekly program by preceding Thursday.'
+    },
+    {
+      description: 'Verify sprayer calibration is current',
+      acceptanceCriteria: 'Sprayer holds a current Certificate of Calibration (AGPT-T530 to T536), renewed 12-monthly and after overhaul',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: 'AGPT-T530 to T536 (sprayer calibration)',
+      notes: 'Clause 408.05. Sprayer Certificate of Calibration current (<= 12 months).'
+    },
+    {
+      description: 'Submit design rates of application at least one week prior',
+      acceptanceCriteria: 'Initial design rates of application for bituminous material, aggregate and pre-treatment submitted for the Superintendent\'s review at least one week prior to commencement (designed per AGPT Part 4K)',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP - Clause 408.13(a). Design rates of application submitted >= 1 week prior (AGPT 4K).'
+    },
+    {
+      description: 'Provide daily written confirmation of next-day works and agree any rate variations',
+      acceptanceCriteria: 'Written confirmation of the works to be undertaken the following day provided and agreement obtained from the Superintendent to any variation in the design rates of application',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP - Clause 408.04(b). Daily written confirmation + rate variation agreement.'
+    },
+    {
+      description: 'Obtain agreement that the surface is fit and ready for surfacing',
+      acceptanceCriteria: 'Contractor and Superintendent agree the road/pavement surface is fit and ready for surfacing no more than 24 hours prior to the works; for Initial Seals on Construction Projects the requirements of Section 310 are satisfied',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'HP - Clause 408.04(b). Surface agreed fit & ready <= 24 h prior (initial seals -> Section 310).'
+    },
+
+    // =========================================================================
+    // SURFACE PREPARATION AND CONDITIONS
+    // =========================================================================
+    {
+      description: 'Sweep and pre-treat the surface before priming',
+      acceptanceCriteria: 'Surface swept clean; pre-treatment applied to correct texture as required prior to priming/primersealing',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'Clause 408.13. Surface swept clean; texture-corrected before treatment.'
+    },
+    {
+      description: 'Verify temperature and safety gates before spraying',
+      acceptanceCriteria: 'Air and pavement temperature above the Table 408.131 minimum and rising (primes 10 deg C); AAPA HSE Guide 8 risk assessed as "low" for primes and initial seals',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 408.13, Table 408.131. Min temperature (prime 10 deg C) and rising; AAPA HSE risk "low".'
+    },
+
+    // =========================================================================
+    // APPLICATION
+    // =========================================================================
+    {
+      description: 'Spray binder at the design residual rate',
+      acceptanceCriteria: 'Prime/primerbinder sprayed at the design residual application rate (L/m2 at 15 deg C); actual vs design variation within Table 408.151 (< 0.1 L/m2 under = accept; 0.1-0.2 under = -$0.75/m2; > 0.2 under = -$1.50/m2)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Tank dip / calibrated device (Job Completion Report)',
+      notes: 'Clause 408.15, Table 408.151. Residual binder rate at 15 deg C; variation pay-adjusted.'
+    },
+    {
+      description: 'Spread cover aggregate forward with correct rolling',
+      acceptanceCriteria: 'Forward aggregate spreading only (no reverse spreading); rolling with static rubber-tyred or rubber-coated steel rollers',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'Clause 408.14 (tolerances/gates). Forward aggregate spreading only; correct roller type.'
+    },
+    {
+      description: 'Sweep intermediate layers between multiple applications',
+      acceptanceCriteria: 'For multiple application treatments (e.g. prime then seal), intermediate sprayed layers thoroughly swept to remove loose aggregate before the subsequent layer is applied',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'HP - Clause 408.13(h). Intermediate sweep between multi-application layers.'
+    },
+    {
+      description: 'Remove loose aggregate within the required time window',
+      acceptanceCriteria: 'Loose aggregate removed within the Table 408.141 time limits by AADT (> 5000/freeways 8 h; 2000-5000 24 h; 500-2000 48 h; < 500 5 days)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Clause 408.14, Table 408.141. Loose-aggregate removal window by AADT.'
+    },
+
+    // =========================================================================
+    // ACCEPTANCE AND RECORDS
+    // =========================================================================
+    {
+      description: 'Verify surface texture in marginal cases',
+      acceptanceCriteria: 'Where required (marginal cases), surface texture within Table 408.152 by aggregate size and treatment; lot 100-600 m lane (or 400-2500 m2)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'RC 317.01 (sand patch)',
+      notes: 'Clause 408.15, Table 408.152. Surface texture in marginal cases.'
+    },
+    {
+      description: 'Verify aggregate retention (stripping) and loose-stone count',
+      acceptanceCriteria: 'Aggregate retention stripping score 0-2 = accept (3-5 retest before DLP end, > 5 rectify within 5 days) per Table 408.153; loose-stone count after sweep <= 40 stones/m2 (>= 10 mm seals) or <= 60 stones/m2 (<= 7 mm seals)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'RC 317.03 (aggregate retention)',
+      notes: 'Clause 408.14/408.15, Table 408.153. Stripping <= 2; loose-stone count within limits.'
+    },
+    {
+      description: 'Agree treatment for any seal/prime failure before repair',
+      acceptanceCriteria: 'For seal-failure repairs, the Contractor advises the Superintendent in writing of the proposed treatment and obtains the Superintendent\'s agreement before undertaking the work',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'HP - Clause 408.16. Written proposal + Superintendent agreement before failure repairs.'
+    },
+    {
+      description: 'Submit and validate the Job Completion Report (Sealing)',
+      acceptanceCriteria: 'Job Completion Report (Sealing) validated by the Superintendent\'s on-site representative and submitted within 7 days; at least 2 Defects Liability Period inspections with condition reports carried out',
+      pointType: 'witness',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'WP - Clause 408.17. Job Completion Report validated on site, submitted <= 7 days; >= 2 DLP inspections.'
+    }
+  ]
+}
+
+// =============================================================================
 // SEED FUNCTION
 // =============================================================================
 
@@ -1821,9 +1978,11 @@ async function main() {
     await seedTemplate(vicSMATemplate)
     await seedTemplate(vicSprayedSealTemplate)
     await seedTemplate(vicWMARecycledTemplate)
+    await seedTemplate(vicEME2Template)
+    await seedTemplate(vicPrimingTemplate)
 
     console.log('\n═══════════════════════════════════════════════════════════════')
-    console.log(' Seeding Complete! (5 asphalt templates)')
+    console.log(' Seeding Complete! (7 asphalt templates)')
     console.log('═══════════════════════════════════════════════════════════════')
   } catch (error) {
     console.error('❌ Seeding failed:', error)
