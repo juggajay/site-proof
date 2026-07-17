@@ -6,6 +6,7 @@
  * - Pit & Chamber Construction
  * - Box Culverts
  * - Subsoil Drainage
+ * - Kerbs and Channels (TfNSW R15)
  *
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-nsw-drainage.js --execute
  */
@@ -996,6 +997,130 @@ const nswSubsoilDrainageTemplate = {
 }
 
 // =============================================================================
+// NSW KERBS AND CHANNELS (TfNSW D&C R15)
+// Ed 2 / Rev 0 (Aug 2020) — current TfNSW Design & Construct edition.
+// Concrete supply/placing by cross-reference to TfNSW D&C R53; bedding to AS 2876.
+// =============================================================================
+
+const nswKerbAndChannelTemplate = {
+  name: 'Kerbs and Channels (TfNSW R15)',
+  description: 'TfNSW manually or machine-placed concrete kerbs and channels (gutters) per R15 (Ed 2 Rev 0); concrete supply/placing by cross-reference to D&C R53, bedding/subgrade to AS 2876',
+  activityType: 'kerb_channel',
+  specificationReference: 'TfNSW R15 Ed 2 Rev 0',
+  stateSpec: 'TfNSW',
+  checklistItems: [
+    {
+      description: 'Set out horizontal alignment and level',
+      acceptanceCriteria: 'Alignment and level set out per Survey / AS 2876',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'R15 - setting out (Survey; AS 2876)'
+    },
+    {
+      description: 'Prepare subgrade/bedding; check surface irregularities',
+      acceptanceCriteria: 'Bedding prepared; surface irregularities within tolerance, checked every 10 m',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'R15 Cl 3.6, 4.1; AS 2876 - every 10 m'
+    },
+    {
+      description: 'Set forms / set up kerb machine; check profile dimensions',
+      acceptanceCriteria: 'Fixed forms or kerb machine set; profile dimensions verified',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'R15 - forms / machine set-up'
+    },
+    {
+      description: 'Placing of concrete for kerb and channel',
+      acceptanceCriteria: 'Hold Point per TfNSW D&C R53 concrete-placing Hold Point released before pour',
+      pointType: 'hold_point',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'R15 Cl 4.1 - Hold Point by cross-reference to D&C R53'
+    },
+    {
+      description: 'Place and finish concrete (fixed-form or machine-placed)',
+      acceptanceCriteria: 'Concrete placed and finished to profile',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'R15 - placing and finishing'
+    },
+    {
+      description: 'Verify concrete supply/strength conforms to D&C R53',
+      acceptanceCriteria: 'Concrete strength/properties per TfNSW D&C R53',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: 'Per D&C R53',
+      notes: 'R15 - concrete by cross-reference to R53'
+    },
+    {
+      description: 'Carry out curing per R53',
+      acceptanceCriteria: 'Curing per TfNSW D&C R53',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'photo',
+      testType: null,
+      notes: 'R15 - curing per R53'
+    },
+    {
+      description: 'Check finished level once per concrete batch and every 10 m',
+      acceptanceCriteria: 'Finished level within tolerance (Cl 4 / AS 2876)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'R15 Annexure R15/L - once per batch and every 10 m'
+    },
+    {
+      description: 'Check finished horizontal alignment every 10 m',
+      acceptanceCriteria: 'Horizontal alignment within tolerance',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'R15 Annexure R15/L - every 10 m'
+    },
+    {
+      description: 'Check deviation from 3 m straightedge and on vertical curves',
+      acceptanceCriteria: 'Deviation from 3 m straightedge and on vertical curves within tolerance',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'R15 Annexure R15/L (Cl 4 / AS 2876)'
+    },
+    {
+      description: 'Compile lot conformance documentation',
+      acceptanceCriteria: 'Survey, straightedge records and R53 concrete results complete',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'document',
+      testType: null,
+      notes: 'Lot records'
+    },
+    {
+      description: 'Lot conformance review and sign-off',
+      acceptanceCriteria: 'All criteria met',
+      pointType: 'hold_point',
+      responsibleParty: 'superintendent',
+      evidenceRequired: 'signature',
+      testType: null,
+      notes: 'Final lot approval'
+    }
+  ]
+}
+
+// =============================================================================
 // SEED FUNCTION
 // =============================================================================
 
@@ -1066,6 +1191,7 @@ async function main() {
     await seedTemplate(nswPitConstructionTemplate)
     await seedTemplate(nswBoxCulvertTemplate)
     await seedTemplate(nswSubsoilDrainageTemplate)
+    await seedTemplate(nswKerbAndChannelTemplate)
 
     console.log('═══════════════════════════════════════════════════════════════')
     console.log(' Seeding Complete!')
