@@ -252,3 +252,48 @@ describe('routeTemplateMatch — Austroads baseline gap-fill', () => {
     expect(result.candidates.map((c) => c.id)).toEqual(['austroads-culverts', 'state-family']);
   });
 });
+
+describe('routeTemplateMatch — national baseline spec sets beyond Austroads', () => {
+  it('offers a WSA national template as gap-fill for any state project (Tier B)', () => {
+    const result = match(
+      [tpl({ id: 'wsa-water', stateSpec: 'WSA', activityType: 'water_reticulation' })],
+      'water_reticulation',
+    );
+    expect(result.tier).toBe('B');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ id: 'wsa-water', baseline: true, matchKind: 'exact' }),
+    ]);
+  });
+
+  it('offers an AUS-SPEC national template as gap-fill, hidden when a state exact exists', () => {
+    const ausSpec = tpl({
+      id: 'ausspec-path',
+      stateSpec: 'AUS-SPEC',
+      activityType: 'footpaths_flatwork',
+    });
+    const gapFill = match([ausSpec], 'footpaths_flatwork');
+    expect(gapFill.tier).toBe('B');
+    expect(gapFill.candidates[0]).toMatchObject({ id: 'ausspec-path', baseline: true });
+
+    const withState = match(
+      [ausSpec, tpl({ id: 'state-path', activityType: 'footpaths_flatwork' })],
+      'footpaths_flatwork',
+    );
+    expect(withState.tier).toBe('A');
+    expect(withState.candidates.map((c) => c.id)).toEqual(['state-path']);
+  });
+
+  it('matches AUS-SPEC templates as PRIMARY (Tier A possible) for an AUS-SPEC project', () => {
+    const result = routeTemplateMatch(
+      [tpl({ id: 'ausspec-path', stateSpec: 'AUS-SPEC', activityType: 'footpaths_flatwork' })],
+      {
+        projectId: PROJECT,
+        specificationSet: 'AUS-SPEC',
+        activityValue: 'footpaths_flatwork',
+      },
+    );
+    expect(result.tier).toBe('A');
+    expect(result.suggestedTemplateId).toBe('ausspec-path');
+    expect(result.candidates[0].baseline).toBeUndefined();
+  });
+});
