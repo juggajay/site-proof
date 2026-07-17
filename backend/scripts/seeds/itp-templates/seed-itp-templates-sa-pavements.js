@@ -330,288 +330,168 @@ const saUnboundGranularPavementTemplate = {
 
 const saCementTreatedTemplate = {
   name: 'Cement Treated Crushed Rock (DIT RD-PV-S2)',
-  description: 'DIT plant mixed stabilised pavement using cementitious binders (cement, lime, fly ash, blended cement) per RD-PV-S2 (Plant Mixed Stabilised Pavement). Covers PM1/20 or PM2/20 treated with ≥4% blended cement (GB), retarder requirement, UCS testing.',
+  description: 'DIT plant mixed stabilised pavement per RD-PV-S2 (v1, 30/09/2024) — quarry material treated with lime, polymer, cement or fly ash binder (not bituminous; see RD-BP-S1). Checklist rebuilt from a primary read of RD-PV-S2: the specification defines NO Hold Points and NO Witness Points — conformance is demonstrated through the Section 14 Verification Requirements table (binder content within ±0.5%, dry density ratio ≥ 96%, levels), so every item is a standard verification/QA gate. A failing compaction result renders the represented stratum a Non-Conformance under PC-QA1/PC-QA2 (§12.4c). Template name retained for create-only compatibility.',
   activityType: 'pavement_bound',
   specificationReference: 'RD-PV-S2',
   stateSpec: 'DIT',
   checklistItems: [
     // =========================================================================
-    // PRE-WORK SUBMISSIONS
+    // RD-PV-S2 is VERIFICATION-DRIVEN: no Hold Points, no Witness Points.
+    // Items below are the Section 14 verification requirements and the
+    // construction-order QA gates, all as standard items (per digest §2, §3).
     // =========================================================================
     {
-      description: 'Submit mix design for cement treated crushed rock including binder content and retarder details',
-      acceptanceCriteria: 'Mix design reviewed and accepted by Principal\'s Authorised Person; PM1/20 or PM2/20 base material with >= 4% blended cement (GB) binder; retarder type and usage rate nominated; NATA endorsed laboratory results provided',
-      pointType: 'hold_point',
+      description: 'Submit mixing-plant, retarder, calibration, binder-verification and construction procedures as Construction Documentation',
+      acceptanceCriteria: 'Construction Documentation submitted covering mixing plant details, retarder details, calibration procedures, binder-content verification procedure and material-handling/construction procedures per RD-PV-S2 §3.2',
+      pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'RD-PV-S2. HP — Mix design must be approved before production. Cement treated virgin quarry materials must be PM1/20 or PM2/20 treated with not less than 4% blended cement (GB) binder.'
+      notes: 'RD-PV-S2 §3.2. Submission requirement — RD-PV-S2 defines no Hold Points; documentation is lodged as Construction Documentation.'
     },
     {
-      description: 'Nominate retarder type and usage rate in construction documentation',
-      acceptanceCriteria: 'Retarder type identified; usage rate specified; retarder compatible with cement binder; retarder MUST be used with cement binders per RD-PV-S2',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2. HP — A retarder MUST be used with cement binders to extend working time. Retarder nomination is part of Construction Documentation.'
-    },
-    {
-      description: 'Submit construction documentation including placement, compaction, and curing procedures',
-      acceptanceCriteria: 'Construction documentation reviewed and accepted by Principal\'s Authorised Person; covers production, transport, placement, compaction, curing, and testing regime',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2. HP — Construction documentation must be accepted before work commences.'
-    },
-    {
-      description: 'Submit cementitious binder details and compliance certificates',
-      acceptanceCriteria: 'Binder type identified (cement, lime, fly ash, blended cement GB); compliance certificates provided; source approved',
+      description: 'Confirm cement is AS 3972 Type GB and a retarder is used with cement binders',
+      acceptanceCriteria: 'Cement conforms to AS 3972 Type GB; a retarder is used with cement binders to extend working time per RD-PV-S2 §3.1',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: 'AS 3972',
-      notes: 'RD-PV-S2. Binders include cement, lime, fly ash, blended cement (GB).'
+      notes: 'RD-PV-S2 §3.1b, §4. Retarder required with cement binder.'
     },
-
-    // =========================================================================
-    // MATERIAL COMPLIANCE — BASE MATERIAL
-    // =========================================================================
     {
-      description: 'Verify base material (PM1/20 or PM2/20) conformance prior to treatment',
-      acceptanceCriteria: 'Base material grading, PI, LA Abrasion, Aggregate Crushing Value, Flakiness Index, and CBR within specified limits per RD-PV-S1; NATA endorsed results',
+      description: 'Take initial raw-feed bulk samples and assign initial maximum dry density (MDD)',
+      acceptanceCriteria: 'Bulk samples of raw feed taken; initial MDD assigned per Dept TP166 and AS 1289.5.4.1 for use in dry density ratio acceptance',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'test_result',
-      testType: 'Multiple (per RD-PV-S1)',
-      notes: 'RD-PV-S1, Part R15 Attachment A. Base material must comply with PM1/20 or PM2/20 requirements before cement treatment.'
+      testType: 'Dept TP166 / AS 1289.5.4.1',
+      notes: 'RD-PV-S2 §12.1.'
     },
     {
-      description: 'Verify binder content in mix — minimum 4% blended cement (GB)',
-      acceptanceCriteria: 'Binder content tested and verified at >= 4% blended cement (GB) by mass; within design tolerance; tested per production lot',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test_result',
-      testType: null,
-      notes: 'RD-PV-S2. Minimum 4% blended cement (GB) binder required for cement treated virgin quarry materials.'
-    },
-
-    // =========================================================================
-    // UCS TESTING AND STRENGTH VERIFICATION
-    // =========================================================================
-    {
-      description: 'Prepare UCS test specimens at 100% Standard Proctor at 100% Standard OMC',
-      acceptanceCriteria: 'Specimens prepared using 100% Standard Proctor compactive effort at 100% Standard Optimum Moisture Content per RD-PV-S2; specimen preparation documented',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test_result',
-      testType: 'AS 1289.5.1.1 (Standard Compaction)',
-      notes: 'RD-PV-S2. Specimens stabilised with GP cement prepared at 100% Standard Proctor compactive effort at 100% Standard OMC.'
-    },
-    {
-      description: 'Conduct 28-day moist cured UCS testing',
-      acceptanceCriteria: 'UCS specimens cured for minimum 28 days in moist condition without soaking in water; UCS results within target range per pavement design (RD-PV-D1); typical target 1-2 MPa for modified/lightly bound [VERIFY exact targets from RD-PV-D1]',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test_result',
-      testType: 'UCS (28-day moist cure)',
-      notes: 'RD-PV-S2, RD-PV-D1. Normal curing: minimum 28 days in moist condition without soaking. Target UCS 1-2 MPa for modified/lightly bound; higher for heavily bound.'
-    },
-    {
-      description: 'Conduct accelerated curing UCS testing (where applicable)',
-      acceptanceCriteria: 'Specimens cured per approved accelerated method: 7-day at >= 90% humidity and 23°C with 4-hour precondition; OR 7-day at 65°C with 4-hour soak (for slow-setting binders); UCS results within target range',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test_result',
-      testType: 'UCS (accelerated cure per Austroads AGPT04D)',
-      notes: 'RD-PV-S2, Austroads AGPT04D. Accelerated curing: 7-day at >= 90% humidity and 23°C with 4hr precondition; OR 7-day at 65°C with 4hr soak.'
-    },
-    {
-      description: 'Classify stabilised material by UCS result',
-      acceptanceCriteria: 'Material classified per UCS: Modified 0.5-1.0 MPa, Lightly bound 1.0-2.0 MPa, Heavily bound 2.0-6.0 MPa; classification matches pavement design intent (RD-PV-D1)',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test_result',
-      testType: 'UCS Classification',
-      notes: 'RD-PV-D1, Austroads AGPT04D. Modified: 0.5-1.0 MPa; Lightly bound: 1.0-2.0 MPa; Heavily bound: 2.0-6.0 MPa.'
-    },
-
-    // =========================================================================
-    // SUBGRADE/FOUNDATION ACCEPTANCE
-    // =========================================================================
-    {
-      description: 'Verify foundation/subgrade has been accepted and released',
-      acceptanceCriteria: 'Formation release documentation held; proof rolling completed per RD-EW-C1; density and levels compliant; surface clean and free of loose material',
-      pointType: 'hold_point',
-      responsibleParty: 'superintendent',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2, RD-EW-C1. HP — Foundation must be accepted by Principal\'s Authorised Person before cement treated pavement placement.'
-    },
-    {
-      description: 'Verify foundation surface level and shape',
-      acceptanceCriteria: 'Foundation level within tolerance; no ponding; drainage adequate; surface clean and free of loose material',
+      description: 'Central pugmill-mix binder to within 0.3% accuracy per 200 t and produce a uniform mixture',
+      acceptanceCriteria: 'Quarry material, binder, retarder and water pugmill-mixed to a uniform mixture; binder measured to within 0.3% of dry mass of material stabilised per 200 t per RD-PV-S2 §4.1',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'inspection',
       testType: null,
-      notes: 'RD-PV-S2.'
-    },
-
-    // =========================================================================
-    // PRODUCTION AND MIXING
-    // =========================================================================
-    {
-      description: 'Verify mixing plant calibration for binder content and moisture',
-      acceptanceCriteria: 'Plant calibration current; binder content within design tolerance; moisture content controlled; calibration records available',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2. HP — Plant calibration must be verified before production commences.'
+      notes: 'RD-PV-S2 §3.1b, §4.1d.'
     },
     {
-      description: 'Monitor binder content during production',
-      acceptanceCriteria: 'Binder content tested and within design tolerance per production lot; records maintained',
+      description: 'Test binder content — one test per 150 t — within ±0.5% of specified',
+      acceptanceCriteria: 'Binder content tested at one test per 150 t (or part thereof) using the Contractor\'s verified procedure; result within ±0.5% of specified per RD-PV-S2 Table 14-1',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'test_result',
-      testType: null,
-      notes: 'RD-PV-S2. Binder content monitoring throughout production.'
+      testType: 'Binder content (verified procedure per §3.2d/§4.2)',
+      notes: 'RD-PV-S2 §4.2, Table 14-1 (Verification Requirements).'
     },
     {
-      description: 'Verify moisture content at mixing',
-      acceptanceCriteria: 'Moisture content appropriate for compaction; not excessive (causing bleeding) or deficient; monitored during production',
+      description: 'Take a moisture sample with each binder-content determination and record (report only)',
+      acceptanceCriteria: 'Moisture content determined with each binder-content determination by oven (AS 1289.2.1.1) or calibrated microwave (AS 1289.2.1.4); reported for record only per RD-PV-S2 Table 14-1',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'test_result',
-      testType: 'TP 320 (Moisture)',
-      notes: 'RD-PV-S2, TP 320.'
-    },
-
-    // =========================================================================
-    // PLACEMENT AND COMPACTION
-    // =========================================================================
-    {
-      description: 'Place cement treated material and commence compaction within 1.5 hours of stabilisation',
-      acceptanceCriteria: 'Rate of delivery and placing sufficient to enable first compaction testing within 1.5 hours of material being stabilised; allows additional rolling if compaction standard not achieved',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'RD-PV-S2. HP — First compaction testing must occur within 1.5 hours of stabilisation. Time-critical operation.'
+      testType: 'AS 1289.2.1.1 / AS 1289.2.1.4',
+      notes: 'RD-PV-S2 §12.3, Table 14-1. Report only.'
     },
     {
-      description: 'Compact cement treated pavement to specified Dry Density Ratio',
-      acceptanceCriteria: 'Dry Density Ratio meets specified minimum per TP 320; "one-for-one" MDD testing conducted; compaction completed before initial set of cementitious binder',
-      pointType: 'witness',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'test_result',
-      testType: 'TP 320',
-      notes: 'RD-PV-S2, TP 320. "One-for-one" MDD testing required. Compaction must be complete before set. Principal\'s Authorised Person to be notified.'
-    },
-    {
-      description: 'Verify surface level of completed cement treated layer',
-      acceptanceCriteria: 'Surface level within specified tolerance of design level; cross-fall correct; lateral position within +/- 50 mm',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2, PC-SI1.'
-    },
-
-    // =========================================================================
-    // CURING
-    // =========================================================================
-    {
-      description: 'Apply curing treatment immediately after compaction and finishing',
-      acceptanceCriteria: 'Curing compound applied at specified rate immediately after finishing; or approved curing method commenced; surface protected from drying',
-      pointType: 'hold_point',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'inspection',
-      testType: null,
-      notes: 'RD-PV-S2. HP — Curing must commence immediately after compaction and finishing.'
-    },
-    {
-      description: 'Maintain curing for specified duration and restrict trafficking',
-      acceptanceCriteria: 'Curing maintained for specified period; no trafficking during curing period except where approved; membrane integrity checked; reapplication where damaged',
+      description: 'Cover load in transit and do not uncover until tipping',
+      acceptanceCriteria: 'Load fully covered (tarpaulin) during transport and not uncovered until about to tip per RD-PV-S2 §5',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'inspection',
       testType: null,
-      notes: 'RD-PV-S2. Trafficking restrictions during curing period. Protection from drying and weather effects.'
+      notes: 'RD-PV-S2 §5.'
     },
-
-    // =========================================================================
-    // POST-CONSTRUCTION DOCUMENTATION
-    // =========================================================================
     {
-      description: 'Submit all UCS test records (28-day and/or accelerated)',
-      acceptanceCriteria: 'Complete UCS records with specimen preparation details, curing conditions, and results; material classification confirmed; all results within design target range',
+      description: 'Enforce temperature gates — no delivery above 35°C shade air; no placing if mix above 27°C at site',
+      acceptanceCriteria: 'Material not delivered when shade air temperature exceeds 35°C; not placed if mix temperature at site exceeds 27°C per RD-PV-S2 §6c',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'RD-PV-S2 §6c.'
+    },
+    {
+      description: 'Deliver so spread/shape/compact occurs within 2.75 h and first compaction test within 1.5 h of stabilising',
+      acceptanceCriteria: 'Delivery rate allows spread, shape and compaction within 2.75 hours of the material being stabilised, and the first compaction test within 1.5 hours per RD-PV-S2 §6a–b',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'RD-PV-S2 §6a–b. Time-critical.'
+    },
+    {
+      description: 'Place by paver/grader — min subbase layer 100 mm; two-layer upper lift ≥ ½ thickness same day; Work Lot ≤ 1 day',
+      acceptanceCriteria: 'Placed by paver or grader; minimum subbase layer 100 mm; where two layers, upper lift ≥ half the specified course thickness placed the same day; Work Lot ≤ 1 day\'s work per RD-PV-S2 §7',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'RD-PV-S2 §7d,e,h.'
+    },
+    {
+      description: 'Form near-vertical full-depth joints; cut within 1 hour of completing compaction and keep moist',
+      acceptanceCriteria: 'Construction joints near-vertical and continuous through full depth; cut within 1 hour of completion of compaction; kept moist per RD-PV-S2 §8',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'RD-PV-S2 §8b–d. Construction joint at end of day\'s work or when spreading halted > 3 h.'
+    },
+    {
+      description: 'Compact to dry density ratio ≥ 96% (modified) full depth/width; test at Table 12-1 frequency on stratified-random sites',
+      acceptanceCriteria: 'Dry density ratio ≥ 96% (modified) over full depth and width; number of tests per layer per Table 12-1 (2 tests <300 m² up to 6+ for >1500 m²); test locations chosen on a stratified random basis (AS 1289.1.4.2)',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Dept TP320 / AS 1289.5.8.1',
+      notes: 'RD-PV-S2 §12.4, Table 12-1, Table 14-1.'
+    },
+    {
+      description: 'Update MDD per Work Lot and raise a Non-Conformance for any failing stratum',
+      acceptanceCriteria: 'MDD assigned/updated per Work Lot (Dept TP166 / TP164) with traceability; any failing compaction result renders the represented stratum a Non-Conformance under PC-QA1/PC-QA2',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Dept TP166 / TP164',
+      notes: 'RD-PV-S2 §12.2, §12.4c. No Hold Point — Non-Conformance handled under PC-QA1/PC-QA2.'
+    },
+    {
+      description: 'Verify lateral position ±50 mm and finished levels (checks ≤ 10 m apart) per PC-SI1',
+      acceptanceCriteria: 'Lateral position within ±50 mm; finished levels per Contract Documents, checked no more than 10 m apart longitudinally per RD-PV-S2 §12.5 and PC-SI1',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test_result',
+      testType: 'Survey per PC-SI1',
+      notes: 'RD-PV-S2 §12.5, Table 14-1.'
+    },
+    {
+      description: 'Cure — keep surface continuously moist for at least 7 days from completion of compaction',
+      acceptanceCriteria: 'Surface kept continuously moist for a minimum of 7 days from completion of compaction per RD-PV-S2 §9',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'RD-PV-S2 §9a–b.'
+    },
+    {
+      description: 'Enforce traffic restrictions — 7-day exclusion (3 days for kerb-laying plant); 200 mm PM2/20Q cover for heavy-vehicle access',
+      acceptanceCriteria: 'No vehicular traffic/plant for 7 days from completion of compaction (single-axle ≤ 8 t/axle for curing excepted); kerb-laying plant permitted after 3 days; 200 mm PM2/20Q class 2 pavement placed over any heavy-vehicle access area per RD-PV-S2 §11',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'inspection',
+      testType: null,
+      notes: 'RD-PV-S2 §11a–b,e–f.'
+    },
+    {
+      description: 'Lodge all verification records (binder, moisture, density, levels, daily binder average) in QM Records',
+      acceptanceCriteria: 'Binder content, moisture, dry density ratio, level results and the daily average stabilising-binder calculation lodged in QM Records per RD-PV-S2 §14 and §2.2',
       pointType: 'standard',
       responsibleParty: 'contractor',
       evidenceRequired: 'document',
       testType: null,
-      notes: 'RD-PV-S2, RD-PV-D1.'
-    },
-    {
-      description: 'Submit all compaction test records (TP 320) with "one-for-one" MDD',
-      acceptanceCriteria: 'Complete Dry Density Ratio results for all lots; "one-for-one" MDD records included; all lots meeting specified minimum',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2, TP 320.'
-    },
-    {
-      description: 'Submit all binder content production test records',
-      acceptanceCriteria: 'Complete binder content test results for production; all within design tolerance; minimum 4% GB confirmed',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2.'
-    },
-    {
-      description: 'Submit mixing plant calibration records',
-      acceptanceCriteria: 'Plant calibration records for binder content, moisture, and aggregate proportioning; records current throughout production period',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2.'
-    },
-    {
-      description: 'Submit curing records',
-      acceptanceCriteria: 'Records of curing compound application (type, rate, timing) or alternative curing log; weather conditions during cure period documented',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2.'
-    },
-    {
-      description: 'Submit as-built drawings showing cement treated layer thickness and levels',
-      acceptanceCriteria: 'As-built survey data showing actual vs design for cement treated layer; any variations documented',
-      pointType: 'standard',
-      responsibleParty: 'contractor',
-      evidenceRequired: 'document',
-      testType: null,
-      notes: 'RD-PV-S2.'
-    },
-
-    // =========================================================================
-    // LOT SIGN-OFF
-    // =========================================================================
-    {
-      description: 'Final lot sign-off by Principal\'s Authorised Person',
-      acceptanceCriteria: 'All acceptance criteria met for cement treated crushed rock pavement; lot approved and released for subsequent works',
-      pointType: 'hold_point',
-      responsibleParty: 'superintendent',
-      evidenceRequired: 'signature',
-      testType: null,
-      notes: 'Final lot approval by Principal\'s Authorised Person before subsequent works proceed.'
+      notes: 'RD-PV-S2 §14, §4.2c–d.'
     }
   ]
 }
