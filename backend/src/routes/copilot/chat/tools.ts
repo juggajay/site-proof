@@ -13,6 +13,7 @@ import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getDashboardProjectAccess, type AuthUser } from '../../dashboard/access.js';
 import { buildHoldPointListItems } from '../../holdpoints/listPresentation.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
+import { HELP_TOPICS, HELP_TOPIC_SLUGS, getHelpTopic } from './productKnowledge.js';
 import { isAllowedNavigateTarget, isChatStage, type ChatStage } from './prompt.js';
 
 export type ChatAction =
@@ -137,6 +138,29 @@ export const CHAT_TOOLS = [
         },
       },
       required: ['projectId', 'lotNumber'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_help_topics',
+    description:
+      'List the documentation topics you can explain, as slug + title pairs. Call this when you are unsure which get_help topic covers a question.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'get_help',
+    description:
+      'Explain how a part of CIVOS works from the in-app documentation. Call this when the user asks how to do something or how a feature works and the WORKFLOW OVERVIEW in your prompt is not enough. `topic` must be one of the documentation slugs — call list_help_topics if you are unsure which fits.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          enum: HELP_TOPIC_SLUGS,
+          description: 'The documentation topic slug',
+        },
+      },
+      required: ['topic'],
       additionalProperties: false,
     },
   },
@@ -704,6 +728,26 @@ export function createChatToolExecutor(user: AuthUser): ToolExecutor {
           return { result: 'A projectId and lotNumber are required.' };
         }
         return getLotStatus(user, projectId, lotNumber);
+      }
+
+      case 'list_help_topics':
+        return {
+          result: JSON.stringify({
+            topics: HELP_TOPICS.map((t) => ({ slug: t.slug, title: t.title })),
+          }),
+        };
+
+      case 'get_help': {
+        const topic = readString(input, 'topic');
+        const found = topic ? getHelpTopic(topic) : undefined;
+        if (!found) {
+          return {
+            result: `Unknown help topic. Call list_help_topics for the valid slugs (e.g. ${HELP_TOPIC_SLUGS.slice(0, 3).join(', ')}).`,
+          };
+        }
+        return {
+          result: JSON.stringify({ slug: found.slug, title: found.title, body: found.body }),
+        };
       }
 
       case 'navigate': {
