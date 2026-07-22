@@ -17,7 +17,7 @@ export function MainLayout() {
   const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore();
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
