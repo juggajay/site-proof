@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link2, Check, RefreshCw, Printer, MoreVertical } from 'lucide-react';
 import { LotQRCode } from '@/components/lots/LotQRCode';
+import { AskClancyButton } from '@/components/copilot/AskClancy';
 import type { Lot, LotSubcontractorAssignment } from '../types';
 import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection';
@@ -251,6 +252,10 @@ export function LotHeader({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <AskClancyButton
+            question={`What is the status of lot ${lot.lotNumber}?`}
+            label="Ask Clancy"
+          />
           <button
             onClick={onCopyLink}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"

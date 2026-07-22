@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { ClancyPanel } from './ClancyPanel';
 import { useClancyEnabled } from './clancyAccess';
 import {
+  clearPendingPrompt,
   closeClancy,
   openClancy,
   sendClancy,
@@ -43,7 +44,7 @@ function navLabel(to: string): string {
 export function ClancyWidget() {
   const clancyEnabled = useClancyEnabled();
   const { user } = useAuth();
-  const { open, messages } = useClancyStore();
+  const { open, messages, inFlight, pendingPrompt } = useClancyStore();
   const location = useLocation();
   const navigate = useNavigate();
   const handledNavId = useRef<string | null>(null);
@@ -73,6 +74,17 @@ export function ClancyWidget() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [clancyEnabled]);
+
+  // Consume a prompt queued by a contextual "Ask Clancy" affordance. Clear
+  // before sending so the effect can't double-fire on the same prompt; hold off
+  // while a send is in flight and retry when it clears.
+  useEffect(() => {
+    if (!pendingPrompt || inFlight) return;
+    const question = pendingPrompt;
+    clearPendingPrompt();
+    markIntroSeen();
+    void sendClancy(question, projectId);
+  }, [pendingPrompt, inFlight, projectId]);
 
   // Execute a `navigate` action the moment Clancy's newest message carries one.
   useEffect(() => {

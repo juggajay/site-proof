@@ -72,6 +72,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { getReleaseMethodLabel } from './holdPointReleaseIdentity';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
+import { AskClancyChips } from '@/components/copilot/AskClancy';
 
 // Read side of the "Copy link" action (?hp=<id>): stable references so the
 // deep-link effect doesn't re-run on every render.
@@ -690,6 +691,20 @@ export function HoldPointsPage() {
         onLotFilterChange={handleLotFilterChange}
         onSearchChange={handleSearchChange}
         onExportCSV={handleExportCSV}
+      />
+
+      <AskClancyChips
+        prompts={[
+          {
+            label: 'Hold point summary',
+            question:
+              'Summarise the hold points on this project — how many are open, released, and ready to request?',
+          },
+          {
+            label: 'What needs chasing?',
+            question: 'Which hold points have been notified but not released?',
+          },
+        ]}
       />
 
       <HoldPointsLoadErrorAlert loadError={loadError} onRetry={handleRetryLoad} />
