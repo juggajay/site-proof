@@ -173,6 +173,33 @@ describe('ClancyWidget', () => {
     expect(toastMock).toHaveBeenCalledWith({ description: 'Taking you to Plan Sheets' });
   });
 
+  it('does NOT replay a handled navigate action when the widget remounts (live bug)', async () => {
+    // The widget remounts on layout changes while the module store (and its
+    // transcript) survives. With a ref-based guard, every remount re-executed
+    // the last navigation — clicking Dashboard boomeranged back to the lot
+    // register Clancy had navigated to.
+    writeLocalStorageItem(INTRO_FLAG, '1');
+    apiFetchMock.mockResolvedValue({
+      message: 'Opening plan sheets.',
+      actions: [{ type: 'navigate', to: '/projects/project-1/plan-sheets' }],
+    });
+    const { unmount } = renderWidget();
+
+    act(() => openClancy());
+    fireEvent.click(screen.getByText('Read my drawings for me'));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(1));
+
+    // Route change: widget unmounts and remounts; store keeps the transcript.
+    unmount();
+    navigateMock.mockClear();
+    toastMock.mockClear();
+    renderWidget();
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+
   it('auto-sends a queued pendingPrompt once and clears it', async () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
     apiFetchMock.mockResolvedValue({ message: 'Lot 12 is open.' });

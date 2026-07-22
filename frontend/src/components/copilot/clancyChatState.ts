@@ -31,6 +31,15 @@ interface ClancyState {
    * work) and clears it. Null when nothing is queued.
    */
   pendingPrompt: string | null;
+  /**
+   * Id of the newest assistant message whose navigate action has been
+   * executed. Lives in the STORE, not a widget ref: the widget remounts on
+   * layout changes while this module-level transcript survives, and a
+   * ref-based guard resets on remount — replaying the last navigation every
+   * time the user changes route (live bug: Dashboard clicks boomeranged back
+   * to the lot register Clancy had navigated to).
+   */
+  handledNavMessageId: string | null;
 }
 
 /** Wire response shape — LOCKED contract with the copilot chat backend. */
@@ -47,6 +56,7 @@ let state: ClancyState = {
   inFlight: false,
   unseen: false,
   pendingPrompt: null,
+  handledNavMessageId: null,
 };
 const listeners = new Set<() => void>();
 
@@ -71,8 +81,20 @@ export function getClancyStateForTest(): ClancyState {
 
 /** Test-only: reset module state between cases. */
 export function resetClancyStore() {
-  state = { open: false, messages: [], inFlight: false, unseen: false, pendingPrompt: null };
+  state = {
+    open: false,
+    messages: [],
+    inFlight: false,
+    unseen: false,
+    pendingPrompt: null,
+    handledNavMessageId: null,
+  };
   listeners.forEach((l) => l());
+}
+
+/** Mark an assistant message's navigate action as executed (remount-proof). */
+export function markNavHandled(messageId: string) {
+  setState({ handledNavMessageId: messageId });
 }
 
 let idSeq = 0;
