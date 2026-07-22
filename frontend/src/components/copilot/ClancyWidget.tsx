@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { toast } from '@/components/ui/toaster';
@@ -8,6 +8,7 @@ import { useClancyEnabled } from './clancyAccess';
 import {
   clearPendingPrompt,
   closeClancy,
+  markNavHandled,
   openClancy,
   sendClancy,
   toggleClancy,
@@ -44,10 +45,9 @@ function navLabel(to: string): string {
 export function ClancyWidget() {
   const clancyEnabled = useClancyEnabled();
   const { user } = useAuth();
-  const { open, messages, inFlight, pendingPrompt } = useClancyStore();
+  const { open, messages, inFlight, pendingPrompt, handledNavMessageId } = useClancyStore();
   const location = useLocation();
   const navigate = useNavigate();
-  const handledNavId = useRef<string | null>(null);
 
   const projectId = projectIdFromPath(location.pathname);
   const firstName = firstNameOf(user);
@@ -87,10 +87,14 @@ export function ClancyWidget() {
   }, [pendingPrompt, inFlight, projectId]);
 
   // Execute a `navigate` action the moment Clancy's newest message carries one.
+  // The handled-marker lives in the STORE, not a ref: the widget remounts on
+  // layout changes while the transcript survives, and a ref reset would replay
+  // the last navigation on every remount (live bug: Dashboard clicks kept
+  // boomeranging back to the page Clancy last navigated to).
   useEffect(() => {
     const last = messages[messages.length - 1];
-    if (!last || last.role !== 'assistant' || handledNavId.current === last.id) return;
-    handledNavId.current = last.id;
+    if (!last || last.role !== 'assistant' || handledNavMessageId === last.id) return;
+    markNavHandled(last.id);
     const nav = last.actions?.find(
       (a): a is Extract<ClancyAction, { type: 'navigate' }> => a.type === 'navigate',
     );
@@ -98,7 +102,7 @@ export function ClancyWidget() {
       toast({ description: `Taking you to ${navLabel(nav.to)}` });
       navigate(nav.to);
     }
-  }, [messages, navigate]);
+  }, [messages, handledNavMessageId, navigate]);
 
   if (!clancyEnabled) return null;
 
