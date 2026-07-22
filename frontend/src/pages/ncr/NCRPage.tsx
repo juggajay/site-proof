@@ -8,6 +8,7 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { Button } from '@/components/ui/button';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
+import { AskClancyChips } from '@/components/copilot/AskClancy';
 
 // Types
 import type { NCR } from './types';
@@ -184,6 +185,19 @@ export function NCRPage() {
           )}
         </div>
       </div>
+
+      <AskClancyChips
+        prompts={[
+          {
+            label: 'Open NCR summary',
+            question: 'Summarise the open NCRs on this project',
+          },
+          {
+            label: 'Overdue NCRs',
+            question: 'Are any NCRs overdue or waiting on verification?',
+          },
+        ]}
+      />
 
       {/* Messages */}
       {error && (

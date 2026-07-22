@@ -25,6 +25,12 @@ interface ClancyState {
   inFlight: boolean;
   /** An unread Clancy reply arrived while the panel was closed. */
   unseen: boolean;
+  /**
+   * A prompt queued from a contextual "Ask Clancy" affordance. The widget
+   * consumes it through its normal send path (so tool actions/navigation still
+   * work) and clears it. Null when nothing is queued.
+   */
+  pendingPrompt: string | null;
 }
 
 /** Wire response shape — LOCKED contract with the copilot chat backend. */
@@ -35,7 +41,13 @@ interface ChatResponse {
 
 // ponytail: one module-level store, not context — the widget is a singleton and
 // the transcript is deliberately per-session (resets on reload).
-let state: ClancyState = { open: false, messages: [], inFlight: false, unseen: false };
+let state: ClancyState = {
+  open: false,
+  messages: [],
+  inFlight: false,
+  unseen: false,
+  pendingPrompt: null,
+};
 const listeners = new Set<() => void>();
 
 function setState(patch: Partial<ClancyState>) {
@@ -52,9 +64,14 @@ export function useClancyStore(): ClancyState {
   return useSyncExternalStore(subscribe, () => state);
 }
 
+/** Test-only: read module state without a hook. */
+export function getClancyStateForTest(): ClancyState {
+  return state;
+}
+
 /** Test-only: reset module state between cases. */
 export function resetClancyStore() {
-  state = { open: false, messages: [], inFlight: false, unseen: false };
+  state = { open: false, messages: [], inFlight: false, unseen: false, pendingPrompt: null };
   listeners.forEach((l) => l());
 }
 
@@ -75,6 +92,22 @@ export function closeClancy() {
 export function toggleClancy() {
   if (state.open) closeClancy();
   else openClancy();
+}
+
+/**
+ * Queue a prompt from a contextual entry point and open the drawer. The widget
+ * consumes `pendingPrompt` via its normal send path (which carries the URL's
+ * projectId) and clears it, so a queued question executes exactly like one typed
+ * in the composer.
+ */
+export function askClancy(question: string) {
+  const text = question.trim();
+  if (!text) return;
+  setState({ pendingPrompt: text, open: true, unseen: false });
+}
+
+export function clearPendingPrompt() {
+  if (state.pendingPrompt !== null) setState({ pendingPrompt: null });
 }
 
 const MAX_TRANSCRIPT = 20;

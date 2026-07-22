@@ -8,7 +8,7 @@ import {
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
 import { ClancyWidget } from './ClancyWidget';
-import { openClancy, resetClancyStore } from './clancyChatState';
+import { askClancy, getClancyStateForTest, openClancy, resetClancyStore } from './clancyChatState';
 
 const INTRO_FLAG = 'clancy-intro-seen';
 
@@ -171,6 +171,27 @@ describe('ClancyWidget', () => {
       expect(navigateMock).toHaveBeenCalledWith('/projects/project-1/plan-sheets'),
     );
     expect(toastMock).toHaveBeenCalledWith({ description: 'Taking you to Plan Sheets' });
+  });
+
+  it('auto-sends a queued pendingPrompt once and clears it', async () => {
+    writeLocalStorageItem(INTRO_FLAG, '1');
+    apiFetchMock.mockResolvedValue({ message: 'Lot 12 is open.' });
+    renderWidget();
+
+    act(() => askClancy('What is the status of lot 12?'));
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
+    const [, opts] = apiFetchMock.mock.calls[0];
+    const body = JSON.parse(opts.body);
+    expect(body.messages.at(-1).content).toBe('What is the status of lot 12?');
+    // projectId derives from the URL, not the caller.
+    expect(body.projectId).toBe('project-1');
+    // Cleared so a re-render can't resend it.
+    expect(getClancyStateForTest().pendingPrompt).toBeNull();
+    expect(await screen.findByText('Lot 12 is open.')).toBeInTheDocument();
+
+    // No second send from the consumption effect re-running.
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('renders an open_stage chip that navigates to the copilot stage URL', async () => {

@@ -19,6 +19,14 @@ vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
   return { ...actual, useIsMobile: () => true };
 });
 
+// The register header hosts the Ask-Clancy chips, whose gate reads auth + AI
+// status; stub those so the copilot affordance renders without an AuthProvider.
+vi.mock('@/hooks/useAiStatus', () => ({ useAiStatus: () => ({ aiConfigured: true }) }));
+vi.mock('@/lib/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth')>()),
+  useAuth: () => ({ user: { roleInCompany: 'owner' } }),
+}));
+
 import { HoldPointsPage } from './HoldPointsPage';
 
 type UserEvent = ReturnType<typeof userEvent.setup>;
@@ -261,6 +269,19 @@ describe('HoldPointsPage register data layer', () => {
     expect(await findLotCard('LOT-001')).toBeInTheDocument();
     expect(getLotCard('LOT-150')).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/holdpoints/project/p1?all=true');
+  });
+
+  it('offers the Ask-Clancy chips below the header', async () => {
+    mockHoldPointsApi(buildRegister());
+
+    renderPage();
+
+    expect(
+      await screen.findByRole('button', { name: 'Ask Clancy: Hold point summary' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Ask Clancy: What needs chasing?' }),
+    ).toBeInTheDocument();
   });
 
   it('applies a status filter arriving via the URL', async () => {

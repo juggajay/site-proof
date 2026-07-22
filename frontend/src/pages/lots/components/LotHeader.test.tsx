@@ -25,6 +25,14 @@ vi.mock('@/hooks/useMediaQuery', () => ({
   useMediaQuery: () => false,
 }));
 
+// The desktop action row hosts the Ask-Clancy button, whose gate reads auth + AI
+// status; stub those so it renders without an AuthProvider.
+vi.mock('@/hooks/useAiStatus', () => ({ useAiStatus: () => ({ aiConfigured: true }) }));
+vi.mock('@/lib/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth')>()),
+  useAuth: () => ({ user: { roleInCompany: 'owner' } }),
+}));
+
 afterEach(() => {
   cleanup();
   mockIsMobile = false;
