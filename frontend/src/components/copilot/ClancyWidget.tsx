@@ -2,10 +2,9 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { toast } from '@/components/ui/toaster';
-import { useAiStatus } from '@/hooks/useAiStatus';
 import { useAuth } from '@/lib/auth';
-import { getCompanyRole } from '@/lib/subcontractorIdentity';
 import { ClancyPanel } from './ClancyPanel';
+import { useClancyEnabled } from './clancyAccess';
 import {
   closeClancy,
   openClancy,
@@ -35,35 +34,44 @@ function navLabel(to: string): string {
   return NAV_LABELS.find(([re]) => re.test(to))?.[1] ?? 'where you need to be';
 }
 
-// Clancy is an office copilot for the roles that own company setup — owner,
-// admin, and project manager (owner decision 2026-07-16). Field roles
-// (foreman, subbie) get the mobile shells instead; the chat route enforces
-// the same set server-side.
-const CLANCY_ROLES = new Set(['owner', 'admin', 'project_manager']);
-
 /**
  * Clancy — the in-app chat copilot. Mounted once in the classic authenticated
- * shell. Renders nothing when AI is not configured on the server or the user
- * is not an owner/admin.
+ * shell. Owns the right-side drawer and the global ⌘J shortcut; the entry point
+ * lives in the header (see Header.tsx). Renders nothing when AI is not
+ * configured on the server or the user is not an office role.
  */
 export function ClancyWidget() {
-  const { aiConfigured } = useAiStatus();
+  const clancyEnabled = useClancyEnabled();
   const { user } = useAuth();
-  const { open, messages, unseen } = useClancyStore();
+  const { open, messages } = useClancyStore();
   const location = useLocation();
   const navigate = useNavigate();
-  const bubbleRef = useRef<HTMLButtonElement>(null);
   const handledNavId = useRef<string | null>(null);
 
-  const clancyEnabled = aiConfigured && CLANCY_ROLES.has(getCompanyRole(user));
   const projectId = projectIdFromPath(location.pathname);
   const firstName = firstNameOf(user);
 
-  // First-run: auto-open once after a beat so the intro greets a new user.
+  // First-run: auto-open the drawer once after a beat so the intro greets a new
+  // user.
   useEffect(() => {
     if (!clancyEnabled || hasSeenIntro()) return;
     const t = setTimeout(() => openClancy(), 1500);
     return () => clearTimeout(t);
+  }, [clancyEnabled]);
+
+  // Global ⌘J / Ctrl+J toggles the drawer — mirrors the header search's ⌘K
+  // listener (works everywhere, including inside inputs).
+  useEffect(() => {
+    if (!clancyEnabled) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'j' || e.key === 'J')) {
+        e.preventDefault();
+        markIntroSeen();
+        toggleClancy();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [clancyEnabled]);
 
   // Execute a `navigate` action the moment Clancy's newest message carries one.
@@ -85,7 +93,8 @@ export function ClancyWidget() {
   const handleClose = () => {
     markIntroSeen();
     closeClancy();
-    bubbleRef.current?.focus();
+    // Return focus to the header entry point (it stays mounted behind the drawer).
+    document.getElementById('clancy-header-button')?.focus();
   };
 
   const handleSend = (text: string) => {
@@ -97,36 +106,12 @@ export function ClancyWidget() {
     navigate(`/projects/${action.projectId}/copilot?stage=${action.stage}`);
   };
 
-  return (
-    <>
-      <button
-        ref={bubbleRef}
-        type="button"
-        onClick={toggleClancy}
-        aria-label={open ? 'Close Clancy, your copilot' : 'Open Clancy, your copilot'}
-        aria-expanded={open}
-        className="clancy-bubble flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg ring-1 ring-white/10 ui-chrome"
-      >
-        <span className="text-xl font-semibold leading-none tracking-tight" aria-hidden="true">
-          C
-        </span>
-        <span
-          className="absolute bottom-3.5 right-3.5 h-1.5 w-1.5 rounded-full bg-[#2563EB]"
-          aria-hidden="true"
-        />
-        {unseen && !open && (
-          <span className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full border-2 border-zinc-900 bg-[#2563EB]" />
-        )}
-      </button>
-
-      {open && (
-        <ClancyPanel
-          firstName={firstName}
-          onClose={handleClose}
-          onOpenStage={handleOpenStage}
-          onSend={handleSend}
-        />
-      )}
-    </>
-  );
+  return open ? (
+    <ClancyPanel
+      firstName={firstName}
+      onClose={handleClose}
+      onOpenStage={handleOpenStage}
+      onSend={handleSend}
+    />
+  ) : null;
 }

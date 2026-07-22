@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +8,7 @@ import {
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
 import { ClancyWidget } from './ClancyWidget';
-import { resetClancyStore } from './clancyChatState';
+import { openClancy, resetClancyStore } from './clancyChatState';
 
 const INTRO_FLAG = 'clancy-intro-seen';
 
@@ -37,9 +37,15 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 function renderWidget() {
   return render(
     <MemoryRouter initialEntries={['/projects/project-1/lots']}>
+      {/* Stand-in for the header entry point the drawer returns focus to. */}
+      <button id="clancy-header-button" type="button" data-testid="header-button" />
       <ClancyWidget />
     </MemoryRouter>,
   );
+}
+
+function pressCmdJ() {
+  fireEvent.keyDown(document, { key: 'j', metaKey: true });
 }
 
 beforeEach(() => {
@@ -58,51 +64,47 @@ afterEach(() => {
 });
 
 describe('ClancyWidget', () => {
-  it('renders the bubble only when AI is configured', () => {
+  it('⌘J does not open the drawer when AI is unconfigured', () => {
     writeLocalStorageItem(INTRO_FLAG, '1'); // suppress auto-open
-    const { unmount } = renderWidget();
-    const bubble = screen.getByLabelText('Open Clancy, your copilot');
-    expect(bubble).toBeInTheDocument();
-    // Rename regression (live browser test): the bubble hardcoded "J" and
-    // referenced a CSS class that no longer existed, losing its fixed
-    // positioning. Pin the monogram and the class the stylesheet defines.
-    expect(bubble).toHaveTextContent('C');
-    expect(bubble.className).toContain('clancy-bubble');
-    unmount();
-
     aiState.configured = false;
     renderWidget();
-    expect(screen.queryByLabelText('Open Clancy, your copilot')).not.toBeInTheDocument();
+    pressCmdJ();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders only for office roles — field roles never see Clancy', () => {
+  it('⌘J does not open the drawer for field roles', () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
     for (const role of ['foreman', 'site_manager', 'quality_manager', 'subcontractor']) {
       authState.roleInCompany = role;
       const { unmount } = renderWidget();
-      expect(screen.queryByLabelText('Open Clancy, your copilot')).not.toBeInTheDocument();
+      pressCmdJ();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       unmount();
     }
+  });
 
-    for (const role of ['admin', 'project_manager']) {
+  it('⌘J toggles the drawer for office roles', () => {
+    writeLocalStorageItem(INTRO_FLAG, '1');
+    for (const role of ['owner', 'admin', 'project_manager']) {
       authState.roleInCompany = role;
       const { unmount } = renderWidget();
-      expect(screen.getByLabelText('Open Clancy, your copilot')).toBeInTheDocument();
+
+      pressCmdJ();
+      const dialog = screen.getByRole('dialog');
+      // The drawer container carries the (renamed) animation class.
+      expect(dialog.className).toContain('clancy-drawer');
+      // The "C" monogram now lives on the avatar in the drawer header.
+      expect(within(dialog).getByText('C')).toBeInTheDocument();
+
+      pressCmdJ();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
       unmount();
+      resetClancyStore();
     }
   });
 
-  it('does not auto-open the first-run intro for a non-admin role', () => {
-    vi.useFakeTimers();
-    authState.roleInCompany = 'foreman';
-    renderWidget();
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('auto-opens once for a first-run user and sets the seen flag on close', () => {
+  it('auto-opens the drawer once for a first-run user and sets the seen flag on close', () => {
     vi.useFakeTimers();
     renderWidget();
 
@@ -118,12 +120,34 @@ describe('ClancyWidget', () => {
     expect(readLocalStorageItem(INTRO_FLAG)).toBe('1');
   });
 
+  it('does not auto-open the first-run intro for a non-office role', () => {
+    vi.useFakeTimers();
+    authState.roleInCompany = 'foreman';
+    renderWidget();
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes on Escape and returns focus to the header button', () => {
+    writeLocalStorageItem(INTRO_FLAG, '1');
+    renderWidget();
+    act(() => openClancy());
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(document.getElementById('clancy-header-button'));
+  });
+
   it('sends a suggested prompt as a user message', async () => {
     writeLocalStorageItem(INTRO_FLAG, '1');
     apiFetchMock.mockResolvedValue({ message: 'Start with the control line.' });
     renderWidget();
 
-    fireEvent.click(screen.getByLabelText('Open Clancy, your copilot'));
+    act(() => openClancy());
     fireEvent.click(screen.getByText('What should I do first?'));
 
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
@@ -140,7 +164,7 @@ describe('ClancyWidget', () => {
     });
     renderWidget();
 
-    fireEvent.click(screen.getByLabelText('Open Clancy, your copilot'));
+    act(() => openClancy());
     fireEvent.click(screen.getByText('Read my drawings for me'));
 
     await waitFor(() =>
@@ -157,24 +181,11 @@ describe('ClancyWidget', () => {
     });
     renderWidget();
 
-    fireEvent.click(screen.getByLabelText('Open Clancy, your copilot'));
+    act(() => openClancy());
     fireEvent.click(screen.getByText('What should I do first?'));
 
     const chip = await screen.findByText(/Open: Read setout sheets/);
     fireEvent.click(chip);
     expect(navigateMock).toHaveBeenCalledWith('/projects/project-1/copilot?stage=control_line');
-  });
-
-  it('closes on Escape and returns focus to the bubble', () => {
-    writeLocalStorageItem(INTRO_FLAG, '1');
-    renderWidget();
-    const bubble = screen.getByLabelText('Open Clancy, your copilot');
-
-    fireEvent.click(bubble);
-    const dialog = screen.getByRole('dialog');
-    fireEvent.keyDown(dialog, { key: 'Escape' });
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(bubble);
   });
 });

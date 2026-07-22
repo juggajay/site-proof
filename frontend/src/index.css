@@ -1319,58 +1319,22 @@
   }
 }
 
-/* Clancy copilot chat widget. The global reduced-motion block above neutralises
-   these animations automatically. */
-.clancy-bubble {
-  position: fixed;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  z-index: 40;
-  animation: clancy-bubble-in 0.35s cubic-bezier(0.32, 1.15, 0.35, 1);
-  transition:
-    transform 0.15s ease-out,
-    box-shadow 0.15s ease-out;
-}
-.clancy-bubble:hover {
-  transform: translateY(-2px);
-}
-/* On mobile the classic layout shows a bottom nav (h-16 + safe area); lift the
-   bubble clear of it. */
-@media (max-width: 767px) {
-  .clancy-bubble {
-    right: 1rem;
-    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
-  }
-}
-@keyframes clancy-bubble-in {
-  from {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.clancy-panel {
-  animation: clancy-panel-in 0.28s cubic-bezier(0.32, 1.15, 0.35, 1);
-  transform-origin: bottom right;
+/* Clancy copilot chat drawer. Desktop slides in from the right edge; mobile
+   rises as a bottom sheet. */
+.clancy-drawer {
+  animation: clancy-drawer-in 0.2s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @media (max-width: 767px) {
-  .clancy-panel {
+  .clancy-drawer {
     animation-name: clancy-sheet-in;
-    transform-origin: bottom center;
   }
 }
-@keyframes clancy-panel-in {
+@keyframes clancy-drawer-in {
   from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.96);
+    transform: translateX(100%);
   }
   to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
 }
 @keyframes clancy-sheet-in {
@@ -1379,6 +1343,21 @@
   }
   to {
     transform: translateY(0);
+  }
+}
+/* Reduced motion: swap the slide for a plain short fade (overrides the global
+   0.01ms neutraliser via higher selector specificity). */
+@media (prefers-reduced-motion: reduce) {
+  .clancy-drawer {
+    animation: clancy-drawer-fade 120ms ease !important;
+  }
+}
+@keyframes clancy-drawer-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

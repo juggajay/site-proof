@@ -7,12 +7,11 @@ import { ClancyMessageRow } from './ClancyMessage';
 import { CLANCY_SUGGESTED_PROMPTS, clancyIntro } from './clancyIntro';
 import { useClancyStore, type ClancyAction } from './clancyChatState';
 
-const FOCUSABLE = 'a[href],button:not([disabled]),textarea,input,[tabindex]:not([tabindex="-1"])';
-
 /**
- * The Clancy conversation surface. Desktop: a card anchored above the bubble.
- * Mobile (<768px): a full-width bottom sheet. Focus is trapped while open and
- * Esc closes; the widget restores focus to the bubble.
+ * The Clancy conversation surface. Desktop: a non-modal right-side drawer — the
+ * page stays interactive beneath it (no backdrop, no scroll-lock), matching the
+ * Rovo/ServiceNow pattern. Mobile (<768px): a full-width bottom sheet. Esc
+ * closes and the widget restores focus to the header entry point.
  */
 export function ClancyPanel({
   firstName,
@@ -32,7 +31,8 @@ export function ClancyPanel({
   const [atBottom, setAtBottom] = useState(true);
   const [slowHint, setSlowHint] = useState(false);
 
-  // Esc-to-close + focus trap within the panel.
+  // Esc-to-close. No focus trap — the drawer is non-modal, so Tab must be able
+  // to move back out into the page.
   useEffect(() => {
     const node = panelRef.current;
     if (!node) return;
@@ -40,21 +40,6 @@ export function ClancyPanel({
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const items = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.offsetParent !== null,
-      );
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
       }
     };
     node.addEventListener('keydown', onKeyDown);
@@ -112,11 +97,11 @@ export function ClancyPanel({
       role="dialog"
       aria-label="Clancy, your CIVOS copilot"
       className={cn(
-        'clancy-panel pointer-events-auto flex flex-col overflow-hidden border border-border bg-card shadow-2xl',
-        // Desktop: anchored card above the bubble.
-        'fixed bottom-24 right-4 z-40 h-[560px] max-h-[calc(100dvh-7rem)] w-[380px] max-w-[calc(100vw-2rem)] rounded-xl',
+        'clancy-drawer pointer-events-auto flex flex-col overflow-hidden bg-card shadow-2xl',
+        // Desktop: non-modal right-side drawer, full viewport height.
+        'fixed right-0 top-0 z-40 h-[100dvh] w-[420px] max-w-[calc(100vw-2rem)] border-l border-border',
         // Mobile: full-width bottom sheet.
-        'max-md:inset-x-0 max-md:bottom-0 max-md:right-0 max-md:h-[85dvh] max-md:w-full max-md:max-w-none max-md:rounded-b-none max-md:rounded-t-2xl',
+        'max-md:inset-x-0 max-md:bottom-0 max-md:top-auto max-md:h-[85dvh] max-md:w-full max-md:max-w-none max-md:border-l-0 max-md:border-t max-md:rounded-t-2xl',
       )}
     >
       {/* Mobile drag-handle affordance */}

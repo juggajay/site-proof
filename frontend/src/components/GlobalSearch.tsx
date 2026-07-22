@@ -9,11 +9,14 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/components/ui/button';
+import { useClancyEnabled } from '@/components/copilot/clancyAccess';
+import { openClancy } from '@/components/copilot/clancyChatState';
 
 interface SearchResult {
   id: string;
@@ -94,6 +97,7 @@ interface GlobalSearchProps {
 export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   const navigate = useNavigate();
   const { projectId } = useParams();
+  const clancyEnabled = useClancyEnabled();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -396,6 +400,24 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
 
         {/* Results */}
         <div className="max-h-[400px] overflow-auto">
+          {clancyEnabled && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                openClancy();
+              }}
+              className="flex w-full items-center gap-3 border-b px-4 py-2.5 text-left hover:bg-muted"
+            >
+              <Sparkles className="h-4 w-4 flex-shrink-0 text-[#2563EB]" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Ask Clancy…</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  Chat with your CIVOS copilot
+                </div>
+              </div>
+            </button>
+          )}
           {!projectId ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
               Select a project to search
