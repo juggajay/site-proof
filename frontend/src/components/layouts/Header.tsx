@@ -1,41 +1,16 @@
-import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
-import {
-  Bell,
-  LogOut,
-  ChevronDown,
-  FolderKanban,
-  Settings,
-  UserCircle,
-  Search,
-  Sparkles,
-  Sun,
-  Moon,
-  BookOpen,
-  Compass,
-  Building2,
-  ClipboardList,
-  HelpCircle,
-} from 'lucide-react';
+import { Bell, ChevronDown, FolderKanban, Search, Sparkles } from 'lucide-react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
-import { isAdminRole, isSubcontractorRole } from '@/lib/roles';
-import {
-  getCompanyRole,
-  getProjectScopedRole,
-  hasSubcontractorPortalIdentity,
-} from '@/lib/subcontractorIdentity';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { useClancyEnabled } from '@/components/copilot/clancyAccess';
 import { toggleClancy, useClancyStore } from '@/components/copilot/clancyChatState';
-import { startOnboardingTour, useOnboarding } from '@/components/OnboardingTour';
-import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
-import { useTheme } from '@/lib/theme';
 import { Input } from '@/components/ui/input';
 import { buildProjectSwitchPath } from './projectSwitchPath';
+import { UserMenu } from './UserMenu';
 
 interface Project {
   id: string;
@@ -44,27 +19,13 @@ interface Project {
 }
 
 export function Header() {
-  const { user } = useAuth();
-  const { resetOnboarding } = useOnboarding();
-  const { requestSignOut, dialog: signOutDialog } = useUnsyncedSignOut();
-  // Mirrors the ProtectedAppShell tour audience gate: subcontractor portal
-  // users get no tour entry point (the tour walks the company-side app).
-  const canTakeTour =
-    Boolean(user?.companyId) &&
-    !isSubcontractorRole(getCompanyRole(user)) &&
-    !hasSubcontractorPortalIdentity(user);
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
-  const { setTheme, resolvedTheme } = useTheme();
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const projectSelectorRef = useRef<HTMLDivElement>(null);
   const projectSearchInputRef = useRef<HTMLInputElement>(null);
-
-  // User menu state
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Global search state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -88,27 +49,6 @@ export function Header() {
   });
   const unreadCount = unreadCountData?.count || 0;
 
-  // Project detail for the current context — same query key as Sidebar, so this
-  // shares the cache (no extra request). Drives the avatar-menu utility gates.
-  const { data: projectData } = useQuery({
-    queryKey: queryKeys.projectModules(projectId!),
-    queryFn: () =>
-      apiFetch<{ project?: { currentUserRole?: string | null } }>(`/api/projects/${projectId}`),
-    enabled: !!projectId,
-  });
-
-  // Gating for the relocated utility items. Mirrors Sidebar.tsx faithfully:
-  // Settings hides for subcontractors, Company Settings needs company admin,
-  // Audit Log needs admin OR a project-scoped PM/QM. Keep in sync with Sidebar.
-  const companyRole = getCompanyRole(user);
-  const projectScopedRole = projectId
-    ? (projectData?.project?.currentUserRole ?? 'viewer')
-    : getProjectScopedRole(user);
-  const isSubcontractor = isSubcontractorRole(companyRole) || hasSubcontractorPortalIdentity(user);
-  const hasAdmin = isAdminRole(companyRole);
-  const hasAuditLogAccess =
-    hasAdmin || projectScopedRole === 'project_manager' || projectScopedRole === 'quality_manager';
-
   // Find the current project from the list
   const currentProject = projects.find((p) => p.id === projectId);
 
@@ -128,7 +68,7 @@ export function Header() {
     }
   }, [isProjectSelectorOpen]);
 
-  // Close dropdowns when clicking outside
+  // Close the project selector when clicking outside (UserMenu owns its own).
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -137,20 +77,16 @@ export function Header() {
       ) {
         setIsProjectSelectorOpen(false);
       }
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setIsUserMenuOpen(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close dropdowns on Escape key
+  // Close the project selector on Escape.
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsProjectSelectorOpen(false);
-        setIsUserMenuOpen(false);
       }
     };
     document.addEventListener('keydown', handleEscape);
@@ -168,11 +104,6 @@ export function Header() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const handleSignOut = async () => {
-    // Manual sign-out: warn before wiping unsynced offline work, then navigate.
-    await requestSignOut(() => navigate('/login', { replace: true }));
-  };
 
   const handleProjectSelect = (project: Project) => {
     setIsProjectSelectorOpen(false);
@@ -325,166 +256,14 @@ export function Header() {
             )}
           </Link>
         </div>
-        {/* User Profile Menu */}
-        <div ref={userMenuRef} className="relative">
-          <button
-            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-            className="rounded-lg p-1 hover:bg-muted"
-            aria-label="User menu"
-            aria-expanded={isUserMenuOpen}
-            aria-haspopup="menu"
-          >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <span className="text-sm font-semibold" aria-hidden="true">
-                  {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-          </button>
-
-          {isUserMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border bg-card shadow-lg">
-              <div className="border-b px-4 py-3">
-                <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-              </div>
-              {/* Me: theme, profile, tour */}
-              <div className="p-1">
-                <button
-                  onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                  role="menuitem"
-                >
-                  {resolvedTheme === 'dark' ? (
-                    <Sun className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <Moon className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                </button>
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    navigate('/profile');
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                  role="menuitem"
-                >
-                  <UserCircle className="h-4 w-4" aria-hidden="true" />
-                  Profile
-                </button>
-                {canTakeTour && (
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      resetOnboarding();
-                      startOnboardingTour();
-                    }}
-                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                    role="menuitem"
-                  >
-                    <Compass className="h-4 w-4" aria-hidden="true" />
-                    Take the tour
-                  </button>
-                )}
-              </div>
-
-              {/* System settings — relocated from the sidebar utility cluster;
-                  gates mirror Sidebar.tsx. Group hidden entirely for
-                  subcontractors (Settings excluded, and they can't be admin). */}
-              {!isSubcontractor && (
-                <div className="border-t p-1">
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      navigate('/settings');
-                    }}
-                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                    role="menuitem"
-                  >
-                    <Settings className="h-4 w-4" aria-hidden="true" />
-                    Settings
-                  </button>
-                  {hasAdmin && (
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        navigate('/company-settings');
-                      }}
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                      role="menuitem"
-                    >
-                      <Building2 className="h-4 w-4" aria-hidden="true" />
-                      Company Settings
-                    </button>
-                  )}
-                  {hasAuditLogAccess && (
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        navigate('/audit-log');
-                      }}
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                      role="menuitem"
-                    >
-                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                      Audit Log
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Help — always available */}
-              <div className="border-t p-1">
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    navigate('/docs');
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                  role="menuitem"
-                >
-                  <BookOpen className="h-4 w-4" aria-hidden="true" />
-                  Documentation
-                </button>
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    navigate('/support');
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                  role="menuitem"
-                >
-                  <HelpCircle className="h-4 w-4" aria-hidden="true" />
-                  Help & Support
-                </button>
-              </div>
-              <div className="border-t p-1">
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    handleSignOut();
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
-                  role="menuitem"
-                >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                  Sign out
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* User menu — below md only. At md+ the sidebar owns identity; the
+            sidebar is hidden below md and MobileNav has no Profile/Sign out, so
+            the avatar stays reachable here on phones/tablets. */}
+        <UserMenu variant="header" className="md:hidden" />
       </div>
 
       {/* Global Search Modal */}
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
-
-      {/* Confirm dialog shown when signing out would discard unsynced offline work */}
-      {signOutDialog}
     </header>
   );
 }

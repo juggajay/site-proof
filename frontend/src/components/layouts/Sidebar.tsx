@@ -41,6 +41,7 @@ import {
   projectNavigation,
   type NavigationItem,
 } from './navItems';
+import { UserMenu } from './UserMenu';
 
 const navigation: NavigationItem[] = [
   {
@@ -371,9 +372,19 @@ export function Sidebar() {
           </>
         )}
       </nav>
-      <div className={cn('border-t transition-all duration-300', isCollapsed ? 'p-2' : 'p-4')}>
-        {/* Collapse/Expand Toggle Button — the only pinned control now that the
-            utility cluster moved to the header avatar menu. */}
+      <div
+        className={cn(
+          'border-t space-y-1 transition-all duration-300',
+          isCollapsed ? 'p-2' : 'p-4',
+        )}
+      >
+        {/* Identity slot (Linear/Slack pattern): avatar + name, opens the user
+            menu as a drop-up. Carries theme, Profile, the relocated utility
+            destinations, and Sign out. */}
+        <UserMenu variant="sidebar" collapsed={isCollapsed} />
+
+        {/* Collapse/Expand Toggle Button — the other pinned control now that the
+            utility cluster moved to the user menu. */}
         <Button
           variant="ghost"
           onClick={toggleSidebar}
