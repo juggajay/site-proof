@@ -8,6 +8,18 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return { ...actual, apiFetch: vi.fn() };
 });
+// The pinned footer now renders UserMenu; stub its extra boundaries so the
+// Sidebar renders in isolation (menu contents are covered in UserMenu.test).
+vi.mock('@/lib/theme', () => ({
+  useTheme: () => ({ setTheme: vi.fn(), resolvedTheme: 'light' }),
+}));
+vi.mock('@/components/OnboardingTour', () => ({
+  useOnboarding: () => ({ resetOnboarding: vi.fn() }),
+  startOnboardingTour: vi.fn(),
+}));
+vi.mock('@/components/UnsyncedSignOutDialog', () => ({
+  useUnsyncedSignOut: () => ({ requestSignOut: vi.fn(), dialog: null }),
+}));
 
 import { Sidebar } from './Sidebar';
 import { useAuth } from '@/lib/auth';
@@ -295,15 +307,14 @@ describe('Sidebar project navigation', () => {
     });
   });
 
-  it('shows audit log but not company settings for project-scoped quality managers', async () => {
-    mockProjectDetail('quality_manager');
+  it('no longer pins the utility cluster; the Collapse control stays pinned', async () => {
+    mockProjectDetail('owner');
     useAuthMock.mockReturnValue({
       user: {
-        id: 'project-qm-1',
-        email: 'project-qm@example.com',
-        role: 'member',
-        roleInCompany: 'member',
-        dashboardRole: 'quality_manager',
+        id: 'owner-cluster-1',
+        email: 'owner-cluster@example.com',
+        role: 'owner',
+        roleInCompany: 'owner',
         companyId: 'company-1',
       },
     } as unknown as ReturnType<typeof useAuth>);
@@ -311,8 +322,33 @@ describe('Sidebar project navigation', () => {
     renderProjectSidebar();
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: /Audit Log/i })).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-toggle')).toBeInTheDocument();
     });
+    // The five utility destinations moved to the user menu; they are no longer
+    // sidebar links.
+    expect(screen.queryByRole('link', { name: /^Settings$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Documentation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Help & Support/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Company Settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Audit Log/i })).not.toBeInTheDocument();
+  });
+
+  it('pins the user identity menu in the footer', async () => {
+    mockProjectDetail('owner');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'owner-identity-1',
+        email: 'owner-identity@example.com',
+        role: 'owner',
+        roleInCompany: 'owner',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'User menu' })).toBeInTheDocument();
+    });
   });
 });

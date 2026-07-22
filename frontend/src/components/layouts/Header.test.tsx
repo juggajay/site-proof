@@ -1,13 +1,13 @@
-import { screen, fireEvent } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 
-// The header was decluttered to two labelled pills, two icons and an avatar-only
-// user-menu trigger. These tests lock in the three behaviours that carry the
-// restraint: the avatar trigger shows no inline email, the theme toggle lives
-// inside the user menu (and toggling keeps the menu open for instant feedback),
-// and Ask Clancy still exposes its ⌘J shortcut via aria/title rather than an
-// inline kbd chip. All external boundaries are mocked.
+// The desktop sidebar now owns identity (see Sidebar/UserMenu). At md+ the
+// header no longer shows an avatar; below md — where the sidebar is hidden and
+// MobileNav has no Profile/Sign out — the header keeps the UserMenu, wrapped in
+// md:hidden. These tests lock in: the header UserMenu is below-md only, the
+// avatar trigger shows no inline email, and Ask Clancy keeps its ⌘J hint in
+// aria/title. Menu contents + gating live in UserMenu.test.tsx. Boundaries mocked.
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -35,11 +35,12 @@ import { useTheme } from '@/lib/theme';
 const useAuthMock = vi.mocked(useAuth);
 const useThemeMock = vi.mocked(useTheme);
 
-function setup(resolvedTheme: 'light' | 'dark' = 'light') {
+function setup(
+  resolvedTheme: 'light' | 'dark' = 'light',
+  user: Record<string, unknown> = { email: 'jay@ryox.com.au', companyId: 'c1' },
+) {
   const setTheme = vi.fn();
-  useAuthMock.mockReturnValue({
-    user: { email: 'jay@ryox.com.au', companyId: 'c1' },
-  } as unknown as ReturnType<typeof useAuth>);
+  useAuthMock.mockReturnValue({ user } as unknown as ReturnType<typeof useAuth>);
   useThemeMock.mockReturnValue({ setTheme, resolvedTheme } as unknown as ReturnType<
     typeof useTheme
   >);
@@ -52,23 +53,20 @@ afterEach(() => {
 });
 
 describe('Header', () => {
+  it('renders the user menu only below md (sidebar owns identity at md+)', () => {
+    setup();
+    // The header UserMenu wrapper carries md:hidden so it disappears once the
+    // sidebar is visible.
+    const trigger = screen.getByRole('button', { name: 'User menu' });
+    expect(trigger.parentElement).toHaveClass('md:hidden');
+  });
+
   it('avatar trigger shows no inline email text', () => {
     setup();
-    // The dropdown (which does show the email) is closed, so the email must not
+    // The popover (which does show the email) is closed, so the email must not
     // appear anywhere in the collapsed header.
     expect(screen.queryByText('jay@ryox.com.au')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'User menu' })).toBeInTheDocument();
-  });
-
-  it('toggles theme from the user menu without closing it', () => {
-    const { setTheme } = setup('light');
-    fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
-
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to dark mode' }));
-    expect(setTheme).toHaveBeenCalledWith('dark');
-
-    // Menu stays open for instant feedback — Profile is still reachable.
-    expect(screen.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
   });
 
   it('Ask Clancy keeps the ⌘J shortcut hint in aria/title, not an inline kbd', () => {
