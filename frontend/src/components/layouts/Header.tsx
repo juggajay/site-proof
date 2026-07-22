@@ -8,6 +8,7 @@ import {
   Settings,
   UserCircle,
   Search,
+  Sparkles,
   Sun,
   Moon,
   BookOpen,
@@ -21,6 +22,8 @@ import { isSubcontractorRole } from '@/lib/roles';
 import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { useClancyEnabled } from '@/components/copilot/clancyAccess';
+import { toggleClancy, useClancyStore } from '@/components/copilot/clancyChatState';
 import { startOnboardingTour, useOnboarding } from '@/components/OnboardingTour';
 import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
 import { useTheme } from '@/lib/theme';
@@ -59,6 +62,10 @@ export function Header() {
 
   // Global search state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Clancy copilot entry point — gated to office roles + AI configured.
+  const clancyEnabled = useClancyEnabled();
+  const { open: clancyOpen, unseen: clancyUnseen } = useClancyStore();
 
   // Fetch user's projects via TanStack Query
   const { data: projectsData } = useQuery({
@@ -253,6 +260,32 @@ export function Header() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Ask Clancy — copilot entry, styled to match the search button */}
+        {clancyEnabled && (
+          <button
+            id="clancy-header-button"
+            type="button"
+            onClick={() => toggleClancy()}
+            className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Ask Clancy (⌘J)"
+            aria-expanded={clancyOpen}
+          >
+            <span className="relative flex">
+              <Sparkles className="h-4 w-4 text-[#2563EB]" aria-hidden="true" />
+              {clancyUnseen && !clancyOpen && (
+                <span
+                  className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-[#2563EB]"
+                  aria-hidden="true"
+                />
+              )}
+            </span>
+            <span className="hidden md:inline">Ask Clancy</span>
+            <kbd className="hidden md:inline-flex items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
+              <span className="text-xs">⌘</span>J
+            </kbd>
+          </button>
         )}
 
         {/* Notification Bell */}
