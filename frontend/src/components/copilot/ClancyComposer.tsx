@@ -44,9 +44,15 @@ export function ClancyComposer({
 
   const overCounter = value.length >= COUNTER_AT;
 
+  const canSend = !disabled && value.trim().length > 0;
+
   return (
-    <div className="border-t border-border bg-card px-3 py-2.5">
-      <div className="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring">
+    <div className="border-t border-border bg-card px-3 py-3">
+      {/* Single-surface composer (ChatGPT/Claude idiom): one soft filled shape,
+          borderless textarea inside, monochrome send that only comes alive with
+          input. No inner borders, no rings-on-rings, no standing brand colour —
+          the header sparkle is the accent; the composer stays quiet. */}
+      <div className="flex items-end gap-1.5 rounded-2xl bg-muted px-3.5 py-2 transition-colors focus-within:bg-background focus-within:shadow-[inset_0_0_0_1px_hsl(var(--border))]">
         <textarea
           ref={textareaRef}
           rows={1}
@@ -56,14 +62,19 @@ export function ClancyComposer({
           onKeyDown={onKeyDown}
           placeholder="Ask Clancy…"
           aria-label="Message Clancy"
-          className="flex-1 resize-none bg-transparent text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground"
+          className="flex-1 resize-none appearance-none border-0 bg-transparent py-0.5 text-sm leading-5 text-foreground outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0"
         />
         <button
           type="button"
           onClick={submit}
-          disabled={disabled || value.trim().length === 0}
+          disabled={!canSend}
           aria-label="Send message"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#2563EB] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+          className={cn(
+            'mb-px flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors',
+            canSend
+              ? 'bg-foreground text-background hover:opacity-90'
+              : 'cursor-default bg-transparent text-muted-foreground/40',
+          )}
         >
           <svg
             viewBox="0 0 24 24"
@@ -73,7 +84,7 @@ export function ClancyComposer({
             strokeWidth="2"
             aria-hidden="true"
           >
-            <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 19V5M6 11l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       </div>
