@@ -295,15 +295,14 @@ describe('Sidebar project navigation', () => {
     });
   });
 
-  it('shows audit log but not company settings for project-scoped quality managers', async () => {
-    mockProjectDetail('quality_manager');
+  it('no longer pins the utility cluster; the Collapse control stays pinned', async () => {
+    mockProjectDetail('owner');
     useAuthMock.mockReturnValue({
       user: {
-        id: 'project-qm-1',
-        email: 'project-qm@example.com',
-        role: 'member',
-        roleInCompany: 'member',
-        dashboardRole: 'quality_manager',
+        id: 'owner-cluster-1',
+        email: 'owner-cluster@example.com',
+        role: 'owner',
+        roleInCompany: 'owner',
         companyId: 'company-1',
       },
     } as unknown as ReturnType<typeof useAuth>);
@@ -311,8 +310,13 @@ describe('Sidebar project navigation', () => {
     renderProjectSidebar();
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: /Audit Log/i })).toBeInTheDocument();
+      expect(screen.getByTestId('sidebar-toggle')).toBeInTheDocument();
     });
+    // The five utility destinations moved to the header avatar menu.
+    expect(screen.queryByRole('link', { name: /^Settings$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Documentation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Help & Support/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Company Settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Audit Log/i })).not.toBeInTheDocument();
   });
 });

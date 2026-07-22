@@ -35,16 +35,21 @@ import { useTheme } from '@/lib/theme';
 const useAuthMock = vi.mocked(useAuth);
 const useThemeMock = vi.mocked(useTheme);
 
-function setup(resolvedTheme: 'light' | 'dark' = 'light') {
+function setup(
+  resolvedTheme: 'light' | 'dark' = 'light',
+  user: Record<string, unknown> = { email: 'jay@ryox.com.au', companyId: 'c1' },
+) {
   const setTheme = vi.fn();
-  useAuthMock.mockReturnValue({
-    user: { email: 'jay@ryox.com.au', companyId: 'c1' },
-  } as unknown as ReturnType<typeof useAuth>);
+  useAuthMock.mockReturnValue({ user } as unknown as ReturnType<typeof useAuth>);
   useThemeMock.mockReturnValue({ setTheme, resolvedTheme } as unknown as ReturnType<
     typeof useTheme
   >);
   renderWithProviders(<Header />);
   return { setTheme };
+}
+
+function openMenu() {
+  fireEvent.click(screen.getByRole('button', { name: 'User menu' }));
 }
 
 afterEach(() => {
@@ -76,5 +81,45 @@ describe('Header', () => {
     const clancy = screen.getByRole('button', { name: 'Ask Clancy (⌘J)' });
     expect(clancy).toHaveAttribute('title', 'Ask Clancy (⌘J)');
     expect(clancy.querySelector('kbd')).toBeNull();
+  });
+
+  // The five utility destinations relocated from the sidebar now live in the
+  // avatar menu, gated exactly as the old sidebar cluster was.
+  it('shows all five relocated utility rows in the avatar menu for an owner', () => {
+    setup('light', { email: 'owner@ryox.com.au', companyId: 'c1', roleInCompany: 'owner' });
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Company Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Audit Log' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Documentation' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Help & Support' })).toBeInTheDocument();
+  });
+
+  it('hides Company Settings and Audit Log from a role without access', () => {
+    setup('light', {
+      email: 'site@ryox.com.au',
+      companyId: 'c1',
+      roleInCompany: 'site_manager',
+    });
+    openMenu();
+    // Settings, Documentation, Help stay; the admin/audit rows do not.
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Documentation' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Company Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Audit Log' })).not.toBeInTheDocument();
+  });
+
+  it('hides the Settings row for subcontractors', () => {
+    setup('light', {
+      email: 'subbie@ryox.com.au',
+      companyId: 'c1',
+      roleInCompany: 'subcontractor',
+    });
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Company Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Audit Log' })).not.toBeInTheDocument();
+    // Help destinations remain reachable.
+    expect(screen.getByRole('menuitem', { name: 'Documentation' })).toBeInTheDocument();
   });
 });

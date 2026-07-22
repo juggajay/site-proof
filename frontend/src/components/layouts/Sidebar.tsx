@@ -3,15 +3,11 @@ import { useEffect } from 'react';
 import {
   LayoutDashboard,
   FolderKanban,
-  Settings,
   Building2,
   PieChart,
-  HelpCircle,
-  ClipboardList,
   ChevronLeft,
   ChevronRight,
   Briefcase,
-  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -70,14 +66,10 @@ const navigation: NavigationItem[] = [
   },
 ];
 
-// Settings navigation items
-const settingsNavigation: NavigationItem[] = [
-  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-  { name: 'Documentation', href: '/docs', icon: BookOpen },
-  { name: 'Help & Support', href: '/support', icon: HelpCircle },
-  { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
-  { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAuditLogAccess: true },
-];
+// The utility cluster (Settings, Documentation, Help & Support, Company
+// Settings, Audit Log) used to be pinned here; it now lives in the header
+// avatar menu so the sidebar is pure navigation. Gating for those items was
+// ported to Header.tsx.
 
 // Subcontractor-specific navigation
 const subcontractorNavigation: NavigationItem[] = [
@@ -245,9 +237,6 @@ export function Sidebar() {
     );
   }
 
-  // Filter settings navigation
-  const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem);
-
   // Filter subcontractor navigation (only for subcontractors)
   const filteredSubcontractorNavigation = hasPortalIdentity
     ? subcontractorNavigation.filter(shouldShowItem)
@@ -382,31 +371,9 @@ export function Sidebar() {
           </>
         )}
       </nav>
-      <div
-        className={cn(
-          'border-t space-y-1 transition-all duration-300',
-          isCollapsed ? 'p-2' : 'p-4',
-        )}
-      >
-        {filteredSettingsNavigation.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.href}
-            title={isCollapsed ? item.name : undefined}
-            className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
-          >
-            {({ isActive }) => (
-              <>
-                <item.icon className={navIconClass(isActive)} aria-hidden="true" />
-                {!isCollapsed && (
-                  <span className="transition-opacity duration-200">{item.name}</span>
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-
-        {/* Collapse/Expand Toggle Button */}
+      <div className={cn('border-t transition-all duration-300', isCollapsed ? 'p-2' : 'p-4')}>
+        {/* Collapse/Expand Toggle Button — the only pinned control now that the
+            utility cluster moved to the header avatar menu. */}
         <Button
           variant="ghost"
           onClick={toggleSidebar}

@@ -13,13 +13,20 @@ import {
   Moon,
   BookOpen,
   Compass,
+  Building2,
+  ClipboardList,
+  HelpCircle,
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
-import { isSubcontractorRole } from '@/lib/roles';
-import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { isAdminRole, isSubcontractorRole } from '@/lib/roles';
+import {
+  getCompanyRole,
+  getProjectScopedRole,
+  hasSubcontractorPortalIdentity,
+} from '@/lib/subcontractorIdentity';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { useClancyEnabled } from '@/components/copilot/clancyAccess';
@@ -80,6 +87,27 @@ export function Header() {
     refetchInterval: 60000,
   });
   const unreadCount = unreadCountData?.count || 0;
+
+  // Project detail for the current context — same query key as Sidebar, so this
+  // shares the cache (no extra request). Drives the avatar-menu utility gates.
+  const { data: projectData } = useQuery({
+    queryKey: queryKeys.projectModules(projectId!),
+    queryFn: () =>
+      apiFetch<{ project?: { currentUserRole?: string | null } }>(`/api/projects/${projectId}`),
+    enabled: !!projectId,
+  });
+
+  // Gating for the relocated utility items. Mirrors Sidebar.tsx faithfully:
+  // Settings hides for subcontractors, Company Settings needs company admin,
+  // Audit Log needs admin OR a project-scoped PM/QM. Keep in sync with Sidebar.
+  const companyRole = getCompanyRole(user);
+  const projectScopedRole = projectId
+    ? (projectData?.project?.currentUserRole ?? 'viewer')
+    : getProjectScopedRole(user);
+  const isSubcontractor = isSubcontractorRole(companyRole) || hasSubcontractorPortalIdentity(user);
+  const hasAdmin = isAdminRole(companyRole);
+  const hasAuditLogAccess =
+    hasAdmin || projectScopedRole === 'project_manager' || projectScopedRole === 'quality_manager';
 
   // Find the current project from the list
   const currentProject = projects.find((p) => p.id === projectId);
@@ -323,6 +351,7 @@ export function Header() {
                 <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
+              {/* Me: theme, profile, tour */}
               <div className="p-1">
                 <button
                   onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
@@ -347,17 +376,6 @@ export function Header() {
                   <UserCircle className="h-4 w-4" aria-hidden="true" />
                   Profile
                 </button>
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    navigate('/docs');
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                  role="menuitem"
-                >
-                  <BookOpen className="h-4 w-4" aria-hidden="true" />
-                  Documentation
-                </button>
                 {canTakeTour && (
                   <button
                     onClick={() => {
@@ -372,16 +390,76 @@ export function Header() {
                     Take the tour
                   </button>
                 )}
+              </div>
+
+              {/* System settings — relocated from the sidebar utility cluster;
+                  gates mirror Sidebar.tsx. Group hidden entirely for
+                  subcontractors (Settings excluded, and they can't be admin). */}
+              {!isSubcontractor && (
+                <div className="border-t p-1">
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      navigate('/settings');
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                    role="menuitem"
+                  >
+                    <Settings className="h-4 w-4" aria-hidden="true" />
+                    Settings
+                  </button>
+                  {hasAdmin && (
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        navigate('/company-settings');
+                      }}
+                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                      role="menuitem"
+                    >
+                      <Building2 className="h-4 w-4" aria-hidden="true" />
+                      Company Settings
+                    </button>
+                  )}
+                  {hasAuditLogAccess && (
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        navigate('/audit-log');
+                      }}
+                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                      role="menuitem"
+                    >
+                      <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                      Audit Log
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Help — always available */}
+              <div className="border-t p-1">
                 <button
                   onClick={() => {
                     setIsUserMenuOpen(false);
-                    navigate('/settings');
+                    navigate('/docs');
                   }}
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
                   role="menuitem"
                 >
-                  <Settings className="h-4 w-4" aria-hidden="true" />
-                  Settings
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  Documentation
+                </button>
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    navigate('/support');
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  <HelpCircle className="h-4 w-4" aria-hidden="true" />
+                  Help & Support
                 </button>
               </div>
               <div className="border-t p-1">
