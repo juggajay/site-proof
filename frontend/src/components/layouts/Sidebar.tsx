@@ -292,8 +292,16 @@ export function Sidebar() {
           </span>
         )}
       </div>
+      {/* min-h-0 + overflow-y-auto: on short screens (laptops ~768px) the
+          project nav is taller than the viewport; without its own scroller it
+          overflowed the h-screen layout root and stretched the document, so
+          the main content column clipped mid-viewport on window scroll. The
+          nav scrolls; the utility cluster below stays pinned. */}
       <nav
-        className={cn('flex-1 space-y-1 transition-all duration-300', isCollapsed ? 'p-2' : 'p-4')}
+        className={cn(
+          'min-h-0 flex-1 space-y-1 overflow-y-auto transition-all duration-300',
+          isCollapsed ? 'p-2' : 'p-4',
+        )}
       >
         {filteredNavigation.map((item) => (
           <NavLink
