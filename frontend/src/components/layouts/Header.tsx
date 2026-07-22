@@ -27,7 +27,6 @@ import { toggleClancy, useClancyStore } from '@/components/copilot/clancyChatSta
 import { startOnboardingTour, useOnboarding } from '@/components/OnboardingTour';
 import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
 import { useTheme } from '@/lib/theme';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { buildProjectSwitchPath } from './projectSwitchPath';
 
@@ -157,26 +156,14 @@ export function Header() {
       <div className="flex items-center gap-4">
         <Breadcrumbs />
       </div>
-      <div className="flex items-center gap-4">
-        {/* Theme Toggle Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-          className="touch-manipulation"
-          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-        >
-          {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-        </Button>
-
+      <div className="flex items-center gap-2">
         {/* Quick Search Button */}
         <button
           onClick={() => setIsSearchOpen(true)}
           className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Quick search"
+          aria-label="Search"
         >
           <Search className="h-4 w-4" />
-          <span className="hidden sm:inline">Search</span>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
             <span className="text-xs">⌘</span>K
           </kbd>
@@ -269,6 +256,7 @@ export function Header() {
             type="button"
             onClick={() => toggleClancy()}
             className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Ask Clancy (⌘J)"
             aria-label="Ask Clancy (⌘J)"
             aria-expanded={clancyOpen}
           >
@@ -282,9 +270,6 @@ export function Header() {
               )}
             </span>
             <span className="hidden md:inline">Ask Clancy</span>
-            <kbd className="hidden md:inline-flex items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
-              <span className="text-xs">⌘</span>J
-            </kbd>
           </button>
         )}
 
@@ -316,7 +301,7 @@ export function Header() {
         <div ref={userMenuRef} className="relative">
           <button
             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted"
+            className="rounded-lg p-1 hover:bg-muted"
             aria-label="User menu"
             aria-expanded={isUserMenuOpen}
             aria-haspopup="menu"
@@ -330,13 +315,6 @@ export function Header() {
                 </span>
               </div>
             )}
-            <span className="text-sm font-medium max-w-[150px] truncate hidden sm:block">
-              {user?.email}
-            </span>
-            <ChevronDown
-              className={`h-4 w-4 text-muted-foreground transition-transform hidden sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
           </button>
 
           {isUserMenuOpen && (
@@ -346,6 +324,18 @@ export function Header() {
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
               <div className="p-1">
+                <button
+                  onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  {resolvedTheme === 'dark' ? (
+                    <Sun className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Moon className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                </button>
                 <button
                   onClick={() => {
                     setIsUserMenuOpen(false);
