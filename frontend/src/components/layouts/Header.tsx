@@ -214,7 +214,7 @@ export function Header() {
             id="clancy-header-button"
             type="button"
             onClick={() => toggleClancy()}
-            className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex items-center gap-2 rounded-lg border border-[#2563EB]/25 bg-[#2563EB]/[0.04] px-3 py-1.5 text-sm text-foreground transition-colors hover:border-[#2563EB]/40 hover:bg-[#2563EB]/[0.08] dark:bg-[#2563EB]/[0.12] dark:hover:bg-[#2563EB]/[0.18]"
             title="Ask Clancy (⌘J)"
             aria-label="Ask Clancy (⌘J)"
             aria-expanded={clancyOpen}

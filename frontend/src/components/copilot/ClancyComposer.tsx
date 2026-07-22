@@ -52,6 +52,11 @@ export function ClancyComposer({
           borderless textarea inside, monochrome send that only comes alive with
           input. No inner borders, no rings-on-rings, no standing brand colour —
           the header sparkle is the accent; the composer stays quiet. */}
+      {/* The textarea carries focus-visible:ring-0/offset-0 to beat the GLOBAL
+          :focus-visible ring-2 rule in index.css — text fields always match
+          focus-visible when focused, which stamped a rectangle inside the soft
+          shape (live report). The container's focus-within treatment carries
+          the focus signal for this composite control. */}
       <div className="flex items-end gap-1.5 rounded-2xl bg-muted px-3.5 py-2 transition-colors focus-within:bg-background focus-within:shadow-[inset_0_0_0_1px_hsl(var(--border))]">
         <textarea
           ref={textareaRef}
@@ -62,7 +67,7 @@ export function ClancyComposer({
           onKeyDown={onKeyDown}
           placeholder="Ask Clancy…"
           aria-label="Message Clancy"
-          className="flex-1 resize-none appearance-none border-0 bg-transparent py-0.5 text-sm leading-5 text-foreground outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+          className="flex-1 resize-none appearance-none border-0 bg-transparent py-0.5 text-sm leading-5 text-foreground outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <button
           type="button"
