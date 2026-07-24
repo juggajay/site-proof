@@ -1,0 +1,134 @@
+name: Storage Backup
+
+on:
+  schedule:
+    # 01:37 Australia/Sydney during standard time. Offset one hour after the
+    # database backup (14:37 UTC) so the two jobs never contend for a runner.
+    - cron: "37 15 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Supabase Storage backup
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      STORAGE_BACKUP_SUPABASE_URL: ${{ secrets.STORAGE_BACKUP_SUPABASE_URL }}
+      STORAGE_BACKUP_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STORAGE_BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+      STORAGE_BACKUP_ENCRYPTION_KEY: ${{ secrets.STORAGE_BACKUP_ENCRYPTION_KEY }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # The `runner` context is only available at step level, not in job env,
+      # so the staging dirs are derived from $RUNNER_TEMP here.
+      - name: Configure backup directories
+        run: |
+          echo "STORAGE_BACKUP_DIR=$RUNNER_TEMP/siteproof-storage-backup" >> "$GITHUB_ENV"
+          echo "ARTIFACT_DIR=$RUNNER_TEMP/siteproof-storage-artifact" >> "$GITHUB_ENV"
+          echo "VERIFY_DIR=$RUNNER_TEMP/siteproof-storage-verify" >> "$GITHUB_ENV"
+
+      - name: Validate backup secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${STORAGE_BACKUP_SUPABASE_URL:-}" ]]; then
+            echo "::error::Set STORAGE_BACKUP_SUPABASE_URL as a repository secret for storage backups."
+            exit 1
+          fi
+          if [[ -z "${STORAGE_BACKUP_SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+            echo "::error::Set STORAGE_BACKUP_SUPABASE_SERVICE_ROLE_KEY as a repository secret for storage backups."
+            exit 1
+          fi
+          if [[ -z "${STORAGE_BACKUP_ENCRYPTION_KEY:-}" ]]; then
+            echo "::error::Set STORAGE_BACKUP_ENCRYPTION_KEY as a repository secret for encrypted backup artifacts."
+            exit 1
+          fi
+          echo "::add-mask::$STORAGE_BACKUP_SUPABASE_URL"
+          echo "::add-mask::$STORAGE_BACKUP_SUPABASE_SERVICE_ROLE_KEY"
+          echo "::add-mask::$STORAGE_BACKUP_ENCRYPTION_KEY"
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: List bucket size (dry run)
+        run: npx tsx scripts/storage-backup.ts create --dry-run
+
+      - name: Create backup (list + download + manifest)
+        run: npx tsx scripts/storage-backup.ts create
+
+      - name: Archive and encrypt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+
+          if [[ ! -f "$STORAGE_BACKUP_DIR/manifest.json" ]]; then
+            echo "::error::No manifest.json was produced; backup did not complete."
+            exit 1
+          fi
+
+          stamp="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          archive_path="$ARTIFACT_DIR/siteproof-storage-${stamp}.tar"
+
+          # Archive the manifest plus the objects tree from the staging dir.
+          tar -C "$STORAGE_BACKUP_DIR" -cf "$archive_path" manifest.json objects
+
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$STORAGE_BACKUP_ENCRYPTION_KEY" \
+            --symmetric --cipher-algo AES256 \
+            --output "$archive_path.gpg" "$archive_path"
+
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum "$(basename "$archive_path.gpg")" > "$(basename "$archive_path.gpg").sha256"
+          )
+
+          # Keep only the encrypted artifact + checksum for upload.
+          rm -f "$archive_path"
+          echo "ARCHIVE_GPG=$archive_path.gpg" >> "$GITHUB_ENV"
+
+      - name: Verify encrypted archive against manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$VERIFY_DIR"
+          mkdir -p "$VERIFY_DIR"
+
+          # Confirm the artifact checksum before trusting it.
+          (
+            cd "$(dirname "$ARCHIVE_GPG")"
+            sha256sum -c "$(basename "$ARCHIVE_GPG").sha256"
+          )
+
+          # Decrypt into an independent temp dir and re-check every object path
+          # + size and a sampled set of checksums against the manifest.
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$STORAGE_BACKUP_ENCRYPTION_KEY" \
+            --decrypt --output "$VERIFY_DIR/archive.tar" "$ARCHIVE_GPG"
+
+          tar -C "$VERIFY_DIR" -xf "$VERIFY_DIR/archive.tar"
+          rm -f "$VERIFY_DIR/archive.tar"
+
+          npx tsx scripts/storage-backup.ts verify "$VERIFY_DIR"
+
+      - name: Upload verified backup artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: siteproof-storage-backup-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/siteproof-storage-artifact/*.tar.gpg
+            ${{ runner.temp }}/siteproof-storage-artifact/*.tar.gpg.sha256
+          if-no-files-found: error
+          retention-days: 30
