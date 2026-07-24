@@ -49,7 +49,7 @@ proposals, not commitments, until Jay adopts them.
 | At least one scheduled backup run has passed | **[VERIFIED]** | Daily successes observed via `gh run list --workflow=database-backup.yml` (21–23 Jul 2026 all green; checked 24 Jul 2026) |
 | A restore drill has actually been executed and recorded | **[VERIFIED]** | Restore-drill workflow run succeeded 1 Jul 2026 (GitHub → Actions → Database Restore Drill; first attempt same day failed, rerun passed). Launch gate met. **[JAY-ACTION]** remains only to adopt a drill cadence (proposed: quarterly) |
 | Railway point-in-time recovery (PITR) enabled | **[NOT-YET-VERIFIED]** | Depends on Railway plan; runbook treats PITR as an additional control only |
-| **Supabase Storage (documents/photos) backup** | **[JAY-ACTION]** | No repo mechanism backs up the Supabase `documents` bucket. The DB backup covers Postgres only; uploaded files are **not** in scope of any committed backup job. This is a real gap for a buyer who asks "are our photos/certs backed up?" |
+| **Supabase Storage (documents/photos) backup** | **[VERIFIED]** | `.github/workflows/storage-backup.yml` + `backend/scripts/storage-backup.ts` (#1538): nightly 15:37 UTC encrypted tar of the `documents` bucket with in-archive manifest and decrypt-and-verify gate, 30-day retention; runbook `docs/storage-backup-restore-runbook.md`. First run verified 24 Jul 2026: 133 objects / 38.02 MiB, listed==archived, checksum sample matched. Decryption key held outside GitHub (operator password manager) |
 
 ### RPO / RTO targets — DRAFT-UNADOPTED baseline (from runbook)
 
