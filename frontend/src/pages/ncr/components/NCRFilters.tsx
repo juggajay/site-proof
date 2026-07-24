@@ -8,6 +8,7 @@ import {
   type FilterValues,
 } from '@/components/mobile/FilterBottomSheet';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { SavedViewsMenu } from '@/components/registers/SavedViewsMenu';
 import type { NCR } from '../types';
 
 function responsibleLabel(ncr: NCR): string {
@@ -362,6 +363,10 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 Clear Filters
               </button>
             )}
+
+            <div className="ml-auto">
+              <SavedViewsMenu registerKey="ncrs" />
+            </div>
           </div>
 
           {/* Filter Results Summary */}

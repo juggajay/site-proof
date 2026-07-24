@@ -9,17 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
+import { SavedViewsMenu } from '@/components/registers/SavedViewsMenu';
 import { LotColumnSettingsMenu } from './LotColumnSettingsMenu';
-import { LotSavedFiltersMenu } from './LotSavedFiltersMenu';
 import { LotStatusFilterMenu } from './LotStatusFilterMenu';
-import { SAVED_FILTERS_STORAGE_KEY, type ColumnId, type SavedFilter } from './lotFilterConfig';
-import {
-  buildMobileLotFilterConfigs,
-  countActiveLotFilters,
-  createSavedFilterSnapshot,
-  parseSavedFiltersPreference,
-} from './lotFiltersBarHelpers';
+import { type ColumnId } from './lotFilterConfig';
+import { buildMobileLotFilterConfigs, countActiveLotFilters } from './lotFiltersBarHelpers';
 
 interface ClearFilterButtonProps {
   onClick: () => void;
@@ -112,11 +106,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   columnOrder,
   onSetColumnOrder,
 }: LotFiltersBarProps) {
-  // Saved filters state
-  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
-    return parseSavedFiltersPreference(readLocalStorageItem(SAVED_FILTERS_STORAGE_KEY));
-  });
-
   // Mobile filter bottom sheet state
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [mobileFilterValues, setMobileFilterValues] = useState<FilterValues>({
@@ -161,45 +150,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
 
   const handleAreaZoneFilter = (areaZone: string) => {
     onUpdateFilters({ areaZone });
-  };
-
-  // Save filter to local storage
-  const saveCurrentFilter = (filterName: string) => {
-    if (!filterName.trim()) return;
-
-    const newFilter = createSavedFilterSnapshot({
-      name: filterName,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      statusFilters,
-      activityFilter,
-      searchQuery,
-      subcontractorFilter,
-      areaZoneFilter,
-    });
-    if (!newFilter) return;
-
-    const updatedFilters = [...savedFilters, newFilter];
-    setSavedFilters(updatedFilters);
-    writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters));
-  };
-
-  // Load a saved filter
-  const loadSavedFilter = (filter: SavedFilter) => {
-    onUpdateFilters({
-      status: filter.status,
-      activity: filter.activity,
-      search: filter.search,
-      subcontractor: filter.subcontractor || '',
-      areaZone: filter.areaZone || '',
-    });
-  };
-
-  // Delete a saved filter
-  const deleteSavedFilter = (filterId: string) => {
-    const updatedFilters = savedFilters.filter((f) => f.id !== filterId);
-    setSavedFilters(updatedFilters);
-    writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters));
   };
 
   if (isMobile) {
@@ -473,16 +423,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           </>
         )}
 
-        <LotSavedFiltersMenu
-          hasActiveFilters={activeFilterCount > 0}
-          savedFilters={savedFilters}
-          statusFilters={statusFilters}
-          activityFilter={activityFilter}
-          searchQuery={searchQuery}
-          onSaveFilter={saveCurrentFilter}
-          onLoadSavedFilter={loadSavedFilter}
-          onDeleteSavedFilter={deleteSavedFilter}
-        />
+        <SavedViewsMenu registerKey="lots" />
 
         <span className="text-sm text-muted-foreground">
           Showing {filteredLotsCount} of {totalLots} lots

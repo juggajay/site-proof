@@ -1,4 +1,5 @@
 import React from 'react';
+import { SavedViewsMenu } from '@/components/registers/SavedViewsMenu';
 import type { HoldPointLotOption, StatusFilter, HoldPointStats } from '../types';
 
 interface HoldPointStatusFilterProps {
@@ -71,6 +72,7 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
             Export CSV
           </button>
         )}
+        <SavedViewsMenu registerKey="hold-points" />
       </div>
     </>
   );
