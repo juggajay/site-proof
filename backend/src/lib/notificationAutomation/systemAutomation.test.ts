@@ -87,6 +87,7 @@ describe('processSystemAlerts race handling (partial unique index on active aler
       .fn()
       .mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
     const notificationCreate = vi.fn();
+    const notificationCreateMany = vi.fn();
     const deps = buildDeps();
     (
       deps.prisma as unknown as { notificationAlert: { create: ReturnType<typeof vi.fn> } }
@@ -94,6 +95,9 @@ describe('processSystemAlerts race handling (partial unique index on active aler
     (
       deps.prisma as unknown as { notification: { create: ReturnType<typeof vi.fn> } }
     ).notification.create = notificationCreate;
+    (
+      deps.prisma as unknown as { notification: { createMany: ReturnType<typeof vi.fn> } }
+    ).notification.createMany = notificationCreateMany;
 
     const result = await processSystemAlerts(
       { now: new Date('2026-06-20T12:00:00.000Z'), projectIds: ['project-1'] },
@@ -106,7 +110,9 @@ describe('processSystemAlerts race handling (partial unique index on active aler
     expect(result.alertsCreated).toBe(0);
     expect(result.skippedAlerts).toBe(1);
     expect(result.createdAlerts).toEqual([]);
+    // Neither individual nor bulk notifications go out after a lost race.
     expect(notificationCreate).not.toHaveBeenCalled();
+    expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 
   it('reports created alerts with their details for the admin check endpoint', async () => {

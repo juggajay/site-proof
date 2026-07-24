@@ -174,6 +174,16 @@ async function findActiveProjects(
     return [];
   }
 
+  // No default cap: a silent take-100 here (oldest-first) permanently starved
+  // project 101+ of automated alerts on every scheduled run, and truncated
+  // explicitly scoped admin checks the same way. An explicit options.limit is
+  // still honoured for ops tuning. ponytail: unbounded fetch of small rows —
+  // paginate if active-project counts ever reach the tens of thousands.
+  const take =
+    options.limit !== undefined
+      ? parsePositiveInteger(options.limit, DEFAULT_JOB_LIMIT)
+      : undefined;
+
   return prisma.project.findMany({
     where: {
       status: 'active',
@@ -189,7 +199,7 @@ async function findActiveProjects(
       settings: true,
     },
     orderBy: { createdAt: 'asc' },
-    take: parsePositiveInteger(options.limit, DEFAULT_JOB_LIMIT),
+    ...(take !== undefined ? { take } : {}),
   });
 }
 

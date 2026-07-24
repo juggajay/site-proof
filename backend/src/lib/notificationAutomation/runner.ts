@@ -8,7 +8,8 @@ import { formatDateKey, parsePositiveInteger } from './helpers.js';
 import { logError, logInfo } from '../serverLogger.js';
 
 const DEFAULT_AUTOMATION_WORKER_INTERVAL_MS = 60 * 60 * 1000;
-const NOTIFICATION_AUTOMATION_WORKER_LOCK_ID = 731_452_021;
+// Exported for tests that need to hold the lock to exercise contention paths.
+export const NOTIFICATION_AUTOMATION_WORKER_LOCK_ID = 731_452_021;
 
 type NotificationAutomationProcess = (
   options?: NotificationAutomationJobOptions,
