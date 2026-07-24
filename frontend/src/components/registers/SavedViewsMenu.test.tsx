@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { removeLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { SavedViewsMenu } from './SavedViewsMenu';
 
 // Probe that surfaces the current querystring so tests can assert that applying
@@ -21,7 +22,8 @@ function renderMenu(initialUrl = '/tests') {
 
 describe('SavedViewsMenu', () => {
   beforeEach(() => {
-    localStorage.clear();
+    // Guardrail: all storage access (tests included) goes through the safe helpers.
+    removeLocalStorageItem('siteproof_saved_views.test-results');
   });
 
   it('saves the current querystring as a named view and lists it', () => {
@@ -47,7 +49,7 @@ describe('SavedViewsMenu', () => {
 
   it('applies a saved view by navigating to its stored querystring', () => {
     // Seed a stored view directly, then apply it from an unfiltered URL.
-    localStorage.setItem(
+    writeLocalStorageItem(
       'siteproof_saved_views.test-results',
       JSON.stringify([{ id: 'v1', name: 'Only failures', query: 'passFail=fail' }]),
     );
@@ -61,7 +63,7 @@ describe('SavedViewsMenu', () => {
   });
 
   it('deletes a saved view', () => {
-    localStorage.setItem(
+    writeLocalStorageItem(
       'siteproof_saved_views.test-results',
       JSON.stringify([{ id: 'v1', name: 'Doomed', query: 'status=entered' }]),
     );

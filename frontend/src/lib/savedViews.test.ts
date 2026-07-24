@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { removeLocalStorageItem, writeLocalStorageItem } from './storagePreferences';
 import { deleteView, listViews, saveView } from './savedViews';
 
 describe('savedViews', () => {
   beforeEach(() => {
-    localStorage.clear();
+    // Guardrail: all storage access (tests included) goes through the safe helpers.
+    for (const key of ['ncrs', 'lots', 'test-results', 'holdpoints']) {
+      removeLocalStorageItem(`siteproof_saved_views.${key}`);
+    }
   });
 
   it('returns an empty list when nothing is saved', () => {
@@ -48,7 +52,7 @@ describe('savedViews', () => {
   });
 
   it('tolerates corrupt storage by returning an empty list', () => {
-    localStorage.setItem('siteproof_saved_views.ncrs', 'not json{');
+    writeLocalStorageItem('siteproof_saved_views.ncrs', 'not json{');
     expect(listViews('ncrs')).toEqual([]);
   });
 });
