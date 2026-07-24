@@ -20,6 +20,8 @@ const PINNED_SECTIONS: ReadonlyArray<[id: string, title: string]> = [
   ['ncr-diary', 'NCRs and daily diary'],
   ['claims-reports', 'Claims, variations, costs, and reports'],
   ['admin', 'Admin, audit, and settings'],
+  ['ai-copilot', 'AI in CIVOS: setup copilot and Clancy'],
+  ['integrations', 'Integrations: API keys and webhooks'],
 ];
 
 describe('documentationSections — pinned mirror for Clancy product knowledge', () => {

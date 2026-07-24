@@ -14,6 +14,8 @@ import {
   GitPullRequest,
   Map as MapIcon,
   MapPin,
+  Plug,
+  Sparkles,
   TestTube,
   Upload,
 } from 'lucide-react';
@@ -195,6 +197,7 @@ export const documentationSections: DocumentationSection[] = [
       'Verified ITP and test records are protected from unsafe edits.',
       'Failing an ITP checklist item online requires a photo of the issue first, and still raises an NCR automatically.',
       'Hold point release and request events are written to the audit log.',
+      'The lot ITP checklist and lot edit form keep working offline and sync when you are back in coverage.',
     ],
   },
   {
@@ -321,6 +324,8 @@ export const documentationSections: DocumentationSection[] = [
       'Budget amount is required before a conformed lot can be claimed.',
       'The evidence package PDF compiles ITPs, hold points, tests, NCRs, photos, and claimed variations per claim.',
       'The Xero export produces a draft-invoice CSV with a line per lot and per variation.',
+      'The Costs page tracks labour and plant spend from approved dockets against lot budgets, broken down by subcontractor and by lot.',
+      'Reports can be scheduled to arrive by email on a recurring basis on Professional and Enterprise plans.',
       'Reports are strongest when field teams maintain lots, dockets, tests, and diaries daily.',
     ],
   },
@@ -351,6 +356,71 @@ export const documentationSections: DocumentationSection[] = [
       'Audit log search covers actions, entities, users, projects, and detail text.',
       'Subcontractor portal access is separate from head-contractor company membership.',
       'Use Notifications for pending approvals, queries, and workflow items that need attention.',
+      'Foremen and subcontractors use simplified mobile shells (foreman /m, subbie portal /p) rather than these office pages.',
+    ],
+  },
+  {
+    id: 'ai-copilot',
+    title: 'AI in CIVOS: setup copilot and Clancy',
+    summary:
+      'AI reads your drawings and answers questions — and every AI-prepared change goes to a human review queue before it touches the project.',
+    icon: Sparkles,
+    route: '/projects',
+    routeLabel: 'Open projects',
+    steps: [
+      {
+        title: 'Run the setup copilot on a new project',
+        description:
+          'From the project Copilot page, four stages read your drawings for you: project facts from the title block, control line from a setout sheet, plan sheet registration, and lot breakdown along the alignment. Each stage produces proposals you review and apply — nothing is written to the project until you approve it.',
+      },
+      {
+        title: 'Ask Clancy anything',
+        description:
+          'Clancy is the chat copilot in the header (or press Ctrl+J / Cmd+J). He answers from live project data and this documentation — lot status, hold point and NCR counts, module summaries, ITP suggestions, and how-to help — and he can take you to the right page. He is available to owners, admins, and project managers, and he never changes records.',
+      },
+      {
+        title: 'Let AI lift data from paperwork',
+        description:
+          'Test certificate uploads can extract results automatically, setout sheets can be imported as control lines, and lot ITP photo uploads are classified automatically. Voice dictation (Australian English) is available on diary and docket notes.',
+      },
+    ],
+    tips: [
+      'Every AI extraction lands in a review queue with an audit trail — approve, edit, or discard before anything is applied.',
+      'AI stages need the server AI to be configured; the lot breakdown stage is deterministic and works without it.',
+      'Clancy says plainly when he does not know or cannot do something — he never guesses project data.',
+    ],
+  },
+  {
+    id: 'integrations',
+    title: 'Integrations: API keys and webhooks',
+    summary:
+      'Connect your own systems: API keys pull data from the CIVOS REST API, webhooks push lot, hold point, and NCR events to your endpoint.',
+    icon: Plug,
+    route: '/company-settings',
+    routeLabel: 'Open Company Settings',
+    steps: [
+      {
+        title: 'Create an API key',
+        description:
+          'From Company Settings, API keys. A key acts as the user who created it, with the same project access. Scopes limit what it can do: read allows viewing data only, write also allows creating and updating, admin allows everything. The full key is shown once at creation — store it somewhere safe.',
+      },
+      {
+        title: 'Call the REST API with the key',
+        description:
+          'Send the key in an x-api-key header. It works against the same REST API the app uses, so anything you can see in the app — lots, tests, NCRs, dockets, claims — can be pulled into your own reports, dashboards, or spreadsheets.',
+      },
+      {
+        title: 'Add a webhook to hear about events',
+        description:
+          'From Company Settings, Webhooks. Paste your endpoint URL; it subscribes to all supported lot, hold point, and NCR events, and CIVOS notifies that URL the moment each event happens. Every delivery is signed with HMAC-SHA256 using the signing secret shown at creation, so your system can verify the notification really came from CIVOS.',
+      },
+    ],
+    tips: [
+      'Supported webhook events: lot created, updated, and deleted; hold point release requested and released; NCR created and closed.',
+      'A read-scope key cannot change anything even if it leaks — prefer read unless you need more.',
+      'Keys support expiry dates and instant revocation, and creation and revocation are audit-logged.',
+      'An API key can never be used to create or manage other API keys.',
+      'Regenerate a webhook signing secret at any time from the webhook row.',
     ],
   },
 ];
