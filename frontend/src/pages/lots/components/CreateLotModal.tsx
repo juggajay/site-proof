@@ -150,15 +150,6 @@ export function CreateLotModal({
     }
   }, [projectId, setValue]);
 
-  // Tier A: preselect the single exact-slug suggestion (still editable). Tier
-  // B/C: no auto-selection. Re-runs when the activity (and thus its match)
-  // changes, so switching activity re-suggests rather than keeping a stale pick.
-  const suggestedTemplateId =
-    templateMatch.data?.tier === 'A' ? templateMatch.data.suggestedTemplateId : null;
-  useEffect(() => {
-    setSelectedTemplateId(suggestedTemplateId ?? '');
-  }, [suggestedTemplateId, activityType]);
-
   // Fetch data when modal opens
   useEffect(() => {
     if (!isOpen) return;
@@ -166,6 +157,21 @@ export function CreateLotModal({
     resetFormState();
     void fetchLookupData();
   }, [isOpen, resetFormState, fetchLookupData]);
+
+  // Tier A: preselect the single exact-slug suggestion (still editable). Tier
+  // B/C: no auto-selection. Re-runs when the activity (and thus its match)
+  // changes, so switching activity re-suggests rather than keeping a stale pick.
+  // Declared AFTER the open/reset effect and keyed on isOpen: the modal is
+  // always mounted, so the match resolves (and used to preselect) while it was
+  // still closed — then resetFormState wiped the pick on open and this effect's
+  // deps hadn't changed, so the suggestion was lost (W2-PR2 regression). Running
+  // reset-then-suggest on open restores it without touching mid-edit state.
+  const suggestedTemplateId =
+    templateMatch.data?.tier === 'A' ? templateMatch.data.suggestedTemplateId : null;
+  useEffect(() => {
+    if (!isOpen) return;
+    setSelectedTemplateId(suggestedTemplateId ?? '');
+  }, [isOpen, suggestedTemplateId, activityType]);
 
   const handleClose = () => {
     setSelectedTemplateId('');

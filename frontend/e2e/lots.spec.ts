@@ -177,10 +177,8 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
     // W2-PR2 deterministic matcher: the create-lot modal asks this per activity
     // and surfaces the Tier-A candidate under "Suggested". Return the seeded
     // template as the exact match for the default 'earthworks_general' activity.
-    // (Auto-preselect of the initial activity's match is a known app gap: the
-    // match resolves while the modal is still mounted-but-closed, then the
-    // open-effect reset clears selectedTemplateId and the Tier-A effect does not
-    // re-fire since its deps are unchanged. The operator selects it explicitly.)
+    // The Tier-A effect runs reset-then-suggest on open (keyed on isOpen), so
+    // the match made while the modal was mounted-but-closed pre-selects cleanly.
     if (
       url.pathname === '/api/itp/templates/match' &&
       url.searchParams.get('projectId') === E2E_PROJECT_ID
@@ -419,10 +417,10 @@ test.describe('Lots seeded UI contract', () => {
     await expect(page.getByRole('heading', { name: 'Create New Lot' })).toBeVisible();
     const modal = page.locator('[role="dialog"]').filter({ hasText: 'Create New Lot' });
     await expect(modal.getByLabel(/Lot Number/)).toHaveValue('LOT-002');
-    // The Tier-A match surfaces the exact-slug template under "Suggested" in the
-    // ITP dropdown; the operator picks it (see auto-preselect gap note above).
+    // The Tier-A match pre-selects the exact-slug template on open (still
+    // editable) — asserted without a manual pick, guarding the always-mounted
+    // reset-vs-suggest ordering fixed after W2-PR2.
     await expect(modal.getByRole('option', { name: /E2E Earthworks ITP/ })).toBeAttached();
-    await modal.getByLabel('ITP Template (Optional)').selectOption(E2E_ITP_TEMPLATE_ID);
     await expect(modal.getByLabel('ITP Template (Optional)')).toHaveValue(E2E_ITP_TEMPLATE_ID);
 
     await modal.getByLabel(/Lot Number/).fill('  LOT-002  ');
