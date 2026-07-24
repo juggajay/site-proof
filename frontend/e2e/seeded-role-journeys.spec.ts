@@ -7,6 +7,7 @@ import {
   loginAsAdmin,
   loginAsOwner,
   loginAsSubcontractor,
+  seedRealSessionDefaults,
 } from './helpers';
 
 const E2E_OUTCOME_LOT_ID = 'e2e-itp-outcomes-lot';
@@ -75,6 +76,12 @@ test.describe.serial('seeded real-backend role journeys', () => {
   // These journeys mutate shared seeded rows; Playwright retries would reuse the mutated DB state.
   test.describe.configure({ retries: 0 });
 
+  // Real logins never run mockAuthenticatedUserState, so suppress the cookie
+  // banner + Clancy intro overlays that intercept bottom-of-page clicks.
+  test.beforeEach(async ({ page }) => {
+    await seedRealSessionDefaults(page.context());
+  });
+
   test('admin sees the modern lot subcontractor ITP permission assignment', async ({ page }) => {
     await loginAsAdmin(page);
 
@@ -102,8 +109,10 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByRole('heading', { name: 'Billing & Subscription' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Transfer Ownership' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
-    await expect(page.getByText('E2E Owner')).toBeVisible();
-    await expect(page.getByText('E2E Admin')).toBeVisible();
+    // Scope to main: #1524 renders the logged-in user's name ("E2E Owner") in
+    // the sidebar UserMenu footer, which collides with the team roster rows.
+    await expect(page.getByRole('main').getByText('E2E Owner')).toBeVisible();
+    await expect(page.getByRole('main').getByText('E2E Admin')).toBeVisible();
   });
 
   test('owner manages a company member against the real backend', async ({ page }) => {
@@ -185,8 +194,10 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
 
     await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
-    await expect(page.getByText('E2E Owner')).toBeVisible();
-    await expect(page.getByText('E2E Admin')).toBeVisible();
+    // Scope to main: #1524 renders the logged-in user's name ("E2E Owner") in
+    // the sidebar UserMenu footer, which collides with the team roster rows.
+    await expect(page.getByRole('main').getByText('E2E Owner')).toBeVisible();
+    await expect(page.getByRole('main').getByText('E2E Admin')).toBeVisible();
 
     await page.getByRole('button', { name: 'Add Team Member' }).click();
     const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Add Team Member' });
@@ -749,6 +760,8 @@ test.describe.serial('seeded real-backend role journeys', () => {
   }) => {
     const adminContext = await browser.newContext();
     const subbieContext = await browser.newContext();
+    await seedRealSessionDefaults(adminContext);
+    await seedRealSessionDefaults(subbieContext);
     const adminPage = await adminContext.newPage();
     const subbiePage = await subbieContext.newPage();
 

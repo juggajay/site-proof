@@ -422,8 +422,8 @@ test.describe('Documents seeded evidence contract', () => {
 
     await page.getByRole('button', { name: 'Clear All' }).click();
     await expect(photoItem).toBeVisible();
-    await page.getByLabel('Search', { exact: true }).fill('proof');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('main').getByLabel('Search', { exact: true }).fill('proof');
+    await page.getByRole('main').getByRole('button', { name: 'Search', exact: true }).click();
     await expect(photoItem).toBeVisible();
     await expect(pdfItem).toBeHidden();
 

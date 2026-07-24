@@ -148,13 +148,14 @@ test.describe('Documentation', () => {
     ).toBeVisible();
   });
 
-  test('exposes documentation in desktop navigation', async ({ page }) => {
+  test('exposes documentation in the desktop user menu', async ({ page }) => {
     await mockDocumentationApi(page);
 
     await page.goto('/dashboard');
-    await expect(page.getByRole('link', { name: 'Documentation' })).toHaveAttribute(
-      'href',
-      '/docs',
-    );
+    // #1524 relocated Documentation out of the sidebar into the identity
+    // (UserMenu) popover, rendered in the desktop sidebar footer at md+.
+    await page.getByRole('button', { name: 'User menu' }).click();
+    await page.getByRole('menuitem', { name: 'Documentation' }).click();
+    await expect(page).toHaveURL(/\/docs$/);
   });
 });

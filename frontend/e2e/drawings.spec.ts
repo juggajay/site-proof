@@ -412,13 +412,13 @@ test.describe('Drawings seeded register contract', () => {
     await expect(currentRow).toBeHidden();
 
     await page.getByLabel('Status', { exact: true }).selectOption('');
-    await page.getByLabel('Search', { exact: true }).fill('grading');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('main').getByLabel('Search', { exact: true }).fill('grading');
+    await page.getByRole('main').getByRole('button', { name: 'Search', exact: true }).click();
     await expect(currentRow).toBeVisible();
     await expect(prelimRow).toBeHidden();
 
-    await page.getByLabel('Search', { exact: true }).fill('');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('main').getByLabel('Search', { exact: true }).fill('');
+    await page.getByRole('main').getByRole('button', { name: 'Search', exact: true }).click();
     await currentRow.getByLabel('Status for DRW-E2E-001').selectOption('as_built');
     await expect
       .poll(() => api.getStatusRequest())
@@ -439,8 +439,8 @@ test.describe('Drawings seeded register contract', () => {
       );
     await expect(page.getByText('2 current drawing(s) were opened for download.')).toBeVisible();
 
-    await page.getByLabel('Search', { exact: true }).fill('does-not-exist');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('main').getByLabel('Search', { exact: true }).fill('does-not-exist');
+    await page.getByRole('main').getByRole('button', { name: 'Search', exact: true }).click();
     await expect(page.getByText('No drawings found')).toBeVisible();
     await expect(page.getByText('No drawings match the current filters.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Download Current Set' })).toBeEnabled();
@@ -448,8 +448,8 @@ test.describe('Drawings seeded register contract', () => {
     await page.getByRole('button', { name: 'Download Current Set' }).click();
     await expect.poll(() => anchorDownloads.length).toBeGreaterThan(currentSetDownloadsBefore);
 
-    await page.getByLabel('Search', { exact: true }).fill('');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('main').getByLabel('Search', { exact: true }).fill('');
+    await page.getByRole('main').getByRole('button', { name: 'Search', exact: true }).click();
     await expect(currentRow).toBeVisible();
 
     await page.getByRole('button', { name: 'Add Drawing' }).click();

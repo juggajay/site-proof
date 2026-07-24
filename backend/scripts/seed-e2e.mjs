@@ -340,6 +340,15 @@ async function main() {
 
   await prisma.scheduledReport.deleteMany({ where: { projectId: project.id } });
 
+  // Tests upload documents against the seeded project (e.g. the subcontractor
+  // shared-document journey in seeded-role-journeys) and nothing deletes them,
+  // so empty-state assertions rot after the first run on a reused local DB.
+  // Wipe project documents each seed to restore the known-empty baseline.
+  // Drawings first: Drawing.document is onDelete: Restrict; the other document
+  // dependents (attachments, evidence, signed-url tokens) cascade.
+  await prisma.drawing.deleteMany({ where: { projectId: project.id } });
+  await prisma.document.deleteMany({ where: { projectId: project.id } });
+
   await prisma.projectUser.upsert({
     where: { id: ids.ownerProjectUser },
     update: {
