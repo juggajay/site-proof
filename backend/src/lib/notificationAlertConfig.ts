@@ -25,7 +25,12 @@ export const STALE_HOLD_POINT_ALERT_ROLES = [
 
 export const STALE_HOLD_POINT_ESCALATION_ROLES = [...STALE_HOLD_POINT_ALERT_ROLES, 'admin'];
 
-export const ALERT_ESCALATION_CONFIG: Record<AlertType, AlertEscalationConfig> = {
+// Partial: 'pending_approval' is intentionally absent. The missing-diary alert
+// (the only creator of that type) is retired, so leaving it out of the config
+// excludes the draining backlog from the escalation scan
+// (ESCALATABLE_TYPES = Object.keys(this)) — no zombie escalation races the sweep
+// that resolves those rows. 'overdue_test' is kept though unused (F0 spec).
+export const ALERT_ESCALATION_CONFIG: Partial<Record<AlertType, AlertEscalationConfig>> = {
   overdue_ncr: {
     firstEscalationAfterHours: 24,
     secondEscalationAfterHours: 48,
@@ -35,11 +40,6 @@ export const ALERT_ESCALATION_CONFIG: Record<AlertType, AlertEscalationConfig> =
     firstEscalationAfterHours: 4,
     secondEscalationAfterHours: 8,
     escalationRoles: STALE_HOLD_POINT_ESCALATION_ROLES,
-  },
-  pending_approval: {
-    firstEscalationAfterHours: 8,
-    secondEscalationAfterHours: 24,
-    escalationRoles: ['project_manager', 'admin'],
   },
   overdue_test: {
     firstEscalationAfterHours: 48,

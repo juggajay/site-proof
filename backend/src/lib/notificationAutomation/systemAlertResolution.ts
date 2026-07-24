@@ -16,8 +16,10 @@ import type { PrismaClient } from '@prisma/client';
  *   - stale_hold_point created for hold points status IN (requested, scheduled)
  *                     AND scheduledDate < now - 1 day -> resolve when it no
  *                     longer matches (released/completed, rescheduled, deleted).
- *   - pending_approval/diary (the missing-diary alert) created when NO diary
- *                     existed for project+date -> resolve when a diary now exists.
+ *   - pending_approval/diary (the retired missing-diary alert) is no longer
+ *                     created. This pass unconditionally resolves ANY active
+ *                     alert of that type so the standing prod backlog drains
+ *                     silently over successive runs and never escalates again.
  *
  * Resolution is silent bookkeeping: it sets resolved_at only (the schema has no
  * resolution reason/actor column) and sends NO notifications. This same path
@@ -28,16 +30,8 @@ const RESOLVABLE_TYPES = ['overdue_ncr', 'stale_hold_point', 'pending_approval']
 const DEFAULT_BATCH_SIZE = 500;
 const NCR_OPEN_STATUS_EXCLUDE = ['closed', 'closed_concession'];
 const STALE_HOLD_POINT_STATUSES = ['requested', 'scheduled'];
-const DIARY_DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
-// Missing-diary alerts older than this drain unconditionally: nobody backfills a
-// diary for a long-past date, so the alert can never clear via a diary appearing
-// and has no remaining action value (stale beyond action value).
-const STALE_DIARY_MAX_AGE_DAYS = 30;
 
-type ResolutionPrisma = Pick<
-  PrismaClient,
-  'nCR' | 'holdPoint' | 'dailyDiary' | 'notificationAlert'
->;
+type ResolutionPrisma = Pick<PrismaClient, 'nCR' | 'holdPoint' | 'notificationAlert'>;
 
 export type SystemAlertResolutionDependencies = {
   prisma: ResolutionPrisma;
@@ -62,17 +56,8 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-// Reconstruct the missing-diary date window from the alert's entityId. The
-// creator stored entityId = `diary-${projectId}-${YYYY-MM-DD}` where the date
-// key is a UTC calendar date (formatDateKey uses toISOString). Railway prod and
-// the test suite both run the server in UTC, so a UTC-midnight window matches
-// the range the creator checked. Returns null for legacy/unparseable ids.
-function parseDiaryDateKey(alert: ActiveAlertRow): string | null {
-  if (!alert.projectId) return null;
-  const prefix = `diary-${alert.projectId}-`;
-  if (!alert.entityId.startsWith(prefix)) return null;
-  const dateKey = alert.entityId.slice(prefix.length);
-  return DIARY_DATE_KEY.test(dateKey) ? dateKey : null;
+function normalizeEntityType(entityType: string): string {
+  return entityType.toLowerCase().replace(/[\s-]/g, '_');
 }
 
 async function idsStillMatchingNcr(
@@ -109,39 +94,6 @@ async function idsStillMatchingHoldPoint(
   return new Set(rows.map((row) => row.id));
 }
 
-// Set of `${projectId}|${dateKey}` for which a diary now exists.
-async function diaryKeysThatNowExist(
-  prisma: ResolutionPrisma,
-  diaryAlerts: Array<{ projectId: string; dateKey: string }>,
-  dayMs: number,
-): Promise<Set<string>> {
-  if (diaryAlerts.length === 0) return new Set();
-  const seen = new Set<string>();
-  const conditions = diaryAlerts
-    .filter((alert) => {
-      const key = `${alert.projectId}|${alert.dateKey}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((alert) => {
-      const start = new Date(`${alert.dateKey}T00:00:00.000Z`);
-      return {
-        projectId: alert.projectId,
-        date: { gte: start, lt: new Date(start.getTime() + dayMs) },
-      };
-    });
-
-  const diaries = await prisma.dailyDiary.findMany({
-    where: { OR: conditions },
-    select: { projectId: true, date: true },
-  });
-
-  return new Set(
-    diaries.map((diary) => `${diary.projectId}|${diary.date.toISOString().split('T')[0]}`),
-  );
-}
-
 /**
  * Resolve active system alerts whose condition has cleared. Bounded, paginated
  * (cursor on id, default 500/page), and idempotent: already-resolved rows are
@@ -161,12 +113,6 @@ export async function resolveClearedSystemAlerts(
   const batchSize = deps.batchSize ?? DEFAULT_BATCH_SIZE;
   const now = options.now;
   const staleThreshold = new Date(now.getTime() - dayMs);
-  // UTC-midnight cutoff consistent with the module's dateKey handling. A diary
-  // whose date is strictly before this resolves on age alone. Boundary: exactly
-  // 30 days old (== cutoff) is NOT older-than-30-days, so it stays active.
-  const staleDiaryCutoff =
-    new Date(`${now.toISOString().split('T')[0]}T00:00:00.000Z`).getTime() -
-    STALE_DIARY_MAX_AGE_DAYS * dayMs;
 
   let cursor: string | undefined;
   let totalResolved = 0;
@@ -191,16 +137,15 @@ export async function resolveClearedSystemAlerts(
 
     const ncrAlerts = page.filter((alert) => alert.type === 'overdue_ncr');
     const holdPointAlerts = page.filter((alert) => alert.type === 'stale_hold_point');
-    const diaryAlerts = page
+    // The missing-diary alert type is retired: sweep every active
+    // pending_approval/diary row unconditionally (no diary lookup, no date
+    // parsing, no age gate) so the standing backlog drains and none escalate.
+    const diaryAlertIds = page
       .filter(
         (alert) =>
-          alert.type === 'pending_approval' &&
-          alert.entityType.toLowerCase().replace(/[\s-]/g, '_') === 'diary',
+          alert.type === 'pending_approval' && normalizeEntityType(alert.entityType) === 'diary',
       )
-      .map((alert) => ({ alert, dateKey: parseDiaryDateKey(alert) }))
-      .filter(
-        (entry): entry is { alert: ActiveAlertRow; dateKey: string } => entry.dateKey !== null,
-      );
+      .map((alert) => alert.id);
 
     const stillOverdueNcr = await idsStillMatchingNcr(
       prisma,
@@ -212,11 +157,6 @@ export async function resolveClearedSystemAlerts(
       unique(holdPointAlerts.map((alert) => alert.entityId)),
       staleThreshold,
     );
-    const existingDiaryKeys = await diaryKeysThatNowExist(
-      prisma,
-      diaryAlerts.map((entry) => ({ projectId: entry.alert.projectId!, dateKey: entry.dateKey })),
-      dayMs,
-    );
 
     const toResolve: string[] = [];
     for (const alert of ncrAlerts) {
@@ -225,15 +165,7 @@ export async function resolveClearedSystemAlerts(
     for (const alert of holdPointAlerts) {
       if (!stillStaleHoldPoint.has(alert.entityId)) toResolve.push(alert.id);
     }
-    for (const entry of diaryAlerts) {
-      const diaryMidnight = new Date(`${entry.dateKey}T00:00:00.000Z`).getTime();
-      if (
-        existingDiaryKeys.has(`${entry.alert.projectId}|${entry.dateKey}`) ||
-        diaryMidnight < staleDiaryCutoff
-      ) {
-        toResolve.push(entry.alert.id);
-      }
-    }
+    toResolve.push(...diaryAlertIds);
 
     if (toResolve.length > 0) {
       const updated = await prisma.notificationAlert.updateMany({

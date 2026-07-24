@@ -34,12 +34,6 @@ export function startOfDay(value: Date): Date {
   return date;
 }
 
-export function addDays(value: Date, days: number): Date {
-  const date = new Date(value);
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
 export function formatDateKey(value: Date): string {
   return value.toISOString().split('T')[0]!;
 }
@@ -53,23 +47,6 @@ export function parseWorkingDays(value: string | null | undefined): Set<number> 
   );
 
   return days.size > 0 ? days : DEFAULT_WORKING_DAYS;
-}
-
-export function getPreviousWorkingDay(
-  now: Date,
-  workingDaysValue: string | null | undefined,
-): Date {
-  const workingDays = parseWorkingDays(workingDaysValue);
-  let candidate = startOfDay(addDays(now, -1));
-
-  for (let attempt = 0; attempt < 7; attempt += 1) {
-    if (workingDays.has(candidate.getDay())) {
-      return candidate;
-    }
-    candidate = addDays(candidate, -1);
-  }
-
-  return startOfDay(addDays(now, -1));
 }
 
 export function isWorkingDay(project: ProjectWorkingDays, date: Date): boolean {

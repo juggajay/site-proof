@@ -31,8 +31,8 @@ export const notificationSystemAlertsRouter = Router();
 
 // POST /api/notifications/system-alerts/check - Check and generate system alerts for critical issues
 // Runs the shared system-alerts automation job (overdue NCRs, stale hold
-// points, missing diaries) for the caller's manageable active projects, under
-// the same advisory lock as the hourly worker.
+// points) for the caller's manageable active projects, under the same advisory
+// lock as the hourly worker.
 notificationSystemAlertsRouter.post(
   '/system-alerts/check',
   asyncHandler(async (req, res) => {
@@ -55,7 +55,6 @@ notificationSystemAlertsRouter.post(
     const summary = {
       overdueNCRs: result.overdueNcrAlerts,
       staleHoldPoints: result.staleHoldPointAlerts,
-      missingDiaries: result.missingDiaryAlerts,
     };
     const activeAlerts = await prisma.notificationAlert.count({
       where: {

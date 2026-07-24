@@ -49,7 +49,6 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
       alertsCreated: 0,
       overdueNcrAlerts: 0,
       staleHoldPointAlerts: 0,
-      missingDiaryAlerts: 0,
       notificationsCreated: 0,
       skippedAlerts: 0,
       createdAlerts: [],

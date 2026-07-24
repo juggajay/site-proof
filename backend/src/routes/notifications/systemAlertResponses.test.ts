@@ -19,7 +19,7 @@ describe('system alert response helpers', () => {
         message: 'NCR is overdue',
       },
     ];
-    const summary = { overdueNCRs: 1, staleHoldPoints: 0, missingDiaries: 0 };
+    const summary = { overdueNCRs: 1, staleHoldPoints: 0 };
 
     expect(buildSystemAlertsCheckResponse(now, 3, alerts, summary, 4)).toEqual({
       success: true,
