@@ -6,6 +6,7 @@ import {
 } from '../notificationAlertConfig.js';
 import { buildProjectEntityLink, formatDateKey, getPreviousWorkingDay } from './helpers.js';
 import type { NotificationTypeWithTiming } from './preferences.js';
+import { resolveClearedSystemAlerts } from './systemAlertResolution.js';
 
 const SYSTEM_DIARY_ALERT_ROLES = ['site_engineer', 'foreman', 'project_manager'];
 const ALERT_OWNER_ROLE_PRIORITY = [
@@ -57,6 +58,7 @@ export type CreatedSystemAlert = {
 
 export type SystemAlertAutomationResult = {
   projectsChecked: number;
+  alertsResolved: number;
   alertsCreated: number;
   overdueNcrAlerts: number;
   staleHoldPointAlerts: number;
@@ -196,9 +198,19 @@ export async function processSystemAlerts(
   deps: SystemAutomationDependencies,
 ): Promise<SystemAlertAutomationResult> {
   const now = options.now ?? new Date();
+
+  // Resolve alerts whose condition has cleared BEFORE creating new ones, under
+  // the caller's advisory lock, so a resolved-then-recurred condition writes a
+  // clean new row against the partial unique index this same pass.
+  const alertsResolved = await resolveClearedSystemAlerts(
+    { now, projectIds: options.projectIds },
+    { prisma: deps.prisma, dayMs: deps.dayMs },
+  );
+
   const projects = await deps.findActiveProjects(options);
   const result: SystemAlertAutomationResult = {
     projectsChecked: projects.length,
+    alertsResolved,
     alertsCreated: 0,
     overdueNcrAlerts: 0,
     staleHoldPointAlerts: 0,

@@ -34,6 +34,9 @@ function buildDeps(
       },
       notificationAlert: {
         findFirst: vi.fn().mockResolvedValue(null),
+        // Auto-resolution pass runs before creation; no active alerts to resolve.
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         create: vi.fn().mockResolvedValue({ id: 'alert-1' }),
       },
       notification: {

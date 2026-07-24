@@ -45,6 +45,7 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
     },
     systemAlerts: {
       projectsChecked: 0,
+      alertsResolved: 0,
       alertsCreated: 0,
       overdueNcrAlerts: 0,
       staleHoldPointAlerts: 0,
@@ -126,6 +127,7 @@ function countAutomationChanges(result: NotificationAutomationRunResult): number
   return (
     result.diaryReminders.remindersCreated +
     result.docketBacklogAlerts.alertsCreated +
+    result.systemAlerts.alertsResolved +
     result.systemAlerts.alertsCreated +
     result.alertEscalations.escalated
   );
@@ -154,6 +156,7 @@ export function startNotificationAutomationWorker(
         logInfo('[Notification Automation] Processed notification jobs', {
           diaryReminders: result.diaryReminders.remindersCreated,
           docketBacklogAlerts: result.docketBacklogAlerts.alertsCreated,
+          systemAlertsResolved: result.systemAlerts.alertsResolved,
           systemAlerts: result.systemAlerts.alertsCreated,
           alertEscalations: result.alertEscalations.escalated,
         });

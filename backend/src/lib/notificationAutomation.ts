@@ -86,6 +86,7 @@ export type DocketBacklogAlertJobResult = NotificationDeliverySummary & {
 
 export type SystemAlertJobResult = {
   projectsChecked: number;
+  alertsResolved: number;
   alertsCreated: number;
   overdueNcrAlerts: number;
   staleHoldPointAlerts: number;
