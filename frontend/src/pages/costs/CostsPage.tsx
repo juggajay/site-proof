@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
+import { ROLE_GROUPS } from '@/lib/roles';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { downloadBrandedCsv } from '@/lib/csv';
 import { useCsvBranding } from '@/hooks/useCsvBranding';
@@ -104,7 +105,9 @@ export function CostsPage() {
   }
 
   if (accessDenied) {
-    return <AccessDeniedState message={loadError ?? undefined} />;
+    return (
+      <AccessDeniedState message={loadError ?? undefined} requiredRoles={ROLE_GROUPS.COMMERCIAL} />
+    );
   }
 
   return (

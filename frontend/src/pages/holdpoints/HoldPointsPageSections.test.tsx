@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { HoldPointsLoadErrorAlert, HoldPointsPageHeader } from './HoldPointsPageSections';
 
@@ -20,7 +21,9 @@ function renderHeader(overrides: Partial<Parameters<typeof HoldPointsPageHeader>
     onExportCSV: vi.fn(),
     ...overrides,
   };
-  return { props, ...render(<HoldPointsPageHeader {...props} />) };
+  // The status filter bar now embeds the router-aware SavedViewsMenu, so the
+  // header must render inside a Router. RTL applies the wrapper to rerender too.
+  return { props, ...render(<HoldPointsPageHeader {...props} />, { wrapper: MemoryRouter }) };
 }
 
 describe('HoldPointsPageHeader', () => {

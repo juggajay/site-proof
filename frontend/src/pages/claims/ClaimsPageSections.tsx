@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
+import { ROLE_GROUPS } from '@/lib/roles';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts';
 import type { CsvBrandingContext } from '@/lib/csv';
@@ -98,7 +99,7 @@ interface ClaimsAccessDeniedStateProps {
 }
 
 export function ClaimsAccessDeniedState({ message }: ClaimsAccessDeniedStateProps) {
-  return <AccessDeniedState message={message} />;
+  return <AccessDeniedState message={message} requiredRoles={ROLE_GROUPS.COMMERCIAL} />;
 }
 
 interface ClaimsMainContentProps {
