@@ -43,6 +43,56 @@ export async function mockAuthenticatedUserState(
   user = E2E_ADMIN_USER,
   notificationUnreadCount = 0,
 ): Promise<void> {
+  // The mocked session uses a fake bearer token; when CI runs a real backend
+  // (VITE_API_URL), any UNMOCKED api call would 401 -> notifySessionExpired()
+  // -> the whole spec bounces to the login page. That is exactly how a single
+  // new shell-level query (the #1518 header's /api/ai/status) silently broke 36
+  // master E2E tests for a week. Two surfaces get shell-wide defaults, and they
+  // need OPPOSITE routing because /api/auth/me and /api/ai/status differ in who
+  // should win when a spec has its own `**/api/**` catch-all:
+  //
+  //   - /api/auth/me lives on the CONTEXT route below. Page routes always beat
+  //     context routes in Playwright, so a spec's OWN stateful /api/auth/me
+  //     (profile edit, onboarding company creation, project-users) wins. A
+  //     page-level default here would instead SHADOW that stateful handler
+  //     (last-registered page route wins) and, e.g., revert a just-saved profile
+  //     name. The context default only fills in for specs that never mock it, so
+  //     boot-time token validation (401 OR malformed user => expired) survives.
+  //
+  //   - /api/ai/status lives on a PAGE route (below the context block). It MUST
+  //     shadow a spec's catch-all: useAiStatus() defaults aiConfigured=true when
+  //     the request errors, so a spec whose catch-all 404s /api/ai/status would
+  //     render the full Clancy chrome and break selectors. Forcing "not
+  //     configured" keeps the minimal pre-Clancy chrome. A spec that wants Clancy
+  //     overrides this by registering its own /api/ai/status AFTER this call.
+  //
+  //   - everything else: a benign empty 200 keeps unmocked surfaces in
+  //     loading/empty states instead of killing the session.
+  await page.context().route('**/api/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/auth/me') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    });
+  });
+
+  await page.route('**/api/ai/status**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ aiConfigured: false }),
+    });
+  });
+
   await page.route('**/api/projects/*/access', async (route) => {
     if (hasSubcontractorProjectIdentity(user)) {
       await route.fulfill({
