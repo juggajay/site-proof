@@ -45,9 +45,9 @@ proposals, not commitments, until Jay adopts them.
 | Retention = 30 days of encrypted dump artifacts in GitHub Actions | **[VERIFIED]** | runbook §Objective |
 | Restore drill tooling (restore into disposable Postgres) exists as a workflow | **[VERIFIED]** | `.github/workflows/database-restore-drill.yml` (manual `workflow_dispatch`, restores a chosen backup run into a throwaway `postgres:17` service) |
 | Documented production restore procedure | **[VERIFIED]** | runbook §Production Restore |
-| Backup GitHub secrets actually configured (`DATABASE_BACKUP_URL`/`DATABASE_URL`, `DATABASE_BACKUP_ENCRYPTION_KEY`) | **[NOT-YET-VERIFIED]** | Lives in GitHub repo settings, not the codebase — confirm in GitHub → Settings → Secrets |
-| At least one scheduled backup run has passed | **[NOT-YET-VERIFIED]** | Confirm in GitHub → Actions → Database Backup |
-| A restore drill has actually been executed and recorded | **[JAY-ACTION]** | Runbook §Restore Drill exists but records no completed drill. Launch gate requires ≥1 passing drill before paying users |
+| Backup GitHub secrets actually configured (`DATABASE_BACKUP_URL`/`DATABASE_URL`, `DATABASE_BACKUP_ENCRYPTION_KEY`) | **[VERIFIED]** | Scheduled backup runs succeed daily (GitHub → Actions → Database Backup; checked 24 Jul 2026, last success 23 Jul 2026 16:10 UTC) — the workflow cannot succeed without the secrets |
+| At least one scheduled backup run has passed | **[VERIFIED]** | Daily successes observed via `gh run list --workflow=database-backup.yml` (21–23 Jul 2026 all green; checked 24 Jul 2026) |
+| A restore drill has actually been executed and recorded | **[VERIFIED]** | Restore-drill workflow run succeeded 1 Jul 2026 (GitHub → Actions → Database Restore Drill; first attempt same day failed, rerun passed). Launch gate met. **[JAY-ACTION]** remains only to adopt a drill cadence (proposed: quarterly) |
 | Railway point-in-time recovery (PITR) enabled | **[NOT-YET-VERIFIED]** | Depends on Railway plan; runbook treats PITR as an additional control only |
 | **Supabase Storage (documents/photos) backup** | **[JAY-ACTION]** | No repo mechanism backs up the Supabase `documents` bucket. The DB backup covers Postgres only; uploaded files are **not** in scope of any committed backup job. This is a real gap for a buyer who asks "are our photos/certs backed up?" |
 
