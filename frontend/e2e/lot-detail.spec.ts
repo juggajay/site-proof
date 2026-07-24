@@ -896,16 +896,26 @@ test.describe('Lot detail ITP workflow', () => {
     await mockLotDetailApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
-    await page.getByRole('button', { name: 'Assign Subcontractor' }).first().click();
 
-    const modal = page.locator('.fixed').filter({ hasText: 'Subcontractor Company' });
-    await expect(modal.getByRole('heading', { name: 'Assign Subcontractor' })).toBeVisible();
-    await expect(modal.getByRole('button', { name: 'Remove Assignment' })).toHaveCount(0);
-    await expect(modal.getByRole('button', { name: 'Select subcontractor' })).toBeDisabled();
+    // The legacy header "Assign Subcontractor" button was retired; assignment now
+    // lives in the lot header's "Assigned Subcontractors" section via its Add button.
+    const assignmentsSection = page
+      .locator('.rounded-lg.border')
+      .filter({ hasText: 'Assigned Subcontractors' })
+      .first();
+    await expect(assignmentsSection.getByText('No subcontractors assigned')).toBeVisible();
+    await assignmentsSection.getByRole('button', { name: 'Add' }).click();
 
-    await modal.locator('#subcontractor-select').selectOption('e2e-subcontractor-company');
+    const modal = page.getByRole('dialog').filter({ hasText: 'Subcontractor Company' });
+    await expect(modal.getByRole('heading', { name: /Assign Subcontractor/ })).toBeVisible();
+    // A fresh (non-editing) assignment offers no remove control...
+    await expect(modal.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+    // ...and cannot be submitted until a subcontractor company is chosen.
+    await expect(modal.getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
 
-    await expect(modal.getByRole('button', { name: 'Assign Subcontractor' })).toBeEnabled();
+    await modal.locator('select').selectOption('e2e-subcontractor-company');
+
+    await expect(modal.getByRole('button', { name: 'Assign', exact: true })).toBeEnabled();
   });
 
   test('guards duplicate checklist completion submissions @pr-smoke', async ({ page }) => {

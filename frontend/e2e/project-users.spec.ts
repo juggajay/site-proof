@@ -309,7 +309,9 @@ test.describe('Project users seeded admin contract', () => {
 
     await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
     await expect(page.getByText('Manage team members and their roles')).toBeVisible();
-    await expect(page.getByText('E2E Admin')).toBeVisible();
+    // Scope identity to the team table: the sidebar footer now also renders the
+    // logged-in user's name (#1524), so an unscoped 'E2E Admin' is ambiguous.
+    await expect(page.locator('tbody').getByText('E2E Admin')).toBeVisible();
     await expect(page.getByText('(You)')).toBeVisible();
     await expect(page.getByText('E2E Engineer')).toBeVisible();
     await expect(page.getByText('E2E Viewer')).toBeVisible();
@@ -372,7 +374,8 @@ test.describe('Project users seeded admin contract', () => {
 
     await expect.poll(() => api.getUserLoadCount()).toBeGreaterThan(2);
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByText('E2E Admin')).toBeVisible();
+    // Scope to the team table — sidebar footer also shows 'E2E Admin' (#1524).
+    await expect(page.locator('tbody').getByText('E2E Admin')).toBeVisible();
     await expect(page.getByText('E2E Engineer')).toBeVisible();
   });
 

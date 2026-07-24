@@ -9,7 +9,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs only for PRs. Push runs (master) must never be
+  # cancelled: back-to-back merges were cancelling the full E2E job, which hid
+  # a red master suite for nine days (Jul 15-24).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

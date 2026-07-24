@@ -295,7 +295,7 @@ test.describe('ITP seeded UI contract', () => {
       .filter({ hasText: 'TfNSW Pavement ITP' });
     await expect(globalTemplateCard).toBeVisible();
     await expect(globalTemplateCard.getByText('TfNSW Template')).toBeVisible();
-    await expect(globalTemplateCard.getByText('Pavement (bound)')).toBeVisible();
+    await expect(globalTemplateCard.getByText('Bound/stabilised pavement')).toBeVisible();
     await expect(globalTemplateCard.getByText('Library pavement controls')).toBeVisible();
     await expect(globalTemplateCard.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 
@@ -339,7 +339,7 @@ test.describe('ITP seeded UI contract', () => {
     const modal = page.locator('.fixed.inset-0').filter({ hasText: 'Create ITP Template' });
     await expect(modal).toBeVisible();
     await modal.getByPlaceholder('e.g., Earthworks ITP').fill('  E2E Concrete ITP  ');
-    await modal.locator('select').first().selectOption('Concrete');
+    await modal.locator('select').first().selectOption('structural_concrete');
     await modal
       .getByPlaceholder('Optional description of this ITP template')
       .fill('  Concrete pour checks  ');
@@ -353,7 +353,7 @@ test.describe('ITP seeded UI contract', () => {
       projectId: E2E_PROJECT_ID,
       name: 'E2E Concrete ITP',
       description: 'Concrete pour checks',
-      activityType: 'Concrete',
+      activityType: 'structural_concrete',
       checklistItems: [
         expect.objectContaining({
           description: 'Confirm formwork is signed off',

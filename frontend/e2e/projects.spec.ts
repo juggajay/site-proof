@@ -341,6 +341,9 @@ test.describe('Projects seeded account contract', () => {
     const dialog = page.getByRole('dialog', { name: 'Create New Project' });
     await dialog.getByLabel(/Project Name/).fill('Project Over Limit');
     await dialog.getByLabel(/Project Number/).fill('LIMIT-001');
+    // State is now required to enable Create Project (it drives the spec-set
+    // options); without it the submit button stays disabled.
+    await dialog.getByLabel('State').selectOption('QLD');
     await dialog.getByRole('button', { name: 'Create Project' }).click();
 
     await expect(dialog.getByRole('alert')).toContainText(
