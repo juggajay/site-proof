@@ -1,6 +1,6 @@
 // Feature #250: Drawing Register management page
 import { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
 import { useIsMobile } from '@/hooks/useMediaQuery';
@@ -102,6 +102,8 @@ function getDrawingShowingRange(
 
 export function DrawingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
+  const querySearch = searchParams.get('search') || '';
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
@@ -124,8 +126,8 @@ export function DrawingsPage() {
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [committedSearch, setCommittedSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState(querySearch);
+  const [committedSearch, setCommittedSearch] = useState(querySearch);
   const [currentPage, setCurrentPage] = useState(1);
   const [drawingPendingDelete, setDrawingPendingDelete] = useState<Drawing | null>(null);
 
@@ -196,6 +198,13 @@ export function DrawingsPage() {
       setCurrentPage(pagination.totalPages);
     }
   }, [pagination]);
+
+  // Seed the search box from a ?search= deep link (e.g. global search → a drawing).
+  useEffect(() => {
+    setSearchQuery(querySearch);
+    setCommittedSearch(querySearch);
+    setCurrentPage(1);
+  }, [querySearch]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

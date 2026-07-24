@@ -4,6 +4,8 @@ import {
   Search,
   X,
   FileText,
+  File,
+  PenTool,
   AlertTriangle,
   TestTube,
   Loader2,
@@ -15,12 +17,13 @@ import { apiFetch } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/components/ui/button';
+import { rankResults } from '@/components/globalSearchRanking';
 import { useClancyEnabled } from '@/components/copilot/clancyAccess';
 import { openClancy } from '@/components/copilot/clancyChatState';
 
 interface SearchResult {
   id: string;
-  type: 'lot' | 'ncr' | 'test';
+  type: 'lot' | 'ncr' | 'test' | 'document' | 'drawing';
   title: string;
   subtitle: string;
   projectId: string;
@@ -70,6 +73,30 @@ interface TestSearchItem {
   } | null;
 }
 
+// Documents: server strips fileUrl from list responses (buildDocumentResponse),
+// so there is no raw Supabase URL to render here — results link to the documents
+// page only, per the backend-mediated-access storage rule.
+interface DocumentSearchItem {
+  id: string;
+  projectId: string;
+  filename?: string | null;
+  category?: string | null;
+  documentType?: string | null;
+  lot?: {
+    lotNumber?: string | null;
+    description?: string | null;
+  } | null;
+}
+
+interface DrawingSearchItem {
+  id: string;
+  projectId: string;
+  drawingNumber?: string | null;
+  title?: string | null;
+  revision?: string | null;
+  status?: string | null;
+}
+
 const includesQuery = (value: string | number | null | undefined, query: string) =>
   String(value ?? '')
     .toLowerCase()
@@ -87,6 +114,13 @@ const buildSearchUrl = (path: string, projectId: string, searchTerm: string) => 
   });
 
   return `${path}?${params.toString()}`;
+};
+
+// Documents and drawings list routes take the projectId as a path segment
+// (/api/documents/:projectId, /api/drawings/:projectId) rather than a query param.
+const buildProjectScopedSearchUrl = (basePath: string, projectId: string, searchTerm: string) => {
+  const params = new URLSearchParams({ search: searchTerm, page: '1', limit: '10' });
+  return `${basePath}/${encodeURIComponent(projectId)}?${params.toString()}`;
 };
 
 interface GlobalSearchProps {
@@ -173,17 +207,36 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     staleTime: 30_000,
   });
 
-  const loading =
-    searchEnabled && (lotsQuery.isFetching || ncrsQuery.isFetching || testsQuery.isFetching);
-  const hasSearchError =
-    searchEnabled && (lotsQuery.isError || ncrsQuery.isError || testsQuery.isError);
-  const allSearchesFailed =
-    searchEnabled && lotsQuery.isError && ncrsQuery.isError && testsQuery.isError;
+  const documentsQuery = useQuery({
+    queryKey: queryKeys.globalSearch(activeProjectId, searchTerm, 'documents'),
+    queryFn: () =>
+      apiFetch<{ documents?: DocumentSearchItem[] }>(
+        buildProjectScopedSearchUrl('/api/documents', activeProjectId, searchTerm),
+      ),
+    enabled: searchEnabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const drawingsQuery = useQuery({
+    queryKey: queryKeys.globalSearch(activeProjectId, searchTerm, 'drawings'),
+    queryFn: () =>
+      apiFetch<{ drawings?: DrawingSearchItem[] }>(
+        buildProjectScopedSearchUrl('/api/drawings', activeProjectId, searchTerm),
+      ),
+    enabled: searchEnabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const scopeQueries = [lotsQuery, ncrsQuery, testsQuery, documentsQuery, drawingsQuery];
+
+  const loading = searchEnabled && scopeQueries.some((q) => q.isFetching);
+  const hasSearchError = searchEnabled && scopeQueries.some((q) => q.isError);
+  const allSearchesFailed = searchEnabled && scopeQueries.every((q) => q.isError);
 
   const retrySearch = () => {
-    void lotsQuery.refetch();
-    void ncrsQuery.refetch();
-    void testsQuery.refetch();
+    scopeQueries.forEach((q) => void q.refetch());
   };
 
   // Derive search results from query data + client-side filtering
@@ -195,8 +248,8 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
 
     // Filter lots
     const lots = lotsQuery.data?.lots ?? lotsQuery.data?.data ?? [];
-    lots
-      .filter((lot) =>
+    rankResults(
+      lots.filter((lot) =>
         anyFieldIncludesQuery(
           [
             lot.lotNumber,
@@ -209,7 +262,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           ],
           q,
         ),
-      )
+      ),
+      searchTerm,
+      (lot) => lot.lotNumber,
+    )
       .slice(0, 5)
       .forEach((lot) => {
         searchResults.push({
@@ -223,8 +279,8 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
 
     // Filter NCRs
     const ncrs = ncrsQuery.data?.ncrs ?? ncrsQuery.data?.data ?? [];
-    ncrs
-      .filter((ncr) => {
+    rankResults(
+      ncrs.filter((ncr) => {
         const linkedLotText = ncr.ncrLots
           ?.map((ncrLot) => `${ncrLot.lot?.lotNumber ?? ''} ${ncrLot.lot?.description ?? ''}`)
           .join(' ');
@@ -241,7 +297,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           ],
           q,
         );
-      })
+      }),
+      searchTerm,
+      (ncr) => ncr.ncrNumber,
+    )
       .slice(0, 5)
       .forEach((ncr) => {
         searchResults.push({
@@ -255,8 +314,8 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
 
     // Filter tests
     const tests = testsQuery.data?.testResults || [];
-    tests
-      .filter((test) =>
+    rankResults(
+      tests.filter((test) =>
         anyFieldIncludesQuery(
           [
             test.testRequestNumber,
@@ -270,7 +329,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           ],
           q,
         ),
-      )
+      ),
+      searchTerm,
+      (test) => test.testRequestNumber,
+    )
       .slice(0, 5)
       .forEach((test) => {
         const resultText =
@@ -288,8 +350,64 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
         });
       });
 
+    // Filter documents. Primary identifier is the filename; the row links to the
+    // documents page (search-seeded), never a raw file URL.
+    const documents = documentsQuery.data?.documents ?? [];
+    rankResults(
+      documents.filter((doc) =>
+        anyFieldIncludesQuery(
+          [doc.filename, doc.category, doc.documentType, doc.lot?.lotNumber, doc.lot?.description],
+          q,
+        ),
+      ),
+      searchTerm,
+      (doc) => doc.filename,
+    )
+      .slice(0, 5)
+      .forEach((doc) => {
+        searchResults.push({
+          id: doc.id,
+          type: 'document',
+          title: doc.filename || `Document-${doc.id.slice(0, 8)}`,
+          subtitle: doc.category || doc.documentType || 'Document',
+          projectId: doc.projectId || activeProjectId,
+        });
+      });
+
+    // Filter drawings. Primary identifier is the drawing number.
+    const drawings = drawingsQuery.data?.drawings ?? [];
+    rankResults(
+      drawings.filter((drawing) =>
+        anyFieldIncludesQuery(
+          [drawing.drawingNumber, drawing.title, drawing.revision, drawing.status],
+          q,
+        ),
+      ),
+      searchTerm,
+      (drawing) => drawing.drawingNumber,
+    )
+      .slice(0, 5)
+      .forEach((drawing) => {
+        searchResults.push({
+          id: drawing.id,
+          type: 'drawing',
+          title: drawing.drawingNumber || `Drawing-${drawing.id.slice(0, 8)}`,
+          subtitle:
+            drawing.title || (drawing.revision ? `Rev ${drawing.revision}` : drawing.status || ''),
+          projectId: drawing.projectId || activeProjectId,
+        });
+      });
+
     return searchResults;
-  }, [searchTerm, activeProjectId, lotsQuery.data, ncrsQuery.data, testsQuery.data]);
+  }, [
+    searchTerm,
+    activeProjectId,
+    lotsQuery.data,
+    ncrsQuery.data,
+    testsQuery.data,
+    documentsQuery.data,
+    drawingsQuery.data,
+  ]);
 
   // Reset selected index when results change
   useEffect(() => {
@@ -333,6 +451,14 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       case 'test':
         path = `/projects/${projectPath}/tests?${new URLSearchParams({ test: result.id }).toString()}`;
         break;
+      case 'document':
+        // Deep-link seeds the documents register search box (see DocumentsPage);
+        // links to the backend-mediated surface, never a raw Supabase URL.
+        path = `/projects/${projectPath}/documents?${new URLSearchParams({ search: result.title }).toString()}`;
+        break;
+      case 'drawing':
+        path = `/projects/${projectPath}/drawings?${new URLSearchParams({ search: result.title }).toString()}`;
+        break;
     }
     onClose();
     navigate(path);
@@ -347,6 +473,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
         return <AlertTriangle className="h-4 w-4 text-warning" />;
       case 'test':
         return <TestTube className="h-4 w-4 text-success" />;
+      case 'document':
+        return <File className="h-4 w-4 text-primary" />;
+      case 'drawing':
+        return <PenTool className="h-4 w-4 text-primary" />;
     }
   };
 
@@ -359,6 +489,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
         return 'NCR';
       case 'test':
         return 'Test';
+      case 'document':
+        return 'Document';
+      case 'drawing':
+        return 'Drawing';
     }
   };
 
@@ -382,7 +516,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search lots, NCRs, tests..."
+            placeholder="Search lots, NCRs, tests, documents, drawings..."
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             aria-label="Search"
           />
@@ -506,7 +640,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             </>
           ) : !query ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              <p>Type to search across lots, NCRs, and tests</p>
+              <p>Type to search across lots, NCRs, tests, documents, and drawings</p>
               <p className="mt-2 text-xs">
                 <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">↑</kbd>
                 <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs ml-1">
