@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MoreVertical, FileDown, FolderOpen, FlaskConical } from 'lucide-react';
@@ -120,14 +120,62 @@ export function TestResultsPage() {
   const [failedTestForNcr, setFailedTestForNcr] = useState<FailedTestForNcr | null>(null);
   const [ncrInitialDescription, setNcrInitialDescription] = useState('');
 
-  // Filter state
-  const [filterTestType, setFilterTestType] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPassFail, setFilterPassFail] = useState('');
-  const [filterLot, setFilterLot] = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  // URL-persisted filter state (same idiom as LotsPage/NCRFilters/HoldPointsPage)
+  // so filters survive refresh/back-nav and are shareable as links. `test`
+  // (GlobalSearch deep link) is a reserved param on this page — updateFilters
+  // only touches the keys it is handed, so it is preserved automatically.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get('search') || '';
+  const filterTestType = searchParams.get('type') || '';
+  const filterStatus = searchParams.get('status') || '';
+  const filterPassFail = searchParams.get('passFail') || '';
+  const filterLot = searchParams.get('lot') || '';
+  const filterDateFrom = searchParams.get('from') || '';
+  const filterDateTo = searchParams.get('to') || '';
+
+  const updateFilters = useCallback(
+    (newParams: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams);
+      Object.entries(newParams).forEach(([key, value]) => {
+        if (value) {
+          params.set(key, value);
+        } else {
+          params.delete(key);
+        }
+      });
+      setSearchParams(params);
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const setSearchQuery = useCallback(
+    (value: string) => updateFilters({ search: value }),
+    [updateFilters],
+  );
+  const setFilterTestType = useCallback(
+    (value: string) => updateFilters({ type: value }),
+    [updateFilters],
+  );
+  const setFilterStatus = useCallback(
+    (value: string) => updateFilters({ status: value }),
+    [updateFilters],
+  );
+  const setFilterPassFail = useCallback(
+    (value: string) => updateFilters({ passFail: value }),
+    [updateFilters],
+  );
+  const setFilterLot = useCallback(
+    (value: string) => updateFilters({ lot: value }),
+    [updateFilters],
+  );
+  const setFilterDateFrom = useCallback(
+    (value: string) => updateFilters({ from: value }),
+    [updateFilters],
+  );
+  const setFilterDateTo = useCallback(
+    (value: string) => updateFilters({ to: value }),
+    [updateFilters],
+  );
 
   // Data fetching
   const fetchData = useCallback(async () => {
@@ -263,14 +311,8 @@ export function TestResultsPage() {
   const hasActiveFilters = hasActiveTestFilters(filterState);
 
   const clearFilters = useCallback(() => {
-    setFilterTestType('');
-    setFilterStatus('');
-    setFilterPassFail('');
-    setFilterLot('');
-    setFilterDateFrom('');
-    setFilterDateTo('');
-    setSearchQuery('');
-  }, []);
+    updateFilters({ search: '', type: '', status: '', passFail: '', lot: '', from: '', to: '' });
+  }, [updateFilters]);
 
   // Status workflow handler
   const handleUpdateStatus = useCallback(

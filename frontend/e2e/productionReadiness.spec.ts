@@ -2440,10 +2440,6 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/LotsPage.tsx', import.meta.url),
       'utf8',
     );
-    const lotFiltersBar = await readFile(
-      new URL('../src/pages/lots/components/LotFiltersBar.tsx', import.meta.url),
-      'utf8',
-    );
     const lotColumnSettingsMenu = await readFile(
       new URL('../src/pages/lots/components/LotColumnSettingsMenu.tsx', import.meta.url),
       'utf8',
@@ -2458,6 +2454,10 @@ test.describe('production readiness guardrails', () => {
     );
     const lotActions = await readFile(
       new URL('../src/pages/lots/hooks/useLotsActions.ts', import.meta.url),
+      'utf8',
+    );
+    const savedViewsLib = await readFile(
+      new URL('../src/lib/savedViews.ts', import.meta.url),
       'utf8',
     );
     const uiStore = await readFile(new URL('../src/stores/uiStore.ts', import.meta.url), 'utf8');
@@ -2486,19 +2486,23 @@ test.describe('production readiness guardrails', () => {
     expect(lotsPage).not.toContain("localStorage.getItem('siteproof_lot_view_mode')");
     expect(lotActions).toContain("writeLocalStorageItem('siteproof_lot_view_mode', mode)");
     expect(lotActions).not.toContain("localStorage.setItem('siteproof_lot_view_mode'");
-    expect(lotFiltersBar).toContain('readLocalStorageItem(SAVED_FILTERS_STORAGE_KEY)');
-    expect(lotFiltersBar).toContain('writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY');
-    expect(lotFiltersBar).toContain('parseSavedFiltersPreference');
-    expect(lotFiltersBar).not.toContain('return JSON.parse(stored) as SavedFilter[]');
-    expect(lotFiltersBar).not.toContain('localStorage.getItem(SAVED_FILTERS_STORAGE_KEY)');
-    expect(lotFiltersBar).not.toContain('localStorage.setItem(SAVED_FILTERS_STORAGE_KEY');
+    // Saved views moved from the lots-only LotSavedFiltersMenu into the shared
+    // savedViews module (#1549) — the validated-parse-before-render guarantee
+    // is pinned there at the same strictness.
+    expect(savedViewsLib).toContain('readLocalStorageItem(storageKey(registerKey))');
+    expect(savedViewsLib).toContain('writeLocalStorageItem(storageKey(registerKey)');
+    expect(savedViewsLib).toContain('parseSavedViews');
+    expect(savedViewsLib).toContain('if (!Array.isArray(value)) return null;');
+    expect(savedViewsLib).not.toContain('JSON.parse(stored) as SavedView[]');
+    expect(savedViewsLib).not.toContain('localStorage.getItem');
+    expect(savedViewsLib).not.toContain('localStorage.setItem');
     expect(lotColumnSettingsMenu).toContain('writeLocalStorageItem(COLUMN_STORAGE_KEY');
     expect(lotColumnSettingsMenu).toContain('writeLocalStorageItem(COLUMN_ORDER_STORAGE_KEY');
     expect(lotColumnSettingsMenu).not.toContain('localStorage.setItem(COLUMN_STORAGE_KEY');
     expect(lotColumnSettingsMenu).not.toContain('localStorage.setItem(COLUMN_ORDER_STORAGE_KEY');
     expect(lotFilterConfig).toContain("COLUMN_STORAGE_KEY = 'siteproof_lot_columns'");
     expect(lotFilterConfig).toContain("COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'");
-    expect(lotFilterConfig).toContain("SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters'");
+    expect(savedViewsLib).toContain("STORAGE_PREFIX = 'siteproof_saved_views.'");
     expect(lotTable).toContain('readLocalStorageItem(COLUMN_WIDTH_STORAGE_KEY)');
     expect(lotTable).toContain('writeLocalStorageItem(COLUMN_WIDTH_STORAGE_KEY');
     expect(lotTable).toContain('parseColumnWidthsPreference');

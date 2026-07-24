@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { SavedViewsMenu } from '@/components/registers/SavedViewsMenu';
 import type { Lot } from '../types';
 
 interface TestFiltersProps {
@@ -89,6 +90,8 @@ export const TestFilters = React.memo(function TestFilters({
             </span>
           )}
         </button>
+
+        <SavedViewsMenu registerKey="test-results" />
       </div>
 
       {showFilters && (
