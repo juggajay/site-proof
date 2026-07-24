@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Lot } from '../lotsPageTypes';
 import { logError } from '@/lib/logger';
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
@@ -44,6 +45,8 @@ interface CreateLotModalProps {
   onSuccess: (lot: Lot) => void;
   projectId: string;
   canViewBudgets: boolean;
+  /** Why the budget field is gated, when canViewBudgets is false. null = access granted. */
+  commercialAccessReason?: string | null;
   initialActivityType?: string;
 }
 
@@ -68,6 +71,7 @@ export function CreateLotModal({
   onSuccess,
   projectId,
   canViewBudgets,
+  commercialAccessReason,
   initialActivityType,
 }: CreateLotModalProps) {
   const [creating, setCreating] = useState(false);
@@ -393,7 +397,7 @@ export function CreateLotModal({
               </div>
             </div>
 
-            {canViewBudgets && (
+            {canViewBudgets ? (
               <div>
                 <Label htmlFor="lot-budget">Budget Amount ($)</Label>
                 <Input
@@ -411,7 +415,35 @@ export function CreateLotModal({
                   </p>
                 )}
               </div>
-            )}
+            ) : commercialAccessReason ? (
+              // Explain the gate instead of hiding the field. The input stays empty
+              // and disabled, so no commercial value is ever exposed.
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div title={commercialAccessReason}>
+                      <Label htmlFor="lot-budget" className="text-muted-foreground">
+                        Budget Amount ($)
+                      </Label>
+                      <Input
+                        id="lot-budget"
+                        type="number"
+                        disabled
+                        value=""
+                        readOnly
+                        className="mt-1"
+                        placeholder="Requires a commercial role"
+                        aria-describedby="lot-budget-reason"
+                      />
+                      <p id="lot-budget-reason" className="text-xs text-muted-foreground mt-1">
+                        {commercialAccessReason}
+                      </p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{commercialAccessReason}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
           </div>
         </form>
       </ModalBody>

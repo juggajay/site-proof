@@ -49,7 +49,7 @@ export function LotsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { canViewBudgets } = useCommercialAccess();
+  const { canViewBudgets, commercialAccessReason } = useCommercialAccess();
   const { isSubcontractor } = useSubcontractorAccess();
   const isMobile = useIsMobile();
 
@@ -491,6 +491,7 @@ export function LotsPage() {
           onSuccess={actions.handleCreateSuccess}
           projectId={projectId}
           canViewBudgets={canViewBudgets}
+          commercialAccessReason={commercialAccessReason}
           initialActivityType={activityFilter || undefined}
         />
       )}

@@ -132,6 +132,31 @@ describe('useCommercialAccess', () => {
     expect(result.current.canViewSubcontractorRates).toBe(true);
   });
 
+  it('exposes no reason string when commercial access is granted', () => {
+    setAuth({ role: 'admin', roleInCompany: 'admin', dashboardRole: null }, 'admin');
+
+    const { result } = renderHook(() => useCommercialAccess());
+
+    expect(result.current.hasCommercialAccess).toBe(true);
+    expect(result.current.commercialAccessReason).toBeNull();
+  });
+
+  it('derives the reason from the project-scoped role, not the RoleSwitcher actual role', () => {
+    // RoleSwitcher override: displayed role is site_engineer while the real
+    // account is admin. The reason must name the effective (overridden) role.
+    setAuth(
+      { role: 'site_engineer', roleInCompany: 'site_engineer', dashboardRole: null },
+      'admin',
+    );
+
+    const { result } = renderHook(() => useCommercialAccess());
+
+    expect(result.current.hasCommercialAccess).toBe(false);
+    expect(result.current.commercialAccessReason).toBe(
+      'Requires a commercial role (Owner, Administrator or Project Manager). Your role: Site Engineer.',
+    );
+  });
+
   it('does not let subcontractor portal users borrow a project dashboard role for commercial access', () => {
     setAuth(
       {

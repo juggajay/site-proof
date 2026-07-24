@@ -88,6 +88,18 @@ describe('RoleProtectedRoute', () => {
     expect(screen.getByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
   });
 
+  it('names the required roles and the current role on the denial screen', () => {
+    renderRoute(
+      <RoleProtectedRoute allowedRoles={['owner', 'admin', 'project_manager']}>
+        <div>Protected Content</div>
+      </RoleProtectedRoute>,
+    );
+
+    expect(
+      screen.getByText('Requires Owner, Administrator or Project Manager. Your role: Member.'),
+    ).toBeInTheDocument();
+  });
+
   it('preserves expired-session state when redirecting anonymous users to login', () => {
     authState.user = null;
     authState.sessionExpired = true;
