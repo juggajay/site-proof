@@ -6,6 +6,7 @@ import { authRouter } from './auth.js';
 import { authenticateApiKey } from './apiKeys.js';
 import { notificationsRouter } from './notifications.js';
 import { prisma } from '../lib/prisma.js';
+import { NOTIFICATION_AUTOMATION_WORKER_LOCK_ID } from '../lib/notificationAutomation/runner.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 import { MAX_ALERT_LIST_RESULTS } from './notifications/alerts.js';
@@ -2249,6 +2250,25 @@ describe('Notifications API', () => {
           .send({ projectId });
 
         expect(res.status).toBe(403);
+      });
+
+      it('should return 409 while the automation lock is held', async () => {
+        // Hold the worker's advisory lock in an open transaction; the check
+        // endpoint must refuse to interleave rather than run a duplicate pass.
+        await prisma.$transaction(async (tx) => {
+          const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+            SELECT pg_try_advisory_xact_lock(${NOTIFICATION_AUTOMATION_WORKER_LOCK_ID}) AS locked
+          `;
+          expect(lockRows[0]?.locked).toBe(true);
+
+          const res = await request(app)
+            .post('/api/notifications/system-alerts/check')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ projectId });
+
+          expect(res.status).toBe(409);
+          expect(res.body.error.message).toContain('already running');
+        });
       });
 
       it('should reject unauthorized system alert checks', async () => {
