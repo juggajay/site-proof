@@ -1,0 +1,550 @@
+{
+  "lots": [
+    {
+      "lotId": "<id:0>",
+      "lotNumber": "L01-no-itp",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:1>",
+      "lotNumber": "L02-itp-unstarted",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:2>",
+      "lotNumber": "L03-itp-partial",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:3>",
+      "lotNumber": "L04-itp-complete-notest",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:4>",
+      "lotNumber": "L05-test-required-none",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:5>",
+      "lotNumber": "L06-test-pending",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [
+          {
+            "code": "pending_tests",
+            "severity": "warning",
+            "area": "test",
+            "title": "Tests still pending",
+            "detail": "1 test result is not verified yet.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:6>",
+      "lotNumber": "L07-test-failed",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [
+          {
+            "code": "pending_tests",
+            "severity": "warning",
+            "area": "test",
+            "title": "Tests still pending",
+            "detail": "1 test result is not verified yet.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:7>",
+      "lotNumber": "L08-test-passing-unverified",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [
+          {
+            "code": "pending_tests",
+            "severity": "warning",
+            "area": "test",
+            "title": "Tests still pending",
+            "detail": "1 test result is not verified yet.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:8>",
+      "lotNumber": "L09-test-passing-verified",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:9>",
+      "lotNumber": "L10-ncr-minor-open",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:10>",
+      "lotNumber": "L11-ncr-major-open",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:11>",
+      "lotNumber": "L12-hp-pending",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          },
+          {
+            "code": "unreleased_hold_points",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold points unreleased",
+            "detail": "1 hold point still need release evidence.",
+            "blocksAction": false,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:12>",
+      "lotNumber": "L13-hp-released",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [
+          {
+            "code": "released_hold_points",
+            "severity": "support",
+            "area": "hold_point",
+            "title": "Released hold points",
+            "detail": "1 hold point released.",
+            "blocksAction": false,
+            "count": 1
+          }
+        ],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:13>",
+      "lotNumber": "L14-hp-completed",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          },
+          {
+            "code": "unreleased_hold_points",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold points unreleased",
+            "detail": "1 hold point still need release evidence.",
+            "blocksAction": false,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:14>",
+      "lotNumber": "L15-hp-na-bypass",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          },
+          {
+            "code": "unreleased_hold_points",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold points unreleased",
+            "detail": "1 hold point still need release evidence.",
+            "blocksAction": false,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:15>",
+      "lotNumber": "L16-conformed",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:16>",
+      "lotNumber": "L17-conformed-override",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_overridden",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance accepted by override",
+            "detail": "An owner or admin force-conformed this lot on 2026-01-15.",
+            "blocksAction": false
+          }
+        ],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:17>",
+      "lotNumber": "L18-conformed-regressed",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "conformance_no_longer_current",
+            "severity": "blocker",
+            "area": "conformance",
+            "title": "Conformance needs review",
+            "detail": "Conformance is no longer current — see the Conformance card.",
+            "blocksAction": true,
+            "actionLabel": "Review conformance"
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:18>",
+      "lotNumber": "L19-claimed",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "already_claimed",
+        "blockers": [
+          {
+            "code": "already_claimed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Fully claimed",
+            "detail": "This lot has been claimed in full and cannot be claimed again.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    },
+    {
+      "lotId": "<id:19>",
+      "lotNumber": "L20-conformed-no-budget",
+      "activityType": "Earthworks",
+      "claim": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "missing_budget",
+            "severity": "blocker",
+            "area": "budget",
+            "title": "Budget missing",
+            "detail": "Add a lot budget before including this lot in a progress claim.",
+            "blocksAction": true,
+            "actionLabel": "Add budget"
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      }
+    }
+  ]
+}

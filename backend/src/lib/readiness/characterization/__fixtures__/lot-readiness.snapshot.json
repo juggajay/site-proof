@@ -1,0 +1,2176 @@
+{
+  "L01-no-itp": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L01-no-itp",
+      "status": "not_started",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "No ITP assigned to this lot"
+        ],
+        "prerequisites": {
+          "itpAssigned": false,
+          "itpCompleted": false,
+          "itpCompletedCount": 0,
+          "itpTotalCount": 0,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_itp_assigned",
+            "severity": "blocker",
+            "area": "itp",
+            "title": "No ITP assigned",
+            "detail": "Assign an ITP before this lot can be conformed.",
+            "blocksAction": true,
+            "actionLabel": "Assign ITP"
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 0,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": []
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 0,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L02-itp-unstarted": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L02-itp-unstarted",
+      "status": "not_started",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP checklist incomplete (0/2 items completed)"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": false,
+          "itpCompletedCount": 0,
+          "itpTotalCount": 2,
+          "itpIncompleteItems": [
+            {
+              "id": "<id:1>",
+              "description": "Item a",
+              "pointType": "standard"
+            },
+            {
+              "id": "<id:2>",
+              "description": "Item b",
+              "pointType": "standard"
+            }
+          ],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "itp_incomplete",
+            "severity": "blocker",
+            "area": "itp",
+            "title": "ITP checklist incomplete",
+            "detail": "0/2 checklist items are complete.",
+            "blocksAction": true,
+            "actionLabel": "Complete ITP",
+            "count": 2,
+            "relatedIds": [
+              "<id:1>",
+              "<id:2>"
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 2,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "2 checklist items can be worked by field teams.",
+            "blocksAction": false,
+            "count": 2,
+            "relatedIds": [
+              "<id:1>",
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L03-itp-partial": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L03-itp-partial",
+      "status": "in_progress",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP checklist incomplete (1/2 items completed)"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": false,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 2,
+          "itpIncompleteItems": [
+            {
+              "id": "<id:1>",
+              "description": "Item b",
+              "pointType": "standard"
+            }
+          ],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "itp_incomplete",
+            "severity": "blocker",
+            "area": "itp",
+            "title": "ITP checklist incomplete",
+            "detail": "1/2 checklist items are complete.",
+            "blocksAction": true,
+            "actionLabel": "Complete ITP",
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 2,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "2 checklist items can be worked by field teams.",
+            "blocksAction": false,
+            "count": 2,
+            "relatedIds": [
+              "<id:2>",
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L04-itp-complete-notest": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L04-itp-complete-notest",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 0,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "L05-test-required-none": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L05-test-required-none",
+      "status": "awaiting_test",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP requires a matching passing verified test result"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": false,
+          "outstandingTestItems": [
+            {
+              "itemId": "<id:1>",
+              "description": "Item t",
+              "testType": "compaction",
+              "state": "no_result"
+            }
+          ],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_passing_verified_test",
+            "severity": "blocker",
+            "area": "test",
+            "title": "Required tests outstanding",
+            "detail": "1 required test outstanding (1 without result).",
+            "blocksAction": true,
+            "actionLabel": "Review tests",
+            "outstandingTests": [
+              {
+                "itemId": "<id:1>",
+                "description": "Item t",
+                "testType": "compaction",
+                "state": "no_result"
+              }
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L06-test-pending": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L06-test-pending",
+      "status": "awaiting_test",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP requires a matching passing verified test result"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": false,
+          "outstandingTestItems": [
+            {
+              "itemId": "<id:1>",
+              "description": "Item t",
+              "testType": "compaction",
+              "state": "failing"
+            }
+          ],
+          "testResults": [
+            {
+              "id": "<id:2>",
+              "itpChecklistItemId": "<id:1>",
+              "testType": "compaction",
+              "passFail": "pending",
+              "status": "requested"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_passing_verified_test",
+            "severity": "blocker",
+            "area": "test",
+            "title": "Required tests outstanding",
+            "detail": "1 required test outstanding (1 failing).",
+            "blocksAction": true,
+            "actionLabel": "Review tests",
+            "outstandingTests": [
+              {
+                "itemId": "<id:1>",
+                "description": "Item t",
+                "testType": "compaction",
+                "state": "failing"
+              }
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [
+          {
+            "code": "pending_tests",
+            "severity": "warning",
+            "area": "test",
+            "title": "Tests still pending",
+            "detail": "1 test result is not verified yet.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 1,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L07-test-failed": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L07-test-failed",
+      "status": "awaiting_test",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP requires a matching passing verified test result"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": false,
+          "outstandingTestItems": [
+            {
+              "itemId": "<id:1>",
+              "description": "Item t",
+              "testType": "compaction",
+              "state": "failing"
+            }
+          ],
+          "testResults": [
+            {
+              "id": "<id:2>",
+              "itpChecklistItemId": "<id:1>",
+              "testType": "compaction",
+              "passFail": "fail",
+              "status": "entered"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_passing_verified_test",
+            "severity": "blocker",
+            "area": "test",
+            "title": "Required tests outstanding",
+            "detail": "1 required test outstanding (1 failing).",
+            "blocksAction": true,
+            "actionLabel": "Review tests",
+            "outstandingTests": [
+              {
+                "itemId": "<id:1>",
+                "description": "Item t",
+                "testType": "compaction",
+                "state": "failing"
+              }
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [
+          {
+            "code": "pending_tests",
+            "severity": "warning",
+            "area": "test",
+            "title": "Tests still pending",
+            "detail": "1 test result is not verified yet.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 1,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L08-test-passing-unverified": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L08-test-passing-unverified",
+      "status": "awaiting_test",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP requires a matching passing verified test result"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": false,
+          "outstandingTestItems": [
+            {
+              "itemId": "<id:1>",
+              "description": "Item t",
+              "testType": "compaction",
+              "state": "awaiting_verification"
+            }
+          ],
+          "testResults": [
+            {
+              "id": "<id:2>",
+              "itpChecklistItemId": "<id:1>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "entered"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_passing_verified_test",
+            "severity": "blocker",
+            "area": "test",
+            "title": "Required tests outstanding",
+            "detail": "1 required test outstanding (1 awaiting verification).",
+            "blocksAction": true,
+            "actionLabel": "Review tests",
+            "outstandingTests": [
+              {
+                "itemId": "<id:1>",
+                "description": "Item t",
+                "testType": "compaction",
+                "state": "awaiting_verification"
+              }
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [
+          {
+            "code": "pending_tests",
+            "severity": "warning",
+            "area": "test",
+            "title": "Tests still pending",
+            "detail": "1 test result is not verified yet.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 1,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L09-test-passing-verified": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L09-test-passing-verified",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": true,
+          "outstandingTestItems": [],
+          "testResults": [
+            {
+              "id": "<id:1>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 0,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "L10-ncr-minor-open": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L10-ncr-minor-open",
+      "status": "ncr_raised",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "1 open NCR(s) must be closed"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": false,
+          "openNcrs": [
+            {
+              "id": "<id:1>",
+              "ncrNumber": "L10-ncr-minor-open-NCR-1",
+              "description": "Fixture NCR 1",
+              "status": "open"
+            }
+          ],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "open_ncrs",
+            "severity": "blocker",
+            "area": "ncr",
+            "title": "Open NCRs must be closed",
+            "detail": "1 NCR remains open for this lot.",
+            "blocksAction": true,
+            "actionLabel": "Review NCRs",
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L11-ncr-major-open": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L11-ncr-major-open",
+      "status": "ncr_raised",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "1 open NCR(s) must be closed"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": false,
+          "openNcrs": [
+            {
+              "id": "<id:1>",
+              "ncrNumber": "L11-ncr-major-open-NCR-1",
+              "description": "Fixture NCR 1",
+              "status": "open"
+            }
+          ],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "open_ncrs",
+            "severity": "blocker",
+            "area": "ncr",
+            "title": "Open NCRs must be closed",
+            "detail": "1 NCR remains open for this lot.",
+            "blocksAction": true,
+            "actionLabel": "Review NCRs",
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L12-hp-pending": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L12-hp-pending",
+      "status": "hold_point",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          },
+          {
+            "code": "unreleased_hold_points",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold points unreleased",
+            "detail": "1 hold point still need release evidence.",
+            "blocksAction": false,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "warning",
+        "counts": {
+          "releaseGatedHoldPoints": 1,
+          "missingRequestEvidence": 1,
+          "missingRecipients": 0,
+          "fieldActionableItems": 0,
+          "managementOnlyItems": 1
+        },
+        "blockers": [],
+        "warnings": [
+          {
+            "code": "missing_request_evidence",
+            "severity": "warning",
+            "area": "hold_point",
+            "title": "Request evidence missing",
+            "detail": "1 release-gated hold point has no request evidence attached yet.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ],
+            "actionLabel": "Open Hold Points",
+            "actionHref": "/projects/<id:2>/hold-points?lotId=<id:0>"
+          },
+          {
+            "code": "management_only_items",
+            "severity": "warning",
+            "area": "hold_point",
+            "title": "Management-only items",
+            "detail": "1 hold point need management or superintendent release before field handoff.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ],
+            "actionLabel": "Open Hold Points",
+            "actionHref": "/projects/<id:2>/hold-points?lotId=<id:0>"
+          }
+        ],
+        "support": [
+          {
+            "code": "release_gated_hold_points",
+            "severity": "support",
+            "area": "hold_point",
+            "title": "Release-gated hold points",
+            "detail": "1 release-gated hold point is in this lot's ITP.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 2,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "L13-hp-released": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L13-hp-released",
+      "status": "hold_point",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [
+          {
+            "code": "released_hold_points",
+            "severity": "support",
+            "area": "hold_point",
+            "title": "Released hold points",
+            "detail": "1 hold point released.",
+            "blocksAction": false,
+            "count": 1
+          }
+        ],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "warning",
+        "counts": {
+          "releaseGatedHoldPoints": 1,
+          "missingRequestEvidence": 1,
+          "missingRecipients": 0,
+          "fieldActionableItems": 0,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [
+          {
+            "code": "missing_request_evidence",
+            "severity": "warning",
+            "area": "hold_point",
+            "title": "Request evidence missing",
+            "detail": "1 release-gated hold point has no request evidence attached yet.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ],
+            "actionLabel": "Open Hold Points",
+            "actionHref": "/projects/<id:2>/hold-points?lotId=<id:0>"
+          }
+        ],
+        "support": [
+          {
+            "code": "release_gated_hold_points",
+            "severity": "support",
+            "area": "hold_point",
+            "title": "Release-gated hold points",
+            "detail": "1 release-gated hold point is in this lot's ITP.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 1,
+        "supportCount": 3,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "L14-hp-completed": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L14-hp-completed",
+      "status": "hold_point",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          },
+          {
+            "code": "unreleased_hold_points",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold points unreleased",
+            "detail": "1 hold point still need release evidence.",
+            "blocksAction": false,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "warning",
+        "counts": {
+          "releaseGatedHoldPoints": 1,
+          "missingRequestEvidence": 1,
+          "missingRecipients": 0,
+          "fieldActionableItems": 0,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [
+          {
+            "code": "missing_request_evidence",
+            "severity": "warning",
+            "area": "hold_point",
+            "title": "Request evidence missing",
+            "detail": "1 release-gated hold point has no request evidence attached yet.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ],
+            "actionLabel": "Open Hold Points",
+            "actionHref": "/projects/<id:2>/hold-points?lotId=<id:0>"
+          }
+        ],
+        "support": [
+          {
+            "code": "release_gated_hold_points",
+            "severity": "support",
+            "area": "hold_point",
+            "title": "Release-gated hold points",
+            "detail": "1 release-gated hold point is in this lot's ITP.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 1,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "L15-hp-na-bypass": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L15-hp-na-bypass",
+      "status": "hold_point",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "1 hold point item marked N/A but not released"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 1,
+          "noNaHoldPointBypass": false
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "na_hold_point_not_released",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold point items require release",
+            "detail": "1 hold point item marked N/A but the hold point has not been released. Release the hold point to satisfy conformance.",
+            "blocksAction": true,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          },
+          {
+            "code": "unreleased_hold_points",
+            "severity": "blocker",
+            "area": "hold_point",
+            "title": "Hold points unreleased",
+            "detail": "1 hold point still need release evidence.",
+            "blocksAction": false,
+            "actionLabel": "Review hold points",
+            "count": 1
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "warning",
+        "counts": {
+          "releaseGatedHoldPoints": 1,
+          "missingRequestEvidence": 1,
+          "missingRecipients": 0,
+          "fieldActionableItems": 0,
+          "managementOnlyItems": 1
+        },
+        "blockers": [],
+        "warnings": [
+          {
+            "code": "missing_request_evidence",
+            "severity": "warning",
+            "area": "hold_point",
+            "title": "Request evidence missing",
+            "detail": "1 release-gated hold point has no request evidence attached yet.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ],
+            "actionLabel": "Open Hold Points",
+            "actionHref": "/projects/<id:2>/hold-points?lotId=<id:0>"
+          },
+          {
+            "code": "management_only_items",
+            "severity": "warning",
+            "area": "hold_point",
+            "title": "Management-only items",
+            "detail": "1 hold point need management or superintendent release before field handoff.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ],
+            "actionLabel": "Open Hold Points",
+            "actionHref": "/projects/<id:2>/hold-points?lotId=<id:0>"
+          }
+        ],
+        "support": [
+          {
+            "code": "release_gated_hold_points",
+            "severity": "support",
+            "area": "hold_point",
+            "title": "Release-gated hold points",
+            "detail": "1 release-gated hold point is in this lot's ITP.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 3,
+        "warningCount": 2,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L16-conformed": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L16-conformed",
+      "status": "conformed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": true,
+          "outstandingTestItems": [],
+          "testResults": [
+            {
+              "id": "<id:1>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "already_conformed",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "lot_already_conformed",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Lot already conformed",
+            "detail": "This lot is conformed and can be considered for claiming if commercial rules are met.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 0,
+        "warningCount": 0,
+        "supportCount": 2,
+        "actionBlockerCount": 0
+      }
+    }
+  },
+  "L17-conformed-override": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L17-conformed-override",
+      "status": "conformed",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP checklist incomplete (1/2 items completed)"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": false,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 2,
+          "itpIncompleteItems": [
+            {
+              "id": "<id:1>",
+              "description": "Item b",
+              "pointType": "standard"
+            }
+          ],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "already_conformed",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "lot_already_conformed",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Lot already conformed",
+            "detail": "This lot is conformed and can be considered for claiming if commercial rules are met.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_overridden",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance accepted by override",
+            "detail": "An owner or admin force-conformed this lot on 2026-01-15.",
+            "blocksAction": false
+          }
+        ],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 2,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "2 checklist items can be worked by field teams.",
+            "blocksAction": false,
+            "count": 2,
+            "relatedIds": [
+              "<id:2>",
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 0,
+        "warningCount": 0,
+        "supportCount": 3,
+        "actionBlockerCount": 0
+      }
+    }
+  },
+  "L18-conformed-regressed": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L18-conformed-regressed",
+      "status": "conformed",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "1 open NCR(s) must be closed"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": false,
+          "openNcrs": [
+            {
+              "id": "<id:1>",
+              "ncrNumber": "L18-conformed-regressed-NCR-1",
+              "description": "Fixture NCR 1",
+              "status": "open"
+            }
+          ],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "open_ncrs",
+            "severity": "blocker",
+            "area": "ncr",
+            "title": "Open NCRs must be closed",
+            "detail": "1 NCR remains open for this lot.",
+            "blocksAction": true,
+            "actionLabel": "Review NCRs",
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ],
+        "warnings": [],
+        "support": []
+      },
+      "claim": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "conformance_no_longer_current",
+            "severity": "blocker",
+            "area": "conformance",
+            "title": "Conformance needs review",
+            "detail": "Conformance is no longer current — see the Conformance card.",
+            "blocksAction": true,
+            "actionLabel": "Review conformance"
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "L19-claimed": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L19-claimed",
+      "status": "claimed",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "No ITP assigned to this lot"
+        ],
+        "prerequisites": {
+          "itpAssigned": false,
+          "itpCompleted": false,
+          "itpCompletedCount": 0,
+          "itpTotalCount": 0,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "already_claimed",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "lot_already_claimed",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance complete",
+            "detail": "This lot passed conformance before being included in a progress claim.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "already_claimed",
+        "blockers": [
+          {
+            "code": "already_claimed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Fully claimed",
+            "detail": "This lot has been claimed in full and cannot be claimed again.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": 5000,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 0,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": []
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 0,
+        "supportCount": 1,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "L20-conformed-no-budget": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "L20-conformed-no-budget",
+      "status": "conformed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": false,
+          "hasPassingTest": false,
+          "outstandingTestItems": [],
+          "testResults": [],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true
+        }
+      },
+      "conformance": {
+        "state": "already_conformed",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "lot_already_conformed",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Lot already conformed",
+            "detail": "This lot is conformed and can be considered for claiming if commercial rules are met.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "missing_budget",
+            "severity": "blocker",
+            "area": "budget",
+            "title": "Budget missing",
+            "detail": "Add a lot budget before including this lot in a progress claim.",
+            "blocksAction": true,
+            "actionLabel": "Add budget"
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 0,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  }
+}
