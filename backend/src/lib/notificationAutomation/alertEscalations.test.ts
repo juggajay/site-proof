@@ -41,7 +41,6 @@ describe('processAlertEscalations stale hold-point routing', () => {
         },
       } as unknown as AlertEscalationAutomationDependencies['prisma'],
       hourMs: 60 * 60 * 1000,
-      defaultJobLimit: 100,
       findEscalationUsers,
       notifyUsers,
     };

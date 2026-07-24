@@ -360,7 +360,6 @@ const systemAutomationDependencies = {
 const alertEscalationDependencies = {
   prisma,
   hourMs: HOUR_MS,
-  defaultJobLimit: DEFAULT_JOB_LIMIT,
   findEscalationUsers,
   notifyUsers,
 } satisfies AlertEscalationAutomationDependencies;
@@ -398,7 +397,11 @@ export async function processSystemAlertsWithLock(
 }
 
 export async function processAlertEscalations(
-  options: NotificationAutomationJobOptions & { alertIds?: string[] } = {},
+  options: NotificationAutomationJobOptions & {
+    alertIds?: string[];
+    batchSize?: number;
+    sendCap?: number;
+  } = {},
 ): Promise<AlertEscalationJobResult> {
   return processAlertEscalationsJob(options, alertEscalationDependencies);
 }
