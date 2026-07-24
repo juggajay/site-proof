@@ -2,7 +2,13 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import type { ReactNode } from 'react';
-import { ROLE_GROUPS, hasRoleInGroup, isSubcontractorRole } from '@/lib/roles';
+import {
+  ROLE_GROUPS,
+  formatRoleDisplayList,
+  getRoleDisplayName,
+  hasRoleInGroup,
+  isSubcontractorRole,
+} from '@/lib/roles';
 import {
   getCompanyRole,
   getProjectScopedRole,
@@ -64,6 +70,12 @@ export function RoleProtectedRoute({
           You don't have permission to access this page. Contact your administrator if you believe
           this is an error.
         </p>
+        {allowedRoles.length > 0 && (
+          <p className="text-sm text-muted-foreground text-center max-w-md">
+            Requires {formatRoleDisplayList(allowedRoles)}. Your role:{' '}
+            {userRole ? getRoleDisplayName(userRole) : 'none'}.
+          </p>
+        )}
         <button
           onClick={() => navigate(_redirectTo)}
           className="mt-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"

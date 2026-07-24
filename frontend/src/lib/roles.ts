@@ -235,3 +235,30 @@ export function canDeleteLots(role: string | undefined | null): boolean {
 export function canManageItpTemplates(role: string | undefined | null): boolean {
   return hasRoleInGroup(role, ROLE_GROUPS.ITP_TEMPLATE_MANAGERS);
 }
+
+/**
+ * Human-readable, comma-and-"or" joined list of role display names.
+ * e.g. ['owner', 'admin', 'project_manager'] -> "Owner, Administrator or Project Manager".
+ */
+export function formatRoleDisplayList(roles: readonly string[]): string {
+  const names = roles.map(getRoleDisplayName);
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+}
+
+/**
+ * Explains why the current role is denied a capability gated by a role group.
+ * Returns null when the role IS in the group (nothing to explain — access granted).
+ * e.g. "Requires a commercial role (Owner, Administrator or Project Manager). Your role: Site Engineer."
+ * Derives entirely from the canonical ROLE_GROUPS + getRoleDisplayName, so wording
+ * never drifts from the gate it explains.
+ */
+export function describeRoleGroupRequirement(
+  role: string | undefined | null,
+  group: readonly string[],
+  capabilityLabel: string,
+): string | null {
+  if (hasRoleInGroup(role, group)) return null;
+  const current = role ? getRoleDisplayName(role) : 'no project role';
+  return `Requires ${capabilityLabel} (${formatRoleDisplayList(group)}). Your role: ${current}.`;
+}
