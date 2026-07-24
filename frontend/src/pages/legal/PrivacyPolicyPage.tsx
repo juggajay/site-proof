@@ -15,7 +15,7 @@ import {
 import { LegalContactCard } from './LegalContactCard';
 
 export function PrivacyPolicyPage() {
-  const lastUpdated = 'January 18, 2026';
+  const lastUpdated = 'July 24, 2026';
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -160,9 +160,12 @@ export function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-1">
               <li>Application hosting and database infrastructure (Railway)</li>
+              <li>Web application delivery and hosting (Vercel)</li>
               <li>File and photo storage (Supabase)</li>
               <li>Transactional email delivery (Resend)</li>
               <li>AI document processing, such as reading drawings and certificates (Anthropic)</li>
+              <li>Optional sign-in with your Google account (Google)</li>
+              <li>Map imagery and satellite tiles on the site map (MapTiler)</li>
               <li>
                 Early-access form processing on our public website (Formspree) — used only to
                 deliver your enquiry to us

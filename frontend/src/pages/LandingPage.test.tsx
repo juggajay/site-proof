@@ -3,9 +3,16 @@
  * at the mounted /login route (App.tsx). The page uses plain anchors (no
  * react-router), so no Router is needed here.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LandingPage } from './LandingPage';
+
+// The form posts to Formspree via fetchWithTimeout; mock it so the failure
+// path can be driven without a network.
+vi.mock('@/lib/fetchWithTimeout', () => ({
+  fetchWithTimeout: vi.fn(),
+}));
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 
 // The page's mount effect calls matchMedia + IntersectionObserver, which jsdom
 // does not implement. Stub the minimum surface the effect touches.
@@ -66,5 +73,26 @@ describe('LandingPage', () => {
     render(<LandingPage />);
     const alert = screen.getByRole('alert', { hidden: true });
     expect(alert).toHaveTextContent(/Something went wrong/);
+  });
+
+  // Real failure drive: fill the form, submission rejects, the alert becomes
+  // VISIBLE (not hidden:true) — i.e. actually announced.
+  it('shows the alert after a failed submission', async () => {
+    vi.mocked(fetchWithTimeout).mockRejectedValueOnce(new Error('network down'));
+    render(<LandingPage />);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Jay Tester' } });
+    fireEvent.change(screen.getByLabelText('Work email'), { target: { value: 'jay@example.com' } });
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: 'ABC Civil' } });
+    const stateSelect = screen.getByLabelText('State') as HTMLSelectElement;
+    fireEvent.change(stateSelect, { target: { value: stateSelect.options[1].value } });
+    const painSelect = screen.getByLabelText('What hurts most right now?') as HTMLSelectElement;
+    fireEvent.change(painSelect, { target: { value: painSelect.options[1].value } });
+
+    fireEvent.submit(screen.getByRole('button', { name: /Request early access/ }).closest('form')!);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Something went wrong/);
+    });
   });
 });
