@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
-type SearchScope = 'lots' | 'ncrs' | 'tests';
+type SearchScope = 'lots' | 'ncrs' | 'tests' | 'documents' | 'drawings';
 
 const project = {
   id: E2E_PROJECT_ID,
@@ -42,6 +42,8 @@ async function mockGlobalSearchApi(
     lots: [],
     ncrs: [],
     tests: [],
+    documents: [],
+    drawings: [],
   };
   let lotsRequestCount = 0;
 
@@ -162,6 +164,64 @@ async function mockGlobalSearchApi(
       return;
     }
 
+    if (url.pathname === `/api/documents/${E2E_PROJECT_ID}`) {
+      requests.documents.push({
+        search: url.searchParams.get('search'),
+        limit: url.searchParams.get('limit'),
+      });
+      if (failingScopes.has('documents')) {
+        await json({ message: 'Documents unavailable' }, 503);
+        return;
+      }
+      const documents = options.noResults
+        ? []
+        : [
+            {
+              id: 'document-search-1',
+              projectId: E2E_PROJECT_ID,
+              filename: 'ALPHA-spec.pdf',
+              category: 'specification',
+              documentType: 'specification',
+            },
+          ];
+      await json({
+        documents,
+        total: documents.length,
+        categories: {},
+        pagination: { total: documents.length, page: 1, limit: 10, totalPages: 1 },
+      });
+      return;
+    }
+
+    if (url.pathname === `/api/drawings/${E2E_PROJECT_ID}`) {
+      requests.drawings.push({
+        search: url.searchParams.get('search'),
+        limit: url.searchParams.get('limit'),
+      });
+      if (failingScopes.has('drawings')) {
+        await json({ message: 'Drawings unavailable' }, 503);
+        return;
+      }
+      const drawings = options.noResults
+        ? []
+        : [
+            {
+              id: 'drawing-search-1',
+              projectId: E2E_PROJECT_ID,
+              drawingNumber: 'ALPHA-DWG-001',
+              title: 'Alpha zone plan',
+              revision: 'A',
+              status: 'for_construction',
+            },
+          ];
+      await json({
+        drawings,
+        stats: { total: drawings.length, preliminary: 0, forConstruction: 1, asBuilt: 0 },
+        pagination: { total: drawings.length, page: 1, limit: 10, totalPages: 1 },
+      });
+      return;
+    }
+
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
@@ -190,9 +250,35 @@ test.describe('Global search', () => {
     await expect.poll(() => api.requests.lots.at(-1)).toEqual({ search: 'alpha', limit: '10' });
     await expect.poll(() => api.requests.ncrs.at(-1)).toEqual({ search: 'alpha', limit: '10' });
     await expect.poll(() => api.requests.tests.at(-1)).toEqual({ search: 'alpha', limit: '10' });
+    await expect
+      .poll(() => api.requests.documents.at(-1))
+      .toEqual({ search: 'alpha', limit: '10' });
+    await expect.poll(() => api.requests.drawings.at(-1)).toEqual({ search: 'alpha', limit: '10' });
+
+    // New scopes render alongside the originals.
+    await expect(page.getByRole('button', { name: /ALPHA-spec\.pdf/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /ALPHA-DWG-001/ })).toBeVisible();
 
     await page.getByRole('button', { name: /ALPHA-LOT-001/ }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/${E2E_PROJECT_ID}/lots/lot%2Fsearch%201$`));
+  });
+
+  test('navigates a document result to the documents register search deep link', async ({
+    page,
+  }) => {
+    await mockGlobalSearchApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}`);
+    await page.getByRole('button', { name: 'Search' }).click();
+    await page
+      .getByRole('dialog', { name: 'Global search' })
+      .getByRole('textbox', { name: 'Search' })
+      .fill('alpha');
+
+    await page.getByRole('button', { name: /ALPHA-spec\.pdf/ }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/projects/${E2E_PROJECT_ID}/documents\\?search=ALPHA-spec.pdf$`),
+    );
   });
 
   test('shows partial failure state without hiding successful results', async ({ page }) => {
@@ -211,7 +297,9 @@ test.describe('Global search', () => {
   });
 
   test('shows retryable failure instead of a false empty state', async ({ page }) => {
-    const api = await mockGlobalSearchApi(page, { failingScopes: ['lots', 'ncrs', 'tests'] });
+    const api = await mockGlobalSearchApi(page, {
+      failingScopes: ['lots', 'ncrs', 'tests', 'documents', 'drawings'],
+    });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
     await page.getByRole('button', { name: 'Search' }).click();

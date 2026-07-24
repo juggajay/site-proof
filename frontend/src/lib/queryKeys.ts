@@ -91,8 +91,11 @@ export const queryKeys = {
 
   // Search
   search: (term: string) => ['search', term] as const,
-  globalSearch: (projectId: string, term: string, scope: 'lots' | 'ncrs' | 'tests') =>
-    ['global-search', projectId, term, scope] as const,
+  globalSearch: (
+    projectId: string,
+    term: string,
+    scope: 'lots' | 'ncrs' | 'tests' | 'documents' | 'drawings',
+  ) => ['global-search', projectId, term, scope] as const,
 
   // Foreman
   foremanDashboard: (projectId: string) => ['foreman-dashboard', projectId] as const,

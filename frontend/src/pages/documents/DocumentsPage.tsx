@@ -95,6 +95,7 @@ export function DocumentsPage() {
   const deletingDocumentRef = useRef<string | null>(null);
   const favouriteDocumentRef = useRef<string | null>(null);
   const queryLotId = searchParams.get('lotId') || '';
+  const querySearch = searchParams.get('search') || '';
   const shouldOpenUploadFromQuery = searchParams.get('upload') === '1';
 
   const currentProjectRole = useCurrentProjectRole(projectId);
@@ -109,8 +110,8 @@ export function DocumentsPage() {
   const [filterLot, setFilterLot] = useState(() => queryLotId);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [committedSearch, setCommittedSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState(querySearch);
+  const [committedSearch, setCommittedSearch] = useState(querySearch);
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -146,6 +147,13 @@ export function DocumentsPage() {
     setFilterLot(queryLotId);
     setCurrentPage(1);
   }, [queryLotId]);
+
+  // Seed the search box from a ?search= deep link (e.g. global search → a document).
+  useEffect(() => {
+    setSearchQuery(querySearch);
+    setCommittedSearch(querySearch);
+    setCurrentPage(1);
+  }, [querySearch]);
 
   useEffect(() => {
     if (!shouldOpenUploadFromQuery || appliedUploadQueryRef.current === uploadQueryKey) return;
