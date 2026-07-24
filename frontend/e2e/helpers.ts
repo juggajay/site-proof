@@ -38,6 +38,24 @@ function hasSubcontractorProjectIdentity(user: typeof E2E_ADMIN_USER): boolean {
   return roles.some((role) => role.toLowerCase().startsWith('subcontractor'));
 }
 
+// Real-backend specs log in for real and never call mockAuthenticatedUserState,
+// so its localStorage seed (below) doesn't apply. Without these two flags the
+// cookie-consent banner and the Clancy first-run intro overlay bottom-of-page
+// controls and intercept clicks nondeterministically — the source of the
+// seeded-role-journeys timeout flakes. Seed them on any real-login context
+// (context-level: applies to pages created later AND future navigations).
+export async function seedRealSessionDefaults(context: {
+  addInitScript: (script: () => void) => Promise<void>;
+}): Promise<void> {
+  await context.addInitScript(() => {
+    window.localStorage.setItem('clancy-intro-seen', '1');
+    window.localStorage.setItem(
+      'cookie_consent',
+      JSON.stringify({ version: 'v1', accepted: true, timestamp: '2026-01-15T00:00:00.000Z' }),
+    );
+  });
+}
+
 export async function mockAuthenticatedUserState(
   page: Page,
   user = E2E_ADMIN_USER,

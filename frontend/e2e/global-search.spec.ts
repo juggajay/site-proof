@@ -180,7 +180,7 @@ test.describe('Global search', () => {
     const api = await mockGlobalSearchApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('button', { name: 'Quick search' }).click();
+    await page.getByRole('button', { name: 'Search' }).click();
     await page
       .getByRole('dialog', { name: 'Global search' })
       .getByRole('textbox', { name: 'Search' })
@@ -199,7 +199,7 @@ test.describe('Global search', () => {
     await mockGlobalSearchApi(page, { failingScopes: ['ncrs', 'tests'] });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('button', { name: 'Quick search' }).click();
+    await page.getByRole('button', { name: 'Search' }).click();
     await page
       .getByRole('dialog', { name: 'Global search' })
       .getByRole('textbox', { name: 'Search' })
@@ -214,7 +214,7 @@ test.describe('Global search', () => {
     const api = await mockGlobalSearchApi(page, { failingScopes: ['lots', 'ncrs', 'tests'] });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('button', { name: 'Quick search' }).click();
+    await page.getByRole('button', { name: 'Search' }).click();
     await page
       .getByRole('dialog', { name: 'Global search' })
       .getByRole('textbox', { name: 'Search' })
@@ -232,7 +232,7 @@ test.describe('Global search', () => {
     await mockGlobalSearchApi(page);
 
     await page.goto('/projects');
-    await page.getByRole('button', { name: 'Quick search' }).click();
+    await page.getByRole('button', { name: 'Search' }).click();
 
     await expect(page.getByText('Select a project to search')).toBeVisible();
   });

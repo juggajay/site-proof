@@ -344,7 +344,9 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(page.getByText('Unknown time')).toBeVisible();
     await expect(page.getByText('Lot LOT-007 status changed to in progress')).toBeVisible();
 
-    await expect(page.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+    // exact: the setup checklist copy ("...diaries, and reports.") also matches a
+    // substring "Reports"; target the quick-link precisely.
+    await expect(page.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(
       'href',
       `/projects/${E2E_PROJECT_ID}/reports`,
     );
