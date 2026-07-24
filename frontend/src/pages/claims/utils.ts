@@ -6,7 +6,7 @@
 import type { Claim, CertificationDueStatus, PaymentDueStatus, ConformedLot } from './types';
 import { SOPA_TIMEFRAMES } from './constants';
 import { isSopaNonWorkingDay, SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR } from './sopaBusinessDays';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv, type CsvBrandingContext } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 
@@ -259,11 +259,13 @@ export function getClaimIncrementError(value: string, remainingPercentage: numbe
   return null;
 }
 
-/** Export data as CSV file download */
+/** Export data as CSV file download with the shared branding preamble */
 export function exportChartDataToCSV(
   data: Record<string, unknown>[],
   filename: string,
   headers: string[],
+  registerName: string,
+  branding: CsvBrandingContext | null | undefined,
 ): void {
   const rows = data.map((row) =>
     headers.map((header) => {
@@ -276,5 +278,8 @@ export function exportChartDataToCSV(
     }),
   );
 
-  downloadCsv(`${filename}-${formatDateKey()}.csv`, [headers, ...rows]);
+  downloadBrandedCsv(`${filename}-${formatDateKey()}.csv`, registerName, branding, [
+    headers,
+    ...rows,
+  ]);
 }

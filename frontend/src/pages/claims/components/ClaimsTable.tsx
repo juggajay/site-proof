@@ -21,7 +21,7 @@ import {
   getCertificationDueStatus,
   getPaymentDueStatus,
 } from '../utils';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv, type CsvBrandingContext } from '@/lib/csv';
 import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
@@ -40,6 +40,7 @@ interface ClaimsTableProps {
   onCompletenessCheck: (claimId: string) => void;
   onEvidencePackage: (claimId: string) => void;
   onExportXero?: (claim: Claim) => void;
+  csvBranding?: CsvBrandingContext;
 }
 
 function getStatusBadge(status: string) {
@@ -149,14 +150,14 @@ function DisputeReadBack({ claim }: { claim: Claim }) {
   );
 }
 
-function downloadClaimCsv(claim: Claim) {
+function downloadClaimCsv(claim: Claim, branding?: CsvBrandingContext) {
   const paymentDue =
     claim.paymentDueDate ??
     (claim.submittedAt
       ? calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined)
       : null);
 
-  downloadCsv(`claim-${claim.claimNumber}.csv`, [
+  downloadBrandedCsv(`claim-${claim.claimNumber}.csv`, `Claim ${claim.claimNumber}`, branding, [
     [
       'Claim #',
       'Period Start',
@@ -198,6 +199,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
   onCompletenessCheck,
   onEvidencePackage,
   onExportXero,
+  csvBranding,
 }: ClaimsTableProps) {
   if (claims.length === 0) {
     return (
@@ -380,7 +382,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                         )}
                       </button>
                       <button
-                        onClick={() => downloadClaimCsv(claim)}
+                        onClick={() => downloadClaimCsv(claim, csvBranding)}
                         className="p-2 hover:bg-muted rounded-lg"
                         aria-label="Download CSV"
                         title="Download CSV"

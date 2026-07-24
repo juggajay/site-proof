@@ -3,10 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, extractErrorDetails } from '@/lib/errorHandling';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { queryKeys } from '@/lib/queryKeys';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import type { NCR } from '../types';
 
 const optionalTrimmed = (value?: string) => {
@@ -75,6 +76,7 @@ export function useNCRActions({
   closeModal,
 }: UseNCRActionsOptions): UseNCRActionsReturn {
   const queryClient = useQueryClient();
+  const csvBranding = useCsvBranding(projectId);
   const [actionLoading, setActionLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [copiedNcrId, setCopiedNcrId] = useState<string | null>(null);
@@ -371,9 +373,14 @@ export function useNCRActions({
         new Date(ncr.createdAt).toLocaleDateString('en-AU'),
         ncr.closedAt ? new Date(ncr.closedAt).toLocaleDateString('en-AU') : '-',
       ]);
-      downloadCsv(`ncr-register-${projectId || 'all'}-${formatDateKey()}.csv`, [headers, ...rows]);
+      downloadBrandedCsv(
+        `ncr-register-${projectId || 'all'}-${formatDateKey()}.csv`,
+        'NCR Register',
+        csvBranding,
+        [headers, ...rows],
+      );
     },
-    [projectId],
+    [projectId, csvBranding],
   );
 
   return {

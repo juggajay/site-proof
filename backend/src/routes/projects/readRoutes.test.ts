@@ -11,14 +11,17 @@ describe('buildProjectBrandingResponse', () => {
     logoUrl: 'https://example.test/logo.png',
   };
 
-  it('returns the full company block with the embedded logo when available', () => {
-    expect(buildProjectBrandingResponse(company, 'data:image/png;base64,AAA')).toEqual({
+  it('returns the full company block with the embedded logo and project name', () => {
+    expect(
+      buildProjectBrandingResponse(company, 'data:image/png;base64,AAA', 'Pacific Hwy Upgrade'),
+    ).toEqual({
       company: {
         name: 'Ryox Civil Pty Ltd',
         abn: '12 345 678 901',
         address: '1 Haul Rd, Sydney NSW',
         logoUrl: 'data:image/png;base64,AAA',
       },
+      projectName: 'Pacific Hwy Upgrade',
     });
   });
 
@@ -31,6 +34,7 @@ describe('buildProjectBrandingResponse', () => {
         address: '1 Haul Rd, Sydney NSW',
         logoUrl: 'https://example.test/logo.png',
       },
+      projectName: null,
     });
   });
 
@@ -44,7 +48,8 @@ describe('buildProjectBrandingResponse', () => {
         address: null,
         logoUrl: null,
       },
+      projectName: null,
     });
-    expect(buildProjectBrandingResponse(null, null)).toEqual({ company: null });
+    expect(buildProjectBrandingResponse(null, null)).toEqual({ company: null, projectName: null });
   });
 });

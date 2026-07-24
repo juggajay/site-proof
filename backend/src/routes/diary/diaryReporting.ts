@@ -2,8 +2,9 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { buildCsv } from '../../lib/csvSafe.js';
+import { buildCsv, buildCsvBrandingRows } from '../../lib/csvSafe.js';
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
+import { getProjectBrandingSource } from '../../lib/projectBranding.js';
 import { parseDiaryDate, parseDiaryRouteParam, requireDiaryReadAccess } from './diaryAccess.js';
 import { syncDiaryQaEvents } from './diaryQaSync.js';
 import {
@@ -351,7 +352,13 @@ router.get(
       d.impact || '',
     ]);
 
-    const csv = buildCsv([csvHeaders, ...csvRows]);
+    const brandingSource = await getProjectBrandingSource(projectId);
+    const brandingRows = buildCsvBrandingRows('Delay Register', {
+      companyName: brandingSource?.company?.name,
+      abn: brandingSource?.company?.abn,
+      projectName: brandingSource?.projectName,
+    });
+    const csv = buildCsv([...brandingRows, csvHeaders, ...csvRows]);
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=delay-register.csv');

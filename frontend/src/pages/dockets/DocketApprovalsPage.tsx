@@ -12,7 +12,8 @@ import type { DocketDetailPDFData } from '@/lib/pdfGenerator';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView';
 import { logError } from '@/lib/logger';
-import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
+import { buildScopedCsvFilename, downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import {
   type Docket,
   type DocketDetailResponse,
@@ -42,6 +43,7 @@ const EMPTY_DOCKETS: Docket[] = [];
 
 export function DocketApprovalsPage() {
   const { projectId } = useParams();
+  const csvBranding = useCsvBranding(projectId);
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -366,10 +368,12 @@ export function DocketApprovalsPage() {
       ];
     });
 
-    downloadCsv(buildScopedCsvFilename('dockets', projectInfo?.name || projectId), [
-      headers,
-      ...rows,
-    ]);
+    downloadBrandedCsv(
+      buildScopedCsvFilename('dockets', projectInfo?.name || projectId),
+      'Docket Register',
+      { ...csvBranding, projectName: projectInfo?.name ?? csvBranding.projectName },
+      [headers, ...rows],
+    );
   };
 
   const handlePrintDocket = async (docket: Docket) => {

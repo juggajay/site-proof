@@ -990,6 +990,19 @@ describe('Daily Diary API', () => {
       expect(res.text).not.toContain(`"${description}"`);
       expect(res.text).not.toContain(`"${impact}"`);
     });
+
+    it('prefixes the delay CSV with the company/project branding preamble', async () => {
+      const res = await request(app)
+        .get(`/api/diary/project/${projectId}/delays/export`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      const lines = res.text.split('\n');
+      // Two `#`-prefixed single-field rows sit above the column header.
+      expect(lines[0]).toMatch(/^"# .*Diary Test Company.*Diary Test Project.*"$/);
+      expect(lines[1]).toMatch(/^"# Generated \d{4}-\d{2}-\d{2} — Delay Register — CIVOS"$/);
+      expect(lines[2]).toContain('"Date"');
+    });
   });
 
   describe('Diary item updates', () => {

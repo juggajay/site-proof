@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts';
+import type { CsvBrandingContext } from '@/lib/csv';
 import type { Claim } from './types';
 import type {
   ClaimSummaryTotals,
@@ -120,6 +121,7 @@ interface ClaimsMainContentProps {
   onCompletenessCheck: (claimId: string) => void;
   onEvidencePackage: (claimId: string) => void;
   onExportXero?: (claim: Claim) => void;
+  csvBranding?: CsvBrandingContext;
 }
 
 export function ClaimsMainContent({
@@ -142,6 +144,7 @@ export function ClaimsMainContent({
   onCompletenessCheck,
   onEvidencePackage,
   onExportXero,
+  csvBranding,
 }: ClaimsMainContentProps) {
   if (loadError) return null;
 
@@ -177,6 +180,7 @@ export function ClaimsMainContent({
         onCompletenessCheck={onCompletenessCheck}
         onEvidencePackage={onEvidencePackage}
         onExportXero={onExportXero}
+        csvBranding={csvBranding}
       />
     </>
   );

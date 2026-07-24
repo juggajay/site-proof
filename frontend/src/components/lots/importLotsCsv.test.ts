@@ -44,6 +44,21 @@ describe('importLotsCsv', () => {
     expect(parseLotsCsv('lot_number,description')).toEqual([]);
   });
 
+  it('skips a leading branding preamble so a branded register re-imports', () => {
+    const lots = parseLotsCsv(
+      [
+        '"# Ryox Civil (ABN 12 345)  —  Pacific Hwy"',
+        '"# Generated 2026-07-25 — Lot Register — CIVOS"',
+        'lot,desc,start,end,activity,status',
+        '"#LOT-9","Note # in data",0,50,Earthworks,pending',
+      ].join('\n'),
+    );
+
+    expect(lots).toHaveLength(1);
+    // A `#` inside a data row is preserved — only the top comment block is skipped.
+    expect(lots[0].lotNumber).toBe('#LOT-9');
+  });
+
   it('validates required lot numbers, duplicate lots, and chainage ordering', () => {
     const result = validateLots([
       validLot({ lotNumber: '' }),
