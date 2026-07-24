@@ -7,14 +7,14 @@
 // trackEvent, and the flusher is mounted only in the office shell
 // (ProtectedAppShell) — field shells (/m/*, /p/*) never emit.
 //
-// We use fetch({ keepalive }) rather than navigator.sendBeacon because the API
-// authenticates via an Authorization: Bearer header, which sendBeacon cannot
-// set. keepalive gives the same survives-page-unload behaviour while carrying
-// the auth header. We deliberately do NOT use apiFetch here: its 401 handling
-// bounces the user to the login screen, which telemetry must never trigger.
+// We go through authFetch (the sanctioned API wrapper) with { keepalive } rather
+// than navigator.sendBeacon: the API authenticates via an Authorization: Bearer
+// header, which sendBeacon cannot set. keepalive gives the same survives-page-
+// unload behaviour while carrying the auth header. We use authFetch, not
+// apiFetch, so a non-2xx never throws an ApiError into this fire-and-forget path
+// — the response is simply ignored.
 
-import { getAuthToken } from './api';
-import { apiUrl } from './config';
+import { authFetch, getAuthToken } from './api';
 
 export type ProductEventMetadata = {
   activityType?: string;
@@ -40,12 +40,12 @@ export function trackEvent(event: string, step?: string, metadata?: ProductEvent
 }
 
 async function postBatch(events: QueuedEvent[], keepalive: boolean): Promise<void> {
-  const token = getAuthToken();
-  if (!token) return;
+  // Skip entirely when logged out: no point issuing a request that only 401s.
+  if (!getAuthToken()) return;
   try {
-    await fetch(apiUrl('/api/product-events'), {
+    await authFetch('/api/product-events', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ events }),
       keepalive,
     });
