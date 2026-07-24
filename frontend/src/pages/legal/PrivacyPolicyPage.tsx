@@ -8,6 +8,7 @@ import {
   Eye,
   Database,
   Clock,
+  Server,
   UserCheck,
   Mail,
 } from 'lucide-react';
@@ -145,6 +146,29 @@ export function PrivacyPolicyPage() {
               the Internet or electronic storage is 100% secure. We cannot guarantee absolute
               security.
             </p>
+          </section>
+
+          {/* Third-Party Service Providers */}
+          <section className="mb-8">
+            <div className="flex items-center gap-2 text-lg font-semibold mb-3">
+              <Server className="h-5 w-5 text-primary" />
+              Third-Party Service Providers
+            </div>
+            <p className="text-muted-foreground mb-2">
+              CIVOS relies on a small set of service providers, each processing data only as needed
+              to deliver their function to us:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-1">
+              <li>Application hosting and database infrastructure (Railway)</li>
+              <li>File and photo storage (Supabase)</li>
+              <li>Transactional email delivery (Resend)</li>
+              <li>AI document processing, such as reading drawings and certificates (Anthropic)</li>
+              <li>
+                Early-access form processing on our public website (Formspree) — used only to
+                deliver your enquiry to us
+              </li>
+              <li>Error monitoring (Sentry)</li>
+            </ul>
           </section>
 
           {/* Data Retention */}
