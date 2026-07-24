@@ -25,6 +25,9 @@ export const RETENTION_POLICIES = {
 
   // Sync queue (processed items)
   processedSyncItems: 7,
+
+  // Product/UX telemetry (privacy-conscious: short window, not a compliance record)
+  productEvents: 180,
 };
 
 export const DAYS_TO_MS = 24 * 60 * 60 * 1000;
@@ -56,6 +59,7 @@ export interface RetentionApplyResult {
   documentSignedUrlTokens: number;
   holdPointReleaseTokens: number;
   revokedAuthTokens: number;
+  productEvents: number;
   totalDeleted: number;
 }
 
@@ -67,6 +71,7 @@ type RetentionPrismaClient = Pick<
   | 'documentSignedUrlToken'
   | 'holdPointReleaseToken'
   | 'revokedAuthToken'
+  | 'productEvent'
 >;
 
 /**
@@ -112,6 +117,13 @@ export async function applyRetentionPolicies(
     await client.revokedAuthToken.deleteMany({ where: { expiresAt: { lt: now } } })
   ).count;
 
+  const productEventsCutoff = new Date(
+    now.getTime() - RETENTION_POLICIES.productEvents * DAYS_TO_MS,
+  );
+  const productEvents = (
+    await client.productEvent.deleteMany({ where: { createdAt: { lt: productEventsCutoff } } })
+  ).count;
+
   return {
     passwordResetTokens,
     emailVerificationTokens,
@@ -119,12 +131,14 @@ export async function applyRetentionPolicies(
     documentSignedUrlTokens,
     holdPointReleaseTokens,
     revokedAuthTokens,
+    productEvents,
     totalDeleted:
       passwordResetTokens +
       emailVerificationTokens +
       processedSyncItems +
       documentSignedUrlTokens +
       holdPointReleaseTokens +
-      revokedAuthTokens,
+      revokedAuthTokens +
+      productEvents,
   };
 }

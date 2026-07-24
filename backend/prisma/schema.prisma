@@ -86,6 +86,7 @@ model User {
   documentSignedUrlTokens     DocumentSignedUrlToken[]
   notifications               Notification[]
   auditLogs                   AuditLog[]
+  productEvents               ProductEvent[]
   syncQueues                  SyncQueue[]
   preparedClaims              ProgressClaim[]
   createdVariations           Variation[]                  @relation("CreatedVariations")
@@ -403,6 +404,7 @@ model Project {
   notifications               Notification[]
   notificationAlerts          NotificationAlert[]
   auditLogs                   AuditLog[]
+  productEvents               ProductEvent[]
   testResults                 TestResult[]
   lotSubcontractorAssignments LotSubcontractorAssignment[]
   scheduledReports            ScheduledReport[]
@@ -1650,6 +1652,39 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+/// Privacy-conscious UX/product telemetry. Deliberately SEPARATE from AuditLog:
+/// AuditLog is a compliance artifact in a QA-evidence product and must stay pure,
+/// so funnel/UX events live here with independent (short) retention.
+///
+/// Privacy posture — what is NOT collected, by construction:
+///   - NO IP address, NO user agent (unlike AuditLog, which keeps both).
+///   - NO free-text: `metadata` holds only server-whitelisted, structured keys
+///     validated per-event (see lib/productEvents.ts). No page URLs / query
+///     strings, no message bodies, no names.
+///   - `event` names are rejected unless present in the registered catalog, so
+///     the table cannot fill with arbitrary strings.
+/// userId/companyId are derived server-side from the authenticated user, never
+/// from the client body.
+model ProductEvent {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  projectId String?  @map("project_id")
+  companyId String?  @map("company_id")
+  event     String // dot-namespaced, catalog-registered, e.g. 'lot_create.opened'
+  step      String?
+  metadata  Json? // structured, whitelisted keys only — never free text
+  clientTs  DateTime? @map("client_ts")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([event, createdAt])
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
+  @@map("product_events")
 }
 
 model SyncQueue {

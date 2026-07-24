@@ -6,6 +6,7 @@ import {
   useKeyboardShortcutsHelp,
 } from '@/components/KeyboardShortcutsHelp';
 import { ClancyWidget } from '@/components/copilot/ClancyWidget';
+import { ProductEventsFlusher } from '@/components/ProductEventsFlusher';
 import { OnboardingTour } from '@/components/OnboardingTour';
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { useAuth } from '@/lib/auth';
@@ -73,6 +74,7 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
       <OnboardingTour enabled={showGeneralOnboarding} autoShow={autoShowGeneralOnboarding} />
       <SessionTimeoutWarning />
       <ClancyWidget />
+      <ProductEventsFlusher />
     </>
   );
 }

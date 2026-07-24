@@ -18,6 +18,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Lot } from '../lotsPageTypes';
 import { logError } from '@/lib/logger';
+import { trackEvent } from '@/lib/productEvents';
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
 import { formatActivityLabel, isCanonicalActivitySlug } from '@/lib/activityTaxonomy';
 import { useAiStatus } from '@/hooks/useAiStatus';
@@ -177,6 +178,15 @@ export function CreateLotModal({
     setSelectedTemplateId(suggestedTemplateId ?? '');
   }, [isOpen, suggestedTemplateId, activityType]);
 
+  // Funnel: modal opened. Fire once per open (deps intentionally just [isOpen]);
+  // activityType is not yet user-chosen here, so no metadata.
+  useEffect(() => {
+    if (isOpen) {
+      trackEvent('lot_create.opened');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   const handleClose = () => {
     setSelectedTemplateId('');
     setLookupError(null);
@@ -188,6 +198,9 @@ export function CreateLotModal({
     if (creating) return;
 
     setCreating(true);
+    const usedSuggestedTemplate =
+      selectedTemplateId !== '' && suggestedTemplates.some((t) => t.id === selectedTemplateId);
+    trackEvent('lot_create.submitted', undefined, { activityType: formData.activityType });
 
     try {
       const chainageStart = parseChainageInput(formData.chainageStart);
@@ -227,8 +240,14 @@ export function CreateLotModal({
         variant: 'success',
       });
 
+      trackEvent('lot_create.succeeded', undefined, {
+        activityType: formData.activityType,
+        usedSuggestedTemplate,
+      });
+
       onSuccess(createdLot);
     } catch (err) {
+      trackEvent('lot_create.failed', undefined, { activityType: formData.activityType });
       const message = handleApiError(err, 'Failed to create lot');
       setError('root', { message });
     } finally {
