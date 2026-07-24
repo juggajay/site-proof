@@ -188,6 +188,25 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
     });
   }
 
+  // Check product/UX telemetry events past the 180-day window
+  const productEventsCutoff = new Date(
+    now.getTime() - RETENTION_POLICIES.productEvents * DAYS_TO_MS,
+  );
+  const oldProductEvents = await prisma.productEvent.count({
+    where: { createdAt: { lt: productEventsCutoff } },
+  });
+  totalChecked += oldProductEvents;
+  if (oldProductEvents > 0) {
+    toDelete += oldProductEvents;
+    findings.push({
+      category: 'Product Events (180+ days old)',
+      count: oldProductEvents,
+      oldestDate: productEventsCutoff,
+      action: 'delete',
+      reason: `UX telemetry older than ${RETENTION_POLICIES.productEvents} days is deleted (not a compliance record)`,
+    });
+  }
+
   // Check audit logs (report only - don't delete within retention period)
   const auditLogCutoff = new Date(now.getTime() - RETENTION_POLICIES.auditLogs * DAYS_TO_MS);
   const retainedAuditLogs = await prisma.auditLog.count({
@@ -292,14 +311,15 @@ async function runRetentionApply(): Promise<void> {
     console.log(`✅ Deleted ${result.processedSyncItems} processed sync queue items`);
   }
   if (result.documentSignedUrlTokens > 0) {
-    console.log(
-      `✅ Deleted ${result.documentSignedUrlTokens} expired document signed-link tokens`,
-    );
+    console.log(`✅ Deleted ${result.documentSignedUrlTokens} expired document signed-link tokens`);
   }
   if (result.holdPointReleaseTokens > 0) {
     console.log(
       `✅ Deleted ${result.holdPointReleaseTokens} expired or old used hold point release-link tokens`,
     );
+  }
+  if (result.productEvents > 0) {
+    console.log(`✅ Deleted ${result.productEvents} product events older than 180 days`);
   }
 
   // Note: Notifications are retained until a real archive field/table exists

@@ -40,6 +40,7 @@ import { oauthRouter } from './routes/oauth.js';
 import webhooksRouter from './routes/webhooks.js';
 import { pushNotificationsRouter } from './routes/pushNotifications.js';
 import { aiStatusRouter } from './routes/aiStatus.js';
+import { productEventsRouter } from './routes/productEvents.js';
 import {
   buildBackendUrl,
   getExpressTrustProxySetting,
@@ -171,6 +172,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/push', pushNotificationsRouter); // Feature #657: Mobile push notifications
   app.use('/api/ai', aiStatusRouter); // Wave 0: expose AI-extraction availability to the UI
   app.use('/api/copilot', chatRouter); // Clancy: company-level chat copilot (works before any project)
+  app.use('/api/product-events', productEventsRouter); // A6: privacy-conscious UX telemetry ingestion
 
   // Error handling
   app.use(errorHandler);

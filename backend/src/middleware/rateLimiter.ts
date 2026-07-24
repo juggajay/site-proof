@@ -30,7 +30,13 @@ interface RateLimitResult {
   resetSeconds: number;
 }
 
-type RateLimitScope = 'api' | 'auth' | 'support' | 'verification-resend' | 'chat';
+type RateLimitScope =
+  | 'api'
+  | 'auth'
+  | 'support'
+  | 'verification-resend'
+  | 'chat'
+  | 'product-events';
 type AuthLockoutResult = { locked: boolean; remainingSeconds: number };
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
@@ -53,6 +59,8 @@ const VERIFICATION_RESEND_MAX_REQUESTS = readPositiveIntegerEnv(
 const SUPPORT_WINDOW_MS = 60 * 1000;
 const CHAT_WINDOW_MS = 60 * 1000;
 const CHAT_MAX_REQUESTS = readPositiveIntegerEnv('CHAT_RATE_LIMIT_MAX', 20);
+const PRODUCT_EVENTS_WINDOW_MS = 60 * 1000;
+const PRODUCT_EVENTS_MAX_REQUESTS = readPositiveIntegerEnv('PRODUCT_EVENTS_RATE_LIMIT_MAX', 60);
 const CLEANUP_INTERVAL = 5 * 60 * 1000;
 const MAX_MAP_SIZE = 10000;
 const LOCKOUT_THRESHOLD = readPositiveIntegerEnv('AUTH_LOCKOUT_THRESHOLD', 5);
@@ -585,4 +593,34 @@ async function handleChatRateLimit(req: Request, res: Response, next: NextFuncti
  */
 export function chatRateLimiter(req: Request, res: Response, next: NextFunction) {
   void handleChatRateLimit(req, res, next).catch(next);
+}
+
+async function handleProductEventsRateLimit(req: Request, res: Response, next: NextFunction) {
+  // requireAuth runs first, so key per user; fall back to source IP.
+  const identifier = req.user?.id || getClientIp(req);
+  const result = await consumeRateLimit(
+    'product-events',
+    identifier,
+    PRODUCT_EVENTS_WINDOW_MS,
+    PRODUCT_EVENTS_MAX_REQUESTS,
+  );
+  setRateLimitHeaders(res, PRODUCT_EVENTS_MAX_REQUESTS, result.remaining, result.resetSeconds);
+
+  if (!result.allowed) {
+    throw new AppError(
+      429,
+      `Too many telemetry requests. Maximum ${PRODUCT_EVENTS_MAX_REQUESTS} per minute.`,
+      'RATE_LIMITED',
+      { retryAfter: result.resetSeconds },
+    );
+  }
+
+  next();
+}
+
+/**
+ * Per-user limiter for the product-events telemetry ingestion endpoint.
+ */
+export function productEventsRateLimiter(req: Request, res: Response, next: NextFunction) {
+  void handleProductEventsRateLimit(req, res, next).catch(next);
 }

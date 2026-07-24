@@ -9,6 +9,7 @@ function makeClient() {
     documentSignedUrlToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     holdPointReleaseToken: { deleteMany: vi.fn().mockResolvedValue({ count: 4 }) },
     revokedAuthToken: { deleteMany: vi.fn().mockResolvedValue({ count: 5 }) },
+    productEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 6 }) },
   };
 }
 
@@ -42,9 +43,15 @@ describe('applyRetentionPolicies (GAP-B/C)', () => {
       where: { expiresAt: { lt: expect.any(Date) } },
     });
 
-    expect(result.totalDeleted).toBe(2 + 1 + 3 + 0 + 4 + 5);
+    // A6: product/UX telemetry purged past its 180-day window.
+    expect(client.productEvent.deleteMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: expect.any(Date) } },
+    });
+
+    expect(result.totalDeleted).toBe(2 + 1 + 3 + 0 + 4 + 5 + 6);
     expect(result.holdPointReleaseTokens).toBe(4);
     expect(result.passwordResetTokens).toBe(2);
     expect(result.revokedAuthTokens).toBe(5);
+    expect(result.productEvents).toBe(6);
   });
 });
