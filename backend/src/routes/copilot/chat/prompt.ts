@@ -54,7 +54,10 @@ export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   },
   { path: 'drawings', label: 'project drawings' },
   { path: 'costs', label: 'project costs' },
-  { path: 'delays', label: 'delay register' },
+  {
+    path: 'delays',
+    label: 'delay register — delays rolled up from daily diaries, with hours lost and export',
+  },
   { path: 'areas', label: 'project areas setup' },
   { path: 'settings', label: 'project settings' },
 ];
@@ -67,7 +70,11 @@ export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
 // restriction in its label so Clancy can warn a PM before sending them.
 // `path` is relative to the app root (no /projects prefix).
 export const TOP_LEVEL_PAGES: ReadonlyArray<{ path: string; label: string }> = [
-  { path: 'portfolio', label: 'portfolio — cross-project rollup dashboard' },
+  {
+    path: 'portfolio',
+    label:
+      'portfolio — cross-project rollup: status and timeline health, cash flow summary, critical NCRs, and projects at risk',
+  },
   {
     path: 'notifications',
     label: 'notifications — pending approvals, queries, and workflow items needing attention',
@@ -76,12 +83,16 @@ export const TOP_LEVEL_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   {
     path: 'company-settings',
     label:
-      'company settings — company profile, members, and commercial access (owner/admin only; a project manager cannot open this)',
+      'company settings — company profile and logo, team members and roles, API keys and webhooks for integrations, billing and plan limits, and ownership transfer (owner/admin only; a project manager cannot open this)',
   },
   { path: 'docs', label: 'in-app documentation — how CIVOS works, module by module' },
   { path: 'support', label: 'support — raise a ticket or find contact details' },
-  { path: 'profile', label: 'your profile — name, password, and MFA' },
-  { path: 'settings', label: 'your personal preferences' },
+  { path: 'profile', label: 'your profile — name, avatar, and password' },
+  {
+    path: 'settings',
+    label:
+      'your personal preferences — theme, date and timezone formats, notification preferences, MFA, and privacy/data controls',
+  },
   { path: 'invitations', label: 'your pending project and company invitations' },
 ];
 

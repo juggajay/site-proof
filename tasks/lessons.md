@@ -300,3 +300,17 @@ when a feature is deliberately best-effort/silent, add at least one
 integration test through its full chain in the same PR (route-level
 DB-backed test + a seeded-journey step); unit tests on the core cannot see
 wiring loss. Closed by #1465.
+
+## 2026-07-24 — a user-facing surface Clancy can't explain is a docs gap first, a copilot gap second
+Live find (Jay): Clancy denied API keys + webhooks exist — the company-settings
+sections were never documented in `documentationContent.ts`, and Clancy's
+knowledge deliberately mirrors those docs (two-sided pinned tests), so he
+inherited the hole and honestly refused. The route-completeness pins
+(prompt.test.ts mirrors of App.tsx) only guard PAGES, not the sections ON a
+page. **Rule:** any PR that adds or meaningfully changes a user-facing surface
+(a page section, workflow, or capability a user could ask "what is this?"
+about) must update `frontend/src/pages/docs/documentationContent.ts` in the
+same PR and mirror it into `backend/src/routes/copilot/chat/productKnowledge.ts`
+(both pin tests will force the pair). If the surface lives on an existing page,
+also check the page's label in `prompt.ts` PROJECT_PAGES/TOP_LEVEL_PAGES still
+describes what's on it.
