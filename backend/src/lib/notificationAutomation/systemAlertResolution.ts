@@ -29,6 +29,10 @@ const DEFAULT_BATCH_SIZE = 500;
 const NCR_OPEN_STATUS_EXCLUDE = ['closed', 'closed_concession'];
 const STALE_HOLD_POINT_STATUSES = ['requested', 'scheduled'];
 const DIARY_DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+// Missing-diary alerts older than this drain unconditionally: nobody backfills a
+// diary for a long-past date, so the alert can never clear via a diary appearing
+// and has no remaining action value (stale beyond action value).
+const STALE_DIARY_MAX_AGE_DAYS = 30;
 
 type ResolutionPrisma = Pick<
   PrismaClient,
@@ -157,6 +161,12 @@ export async function resolveClearedSystemAlerts(
   const batchSize = deps.batchSize ?? DEFAULT_BATCH_SIZE;
   const now = options.now;
   const staleThreshold = new Date(now.getTime() - dayMs);
+  // UTC-midnight cutoff consistent with the module's dateKey handling. A diary
+  // whose date is strictly before this resolves on age alone. Boundary: exactly
+  // 30 days old (== cutoff) is NOT older-than-30-days, so it stays active.
+  const staleDiaryCutoff =
+    new Date(`${now.toISOString().split('T')[0]}T00:00:00.000Z`).getTime() -
+    STALE_DIARY_MAX_AGE_DAYS * dayMs;
 
   let cursor: string | undefined;
   let totalResolved = 0;
@@ -216,7 +226,11 @@ export async function resolveClearedSystemAlerts(
       if (!stillStaleHoldPoint.has(alert.entityId)) toResolve.push(alert.id);
     }
     for (const entry of diaryAlerts) {
-      if (existingDiaryKeys.has(`${entry.alert.projectId}|${entry.dateKey}`)) {
+      const diaryMidnight = new Date(`${entry.dateKey}T00:00:00.000Z`).getTime();
+      if (
+        existingDiaryKeys.has(`${entry.alert.projectId}|${entry.dateKey}`) ||
+        diaryMidnight < staleDiaryCutoff
+      ) {
         toResolve.push(entry.alert.id);
       }
     }
