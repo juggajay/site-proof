@@ -3,7 +3,6 @@ import {
   appendQueryParams,
   buildProjectEntityLink,
   formatDateKey,
-  getPreviousWorkingDay,
   getZonedMinutesOfDay,
   isDueForProjectTime,
   isWorkingDay,
@@ -85,12 +84,9 @@ describe('notification automation helpers', () => {
   it('keeps working-day date logic stable', () => {
     const monday = new Date(2026, 4, 11, 12, 0, 0, 0);
     const sunday = new Date(2026, 4, 10, 12, 0, 0, 0);
-    const previousWorkingDay = getPreviousWorkingDay(monday, '1,2,3,4,5');
 
     expect(isWorkingDay({ workingDays: '1,2,3,4,5' }, monday)).toBe(true);
     expect(isWorkingDay({ workingDays: '1,2,3,4,5' }, sunday)).toBe(false);
-    expect(previousWorkingDay.getDay()).toBe(5);
-    expect(previousWorkingDay.getHours()).toBe(0);
     expect(formatDateKey(new Date(Date.UTC(2026, 4, 8, 12, 0, 0, 0)))).toBe('2026-05-08');
   });
 

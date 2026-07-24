@@ -1,14 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import {
-  getAlertEmailNotificationType,
-  STALE_HOLD_POINT_ALERT_ROLES,
-} from '../notificationAlertConfig.js';
-import { buildProjectEntityLink, formatDateKey, getPreviousWorkingDay } from './helpers.js';
-import type { NotificationTypeWithTiming } from './preferences.js';
+import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
+import { buildProjectEntityLink } from './helpers.js';
 import { resolveClearedSystemAlerts } from './systemAlertResolution.js';
 
-const SYSTEM_DIARY_ALERT_ROLES = ['site_engineer', 'foreman', 'project_manager'];
 const ALERT_OWNER_ROLE_PRIORITY = [
   'project_manager',
   'quality_manager',
@@ -19,12 +14,12 @@ const ALERT_OWNER_ROLE_PRIORITY = [
   'foreman',
 ];
 
-type SystemAlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
+type SystemAlertType = 'overdue_ncr' | 'stale_hold_point';
 type SystemAlertSeverity = 'medium' | 'high' | 'critical';
 
 type SystemAutomationPrisma = Pick<
   PrismaClient,
-  'dailyDiary' | 'holdPoint' | 'nCR' | 'notification' | 'notificationAlert' | 'projectUser' | 'user'
+  'holdPoint' | 'nCR' | 'notification' | 'notificationAlert' | 'projectUser' | 'user'
 >;
 
 type SystemProjectForAutomation = {
@@ -48,7 +43,7 @@ type SystemAutomationJobOptions = {
 };
 
 export type CreatedSystemAlert = {
-  type: 'overdue_ncr' | 'stale_hold_point' | 'missing_diary';
+  type: 'overdue_ncr' | 'stale_hold_point';
   alertId: string;
   entityId: string;
   projectName: string;
@@ -62,17 +57,9 @@ export type SystemAlertAutomationResult = {
   alertsCreated: number;
   overdueNcrAlerts: number;
   staleHoldPointAlerts: number;
-  missingDiaryAlerts: number;
   notificationsCreated: number;
   skippedAlerts: number;
   createdAlerts: CreatedSystemAlert[];
-};
-
-type SystemNotificationDeliverySummary = {
-  inAppCreated: number;
-  emailsSent: number;
-  emailsQueued: number;
-  emailsFailed: number;
 };
 
 export type SystemAutomationDependencies = {
@@ -84,24 +71,6 @@ export type SystemAutomationDependencies = {
     projectId: string,
     roles: string[],
   ): Promise<SystemNotificationRecipient[]>;
-  notifyUsers(
-    users: SystemNotificationRecipient[],
-    inAppNotification: {
-      projectId: string | null;
-      type: string;
-      title: string;
-      message: string;
-      linkUrl?: string | null;
-      createdAt?: Date;
-    },
-    emailNotificationType: NotificationTypeWithTiming,
-    emailData: {
-      title: string;
-      message: string;
-      linkUrl?: string;
-      projectName?: string;
-    },
-  ): Promise<SystemNotificationDeliverySummary & { usersNotified: number }>;
 };
 
 function generateAlertId(): string {
@@ -214,7 +183,6 @@ export async function processSystemAlerts(
     alertsCreated: 0,
     overdueNcrAlerts: 0,
     staleHoldPointAlerts: 0,
-    missingDiaryAlerts: 0,
     notificationsCreated: 0,
     skippedAlerts: 0,
     createdAlerts: [],
@@ -385,92 +353,6 @@ export async function processSystemAlerts(
         severity,
         message: title,
       });
-    }
-
-    const missingDiaryDate = getPreviousWorkingDay(now, project.workingDays);
-    const missingDiaryDateKey = formatDateKey(missingDiaryDate);
-    const existingDiary = await deps.prisma.dailyDiary.findFirst({
-      where: {
-        projectId: project.id,
-        date: {
-          gte: missingDiaryDate,
-          lt: new Date(missingDiaryDate.getTime() + deps.dayMs),
-        },
-      },
-    });
-
-    if (!existingDiary) {
-      const missingDiaryEntityId = `diary-${project.id}-${missingDiaryDateKey}`;
-      const existingMissingAlert = await deps.prisma.notificationAlert.findFirst({
-        where: {
-          type: 'pending_approval',
-          entityType: 'diary',
-          projectId: project.id,
-          entityId: missingDiaryEntityId,
-          resolvedAt: null,
-        },
-      });
-
-      if (existingMissingAlert) {
-        result.skippedAlerts += 1;
-      } else if (!alertOwnerId) {
-        result.skippedAlerts += 1;
-      } else {
-        const title = `Missing Daily Diary: ${project.name}`;
-        const message = `No daily diary was submitted for ${project.name} on ${missingDiaryDateKey}. This affects project records and compliance.`;
-        const alertId = await createAlertRecord(deps.prisma, {
-          type: 'pending_approval',
-          severity: 'high',
-          title,
-          message,
-          entityId: missingDiaryEntityId,
-          entityType: 'diary',
-          projectId: project.id,
-          assignedToId: alertOwnerId,
-          createdAt: now,
-        });
-        if (alertId === null) {
-          result.skippedAlerts += 1;
-          continue;
-        }
-
-        // M60: this is the single missing-diary alert. It both escalates (via
-        // the notificationAlert record created above) AND notifies recipients
-        // in-app + by email through the shared notifyUsers helper, replacing the
-        // former duplicate emit in diaryAutomation.processMissingDiaryAlerts.
-        const users = await deps.findProjectUsersByRoles(project.id, SYSTEM_DIARY_ALERT_ROLES);
-        const linkUrl = `/projects/${project.id}/diary`;
-        const delivery = await deps.notifyUsers(
-          users,
-          {
-            projectId: project.id,
-            type: 'alert_missing_diary',
-            title,
-            message,
-            linkUrl,
-            createdAt: now,
-          },
-          getAlertEmailNotificationType({ type: 'pending_approval', entityType: 'diary' }),
-          {
-            title,
-            message,
-            projectName: project.name,
-            linkUrl,
-          },
-        );
-
-        result.alertsCreated += 1;
-        result.missingDiaryAlerts += 1;
-        result.notificationsCreated += delivery.inAppCreated;
-        result.createdAlerts.push({
-          type: 'missing_diary',
-          alertId,
-          entityId: missingDiaryEntityId,
-          projectName: project.name,
-          severity: 'high',
-          message: title,
-        });
-      }
     }
   }
 

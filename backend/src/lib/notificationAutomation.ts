@@ -90,7 +90,6 @@ export type SystemAlertJobResult = {
   alertsCreated: number;
   overdueNcrAlerts: number;
   staleHoldPointAlerts: number;
-  missingDiaryAlerts: number;
   notificationsCreated: number;
   skippedAlerts: number;
   createdAlerts: CreatedSystemAlert[];
@@ -354,7 +353,6 @@ const systemAutomationDependencies = {
   hourMs: HOUR_MS,
   findActiveProjects,
   findProjectUsersByRoles,
-  notifyUsers,
 } satisfies SystemAutomationDependencies;
 
 const alertEscalationDependencies = {

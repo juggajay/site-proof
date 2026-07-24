@@ -228,27 +228,31 @@ describe('resolveClearedSystemAlerts — stale_hold_point', () => {
   });
 });
 
-describe('resolveClearedSystemAlerts — missing diary (pending_approval/diary)', () => {
+describe('resolveClearedSystemAlerts — missing diary (retired pending_approval/diary type is swept)', () => {
   const now = new Date('2026-06-20T12:00:00.000Z');
   const dateKey = '2026-06-19';
 
-  function diaryAlert() {
-    return createAlert({
+  // The missing-diary alert is retired: the sweep resolves EVERY active
+  // pending_approval/diary row unconditionally — no diary lookup, no date
+  // parsing, no age gate — so the standing prod backlog drains silently.
+
+  it('resolves a recent diary alert even though no diary exists for that project+date', async () => {
+    const alertId = await createAlert({
       type: 'pending_approval',
       entityType: 'diary',
       entityId: `diary-${projectId}-${dateKey}`,
     });
-  }
 
-  it('does NOT resolve while no diary exists for that project+date', async () => {
-    const alertId = await diaryAlert();
-
-    expect(await runResolve(now)).toBe(0);
-    expect(await isResolved(alertId)).toBe(false);
+    expect(await runResolve(now)).toBe(1);
+    expect(await isResolved(alertId)).toBe(true);
   });
 
-  it('resolves once a diary exists for that project+date', async () => {
-    const alertId = await diaryAlert();
+  it('resolves a diary alert when a diary exists for that project+date', async () => {
+    const alertId = await createAlert({
+      type: 'pending_approval',
+      entityType: 'diary',
+      entityId: `diary-${projectId}-${dateKey}`,
+    });
     await prisma.dailyDiary.create({
       data: { projectId, date: new Date(`${dateKey}T00:00:00.000Z`), status: 'submitted' },
     });
@@ -257,55 +261,23 @@ describe('resolveClearedSystemAlerts — missing diary (pending_approval/diary)'
     expect(await isResolved(alertId)).toBe(true);
   });
 
-  // Age-based expiry: cutoff = now's UTC midnight (2026-06-20) - 30 days =
-  // 2026-05-21. A diary dated strictly before that resolves on age with NO
-  // diary present; on/after that stays active.
-  it('resolves a diary alert dated 31+ days ago with no diary present', async () => {
-    const oldKey = '2026-05-20'; // 31 days before 2026-06-20
+  it('resolves a diary alert with an unparseable entityId (type retired, no date needed)', async () => {
     const alertId = await createAlert({
       type: 'pending_approval',
       entityType: 'diary',
-      entityId: `diary-${projectId}-${oldKey}`,
+      entityId: nextId('legacy-entity'), // does not match diary-<project>-<date>
+      message: 'Missing diary for 2020-01-01',
     });
 
     expect(await runResolve(now)).toBe(1);
     expect(await isResolved(alertId)).toBe(true);
   });
 
-  it('does NOT resolve a diary alert within 30 days with no diary present', async () => {
-    // 15 days old — inside the window. Distinct key so an earlier test's diary
-    // (afterEach clears alerts, not diaries) can't accidentally resolve it.
-    const recentKey = '2026-06-05';
+  it('does NOT resolve a pending_approval alert whose entityType is not diary', async () => {
     const alertId = await createAlert({
       type: 'pending_approval',
-      entityType: 'diary',
-      entityId: `diary-${projectId}-${recentKey}`,
-    });
-
-    expect(await runResolve(now)).toBe(0);
-    expect(await isResolved(alertId)).toBe(false);
-  });
-
-  it('does NOT resolve at exactly 30 days old (boundary stays active)', async () => {
-    // 2026-05-21 == cutoff. Chosen side: exactly 30 days is NOT "older than 30
-    // days", so it stays active; only strictly-older (31+) drains on age.
-    const boundaryKey = '2026-05-21';
-    const alertId = await createAlert({
-      type: 'pending_approval',
-      entityType: 'diary',
-      entityId: `diary-${projectId}-${boundaryKey}`,
-    });
-
-    expect(await runResolve(now)).toBe(0);
-    expect(await isResolved(alertId)).toBe(false);
-  });
-
-  it('leaves a diary alert with an unparseable entityId untouched even with an old date in the message', async () => {
-    const alertId = await createAlert({
-      type: 'pending_approval',
-      entityType: 'diary',
-      entityId: nextId('legacy-entity'), // does not match diary-<project>-<date>
-      message: 'Missing diary for 2020-01-01',
+      entityType: 'docket',
+      entityId: nextId('docket-entity'),
     });
 
     expect(await runResolve(now)).toBe(0);

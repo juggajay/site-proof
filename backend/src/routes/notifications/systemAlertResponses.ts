@@ -1,7 +1,7 @@
 import type { AlertSeverity } from './alertMappers.js';
 
 export type SystemAlertResult = {
-  type: 'overdue_ncr' | 'stale_hold_point' | 'missing_diary';
+  type: 'overdue_ncr' | 'stale_hold_point';
   alertId: string;
   entityId?: string;
   projectName: string;
@@ -12,7 +12,6 @@ export type SystemAlertResult = {
 type SystemAlertSummary = {
   overdueNCRs: number;
   staleHoldPoints: number;
-  missingDiaries: number;
 };
 
 type ActiveSystemAlert = {

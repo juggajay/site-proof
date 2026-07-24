@@ -255,6 +255,13 @@ export async function processAlertEscalations(
       }
 
       const config = ALERT_ESCALATION_CONFIG[alert.type];
+      if (!config) {
+        // Type has no escalation config (e.g. retired pending_approval). The
+        // scan already excludes these via ESCALATABLE_TYPES; this guards the
+        // Partial index type.
+        result.skippedAlerts += 1;
+        continue;
+      }
       const newLevel = nextEscalationLevel(alert, config, deps.hourMs, now);
       if (newLevel === null) {
         result.skippedAlerts += 1;

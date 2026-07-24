@@ -194,11 +194,9 @@ describe('notification automation jobs', () => {
         where: { projectId: fixture.projectId, type: 'diary_reminder' },
       });
       expect(notifications).toHaveLength(2);
-      // 2 diary-reminder emails (foreman + PM) + 2 missing-diary emails. Since
-      // M60 the single missing-diary alert emails the full SYSTEM_DIARY_ALERT_ROLES
-      // set (site_engineer/foreman/project_manager → foreman + PM here), replacing
-      // the old PM-only diaryAutomation path.
-      expect(getQueuedEmails()).toHaveLength(4);
+      // 2 diary-reminder emails (foreman + PM). The missing-diary alert is
+      // retired, so no additional missing-diary emails are queued.
+      expect(getQueuedEmails()).toHaveLength(2);
     } finally {
       middlewareActive = false;
       clearTimeout(releaseFallback);
@@ -343,7 +341,6 @@ describe('notification automation jobs', () => {
 
       expect(result.projectsChecked).toBe(1);
       expect(result.overdueNcrAlerts).toBe(1);
-      expect(result.missingDiaryAlerts).toBe(0);
 
       const alert = await prisma.notificationAlert.findFirst({
         where: { projectId: fixture.projectId, type: 'overdue_ncr', entityId: ncr.id },

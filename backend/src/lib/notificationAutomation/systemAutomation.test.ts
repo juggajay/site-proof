@@ -29,9 +29,6 @@ function buildDeps(
           },
         ]),
       },
-      dailyDiary: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'diary-1' }),
-      },
       notificationAlert: {
         findFirst: vi.fn().mockResolvedValue(null),
         // Auto-resolution pass runs before creation; no active alerts to resolve.
@@ -56,19 +53,8 @@ function buildDeps(
       },
     ]),
     findProjectUsersByRoles: vi.fn().mockResolvedValue([]),
-    notifyUsers: vi.fn().mockResolvedValue({
-      inAppCreated: 0,
-      emailsSent: 0,
-      emailsQueued: 0,
-      emailsFailed: 0,
-      usersNotified: 0,
-    }),
     ...overrides,
   };
-}
-
-function emptyDelivery() {
-  return { inAppCreated: 0, emailsSent: 0, emailsQueued: 0, emailsFailed: 0, usersNotified: 0 };
 }
 
 describe('processSystemAlerts stale hold-point routing', () => {
@@ -135,46 +121,30 @@ describe('processSystemAlerts race handling (partial unique index on active aler
   });
 });
 
-describe('processSystemAlerts missing-diary alert (M60: single alert that emails AND escalates)', () => {
-  it('creates the escalatable alert record and notifies recipients via notifyUsers (in-app + email)', async () => {
-    const notifyUsers = vi
-      .fn()
-      .mockResolvedValue({ ...emptyDelivery(), inAppCreated: 1, usersNotified: 1 });
-    const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-diary' });
-    const notificationCreateMany = vi.fn().mockResolvedValue({ count: 0 });
+describe('processSystemAlerts missing-diary alert is retired', () => {
+  it('never creates a pending_approval/diary alert, even with no hold points or NCRs', async () => {
+    const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-x' });
     const deps = buildDeps({
-      // No diary for the previous working day => missing-diary branch fires.
       findProjectUsersByRoles: vi
         .fn()
-        .mockImplementation((_projectId: string, roles: string[]) =>
-          roles.includes('foreman') ? [{ id: 'pm-1', email: 'pm@x.com', fullName: 'PM' }] : [],
-        ),
-      notifyUsers,
+        .mockResolvedValue([{ id: 'pm-1', email: 'pm@x.com', fullName: 'PM' }]),
     });
+    // No hold points and no NCRs => the only thing the old scan would have
+    // created here is a missing-diary alert. It must not be created.
     (
-      deps.prisma as unknown as { dailyDiary: { findFirst: ReturnType<typeof vi.fn> } }
-    ).dailyDiary.findFirst = vi.fn().mockResolvedValue(null);
+      deps.prisma as unknown as { holdPoint: { findMany: ReturnType<typeof vi.fn> } }
+    ).holdPoint.findMany = vi.fn().mockResolvedValue([]);
     (
       deps.prisma as unknown as { notificationAlert: { create: ReturnType<typeof vi.fn> } }
     ).notificationAlert.create = alertCreate;
-    (
-      deps.prisma as unknown as { notification: { createMany: ReturnType<typeof vi.fn> } }
-    ).notification.createMany = notificationCreateMany;
 
     const result = await processSystemAlerts(
       { now: new Date('2026-06-23T12:00:00.000Z'), projectIds: ['project-1'] },
       deps,
     );
 
-    // Escalatable alert record still created (so check-escalations can climb it).
-    expect(alertCreate).toHaveBeenCalled();
-    expect(result.missingDiaryAlerts).toBe(1);
-    // Recipients notified via the shared in-app + email helper, not a bare createMany.
-    expect(notifyUsers).toHaveBeenCalledTimes(1);
-    const [users, inApp, emailType] = notifyUsers.mock.calls[0];
-    expect(users).toEqual([{ id: 'pm-1', email: 'pm@x.com', fullName: 'PM' }]);
-    expect(inApp.type).toBe('alert_missing_diary');
-    expect(emailType).toBe('diaryReminder');
-    expect(notificationCreateMany).not.toHaveBeenCalled();
+    expect(alertCreate).not.toHaveBeenCalled();
+    expect(result.alertsCreated).toBe(0);
+    expect(result.createdAlerts).toEqual([]);
   });
 });
