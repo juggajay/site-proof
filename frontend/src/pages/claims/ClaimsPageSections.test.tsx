@@ -9,6 +9,7 @@ import { queryKeys } from '@/lib/queryKeys';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const downloadCsvMock = vi.hoisted(() => vi.fn());
+const downloadBrandedCsvMock = vi.hoisted(() => vi.fn());
 const generateClaimEvidencePackagePDFMock = vi.hoisted(() => vi.fn());
 const openDocumentAccessUrlMock = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => vi.fn());
@@ -23,7 +24,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 vi.mock('@/lib/csv', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/csv')>();
-  return { ...actual, downloadCsv: downloadCsvMock };
+  return { ...actual, downloadCsv: downloadCsvMock, downloadBrandedCsv: downloadBrandedCsvMock };
 });
 
 vi.mock('@/lib/pdfGenerator', async (importOriginal) => {
@@ -292,6 +293,7 @@ describe('ClaimsTable payment schedule wording', () => {
 describe('ClaimsTable row CSV export', () => {
   beforeEach(() => {
     downloadCsvMock.mockReset();
+    downloadBrandedCsvMock.mockReset();
   });
 
   it('falls back to calculated project-state payment due date when the claim omits one', async () => {
@@ -327,8 +329,10 @@ describe('ClaimsTable row CSV export', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
 
-    expect(downloadCsvMock).toHaveBeenCalledWith(
+    expect(downloadBrandedCsvMock).toHaveBeenCalledWith(
       'claim-7.csv',
+      'Claim 7',
+      undefined,
       expect.arrayContaining([expect.arrayContaining([expectedDueDate])]),
     );
   });

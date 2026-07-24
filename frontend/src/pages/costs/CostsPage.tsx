@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { ROLE_GROUPS } from '@/lib/roles';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import { formatDateKey } from '@/lib/localDate';
 import {
@@ -31,6 +32,7 @@ import { CostSummaryCards, DocketStatusSummary } from './components/CostSummaryC
 
 export function CostsPage() {
   const { projectId } = useParams();
+  const csvBranding = useCsvBranding(projectId);
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<'summary' | 'subcontractors' | 'lots'>('summary');
   const [showFilters, setShowFilters] = useState(false);
@@ -91,7 +93,7 @@ export function CostsPage() {
 
     const rows = buildCostReportRows(summary, filteredSubcontractorCosts, filteredLotCosts);
 
-    downloadCsv(`cost-report-${formatDateKey()}.csv`, rows);
+    downloadBrandedCsv(`cost-report-${formatDateKey()}.csv`, 'Cost Report', csvBranding, rows);
   };
 
   if (loading) {

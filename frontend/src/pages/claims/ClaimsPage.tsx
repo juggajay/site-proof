@@ -3,7 +3,8 @@ import { useRef, useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
-import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
+import { buildScopedCsvFilename, downloadCsv, downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import { readLocalStorageItem } from '@/lib/storagePreferences';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
@@ -47,6 +48,7 @@ import {
 export function ClaimsPage() {
   const { projectId } = useParams();
   const queryClient = useQueryClient();
+  const csvBranding = useCsvBranding(projectId);
 
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -192,11 +194,13 @@ export function ClaimsPage() {
         paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
       ];
     });
-    downloadCsv(buildScopedCsvFilename('progress-claims', projectQuery.data?.name || 'project'), [
-      headers,
-      ...rows,
-    ]);
-  }, [claims, projectQuery.data?.name]);
+    downloadBrandedCsv(
+      buildScopedCsvFilename('progress-claims', projectQuery.data?.name || 'project'),
+      'Progress Claims Register',
+      { ...csvBranding, projectName: projectQuery.data?.name ?? csvBranding.projectName },
+      [headers, ...rows],
+    );
+  }, [claims, projectQuery.data?.name, csvBranding]);
 
   const handleExportCumulativeData = useCallback(() => {
     exportChartDataToCSV(
@@ -208,8 +212,10 @@ export function ClaimsPage() {
       })),
       'cumulative-claims',
       ['Name', 'Claimed', 'Certified', 'Paid'],
+      'Cumulative Claims',
+      { ...csvBranding, projectName: projectQuery.data?.name ?? csvBranding.projectName },
     );
-  }, [cumulativeChartData]);
+  }, [cumulativeChartData, csvBranding, projectQuery.data?.name]);
 
   const handleExportMonthlyData = useCallback(() => {
     exportChartDataToCSV(
@@ -221,8 +227,10 @@ export function ClaimsPage() {
       })),
       'monthly-claims-breakdown',
       ['Name', 'Claimed', 'Certified', 'Paid'],
+      'Monthly Claims Breakdown',
+      { ...csvBranding, projectName: projectQuery.data?.name ?? csvBranding.projectName },
     );
-  }, [monthlyBreakdownData]);
+  }, [monthlyBreakdownData, csvBranding, projectQuery.data?.name]);
 
   const handleClaimCreated = useCallback(() => {
     invalidateClaimAdjacentProjectCaches();
@@ -649,6 +657,10 @@ export function ClaimsPage() {
           setShowPackageModal(claimId);
         }}
         onExportXero={handleExportXero}
+        csvBranding={{
+          ...csvBranding,
+          projectName: projectQuery.data?.name ?? csvBranding.projectName,
+        }}
       />
 
       {showCreateModal && projectId && (

@@ -48,7 +48,15 @@ export function parseChainageInput(value: string): number | null {
 }
 
 export function parseLotsCsv(content: string): ParsedLot[] {
-  const lines = content.trim().split('\n');
+  const rawLines = content.trim().split('\n');
+  // Skip a leading `#` comment block so a branded register export (two provenance
+  // rows above the header) re-imports cleanly. Only strips contiguous top rows,
+  // so a `#`-prefixed value in a data row is untouched.
+  let start = 0;
+  while (start < rawLines.length && rawLines[start].trim().replace(/^["']/, '').startsWith('#')) {
+    start += 1;
+  }
+  const lines = rawLines.slice(start);
   if (lines.length < 2) return []; // Need header + at least one row
 
   const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/['"]/g, ''));

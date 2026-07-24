@@ -66,3 +66,40 @@ export function downloadCsv(filename: string, rows: ReadonlyArray<ReadonlyArray<
   const blob = new Blob([buildCsv(rows)], { type: 'text/csv;charset=utf-8;' });
   downloadBlob(blob, sanitizeCsvFilename(filename), 'export.csv');
 }
+
+export type CsvBrandingContext = {
+  companyName?: string | null;
+  abn?: string | null;
+  projectName?: string | null;
+};
+
+// Two `#`-prefixed provenance rows placed above the column header, mirroring the
+// PDF branding band. Each row is a single cell so a strict/ragged-aware parser
+// (pandas `comment='#'`, most CSV libs) can skip them, and any commas/quotes in
+// a company name stay safely inside one escaped field. Row 1: company (+ ABN) —
+// project. Row 2: Generated <ISO date> — <register> — CIVOS.
+export function buildCsvBrandingRows(
+  registerName: string,
+  branding: CsvBrandingContext | null | undefined,
+  date: Date = new Date(),
+): CsvCell[][] {
+  const company = branding?.companyName?.trim();
+  const abn = branding?.abn?.trim();
+  const project = branding?.projectName?.trim();
+  const companyPart = company ? (abn ? `${company} (ABN ${abn})` : company) : '';
+  const line1 = [companyPart, project].filter(Boolean).join('  —  ') || 'CIVOS';
+  const isoDate = date.toISOString().slice(0, 10);
+  return [[`# ${line1}`], [`# Generated ${isoDate} — ${registerName} — CIVOS`]];
+}
+
+// downloadCsv with the two-row branding preamble prepended. `rows` is the usual
+// [header, ...dataRows]; branding is best-effort (an unbranded export beats a
+// failed one), so a null/empty context still emits a consistent CIVOS preamble.
+export function downloadBrandedCsv(
+  filename: string,
+  registerName: string,
+  branding: CsvBrandingContext | null | undefined,
+  rows: ReadonlyArray<ReadonlyArray<CsvCell>>,
+): void {
+  downloadCsv(filename, [...buildCsvBrandingRows(registerName, branding), ...rows]);
+}

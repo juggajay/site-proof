@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -67,6 +68,7 @@ export function useVariationActions({
   closeModal,
 }: UseVariationActionsOptions) {
   const queryClient = useQueryClient();
+  const csvBranding = useCsvBranding(projectId);
   const [actionLoading, setActionLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [copiedVariationId, setCopiedVariationId] = useState<string | null>(null);
@@ -252,40 +254,45 @@ export function useVariationActions({
 
   const handleExportCSV = useCallback(
     (variations: Variation[], lotsById?: Map<string, VariationLot>) => {
-      downloadCsv(`variation-register-${projectId || 'all'}-${formatDateKey()}.csv`, [
+      downloadBrandedCsv(
+        `variation-register-${projectId || 'all'}-${formatDateKey()}.csv`,
+        'Variation Register',
+        csvBranding,
         [
-          'VAR #',
-          'Title',
-          'Description',
-          'Client Ref',
-          'Amount',
-          'Status',
-          'Submitted',
-          'Approved',
-          'Rejected',
-          'Rejection Reason',
-          'Claimed',
-          'Lot',
-          'Updated',
+          [
+            'VAR #',
+            'Title',
+            'Description',
+            'Client Ref',
+            'Amount',
+            'Status',
+            'Submitted',
+            'Approved',
+            'Rejected',
+            'Rejection Reason',
+            'Claimed',
+            'Lot',
+            'Updated',
+          ],
+          ...variations.map((variation) => [
+            variation.variationNumber,
+            variation.title,
+            variation.description ?? '',
+            variation.clientReference ?? '',
+            variation.approvedAmount ?? '',
+            formatStatusLabel(variation.status),
+            csvDate(variation.submittedAt),
+            csvDate(variation.approvedAt),
+            csvDate(variation.rejectedAt),
+            variation.rejectionReason ?? '',
+            variation.claimedInId ? 'Yes' : 'No',
+            (variation.lotId && lotsById?.get(variation.lotId)?.lotNumber) || '',
+            new Date(variation.updatedAt).toLocaleDateString('en-AU'),
+          ]),
         ],
-        ...variations.map((variation) => [
-          variation.variationNumber,
-          variation.title,
-          variation.description ?? '',
-          variation.clientReference ?? '',
-          variation.approvedAmount ?? '',
-          formatStatusLabel(variation.status),
-          csvDate(variation.submittedAt),
-          csvDate(variation.approvedAt),
-          csvDate(variation.rejectedAt),
-          variation.rejectionReason ?? '',
-          variation.claimedInId ? 'Yes' : 'No',
-          (variation.lotId && lotsById?.get(variation.lotId)?.lotNumber) || '',
-          new Date(variation.updatedAt).toLocaleDateString('en-AU'),
-        ]),
-      ]);
+      );
     },
-    [projectId],
+    [projectId, csvBranding],
   );
 
   return {

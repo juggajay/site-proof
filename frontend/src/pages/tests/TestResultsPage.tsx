@@ -21,7 +21,8 @@ import { RejectTestModal } from './components/RejectTestModal';
 import { NcrPromptModal, NcrCreateModal } from './components/NcrModals';
 import { buildFailedTestNcrContext, type FailedTestNcrInput } from './failedTestNcr';
 import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -84,6 +85,7 @@ export function TestResultsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
+  const csvBranding = useCsvBranding(projectId);
 
   // Core data state
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -600,11 +602,13 @@ export function TestResultsPage() {
 
   // Export CSV handler
   const handleExportCSV = useCallback(() => {
-    downloadCsv(`test-results-${projectId}-${formatDateKey()}.csv`, [
-      TEST_RESULTS_CSV_HEADERS,
-      ...buildTestResultsCsvRows(testResults),
-    ]);
-  }, [testResults, projectId]);
+    downloadBrandedCsv(
+      `test-results-${projectId}-${formatDateKey()}.csv`,
+      'Test Results Register',
+      csvBranding,
+      [TEST_RESULTS_CSV_HEADERS, ...buildTestResultsCsvRows(testResults)],
+    );
+  }, [testResults, projectId, csvBranding]);
 
   // Loading state
   if (loading) {

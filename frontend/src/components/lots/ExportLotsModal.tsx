@@ -4,7 +4,8 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Moda
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
+import { buildScopedCsvFilename, downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 
 interface ExportColumn {
   key: string;
@@ -63,6 +64,7 @@ export function ExportLotsModal({
   isSubcontractor,
   onClose,
 }: ExportLotsModalProps) {
+  const csvBranding = useCsvBranding(projectId);
   // Filter columns based on permissions
   const availableColumns = ALL_COLUMNS.filter((col) => {
     if (col.key === 'budgetAmount' && !canViewBudgets) return false;
@@ -181,10 +183,12 @@ export function ExportLotsModal({
       return row;
     });
 
-    downloadCsv(buildScopedCsvFilename('lot-register', projectName || projectId), [
-      headers,
-      ...rows,
-    ]);
+    downloadBrandedCsv(
+      buildScopedCsvFilename('lot-register', projectName || projectId),
+      'Lot Register',
+      { ...csvBranding, projectName: projectName ?? csvBranding.projectName },
+      [headers, ...rows],
+    );
 
     onClose();
   };

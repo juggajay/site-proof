@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
+import { getProjectBrandingSource } from '../../lib/projectBranding.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
 import { buildProjectCostsResponse } from './costResponses.js';
@@ -58,9 +59,10 @@ type CompanyBrandingDetailRecord = {
 export function buildProjectBrandingResponse(
   company: CompanyBrandingDetailRecord | null,
   embeddedLogo: string | null,
+  projectName: string | null = null,
 ) {
   if (!company) {
-    return { company: null };
+    return { company: null, projectName };
   }
 
   return {
@@ -70,6 +72,7 @@ export function buildProjectBrandingResponse(
       address: company.address,
       logoUrl: embeddedLogo ?? buildCompanyLogoDisplayUrl(company.id, company.logoUrl),
     },
+    projectName,
   };
 }
 
@@ -373,15 +376,7 @@ export function createProjectReadRouter({
       const isSubcontractor = isSubcontractorUser(user);
       const isStandaloneSubcontractor = isStandaloneSubcontractorPortalIdentity(user);
 
-      const project = await prisma.project.findUnique({
-        where: { id },
-        select: {
-          companyId: true,
-          company: {
-            select: { id: true, name: true, abn: true, address: true, logoUrl: true },
-          },
-        },
-      });
+      const project = await getProjectBrandingSource(id);
 
       if (!project) {
         throw AppError.notFound('Project');
@@ -406,7 +401,7 @@ export function createProjectReadRouter({
         ? await getCompanyLogoDataUrl(project.company.id, project.company.logoUrl)
         : null;
 
-      res.json(buildProjectBrandingResponse(project.company, embeddedLogo));
+      res.json(buildProjectBrandingResponse(project.company, embeddedLogo, project.projectName));
     }),
   );
 

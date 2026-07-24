@@ -234,7 +234,11 @@ vi.mock('@/components/ContextHelp', () => ({
 
 // ── Stub downloadCsv ──
 const downloadCsvMock = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/csv', () => ({ downloadCsv: downloadCsvMock }));
+const downloadBrandedCsvMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/csv', () => ({
+  downloadCsv: downloadCsvMock,
+  downloadBrandedCsv: downloadBrandedCsvMock,
+}));
 
 // ── Stub apiFetch so no real network calls happen ──
 const apiFetchMock = vi.hoisted(() =>
@@ -473,7 +477,7 @@ describe('TestResultsPage header — mobile', () => {
     await user.click(screen.getByRole('button', { name: /Export CSV/i }));
 
     await waitFor(() => {
-      expect(downloadCsvMock).toHaveBeenCalledOnce();
+      expect(downloadBrandedCsvMock).toHaveBeenCalledOnce();
     });
     // Sheet closes after action
     await waitFor(() => {

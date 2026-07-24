@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv } from '@/lib/csv';
+import { useAuth } from '@/lib/auth';
 import { formatDateKey } from '@/lib/localDate';
 import { type AuditLog, formatAuditAction, formatChanges, formatDateTime } from './auditLogDisplay';
 import { AuditLogDetailsModal } from './components/AuditLogDetailsModal';
@@ -46,6 +47,7 @@ function getAuditLogFiltersFromSearchParams(searchParams: URLSearchParams): Audi
 export function AuditLogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const exportInFlightRef = useRef(false);
+  const { user } = useAuth();
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -234,7 +236,12 @@ export function AuditLogPage() {
         return;
       }
 
-      downloadCsv(`audit-logs-${formatDateKey()}.csv`, buildCsvRows(exportedLogs));
+      downloadBrandedCsv(
+        `audit-logs-${formatDateKey()}.csv`,
+        'Audit Log',
+        { companyName: user?.companyName ?? null, abn: null, projectName: null },
+        buildCsvRows(exportedLogs),
+      );
     } catch {
       setExportError('Failed to export audit logs. Please try again.');
     } finally {

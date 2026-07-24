@@ -67,7 +67,8 @@ import {
   BatchRequestReleaseModal,
   type BatchRequestReleaseSubmitData,
 } from './components/BatchRequestReleaseModal';
-import { downloadCsv } from '@/lib/csv';
+import { downloadBrandedCsv } from '@/lib/csv';
+import { useCsvBranding } from '@/hooks/useCsvBranding';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { getReleaseMethodLabel } from './holdPointReleaseIdentity';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
@@ -95,6 +96,7 @@ const SUPERINTENDENT_RELEASE_PERMISSION_MESSAGE =
 
 export function HoldPointsPage() {
   const { projectId } = useParams();
+  const csvBranding = useCsvBranding(projectId);
   const isMobile = useIsMobile();
   const currentProjectRole = useCurrentProjectRole(projectId);
   const queryClient = useQueryClient();
@@ -648,8 +650,13 @@ export function HoldPointsPage() {
       getReleaseMethodLabel(hp.releaseMethod) || '-',
       hp.releaseNotes || '-',
     ]);
-    downloadCsv(`hold-points-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
-  }, [holdPoints, projectId]);
+    downloadBrandedCsv(
+      `hold-points-${projectId}-${formatDateKey()}.csv`,
+      'Hold Point Register',
+      csvBranding,
+      [headers, ...rows],
+    );
+  }, [holdPoints, projectId, csvBranding]);
 
   const handleCloseRequestModal = useCallback(() => {
     setShowRequestModal(false);

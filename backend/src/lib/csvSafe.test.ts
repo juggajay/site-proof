@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsv, escapeCsvFormulaValue, formatCsvCell } from './csvSafe.js';
+import { buildCsv, buildCsvBrandingRows, escapeCsvFormulaValue, formatCsvCell } from './csvSafe.js';
 
 describe('csvSafe', () => {
   it.each([
@@ -29,5 +29,26 @@ describe('csvSafe', () => {
         ['Normal', '@SUM(1,1)'],
       ]),
     ).toBe(`"Name","Value"\n"Normal","'@SUM(1,1)"`);
+  });
+});
+
+describe('buildCsvBrandingRows', () => {
+  it('emits two single-cell provenance rows above the header', () => {
+    const rows = buildCsvBrandingRows(
+      'Delay Register',
+      { companyName: 'Ryox Carpentry', abn: '12 345', projectName: 'Pacific Hwy' },
+      new Date('2026-07-25T00:00:00.000Z'),
+    );
+    expect(rows).toEqual([
+      ['# Ryox Carpentry (ABN 12 345)  —  Pacific Hwy'],
+      ['# Generated 2026-07-25 — Delay Register — CIVOS'],
+    ]);
+  });
+
+  it('escapes commas/quotes in the company name into one field', () => {
+    const csv = buildCsv(
+      buildCsvBrandingRows('Delay Register', { companyName: 'Smith, "Bob" & Co' }),
+    );
+    expect(csv.split('\n')[0]).toBe('"# Smith, ""Bob"" & Co"');
   });
 });
