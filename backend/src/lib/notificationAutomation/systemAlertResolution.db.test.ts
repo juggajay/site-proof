@@ -256,6 +256,61 @@ describe('resolveClearedSystemAlerts — missing diary (pending_approval/diary)'
     expect(await runResolve(now)).toBe(1);
     expect(await isResolved(alertId)).toBe(true);
   });
+
+  // Age-based expiry: cutoff = now's UTC midnight (2026-06-20) - 30 days =
+  // 2026-05-21. A diary dated strictly before that resolves on age with NO
+  // diary present; on/after that stays active.
+  it('resolves a diary alert dated 31+ days ago with no diary present', async () => {
+    const oldKey = '2026-05-20'; // 31 days before 2026-06-20
+    const alertId = await createAlert({
+      type: 'pending_approval',
+      entityType: 'diary',
+      entityId: `diary-${projectId}-${oldKey}`,
+    });
+
+    expect(await runResolve(now)).toBe(1);
+    expect(await isResolved(alertId)).toBe(true);
+  });
+
+  it('does NOT resolve a diary alert within 30 days with no diary present', async () => {
+    // 15 days old — inside the window. Distinct key so an earlier test's diary
+    // (afterEach clears alerts, not diaries) can't accidentally resolve it.
+    const recentKey = '2026-06-05';
+    const alertId = await createAlert({
+      type: 'pending_approval',
+      entityType: 'diary',
+      entityId: `diary-${projectId}-${recentKey}`,
+    });
+
+    expect(await runResolve(now)).toBe(0);
+    expect(await isResolved(alertId)).toBe(false);
+  });
+
+  it('does NOT resolve at exactly 30 days old (boundary stays active)', async () => {
+    // 2026-05-21 == cutoff. Chosen side: exactly 30 days is NOT "older than 30
+    // days", so it stays active; only strictly-older (31+) drains on age.
+    const boundaryKey = '2026-05-21';
+    const alertId = await createAlert({
+      type: 'pending_approval',
+      entityType: 'diary',
+      entityId: `diary-${projectId}-${boundaryKey}`,
+    });
+
+    expect(await runResolve(now)).toBe(0);
+    expect(await isResolved(alertId)).toBe(false);
+  });
+
+  it('leaves a diary alert with an unparseable entityId untouched even with an old date in the message', async () => {
+    const alertId = await createAlert({
+      type: 'pending_approval',
+      entityType: 'diary',
+      entityId: nextId('legacy-entity'), // does not match diary-<project>-<date>
+      message: 'Missing diary for 2020-01-01',
+    });
+
+    expect(await runResolve(now)).toBe(0);
+    expect(await isResolved(alertId)).toBe(false);
+  });
 });
 
 describe('resolveClearedSystemAlerts — idempotency and pagination', () => {
