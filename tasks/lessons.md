@@ -314,3 +314,14 @@ same PR and mirror it into `backend/src/routes/copilot/chat/productKnowledge.ts`
 (both pin tests will force the pair). If the surface lives on an existing page,
 also check the page's label in `prompt.ts` PROJECT_PAGES/TOP_LEVEL_PAGES still
 describes what's on it.
+
+## 2026-07-24 — a copied prod .env in a worktree backend poisons DB-backed tests via STORAGE, not the DB
+Full local suite showed 30s-timeout failures in NCR-evidence/comment-attachment
+/company-logo tests. Cause: a prod `.env` copied into the worktree backend (for
+prisma generate) made `isSupabaseConfigured()` true and pointed `BACKEND_URL`
+at prod — storage tests then hit real Supabase over the network.
+`databaseSafety.ts` only guards DATABASE_URL, not storage/env config.
+**Rules:** (1) `npx prisma generate` does not need `.env` — never copy one into
+a worktree for it. (2) If a worktree backend has a `.env` and DB-backed tests
+fail with network-ish timeouts in storage paths, move the `.env` aside and
+re-run before suspecting the code.

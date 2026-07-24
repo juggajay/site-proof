@@ -46,6 +46,15 @@ type SystemAutomationJobOptions = {
   projectIds?: string[];
 };
 
+export type CreatedSystemAlert = {
+  type: 'overdue_ncr' | 'stale_hold_point' | 'missing_diary';
+  alertId: string;
+  entityId: string;
+  projectName: string;
+  severity: SystemAlertSeverity;
+  message: string;
+};
+
 export type SystemAlertAutomationResult = {
   projectsChecked: number;
   alertsCreated: number;
@@ -54,6 +63,7 @@ export type SystemAlertAutomationResult = {
   missingDiaryAlerts: number;
   notificationsCreated: number;
   skippedAlerts: number;
+  createdAlerts: CreatedSystemAlert[];
 };
 
 type SystemNotificationDeliverySummary = {
@@ -130,6 +140,16 @@ async function findProjectAlertOwnerId(
   return companyOwner?.id ?? projectUsers[0]?.userId ?? null;
 }
 
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
+  );
+}
+
+// Returns the created alert id, or null when a concurrent run already created
+// the same active alert — the partial unique index on (type, entity_id) WHERE
+// resolved_at IS NULL makes the race loser fail with P2002 instead of writing
+// a duplicate. Callers must skip notifications when null.
 async function createAlertRecord(
   prisma: SystemAutomationPrisma,
   data: {
@@ -143,23 +163,30 @@ async function createAlertRecord(
     assignedToId: string;
     createdAt: Date;
   },
-): Promise<string> {
+): Promise<string | null> {
   const id = generateAlertId();
-  await prisma.notificationAlert.create({
-    data: {
-      id,
-      type: data.type,
-      severity: data.severity,
-      title: data.title,
-      message: data.message,
-      entityId: data.entityId,
-      entityType: data.entityType,
-      projectId: data.projectId,
-      assignedToId: data.assignedToId,
-      createdAt: data.createdAt,
-      escalationLevel: 0,
-    },
-  });
+  try {
+    await prisma.notificationAlert.create({
+      data: {
+        id,
+        type: data.type,
+        severity: data.severity,
+        title: data.title,
+        message: data.message,
+        entityId: data.entityId,
+        entityType: data.entityType,
+        projectId: data.projectId,
+        assignedToId: data.assignedToId,
+        createdAt: data.createdAt,
+        escalationLevel: 0,
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      return null;
+    }
+    throw error;
+  }
 
   return id;
 }
@@ -178,6 +205,7 @@ export async function processSystemAlerts(
     missingDiaryAlerts: 0,
     notificationsCreated: 0,
     skippedAlerts: 0,
+    createdAlerts: [],
   };
 
   for (const project of projects) {
@@ -224,7 +252,7 @@ export async function processSystemAlerts(
         daysOverdue > 7 ? 'critical' : daysOverdue > 3 ? 'high' : 'medium';
       const title = `NCR ${ncr.ncrNumber} is overdue`;
       const message = `NCR ${ncr.ncrNumber} is ${daysOverdue} day(s) overdue. ${ncr.description?.substring(0, 100) || 'No description'}`;
-      await createAlertRecord(deps.prisma, {
+      const alertId = await createAlertRecord(deps.prisma, {
         type: 'overdue_ncr',
         severity,
         title,
@@ -235,6 +263,10 @@ export async function processSystemAlerts(
         assignedToId,
         createdAt: now,
       });
+      if (alertId === null) {
+        result.skippedAlerts += 1;
+        continue;
+      }
       await deps.prisma.notification.create({
         data: {
           userId: assignedToId,
@@ -249,6 +281,14 @@ export async function processSystemAlerts(
       result.alertsCreated += 1;
       result.overdueNcrAlerts += 1;
       result.notificationsCreated += 1;
+      result.createdAlerts.push({
+        type: 'overdue_ncr',
+        alertId,
+        entityId: ncr.id,
+        projectName: project.name,
+        severity,
+        message: title,
+      });
     }
 
     const staleThreshold = new Date(now.getTime() - deps.dayMs);
@@ -290,7 +330,7 @@ export async function processSystemAlerts(
         hoursStale > 48 ? 'critical' : hoursStale > 24 ? 'high' : 'medium';
       const title = `Hold Point stale: Lot ${holdPoint.lot.lotNumber}`;
       const message = `Hold Point for Lot ${holdPoint.lot.lotNumber} has been ${holdPoint.status} for ${hoursStale} hours. ${holdPoint.itpChecklistItem?.description?.substring(0, 80) || ''}`;
-      await createAlertRecord(deps.prisma, {
+      const alertId = await createAlertRecord(deps.prisma, {
         type: 'stale_hold_point',
         severity,
         title,
@@ -301,6 +341,10 @@ export async function processSystemAlerts(
         assignedToId: alertOwnerId,
         createdAt: now,
       });
+      if (alertId === null) {
+        result.skippedAlerts += 1;
+        continue;
+      }
 
       const users = await deps.findProjectUsersByRoles(project.id, STALE_HOLD_POINT_ALERT_ROLES);
       if (users.length > 0) {
@@ -321,6 +365,14 @@ export async function processSystemAlerts(
       result.alertsCreated += 1;
       result.staleHoldPointAlerts += 1;
       result.notificationsCreated += users.length;
+      result.createdAlerts.push({
+        type: 'stale_hold_point',
+        alertId,
+        entityId: holdPoint.id,
+        projectName: project.name,
+        severity,
+        message: title,
+      });
     }
 
     const missingDiaryDate = getPreviousWorkingDay(now, project.workingDays);
@@ -354,7 +406,7 @@ export async function processSystemAlerts(
       } else {
         const title = `Missing Daily Diary: ${project.name}`;
         const message = `No daily diary was submitted for ${project.name} on ${missingDiaryDateKey}. This affects project records and compliance.`;
-        await createAlertRecord(deps.prisma, {
+        const alertId = await createAlertRecord(deps.prisma, {
           type: 'pending_approval',
           severity: 'high',
           title,
@@ -365,6 +417,10 @@ export async function processSystemAlerts(
           assignedToId: alertOwnerId,
           createdAt: now,
         });
+        if (alertId === null) {
+          result.skippedAlerts += 1;
+          continue;
+        }
 
         // M60: this is the single missing-diary alert. It both escalates (via
         // the notificationAlert record created above) AND notifies recipients
@@ -394,6 +450,14 @@ export async function processSystemAlerts(
         result.alertsCreated += 1;
         result.missingDiaryAlerts += 1;
         result.notificationsCreated += delivery.inAppCreated;
+        result.createdAlerts.push({
+          type: 'missing_diary',
+          alertId,
+          entityId: missingDiaryEntityId,
+          projectName: project.name,
+          severity: 'high',
+          message: title,
+        });
       }
     }
   }
