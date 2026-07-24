@@ -1,0 +1,4 @@
+# Characterization snapshots are byte-identical to the test's JSON.stringify
+# output (LF newlines). Pin LF so autocrlf never rewrites them to CRLF and
+# breaks the F0.2 byte-identical gate on Windows checkouts.
+*.json text eol=lf
