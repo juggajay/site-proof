@@ -346,6 +346,10 @@ model NotificationAlert {
   assignedTo User     @relation("AssignedNotificationAlerts", fields: [assignedToId], references: [id], onDelete: Cascade)
   project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  // Plus a PARTIAL unique index Prisma cannot express: one ACTIVE alert per
+  // (type, entity_id) — notification_alerts_active_type_entity_key, created in
+  // migration 20260724070000_active_alert_unique_index with
+  // WHERE resolved_at IS NULL. Alert creators must handle P2002.
   @@index([projectId, resolvedAt])
   @@index([assignedToId, resolvedAt])
   @@index([type, resolvedAt])

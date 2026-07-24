@@ -50,6 +50,7 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
       missingDiaryAlerts: 0,
       notificationsCreated: 0,
       skippedAlerts: 0,
+      createdAlerts: [],
     },
     alertEscalations: {
       ...emptyDeliverySummary(),
@@ -61,27 +62,44 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
   };
 }
 
-export async function processNotificationAutomationWithLock(
-  options: NotificationAutomationJobOptions = {},
-  { prisma, processUnlocked }: NotificationAutomationRunnerDependencies,
-): Promise<NotificationAutomationRunResult> {
-  const now = options.now ?? new Date();
+/**
+ * Run `fn` under the automation advisory lock, or return null if another
+ * holder (the hourly worker or an admin-triggered check on another instance)
+ * currently has it. One lock id covers every writer of notification alerts so
+ * the worker and the admin route can never interleave their check-then-create
+ * passes.
+ */
+export async function runWithNotificationAutomationLock<T>(
+  prisma: PrismaClient,
+  fn: () => Promise<T>,
+): Promise<T | null> {
   return prisma.$transaction(
     async (tx) => {
       const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
         SELECT pg_try_advisory_xact_lock(${NOTIFICATION_AUTOMATION_WORKER_LOCK_ID}) AS locked
       `;
       if (lockRows[0]?.locked !== true) {
-        return emptyNotificationAutomationResult(now);
+        return null;
       }
 
-      return processUnlocked({ ...options, now });
+      return fn();
     },
     {
       maxWait: 5_000,
       timeout: 30 * 60 * 1_000,
     },
   );
+}
+
+export async function processNotificationAutomationWithLock(
+  options: NotificationAutomationJobOptions = {},
+  { prisma, processUnlocked }: NotificationAutomationRunnerDependencies,
+): Promise<NotificationAutomationRunResult> {
+  const now = options.now ?? new Date();
+  const result = await runWithNotificationAutomationLock(prisma, () =>
+    processUnlocked({ ...options, now }),
+  );
+  return result ?? emptyNotificationAutomationResult(now);
 }
 
 function getNotificationAutomationWorkerEnabled(): boolean {

@@ -1,3 +1,4 @@
+import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 import { ALERT_ESCALATION_CONFIG } from '../../lib/notificationAlertConfig.js';
 import { toAlert, type Alert } from './alertMappers.js';
@@ -21,6 +22,24 @@ import { toAlert, type Alert } from './alertMappers.js';
 export const ESCALATION_CONFIG = ALERT_ESCALATION_CONFIG;
 
 export async function createAlertRecord(alert: Alert): Promise<Alert> {
+  try {
+    return await createAlertRecordUnchecked(alert);
+  } catch (error) {
+    // Partial unique index: one active alert per (type, entityId). A manual
+    // create that collides with an existing active alert is a client error,
+    // not a crash.
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: unknown }).code === 'P2002'
+    ) {
+      throw AppError.conflict('An active alert already exists for this item');
+    }
+    throw error;
+  }
+}
+
+async function createAlertRecordUnchecked(alert: Alert): Promise<Alert> {
   const record = await prisma.notificationAlert.create({
     data: {
       id: alert.id,

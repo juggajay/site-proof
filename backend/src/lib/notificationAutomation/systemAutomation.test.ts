@@ -81,6 +81,51 @@ describe('processSystemAlerts stale hold-point routing', () => {
   });
 });
 
+describe('processSystemAlerts race handling (partial unique index on active alerts)', () => {
+  it('treats a P2002 on alert create as a lost race: skips it and sends no notification', async () => {
+    const alertCreate = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
+    const notificationCreate = vi.fn();
+    const deps = buildDeps();
+    (
+      deps.prisma as unknown as { notificationAlert: { create: ReturnType<typeof vi.fn> } }
+    ).notificationAlert.create = alertCreate;
+    (
+      deps.prisma as unknown as { notification: { create: ReturnType<typeof vi.fn> } }
+    ).notification.create = notificationCreate;
+
+    const result = await processSystemAlerts(
+      { now: new Date('2026-06-20T12:00:00.000Z'), projectIds: ['project-1'] },
+      deps,
+    );
+
+    // The stale hold point from buildDeps loses the race: no alert counted,
+    // no recipients notified, run does not crash.
+    expect(result.staleHoldPointAlerts).toBe(0);
+    expect(result.alertsCreated).toBe(0);
+    expect(result.skippedAlerts).toBe(1);
+    expect(result.createdAlerts).toEqual([]);
+    expect(notificationCreate).not.toHaveBeenCalled();
+  });
+
+  it('reports created alerts with their details for the admin check endpoint', async () => {
+    const result = await processSystemAlerts(
+      { now: new Date('2026-06-20T12:00:00.000Z'), projectIds: ['project-1'] },
+      buildDeps(),
+    );
+
+    expect(result.createdAlerts).toHaveLength(1);
+    expect(result.createdAlerts[0]).toMatchObject({
+      type: 'stale_hold_point',
+      entityId: 'hp-1',
+      projectName: 'Gateway Upgrade',
+      severity: 'high',
+    });
+    expect(result.createdAlerts[0].alertId).toMatch(/^alert-/);
+  });
+});
+
 describe('processSystemAlerts missing-diary alert (M60: single alert that emails AND escalates)', () => {
   it('creates the escalatable alert record and notifies recipients via notifyUsers (in-app + email)', async () => {
     const notifyUsers = vi

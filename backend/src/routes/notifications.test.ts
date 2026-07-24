@@ -1984,7 +1984,9 @@ describe('Notifications API', () => {
             severity: 'low',
             title: 'To Resolve',
             message: 'Will be resolved',
-            entityId: 'ncr-resolve',
+            // Unique per test: the partial unique index allows only one ACTIVE
+            // alert per (type, entityId), and not every test resolves this one.
+            entityId: `ncr-resolve-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             entityType: 'ncr',
             assignedTo: userId,
           });

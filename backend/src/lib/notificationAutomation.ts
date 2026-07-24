@@ -21,11 +21,13 @@ import {
   normalizeEmailPreferences,
 } from './notificationAutomation/preferences.js';
 import {
+  type CreatedSystemAlert,
   type SystemAutomationDependencies,
   processSystemAlerts as processSystemAlertsJob,
 } from './notificationAutomation/systemAutomation.js';
 import {
   processNotificationAutomationWithLock,
+  runWithNotificationAutomationLock,
   startNotificationAutomationWorker as startNotificationAutomationWorkerJob,
 } from './notificationAutomation/runner.js';
 import { prisma } from './prisma.js';
@@ -90,6 +92,7 @@ export type SystemAlertJobResult = {
   missingDiaryAlerts: number;
   notificationsCreated: number;
   skippedAlerts: number;
+  createdAlerts: CreatedSystemAlert[];
 };
 
 export type AlertEscalationJobResult = AlertEscalationAutomationResult;
@@ -367,6 +370,20 @@ export async function processSystemAlerts(
   options: NotificationAutomationJobOptions = {},
 ): Promise<SystemAlertJobResult> {
   return processSystemAlertsJob(options, systemAutomationDependencies);
+}
+
+export type { CreatedSystemAlert };
+
+/**
+ * The system-alerts job alone, under the same advisory lock as the hourly
+ * worker — for the admin check endpoint. Returns null when the lock is held
+ * (a worker run or another admin check is in progress) so the caller can
+ * report "already running" instead of interleaving duplicate checks.
+ */
+export async function processSystemAlertsWithLock(
+  options: NotificationAutomationJobOptions = {},
+): Promise<SystemAlertJobResult | null> {
+  return runWithNotificationAutomationLock(prisma, () => processSystemAlerts(options));
 }
 
 export async function processAlertEscalations(
