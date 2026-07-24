@@ -883,14 +883,15 @@ export function LandingPage() {
                 <h4>Request received</h4>
                 <p>{okBody}</p>
               </div>
-              <div className={'form-err' + (formStatus === 'error' ? ' show' : '')}>
+              <div role="alert" className={'form-err' + (formStatus === 'error' ? ' show' : '')}>
                 Something went wrong sending that. Email{' '}
                 <a href={`mailto:${FOUNDER_EMAIL}`}>{FOUNDER_EMAIL}</a> directly and we&rsquo;ll
                 sort it.
               </div>
               <p className="form-fine">
-                We&rsquo;ll only use this to contact you about CIVOS early access. No mailing-list
-                spam.
+                We&rsquo;ll only use this to contact you about CIVOS early access — no mailing-list
+                spam. Submissions are delivered via Formspree, our form processor. See our{' '}
+                <a href="/privacy-policy">privacy policy</a>.
               </p>
             </form>
           </div>
@@ -936,6 +937,8 @@ export function LandingPage() {
           <a href="#how">How it works</a>
           <a href="#templates">Templates</a>
           <a href="#early-access">Early access</a>
+          <a href="/privacy-policy">Privacy</a>
+          <a href="/terms-of-service">Terms</a>
           <div className="fine">
             <span>
               © 2026 CIVOS · Built in Australia for civil contractors · Evidence, lot by lot.
