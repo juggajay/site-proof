@@ -1,5 +1,6 @@
 import { prisma } from './prisma.js';
 import { isReleaseGatedChecklistItem } from './holdPointReleaseGating.js';
+import { lotConformable, testMatchesItem, testPassing } from './readiness/predicates.js';
 import {
   getChecklistItemsForInstance,
   type ChecklistItem,
@@ -246,27 +247,12 @@ function getNaHoldPointSignoffItemIds(
     .map((item) => item.id);
 }
 
-function normalizeTestType(value: string | null | undefined): string {
-  return (value || '').trim().toLowerCase();
-}
-
 function isRequiredTestItem(item: {
   id: string;
   evidenceRequired?: string | null;
   testType?: string | null;
 }): boolean {
   return item.evidenceRequired === 'test' || Boolean(item.testType);
-}
-
-function testResultMatchesItem(
-  item: { id: string; testType?: string | null },
-  testResult: { itpChecklistItemId?: string | null; testType: string },
-): boolean {
-  if (testResult.itpChecklistItemId === item.id) {
-    return true;
-  }
-  const requiredTestType = normalizeTestType(item.testType);
-  return Boolean(requiredTestType) && normalizeTestType(testResult.testType) === requiredTestType;
 }
 
 function hasVerifiedPassingTestForItem(
@@ -279,10 +265,7 @@ function hasVerifiedPassingTestForItem(
   }[],
 ): boolean {
   return testResults.some(
-    (testResult) =>
-      testResult.passFail === 'pass' &&
-      testResult.status === 'verified' &&
-      testResultMatchesItem(item, testResult),
+    (testResult) => testPassing(testResult) && testMatchesItem(item, testResult),
   );
 }
 
@@ -305,14 +288,14 @@ function buildOutstandingTestItems(
   // When one exists, an unsatisfied item with no direct match is more honestly
   // "a result exists, link it" than "no result yet" — the #1336 misclassification.
   const hasUnmatchedResult = testResults.some(
-    (testResult) => !requiredItems.some((item) => testResultMatchesItem(item, testResult)),
+    (testResult) => !requiredItems.some((item) => testMatchesItem(item, testResult)),
   );
 
   return requiredItems.flatMap((item) => {
     if (hasVerifiedPassingTestForItem(item, testResults)) {
       return [];
     }
-    const matches = testResults.filter((testResult) => testResultMatchesItem(item, testResult));
+    const matches = testResults.filter((testResult) => testMatchesItem(item, testResult));
     let state: OutstandingTestState;
     if (matches.length === 0) {
       state = hasUnmatchedResult ? 'unmatched_result_exists' : 'no_result';
@@ -468,13 +451,8 @@ export function computeConformanceResult(
   }));
   prerequisites.noOpenNcrs = ncrs.length === 0;
 
-  // Determine if lot can be conformed
-  const canConform =
-    prerequisites.itpAssigned &&
-    prerequisites.itpCompleted &&
-    (!prerequisites.testRequired || prerequisites.hasPassingTest) &&
-    prerequisites.noOpenNcrs &&
-    prerequisites.noNaHoldPointBypass;
+  // Determine if lot can be conformed (shared authoritative predicate).
+  const canConform = lotConformable(prerequisites);
 
   const blockingReasons: string[] = [];
   if (!prerequisites.itpAssigned) {

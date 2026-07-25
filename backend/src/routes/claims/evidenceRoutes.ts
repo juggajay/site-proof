@@ -4,6 +4,11 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { isItpCompletionFinished } from '../../lib/conformancePrerequisites.js';
+import {
+  ncrOpen,
+  testPassing,
+  testPendingNotFailNotVerified,
+} from '../../lib/readiness/predicates.js';
 import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
@@ -234,13 +239,9 @@ export function createClaimEvidenceRouter({
                 completion.verificationStatus !== 'pending_verification' &&
                 completion.verificationStatus !== 'rejected',
             ).length ?? 0;
-          const verifiedPassingTestCount = lot.testResults.filter(
-            (test) => test.passFail === 'pass' && test.status === 'verified',
-          ).length;
+          const verifiedPassingTestCount = lot.testResults.filter(testPassing).length;
           const failedTestCount = lot.testResults.filter((test) => test.passFail === 'fail').length;
-          const pendingTestCount = lot.testResults.filter(
-            (test) => test.passFail !== 'fail' && test.status !== 'verified',
-          ).length;
+          const pendingTestCount = lot.testResults.filter(testPendingNotFailNotVerified).length;
 
           return {
             id: lot.id,
@@ -410,9 +411,7 @@ export function createClaimEvidenceRouter({
               failedTestCount,
               pendingTestCount,
               ncrCount: lot.ncrLots.length,
-              openNcrCount: lot.ncrLots.filter(
-                (nl) => !['closed', 'closed_concession'].includes(nl.ncr.status),
-              ).length,
+              openNcrCount: lot.ncrLots.filter((nl) => ncrOpen(nl.ncr)).length,
               photoCount: lot.documents.filter((d) => d.documentType === 'photo').length,
               itpCompletionPercentage: itpInstance
                 ? Math.round(
@@ -449,10 +448,7 @@ export function createClaimEvidenceRouter({
             0,
           ),
           totalPassedTests: claim.claimedLots.reduce(
-            (sum, cl) =>
-              sum +
-              cl.lot.testResults.filter((t) => t.passFail === 'pass' && t.status === 'verified')
-                .length,
+            (sum, cl) => sum + cl.lot.testResults.filter(testPassing).length,
             0,
           ),
           totalFailedTests: claim.claimedLots.reduce(
@@ -460,19 +456,12 @@ export function createClaimEvidenceRouter({
             0,
           ),
           totalPendingTests: claim.claimedLots.reduce(
-            (sum, cl) =>
-              sum +
-              cl.lot.testResults.filter((t) => t.passFail !== 'fail' && t.status !== 'verified')
-                .length,
+            (sum, cl) => sum + cl.lot.testResults.filter(testPendingNotFailNotVerified).length,
             0,
           ),
           totalNCRs: claim.claimedLots.reduce((sum, cl) => sum + cl.lot.ncrLots.length, 0),
           totalOpenNCRs: claim.claimedLots.reduce(
-            (sum, cl) =>
-              sum +
-              cl.lot.ncrLots.filter(
-                (nl) => !['closed', 'closed_concession'].includes(nl.ncr.status),
-              ).length,
+            (sum, cl) => sum + cl.lot.ncrLots.filter((nl) => ncrOpen(nl.ncr)).length,
             0,
           ),
           totalPhotos: claim.claimedLots.reduce(

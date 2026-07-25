@@ -199,7 +199,13 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
       url.pathname === `/api/projects/${E2E_PROJECT_ID}/claim-readiness` &&
       route.request().method() === 'GET'
     ) {
-      await json({ lots: claimReadinessLots });
+      // Paginated cursor API (F0.2a §4): the CreateClaimModal fetches a single
+      // page here (no further cursor), matching its useInfiniteQuery adoption.
+      await json({
+        items: claimReadinessLots,
+        nextCursor: null,
+        total: claimReadinessLots.length,
+      });
       return;
     }
 

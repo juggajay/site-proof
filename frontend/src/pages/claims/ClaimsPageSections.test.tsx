@@ -413,8 +413,12 @@ describe('ClaimsPage TanStack Query register', () => {
   it('invalidates the claims key after create so the register refetches', async () => {
     let claimsResponse: { claims: Claim[] } = { claims: [] };
     apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
-      if (path === '/api/projects/p1/claim-readiness') {
-        return Promise.resolve(READY_LOT_READINESS);
+      if (path.startsWith('/api/projects/p1/claim-readiness')) {
+        return Promise.resolve({
+          items: READY_LOT_READINESS.lots,
+          nextCursor: null,
+          total: READY_LOT_READINESS.lots.length,
+        });
       }
       if (path === '/api/projects/p1/claims' && options?.method === 'POST') {
         claimsResponse = { claims: [SEEDED_CLAIM] };

@@ -23,6 +23,7 @@
 import type { ITPChecklistItem, ITPCompletion, ITPInstance } from '@/pages/lots/types';
 import type { Lot } from '@/pages/lots/lotsPageTypes';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { lotConformable } from '@/lib/readinessPredicates';
 
 // ── Lot card meta ──────────────────────────────────────────────────────────────
 
@@ -486,7 +487,18 @@ export interface LotReadinessLine {
  */
 export function deriveLotReadinessLine(summary: ItpHubSummary, openNcrs: number): LotReadinessLine {
   const remainingItp = Math.max(summary.total - summary.accepted, 0);
-  const conformable = summary.total > 0 && remainingItp === 0 && openNcrs === 0;
+  // Field-view conformability via the shared predicate: the foreman surface
+  // deliberately gates on ITP resolution + open NCRs only (no test-verification
+  // or hold-point gate — those stay the office's call), so testRequired is false
+  // and the N/A hold-point bypass is not applied here. Same output as the prior
+  // inline `total > 0 && remainingItp === 0 && openNcrs === 0`.
+  const conformable = lotConformable({
+    itpAssigned: summary.total > 0,
+    itpCompleted: remainingItp === 0,
+    testRequired: false,
+    hasPassingTest: true,
+    noOpenNcrs: openNcrs === 0,
+  });
 
   let line: string;
   if (summary.total === 0) {

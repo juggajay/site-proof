@@ -99,6 +99,9 @@ export const ErrorCodes = {
   INVALID_INPUT: 'INVALID_INPUT',
   MISSING_FIELD: 'MISSING_FIELD',
   INVALID_REFERENCE: 'INVALID_REFERENCE',
+  // Keyset pagination: a malformed or deleted-anchor cursor. Clients restart
+  // from page one on this code (claim-readiness pagination, F0.2a §4).
+  INVALID_CURSOR: 'INVALID_CURSOR',
 
   // Server errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',

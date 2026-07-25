@@ -1,14 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { ConformedLot, NewClaimFormData } from '../types';
-import type {
-  ClaimReadinessLot,
-  EvidenceReadinessItem,
-  ProjectClaimReadiness,
-} from '@/types/evidenceReadiness';
+import type { ClaimReadinessLot, EvidenceReadinessItem } from '@/types/evidenceReadiness';
 import {
   calculateLotClaimAmount,
   formatCurrency,
@@ -56,6 +52,17 @@ interface VariationsResponse {
   variations?: ClaimableVariation[];
 }
 
+// Paginated claim-readiness page (backend cursor contract, F0.2a §4).
+interface ClaimReadinessPage {
+  items: ClaimReadinessLot[];
+  nextCursor: string | null;
+  total?: number;
+}
+
+// Page size for the modal's claim-readiness fetch. Kept well under the server
+// cap (500); most projects fit in one page, larger registers "load more".
+const CLAIM_READINESS_PAGE_SIZE = 100;
+
 function readinessItems(lot: ClaimReadinessLot): EvidenceReadinessItem[] {
   return [...lot.claim.blockers, ...lot.claim.warnings, ...lot.claim.support];
 }
@@ -100,8 +107,6 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   const [conformedLots, setConformedLots] = useState<ClaimableLot[]>([]);
   const [selectedVariationIds, setSelectedVariationIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
-  const [loadingLots, setLoadingLots] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const creatingRef = useRef(false);
   const requestKeyRef = useRef<string | undefined>(undefined);
@@ -116,26 +121,50 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     };
   });
 
-  const fetchConformedLots = useCallback(async () => {
-    setLoadingLots(true);
-    setLoadError(null);
-    try {
-      const data = await apiFetch<ProjectClaimReadiness>(
-        `/api/projects/${encodeURIComponent(projectId)}/claim-readiness`,
+  // Claim readiness is paginated (cursor API): fetch page-by-page and let the
+  // user "load more" for large registers. The lot rows carry per-row editable
+  // state (selection + percent), so query pages are synced into `conformedLots`
+  // below, preserving any edits the user already made.
+  const readinessQuery = useInfiniteQuery({
+    queryKey: queryKeys.claimReadiness(projectId),
+    queryFn: ({ pageParam }: { pageParam?: string }) => {
+      const params = new URLSearchParams({ limit: String(CLAIM_READINESS_PAGE_SIZE) });
+      if (pageParam) {
+        params.set('cursor', pageParam);
+      }
+      return apiFetch<ClaimReadinessPage>(
+        `/api/projects/${encodeURIComponent(projectId)}/claim-readiness?${params.toString()}`,
       );
-      setConformedLots(data.lots.map(mapReadinessLot));
-    } catch (error) {
-      logError('Error fetching conformed lots:', error);
-      setConformedLots([]);
-      setLoadError(extractErrorMessage(error, 'Could not load claimable lots. Please try again.'));
-    } finally {
-      setLoadingLots(false);
-    }
-  }, [projectId]);
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    staleTime: 30_000,
+    onError: (error) => logError('Error fetching conformed lots:', error),
+  });
 
+  const readinessItems = useMemo(
+    () => (readinessQuery.data?.pages ?? []).flatMap((page) => page.items),
+    [readinessQuery.data],
+  );
+
+  // Sync fetched pages into editable lot state, preserving selection/percent
+  // edits for lots already loaded (so "load more" and refetches never wipe them).
   useEffect(() => {
-    fetchConformedLots();
-  }, [fetchConformedLots]);
+    setConformedLots((previous) => {
+      const previousById = new Map(previous.map((lot) => [lot.id, lot]));
+      return readinessItems.map((item) => {
+        const mapped = mapReadinessLot(item);
+        const existing = previousById.get(mapped.id);
+        return existing
+          ? { ...mapped, selected: existing.selected, percentComplete: existing.percentComplete }
+          : mapped;
+      });
+    });
+  }, [readinessItems]);
+
+  const loadingLots = readinessQuery.isLoading;
+  const loadError = readinessQuery.isError
+    ? extractErrorMessage(readinessQuery.error, 'Could not load claimable lots. Please try again.')
+    : null;
 
   const variationsQuery = useQuery({
     queryKey: queryKeys.variations(projectId),
@@ -301,7 +330,11 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="font-medium">{loadError || createError}</p>
                 {loadError && (
-                  <Button type="button" variant="outline" onClick={() => void fetchConformedLots()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void readinessQuery.refetch()}
+                  >
                     Try again
                   </Button>
                 )}
@@ -477,6 +510,16 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                     </div>
                   );
                 })
+              )}
+              {!loadingLots && !loadError && readinessQuery.hasNextPage && (
+                <button
+                  type="button"
+                  onClick={() => void readinessQuery.fetchNextPage()}
+                  disabled={readinessQuery.isFetchingNextPage}
+                  className="touch-target w-full p-3 text-sm font-medium text-primary hover:bg-muted/50 disabled:opacity-60"
+                >
+                  {readinessQuery.isFetchingNextPage ? 'Loading more lots...' : 'Load more lots'}
+                </button>
               )}
             </div>
           </div>

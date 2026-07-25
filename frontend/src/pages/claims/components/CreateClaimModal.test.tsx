@@ -67,6 +67,9 @@ const APPROVED_VARIATIONS_RESPONSE = {
   ],
 };
 
+// The modal now consumes the paginated claim-readiness cursor API
+// ({ items, nextCursor }) via useInfiniteQuery. A single-page fixture returns
+// all lots with nextCursor: null.
 function mockClaimReadinessAndVariations({
   readiness = READY_LOT_READINESS,
   variations = APPROVED_VARIATIONS_RESPONSE,
@@ -80,8 +83,12 @@ function mockClaimReadinessAndVariations({
     if (options?.method === 'POST') {
       return Promise.resolve(postResponse);
     }
-    if (path === '/api/projects/p1/claim-readiness') {
-      return Promise.resolve(readiness);
+    if (path.startsWith('/api/projects/p1/claim-readiness')) {
+      return Promise.resolve({
+        items: readiness.lots,
+        nextCursor: null,
+        total: readiness.lots.length,
+      });
     }
     if (path === '/api/projects/p1/variations') {
       return Promise.resolve(variations);
@@ -235,8 +242,12 @@ describe('CreateClaimModal create flow', () => {
           ? Promise.reject(new Error('network dropped the response'))
           : Promise.resolve({ claim: { id: 'claim-1' } });
       }
-      if (path === '/api/projects/p1/claim-readiness') {
-        return Promise.resolve(READY_LOT_READINESS);
+      if (path.startsWith('/api/projects/p1/claim-readiness')) {
+        return Promise.resolve({
+          items: READY_LOT_READINESS.lots,
+          nextCursor: null,
+          total: READY_LOT_READINESS.lots.length,
+        });
       }
       if (path === '/api/projects/p1/variations') {
         return Promise.resolve({ variations: [] });
@@ -325,5 +336,53 @@ describe('CreateClaimModal create flow', () => {
 
     expect(await screen.findByText('LOT-001')).toBeInTheDocument();
     expect(screen.queryByText('Approved variations')).not.toBeInTheDocument();
+  });
+
+  it('loads additional claim-readiness pages via the cursor API when Load more is clicked', async () => {
+    const page1Lot = {
+      ...READY_LOT_READINESS.lots[0],
+      lotId: 'lot-1',
+      lotNumber: 'LOT-001',
+    };
+    const page2Lot = {
+      ...READY_LOT_READINESS.lots[0],
+      lotId: 'lot-2',
+      lotNumber: 'LOT-002',
+    };
+
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (options?.method === 'POST') {
+        return Promise.resolve({ claim: { id: 'claim-1' } });
+      }
+      if (path.startsWith('/api/projects/p1/claim-readiness')) {
+        // Second page is requested with the cursor from page one.
+        if (path.includes('cursor=')) {
+          return Promise.resolve({ items: [page2Lot], nextCursor: null });
+        }
+        return Promise.resolve({ items: [page1Lot], nextCursor: 'CURSOR-P2', total: 2 });
+      }
+      if (path === '/api/projects/p1/variations') {
+        return Promise.resolve({ variations: [] });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+
+    renderModal();
+
+    // Page one loads; page two lot is not present yet.
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    expect(screen.queryByText('LOT-002')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Load more lots/i }));
+
+    // Page two lot appears and both remain selectable (state preserved).
+    expect(await screen.findByText('LOT-002')).toBeInTheDocument();
+    expect(screen.getByText('LOT-001')).toBeInTheDocument();
+
+    // The second request carried the page-one cursor.
+    const cursorCall = apiFetchMock.mock.calls.find(
+      (call) => typeof call[0] === 'string' && call[0].includes('cursor=CURSOR-P2'),
+    );
+    expect(cursorCall).toBeTruthy();
   });
 });
