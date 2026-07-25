@@ -200,7 +200,9 @@ jobs:
       - name: Audit dependencies
         # High/critical advisories still block; moderate ones in transitive deps
         # no longer fail unrelated PRs the moment an advisory publishes.
-        run: npm audit --audit-level=high
+        # Documented exceptions (GHSA-keyed, each with a reason) live in
+        # scripts/audit-allowlist.json, enforced by scripts/audit-check.mjs.
+        run: node ../scripts/audit-check.mjs
 
       - name: Check formatting
         run: npm run format:check
