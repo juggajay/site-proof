@@ -7,6 +7,7 @@ import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import { holdPointTerminal } from '../../lib/readiness/predicates.js';
 import { prisma } from '../../lib/prisma.js';
 import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
 import { PENDING_TEST_RESULT_STATUSES } from '../../lib/testResultStatus.js';
@@ -42,7 +43,6 @@ const LOT_PHOTO_DOCUMENT_FILTER: Prisma.DocumentWhereInput = {
 };
 
 const RELEASE_RECIPIENT_FALLBACK_PROJECT_ROLES = ['superintendent', 'project_manager'];
-const TERMINAL_HOLD_POINT_STATUSES = new Set(['released', 'completed']);
 
 type LotForManagementPrep = NonNullable<Awaited<ReturnType<typeof fetchLotReadinessRecord>>>;
 
@@ -138,7 +138,7 @@ function buildManagementPrepSnapshot(lot: LotForManagementPrep, fallbackRecipien
 
   const missingRecipientIds = releaseGatedIds.filter((itemId) => {
     const holdPoint = holdPointByItemId.get(itemId);
-    if (holdPoint && TERMINAL_HOLD_POINT_STATUSES.has(holdPoint.status)) {
+    if (holdPoint && holdPointTerminal(holdPoint)) {
       return false;
     }
 
@@ -150,7 +150,7 @@ function buildManagementPrepSnapshot(lot: LotForManagementPrep, fallbackRecipien
   // "N hold points need release" beside "N hold points released".
   const outstandingManagementIds = releaseGatedIds.filter((itemId) => {
     const holdPoint = holdPointByItemId.get(itemId);
-    return !(holdPoint && TERMINAL_HOLD_POINT_STATUSES.has(holdPoint.status));
+    return !(holdPoint && holdPointTerminal(holdPoint));
   });
 
   const holdPointsHref = `/projects/${encodeURIComponent(lot.projectId)}/hold-points?lotId=${encodeURIComponent(lot.id)}`;

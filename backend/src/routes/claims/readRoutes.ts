@@ -2,11 +2,11 @@ import { Router } from 'express';
 import type { RequestHandler } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { AppError } from '../../lib/AppError.js';
+import { AppError, ErrorCodes } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { checkConformancePrerequisitesBatch } from '../../lib/conformancePrerequisites.js';
-import { isPendingTestResultStatus } from '../../lib/testResultStatus.js';
+import { holdPointReleased, testPendingByStatus } from '../../lib/readiness/predicates.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   buildClaimCertificationView,
@@ -31,6 +31,109 @@ const CLAIM_LOT_QUERYABLE_STATUSES = [
   'conformed',
   'claimed',
 ] as const;
+
+// The lot fields the claim-readiness computation reads. Shared by the legacy
+// full-list query and the paginated query so both fetch an identical shape.
+const CLAIM_READINESS_LOT_SELECT = {
+  id: true,
+  lotNumber: true,
+  status: true,
+  activityType: true,
+  budgetAmount: true,
+  claimedInId: true,
+  conformanceOverriddenAt: true,
+  holdPoints: {
+    select: {
+      id: true,
+      status: true,
+    },
+  },
+  testResults: {
+    select: {
+      id: true,
+      status: true,
+      // passFail is unused by the pendingTests count itself (testPendingByStatus
+      // reads only status) but keeps the row a full TestResultRow for the shared
+      // predicate; it is not rendered, so the response is unchanged.
+      passFail: true,
+    },
+  },
+  documents: {
+    select: {
+      id: true,
+      documentType: true,
+    },
+  },
+} satisfies Prisma.LotSelect;
+
+type ClaimReadinessLotRow = Prisma.LotGetPayload<{ select: typeof CLAIM_READINESS_LOT_SELECT }>;
+
+// Claim-readiness pagination (execution spec Rev 2 §4). The cursor is an opaque
+// base64 of the register's natural key `(lotNumber, id)` under the stable order
+// `lotNumber ASC, id ASC`; `take` is capped at 500 server-side.
+const CLAIM_READINESS_MAX_PAGE_SIZE = 500;
+
+interface ClaimReadinessCursor {
+  lotNumber: string;
+  id: string;
+}
+
+interface ClaimReadinessPagination {
+  limit: number;
+  cursor: ClaimReadinessCursor | null;
+}
+
+function encodeClaimReadinessCursor(row: ClaimReadinessCursor): string {
+  return Buffer.from(JSON.stringify({ lotNumber: row.lotNumber, id: row.id }), 'utf8').toString(
+    'base64',
+  );
+}
+
+function decodeClaimReadinessCursor(value: string): ClaimReadinessCursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+  } catch {
+    throw new AppError(400, 'Invalid pagination cursor', ErrorCodes.INVALID_CURSOR);
+  }
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    typeof (parsed as ClaimReadinessCursor).lotNumber !== 'string' ||
+    typeof (parsed as ClaimReadinessCursor).id !== 'string'
+  ) {
+    throw new AppError(400, 'Invalid pagination cursor', ErrorCodes.INVALID_CURSOR);
+  }
+  const { lotNumber, id } = parsed as ClaimReadinessCursor;
+  return { lotNumber, id };
+}
+
+// Returns null when the request opts out of pagination (no cursor/limit params),
+// preserving the historical full-list response for existing callers.
+function parseClaimReadinessPagination(query: {
+  cursor?: unknown;
+  limit?: unknown;
+}): ClaimReadinessPagination | null {
+  const cursorParam = getOptionalClaimQueryString(query.cursor, 'cursor');
+  const limitParam = getOptionalClaimQueryString(query.limit, 'limit');
+  if (cursorParam === undefined && limitParam === undefined) {
+    return null;
+  }
+
+  let limit = CLAIM_READINESS_MAX_PAGE_SIZE;
+  if (limitParam !== undefined) {
+    const parsedLimit = Number(limitParam);
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+      throw AppError.badRequest('limit must be a positive integer');
+    }
+    limit = Math.min(parsedLimit, CLAIM_READINESS_MAX_PAGE_SIZE);
+  }
+
+  return {
+    limit,
+    cursor: cursorParam === undefined ? null : decodeClaimReadinessCursor(cursorParam),
+  };
+}
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -102,6 +205,61 @@ function parseOptionalClaimBooleanQuery(value: unknown, field: string): boolean 
   throw AppError.badRequest(`${field} must be true or false`);
 }
 
+// Build the claim-readiness view-models for a set of lot rows. Shared by the
+// legacy full-list path and the paginated path so both produce identical items;
+// only the response envelope differs. Byte-identical to the prior inline block.
+async function computeClaimReadinessItems(lots: ClaimReadinessLotRow[]) {
+  // Cumulative claiming: a conformed lot can appear on multiple claims, so its
+  // readiness must reflect how much has already been claimed.
+  const cumulativeClaimedByLotId = await getCumulativeClaimedPercentByLot(
+    lots.map((lot) => lot.id),
+  );
+
+  // M39: resolve conformance for every lot in a constant number of queries
+  // (one lot.findMany + at most one holdPoint.findMany) instead of the old
+  // per-lot ~2N+1 fan-out.
+  const conformStatusByLotId = await checkConformancePrerequisitesBatch(lots.map((lot) => lot.id));
+
+  return lots.map((lot) => {
+    const conformStatus = conformStatusByLotId.get(lot.id);
+    if (!conformStatus?.prerequisites) {
+      throw AppError.notFound('Lot');
+    }
+
+    const readiness = buildLotReadinessFromInputs({
+      lot: {
+        id: lot.id,
+        lotNumber: lot.lotNumber,
+        status: lot.status,
+        budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
+        claimedInId: lot.claimedInId,
+        claimedPercentage: cumulativeClaimedByLotId.get(lot.id) ?? 0,
+        conformanceOverriddenAt: lot.conformanceOverriddenAt
+          ? lot.conformanceOverriddenAt.toISOString()
+          : null,
+      },
+      canViewCommercial: true,
+      conformStatus: {
+        canConform: Boolean(conformStatus.canConform),
+        blockingReasons: conformStatus.blockingReasons ?? [],
+        prerequisites: conformStatus.prerequisites,
+      },
+      evidenceCounts: {
+        unreleasedHoldPoints: lot.holdPoints.filter((holdPoint) => !holdPointReleased(holdPoint))
+          .length,
+        releasedHoldPoints: lot.holdPoints.filter(holdPointReleased).length,
+        approvedDockets: 0,
+        diaryEntries: 0,
+        documents: lot.documents.length,
+        photos: lot.documents.filter((document) => document.documentType === 'photo').length,
+        pendingTests: lot.testResults.filter(testPendingByStatus).length,
+      },
+    });
+
+    return mapClaimReadinessItem(lot, readiness);
+  });
+}
+
 export function createClaimReadRouter({
   requireAuth,
   parseClaimRouteParam,
@@ -158,110 +316,73 @@ export function createClaimReadRouter({
       const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
       await requireCommercialProjectAccess(req.user!, projectId);
 
-      const lots = await prisma.lot.findMany({
-        where: {
-          projectId,
-          status: {
-            in: [
-              'not_started',
-              'in_progress',
-              'awaiting_test',
-              'hold_point',
-              'ncr_raised',
-              'completed',
-              'conformed',
-              'claimed',
-            ],
-          },
-        },
-        select: {
-          id: true,
-          lotNumber: true,
-          status: true,
-          activityType: true,
-          budgetAmount: true,
-          claimedInId: true,
-          conformanceOverriddenAt: true,
-          holdPoints: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-          testResults: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-          documents: {
-            select: {
-              id: true,
-              documentType: true,
-            },
-          },
-        },
-        orderBy: { lotNumber: 'asc' },
-      });
+      const pagination = parseClaimReadinessPagination(req.query);
+      const baseWhere: Prisma.LotWhereInput = {
+        projectId,
+        status: { in: [...CLAIM_LOT_QUERYABLE_STATUSES] },
+      };
 
-      // Cumulative claiming: a conformed lot can appear on multiple claims, so
-      // its readiness must reflect how much has already been claimed.
-      const cumulativeClaimedByLotId = await getCumulativeClaimedPercentByLot(
-        lots.map((lot) => lot.id),
-      );
-
-      // M39: resolve conformance for every lot in a constant number of queries
-      // (one lot.findMany + at most one holdPoint.findMany) instead of the old
-      // per-lot ~2N+1 fan-out.
-      const conformStatusByLotId = await checkConformancePrerequisitesBatch(
-        lots.map((lot) => lot.id),
-      );
-
-      const readinessLots = lots.map((lot) => {
-        const conformStatus = conformStatusByLotId.get(lot.id);
-        if (!conformStatus?.prerequisites) {
-          throw AppError.notFound('Lot');
-        }
-
-        const readiness = buildLotReadinessFromInputs({
-          lot: {
-            id: lot.id,
-            lotNumber: lot.lotNumber,
-            status: lot.status,
-            budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
-            claimedInId: lot.claimedInId,
-            claimedPercentage: cumulativeClaimedByLotId.get(lot.id) ?? 0,
-            conformanceOverriddenAt: lot.conformanceOverriddenAt
-              ? lot.conformanceOverriddenAt.toISOString()
-              : null,
-          },
-          canViewCommercial: true,
-          conformStatus: {
-            canConform: Boolean(conformStatus.canConform),
-            blockingReasons: conformStatus.blockingReasons ?? [],
-            prerequisites: conformStatus.prerequisites,
-          },
-          evidenceCounts: {
-            unreleasedHoldPoints: lot.holdPoints.filter(
-              (holdPoint) => holdPoint.status !== 'released',
-            ).length,
-            releasedHoldPoints: lot.holdPoints.filter(
-              (holdPoint) => holdPoint.status === 'released',
-            ).length,
-            approvedDockets: 0,
-            diaryEntries: 0,
-            documents: lot.documents.length,
-            photos: lot.documents.filter((document) => document.documentType === 'photo').length,
-            pendingTests: lot.testResults.filter((testResult) =>
-              isPendingTestResultStatus(testResult.status),
-            ).length,
-          },
+      // Legacy full-list behaviour (no cursor/limit params): unchanged for
+      // existing callers. Its removal is an F0.2a exit item.
+      if (!pagination) {
+        const lots = await prisma.lot.findMany({
+          where: baseWhere,
+          select: CLAIM_READINESS_LOT_SELECT,
+          orderBy: { lotNumber: 'asc' },
         });
+        res.json(buildClaimReadinessResponse(await computeClaimReadinessItems(lots)));
+        return;
+      }
 
-        return mapClaimReadinessItem(lot, readiness);
+      // A deleted cursor (its anchor lot no longer exists in this project) is a
+      // hard restart signal, not a silent skip — surface INVALID_CURSOR so the
+      // client restarts from page one.
+      if (pagination.cursor) {
+        const anchor = await prisma.lot.findFirst({
+          where: { id: pagination.cursor.id, projectId },
+          select: { id: true },
+        });
+        if (!anchor) {
+          throw new AppError(400, 'Invalid pagination cursor', ErrorCodes.INVALID_CURSOR);
+        }
+      }
+
+      // Keyset pagination on the register's natural key (lotNumber ASC, id ASC).
+      const where: Prisma.LotWhereInput = pagination.cursor
+        ? {
+            ...baseWhere,
+            OR: [
+              { lotNumber: { gt: pagination.cursor.lotNumber } },
+              { lotNumber: pagination.cursor.lotNumber, id: { gt: pagination.cursor.id } },
+            ],
+          }
+        : baseWhere;
+
+      // Over-fetch by one to detect whether a further page exists.
+      const pageLots = await prisma.lot.findMany({
+        where,
+        select: CLAIM_READINESS_LOT_SELECT,
+        orderBy: [{ lotNumber: 'asc' }, { id: 'asc' }],
+        take: pagination.limit + 1,
       });
 
-      res.json(buildClaimReadinessResponse(readinessLots));
+      const hasMore = pageLots.length > pagination.limit;
+      const lots = hasMore ? pageLots.slice(0, pagination.limit) : pageLots;
+      const nextCursor =
+        hasMore && lots.length > 0 ? encodeClaimReadinessCursor(lots[lots.length - 1]) : null;
+
+      const items = await computeClaimReadinessItems(lots);
+
+      const body: { items: typeof items; nextCursor: string | null; total?: number } = {
+        items,
+        nextCursor,
+      };
+      // `total` is a first-page-only convenience (no cursor supplied).
+      if (!pagination.cursor) {
+        body.total = await prisma.lot.count({ where: baseWhere });
+      }
+
+      res.json(body);
     }),
   );
 

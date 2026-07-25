@@ -4,6 +4,13 @@ import type {
   EvidenceReadinessItem,
 } from './core.js';
 import { item, reviewBucket } from './core.js';
+import {
+  holdPointReleased,
+  ncrOpen,
+  ncrSeriousIncludingCritical,
+  testPassing,
+  testPendingNotFailNotVerified,
+} from '../readiness/predicates.js';
 
 export function buildClaimEvidenceReviewFromInputs(
   input: ClaimEvidenceReviewInput,
@@ -95,7 +102,7 @@ export function buildClaimEvidenceReviewFromInputs(
     }
 
     const unreleasedLotHoldPoints = lot.holdPoints.filter(
-      (holdPoint) => holdPoint.status !== 'released',
+      (holdPoint) => !holdPointReleased(holdPoint),
     );
     const releasedLotHoldPoints = lot.holdPoints.length - unreleasedLotHoldPoints.length;
 
@@ -132,11 +139,18 @@ export function buildClaimEvidenceReviewFromInputs(
     // status in the requested -> at_lab -> results_received -> entered -> verified
     // workflow). Anything that has not failed and is not yet verified is still
     // pending verification and must surface as a warning, not as evidence.
-    const pendingTests = lot.testResults.filter(
-      (testResult) => testResult.passFail !== 'fail' && testResult.status !== 'verified',
+    // F0.2a keeps claimReview's divergent pending variant (not-fail-not-verified);
+    // unification to testPendingByStatus is F0.2b. The review DTO types passFail
+    // as nullable (the column is non-null in practice); coercing null → '' is
+    // byte-identical here (null and '' both fail `=== 'pass'` and satisfy `!== 'fail'`).
+    const pendingTests = lot.testResults.filter((testResult) =>
+      testPendingNotFailNotVerified({
+        passFail: testResult.passFail ?? '',
+        status: testResult.status,
+      }),
     );
-    const passingTests = lot.testResults.filter(
-      (testResult) => testResult.passFail === 'pass' && testResult.status === 'verified',
+    const passingTests = lot.testResults.filter((testResult) =>
+      testPassing({ passFail: testResult.passFail ?? '', status: testResult.status }),
     );
 
     if (lot.testResults.length === 0) {
@@ -202,9 +216,11 @@ export function buildClaimEvidenceReviewFromInputs(
     }
 
     const ncrs = lot.ncrLots.map((ncrLot) => ncrLot.ncr);
-    const openNcrs = ncrs.filter((ncr) => !['closed', 'closed_concession'].includes(ncr.status));
-    const criticalOpenNcrs = openNcrs.filter((ncr) => ['major', 'critical'].includes(ncr.severity));
-    const minorOpenNcrs = openNcrs.filter((ncr) => !['major', 'critical'].includes(ncr.severity));
+    const openNcrs = ncrs.filter(ncrOpen);
+    // F0.2a keeps claimReview's divergent seriousness variant (major OR critical);
+    // unification to severity==='major' is F0.2b.
+    const criticalOpenNcrs = openNcrs.filter(ncrSeriousIncludingCritical);
+    const minorOpenNcrs = openNcrs.filter((ncr) => !ncrSeriousIncludingCritical(ncr));
 
     if (criticalOpenNcrs.length > 0) {
       items.push(

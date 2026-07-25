@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { STAGNANT_HOLD_POINT_STATUSES } from '../../lib/readiness/predicates.js';
 import {
   buildDashboardStatsResponse,
   buildEmptyDashboardStatsResponse,
@@ -135,7 +136,7 @@ dashboardStatsRouter.get(
         // panel, so it must reflect ALL stale hold points regardless of the window.
         where: {
           lot: { projectId: { in: projectIds } },
-          status: { in: ['pending', 'scheduled', 'requested'] },
+          status: { in: [...STAGNANT_HOLD_POINT_STATUSES] },
           createdAt: { lt: staleHPThreshold },
         },
         select: {

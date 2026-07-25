@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { STAGNANT_HOLD_POINT_STATUSES } from '../../lib/readiness/predicates.js';
 import {
   COMMERCIAL_DASHBOARD_ROLES,
   getDashboardProjectAccess,
@@ -237,7 +238,7 @@ portfolioDashboardRouter.get(
         FROM hold_points hp
         JOIN lots l ON hp."lot_id" = l.id
         WHERE l."project_id" IN (${Prisma.join(activeProjectIds)})
-          AND hp.status IN ('pending', 'scheduled', 'requested')
+          AND hp.status IN (${Prisma.join([...STAGNANT_HOLD_POINT_STATUSES])})
           AND hp."created_at" < ${sevenDaysAgo}
         GROUP BY l."project_id"
       `

@@ -382,6 +382,111 @@ describe('Progress Claims API', () => {
     });
   });
 
+  describe('GET /api/projects/:projectId/claim-readiness pagination (F0.2a §4)', () => {
+    it('returns the legacy full-list shape { lots } when no cursor/limit params are given', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.lots)).toBe(true);
+      expect(res.body.nextCursor).toBeUndefined();
+      expect(res.body.total).toBeUndefined();
+    });
+
+    it('paginates by (lotNumber, id) with a stable order, exposing total on the first page only', async () => {
+      const stamp = Date.now();
+      // Deterministic lot numbers so the register order is predictable.
+      const a = await createClaimableLot(`PAGE-A-${stamp}`, 1000);
+      const b = await createClaimableLot(`PAGE-B-${stamp}`, 1000);
+      const c = await createClaimableLot(`PAGE-C-${stamp}`, 1000);
+      const createdIds = new Set([a.id, b.id, c.id]);
+
+      const firstPage = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness?limit=2`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(firstPage.status).toBe(200);
+      expect(Array.isArray(firstPage.body.items)).toBe(true);
+      expect(firstPage.body.items.length).toBe(2);
+      expect(typeof firstPage.body.nextCursor).toBe('string');
+      // total is a first-page-only convenience and counts the whole readiness set.
+      expect(typeof firstPage.body.total).toBe('number');
+      expect(firstPage.body.total).toBeGreaterThanOrEqual(3);
+
+      // Walk every page and assert lotNumber order is non-decreasing across the
+      // whole traversal, and each created lot appears exactly once.
+      const seen: string[] = [];
+      const lotNumbers: string[] = [];
+      let cursor: string | null = firstPage.body.nextCursor;
+      for (const item of firstPage.body.items) {
+        seen.push(item.lotId);
+        lotNumbers.push(item.lotNumber);
+      }
+      let guard = 0;
+      while (cursor && guard < 50) {
+        guard += 1;
+        const page = await request(app)
+          .get(
+            `/api/projects/${projectId}/claim-readiness?limit=2&cursor=${encodeURIComponent(cursor)}`,
+          )
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(page.status).toBe(200);
+        // total is omitted on cursor pages.
+        expect(page.body.total).toBeUndefined();
+        for (const item of page.body.items) {
+          seen.push(item.lotId);
+          lotNumbers.push(item.lotNumber);
+        }
+        cursor = page.body.nextCursor;
+      }
+
+      // Order stability: lotNumbers never decrease across the full traversal.
+      const sorted = [...lotNumbers].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+      expect(lotNumbers).toEqual(sorted);
+
+      // Each freshly-created lot shows up exactly once, no duplicates.
+      for (const id of createdIds) {
+        expect(seen.filter((s) => s === id).length).toBe(1);
+      }
+    });
+
+    it('rejects a malformed cursor with 400 INVALID_CURSOR', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness?cursor=not-a-valid-cursor`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CURSOR');
+    });
+
+    it('rejects a cursor whose anchor lot has been deleted with 400 INVALID_CURSOR', async () => {
+      const doomed = await createClaimableLot(`PAGE-DELETED-${Date.now()}`, 1000);
+      const cursor = Buffer.from(
+        JSON.stringify({ lotNumber: doomed.lotNumber, id: doomed.id }),
+        'utf8',
+      ).toString('base64');
+      await prisma.lot.delete({ where: { id: doomed.id } });
+
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness?cursor=${encodeURIComponent(cursor)}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_CURSOR');
+    });
+
+    it('caps the page size at 500 even when a larger limit is requested', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness?limit=100000`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.body.items.length).toBeLessThanOrEqual(500);
+    });
+  });
+
   describe('GET /api/projects/:projectId/lots', () => {
     it('should list lots for claiming', async () => {
       const res = await request(app)
