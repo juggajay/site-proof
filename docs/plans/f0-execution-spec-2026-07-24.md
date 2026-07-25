@@ -1,6 +1,6 @@
-# F0 Execution Specification — Shared Readiness / Action / Evidence Model (Rev 2)
+# F0 Execution Specification — Shared Readiness / Action / Evidence Model (Rev 3)
 
-**Date:** 24 July 2026 · **Rev 2:** 26 July 2026, incorporating the independent dev review (verdict 7.5/10; all ten required corrections applied below, each tagged `[R2-n]`) · **Status:** implementation-ready pending no further review objections; F0.2a may proceed immediately (review's explicit allowance), F0.4–F0.5 only under this revision.
+**Date:** 24 July 2026 · **Rev 2:** 26 July 2026, incorporating the independent dev review of Rev 1 (verdict 7.5/10; ten corrections, tagged `[R2-n]`) · **Rev 3:** 26 July 2026, incorporating the dev review of Rev 2 (verdict 8.5/10; four blockers + smaller corrections, tagged `[R3-n]`) · **Status:** implementation-ready pending no further review objections; F0.2a shipped under Rev 2's explicit allowance; F0.3–F0.5 only under this revision.
 **Foundation:** `docs/plans/f0-readiness-foundation-map-2026-07-24.md` (verified at `3d9b4a90`; re-verify line numbers at build time). **F0.1 has shipped** (#1546, predicate library + characterization corpus on master) — phase references below treat it as done `[R2-staleness]`.
 
 **Governing principle (unchanged):** F0 **extends the existing Evidence Readiness engine** — not a rewrite, not one linear record, not a stored `ready` flag. Readiness is computed; snapshots persist only at decision points; consumers are views over one predicate vocabulary.
@@ -30,7 +30,7 @@
 | RequirementInstance | Derived at evaluation time. Not stored in F0. |
 | EvidenceLink | Existing FKs read through one accessor layer (unchanged from Rev 1). |
 | RequirementEvaluation | **New table** `requirement_evaluations` — §3, with `[R2-2]` integrity. |
-| ActionAssignment | Contract only (A4 builds storage if measured necessary). **Shape corrected `[R2-6]`:** `{ subjectType, subjectId, title, status: 'needs_action'\|'waiting_on_me'\|'waiting_on_others'\|'done', isOverdue: boolean, dueAt?: ISO, assignee: { kind: 'user'\|'role'\|'external', id?: string, role?: string }, severity, reasonCode: string (stable, machine-readable, from the predicate item codes), primaryAction }`. `isOverdue` is orthogonal to `status` — an overdue item can be waiting on me or on others. |
+| ActionAssignment | Contract only (A4 builds storage if measured necessary). **Shape corrected `[R2-6]`, invariants fixed `[R3-small]`:** `{ subjectType, subjectId, title, status: 'waiting_on_me'\|'waiting_on_others'\|'done', needsAction: boolean, isOverdue: boolean, dueAt?: ISO, assignee: { kind: 'user'\|'role'\|'company'\|'external'\|'system', id?: string, role?: string }, severity, reasonCode: string (stable, machine-readable, from the predicate item codes), primaryAction }`. **Invariants:** `status` is exhaustive and mutually exclusive ball-in-court relative to the viewer — `needs_action` is NOT a status (that was the Rev 2 overlap): `needsAction` is derived, true iff `status='waiting_on_me'` AND `primaryAction` is executable by the viewer's role. `isOverdue` is orthogonal to `status` — an overdue item can be waiting on me or on others. Assignee kinds `company` (e.g. a subcontractor firm) and `system` (automation) added per review. |
 | Decision | `recordDecision()` — **no new audit action vocabulary `[R2-4]`.** Existing actions (`hp_released`, `ncr_qm_approved`, `lot_force_conformed`, claim actions, …) are kept untouched — they have consumers. Decision semantics ride on a structured **`decisionKind`** recorded in `AuditLog.changes.decisionKind` AND as a column on the snapshot: `decisionKind: 'approval' \| 'release' \| 'closure' \| 'concession' \| 'override' \| 'waiver' \| 'inclusion'`. One vocabulary for actions (existing), one orthogonal dimension for decision-ness (new column) — never two competing audit vocabularies. |
 | ExceptionOrWaiver | Existing override/concession structures + `decisionKind: 'override'\|'waiver'\|'concession'`. Dedicated table deferred to D1. |
 
@@ -50,7 +50,7 @@ model RequirementEvaluation {
   id                  String   @id @default(uuid())
   projectId           String   @map("project_id")
   entityType          String   @map("entity_type")   // 'lot' | 'hold_point' | 'ncr' | 'claim' | 'claim_lot' | 'claim_variation'
-  entityId            String   @map("entity_id")     // claim_lot rows: ClaimedLot.id (NOT the lot id); claim_variation rows: the claim-variation row id
+  entityId            String   @map("entity_id")     // claim_lot rows: ClaimedLot.id (NOT the lot id); claim_variation rows: Variation.id [R3-3] — there is no claim-variation join row (variations link via Variation.claimedInId, schema.prisma:1485)
   decisionKind        String   @map("decision_kind")
   auditAction         String   @map("audit_action")  // the EXISTING AuditAction recorded alongside
   requirementSet      String   @map("requirement_set")
@@ -69,16 +69,19 @@ model RequirementEvaluation {
   actorUser  User?                  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
   actorToken HoldPointReleaseToken? @relation(fields: [actorTokenId], references: [id], onDelete: SetNull)
 
-  @@unique([auditLogId])                       // idempotency: exactly one snapshot per decision audit row
+  @@unique([auditLogId, entityType, entityId]) // [R3-1] one snapshot per entity per decision — permits a claim decision's aggregate + per-member rows under one audit row while still barring duplicates. (Tighter than the review's suggested [..., requirementSet]: one decision never evaluates one entity under two requirement sets; extend the key only if that ever becomes true.)
   @@unique([entityType, entityId, requestKey]) // request-key replay returns the original, never a duplicate
   @@index([entityType, entityId, evaluatedAt])
   @@index([projectId, decisionKind])
   @@map("requirement_evaluations")
 }
 ```
-- **Claim coverage `[R2-3]`:** a claim decision snapshots at two grains — one `entityType='claim'` aggregate row (claim id; totals, member counts, per-member readiness verdicts) plus one row per member (`claim_lot` keyed by `ClaimedLot.id`, `claim_variation` keyed by the claim-variation row). Lot-only, variation-only and mixed claims are all first-class; the aggregate row exists in all three cases.
+- **Claim coverage `[R2-3]` `[R3-3]`:** a claim decision snapshots at two grains — one `entityType='claim'` aggregate row (claim id; totals, member counts) plus one row per member (`claim_lot` keyed by `ClaimedLot.id`, `claim_variation` keyed by `Variation.id`). Lot-only, variation-only and mixed claims are all first-class; the aggregate row exists in all three cases.
+- **Claim snapshot scale `[R3-3]`:** per-member rows store a **compact verdict** (`resultSchemaVersion`-typed: readiness booleans + blocking reason codes + claimed value, budget ≤ 1 KB serialized — never full evidence dumps; the full evidence detail remains request-time computable from the same predicates). Member rows are written with `createMany` inside the decision transaction. **Supported/benchmarked ceiling: 5,000 members** (the reference dataset); the F0.5 exit gate includes a measured maximum-size claim decision. The single-entity decision overhead target stays < 50ms p95; **claim decisions get their own target: p95 < 2s at the 5,000-member ceiling** — the flat 50ms target was unmeetable at 5,001 rows and is explicitly revised (review blocker 3).
 - **Deletion & retention `[R2-2]`:** rows are immutable (no update/delete API). Project deletion cascades (matching every project-scoped record). `AuditLog` deletion is blocked by the `Restrict` FK — audit rows referenced by snapshots cannot be deleted. Retention: snapshots are compliance evidence and follow the audit-log retention posture (indefinite for now; any future purge must treat audit+snapshot as one unit and is a Jay decision).
-- **Atomic decision flow `[R2-1]`:** inside ONE transaction: (1) evaluate readiness (reads), (2) entity-column updates, (3) `writeAuditLogInTransaction` (existing action, `changes.decisionKind` added), (4) snapshot insert referencing that audit row. Any failure rolls back all four. **Notifications, emails and webhooks are dispatched strictly after commit** (post-commit call in the route handler — never inside the transaction), so a rollback can never have produced user-visible signals.
+- **Atomic decision flow `[R2-1]` `[R3-2]`:** inside ONE transaction: (1) evaluate readiness (reads), (2) entity-column updates, (3) `writeAuditLogInTransaction` (existing action, `changes.decisionKind` added), (4) snapshot insert(s) referencing that audit row. Any failure rolls back all four. **Notifications, emails and webhooks are dispatched strictly after the final successful commit** (post-commit call in the route handler — never inside the transaction), so a rollback or retried attempt can never have produced user-visible signals.
+- **Concurrency protection `[R3-2]`:** the decision transaction runs at **`Serializable` isolation with bounded whole-transaction retries** (3 attempts on Prisma `P2034` serialization failure, re-reading readiness fresh each attempt). This covers what the entity-row optimistic guard alone cannot: related evidence (`TestResult`, `ITPCompletion`, `NCRLot`, hold-point dependencies) changing between the readiness read and the commit. The optimistic `updateMany` guard on the decided entity is retained as a cheap second line, but serializable+retry is the correctness mechanism. Retry exhaustion returns **409 with stable code `DECISION_CONFLICT`** (client refreshes readiness and re-decides); a non-conflict snapshot/audit write failure returns **500 with stable code `SNAPSHOT_WRITE_FAILED`** + Sentry — never an anonymous 500 `[R3-small]`.
+- **Audit helper change `[R3-small]`:** `writeAuditLogInTransaction` (`backend/src/lib/auditLog.ts:110`, currently `Promise<void>`) is changed to return the created `AuditLog` row (or its id) so the snapshot insert can reference it in-transaction. All existing callers ignore the return value — additive, zero behaviour change.
 - Read path unchanged (request-time, stateless, shared predicates).
 
 **Migration:** one additive reviewed migration (table + FKs + uniques; AuditLog gains only a back-relation). Prod apply via the production-migrations workflow.
@@ -98,7 +101,7 @@ Unchanged from Rev 1, plus: snapshot rows carry unfiltered commercial values —
 ## 6. Edge cases (specified, tested)
 
 Rev 1 list retained (override provenance, released-vs-completed, no-ITP codes, snapshot size guard), plus `[R2-10]`:
-- **Concurrent evidence change during a decision:** evaluation reads and entity writes share one transaction; the entity write is an optimistic guard (`updateMany` pinning prior state, per the escalation pattern) — a conflicting concurrent update fails the transaction and the decider retries against fresh readiness. Pinned by test.
+- **Concurrent evidence change during a decision `[R3-2]`:** covered by serializable isolation + bounded retry (§3) — including *related* evidence (`TestResult`, `ITPCompletion`, `NCRLot`, hold-point dependencies) changing mid-decision, not only the decided entity's own row. Retry exhaustion → 409 `DECISION_CONFLICT`. Pinned by test with a concurrent related-evidence writer, not just a concurrent entity writer.
 - **Request-key replay:** same `(entityType, entityId, requestKey)` returns the original decision result (200 + existing snapshot reference), performs no second write, sends no second notification.
 - **Snapshot/audit write failure:** whole transaction rolls back; no entity change, no notification (post-commit only). Pinned by fault-injection test.
 - **Cross-project FK mismatch:** snapshot `projectId` must match the decided entity's project; mismatches are 400 before the transaction opens.
@@ -109,7 +112,7 @@ Unchanged from Rev 1, plus: `actorTokenId` stores the token ROW id (tokens are s
 
 ## 8. Performance tests
 
-Unchanged targets, plus: paginated claim-readiness measured at pages of 100/500 over the 5,000-lot reference dataset; `CreateClaimModal` first-page render budget p95 < 1s `[R2-8]`; the decision-path overhead budget (< 50ms p95) now includes audit row + snapshot insert under the single transaction `[R2-1]`.
+Unchanged targets, plus: paginated claim-readiness measured at pages of 100/500 over the 5,000-lot reference dataset; `CreateClaimModal` first-page render budget p95 < 1s `[R2-8]`; the **single-entity** decision-path overhead budget (< 50ms p95) includes audit row + snapshot insert under the single transaction `[R2-1]`; **claim decisions measured separately: p95 < 2s at the 5,000-member ceiling with `createMany` member snapshots `[R3-3]`**; serializable-retry rate monitored under the concurrency test load (a hot retry loop is a perf failure, not just a correctness event) `[R3-2]`.
 
 ## 9. Feature flag & rollout `[R2-9]` (contradiction resolved)
 
@@ -128,20 +131,23 @@ Rev 1 posture, amended `[R2-9]`: the snapshot requirement cannot be quietly roll
 
 - **F0.1 — DONE** (#1546): predicate library + characterization corpus, merged.
 - **F0.2a** (M): byte-identical re-expression of live consumers + divergent call-site migration onto named predicates, zero behaviour change, snapshot corpus as the gate. Includes the claim-readiness cursor API + `CreateClaimModal` adoption `[R2-8]`. Shell files: import swap only, zero visual diff.
-- **F0.2b** (S, separately approved): the intentional unifications (NCR seriousness → `severity='major'`; pending-test semantics → single predicate). One PR per unification, each landing with its characterization diff attached and explicitly accepted in review; independently revertible.
-- **F0.3** (S–M): consumer contracts for the four future consumers (corrected ActionAssignment shape).
-- **F0.4** (M): `recordDecision` + typed actors + atomic flow + call-site adoption (conform, override, HP release incl. public and public-batch token paths, NCR close/concession, claim create/include). **Gated on this Rev 2 being accepted.**
-- **F0.5** (S–M): snapshots + flag sequence + measurement. **Gated likewise.**
-- Order: F0.2a → F0.2b → {F0.3, F0.4} → F0.5. A4 UI design may start against the F0.3 contract.
+- **F0.2b** (S, separately approved): the intentional unifications (NCR seriousness → `severity='major'`; pending-test semantics → single predicate). One PR per unification, each landing with its characterization diff attached and explicitly accepted in review; independently revertible. **Carried from F0.2a:** removal of the unpaginated claim-readiness default — shipped F0.2a (#1556) kept the legacy no-param full-list response for existing callers; auditing those callers and removing the legacy path moves here (honest scope note, not silently marked done).
+- **F0.3** (S–M): consumer contracts for the four future consumers (ActionAssignment shape + invariants per `[R3-small]`). Was gated on the ActionAssignment overlap — resolved in this revision.
+- **F0.4a** (M) `[R3-4]`: the additive migration (snapshot table ships HERE, not F0.5 — this removes the Rev 2 circularity where `recordDecision` needed a table scheduled later), the `writeAuditLogInTransaction` return change, and `recordDecision` itself (serializable+retry, typed actors, snapshot insert) **behind the flag, deployed disabled** (`snapshotSkipped` recorded). Before build starts: re-verify the foundation map's line citations at current HEAD and stamp the fresh SHA in the PR body `[R3-small]`.
+- **F0.4b** (M) `[R3-4]`: call-site adoption of the decision routes (conform, override, HP release incl. public and public-batch token paths, NCR close/concession, claim create/include), still flag-disabled.
+- **F0.5** (S–M) `[R3-4]`: flag-sequence steps 3–4 (verify on prod, enable permanently) + measurement incl. the maximum-size claim benchmark. **F0.4a onward gated on this Rev 3 being accepted.**
+- Order: F0.2a → F0.2b → {F0.3, F0.4a} → F0.4b → F0.5. A4 UI design may start against the F0.3 contract.
 
 ## 12. Acceptance tests `[R2-10]`
 
 Rev 1 suite, expanded to cover:
-- Concurrent evidence changes during decisions (optimistic-guard rollback + retry).
+- Concurrent evidence changes during decisions: (a) concurrent write to the decided entity, (b) **concurrent write to related evidence** (`TestResult` / `ITPCompletion` / `NCRLot`) mid-transaction — serialization failure → bounded retry → fresh evaluation; retry exhaustion → 409 `DECISION_CONFLICT` `[R3-2]`.
 - HP release decisions via all three actor paths: authenticated, public single-token, public batch (review room) — each snapshotting the correct actor.
 - Normal conformance AND overridden conformance (waiver decisionKind, reason captured).
 - NCR closure and closure-by-concession (segregation-of-duties preserved).
-- Lot-only, variation-only and mixed claims — aggregate + per-member snapshots each correct; `claim_lot` rows keyed by `ClaimedLot.id`.
+- Lot-only, variation-only and mixed claims — aggregate + per-member snapshots each correct; `claim_lot` rows keyed by `ClaimedLot.id`, `claim_variation` rows keyed by `Variation.id` `[R3-3]`.
+- **Maximum-size claim** (5,000 members): decision succeeds inside its p95 < 2s budget, all member rows present, compact-verdict size budget held `[R3-3]`.
+- **Snapshot JSON version decoding:** a row written at `resultSchemaVersion: 1` decodes correctly after the shape moves to version 2 (reader dispatches on the version column) `[R3-small]`.
 - Request-key replay (no duplicate writes/notifications; original result returned).
 - Audit-write and snapshot-write fault injection (full rollback, no post-commit signals).
 - Cross-project FK mismatch rejection.
@@ -159,4 +165,4 @@ Rev 1 list, plus: `snapshotSkipped` gap count in exit evidence `[R2-9]`; per-act
 
 ---
 
-**Review history:** Rev 1 (24 Jul) reviewed by independent dev 26 Jul — verdict 7.5/10, ten corrections required before F0.4–F0.5. Rev 2 (this document) applies all ten (`[R2-1]`…`[R2-10]`) plus staleness fixes. Dev reviewed the file on `origin/master` at `591d731a` (their local checkout was stale — the file wasn't present locally; same trap recorded in tasks/lessons.md).
+**Review history:** Rev 1 (24 Jul) reviewed by independent dev 26 Jul — verdict 7.5/10, ten corrections (`[R2-1]`…`[R2-10]`) applied in Rev 2. Rev 2 reviewed by the same dev at `ed723de3` — verdict 8.5/10, four blockers: snapshot-uniqueness contradiction with claim grains `[R3-1]`, incomplete concurrency protection `[R3-2]`, claim snapshot scale + the nonexistent claim-variation row `[R3-3]`, circular F0.4/F0.5 sequencing `[R3-4]` — plus smaller corrections (`[R3-small]`: audit-helper return type, ActionAssignment invariants, company/system assignees, stable recoverable error codes, added tests, fresh foundation SHA before F0.4a). Rev 3 (this document) applies all of them. **F0.2a shipped and merged (#1556) under Rev 2's allowance — the dev's board assessment confirmed it could continue independently.** F0.2b needs per-change approval of each intentional behaviour diff; F0.3 unblocked by the ActionAssignment invariant fix; F0.4a–F0.5 gated on Rev 3 acceptance.
