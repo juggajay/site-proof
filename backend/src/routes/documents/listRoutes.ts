@@ -6,6 +6,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { checkProjectAccess } from '../../lib/projectAccess.js';
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../../lib/pagination.js';
 import { buildDocumentsListResponse } from '../documentResponses.js';
+import { IMPORT_SOURCE_DOCUMENT_TYPE } from './access.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -133,7 +134,13 @@ export function createDocumentListRouter({
         await requireSubcontractorDocumentPortalAccess(user, projectId, category);
         applyDocumentCategoryFilter(where, category);
       }
-      if (documentType) where.documentType = documentType;
+      // Import source files are internal provenance artefacts (Wave B §4.11) and
+      // are never part of the client-visible register, whatever documentType
+      // filter is asked for. They stay reachable from the import review pane.
+      where.documentType =
+        documentType && documentType !== IMPORT_SOURCE_DOCUMENT_TYPE
+          ? documentType
+          : { not: IMPORT_SOURCE_DOCUMENT_TYPE };
       if (lotId) where.lotId = lotId;
       if (getOptionalQueryString(req.query, 'favourite', 16) === 'true') {
         where.isFavourite = true;

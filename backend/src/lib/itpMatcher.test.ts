@@ -12,6 +12,11 @@ function tpl(overrides: Partial<TemplateForMatch> & { id: string }): TemplateFor
     activityType: null,
     checklistItemCount: 0,
     holdPointCount: 0,
+    // Affirmed by default: these fixtures predate Wave B and stand for
+    // hand-made templates, which are affirmed on create. The `[WBR2-6]` gate
+    // for unaffirmed IMPORTED templates is exercised by passing null
+    // explicitly (see the affirmation-gate describe block).
+    specAffirmedAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
   };
 }
@@ -295,5 +300,83 @@ describe('routeTemplateMatch — national baseline spec sets beyond Austroads', 
     expect(result.tier).toBe('A');
     expect(result.suggestedTemplateId).toBe('ausspec-path');
     expect(result.candidates[0].baseline).toBeUndefined();
+  });
+});
+
+// Wave B `[WBR2-6]`. The state hard filter above applies ONLY to globals: a
+// project-scoped template short-circuits it (`isProjectScoped`) and enters the
+// pool whatever its stateSpec says. That is fine for a template a human typed
+// into the project on purpose, but BULK IMPORT is the mass path for wrong-state
+// project-scoped templates — 40 MRTS ITPs imported into a TfNSW project would
+// otherwise all auto-fill at the highest confidence tier, on one accept click.
+describe('routeTemplateMatch — imported-template affirmation gate', () => {
+  it('holds an UNAFFIRMED project-scoped exact match at Tier B, never Tier A', () => {
+    const result = match(
+      [
+        tpl({
+          id: 'imported',
+          projectId: PROJECT,
+          activityType: 'culverts',
+          specAffirmedAt: null,
+        }),
+      ],
+      'culverts',
+    );
+
+    expect(result.tier).toBe('B');
+    expect(result.suggestedTemplateId).toBeNull();
+    // It is still a visible, selectable candidate — withheld from auto-fill,
+    // not hidden.
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({ id: 'imported', unaffirmed: true });
+  });
+
+  it('promotes it to normal project-scoped matching once affirmed', () => {
+    const result = match(
+      [
+        tpl({
+          id: 'imported',
+          projectId: PROJECT,
+          activityType: 'culverts',
+          specAffirmedAt: new Date('2026-07-26T00:00:00.000Z'),
+        }),
+      ],
+      'culverts',
+    );
+
+    expect(result.tier).toBe('A');
+    expect(result.suggestedTemplateId).toBe('imported');
+    expect(result.candidates[0].unaffirmed).toBeUndefined();
+  });
+
+  it('leaves hand-made (affirmed) project templates auto-filling as before', () => {
+    const result = match(
+      [tpl({ id: 'handmade', projectId: PROJECT, activityType: 'culverts' })],
+      'culverts',
+    );
+    expect(result.tier).toBe('A');
+  });
+
+  it('never marks a GLOBAL template unaffirmed — the state filter already covers those', () => {
+    const result = match(
+      [tpl({ id: 'global', projectId: null, stateSpec: SPEC, activityType: 'culverts' })],
+      'culverts',
+    );
+    expect(result.tier).toBe('A');
+    expect(result.candidates[0].unaffirmed).toBeUndefined();
+  });
+
+  it('an unaffirmed import does not suppress an affirmed template it competes with', () => {
+    const result = match(
+      [
+        tpl({ id: 'imported', projectId: PROJECT, activityType: 'culverts', specAffirmedAt: null }),
+        tpl({ id: 'handmade', projectId: PROJECT, activityType: 'culverts' }),
+      ],
+      'culverts',
+    );
+    // Two exact candidates is Tier B on the pre-existing rule anyway; the point
+    // is that both stay selectable.
+    expect(result.tier).toBe('B');
+    expect(result.candidates.map((c) => c.id).sort()).toEqual(['handmade', 'imported']);
   });
 });

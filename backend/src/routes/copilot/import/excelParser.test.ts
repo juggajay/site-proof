@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest';
+import ExcelJS from 'exceljs';
+
+import { AppError } from '../../../lib/AppError.js';
+import {
+  AU_ITP_HEADERS,
+  buildAuItpWorkbook,
+  buildWorkbook,
+} from '../../../test/itpWorkbookFixture.js';
+import { MAX_IMPORT_ROWS_PER_SHEET, MAX_IMPORT_SHEETS, parseExcelWorkbook } from './excelParser.js';
+
+describe('parseExcelWorkbook', () => {
+  it('parses a realistic AU ITP workbook into a normalized grid', async () => {
+    const grid = await parseExcelWorkbook(await buildAuItpWorkbook());
+
+    expect(grid.sheets.map((sheet) => sheet.name)).toEqual([
+      'ITP-01 Subgrade',
+      'ITP-02 Drainage',
+      'ITP-03 Kerbing',
+    ]);
+    expect(grid.sheets[0].headers).toEqual([...AU_ITP_HEADERS]);
+    expect(grid.sheets[0].rows).toHaveLength(3);
+    // Text really is resolved (the sharedStrings cache is load-bearing).
+    expect(grid.sheets[0].rows[0][1]).toBe('Proof roll subgrade with loaded truck');
+    expect(grid.sheets[0].rows[2][4]).toBe('Superintendent');
+  });
+
+  it('pads short rows to the header width so column indexing is safe', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildWorkbook([{ name: 'S', rows: [['Earthworks', 'Only two cells']] }]),
+    );
+    expect(grid.sheets[0].rows[0]).toHaveLength(AU_ITP_HEADERS.length);
+    expect(grid.sheets[0].rows[0][5]).toBe('');
+  });
+
+  it('skips fully empty rows rather than proposing empty checklist items', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildWorkbook([
+        {
+          name: 'S',
+          rows: [
+            ['', '', '', '', '', ''],
+            ['Earthworks', 'Real row', '', 'H', '', ''],
+          ],
+        },
+      ]),
+    );
+    expect(grid.sheets[0].rows).toHaveLength(1);
+    expect(grid.sheets[0].rows[0][1]).toBe('Real row');
+  });
+
+  it('carries a formula cell through as its inert cached result, never the expression', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('S');
+    sheet.addRow([...AU_ITP_HEADERS]);
+    const row = sheet.addRow(['Earthworks', 'placeholder', '', 'H', '', '']);
+    row.getCell(2).value = { formula: 'HYPERLINK("http://evil","=cmd|calc")', result: '=cmd|calc' };
+    const grid = await parseExcelWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()));
+
+    const value = grid.sheets[0].rows[0][1];
+    expect(value).toBe('=cmd|calc');
+    // Inert text — the expression itself never travels.
+    expect(value).not.toContain('HYPERLINK');
+  });
+
+  it('refuses a file that is not a zip at all', async () => {
+    await expect(parseExcelWorkbook(Buffer.from('just some text'))).rejects.toBeInstanceOf(
+      AppError,
+    );
+  });
+
+  it('fails fast on a sheet past the row cap instead of running out of memory', async () => {
+    const rows = Array.from({ length: MAX_IMPORT_ROWS_PER_SHEET + 5 }, (_, i) => [
+      'Earthworks',
+      `Item ${i}`,
+      '',
+      'S',
+      '',
+      '',
+    ]);
+    await expect(parseExcelWorkbook(await buildWorkbook([{ name: 'Big', rows }]))).rejects.toThrow(
+      /more than 5000 rows/,
+    );
+  }, 60_000);
+
+  it('fails fast past the sheet cap', async () => {
+    const sheets = Array.from({ length: MAX_IMPORT_SHEETS + 2 }, (_, i) => ({
+      name: `S${i}`,
+      rows: [['Earthworks', `Item ${i}`, '', 'S', '', '']],
+    }));
+    await expect(parseExcelWorkbook(await buildWorkbook(sheets))).rejects.toThrow(
+      /more than 50 sheets/,
+    );
+  }, 60_000);
+
+  // Regression: the streaming reader spools worksheets to temp files whenever
+  // the shared-string table sits after them in the archive (the normal layout),
+  // and on that path it measurably DROPPED sheets — a 40-sheet workbook came
+  // back as 8 sheets with every string unresolved. Silently importing 8 of a
+  // contractor's 40 ITPs is the failure this asserts against.
+  it('reads EVERY sheet, with names and text intact, at benchmark scale', async () => {
+    const sheetCount = 40;
+    const sheets = Array.from({ length: sheetCount }, (_, i) => ({
+      name: `ITP-${String(i).padStart(2, '0')}`,
+      rows: [['Earthworks', `Inspection item ${i}`, 'Criteria', 'H', 'Contractor', 'Survey']],
+    }));
+
+    const grid = await parseExcelWorkbook(await buildWorkbook(sheets));
+
+    expect(grid.sheets).toHaveLength(sheetCount);
+    grid.sheets.forEach((sheet, i) => {
+      expect(sheet.name).toBe(`ITP-${String(i).padStart(2, '0')}`);
+      expect(sheet.rows[0][1]).toBe(`Inspection item ${i}`);
+    });
+  }, 60_000);
+
+  it('refuses a workbook with no readable sheet', async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet('Empty');
+    await expect(
+      parseExcelWorkbook(Buffer.from(await workbook.xlsx.writeBuffer())),
+    ).rejects.toThrow(/no readable sheets/);
+  });
+});

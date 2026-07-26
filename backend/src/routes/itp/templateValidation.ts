@@ -40,6 +40,11 @@ export const createTemplateSchema = z.object({
   name: requiredText('name', MAX_TEMPLATE_NAME_LENGTH),
   description: optionalText('description', MAX_TEMPLATE_DESCRIPTION_LENGTH),
   activityType: requiredText('activityType', MAX_SHORT_TEXT_LENGTH),
+  // Wave B `[WBR2-5]`: both columns already exist on the model but had no write
+  // path, which made a state/spec contradiction undetectable rather than merely
+  // unenforced. Optional, so every existing caller is unaffected.
+  stateSpec: optionalText('stateSpec', MAX_SHORT_TEXT_LENGTH),
+  specificationReference: optionalText('specificationReference', MAX_SHORT_TEXT_LENGTH),
   checklistItems: z
     .array(checklistItemSchema)
     .max(MAX_CHECKLIST_ITEMS, `Cannot add more than ${MAX_CHECKLIST_ITEMS} checklist items`)

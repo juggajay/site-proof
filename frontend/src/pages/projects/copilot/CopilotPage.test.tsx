@@ -17,13 +17,20 @@ const state = vi.hoisted(() => ({
   lotPresence: false,
   proposalsLoading: false,
   aiConfigured: true,
+  importBatches: [] as unknown[],
+  pendingProposal: null as Record<string, unknown> | null,
+  pendingProposalDetail: undefined as Record<string, unknown> | undefined,
 }));
 
 vi.mock('./copilotData', () => ({
   useCopilotProposals: () => ({ data: [], isLoading: state.proposalsLoading }),
   useProjectLotPresence: () => ({ data: state.lotPresence }),
   useRollbackProposal: () => ({ mutateAsync: vi.fn(), isLoading: false }),
-  newestProposalForStage: () => null,
+  newestProposalForStage: () => state.pendingProposal,
+}));
+vi.mock('./importData', () => ({
+  useImportBatches: () => ({ data: state.importBatches, refetch: vi.fn() }),
+  useCopilotProposalDetail: () => ({ data: state.pendingProposalDetail }),
 }));
 vi.mock('../settings/controlLinesData', () => ({
   useControlLines: () => ({ data: state.controlLines }),
@@ -69,6 +76,11 @@ vi.mock('./PlanSheetRegistrationReviewModal', () => ({
 vi.mock('./LotBreakdownReviewModal', () => ({
   LotBreakdownReviewModal: stageModalStub('lot_breakdown'),
 }));
+vi.mock('./ItpImportReviewModal', () => ({
+  ItpImportReviewModal: (props: Record<string, unknown>) => (
+    <div data-testid="modal-itp-import">{String(props.batchId ?? 'new')}</div>
+  ),
+}));
 
 function LocationProbe() {
   const location = useLocation();
@@ -104,6 +116,9 @@ describe('CopilotPage deep-link (?stage=)', () => {
     state.lotPresence = false;
     state.proposalsLoading = false;
     state.aiConfigured = true;
+    state.importBatches = [];
+    state.pendingProposal = null;
+    state.pendingProposalDetail = undefined;
   });
 
   it.each([['project_facts'], ['control_line'], ['plan_sheets'], ['lot_breakdown']])(
@@ -144,6 +159,9 @@ describe('CopilotPage after-apply hand-off', () => {
     state.lotPresence = false;
     state.proposalsLoading = false;
     state.aiConfigured = true;
+    state.importBatches = [];
+    state.pendingProposal = null;
+    state.pendingProposalDetail = undefined;
   });
 
   it('offers the next incomplete stage after applying, and Go opens it', async () => {
@@ -175,5 +193,116 @@ describe('CopilotPage after-apply hand-off', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'apply-lot_breakdown' }));
 
     expect(await screen.findByText(/Setup complete/)).toBeInTheDocument();
+  });
+});
+
+describe('CopilotPage — Wave B import rail', () => {
+  beforeEach(() => {
+    state.project = { name: 'MC10', state: 'NSW', code: 'C-1', clientName: 'RMS' };
+    state.controlLines = [];
+    state.planSheets = [];
+    state.lotPresence = false;
+    state.proposalsLoading = false;
+    state.aiConfigured = true;
+    state.importBatches = [];
+    state.pendingProposal = null;
+    state.pendingProposalDetail = undefined;
+  });
+
+  it('offers the import rail and opens a fresh import', async () => {
+    renderAt('/projects/p1/copilot');
+    await screen.findByRole('heading', { name: 'Bring your ITPs across', level: 2 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import a spreadsheet' }));
+    expect(await screen.findByTestId('modal-itp-import')).toHaveTextContent('new');
+  });
+
+  it('resumes an open batch from its Review action', async () => {
+    state.importBatches = [
+      {
+        id: 'batch-1',
+        kind: 'itp_template',
+        status: 'dry_run',
+        failedReason: null,
+        createdAt: '',
+        sourceFileName: 'itps.xlsx',
+        proposalId: null,
+        proposalStatus: null,
+      },
+    ];
+    renderAt('/projects/p1/copilot');
+    await screen.findByText('itps.xlsx');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(await screen.findByTestId('modal-itp-import')).toHaveTextContent('batch-1');
+  });
+
+  it('shows a failed batch with the reason it failed, and no Review action', async () => {
+    state.importBatches = [
+      {
+        id: 'batch-2',
+        kind: 'itp_template',
+        status: 'failed',
+        failedReason: 'That workbook has no readable sheets.',
+        createdAt: '',
+        sourceFileName: 'broken.xlsx',
+        proposalId: null,
+        proposalStatus: null,
+      },
+    ];
+    renderAt('/projects/p1/copilot');
+
+    expect(await screen.findByText('That workbook has no readable sheets.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review' })).not.toBeInTheDocument();
+  });
+
+  it('offers Roll back only once a batch has been applied', async () => {
+    state.importBatches = [
+      {
+        id: 'batch-3',
+        kind: 'itp_template',
+        status: 'applied',
+        failedReason: null,
+        createdAt: '',
+        sourceFileName: 'done.xlsx',
+        proposalId: 'prop-3',
+        proposalStatus: 'accepted',
+      },
+    ];
+    renderAt('/projects/p1/copilot');
+    expect(await screen.findByRole('button', { name: 'Roll back' })).toBeInTheDocument();
+  });
+});
+
+// The proposals LIST is payload-free, so a stage modal must wait for the full
+// proposal rather than open with a half-built review.
+describe('CopilotPage — pending proposal detail gate', () => {
+  beforeEach(() => {
+    state.project = { name: 'MC10', state: 'NSW', code: 'C-1', clientName: 'RMS' };
+    state.controlLines = [];
+    state.planSheets = [];
+    state.lotPresence = false;
+    state.proposalsLoading = false;
+    state.aiConfigured = true;
+    state.importBatches = [];
+    state.pendingProposal = null;
+    state.pendingProposalDetail = undefined;
+  });
+
+  it('holds the modal closed while the payload is still loading', async () => {
+    state.pendingProposal = { id: 'prop-1', status: 'proposed' };
+    state.pendingProposalDetail = undefined;
+
+    renderAt('/projects/p1/copilot?stage=control_line');
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(''));
+    expect(screen.queryByTestId('modal-control_line')).not.toBeInTheDocument();
+  });
+
+  it('opens it once the payload arrives', async () => {
+    state.pendingProposal = { id: 'prop-1', status: 'proposed' };
+    state.pendingProposalDetail = { id: 'prop-1', status: 'proposed', payload: { alignments: [] } };
+
+    renderAt('/projects/p1/copilot?stage=control_line');
+    expect(await screen.findByTestId('modal-control_line')).toBeInTheDocument();
   });
 });
