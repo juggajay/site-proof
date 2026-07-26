@@ -65,6 +65,7 @@ const resolutionSchema = z.object({
   affirmSpec: z.boolean().optional(),
   skip: z.boolean().optional(),
   skipRows: z.array(z.number().int()).max(5_000).optional(),
+  milestoneAs: z.enum(['hold_point', 'witness', 'standard']).optional(),
 });
 
 const dryRunBodySchema = z.object({

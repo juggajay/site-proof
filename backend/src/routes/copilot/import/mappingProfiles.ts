@@ -267,9 +267,12 @@ const POINT_TYPE_RULES: VocabularyRule[] = [
   // CivilPro's controlled vocabulary is Check Item / Witness Point / Hold Point
   // / Milestone. LAST on purpose: "Check Item" must not shadow "Hold Point" (a
   // hold point that imported as a plain check is a gate that never gets held).
-  // Milestone folds to 'standard' — lossy, and a deliberate open question: this
-  // vocabulary has no fourth value, and adding one is a product decision.
-  [/^c|check|milestone/, 'standard'],
+  // Milestone is DELIBERATELY absent (decision 2026-07-26): CivilPro's
+  // Milestone is approval-bearing, so folding it to 'standard' silently drops a
+  // gate and there is no fourth vocabulary value to fold to. It falls through
+  // unrecognised (-> '') and the dry run routes the row to the reviewer, who
+  // picks the real type per template (TemplateResolution.milestoneAs).
+  [/^c|check/, 'standard'],
 ];
 
 const RESPONSIBLE_PARTY_RULES: VocabularyRule[] = [

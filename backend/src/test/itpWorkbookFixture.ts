@@ -204,13 +204,32 @@ export const CIVILPRO_GRID_ROWS: string[][] = [
 ];
 
 /** The grid above as a real .xlsx, optionally behind a title banner row. */
-export async function buildCivilProWorkbook(options: { banner?: string } = {}): Promise<Buffer> {
+/** A CivilPro Milestone row — the approval-bearing fourth point type that must
+ *  route to the reviewer, never fold silently. */
+export const CIVILPRO_MILESTONE_ROW: string[] = [
+  'Quality',
+  'Milestone',
+  '',
+  'Clearing and grubbing complete — stage approval prior to topsoil strip.',
+  '',
+  'FALSE',
+  'Engineer and Supervisor',
+  'QVC',
+  'Visual',
+  'TRUE',
+  'MRTS04 Cl. 7.2.6',
+];
+
+export async function buildCivilProWorkbook(
+  options: { banner?: string; extraRows?: string[][] } = {},
+): Promise<Buffer> {
+  const rows = [...CIVILPRO_GRID_ROWS, ...(options.extraRows ?? [])];
   if (!options.banner) {
     return buildWorkbook([
       {
         name: CIVILPRO_SHEET_NAME,
         headers: CIVILPRO_GRID_HEADERS,
-        rows: CIVILPRO_GRID_ROWS,
+        rows,
       },
     ]);
   }
@@ -220,6 +239,6 @@ export async function buildCivilProWorkbook(options: { banner?: string } = {}): 
   worksheet.addRow([options.banner]);
   worksheet.mergeCells(1, 1, 1, CIVILPRO_GRID_HEADERS.length);
   worksheet.addRow([...CIVILPRO_GRID_HEADERS]);
-  for (const row of CIVILPRO_GRID_ROWS) worksheet.addRow(row);
+  for (const row of rows) worksheet.addRow(row);
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
