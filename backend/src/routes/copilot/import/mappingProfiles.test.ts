@@ -4,6 +4,7 @@ import { AppError } from '../../../lib/AppError.js';
 import {
   AU_ITP_HEADERS,
   buildCivilProWorkbook,
+  CIVILPRO_MILESTONE_ROW,
   CIVILPRO_CSV_HEADERS,
   CIVILPRO_GRID_HEADERS,
   CIVILPRO_SHEET_NAME,
@@ -170,8 +171,10 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
     expect(applyTransform('whs_to_point_type', 'Check Item')).toBe('standard');
     expect(applyTransform('whs_to_point_type', 'Witness Point')).toBe('witness');
     expect(applyTransform('whs_to_point_type', 'Hold Point')).toBe('hold_point');
-    // Lossy and deliberate — there is no fourth point-type value to fold to.
-    expect(applyTransform('whs_to_point_type', 'Milestone')).toBe('standard');
+    // Milestone deliberately does NOT fold (decision 2026-07-26): it is
+    // approval-bearing, so it falls through unrecognised and the dry run routes
+    // the row to the reviewer (milestone_point_type + milestoneAs resolution).
+    expect(applyTransform('whs_to_point_type', 'Milestone')).toBe('');
 
     expect(applyTransform('evidence_required', 'QVC')).toBe('inspection');
     expect(applyTransform('evidence_required', 'QVC/ATP')).toBe('inspection');
@@ -230,6 +233,41 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
       'standard',
     ]);
     expect(result.templates[0].name).toBe(CIVILPRO_SHEET_NAME);
+  });
+
+  it('routes Milestone rows to the reviewer instead of folding them (decision 2026-07-26)', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildCivilProWorkbook({ extraRows: [CIVILPRO_MILESTONE_ROW] }),
+    );
+    const unresolved = computeItpImportDryRun({
+      grid,
+      fieldMap: CIVILPRO_PROFILE.fieldMap,
+      projectSpecificationSet: null,
+      existingTemplates: [],
+      resolutions: { [CIVILPRO_TEMPLATE_KEY]: { activitySlug: 'earthworks_general' } },
+    });
+
+    // Unresolved: the template and the milestone row both flag, and the batch
+    // cannot apply — an approval-bearing point must never silently become a
+    // plain check item.
+    expect(unresolved.dryRun.canApply).toBe(false);
+    const flagged = unresolved.dryRun.rows.filter((row) => row.reason === 'milestone_point_type');
+    expect(flagged.map((row) => row.unit).sort()).toEqual(['checklist_row', 'template']);
+
+    // Resolved: the reviewer says this template's milestones are witness points.
+    const resolved = computeItpImportDryRun({
+      grid,
+      fieldMap: CIVILPRO_PROFILE.fieldMap,
+      projectSpecificationSet: null,
+      existingTemplates: [],
+      resolutions: {
+        [CIVILPRO_TEMPLATE_KEY]: { activitySlug: 'earthworks_general', milestoneAs: 'witness' },
+      },
+    });
+    expect(resolved.dryRun.canApply).toBe(true);
+    expect(resolved.dryRun.rows.some((row) => row.reason === 'milestone_point_type')).toBe(false);
+    expect(resolved.templates[0].checklistItems).toHaveLength(4);
+    expect(resolved.templates[0].checklistItems[3].pointType).toBe('witness');
   });
 
   it('blocks on the missing activity column rather than defaulting a slug', async () => {

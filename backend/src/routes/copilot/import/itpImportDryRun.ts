@@ -44,6 +44,7 @@ export type DryRunReason =
   | 'unresolvable_activity'
   | 'over_length'
   | 'state_spec_conflict'
+  | 'milestone_point_type'
   | 'low_confidence'
   | 'empty';
 
@@ -123,6 +124,12 @@ export interface TemplateResolution {
   skip?: boolean;
   /** Source row indexes to exclude (e.g. an over-length checklist row). */
   skipRows?: number[];
+  /**
+   * What this template's CivilPro "Milestone" rows really are. Milestone is
+   * approval-bearing, so it never folds silently — the reviewer decides.
+   * ponytail: one choice per template; per-row resolution only if a pilot needs it.
+   */
+  milestoneAs?: 'hold_point' | 'witness' | 'standard';
 }
 
 export interface ExistingTemplate {
@@ -154,21 +161,32 @@ interface RawTemplate {
   stateSpec: string | null;
   specificationReference: string | null;
   firstRowRef: DryRunRowRef;
-  rows: { rowRef: DryRunRowRef; values: Partial<Record<ItpImportTarget, string>> }[];
+  rows: {
+    rowRef: DryRunRowRef;
+    values: Partial<Record<ItpImportTarget, string>>;
+    rawPointType?: string;
+  }[];
 }
 
 function readRow(
   indexes: Map<ItpImportTarget, number>,
   transforms: Map<ItpImportTarget, ImportTransform | undefined>,
   cells: string[],
-): Partial<Record<ItpImportTarget, string>> {
+): { values: Partial<Record<ItpImportTarget, string>>; rawPointType?: string } {
   const values: Partial<Record<ItpImportTarget, string>> = {};
+  let rawPointType: string | undefined;
   for (const [target, index] of indexes) {
     const raw = cells[index] ?? '';
+    if (target === 'pointType' && raw.trim()) rawPointType = raw.trim();
     const value = applyTransform(transforms.get(target), raw);
     if (value) values[target] = value;
   }
-  return values;
+  return { values, ...(rawPointType ? { rawPointType } : {}) };
+}
+
+/** CivilPro's approval-bearing fourth point type — never folded silently. */
+function isMilestonePointType(raw: string | undefined): boolean {
+  return Boolean(raw && /milestone/i.test(raw));
 }
 
 /** Group a sheet's rows into templates. A mapped `templateName` column groups
@@ -204,7 +222,7 @@ function collectTemplates(input: DryRunInput): {
     sheet.rows.forEach((cells, offset) => {
       // +2: 1-based sheet rows, and the header row itself is row 1.
       const rowRef: DryRunRowRef = { sheet: sheet.name, rowIndex: offset + 2 };
-      const values = readRow(indexes, transforms, cells);
+      const { values, rawPointType } = readRow(indexes, transforms, cells);
       const groupName = values.templateName?.trim() || sheet.name;
       const groupKey = `${sheet.name}::${groupName}`;
 
@@ -230,7 +248,9 @@ function collectTemplates(input: DryRunInput): {
       template.stateSpec ||= values.stateSpec ?? null;
       template.specificationReference ||= values.specificationReference ?? null;
 
-      if (values.description) template.rows.push({ rowRef, values });
+      if (values.description) {
+        template.rows.push({ rowRef, values, ...(rawPointType ? { rawPointType } : {}) });
+      }
     });
   }
 
@@ -432,6 +452,30 @@ export function computeItpImportDryRun(input: DryRunInput): {
       continue;
     }
 
+    // CivilPro "Milestone" rows: approval-bearing, no vocabulary value to fold
+    // to, so the transform leaves pointType empty and the reviewer decides what
+    // this template's milestones really are (milestoneAs). Unresolved, the
+    // template needs review and the batch cannot apply.
+    const milestoneRows = keptRows.filter((row) => isMilestonePointType(row.rawPointType));
+    if (milestoneRows.length > 0) {
+      if (resolution.milestoneAs) {
+        for (const row of milestoneRows) row.values.pointType = resolution.milestoneAs;
+      } else {
+        for (const row of milestoneRows) {
+          rows.push({
+            key: `row:${row.rowRef.sheet}#${row.rowRef.rowIndex}`,
+            unit: 'checklist_row',
+            rowRef: row.rowRef,
+            label: (row.values.description ?? '').slice(0, 80),
+            outcome: 'needs_review',
+            reason: 'milestone_point_type',
+          });
+        }
+        rows.push({ ...base, outcome: 'needs_review', reason: 'milestone_point_type' });
+        continue;
+      }
+    }
+
     // (a) A declared spec set that contradicts the project's hard-fails unless
     // the reviewer explicitly affirms it. A blank declared spec is not a
     // conflict — it is merely unaffirmed (rule b).
@@ -523,6 +567,9 @@ export function computeItpImportDryRun(input: DryRunInput): {
   // silently importing one of two identically-named ITPs is the kind of error a
   // contractor finds six months later, in an audit.
   const unresolvedCollisions = rows.some((row) => row.reason === 'slug_collision');
+  // Unresolved Milestone rows likewise: applying would write an approval-bearing
+  // point as a plain check item — a gate that never gets held.
+  const unresolvedMilestones = rows.some((row) => row.reason === 'milestone_point_type');
   const applicable = proposed.length > 0;
 
   return {
@@ -530,7 +577,8 @@ export function computeItpImportDryRun(input: DryRunInput): {
       counts,
       rows,
       unmappedHeaders: unmapped,
-      canApply: counts.blocked === 0 && !unresolvedCollisions && applicable,
+      canApply:
+        counts.blocked === 0 && !unresolvedCollisions && !unresolvedMilestones && applicable,
     },
     templates: proposed,
   };
