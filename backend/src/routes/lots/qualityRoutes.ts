@@ -3,11 +3,18 @@ import type { Prisma } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { AuditAction } from '../../lib/auditLog.js';
 import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
+import { buildConformanceBlockerItems } from '../../lib/evidenceReadiness/conformanceItems.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 import { holdPointTerminal } from '../../lib/readiness/predicates.js';
+import { recordDecision, type DecisionSnapshotInput } from '../../lib/readiness/recordDecision.js';
+import {
+  LOT_CONFORMANCE_REQUIREMENT_SET,
+  LOT_CONFORMANCE_RESULT_SCHEMA_VERSION,
+  buildLotConformanceResultV1,
+} from '../../lib/readiness/requirements/lotConformance.v1.js';
 import { prisma } from '../../lib/prisma.js';
 import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
 import { PENDING_TEST_RESULT_STATUSES } from '../../lib/testResultStatus.js';
@@ -43,6 +50,55 @@ const LOT_PHOTO_DOCUMENT_FILTER: Prisma.DocumentWhereInput = {
 };
 
 const RELEASE_RECIPIENT_FALLBACK_PROJECT_ROLES = ['superintendent', 'project_manager'];
+
+type ConformanceEvaluation = Awaited<ReturnType<typeof checkConformancePrerequisites>>;
+
+/**
+ * The single `lot_conformance.v1` row every lot conformance decision records
+ * (execution spec §11 F0.4b PR 1). `evaluate` produced this readiness INSIDE
+ * the decision's serializable transaction, so it is what readiness genuinely
+ * looked like at the instant the status changed — not a re-read taken after.
+ */
+function lotConformanceSnapshot(
+  lotId: string,
+  evaluation: ConformanceEvaluation,
+  options: { overridden: boolean; reason?: string },
+): DecisionSnapshotInput[] {
+  return [
+    {
+      entityType: 'lot',
+      entityId: lotId,
+      requirementSet: LOT_CONFORMANCE_REQUIREMENT_SET,
+      resultSchemaVersion: LOT_CONFORMANCE_RESULT_SCHEMA_VERSION,
+      result: buildLotConformanceResultV1({
+        canConform: Boolean(evaluation.canConform),
+        items: evaluation.prerequisites
+          ? buildConformanceBlockerItems(evaluation.prerequisites)
+          : [],
+        overridden: options.overridden,
+        reason: options.reason,
+      }),
+    },
+  ];
+}
+
+/**
+ * The optimistic guard missed: `update` matched no row, so the lot moved
+ * between the pre-transaction read and the decision's write.
+ *
+ * NEW in F0.4b PR 1 — before it these routes issued a bare `prisma.lot.update`
+ * by id, so two concurrent conforms could both report success. Distinct from
+ * `recordDecision`'s own 409 `DECISION_CONFLICT` (serialization retries
+ * exhausted); both tell the client the same thing: refresh and re-decide.
+ */
+function conflictIfGuardMissed(error: unknown): never {
+  if ((error as { code?: unknown } | null)?.code === 'P2025') {
+    throw AppError.conflict(
+      'This lot changed while the decision was being recorded. Refresh and try again.',
+    );
+  }
+  throw error;
+}
 
 type LotForManagementPrep = NonNullable<Awaited<ReturnType<typeof fetchLotReadinessRecord>>>;
 
@@ -355,14 +411,17 @@ lotQualityRouter.post(
       );
     }
 
-    // Check conformance prerequisites first
-    const conformStatus = await checkConformancePrerequisites(id);
+    // Authorization reads stay OUTSIDE the decision transaction: the
+    // no-stale-readiness guarantee covers EVIDENCE, not permissions
+    // (execution spec §11 F0.4b `[R3.1-R6]`).
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: { id: true, lotNumber: true, status: true, projectId: true },
+    });
 
-    if (conformStatus.error) {
+    if (!lot) {
       throw AppError.notFound('Lot');
     }
-
-    const lot = conformStatus.lot!;
 
     const role = await requireProjectRole(
       lot.projectId,
@@ -376,63 +435,93 @@ lotQualityRouter.post(
       throw AppError.forbidden('Only project admins or owners can force lot conformance');
     }
 
-    // Check if lot is already conformed or claimed
+    // A friendly, cheap rejection for the already-decided lot. It is no longer
+    // the only thing between two concurrent conforms — the optimistic guard in
+    // `mutate` below is, and it answers 409 rather than double-conforming.
     if (lot.status === 'conformed' || lot.status === 'claimed') {
       throw AppError.badRequest(`Lot is already ${lot.status}`);
     }
 
-    // Check prerequisites unless force flag is provided (only for admins)
-    if (!conformStatus.canConform && !force) {
-      throw AppError.badRequest('Cannot conform lot - prerequisites not met', {
-        blockingReasons: conformStatus.blockingReasons as unknown as Record<string, unknown>,
-        prerequisites: conformStatus.prerequisites as unknown as Record<string, unknown>,
-      });
-    }
-
-    // Update lot status to conformed. A forced conform also persists the
-    // override marker (reason validated >= 5 chars above) so the claim gate can
-    // later distinguish a deliberate override from a regression. The normal
-    // path never sets these columns (a not-yet-conformed lot has them null).
     const now = new Date();
-    const updatedLot = await prisma.lot.update({
-      where: { id },
-      data: {
-        status: 'conformed',
-        conformedAt: now,
-        conformedBy: {
-          connect: { id: user.id },
-        },
-        ...(force
-          ? {
-              conformanceOverriddenAt: now,
-              conformanceOverriddenBy: { connect: { id: user.id } },
-              conformanceOverrideReason: forceReason,
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        lotNumber: true,
-        status: true,
-        conformedAt: true,
-      },
-    });
-
-    await createAuditLog({
+    const decision = await recordDecision({
       projectId: lot.projectId,
-      userId: user.id,
       entityType: 'lot',
-      entityId: updatedLot.id,
-      action: force ? AuditAction.LOT_FORCE_CONFORMED : AuditAction.LOT_STATUS_CHANGED,
-      changes: {
+      entityId: id,
+      // Force-conform is an `override`; `waiver` is reserved for future
+      // explicit requirement waivers (spec §11 F0.4b PR 1 `[R3.1-B4]`).
+      decisionKind: force ? 'override' : 'approval',
+      auditAction: force ? AuditAction.LOT_FORCE_CONFORMED : AuditAction.LOT_STATUS_CHANGED,
+      actor: { kind: 'user', userId: user.id },
+      auditChanges: {
         lotNumber: lot.lotNumber,
-        status: { from: lot.status, to: updatedLot.status },
+        status: { from: lot.status, to: 'conformed' },
         force,
         ...(forceReason ? { reason: forceReason } : {}),
       },
       req,
+      // The prerequisite gate now reads inside the decision transaction, so
+      // evidence can no longer change between the check and the status write.
+      evaluate: async (tx) => {
+        const conformStatus = await checkConformancePrerequisites(id, tx);
+
+        if (conformStatus.error) {
+          throw AppError.notFound('Lot');
+        }
+
+        // Check prerequisites unless force flag is provided (only for admins)
+        if (!conformStatus.canConform && !force) {
+          throw AppError.badRequest('Cannot conform lot - prerequisites not met', {
+            blockingReasons: conformStatus.blockingReasons as unknown as Record<string, unknown>,
+            prerequisites: conformStatus.prerequisites as unknown as Record<string, unknown>,
+          });
+        }
+
+        return conformStatus;
+      },
+      // Update lot status to conformed. A forced conform also persists the
+      // override marker (reason validated >= 5 chars above) so the claim gate
+      // can later distinguish a deliberate override from a regression. The
+      // normal path never sets these columns (a not-yet-conformed lot has them
+      // null).
+      mutate: (tx) =>
+        tx.lot
+          .update({
+            where: { id, status: { notIn: ['conformed', 'claimed'] } },
+            data: {
+              status: 'conformed',
+              conformedAt: now,
+              conformedBy: {
+                connect: { id: user.id },
+              },
+              ...(force
+                ? {
+                    conformanceOverriddenAt: now,
+                    conformanceOverriddenBy: { connect: { id: user.id } },
+                    conformanceOverrideReason: forceReason,
+                  }
+                : {}),
+            },
+            select: {
+              id: true,
+              lotNumber: true,
+              status: true,
+              conformedAt: true,
+            },
+          })
+          .catch(conflictIfGuardMissed),
+      snapshots: (evaluation) =>
+        lotConformanceSnapshot(id, evaluation, {
+          overridden: Boolean(force),
+          reason: forceReason,
+        }),
     });
 
+    // No requestKey on this route, so a replay is impossible and `mutation` is
+    // always present (spec §11 F0.4b PR 1 — replay is inert flag-off `[R3.1-B2]`).
+    const updatedLot = decision.mutation!;
+
+    // Post-commit, fire-and-forget: never dispatched from inside the decision,
+    // so a rolled-back or retried attempt cannot emit a user-visible signal.
     emitLotWebhookEvent(lot.projectId, 'lot.updated', {
       lotId: updatedLot.id,
       projectId: lot.projectId,
@@ -497,38 +586,15 @@ lotQualityRouter.post(
     // (stale audit/compliance data) while no longer conformed.
     const clearsConformance = previousStatus === 'conformed';
 
-    // Update the lot status. Moving a conformed lot back to an operational
-    // status also clears any force-conformance override marker, so a later
-    // re-conform starts clean instead of silently inheriting the old override.
-    const updatedLot = await prisma.lot.update({
-      where: { id },
-      data: {
-        status,
-        ...(clearsConformance
-          ? {
-              conformedAt: null,
-              conformedById: null,
-              conformanceOverriddenAt: null,
-              conformanceOverriddenById: null,
-              conformanceOverrideReason: null,
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        lotNumber: true,
-        status: true,
-        updatedAt: true,
-      },
-    });
-
-    await createAuditLog({
+    const decision = await recordDecision({
       projectId: lot.projectId,
-      userId: user.id,
       entityType: 'lot',
       entityId: id,
-      action: AuditAction.LOT_STATUS_CHANGED,
-      changes: {
+      // De-conform is an `override` too, never a `waiver` (`[R3.1-B4]`).
+      decisionKind: 'override',
+      auditAction: AuditAction.LOT_STATUS_CHANGED,
+      actor: { kind: 'user', userId: user.id },
+      auditChanges: {
         lotNumber: lot.lotNumber,
         status: {
           from: previousStatus,
@@ -539,8 +605,55 @@ lotQualityRouter.post(
         ...(clearsConformance ? { conformanceReset: true } : {}),
       },
       req,
+      // Records what readiness looked like at the moment conformance was
+      // withdrawn — the evidence side of "why was this de-conformed?".
+      evaluate: async (tx) => {
+        const conformStatus = await checkConformancePrerequisites(id, tx);
+
+        if (conformStatus.error) {
+          throw AppError.notFound('Lot');
+        }
+
+        return conformStatus;
+      },
+      // Update the lot status. Moving a conformed lot back to an operational
+      // status also clears any force-conformance override marker, so a later
+      // re-conform starts clean instead of silently inheriting the old
+      // override. Pinned to the status this decision was made against, so a
+      // concurrent transition (a claim, a re-conform) loses instead of being
+      // silently overwritten.
+      mutate: (tx) =>
+        tx.lot
+          .update({
+            where: { id, status: previousStatus },
+            data: {
+              status,
+              ...(clearsConformance
+                ? {
+                    conformedAt: null,
+                    conformedById: null,
+                    conformanceOverriddenAt: null,
+                    conformanceOverriddenById: null,
+                    conformanceOverrideReason: null,
+                  }
+                : {}),
+            },
+            select: {
+              id: true,
+              lotNumber: true,
+              status: true,
+              updatedAt: true,
+            },
+          })
+          .catch(conflictIfGuardMissed),
+      snapshots: (evaluation) =>
+        lotConformanceSnapshot(id, evaluation, { overridden: true, reason: reason.trim() }),
     });
 
+    // No requestKey on this route, so `mutation` is always present.
+    const updatedLot = decision.mutation!;
+
+    // Post-commit, fire-and-forget — never dispatched from inside the decision.
     emitLotWebhookEvent(lot.projectId, 'lot.updated', {
       lotId: updatedLot.id,
       projectId: lot.projectId,
