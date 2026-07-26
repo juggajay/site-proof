@@ -2959,11 +2959,18 @@ describe('Lots API', () => {
         });
         expect(auditLog).toBeTruthy();
         expect(auditLog?.userAgent).toBe('lot-override-audit-test');
+        // Exact equality on purpose: the audit `changes` payload is evidence,
+        // so a new key has to be added here deliberately. F0.4b PR 1 routed
+        // this decision through `recordDecision`, which stamps `decisionKind`
+        // and — while `READINESS_SNAPSHOTS_ENABLED` is off — `snapshotSkipped`
+        // so the evidence gap is itself countable (spec §9).
         expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toEqual({
           lotNumber: overrideLot.lotNumber,
           status: { from: 'not_started', to: 'in_progress' },
           reason: 'Manual override after field review',
           override: true,
+          decisionKind: 'override',
+          snapshotSkipped: true,
         });
       } finally {
         await prisma.auditLog.deleteMany({ where: { entityId: overrideLot.id } });
@@ -3067,6 +3074,9 @@ describe('Lots API', () => {
           status: { from: 'not_started', to: 'conformed' },
           force: true,
           reason: 'QA manager override for blocked prerequisites',
+          // F0.4b PR 1: force-conform is an `override`, never a `waiver`
+          // (spec §11 F0.4b PR 1 `[R3.1-B4]`).
+          decisionKind: 'override',
         });
       } finally {
         await prisma.auditLog.deleteMany({ where: { entityId: forceAllowedLot.id } });
