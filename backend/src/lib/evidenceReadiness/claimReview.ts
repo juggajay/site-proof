@@ -9,7 +9,7 @@ import {
   ncrOpen,
   ncrSeriousIncludingCritical,
   testPassing,
-  testPendingNotFailNotVerified,
+  testPendingByStatus,
 } from '../readiness/predicates.js';
 
 export function buildClaimEvidenceReviewFromInputs(
@@ -137,14 +137,14 @@ export function buildClaimEvidenceReviewFromInputs(
     const failedTests = lot.testResults.filter((testResult) => testResult.passFail === 'fail');
     // A test only supports a claim line once it has been verified (the terminal
     // status in the requested -> at_lab -> results_received -> entered -> verified
-    // workflow). Anything that has not failed and is not yet verified is still
-    // pending verification and must surface as a warning, not as evidence.
-    // F0.2a keeps claimReview's divergent pending variant (not-fail-not-verified);
-    // unification to testPendingByStatus is F0.2b. The review DTO types passFail
-    // as nullable (the column is non-null in practice); coercing null → '' is
-    // byte-identical here (null and '' both fail `=== 'pass'` and satisfy `!== 'fail'`).
+    // workflow). Anything still in a pending status must surface as a warning,
+    // not as evidence.
+    // F0.2b pending-test unification: seriousness of "pending" is now the
+    // canonical testPendingByStatus (the PENDING_TEST_RESULT_STATUSES whitelist),
+    // replacing claimReview's divergent not-fail-not-verified variant. This reads
+    // only `status`; passFail is coerced only to satisfy the row shape.
     const pendingTests = lot.testResults.filter((testResult) =>
-      testPendingNotFailNotVerified({
+      testPendingByStatus({
         passFail: testResult.passFail ?? '',
         status: testResult.status,
       }),

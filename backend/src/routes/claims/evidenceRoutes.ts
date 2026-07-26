@@ -4,11 +4,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { isItpCompletionFinished } from '../../lib/conformancePrerequisites.js';
-import {
-  ncrOpen,
-  testPassing,
-  testPendingNotFailNotVerified,
-} from '../../lib/readiness/predicates.js';
+import { ncrOpen, testPassing, testPendingByStatus } from '../../lib/readiness/predicates.js';
 import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 import { buildCompanyLogoDisplayUrl, getCompanyLogoDataUrl } from '../company/logoStorage.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
@@ -241,7 +237,9 @@ export function createClaimEvidenceRouter({
             ).length ?? 0;
           const verifiedPassingTestCount = lot.testResults.filter(testPassing).length;
           const failedTestCount = lot.testResults.filter((test) => test.passFail === 'fail').length;
-          const pendingTestCount = lot.testResults.filter(testPendingNotFailNotVerified).length;
+          // F0.2b: canonical pending-test predicate (status whitelist), replacing
+          // the divergent not-fail-not-verified variant.
+          const pendingTestCount = lot.testResults.filter(testPendingByStatus).length;
 
           return {
             id: lot.id,
@@ -456,7 +454,7 @@ export function createClaimEvidenceRouter({
             0,
           ),
           totalPendingTests: claim.claimedLots.reduce(
-            (sum, cl) => sum + cl.lot.testResults.filter(testPendingNotFailNotVerified).length,
+            (sum, cl) => sum + cl.lot.testResults.filter(testPendingByStatus).length,
             0,
           ),
           totalNCRs: claim.claimedLots.reduce((sum, cl) => sum + cl.lot.ncrLots.length, 0),

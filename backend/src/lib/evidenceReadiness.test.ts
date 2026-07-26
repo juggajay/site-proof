@@ -845,6 +845,56 @@ describe('evidence readiness helpers', () => {
     expect(review.summary.readyCount).toBe(1);
   });
 
+  // F0.2b pending-test unification characterization. Claim-evidence review now
+  // counts "pending" via the canonical PENDING_TEST_RESULT_STATUSES whitelist
+  // (testPendingByStatus), replacing not-fail-not-verified. The two disagree on
+  // exactly two edge shapes:
+  //   (a) a FAILED test in a whitelisted status (fail/entered): OLD not pending,
+  //       NEW pending -> it now raises pending_tests in addition to failed_tests.
+  //   (b) a non-fail test in a non-whitelisted, non-verified status
+  //       (pending/rejected): OLD pending, NEW not pending -> pending_tests drops.
+  it('counts pending tests by the status whitelist (F0.2b), not not-fail-not-verified', () => {
+    const buildForTest = (testResult: { id: string; status: string; passFail: string }) =>
+      buildClaimEvidenceReviewFromInputs({
+        analyzedAt: '2026-06-07T00:00:00.000Z',
+        claim: {
+          id: `claim-${testResult.id}`,
+          claimNumber: 6,
+          totalClaimedAmount: 1000,
+          claimedLots: [
+            {
+              amountClaimed: 1000,
+              lot: {
+                id: `lot-${testResult.id}`,
+                lotNumber: `LOT-${testResult.id}`,
+                activityType: 'Earthworks',
+                testResults: [testResult],
+                ncrLots: [],
+                documents: [],
+                itpInstance: null,
+                holdPoints: [],
+              },
+            },
+          ],
+        },
+      }).lots[0].claim;
+
+    const codes = (bucket: { code: string }[]) => bucket.map((readinessItem) => readinessItem.code);
+
+    // (a) fail + whitelisted status: now BOTH failed and pending (was failed only).
+    const failEntered = buildForTest({ id: 'fail-entered', status: 'entered', passFail: 'fail' });
+    expect(codes(failEntered.blockers)).toContain('failed_tests');
+    expect(codes(failEntered.warnings)).toContain('pending_tests');
+
+    // (b) non-fail, non-whitelisted, non-verified status: no longer pending.
+    const rejected = buildForTest({ id: 'rejected', status: 'rejected', passFail: 'pending' });
+    expect(codes(rejected.warnings)).not.toContain('pending_tests');
+
+    // Control: a whitelisted, non-fail status is pending under both definitions.
+    const atLab = buildForTest({ id: 'at-lab', status: 'at_lab', passFail: 'pending' });
+    expect(codes(atLab.warnings)).toContain('pending_tests');
+  });
+
   it('surfaces N/A hold-point bypass as a conformance action blocker', () => {
     // When the conform gate reports a hold-point item was N/A'd but the hold
     // point is not released, the readiness layer must surface a conformance
