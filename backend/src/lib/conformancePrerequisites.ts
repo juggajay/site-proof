@@ -3,10 +3,11 @@ import { isReleaseGatedChecklistItem } from './holdPointReleaseGating.js';
 import { lotConformable, testMatchesItem, testPassing } from './readiness/predicates.js';
 import {
   getChecklistItemsForInstance,
+  parseTemplateSnapshot,
   type ChecklistItem,
 } from '../routes/itp/helpers/templateSnapshot.js';
 
-type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot'>;
+type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot' | 'iTPChecklistItem'>;
 
 // A checklist item counts as finished for conformance when its completion
 // status is 'completed' OR 'not_applicable'. Owner decision (2026-06-11):
@@ -310,18 +311,40 @@ function buildOutstandingTestItems(
   });
 }
 
-// The deep lot include shared by the single-lot and batch conformance fetches —
-// exactly the fields the conformance computation reads, nothing more. Extracted
+// The lot projection shared by the single-lot and batch conformance fetches —
+// exactly the columns the conformance computation reads, nothing more. Extracted
 // to a const so both paths fetch an identical shape (M39).
-const CONFORMANCE_LOT_INCLUDE = {
+//
+// It is a `select`, not an `include`, because at the 5,000-lot claim ceiling this
+// one query dominates the whole decision: `include`'s all-columns default was
+// measured at 1,938ms p50 against 920ms for exactly these columns
+// (docs/plans/f0-5-benchmark-results-2026-07-26.md §"Sizing the levers", variants
+// 2 and 4). `ITPCompletion` alone has 17 columns — two Decimals, five nullable
+// text fields, three timestamps — of which the gate reads three.
+//
+// `template.checklistItems` is deliberately absent: `getChecklistItemsForInstance`
+// returns the parsed `templateSnapshot` and only falls back to live template items
+// when an instance has no readable snapshot. Every instance assigned through
+// `POST /api/itp/instances` has carried a snapshot since `routes/itp/instances.ts`
+// started writing one, so the nested include hydrated ~12 rows per lot that were
+// then discarded (60,000 rows at the ceiling). The fallback is real for
+// legacy/null-snapshot instances and is preserved by
+// `attachLegacyChecklistItems` below — one extra query, deduplicated per
+// template rather than repeated per instance.
+const CONFORMANCE_LOT_SELECT = {
+  id: true,
+  lotNumber: true,
+  status: true,
+  projectId: true,
   itpInstance: {
-    include: {
-      template: {
-        include: {
-          checklistItems: true,
-        },
+    select: {
+      templateId: true,
+      templateSnapshot: true,
+      // The three columns buildItpChecklistCompleteness and
+      // getNaHoldPointSignoffItemIds read.
+      completions: {
+        select: { checklistItemId: true, status: true, verificationStatus: true },
       },
-      completions: true,
     },
   },
   testResults: {
@@ -339,7 +362,7 @@ const CONFORMANCE_LOT_INCLUDE = {
         status: { notIn: ['closed', 'closed_concession'] },
       },
     },
-    include: {
+    select: {
       ncr: {
         select: {
           id: true,
@@ -353,7 +376,7 @@ const CONFORMANCE_LOT_INCLUDE = {
 };
 
 // The fetched-lot shape the pure conformance computation consumes. Structurally
-// a subset of the Prisma payload from CONFORMANCE_LOT_INCLUDE, so the
+// a subset of the Prisma payload from CONFORMANCE_LOT_SELECT, so the
 // findUnique/findMany results assign directly.
 interface LotForConformance {
   id: string;
@@ -488,6 +511,53 @@ export function computeConformanceResult(
   };
 }
 
+// The shape CONFORMANCE_LOT_SELECT returns: a LotForConformance whose instance
+// carries `templateId` (to resolve a legacy fallback) but no live template items
+// yet.
+type FetchedLotForConformance = Omit<LotForConformance, 'itpInstance'> & {
+  itpInstance: (ItpInstanceForConformance & { templateId: string }) | null;
+};
+
+// Restores the live-template fallback that CONFORMANCE_LOT_SELECT no longer
+// hydrates inline. An instance whose snapshot does not PARSE — absent or
+// unreadable — is exactly the condition `getChecklistItemsForInstance` falls back
+// on, so detection calls the same parser rather than sniffing for null.
+//
+// One query for the DISTINCT templates that actually need it, so 5,000 lots
+// sharing one legacy template cost 12 rows, not 60,000. Modern (snapshot-bearing)
+// instances fire no query at all.
+async function attachLegacyChecklistItems(
+  lots: FetchedLotForConformance[],
+  client: ConformancePrismaClient,
+): Promise<LotForConformance[]> {
+  const legacyTemplateIds = [
+    ...new Set(
+      lots.flatMap((lot) =>
+        lot.itpInstance && !parseTemplateSnapshot(lot.itpInstance.templateSnapshot)
+          ? [lot.itpInstance.templateId]
+          : [],
+      ),
+    ),
+  ];
+  if (legacyTemplateIds.length === 0) return lots;
+
+  const items = await client.iTPChecklistItem.findMany({
+    where: { templateId: { in: legacyTemplateIds } },
+  });
+  const itemsByTemplateId = new Map<string, ChecklistItem[]>();
+  for (const item of items) {
+    const list = itemsByTemplateId.get(item.templateId);
+    if (list) list.push(item);
+    else itemsByTemplateId.set(item.templateId, [item]);
+  }
+
+  return lots.map((lot) => {
+    const checklistItems = lot.itpInstance && itemsByTemplateId.get(lot.itpInstance.templateId);
+    if (!lot.itpInstance || !checklistItems) return lot;
+    return { ...lot, itpInstance: { ...lot.itpInstance, template: { checklistItems } } };
+  });
+}
+
 // Released-hold-point checklist-item ids for ONE lot (single path). Preserves
 // the original query shape and the skip-when-no-na-items behavior so the
 // single-lot gate stays byte-identical.
@@ -521,23 +591,25 @@ export async function checkConformancePrerequisites(
   lotId: string,
   client: ConformancePrismaClient = prisma,
 ): Promise<ConformanceCheckResult> {
-  const lot = await client.lot.findUnique({
+  const fetched = await client.lot.findUnique({
     where: { id: lotId },
-    include: CONFORMANCE_LOT_INCLUDE,
+    select: CONFORMANCE_LOT_SELECT,
   });
 
-  if (!lot) {
+  if (!fetched) {
     return { error: 'Lot not found', lot: null };
   }
 
+  const [lot] = await attachLegacyChecklistItems([fetched], client);
   const releasedHoldPointItemIds = await fetchReleasedHoldPointItemIdsForLot(lot, client);
   return computeConformanceResult(lot, releasedHoldPointItemIds);
 }
 
 // Batched conformance for many lots — collapses the per-lot ~2N+1 queries the
 // create-claim readiness loop used to fire (one lot.findUnique + one
-// holdPoint.findMany PER lot) into a constant number: one lot.findMany and at
-// most one holdPoint.findMany for ALL lots. Returns a map keyed by lot id; a
+// holdPoint.findMany PER lot) into a constant number: one lot.findMany, at most
+// one holdPoint.findMany and at most one legacy-checklist-item findMany for ALL
+// lots (see attachLegacyChecklistItems). Returns a map keyed by lot id; a
 // requested lot id missing from the map means the lot was not found (callers
 // that require every lot should treat a missing key as not-found). (M39)
 export async function checkConformancePrerequisitesBatch(
@@ -547,10 +619,13 @@ export async function checkConformancePrerequisitesBatch(
   const results = new Map<string, ConformanceCheckResult>();
   if (lotIds.length === 0) return results;
 
-  const lots = await client.lot.findMany({
-    where: { id: { in: lotIds } },
-    include: CONFORMANCE_LOT_INCLUDE,
-  });
+  const lots = await attachLegacyChecklistItems(
+    await client.lot.findMany({
+      where: { id: { in: lotIds } },
+      select: CONFORMANCE_LOT_SELECT,
+    }),
+    client,
+  );
 
   // Union of N/A hold-point sign-off item ids across all lots, so a single
   // holdPoint.findMany resolves every lot's bypass guard.

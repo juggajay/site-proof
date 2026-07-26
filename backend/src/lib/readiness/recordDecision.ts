@@ -29,7 +29,7 @@
 // `changes.snapshotSkipped: true` so the evidence gap is itself countable.
 // Enabled, a snapshot failure blocks the decision (spec §9 step 4).
 
-import { AuditLog, Prisma, RequirementEvaluation } from '@prisma/client';
+import { AuditLog, Prisma } from '@prisma/client';
 import { Request } from 'express';
 
 import { AppError, ErrorCodes } from '../AppError.js';
@@ -131,13 +131,20 @@ export interface RecordDecisionInput<TEvaluation, TMutation> {
 
 export interface DecisionOutcome<TMutation> {
   auditLogId: string;
+  /**
+   * Ids of the persisted `RequirementEvaluation` rows — the whole decision
+   * (aggregate + members), and on replay the ORIGINAL rows' ids (spec §6).
+   *
+   * IDS, not rows: no caller reads snapshot row CONTENT off the outcome (the
+   * routes read `mutation`), and returning 5,001 hydrated rows from a
+   * 5,000-member claim decision cost measurable latency for nothing. Read the
+   * rows back by id (or by `auditLogId`) if a consumer ever needs them.
+   */
   snapshotIds: string[];
   /** True when a matching `requestKey` replayed an earlier decision. */
   replayed: boolean;
   /** `mutate`'s return. Undefined on replay — nothing was mutated. */
   mutation?: TMutation;
-  /** Persisted rows. On replay these are the ORIGINAL rows (spec §6). */
-  snapshots: RequirementEvaluation[];
 }
 
 /** Spec §3 `[R3-2]`: 3 attempts total, fresh evaluation each attempt. */
@@ -326,26 +333,42 @@ async function findReplay<TMutation>(
   const snapshots = await prisma.requirementEvaluation.findMany({
     where: { auditLogId: existing.auditLogId },
     orderBy: [{ entityType: 'asc' }, { entityId: 'asc' }],
+    select: { id: true },
   });
 
   return {
     auditLogId: existing.auditLogId,
     snapshotIds: snapshots.map((row) => row.id),
     replayed: true,
-    snapshots,
   };
 }
 
+/**
+ * Returns the persisted row IDS, not the rows: `createManyAndReturn`'s default
+ * RETURNING clause hands back all 15 columns of every row — including the
+ * `result` JSON that was just sent — and at the 5,000-member ceiling that
+ * payload was hydrated into 5,001 objects no caller ever read (measured 699ms
+ * across 11 chunks, docs/plans/f0-5-benchmark-results-2026-07-26.md).
+ * `select: { id: true }` keeps `snapshotIds`, which IS read, and drops the rest.
+ *
+ * ponytail: not plain `createMany` — that returns only a count, and `snapshotIds`
+ * would then have to be minted client-side, moving id generation off the schema
+ * default for no further win.
+ */
 async function insertSnapshots(
   tx: Prisma.TransactionClient,
   rows: Prisma.RequirementEvaluationCreateManyInput[],
-): Promise<RequirementEvaluation[]> {
-  const created: RequirementEvaluation[] = [];
+): Promise<string[]> {
+  const createdIds: string[] = [];
   for (let start = 0; start < rows.length; start += SNAPSHOT_CHUNK_SIZE) {
     const chunk = rows.slice(start, start + SNAPSHOT_CHUNK_SIZE);
-    created.push(...(await tx.requirementEvaluation.createManyAndReturn({ data: chunk })));
+    const created = await tx.requirementEvaluation.createManyAndReturn({
+      data: chunk,
+      select: { id: true },
+    });
+    for (const row of created) createdIds.push(row.id);
   }
-  return created;
+  return createdIds;
 }
 
 /**
@@ -358,7 +381,7 @@ async function writeDecisionRecords<TEvaluation, TMutation>(
   input: RecordDecisionInput<TEvaluation, TMutation>,
   rows: DecisionSnapshotInput[],
   snapshotsEnabled: boolean,
-): Promise<{ auditLog: AuditLog; created: RequirementEvaluation[] }> {
+): Promise<{ auditLog: AuditLog; createdIds: string[] }> {
   const { projectId, entityType, entityId, decisionKind, auditAction, actor, requestKey } = input;
 
   try {
@@ -376,9 +399,9 @@ async function writeDecisionRecords<TEvaluation, TMutation>(
       req: input.req,
     });
 
-    if (!snapshotsEnabled) return { auditLog, created: [] };
+    if (!snapshotsEnabled) return { auditLog, createdIds: [] };
 
-    const created = await insertSnapshots(
+    const createdIds = await insertSnapshots(
       tx,
       rows.map((row) => ({
         projectId,
@@ -394,7 +417,7 @@ async function writeDecisionRecords<TEvaluation, TMutation>(
         ...actorColumns(actor),
       })),
     );
-    return { auditLog, created };
+    return { auditLog, createdIds };
   } catch (error) {
     // A serialization failure belongs to the retry loop; everything else is a
     // genuine audit/snapshot write fault.
@@ -455,7 +478,7 @@ export async function recordDecision<TEvaluation, TMutation>(
             assertRequestKeyIsPersistable(rows, entityType, entityId, requestKey);
           }
 
-          const { auditLog, created } = await writeDecisionRecords(
+          const { auditLog, createdIds } = await writeDecisionRecords(
             tx,
             input,
             rows,
@@ -464,10 +487,9 @@ export async function recordDecision<TEvaluation, TMutation>(
 
           return {
             auditLogId: auditLog.id,
-            snapshotIds: created.map((row) => row.id),
+            snapshotIds: createdIds,
             replayed: false,
             mutation,
-            snapshots: created,
           };
         },
         {
