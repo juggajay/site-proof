@@ -19,6 +19,11 @@
     "scripts/preflight-production-integrations.ts",
     "scripts/process-scheduled-reports.ts",
     "scripts/send-notification-digests.ts",
-    "scripts/process-notification-automation.ts"
+    "scripts/process-notification-automation.ts",
+    "scripts/bench-f05.ts",
+    // bench-f05 mounts the real routers, so it pulls src/routes into this
+    // program — which needs the `Express.Request.user` augmentation the root
+    // tsconfig picks up via `src/**/*`.
+    "src/types/express.d.ts"
   ]
 }
