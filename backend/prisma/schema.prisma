@@ -106,6 +106,7 @@ model User {
   notificationDigestItems     NotificationDigestItem[]
   assignedNotificationAlerts  NotificationAlert[]          @relation("AssignedNotificationAlerts")
   revokedAuthTokens           RevokedAuthToken[]
+  requirementEvaluations      RequirementEvaluation[]
 
   @@index([companyId])
   @@map("users")
@@ -411,6 +412,7 @@ model Project {
   scheduledReportRuns         ScheduledReportRun[]
   scheduledReportDeliveries   ScheduledReportRecipientDelivery[]
   aiProposals                 AiProposal[]
+  requirementEvaluations      RequirementEvaluation[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -776,6 +778,8 @@ model HoldPointReleaseToken {
 
   holdPoint HoldPoint              @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
   batch     HoldPointReleaseBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  requirementEvaluations RequirementEvaluation[]
 
   @@index([batchId])
   @@map("hold_point_release_tokens")
@@ -1648,10 +1652,64 @@ model AuditLog {
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  requirementEvaluations RequirementEvaluation[]
+
   @@index([projectId, createdAt])
   @@index([userId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+/// F0.4a decision snapshot (execution spec §3). Readiness stays COMPUTED at
+/// request time; a row is persisted here only at a decision point, so the
+/// evidence pack can answer "what did the system know when this was decided?"
+///
+/// `entityType` is one of 'lot' | 'hold_point' | 'ncr' | 'claim' | 'claim_lot' |
+/// 'claim_variation'. claim_lot rows key `entityId` on ClaimedLot.id (NOT the
+/// lot id); claim_variation rows key on Variation.id — there is no
+/// claim-variation join row (variations link via Variation.claimedInId).
+///
+/// Rows are immutable: no update/delete API. Project deletion cascades; the
+/// `Restrict` FK to AuditLog means an audit row referenced by a snapshot can
+/// never be deleted — audit + snapshot are one retention unit.
+///
+/// Written only by `backend/src/lib/readiness/recordDecision.ts`, inside the
+/// decision transaction, behind `READINESS_SNAPSHOTS_ENABLED`.
+model RequirementEvaluation {
+  id                  String   @id @default(uuid())
+  projectId           String   @map("project_id")
+  entityType          String   @map("entity_type")
+  entityId            String   @map("entity_id")
+  decisionKind        String   @map("decision_kind")
+  // The EXISTING AuditAction recorded alongside — no new audit vocabulary.
+  auditAction         String   @map("audit_action")
+  requirementSet      String   @map("requirement_set")
+  // Bump when the `result` JSON shape changes; readers dispatch on this column.
+  resultSchemaVersion Int      @map("result_schema_version")
+  result              Json
+  // Client idempotency key when provided; replay returns the original row.
+  requestKey          String?  @map("request_key")
+  actorKind           String   @map("actor_kind")
+  actorUserId         String?  @map("actor_user_id")
+  actorTokenId        String?  @map("actor_token_id")
+  actorLabel          String?  @map("actor_label")
+  evaluatedAt         DateTime @default(now()) @map("evaluated_at")
+  // REQUIRED — a snapshot always belongs to a decision's audit row.
+  auditLogId          String   @map("audit_log_id")
+
+  project    Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  auditLog   AuditLog               @relation(fields: [auditLogId], references: [id], onDelete: Restrict)
+  actorUser  User?                  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorToken HoldPointReleaseToken? @relation(fields: [actorTokenId], references: [id], onDelete: SetNull)
+
+  // One snapshot per entity per decision — permits a claim decision's aggregate
+  // + per-member rows under one audit row while barring duplicates.
+  @@unique([auditLogId, entityType, entityId])
+  // Request-key replay returns the original, never a duplicate.
+  @@unique([entityType, entityId, requestKey])
+  @@index([entityType, entityId, evaluatedAt])
+  @@index([projectId, decisionKind])
+  @@map("requirement_evaluations")
 }
 
 /// Privacy-conscious UX/product telemetry. Deliberately SEPARATE from AuditLog:

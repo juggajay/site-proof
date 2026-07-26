@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { AuditLog, Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { Request } from 'express';
 import { sanitizeUrlValueForLog } from './logSanitization.js';
@@ -106,12 +106,16 @@ export async function createAuditLog(params: AuditLogParams): Promise<void> {
  * transfer, member/key/webhook deletions and mutations — where the change
  * must not be persisted without a corresponding audit record. The audit write
  * must share the caller's transaction client so both commit or both roll back.
+ *
+ * Returns the created row so an in-transaction writer can reference its id —
+ * `recordDecision` links its `RequirementEvaluation` snapshots to this row
+ * (execution spec §3 `[R3-small]`). Existing callers ignore the return value.
  */
 export async function writeAuditLogInTransaction(
   tx: Prisma.TransactionClient,
   params: AuditLogParams,
-): Promise<void> {
-  await tx.auditLog.create({ data: buildAuditLogData(params) });
+): Promise<AuditLog> {
+  return tx.auditLog.create({ data: buildAuditLogData(params) });
 }
 
 export function parseAuditLogChanges(changes: string | null): unknown {
