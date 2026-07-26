@@ -1,20 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the Prisma client module so checkConformancePrerequisites can be
-// characterized without touching a real database. lot.findUnique and
-// holdPoint.findMany are used.
+// characterized without touching a real database. lot.findUnique,
+// holdPoint.findMany and iTPChecklistItem.findMany (the legacy live-template
+// fallback) are used.
 const mocks = vi.hoisted(() => ({
   lotFindUnique: vi.fn(),
   lotFindMany: vi.fn(),
   holdPointFindMany: vi.fn(),
+  checklistItemFindMany: vi.fn(),
 }));
 
 vi.mock('./prisma.js', () => ({
   prisma: {
     lot: { findUnique: mocks.lotFindUnique, findMany: mocks.lotFindMany },
     holdPoint: { findMany: mocks.holdPointFindMany },
+    iTPChecklistItem: { findMany: mocks.checklistItemFindMany },
   },
 }));
+
+/**
+ * Live template items by template id, as the database holds them. The conformance
+ * fetch no longer hydrates `template.checklistItems` inline — an instance with no
+ * readable `templateSnapshot` resolves its items through ONE
+ * `iTPChecklistItem.findMany` keyed by template — so `makeLot` registers its
+ * fixture items here and this mock serves them, exactly as Postgres would.
+ */
+const liveChecklistItemsByTemplateId = new Map<
+  string,
+  (ChecklistItemFixture & { templateId: string; responsibleParty: string })[]
+>();
+
+function serveLiveChecklistItems() {
+  liveChecklistItemsByTemplateId.clear();
+  mocks.checklistItemFindMany.mockImplementation(
+    async ({ where }: { where: { templateId: { in: string[] } } }) =>
+      where.templateId.in.flatMap(
+        (templateId) => liveChecklistItemsByTemplateId.get(templateId) ?? [],
+      ),
+  );
+}
 
 import {
   buildItpChecklistCompleteness,
@@ -307,6 +332,8 @@ interface ChecklistItemFixture {
 function makeLot(opts: {
   status?: string;
   checklistItems: ChecklistItemFixture[];
+  /** Distinct per lot when two lots in one batch need different live items. */
+  templateId?: string;
   templateSnapshot?: string | null;
   completionStatuses: Record<
     string,
@@ -321,19 +348,23 @@ function makeLot(opts: {
   }[];
   ncrs?: { id: string; ncrNumber: string; description: string; status: string }[];
 }) {
+  const templateId = opts.templateId ?? 'template-1';
+  liveChecklistItemsByTemplateId.set(
+    templateId,
+    opts.checklistItems.map((item) => ({
+      ...item,
+      templateId,
+      responsibleParty: item.responsibleParty ?? 'contractor',
+    })),
+  );
   return {
     id: 'lot-1',
     lotNumber: 'LOT-001',
     status: opts.status ?? 'completed',
     projectId: 'project-1',
     itpInstance: {
+      templateId,
       templateSnapshot: opts.templateSnapshot ?? null,
-      template: {
-        checklistItems: opts.checklistItems.map((item) => ({
-          ...item,
-          responsibleParty: item.responsibleParty ?? 'contractor',
-        })),
-      },
       completions: Object.entries(opts.completionStatuses).map(([checklistItemId, status]) => ({
         checklistItemId,
         status: typeof status === 'string' ? status : status.status,
@@ -418,6 +449,7 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     vi.clearAllMocks();
     // Default: no released hold points (overridden per test as needed)
     mocks.holdPointFindMany.mockResolvedValue([]);
+    serveLiveChecklistItems();
   });
 
   it('loads only conformance fields and filters closed NCRs in the database query', async () => {
@@ -431,10 +463,27 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
 
     await checkConformancePrerequisites('lot-1');
 
+    // A `select`, not an `include`: the gate reads four Lot columns and three
+    // ITPCompletion columns, and at the 5,000-lot claim ceiling the all-columns
+    // default was over half the decision's latency. `template.checklistItems` is
+    // NOT hydrated here — see the legacy-fallback test below.
     expect(mocks.lotFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'lot-1' },
-        include: expect.objectContaining({
+        select: expect.objectContaining({
+          id: true,
+          lotNumber: true,
+          status: true,
+          projectId: true,
+          itpInstance: {
+            select: {
+              templateId: true,
+              templateSnapshot: true,
+              completions: {
+                select: { checklistItemId: true, status: true, verificationStatus: true },
+              },
+            },
+          },
           testResults: {
             select: {
               id: true,
@@ -450,7 +499,7 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
                 status: { notIn: ['closed', 'closed_concession'] },
               },
             },
-            include: {
+            select: {
               ncr: {
                 select: {
                   id: true,
@@ -464,6 +513,51 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
         }),
       }),
     );
+  });
+
+  it('resolves a legacy null-snapshot instance from ONE live-template query', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM, TEST_ITEM],
+        templateSnapshot: null,
+        completionStatuses: { i1: 'completed', i2: 'completed' },
+        testResults: [PASSING_VERIFIED_TEST],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(mocks.checklistItemFindMany).toHaveBeenCalledTimes(1);
+    expect(mocks.checklistItemFindMany).toHaveBeenCalledWith({
+      where: { templateId: { in: ['template-1'] } },
+    });
+    // Same verdict the inline nested include used to produce.
+    expect(result.prerequisites?.itpTotalCount).toBe(2);
+    expect(result.prerequisites?.testRequired).toBe(true);
+    expect(result.prerequisites?.hasPassingTest).toBe(true);
+    expect(result.canConform).toBe(true);
+  });
+
+  it('fires NO live-template query when the instance carries a snapshot', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        // Live template has drifted to two items; the snapshot has one.
+        checklistItems: [NON_TEST_ITEM, TEST_ITEM],
+        templateSnapshot: JSON.stringify({
+          id: 'template-1',
+          name: 'Assigned no-test template',
+          checklistItems: [NON_TEST_ITEM],
+        }),
+        completionStatuses: { i1: 'completed' },
+        testResults: [],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(mocks.checklistItemFindMany).not.toHaveBeenCalled();
+    expect(result.prerequisites?.itpTotalCount).toBe(1);
+    expect(result.canConform).toBe(true);
   });
 
   it('conforms a no-test-point lot with NO test result (testRequired false)', async () => {
@@ -778,9 +872,29 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
  * released, and must reproduce the gate exactly.
  */
 describe('computeConformanceResult — pure conformance core (M39)', () => {
+  /**
+   * The pure core receives what the FETCH layer hands it: an instance with the
+   * live template items already attached (the legacy fallback path
+   * `attachLegacyChecklistItems` builds) or a parseable `templateSnapshot`. The
+   * conformance query itself no longer hydrates `template.checklistItems`, so
+   * these fixtures attach what `makeLot` registered as the live template.
+   */
+  function hydratedLot(opts: Parameters<typeof makeLot>[0]) {
+    const lot = makeLot(opts);
+    return {
+      ...lot,
+      itpInstance: {
+        ...lot.itpInstance,
+        template: {
+          checklistItems: liveChecklistItemsByTemplateId.get(lot.itpInstance.templateId) ?? [],
+        },
+      },
+    };
+  }
+
   it('conforms a completed no-test lot with no released hold points needed', () => {
     const result = computeConformanceResult(
-      makeLot({ checklistItems: [NON_TEST_ITEM], completionStatuses: { i1: 'completed' } }),
+      hydratedLot({ checklistItems: [NON_TEST_ITEM], completionStatuses: { i1: 'completed' } }),
       new Set(),
     );
 
@@ -791,7 +905,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
 
   it('blocks an N/A hold-point sign-off item when its id is NOT in the released set', () => {
     const result = computeConformanceResult(
-      makeLot({
+      hydratedLot({
         checklistItems: [HOLD_POINT_ITEM],
         completionStatuses: { hp1: 'not_applicable' },
       }),
@@ -806,7 +920,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
 
   it('passes the same N/A hold-point item once its id IS in the released set', () => {
     const result = computeConformanceResult(
-      makeLot({
+      hydratedLot({
         checklistItems: [HOLD_POINT_ITEM],
         completionStatuses: { hp1: 'not_applicable' },
       }),
@@ -820,7 +934,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
 
   it('still requires a passing verified test for a test-point lot (released set irrelevant)', () => {
     const result = computeConformanceResult(
-      makeLot({ checklistItems: [TEST_ITEM], completionStatuses: { i2: 'completed' } }),
+      hydratedLot({ checklistItems: [TEST_ITEM], completionStatuses: { i2: 'completed' } }),
       new Set(),
     );
 
@@ -863,7 +977,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
     };
 
     const result = computeConformanceResult(
-      makeLot({
+      hydratedLot({
         checklistItems: [noResultItem, awaitingItem, failingItem, satisfiedItem],
         completionStatuses: {
           'tr-none': 'completed',
@@ -900,7 +1014,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
     // "Slump" — the free-text fallback would never match. The explicit link
     // (itpChecklistItemId === item id) is what makes the gate reachable.
     const result = computeConformanceResult(
-      makeLot({
+      hydratedLot({
         checklistItems: [TEST_ITEM], // id 'i2', testType 'Compaction'
         completionStatuses: { i2: 'completed' },
         testResults: [
@@ -926,7 +1040,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
     // nor by testType — the honest state is "there is a result, link it",
     // not "no result yet" (the #1336 misclassification).
     const result = computeConformanceResult(
-      makeLot({
+      hydratedLot({
         checklistItems: [TEST_ITEM], // requires 'Compaction'
         completionStatuses: { i2: 'completed' },
         testResults: [{ id: 'r-orphan', testType: 'Slump', passFail: 'pass', status: 'verified' }],
@@ -956,6 +1070,7 @@ describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Pr
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.holdPointFindMany.mockResolvedValue([]);
+    serveLiveChecklistItems();
   });
 
   function lotWithId<T extends { id: string; lotNumber: string }>(base: T, id: string): T {
@@ -964,11 +1079,19 @@ describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Pr
 
   it('resolves every lot with a single lot.findMany and no per-lot fan-out', async () => {
     const lotA = lotWithId(
-      makeLot({ checklistItems: [NON_TEST_ITEM], completionStatuses: { i1: 'completed' } }),
+      makeLot({
+        checklistItems: [NON_TEST_ITEM],
+        templateId: 'template-a',
+        completionStatuses: { i1: 'completed' },
+      }),
       'lot-a',
     );
     const lotB = lotWithId(
-      makeLot({ checklistItems: [TEST_ITEM], completionStatuses: { i2: 'completed' } }),
+      makeLot({
+        checklistItems: [TEST_ITEM],
+        templateId: 'template-b',
+        completionStatuses: { i2: 'completed' },
+      }),
       'lot-b',
     );
     mocks.lotFindMany.mockResolvedValue([lotA, lotB]);
@@ -976,6 +1099,12 @@ describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Pr
     const result = await checkConformancePrerequisitesBatch(['lot-a', 'lot-b']);
 
     expect(mocks.lotFindMany).toHaveBeenCalledTimes(1);
+    // Both lots are legacy (no snapshot), so the live-template fallback runs —
+    // ONCE for every template involved, not once per lot.
+    expect(mocks.checklistItemFindMany).toHaveBeenCalledTimes(1);
+    expect(mocks.checklistItemFindMany).toHaveBeenCalledWith({
+      where: { templateId: { in: ['template-a', 'template-b'] } },
+    });
     // No N/A hold-point sign-off items → the hold-point query is skipped entirely.
     expect(mocks.holdPointFindMany).not.toHaveBeenCalled();
 
@@ -1015,5 +1144,6 @@ describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Pr
     expect(result.size).toBe(0);
     expect(mocks.lotFindMany).not.toHaveBeenCalled();
     expect(mocks.holdPointFindMany).not.toHaveBeenCalled();
+    expect(mocks.checklistItemFindMany).not.toHaveBeenCalled();
   });
 });

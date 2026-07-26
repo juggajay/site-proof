@@ -251,3 +251,185 @@ one pass, so it is re-runnable against the same database.
 Flags: `--lots=N` (default 5000), `--claim-iterations=N` (20),
 `--entity-iterations=N` (50), `--page-iterations=N` (20), `--only=ABCD` to run a
 subset of the sections, `--keep` to skip teardown and inspect the dataset.
+
+---
+
+## 2026-07-26 post-fix re-measurement
+
+`f0-5-perf-fix` (stacks on #1578) attacks the read volume the section above
+sized. Same benchmark, same script — `backend/scripts/bench-f05.ts` is byte
+identical, so these numbers and the ones above are directly comparable.
+
+- **Code under test:** `f0-5-perf-fix` (three read-volume changes, no schema
+  change, no new dependency, behaviour-preserving on decision outcomes).
+- **Baseline for this table:** the same benchmark re-run on
+  `origin/f0-5-benchmark` @ `093643f0` on the machine that measured the "after"
+  column, minutes before the change. It read **p95 4,163.6ms** where the
+  original write-up above read 4,340.7ms — the same verdict, ~4% run-to-run
+  variance on the same host. Compare within a column pair, not across write-ups.
+
+### Verdict
+
+| # | Target | Budget | Before (p95) | After (p95) | Result |
+|---|--------|--------|--------------|-------------|--------|
+| 1 | Claim inclusion decision, 5,000 members, flag ON | p95 < 2,000ms | 4,163.6ms | **2,964.0ms** | **still FAIL** (148% of budget, was 208%) |
+| 2 | Single-entity decision overhead (audit + snapshot in transaction) | p95 < 50ms | 1.4ms | **1.7ms** | PASS (3% of budget) — no regression |
+| 3 | Paginated claim-readiness, page of 100 | p95 < 1,000ms `[R2-8]` | 63.4ms | **45.0ms** | PASS (4%) — 29% faster |
+| 3 | Paginated claim-readiness, page of 500 | p95 < 1,000ms `[R2-8]` | 261.5ms | **164.8ms** | PASS (16%) — 37% faster |
+
+Snapshot-shape verification at the ceiling is unchanged and still **all PASS**:
+5,001 rows (1 aggregate + 5,000 members) in 11 chunks, max member `result` 103
+bytes, max aggregate `result` 138 bytes. Target 2's 1.4 → 1.7ms movement is noise
+on a 1–2ms measurement (the flag ON − flag OFF delta came out at −0.2ms), not a
+regression; Target 3 improves because it shares the same conformance read.
+
+Full route latency at the ceiling:
+
+| Measurement | p50 | p95 | max | mean |
+|---|---|---|---|---|
+| Route latency, flag ON — before | 3,735.2ms | 4,163.6ms | 4,577.6ms | 3,810.7ms |
+| Route latency, flag ON — **after** | **2,785.4ms** | **2,964.0ms** | 3,014.2ms | 2,783.1ms |
+| Route latency, flag OFF — before | 3,015.7ms | 3,331.9ms | 3,482.7ms | 3,062.9ms |
+| Route latency, flag OFF — **after** | **2,087.9ms** | **2,275.4ms** | 2,293.0ms | 2,105.9ms |
+
+### Updated phase attribution
+
+| Phase | p50 before | p50 after | delta | share of p50 after |
+|---|---|---|---|---|
+| `evaluate` (reads inside the transaction) | 2,101.4ms | **1,128.9ms** | **−972.5ms** | 41% |
+| `snapshot` (11 × `RequirementEvaluation.createManyAndReturn`) | 695.3ms | 681.8ms | −13.5ms | 24% |
+| `mutate` (claim + 5,000 members + status flips) | 577.5ms | 601.7ms | +24.2ms | 22% |
+| `audit` (`AuditLog.create`) | 9.3ms | 8.2ms | −1.1ms | 0.3% |
+| unattributed (raw `FOR UPDATE` locks, auth reads, body parse, JS) | 313.1ms | 345.4ms | +32.3ms | 12% |
+
+Heaviest individual operations, representative iteration:
+
+| Operation | Calls | Before | After |
+|---|---|---|---|
+| `Lot.findMany` — conformance hydration + eligibility read | 1 + 1 | 1,981.3ms + 166.4ms | **1,005.0ms combined** |
+| `RequirementEvaluation.createManyAndReturn` | 11 | 708.5ms | 601.0ms |
+| `ProgressClaim.create` (nested 5,000 `ClaimedLot` rows) | 1 | 366.2ms | 375.7ms |
+| `Lot.updateMany` — 5,000 lots to `claimed` | 1 | 208.8ms | 188.4ms |
+| `ClaimedLot.findMany` — `getCumulativeClaimedPercentByLot` | 1 | 19.9ms | 31.0ms |
+| `AuditLog.create` | 1 | 7.5ms | 7.5ms |
+
+**Reading the "after" operation table:** the recorder keys the two `Lot.findMany`
+calls apart by the `(include)` suffix (`bench-f05.ts:118-121`). The conformance
+read is now a `select`, so both calls land in one `Lot.findMany` bucket —
+1,005.0ms is the conformance hydration **plus** the eligibility read, not the
+conformance read alone. Section D's variant 4 (885–962ms across runs) is the
+standalone figure for the conformance read as it now ships.
+
+### What changed, per lever
+
+1. **`include` → `select` on the conformance read**
+   (`backend/src/lib/conformancePrerequisites.ts`, `CONFORMANCE_LOT_SELECT`).
+   Four Lot columns and three of `ITPCompletion`'s seventeen, matching what
+   `buildItpChecklistCompleteness` and `getNaHoldPointSignoffItemIds` actually
+   read (`checklistItemId`, `status`, `verificationStatus`); `ncrLots` also moved
+   from `include` to `select` so the join row's own columns stop coming back.
+   This is section D variant 4, and it is the whole of the −972ms on `evaluate`.
+2. **`template.checklistItems` out of the hot query** (same const; fallback in
+   `attachLegacyChecklistItems`). `getChecklistItemsForInstance`
+   (`backend/src/routes/itp/helpers/templateSnapshot.ts:88-98`) returns the parsed
+   snapshot and only falls back to live items when the parse yields null, and
+   `backend/src/routes/itp/instances.ts:196` writes a snapshot on every
+   assignment — so ~60,000 rows per decision were hydrated and discarded. The
+   fallback is preserved, not deleted: instances whose snapshot does not parse
+   resolve their items through ONE `iTPChecklistItem.findMany` keyed by the
+   DISTINCT templates involved (12 rows for a 5,000-lot legacy project, not
+   60,000). Snapshot-bearing instances fire no extra query at all. Detection calls
+   `parseTemplateSnapshot` rather than checking for null, so a corrupt snapshot
+   still falls back exactly as it does today.
+3. **`createManyAndReturn` narrowed to `select: { id: true }`**
+   (`backend/src/lib/readiness/recordDecision.ts`, `insertSnapshots`). Verdict on
+   the candidate: **no caller reads snapshot row content off a
+   `DecisionOutcome`** — all eight `recordDecision` call sites (claims
+   `workflowRoutes.ts:253`, `lots/qualityRoutes.ts:446,589`, `holdpoints.ts:192`,
+   `holdpoints/actionRoutes.ts:417`, `holdpoints/publicBatchRoutes.ts:314`,
+   `ncrs/ncrClosureWorkflow.ts:384,527`) read `decision.mutation` and nothing
+   else, and `lib/readiness/contracts/**` never mentions snapshots. So
+   `DecisionOutcome.snapshots` was removed rather than left as a field that is an
+   empty array on every write path, and `snapshotIds` (which the DB suites assert
+   on) stays. **Plain `createMany` was NOT used**: it returns only a count, so
+   `snapshotIds` would have to be minted client-side, moving id generation off the
+   schema default for no further win.
+   **Measured: −13.5ms p50, i.e. noise.** The 5,001-row insert cost is the insert,
+   not the RETURNING payload. Kept because the work it deletes is provably dead
+   (5,001 hydrated rows, ~2 MB of transient objects per decision), not because it
+   moved the benchmark. The earlier "secondary lever, snapshot writes (~700ms)"
+   line should be read as **refuted**: the snapshot phase is ~682ms with or
+   without the payload.
+
+### Why Target 1 is still over, and what is left
+
+The gate needs another ~965ms of p95. Measured, read-only, on the same 5,000-lot
+dataset (`--only=CD --keep`, then the query shapes below at 5 reps each):
+
+| Remaining lever | p50 now | p50 if taken | Available |
+|---|---|---|---|
+| Conformance completions fetched FLAT (`iTPCompletion.findMany` + a JS join) instead of through Prisma's nested-relation hydration | 962.0ms | 659.4ms | **−303ms** |
+| Eligibility read in `evaluateClaimInclusion` (`inclusionDecision.ts:146-151`) narrowed to the 4 columns `ClaimableLot` declares | 184.3ms | 47.2ms | **−137ms** |
+| `ProgressClaim.create`'s 5,000 nested `claimedLots.create` → sibling `claimedLot.createMany` | 375.7ms | not measured | ~−200ms (est.) |
+| Floor: the 60,000 completion rows the gate genuinely reads, fetched flat, 3 columns, nothing else | — | **330.1ms** | — |
+
+Both measured levers together are ~440ms, landing p95 near 2.5s — **still over
+budget**. They are deliberately NOT in this change: they do not flip the verdict,
+and the last row is why. Even a perfect implementation cannot go below the ~330ms
+it takes to read the 60,000 `ITPCompletion` rows the conformance predicates
+consume, and the decision also has to insert 5,001 snapshot rows (~682ms), create
+5,000 `ClaimedLot` rows (~376ms), flip 5,000 lot statuses (~188ms) and hold a
+serializable lock over all of it. The floor for a 5,000-member decision that
+reads every member's ITP state is on the order of 1.7–2.0s on this hardware, with
+no network round trip to Postgres — Railway adds one per query.
+
+So the conclusion of the original §Analysis point 6 stands and is now
+quantified: **at 5,000 members this budget is a spec question, not a tuning
+question.** Three honest options, in order of how much they cost:
+
+1. **Lower the benchmarked ceiling.** At 500 members the same route is well
+   inside 2s (section C's page-of-500 shares the conformance read and lands at
+   164.8ms end to end). One claim covering all 5,000 lots of a 5,000-lot job at
+   100% is an artificial worst case.
+2. **Raise the Target 1 budget** to something the measured floor can meet (~3s)
+   and keep 5,000 members.
+3. **Change what the decision reads** — a per-lot conformance summary maintained
+   on write (or a SQL-side aggregate) instead of re-deriving from 60,000
+   completion rows inside the transaction. Real work, real invalidation risk, and
+   it changes the trust model of the gate: today the verdict is computed from
+   primary data inside the serializable transaction, which is precisely why it
+   cannot be stale.
+
+`DECISION_TRANSACTION_TIMEOUT_MS = 15_000` is now 5x the observed max (3,014ms),
+up from 3.3x.
+
+### Re-running this comparison
+
+```bash
+cd backend
+git checkout origin/f0-5-benchmark   # baseline column
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05bench" \
+  npm run bench:f05
+git checkout f0-5-perf-fix           # after column
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05bench" \
+  npm run bench:f05
+```
+
+Behaviour-preservation proof for the change (local disposable Postgres, never
+Railway):
+
+```bash
+# The three pinned decision suites — 44 tests.
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05perf" \
+  npx vitest run src/routes/claims/claimInclusionDecision.db.test.ts \
+    src/routes/lots/lotConformanceDecision.db.test.ts \
+    src/lib/readiness/recordDecision.db.test.ts
+
+# Everything around the touched code — 1,317 tests. `--no-file-parallelism` is
+# required: these DB suites share one database, and running them concurrently
+# produces spurious 409 DECISION_CONFLICTs from the serializable retry loop.
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05perf" \
+  npx vitest run --no-file-parallelism src/routes/claims src/routes/lots \
+    src/routes/holdpoints src/routes/ncrs src/lib/readiness src/routes/itp \
+    src/lib/conformancePrerequisites.test.ts
+```

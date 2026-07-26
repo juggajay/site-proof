@@ -471,7 +471,12 @@ describe('recordDecision — request-key replay (spec §6)', () => {
     expect(second.auditLogId).toBe(first.auditLogId);
     expect(second.snapshotIds).toEqual(first.snapshotIds);
     expect(second.mutation).toBeUndefined();
-    expect(second.snapshots[0].result).toMatchObject({ ready: true });
+    // The replayed ids point at the ORIGINAL rows (spec §6). The outcome carries
+    // ids rather than hydrated rows, so the content check reads them back.
+    const replayedRows = await prisma.requirementEvaluation.findMany({
+      where: { id: { in: second.snapshotIds } },
+    });
+    expect(replayedRows[0].result).toMatchObject({ ready: true });
 
     // Zero new rows, and `mutate` never ran (the lot stayed reset).
     expect(await snapshotRowsForProject()).toHaveLength(1);
