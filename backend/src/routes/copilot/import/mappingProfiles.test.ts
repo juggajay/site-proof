@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { AppError } from '../../../lib/AppError.js';
-import { AU_ITP_HEADERS } from '../../../test/itpWorkbookFixture.js';
+import {
+  AU_ITP_HEADERS,
+  buildCivilProWorkbook,
+  CIVILPRO_CSV_HEADERS,
+  CIVILPRO_GRID_HEADERS,
+  CIVILPRO_SHEET_NAME,
+} from '../../../test/itpWorkbookFixture.js';
+import { parseExcelWorkbook } from './excelParser.js';
+import { computeItpImportDryRun } from './itpImportDryRun.js';
 import {
   applyTransform,
   assertAllowedFieldMap,
   BUILT_IN_PROFILES,
   deriveFieldMapFromHeaders,
   resolveColumnIndexes,
+  scoreFieldMapAgainstHeaders,
   suggestBuiltInProfile,
+  type ItpImportTarget,
 } from './mappingProfiles.js';
 
 const HEADERS = [...AU_ITP_HEADERS];
@@ -124,5 +134,135 @@ describe('transforms', () => {
   it('trims by default', () => {
     expect(applyTransform(undefined, '  spaced  ')).toBe('spaced');
     expect(applyTransform('none', '  spaced  ')).toBe('spaced');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CivilPro calibration (see the profile's note for the vendor sources)
+// ---------------------------------------------------------------------------
+
+const CIVILPRO_PROFILE = BUILT_IN_PROFILES.find((profile) => profile.key === 'civilpro_itp_excel')!;
+
+/** The reviewer's key for the one template in the fixture: `sheet::sheet`. */
+const CIVILPRO_TEMPLATE_KEY = `${CIVILPRO_SHEET_NAME}::${CIVILPRO_SHEET_NAME}`;
+
+describe('CivilPro profile — calibrated against the vendor-published layout', () => {
+  it('fits the ITP item grid exactly, and is what gets auto-suggested', () => {
+    expect(scoreFieldMapAgainstHeaders(CIVILPRO_PROFILE.fieldMap, [...CIVILPRO_GRID_HEADERS])).toBe(
+      1,
+    );
+    expect(suggestBuiltInProfile([...CIVILPRO_GRID_HEADERS])?.key).toBe('civilpro_itp_excel');
+  });
+
+  it('binds description to Description, never to CivilPro’s short Reference Text', () => {
+    const indexes = resolveColumnIndexes(CIVILPRO_PROFILE.fieldMap, [...CIVILPRO_GRID_HEADERS]);
+    expect(indexes.get('description')).toBe(CIVILPRO_GRID_HEADERS.indexOf('Description'));
+    expect(indexes.get('description')).not.toBe(CIVILPRO_GRID_HEADERS.indexOf('Reference Text'));
+    expect(indexes.get('specificationReference')).toBe(CIVILPRO_GRID_HEADERS.indexOf('Clause'));
+    // Every target the profile claims resolves — no half-mapped import.
+    for (const entry of CIVILPRO_PROFILE.fieldMap) {
+      expect(indexes.has(entry.target as ItpImportTarget)).toBe(true);
+    }
+  });
+
+  it('reads CivilPro’s controlled vocabularies into the codebase ones', () => {
+    expect(applyTransform('whs_to_point_type', 'Check Item')).toBe('standard');
+    expect(applyTransform('whs_to_point_type', 'Witness Point')).toBe('witness');
+    expect(applyTransform('whs_to_point_type', 'Hold Point')).toBe('hold_point');
+    // Lossy and deliberate — there is no fourth point-type value to fold to.
+    expect(applyTransform('whs_to_point_type', 'Milestone')).toBe('standard');
+
+    expect(applyTransform('evidence_required', 'QVC')).toBe('inspection');
+    expect(applyTransform('evidence_required', 'QVC/ATP')).toBe('inspection');
+    // The /test/ arm still wins these two — the QVC arm must stay last.
+    expect(applyTransform('evidence_required', 'QVC/Tests')).toBe('test');
+    expect(applyTransform('evidence_required', 'QVC/Test records')).toBe('test');
+  });
+
+  it('maps the real grid rows through parse → map → dry run', async () => {
+    const grid = await parseExcelWorkbook(await buildCivilProWorkbook());
+    const sheet = grid.sheets[0];
+    expect(sheet.headers).toEqual([...CIVILPRO_GRID_HEADERS]);
+    expect(sheet.rows).toHaveLength(3);
+
+    const indexes = resolveColumnIndexes(CIVILPRO_PROFILE.fieldMap, sheet.headers);
+    const column = (target: ItpImportTarget) => indexes.get(target)!;
+    const cells = sheet.rows.map((row) => ({
+      pointType: applyTransform('whs_to_point_type', row[column('pointType')]),
+      evidenceRequired: applyTransform('evidence_required', row[column('evidenceRequired')]),
+      responsibleParty: applyTransform('responsible_party', row[column('responsibleParty')]),
+      specificationReference: row[column('specificationReference')],
+      testType: row[column('testType')],
+      description: row[column('description')],
+    }));
+
+    expect(cells.map((row) => row.pointType)).toEqual(['standard', 'hold_point', 'standard']);
+    expect(cells.map((row) => row.evidenceRequired)).toEqual(['inspection', 'inspection', 'test']);
+    // Every Clause value lands in specificationReference, on every row.
+    expect(cells.map((row) => row.specificationReference)).toEqual([
+      'MRTS04 Cl. 7.2.1',
+      'MRTS04 Cl. 7.2.2',
+      'MRTS04 Cl.12.2.1.3',
+    ]);
+    expect(cells.map((row) => row.testType)).toEqual(['Visual', 'Visual', 'Visual/Test']);
+    expect(cells[0].description).toBe(
+      'Limits of clearing identified and set out completed by survey.',
+    );
+    // OPEN domain call, pinned here rather than changed: CivilPro's
+    // "Engineer and Supervisor" currently folds to superintendent.
+    expect(cells[0].responsibleParty).toBe('superintendent');
+
+    const result = computeItpImportDryRun({
+      grid,
+      fieldMap: CIVILPRO_PROFILE.fieldMap,
+      projectSpecificationSet: null,
+      existingTemplates: [],
+      resolutions: { [CIVILPRO_TEMPLATE_KEY]: { activitySlug: 'earthworks_general' } },
+    });
+
+    expect(result.dryRun.canApply).toBe(true);
+    expect(result.templates).toHaveLength(1);
+    expect(result.templates[0].checklistItems).toHaveLength(3);
+    expect(result.templates[0].checklistItems.map((item) => item.pointType)).toEqual([
+      'standard',
+      'hold_point',
+      'standard',
+    ]);
+    expect(result.templates[0].name).toBe(CIVILPRO_SHEET_NAME);
+  });
+
+  it('blocks on the missing activity column rather than defaulting a slug', async () => {
+    const grid = await parseExcelWorkbook(await buildCivilProWorkbook());
+    const result = computeItpImportDryRun({
+      grid,
+      fieldMap: CIVILPRO_PROFILE.fieldMap,
+      projectSpecificationSet: null,
+      existingTemplates: [],
+    });
+
+    expect(result.dryRun.canApply).toBe(false);
+    expect(result.dryRun.rows[0].reason).toBe('unresolvable_activity');
+  });
+
+  it('suggests the profile for the register CSV column names too', () => {
+    expect(suggestBuiltInProfile([...CIVILPRO_CSV_HEADERS])?.key).toBe('civilpro_itp_excel');
+
+    // The CSV spells two columns differently, so the alias table (not the
+    // profile's exact headers) is what resolves them in the mapping step.
+    const derived = deriveFieldMapFromHeaders([...CIVILPRO_CSV_HEADERS]);
+    const source = (target: string) =>
+      derived.find((entry) => entry.target === target)?.source.header;
+    expect(source('pointType')).toBe('Check Type');
+    expect(source('testType')).toBe('Inspection Method');
+    expect(source('description')).toBe('Description');
+    expect(source('specificationReference')).toBe('Clause');
+    expect(source('evidenceRequired')).toBe('Records');
+  });
+
+  it('derives the grid layout from its headers alone, with no profile chosen', () => {
+    const derived = deriveFieldMapFromHeaders([...CIVILPRO_GRID_HEADERS]);
+    expect(derived.map((entry) => entry.target).sort()).toEqual(
+      CIVILPRO_PROFILE.fieldMap.map((entry) => entry.target).sort(),
+    );
   });
 });
