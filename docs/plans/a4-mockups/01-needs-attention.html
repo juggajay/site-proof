@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A4 — Needs Attention (richer cards)</title>
+<style>
+/* Tokens copied from frontend/src/index.css:8-104 (HSL triplets). */
+:root{
+  --background:40 14% 96%; --foreground:24 14% 9%;
+  --card:0 0% 100%; --card-foreground:24 14% 9%;
+  --primary:24 14% 9%; --primary-foreground:40 33% 98%;
+  --secondary:40 15% 93%; --secondary-foreground:24 14% 9%;
+  --muted:40 15% 93%; --muted-foreground:30 8% 32%;
+  --accent:40 15% 93%;
+  --destructive:4 74% 40%; --success:142 72% 29%; --warning:32 95% 44%; --info:217 79% 45%;
+  --brand:26 90% 37%; --border:38 18% 89%; --radius:0.5rem;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --background:30 16% 7%; --foreground:40 30% 94%;
+    --card:30 16% 10%; --card-foreground:40 30% 94%;
+    --primary:40 30% 94%; --primary-foreground:30 16% 7%;
+    --secondary:33 14% 15%; --secondary-foreground:40 30% 94%;
+    --muted:33 14% 15%; --muted-foreground:36 16% 70%; --accent:33 14% 17%;
+    --destructive:0 88% 71%; --success:156 64% 52%; --warning:43 96% 56%; --info:213 92% 68%;
+    --brand:38 92% 50%; --border:33 15% 17%;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; padding:32px 20px 64px;
+  background:hsl(var(--background)); color:hsl(var(--foreground));
+  font-family:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+  letter-spacing:-0.006em; -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums}
+.spec-note{max-width:1120px;margin:0 auto 28px;font-size:13px;color:hsl(var(--muted-foreground));line-height:1.55}
+.spec-note code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
+.frames{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+.frame-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground));margin-bottom:10px}
+
+/* ── viewport frames ─────────────────────────────────────────────────────── */
+.viewport{border:1px solid hsl(var(--border));border-radius:12px;background:hsl(var(--background));overflow:hidden}
+.viewport.desktop{width:100%}
+.viewport.mobile{width:390px;max-width:100%}
+
+/* App chrome: MainLayout.tsx:20-32 + Header.tsx:114 */
+.chrome{display:flex;min-height:100%}
+.sidebar{width:224px;flex:0 0 224px;border-right:1px solid hsl(var(--border));background:hsl(var(--card));padding:0 0 12px}
+.sidebar-brand{height:56px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid hsl(var(--border));font-size:17px;font-weight:600;letter-spacing:-0.01em}
+.sidebar-brand span{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;font-weight:400;color:hsl(var(--muted-foreground))}
+.sidebar-nav{padding:14px}
+.nav-section{font-size:11px;font-weight:600;text-transform:uppercase;color:hsl(var(--muted-foreground));padding:0 12px;margin:16px 0 4px}
+.nav-section:first-child{margin-top:0}
+/* Sidebar.tsx:95-113 — nav item + amber left rail on the single active item */
+.nav-item{position:relative;display:flex;align-items:center;gap:12px;border-radius:8px;padding:7px 12px;font-size:14px;color:hsl(var(--muted-foreground));text-decoration:none}
+.nav-item svg{width:18px;height:18px;flex:0 0 18px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.nav-item.active{background:hsl(var(--accent));color:hsl(var(--foreground));font-weight:500}
+.nav-item.active::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2.5px;border-radius:0 999px 999px 0;background:hsl(var(--brand))}
+.nav-item.active svg{color:hsl(var(--brand))}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{height:56px;display:flex;align-items:center;gap:10px;border-bottom:1px solid hsl(var(--border));background:hsl(var(--card));padding:0 24px;font-size:13px;color:hsl(var(--muted-foreground))}
+.crumb-sep{opacity:.5}
+.crumb-current{color:hsl(var(--foreground));font-weight:500}
+.content{padding:24px;display:flex;flex-direction:column;gap:20px}
+.viewport.mobile .content{padding:16px;gap:16px}
+
+/* Page head — DashboardPage.tsx:368 h1 text-2xl font-semibold tracking-tight */
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font-size:24px;font-weight:600;letter-spacing:-0.02em;margin:0}
+.page-sub{margin:4px 0 0;font-size:14px;color:hsl(var(--muted-foreground))}
+
+/* Filter chips — the ORTHOGONAL time lens. Not a second card hierarchy: these are
+   controls, and they re-filter the one list rather than creating new sections. */
+.lenses{display:flex;gap:8px;flex-wrap:wrap}
+.lens{display:inline-flex;align-items:center;gap:7px;border:1px solid hsl(var(--border));background:hsl(var(--card));border-radius:999px;padding:6px 13px;font-size:13px;color:hsl(var(--muted-foreground));cursor:default}
+.lens .n{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.lens[aria-pressed="true"]{background:hsl(var(--primary));border-color:hsl(var(--primary));color:hsl(var(--primary-foreground))}
+.lens.danger .n{color:hsl(var(--destructive))}
+.lens.warn .n{color:hsl(var(--warning))}
+.lens[aria-pressed="true"] .n{color:inherit}
+
+/* Ball-in-court group heading — ItemsRequiringAttentionWidget.tsx:59 */
+.group{display:flex;flex-direction:column;gap:8px}
+.group-head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:hsl(var(--muted-foreground));padding:0 2px}
+.group-head .count{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.group-head .rule{flex:1;height:1px;background:hsl(var(--border))}
+
+/* ── THE RICHER CARD (Needs-Attention list only — Jay exception 2026-07-24) ──
+   Anatomy, fixed and identical for every row on this screen:
+     [subject icon] [subject ref + title] [severity chip] [time chip]
+                    [owner line · age]                    [primary action | nothing]
+   The action button renders IFF needsAction === true. That is the ONLY thing that
+   varies between rows, so the button IS the visible rendering of the derivation. */
+.item{
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;
+  border:1px solid hsl(var(--border));background:hsl(var(--card));
+  border-radius:var(--radius);padding:14px 16px;text-decoration:none;color:inherit;
+}
+.item-ico{width:32px;height:32px;border-radius:8px;background:hsl(var(--muted));display:flex;align-items:center;justify-content:center;flex:0 0 32px}
+.item-ico svg{width:16px;height:16px;stroke:hsl(var(--muted-foreground));fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.item-body{min-width:0}
+.item-line1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.item-ref{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.item-title{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Line 2 is the meta line the exception buys us: owner + age. It is NOT a
+   description — it is two fixed fields, so card height stays uniform. */
+.item-line2{margin-top:5px;display:flex;align-items:center;gap:8px;font-size:12px;color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-line2 .dot{opacity:.45}
+.owner-kind{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border:1px solid hsl(var(--border));border-radius:4px;padding:1px 4px;color:hsl(var(--muted-foreground))}
+.item-tail{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+
+/* chips — colour only where a human must act (lotStatusOverview.ts:63 comment) */
+.chip{display:inline-flex;align-items:center;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.chip-blocker{background:hsl(var(--destructive)/.10);color:hsl(var(--destructive))}
+.chip-warning{background:hsl(var(--warning)/.12);color:hsl(var(--warning))}
+.chip-neutral{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.chip-time{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;border-radius:6px;padding:2px 8px;white-space:nowrap}
+.time-overdue{background:hsl(var(--destructive)/.10);color:hsl(var(--destructive))}
+.time-soon{background:hsl(var(--warning)/.12);color:hsl(var(--warning))}
+.time-none{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+
+/* buttons — button.tsx:7-33 (default/outline, size default h-9) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border-radius:6px;font-size:14px;font-weight:500;border:1px solid transparent;cursor:default;white-space:nowrap}
+.btn-primary{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
+.btn-outline{background:hsl(var(--background));border-color:hsl(var(--border));color:hsl(var(--foreground))}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chev{width:16px;height:16px;stroke:hsl(var(--muted-foreground));fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+
+/* empty / done state */
+.rest{border:1px dashed hsl(var(--border));border-radius:var(--radius);padding:14px 16px;font-size:13px;color:hsl(var(--muted-foreground));display:flex;align-items:center;gap:10px}
+
+/* mobile: the richer card stacks; action button becomes full-width under the meta line */
+.viewport.mobile .item{grid-template-columns:auto 1fr;gap:12px;padding:12px 14px}
+.viewport.mobile .item-tail{grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap;margin-top:2px}
+.viewport.mobile .item-tail .btn{flex:1;min-height:44px}
+/* Rows with no primary action (waiting_on_others / needs-another-role) keep the
+   three-column grid so the chevron stays inline on the right rather than
+   dropping to a full-width row of its own. */
+.viewport.mobile .item:not(:has(.btn)){grid-template-columns:auto 1fr auto}
+.viewport.mobile .item:not(:has(.btn)) .item-tail{grid-column:auto;margin-top:0}
+.viewport.mobile .item-title{white-space:normal}
+.viewport.mobile .sidebar{display:none}
+.viewport.mobile .topbar{padding:0 16px}
+.viewport.mobile h1{font-size:21px}
+</style>
+</head>
+<body>
+
+<div class="spec-note">
+  <strong>A4 · Screen (a) — Needs Attention.</strong> The one screen where richer item cards are permitted
+  (Jay's exception, 2026-07-24). Grouping is by <code>status</code> — exhaustive, mutually exclusive, so every
+  assignment appears exactly once. <code>isOverdue</code> / <code>dueAt</code> are shown as a chip on the row and as
+  filter lenses at the top, never as a peer group — that is how an item can be simultaneously
+  <em>waiting on others</em> and <em>overdue</em> without the two truths being conflated.
+  The primary-action button renders <strong>iff <code>needsAction === true</code></strong>; it is the visible form of
+  <code>deriveNeedsAction()</code>. Viewer below: <code>quality_manager</code>.
+</div>
+
+<div class="frames">
+
+<!-- ─────────────────────────── DESKTOP ─────────────────────────── -->
+<div>
+<div class="frame-label">Desktop — 1120px</div>
+<div class="viewport desktop">
+<div class="chrome">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">CIVOS<span>·v3</span></div>
+    <nav class="sidebar-nav">
+      <!-- No new nav item is added. The Dashboard item stays the entry point;
+           this destination is reached from the dashboard attention widget.
+           Active state shown on Dashboard because /dashboard/needs-attention is
+           a child route of it. -->
+      <a class="nav-item active" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Portfolio</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>Projects</a>
+
+      <div class="nav-section">Quality</div>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Lots</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>ITPs</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Hold Points</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M9 2v6.2L4.6 16A2 2 0 0 0 6.3 19h11.4a2 2 0 0 0 1.7-3L15 8.2V2"/><path d="M8 2h8"/></svg>Test Results</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v3"/><path d="M12 17h.01"/></svg>NCRs</a>
+
+      <div class="nav-section">Commercial</div>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Progress Claims</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>Variations</a>
+
+      <div class="nav-section">Records</div>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Documents</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/></svg>Reports</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span>Dashboard</span><span class="crumb-sep">/</span><span class="crumb-current">Needs Attention</span>
+    </div>
+
+    <div class="content">
+
+      <div class="page-head">
+        <div>
+          <h1>Needs Attention</h1>
+          <p class="page-sub">Across 3 active projects · updated 2 min ago</p>
+        </div>
+      </div>
+
+      <!-- ORTHOGONAL time lenses. Selecting "Overdue" filters the SAME list and
+           keeps the same ball-in-court grouping, so an overdue item that is
+           waiting on a lab still reads "Waiting on Hunter Geotech". -->
+      <div class="lenses">
+        <button class="lens" aria-pressed="true">All open <span class="n">14</span></button>
+        <button class="lens danger" aria-pressed="false">Overdue <span class="n">5</span></button>
+        <button class="lens warn" aria-pressed="false">Due in 7 days <span class="n">4</span></button>
+        <button class="lens" aria-pressed="false">All projects <span class="n">3</span></button>
+      </div>
+
+      <!-- ── GROUP 1: needsAction === true ─────────────────────────────────── -->
+      <section class="group">
+        <div class="group-head"><span>Needs you</span><span class="count">6</span><span class="rule"></span></div>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">HP-014</span>
+              <span class="item-title">Subgrade proof roll — Cudgegong Rd Stage 2, CH 1240–1380 EB</span>
+              <span class="chip chip-blocker">Blocker</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">role</span><span>Quality Manager (you)</span>
+              <span class="dot">·</span><span>waiting 9 days</span>
+              <span class="dot">·</span><span class="mono">unreleased_hold_points</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-overdue">6 days overdue</span>
+            <span class="btn btn-primary">Release hold point</span>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v3"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">NCR-0037</span>
+              <span class="item-title">Basecourse moisture out of spec — LOT-0138, CH 980–1120</span>
+              <span class="chip chip-blocker">Blocker</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">user</span><span>Dana Whitmore (you)</span>
+              <span class="dot">·</span><span>open 12 days</span>
+              <span class="dot">·</span><span class="mono">open_major_ncrs</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-overdue">3 days overdue</span>
+            <span class="btn btn-primary">Verify rectification</span>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M9 2v6.2L4.6 16A2 2 0 0 0 6.3 19h11.4a2 2 0 0 0 1.7-3L15 8.2V2"/><path d="M8 2h8"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">TEST-0912</span>
+              <span class="item-title">Nuclear density result submitted — LOT-0142, CH 1240–1380</span>
+              <span class="chip chip-warning">Warning</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">role</span><span>Quality Manager (you)</span>
+              <span class="dot">·</span><span>waiting 2 days</span>
+              <span class="dot">·</span><span class="mono">pending_tests</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-soon">due tomorrow</span>
+            <span class="btn btn-primary">Verify test result</span>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">LOT-0151</span>
+              <span class="item-title">No ITP assigned — Kerb &amp; gutter, CH 1380–1520 WB</span>
+              <span class="chip chip-blocker">Blocker</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">role</span><span>Quality Manager (you)</span>
+              <span class="dot">·</span><span>created 4 days ago</span>
+              <span class="dot">·</span><span class="mono">no_itp_assigned</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-none">no due date</span>
+            <span class="btn btn-primary">Assign ITP</span>
+          </span>
+        </a>
+      </section>
+
+      <!-- ── GROUP 2: status = waiting_on_me BUT needsAction === false ──────
+           Ball is in the viewer's court, yet their role is not in
+           primaryAction.executableByRoles. No button — a button here would be a
+           lie about what the viewer can do. Chip names the role that can act. -->
+      <section class="group">
+        <div class="group-head"><span>Your court — needs another role</span><span class="count">2</span><span class="rule"></span></div>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">LOT-0138</span>
+              <span class="item-title">Conformed lot has no budget line — cannot be claimed</span>
+              <span class="chip chip-warning">Warning</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">role</span><span>Project Manager can action</span>
+              <span class="dot">·</span><span>blocked 5 days</span>
+              <span class="dot">·</span><span class="mono">missing_budget</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-none">no due date</span>
+            <span class="chip chip-neutral">Needs Project Manager</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">HP-021</span>
+              <span class="item-title">Pre-pour reo inspection — no recipients on the release request</span>
+              <span class="chip chip-warning">Warning</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">role</span><span>Project Manager can action</span>
+              <span class="dot">·</span><span>blocked 2 days</span>
+              <span class="dot">·</span><span class="mono">missing_hold_point_recipients</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-soon">due in 3 days</span>
+            <span class="chip chip-neutral">Needs Project Manager</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+      </section>
+
+      <!-- ── GROUP 3: status = waiting_on_others ────────────────────────────
+           Note row 1: OVERDUE *and* waiting on a lab. Both truths on screen,
+           neither collapsed into the other. Still no action button. -->
+      <section class="group">
+        <div class="group-head"><span>Waiting on others</span><span class="count">6</span><span class="rule"></span></div>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M9 2v6.2L4.6 16A2 2 0 0 0 6.3 19h11.4a2 2 0 0 0 1.7-3L15 8.2V2"/><path d="M8 2h8"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">TEST-0904</span>
+              <span class="item-title">CBR / Modified Proctor — LOT-0142, sample lodged 2 Jul</span>
+              <span class="chip chip-blocker">Blocker</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">company</span><span>Hunter Geotech Pty Ltd (NATA lab)</span>
+              <span class="dot">·</span><span>waiting 21 days</span>
+              <span class="dot">·</span><span class="mono">no_passing_verified_test</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-overdue">7 days overdue</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v3"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">NCR-0041</span>
+              <span class="item-title">Kerb line deviation 38 mm — CH 1180, rectification issued</span>
+              <span class="chip chip-warning">Warning</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">company</span><span>Riverina Civil Pty Ltd</span>
+              <span class="dot">·</span><span>waiting 4 days</span>
+              <span class="dot">·</span><span class="mono">open_minor_ncrs</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-soon">due in 2 days</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">HP-018</span>
+              <span class="item-title">Service crossing clearance — witness point, Pacific Hwy M1</span>
+              <span class="chip chip-warning">Warning</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">external</span><span>Ausgrid — witness attendance</span>
+              <span class="dot">·</span><span>waiting 6 days</span>
+              <span class="dot">·</span><span class="mono">unreleased_hold_points</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-soon">due in 5 days</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">LOT-0147</span>
+              <span class="item-title">ITP checklist 6 of 11 items signed — Bridge BR-02 deck pour prep</span>
+              <span class="chip chip-warning">Warning</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">user</span><span>Marcus Tolley (Site Engineer)</span>
+              <span class="dot">·</span><span>waiting 3 days</span>
+              <span class="dot">·</span><span class="mono">itp_incomplete</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-none">no due date</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">LOT-0144</span>
+              <span class="item-title">Conformance pack assembling — nightly evidence sweep</span>
+              <span class="chip chip-neutral">Support</span>
+            </span>
+            <span class="item-line2">
+              <span class="owner-kind">system</span><span>CIVOS automation</span>
+              <span class="dot">·</span><span>running 4 min</span>
+              <span class="dot">·</span><span class="mono">documents</span>
+            </span>
+          </span>
+          <span class="item-tail">
+            <span class="chip-time time-none">—</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </span>
+        </a>
+      </section>
+
+      <div class="rest">
+        <svg style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+        <span>31 items closed in the last 7 days — <strong style="font-weight:600">status: done</strong> is never listed here.</span>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ─────────────────────────── MOBILE ─────────────────────────── -->
+<div>
+<div class="frame-label">Mobile — 390px</div>
+<div class="viewport mobile">
+<div class="chrome">
+  <div class="main">
+    <div class="topbar"><span class="crumb-current">Needs Attention</span></div>
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h1>Needs Attention</h1>
+          <p class="page-sub">3 active projects</p>
+        </div>
+      </div>
+
+      <div class="lenses">
+        <button class="lens" aria-pressed="true">All <span class="n">14</span></button>
+        <button class="lens danger" aria-pressed="false">Overdue <span class="n">5</span></button>
+        <button class="lens warn" aria-pressed="false">7 days <span class="n">4</span></button>
+      </div>
+
+      <section class="group">
+        <div class="group-head"><span>Needs you</span><span class="count">6</span><span class="rule"></span></div>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">HP-014</span>
+              <span class="chip chip-blocker">Blocker</span>
+              <span class="chip-time time-overdue">6d overdue</span>
+            </span>
+            <span class="item-title" style="display:block;margin-top:3px">Subgrade proof roll — CH 1240–1380 EB</span>
+            <span class="item-line2">
+              <span class="owner-kind">role</span><span>You</span><span class="dot">·</span><span>waiting 9 days</span>
+            </span>
+          </span>
+          <span class="item-tail"><span class="btn btn-primary">Release hold point</span></span>
+        </a>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v3"/><path d="M12 17h.01"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">NCR-0037</span>
+              <span class="chip chip-blocker">Blocker</span>
+              <span class="chip-time time-overdue">3d overdue</span>
+            </span>
+            <span class="item-title" style="display:block;margin-top:3px">Basecourse moisture out of spec — LOT-0138</span>
+            <span class="item-line2">
+              <span class="owner-kind">user</span><span>You</span><span class="dot">·</span><span>open 12 days</span>
+            </span>
+          </span>
+          <span class="item-tail"><span class="btn btn-primary">Verify rectification</span></span>
+        </a>
+      </section>
+
+      <section class="group">
+        <div class="group-head"><span>Waiting on others</span><span class="count">6</span><span class="rule"></span></div>
+
+        <a class="item" href="#">
+          <span class="item-ico"><svg viewBox="0 0 24 24"><path d="M9 2v6.2L4.6 16A2 2 0 0 0 6.3 19h11.4a2 2 0 0 0 1.7-3L15 8.2V2"/><path d="M8 2h8"/></svg></span>
+          <span class="item-body">
+            <span class="item-line1">
+              <span class="item-ref">TEST-0904</span>
+              <span class="chip chip-blocker">Blocker</span>
+              <span class="chip-time time-overdue">7d overdue</span>
+            </span>
+            <span class="item-title" style="display:block;margin-top:3px">CBR / Modified Proctor — LOT-0142</span>
+            <span class="item-line2">
+              <span class="owner-kind">company</span><span>Hunter Geotech</span><span class="dot">·</span><span>21 days</span>
+            </span>
+          </span>
+          <span class="item-tail"><svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        </a>
+      </section>
+
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+</div>
+</body>
+</html>
