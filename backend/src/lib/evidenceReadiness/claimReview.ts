@@ -7,7 +7,7 @@ import { item, reviewBucket } from './core.js';
 import {
   holdPointReleased,
   ncrOpen,
-  ncrSeriousIncludingCritical,
+  ncrSerious,
   testPassing,
   testPendingByStatus,
 } from '../readiness/predicates.js';
@@ -217,23 +217,25 @@ export function buildClaimEvidenceReviewFromInputs(
 
     const ncrs = lot.ncrLots.map((ncrLot) => ncrLot.ncr);
     const openNcrs = ncrs.filter(ncrOpen);
-    // F0.2a keeps claimReview's divergent seriousness variant (major OR critical);
-    // unification to severity==='major' is F0.2b.
-    const criticalOpenNcrs = openNcrs.filter(ncrSeriousIncludingCritical);
-    const minorOpenNcrs = openNcrs.filter((ncr) => !ncrSeriousIncludingCritical(ncr));
+    // F0.2b unification: NCR seriousness is now the canonical `ncrSerious`
+    // (severity === 'major'). Previously this used ncrSeriousIncludingCritical
+    // (severity in {major, critical}); 'critical' is not a schema severity so
+    // the only real-data effect is dropping the never-emitted 'critical' branch.
+    const majorOpenNcrs = openNcrs.filter(ncrSerious);
+    const minorOpenNcrs = openNcrs.filter((ncr) => !ncrSerious(ncr));
 
-    if (criticalOpenNcrs.length > 0) {
+    if (majorOpenNcrs.length > 0) {
       items.push(
         item({
           code: 'open_major_ncrs',
           severity: 'blocker',
           area: 'ncr',
           title: 'Major NCRs still open',
-          detail: `${criticalOpenNcrs.length} major or critical NCR${criticalOpenNcrs.length === 1 ? '' : 's'} remain open.`,
+          detail: `${majorOpenNcrs.length} major NCR${majorOpenNcrs.length === 1 ? '' : 's'} remain open.`,
           blocksAction: false,
           actionLabel: 'Review NCRs',
-          count: criticalOpenNcrs.length,
-          relatedIds: criticalOpenNcrs.map((ncr) => ncr.id),
+          count: majorOpenNcrs.length,
+          relatedIds: majorOpenNcrs.map((ncr) => ncr.id),
         }),
       );
     }

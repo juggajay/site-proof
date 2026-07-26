@@ -242,28 +242,48 @@ export function ncrOverdue(ncr: Pick<NcrRow, 'status' | 'dueDate'>, now: Date): 
 }
 
 /**
+ * The canonical severity value that marks an NCR as "serious" (execution spec
+ * §2). Exported so DB-level `where` filters that cannot consume a row predicate
+ * can bind to the SAME value {@link ncrSerious} tests, keeping the query and the
+ * predicate from drifting (mirrors how F0.2a bound dashboards to
+ * {@link STAGNANT_HOLD_POINT_STATUSES}).
+ */
+export const SERIOUS_NCR_SEVERITY = 'major';
+
+/**
  * CANONICAL seriousness (execution spec §2): `severity === 'major'`. This is the
- * single definition F0 unifies toward, retiring the two drifted variants below.
+ * single definition F0 unifies toward. F0.2b migrated all call sites onto this;
+ * the two drifted variants below are DEPRECATED and retained only until both
+ * F0.2b unification PRs are approved.
  */
 export function ncrSerious(ncr: Pick<NcrRow, 'severity'>): boolean {
-  return ncr.severity === 'major';
+  return ncr.severity === SERIOUS_NCR_SEVERITY;
 }
 
 /**
+ * @deprecated F0.2b unified NCR seriousness onto {@link ncrSerious}
+ * (`severity === 'major'`). No production call site uses this any more; kept
+ * only so the divergence stays named/testable until the F0.2b NCR PR is
+ * approved, then removed.
+ *
  * claimReview variant (map §5 A4, `claimReview.ts:206-207`):
  * `severity in ['major','critical']`. `'critical'` is not a documented severity
  * value (schema: minor | major) → the critical branch is effectively dead.
- * Kept as a named predicate so the characterization corpus can pin the
- * before/after when F0.2 retires it. DIVERGES from {@link ncrSerious} only on
- * `severity === 'critical'` (this → true, canonical → false).
+ * DIVERGES from {@link ncrSerious} only on `severity === 'critical'`
+ * (this → true, canonical → false).
  */
 export function ncrSeriousIncludingCritical(ncr: Pick<NcrRow, 'severity'>): boolean {
   return ncr.severity === 'major' || ncr.severity === 'critical';
 }
 
 /**
+ * @deprecated F0.2b unified NCR seriousness onto {@link ncrSerious}
+ * (`severity === 'major'`). The dashboards now filter by severity (bound to
+ * {@link SERIOUS_NCR_SEVERITY}); this category-keyed variant has no production
+ * call site and is kept only until the F0.2b NCR PR is approved, then removed.
+ *
  * Dashboard variant (map §5 A4, `portfolio.ts:218`,
- * `projectManagerDashboardRoute.ts:118`): keys "major NCR" off the freeform
+ * `projectManagerDashboardRoute.ts:118`): keyed "major NCR" off the freeform
  * `category` column (`category === 'major'`) rather than `severity`. DIVERGES
  * from {@link ncrSerious} whenever a lot's `category` and `severity` disagree on
  * the value 'major'.

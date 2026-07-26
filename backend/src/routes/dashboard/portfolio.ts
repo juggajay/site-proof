@@ -3,7 +3,10 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { STAGNANT_HOLD_POINT_STATUSES } from '../../lib/readiness/predicates.js';
+import {
+  SERIOUS_NCR_SEVERITY,
+  STAGNANT_HOLD_POINT_STATUSES,
+} from '../../lib/readiness/predicates.js';
 import {
   COMMERCIAL_DASHBOARD_ROLES,
   getDashboardProjectAccess,
@@ -108,11 +111,12 @@ portfolioDashboardRouter.get(
       return res.json(buildPortfolioNcrsResponse([]));
     }
 
-    // Get major NCRs (critical) that are not closed
+    // Get major NCRs that are not closed. F0.2b: seriousness is now keyed off
+    // `severity` (canonical `ncrSerious`), not the freeform `category` column.
     const criticalNCRs = await prisma.nCR.findMany({
       where: {
         projectId: { in: projectIds },
-        category: 'major',
+        severity: SERIOUS_NCR_SEVERITY,
         status: { notIn: ['closed', 'closed_concession'] },
       },
       select: {
@@ -211,12 +215,12 @@ portfolioDashboardRouter.get(
 
     // Batch queries for all risk indicators - eliminates N+1 pattern
     const [majorNCRsByProject, overdueNCRsByProject, staleHPsByProject] = await Promise.all([
-      // Major NCRs grouped by project
+      // Major NCRs grouped by project (F0.2b: keyed off `severity`, not `category`)
       prisma.nCR.groupBy({
         by: ['projectId'],
         where: {
           projectId: { in: activeProjectIds },
-          category: 'major',
+          severity: SERIOUS_NCR_SEVERITY,
           status: { notIn: ['closed', 'closed_concession'] },
         },
         _count: true,

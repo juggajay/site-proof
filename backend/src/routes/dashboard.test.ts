@@ -911,13 +911,16 @@ describe('Portfolio NCRs API', () => {
       data: { projectId, userId, role: 'admin', status: 'active' },
     });
 
-    // Create a major NCR
+    // Create a major NCR. F0.2b: the portfolio-ncrs endpoint now selects by
+    // canonical `severity === 'major'`, not the freeform `category` column, so
+    // this fixture must set severity to be picked up.
     const ncr = await prisma.nCR.create({
       data: {
         projectId,
         ncrNumber: 'NCR-MAJOR-001',
         description: 'Critical issue requiring attention',
         category: 'major',
+        severity: 'major',
         status: 'open',
         raisedById: userId,
       },

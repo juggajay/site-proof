@@ -674,6 +674,54 @@ describe('evidence readiness helpers', () => {
     ).toBe(true);
   });
 
+  // F0.2b NCR-seriousness unification characterization. Claim-evidence review
+  // now classifies seriousness by canonical `ncrSerious` (severity === 'major').
+  // Previously it used severity in {major, critical}; 'critical' is not a schema
+  // severity, so the only behavioural effect is that a (data-anomalous)
+  // 'critical' NCR now falls into the MINOR (warning) bucket, not the MAJOR
+  // (blocker) bucket. severity === 'major' is unchanged.
+  it('classifies open NCR seriousness by severity=major (F0.2b): critical -> minor bucket', () => {
+    const buildForSeverity = (severity: string) =>
+      buildClaimEvidenceReviewFromInputs({
+        analyzedAt: '2026-06-07T00:00:00.000Z',
+        claim: {
+          id: `claim-${severity}`,
+          claimNumber: 7,
+          totalClaimedAmount: 1000,
+          claimedLots: [
+            {
+              amountClaimed: 1000,
+              lot: {
+                id: `lot-${severity}`,
+                lotNumber: `LOT-${severity.toUpperCase()}`,
+                activityType: 'Earthworks',
+                testResults: [],
+                ncrLots: [{ ncr: { id: 'ncr-x', status: 'open', severity } }],
+                documents: [],
+                itpInstance: null,
+                holdPoints: [],
+              },
+            },
+          ],
+        },
+      }).lots[0].claim;
+
+    const codes = (bucket: { code: string }[]) => bucket.map((readinessItem) => readinessItem.code);
+
+    const major = buildForSeverity('major');
+    expect(codes(major.blockers)).toContain('open_major_ncrs');
+    expect(codes(major.warnings)).not.toContain('open_minor_ncrs');
+
+    // The intentional F0.2b change: 'critical' is no longer treated as major.
+    const critical = buildForSeverity('critical');
+    expect(codes(critical.blockers)).not.toContain('open_major_ncrs');
+    expect(codes(critical.warnings)).toContain('open_minor_ncrs');
+
+    const minor = buildForSeverity('minor');
+    expect(codes(minor.blockers)).not.toContain('open_major_ncrs');
+    expect(codes(minor.warnings)).toContain('open_minor_ncrs');
+  });
+
   it('counts N/A items as complete and excludes rejected items from claim readiness', () => {
     const buildReview = (
       completions: Array<{
