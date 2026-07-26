@@ -25,10 +25,17 @@ import {
   loadPublicHoldPointReleaseToken,
 } from './holdpoints/publicReleasePayload.js';
 import {
+  buildHoldPointPublicReleaseAuditChanges,
   executeHoldPointTokenRelease,
   rejectTerminalPublicHoldPointRelease,
   runHoldPointReleasePostCommit,
 } from './holdpoints/publicReleaseExecution.js';
+import { AuditAction } from '../lib/auditLog.js';
+import { recordDecision } from '../lib/readiness/recordDecision.js';
+import {
+  evaluateHoldPointReleaseReadiness,
+  holdPointReleaseSnapshot,
+} from './holdpoints/releaseDecision.js';
 
 const holdpointsRouter = Router();
 
@@ -180,17 +187,61 @@ holdpointsRouter.post(
     );
 
     const releasedAt = new Date();
-    const { holdPoint, releasedItpInstanceId } = await prisma.$transaction((tx) =>
-      executeHoldPointTokenRelease(tx, {
+    // F0.4b PR 3: the token claim, the release columns, the ITP reconciliation
+    // and the audit row now commit as ONE serializable transaction.
+    const decision = await recordDecision({
+      projectId: releaseToken.holdPoint.lot.projectId,
+      entityType: 'hold_point',
+      entityId: releaseToken.holdPoint.id,
+      decisionKind: 'release',
+      auditAction: AuditAction.HP_PUBLIC_RELEASED,
+      // Public door: the actor is the TOKEN ROW, labelled with the identity the
+      // site team addressed the link to. `recipientName`, never `recipientEmail`
+      // and never the submitted free-text name (`[R3.1]`, review R7).
+      actor: {
+        kind: 'external_token',
         tokenId: releaseToken.id,
-        holdPointId: releaseToken.holdPoint.id,
-        releasedAt,
+        label: releaseToken.recipientName ?? undefined,
+      },
+      auditChanges: buildHoldPointPublicReleaseAuditChanges({
         effectiveReleasedByName,
+        submittedReleasedByName: releasedByName,
         releasedByOrg,
-        releaseNotes,
-        signatureDataUrl,
+        tokenRecipientEmail: releaseToken.recipientEmail,
+        tokenRecipientName: releaseToken.recipientName,
       }),
-    );
+      req,
+      // Read-only. Every release-eligibility gate this route has (token unused +
+      // unexpired, hold point non-terminal, ITP completion not failed) already
+      // runs inside the transaction, in `executeHoldPointTokenRelease` — and
+      // those gates own the route's pinned 410 TOKEN_USED / TOKEN_EXPIRED
+      // responses, so duplicating them here would change which error a replay
+      // sees. Nothing to move; `evaluate` only reads the readiness to snapshot.
+      evaluate: (tx) =>
+        evaluateHoldPointReleaseReadiness(
+          tx,
+          releaseToken.holdPoint.id,
+          releaseToken.holdPoint.lotId,
+        ),
+      // Unchanged, and still shared verbatim with the batch route: the token
+      // claim and both optimistic guards stay exactly as they were.
+      mutate: (tx) =>
+        executeHoldPointTokenRelease(tx, {
+          tokenId: releaseToken.id,
+          holdPointId: releaseToken.holdPoint.id,
+          releasedAt,
+          effectiveReleasedByName,
+          releasedByOrg,
+          releaseNotes,
+          signatureDataUrl,
+        }),
+      snapshots: (evaluation) => holdPointReleaseSnapshot(releaseToken.holdPoint.id, evaluation),
+    });
+
+    // No requestKey on this route: token semantics are unchanged, so a reused
+    // token still gets the existing 410 from the in-transaction guard rather
+    // than a `recordDecision` replay (`[R3.1-B2]`). `mutation` is always present.
+    const { holdPoint, releasedItpInstanceId } = decision.mutation!;
 
     await runHoldPointReleasePostCommit({
       holdPoint,
@@ -203,6 +254,7 @@ holdpointsRouter.post(
       releaseNotes,
       tokenRecipientEmail: releaseToken.recipientEmail,
       tokenRecipientName: releaseToken.recipientName,
+      auditRecordedByDecision: true,
       req,
     });
 

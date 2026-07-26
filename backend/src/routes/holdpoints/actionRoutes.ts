@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import type { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
@@ -38,6 +39,8 @@ import { updateLotStatusFromITP } from '../itp/helpers/lotProgression.js';
 import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 import { assertHoldPointCompletionCanBeReleased } from './releaseCompletionGuard.js';
 import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
+import { recordDecision } from '../../lib/readiness/recordDecision.js';
+import { evaluateHoldPointReleaseReadiness, holdPointReleaseSnapshot } from './releaseDecision.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -295,16 +298,64 @@ async function requireHoldPointReleaseAccess(
   }
 }
 
-function assertHoldPointNotReleased(holdPoint: ExistingHoldPointForRelease) {
+// Status-only so the SAME gates serve the cheap pre-transaction rejection and
+// `evaluate(tx)`'s re-read inside the decision (F0.4b PR 3).
+function assertHoldPointNotReleased(holdPoint: { status: string }) {
   if (holdPoint.status === 'released') {
     throw AppError.badRequest('This hold point has already been released.');
   }
 }
 
-function assertHoldPointReleaseRequested(holdPoint: ExistingHoldPointForRelease) {
+function assertHoldPointReleaseRequested(holdPoint: { status: string }) {
   if (holdPoint.status !== 'notified') {
     throw AppError.badRequest('Request hold point release before recording a manual release.');
   }
+}
+
+/**
+ * Release eligibility + snapshot readiness for the AUTHENTICATED release,
+ * read inside the decision's serializable transaction (F0.4b PR 3).
+ *
+ * Every gate here also runs pre-transaction as a cheap rejection; this is the
+ * copy that matters, because it sees the same snapshot the release commits
+ * against. Nothing in it depends on the request payload, so it takes only the
+ * transaction client and the hold point id.
+ */
+async function evaluateAuthenticatedHoldPointRelease(tx: Prisma.TransactionClient, id: string) {
+  const current = await tx.holdPoint.findUnique({
+    where: { id },
+    select: { status: true, lotId: true, itpChecklistItemId: true },
+  });
+
+  if (!current) {
+    throw AppError.notFound('Hold point');
+  }
+
+  assertHoldPointNotReleased(current);
+  assertHoldPointReleaseRequested(current);
+
+  const itpInstance = await tx.iTPInstance.findUnique({
+    where: { lotId: current.lotId },
+    select: { id: true },
+  });
+
+  if (itpInstance) {
+    const existingCompletion = await tx.iTPCompletion.findUnique({
+      where: {
+        itpInstanceId_checklistItemId: {
+          itpInstanceId: itpInstance.id,
+          checklistItemId: current.itpChecklistItemId,
+        },
+      },
+      select: { status: true },
+    });
+    assertHoldPointCompletionCanBeReleased(existingCompletion);
+  }
+
+  return {
+    ...(await evaluateHoldPointReleaseReadiness(tx, id, current.lotId)),
+    itpInstanceId: itpInstance?.id ?? null,
+  };
 }
 
 // Release a hold point
@@ -359,97 +410,130 @@ holdPointActionRouter.post(
     // from its state), so the stored instant is correct regardless of server tz.
     const projectTimeZone = projectTimeZoneFromState(existingHP.lot.project.state);
     const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime, projectTimeZone);
-    let releasedItpInstanceId: string | null = null;
-    const holdPoint = await prisma.$transaction(async (tx) => {
-      const releaseTransition = await tx.holdPoint.updateMany({
-        where: {
-          id,
-          status: { not: 'released' },
-        },
-        data: {
-          status: 'released',
-          releasedAt,
-          releasedByName: releasedByName || null,
-          releasedByOrg: releasedByOrg || null,
-          releaseMethod: releaseMethod || null,
-          releaseSignatureUrl: signatureDataUrl || null,
-          releaseNotes: releaseNotes || null,
-        },
-      });
 
-      if (releaseTransition.count !== 1) {
-        throw AppError.badRequest('This hold point has already been released.');
-      }
-
-      const updatedHoldPoint = await tx.holdPoint.findUnique({
-        where: { id },
-        include: {
-          itpChecklistItem: true,
-          lot: true,
-        },
-      });
-
-      if (!updatedHoldPoint) {
-        throw AppError.notFound('Hold point');
-      }
-
-      // Also mark the ITP completion as verified in the same transaction.
-      const itpInstance = await tx.iTPInstance.findUnique({
-        where: { lotId: updatedHoldPoint.lotId },
-        select: { id: true },
-      });
-
-      if (itpInstance) {
-        releasedItpInstanceId = itpInstance.id;
-        const completionKey = {
-          itpInstanceId: itpInstance.id,
-          checklistItemId: updatedHoldPoint.itpChecklistItemId,
-        };
-        const existingCompletion = await tx.iTPCompletion.findUnique({
-          where: { itpInstanceId_checklistItemId: completionKey },
-          select: { status: true },
-        });
-        assertHoldPointCompletionCanBeReleased(existingCompletion);
-
-        // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
-        // Set status='completed' + completedAt (releasedAt) alongside the
-        // verification fields, and CREATE the completion row if the hold point
-        // was never ticked. ITPCompletion has a compound unique key on
-        // [itpInstanceId, checklistItemId], so a single upsert handles the
-        // never-ticked and previously-ticked cases atomically.
-        const completionData = {
-          status: 'completed',
-          completedAt: releasedAt,
-          completedById: req.user!.userId,
-          verificationStatus: 'verified',
-          verifiedById: req.user!.userId,
-          verifiedAt: releasedAt,
-        };
-        await tx.iTPCompletion.upsert({
+    // F0.4b PR 3: the release columns, the ITP reconciliation and the audit row
+    // now commit as ONE serializable transaction instead of a transaction
+    // followed by an unsynchronised best-effort audit write.
+    const decision = await recordDecision({
+      projectId: existingHP.lot.projectId,
+      entityType: 'hold_point',
+      entityId: id,
+      decisionKind: 'release',
+      auditAction: AuditAction.HP_RELEASED,
+      // Authenticated door: the actor is the session user. The submitted
+      // `releasedByName` is free text about WHO signed off in the field — it is
+      // provenance for the audit row, never actor identity (`[R3.1]`, review R7).
+      actor: { kind: 'user', userId: req.user!.userId },
+      auditChanges: {
+        releasedByName,
+        releasedByOrg,
+        releaseDate,
+        releaseTime,
+        releaseMethod,
+        releaseNotes,
+        signatureDataUrl: signatureDataUrl ? '[captured]' : null,
+        releaseEvidenceDocumentId: releaseEvidenceDocument?.id ?? null,
+        releaseEvidenceFilename: releaseEvidenceDocument?.filename ?? null,
+        releaseEvidenceDocumentType: releaseEvidenceDocument?.documentType ?? null,
+        releaseEvidenceCategory: releaseEvidenceDocument?.category ?? null,
+      },
+      req,
+      // The release-eligibility reads move INSIDE the transaction: the status
+      // gates and the failed-completion guard now see the same snapshot the
+      // write commits against. Authorization reads deliberately stay outside —
+      // the no-stale-readiness guarantee covers evidence, not permissions
+      // (spec §11 F0.4b `[R3.1-R6]`).
+      evaluate: (tx) => evaluateAuthenticatedHoldPointRelease(tx, id),
+      // The existing optimistic guard stays as the cheap second line inside the
+      // transaction.
+      mutate: async (tx, evaluation) => {
+        const releaseTransition = await tx.holdPoint.updateMany({
           where: {
-            itpInstanceId_checklistItemId: completionKey,
+            id,
+            status: { not: 'released' },
           },
-          update: completionData,
-          create: {
-            ...completionKey,
-            ...completionData,
+          data: {
+            status: 'released',
+            releasedAt,
+            releasedByName: releasedByName || null,
+            releasedByOrg: releasedByOrg || null,
+            releaseMethod: releaseMethod || null,
+            releaseSignatureUrl: signatureDataUrl || null,
+            releaseNotes: releaseNotes || null,
           },
         });
 
-        if (releaseEvidenceDocument) {
-          await attachHoldPointEvidenceDocuments(tx, {
-            projectId: existingHP.lot.projectId,
-            lotId: updatedHoldPoint.lotId,
-            itpInstanceId: itpInstance.id,
-            itpChecklistItemId: updatedHoldPoint.itpChecklistItemId,
-            documentIds: [releaseEvidenceDocument.id],
-          });
+        if (releaseTransition.count !== 1) {
+          throw AppError.badRequest('This hold point has already been released.');
         }
-      }
 
-      return updatedHoldPoint;
+        const updatedHoldPoint = await tx.holdPoint.findUnique({
+          where: { id },
+          include: {
+            itpChecklistItem: true,
+            lot: true,
+          },
+        });
+
+        if (!updatedHoldPoint) {
+          throw AppError.notFound('Hold point');
+        }
+
+        // Also mark the ITP completion as verified in the same transaction.
+        if (evaluation.itpInstanceId) {
+          const completionKey = {
+            itpInstanceId: evaluation.itpInstanceId,
+            checklistItemId: updatedHoldPoint.itpChecklistItemId,
+          };
+
+          // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
+          // Set status='completed' + completedAt (releasedAt) alongside the
+          // verification fields, and CREATE the completion row if the hold point
+          // was never ticked. ITPCompletion has a compound unique key on
+          // [itpInstanceId, checklistItemId], so a single upsert handles the
+          // never-ticked and previously-ticked cases atomically.
+          const completionData = {
+            status: 'completed',
+            completedAt: releasedAt,
+            completedById: req.user!.userId,
+            verificationStatus: 'verified',
+            verifiedById: req.user!.userId,
+            verifiedAt: releasedAt,
+          };
+          await tx.iTPCompletion.upsert({
+            where: {
+              itpInstanceId_checklistItemId: completionKey,
+            },
+            update: completionData,
+            create: {
+              ...completionKey,
+              ...completionData,
+            },
+          });
+
+          if (releaseEvidenceDocument) {
+            await attachHoldPointEvidenceDocuments(tx, {
+              projectId: existingHP.lot.projectId,
+              lotId: updatedHoldPoint.lotId,
+              itpInstanceId: evaluation.itpInstanceId,
+              itpChecklistItemId: updatedHoldPoint.itpChecklistItemId,
+              documentIds: [releaseEvidenceDocument.id],
+            });
+          }
+        }
+
+        return { holdPoint: updatedHoldPoint, releasedItpInstanceId: evaluation.itpInstanceId };
+      },
+      snapshots: (evaluation) => holdPointReleaseSnapshot(id, evaluation),
     });
 
+    // No requestKey on this route, so a replay is impossible and `mutation` is
+    // always present (spec §11 F0.4b — replay is inert flag-off `[R3.1-B2]`).
+    const { holdPoint, releasedItpInstanceId } = decision.mutation!;
+
+    // Everything below is POST-COMMIT and stays that way: lot progression,
+    // notifications, emails and the webhook are user-visible signals, so a
+    // rolled-back or retried decision must never be able to emit one.
     if (releasedItpInstanceId) {
       await updateLotStatusFromITP(releasedItpInstanceId);
     }
@@ -586,29 +670,10 @@ holdPointActionRouter.post(
       }
     }
 
-    // Audit log for HP release
-    await createAuditLog({
-      projectId: existingHP.lot.projectId,
-      userId: req.user!.userId,
-      entityType: 'hold_point',
-      entityId: id,
-      action: AuditAction.HP_RELEASED,
-      changes: {
-        releasedByName,
-        releasedByOrg,
-        releaseDate,
-        releaseTime,
-        releaseMethod,
-        releaseNotes,
-        signatureDataUrl: signatureDataUrl ? '[captured]' : null,
-        releaseEvidenceDocumentId: releaseEvidenceDocument?.id ?? null,
-        releaseEvidenceFilename: releaseEvidenceDocument?.filename ?? null,
-        releaseEvidenceDocumentType: releaseEvidenceDocument?.documentType ?? null,
-        releaseEvidenceCategory: releaseEvidenceDocument?.category ?? null,
-      },
-      req,
-    });
-
+    // The post-commit `createAuditLog` that used to sit here is gone: the
+    // `hp_released` row is written inside the decision transaction above, so a
+    // released hold point can no longer exist without its audit record
+    // (spec §9 `[R3.1-R1]`).
     emitHoldPointWebhookEvent(existingHP.lot.projectId, 'hold_point.released', {
       holdPointId: holdPoint.id,
       projectId: existingHP.lot.projectId,

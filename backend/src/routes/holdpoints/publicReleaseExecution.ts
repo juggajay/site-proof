@@ -206,25 +206,71 @@ export interface HoldPointReleaseProject {
   settings: string | null;
 }
 
-export interface RunHoldPointReleasePostCommitParams {
+export interface HoldPointPublicReleaseAuditChangesParams {
+  effectiveReleasedByName: string;
+  submittedReleasedByName: string;
+  releasedByOrg?: string | null;
+  tokenRecipientEmail: string;
+  tokenRecipientName: string | null;
+}
+
+/**
+ * The `hp_public_released` audit payload, shared by the single-token decision
+ * (which writes it INSIDE its transaction via `recordDecision`) and the batch
+ * route (which still writes it post-commit until PR 4). One builder so the two
+ * cannot drift while they are temporarily written from two places.
+ *
+ * SECURITY — do NOT rename these keys. `tokenRecipient` / `tokenRecipientName`
+ * match `sanitizeAuditChanges`'s `/token/i` pattern and are therefore stored
+ * `[REDACTED]`. Renaming `tokenRecipient` to anything without "token" in it
+ * would silently start persisting the recipient's EMAIL in the audit trail.
+ * The non-redacted recipient identity now lives on the snapshot's `actorLabel`,
+ * which carries the per-token `recipientName` — never an email (`[R3.1]`).
+ */
+export function buildHoldPointPublicReleaseAuditChanges({
+  effectiveReleasedByName,
+  submittedReleasedByName,
+  releasedByOrg,
+  tokenRecipientEmail,
+  tokenRecipientName,
+}: HoldPointPublicReleaseAuditChangesParams): Record<string, unknown> {
+  return {
+    releasedByName: effectiveReleasedByName,
+    submittedReleasedByName,
+    releasedByOrg,
+    releaseMethod: 'secure_link',
+    tokenRecipient: tokenRecipientEmail,
+    tokenRecipientName,
+  };
+}
+
+export interface RunHoldPointReleasePostCommitParams extends HoldPointPublicReleaseAuditChangesParams {
   holdPoint: ReleasedHoldPoint;
   project: HoldPointReleaseProject;
   releasedItpInstanceId: string | null;
   releasedAt: Date;
-  effectiveReleasedByName: string;
-  submittedReleasedByName: string;
-  releasedByOrg?: string | null;
   releaseNotes?: string | null;
-  tokenRecipientEmail: string;
-  tokenRecipientName: string | null;
   req: Request;
+  /**
+   * F0.4b PR 3: the single-token release records its audit row inside the
+   * decision transaction, so this helper must not write a second one. The BATCH
+   * route passes nothing and keeps its own post-commit write until PR 4 moves it
+   * into one batch decision — including the write's position here, between the
+   * emails and the webhook, so batch behaviour is unchanged this PR.
+   */
+  auditRecordedByDecision?: true;
 }
 
 // Post-commit side effects for a single released hold point: lot-status
 // progression, in-app + email notifications, contractor/superintendent
-// confirmation emails, audit log, and webhook event. Extracted verbatim; each
-// step swallows its own errors so a post-commit failure never rolls back the
-// already-committed release. Safe to call once per hold point in a batch.
+// confirmation emails, and the webhook event — every user-visible signal of the
+// release. Each step swallows its own errors so a post-commit failure never
+// rolls back the already-committed release. Safe to call once per hold point in
+// a batch.
+//
+// The audit write is NO LONGER unconditionally part of this: callers that
+// record their decision through `recordDecision` get the audit row inside their
+// transaction and pass `auditRecordedByDecision` (F0.4b PR 3).
 export async function runHoldPointReleasePostCommit({
   holdPoint,
   project,
@@ -236,6 +282,7 @@ export async function runHoldPointReleasePostCommit({
   releaseNotes,
   tokenRecipientEmail,
   tokenRecipientName,
+  auditRecordedByDecision,
   req,
 }: RunHoldPointReleasePostCommitParams): Promise<void> {
   if (releasedItpInstanceId) {
@@ -369,22 +416,24 @@ export async function runHoldPointReleasePostCommit({
     }
   }
 
-  // Audit log for public HP release (no userId - public endpoint)
-  await createAuditLog({
-    projectId: project.id,
-    entityType: 'hold_point',
-    entityId: holdPoint.id,
-    action: AuditAction.HP_PUBLIC_RELEASED,
-    changes: {
-      releasedByName: effectiveReleasedByName,
-      submittedReleasedByName,
-      releasedByOrg,
-      releaseMethod: 'secure_link',
-      tokenRecipient: tokenRecipientEmail,
-      tokenRecipientName,
-    },
-    req,
-  });
+  // Audit log for public HP release (no userId - public endpoint). Skipped when
+  // the caller already wrote it inside its decision transaction.
+  if (!auditRecordedByDecision) {
+    await createAuditLog({
+      projectId: project.id,
+      entityType: 'hold_point',
+      entityId: holdPoint.id,
+      action: AuditAction.HP_PUBLIC_RELEASED,
+      changes: buildHoldPointPublicReleaseAuditChanges({
+        effectiveReleasedByName,
+        submittedReleasedByName,
+        releasedByOrg,
+        tokenRecipientEmail,
+        tokenRecipientName,
+      }),
+      req,
+    });
+  }
 
   emitHoldPointWebhookEvent(project.id, 'hold_point.released', {
     holdPointId: holdPoint.id,
