@@ -15,6 +15,7 @@ import {
   assertAllowedFieldMap,
   BUILT_IN_PROFILES,
   deriveFieldMapFromHeaders,
+  mergeFieldMapWithAliases,
   resolveColumnIndexes,
   scoreFieldMapAgainstHeaders,
   suggestBuiltInProfile,
@@ -257,6 +258,32 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
     expect(source('description')).toBe('Description');
     expect(source('specificationReference')).toBe('Clause');
     expect(source('evidenceRequired')).toBe('Records');
+  });
+
+  it('merges a suggested profile with alias fills so the CSV resolves pointType', () => {
+    const merged = mergeFieldMapWithAliases(CIVILPRO_PROFILE.fieldMap, [...CIVILPRO_CSV_HEADERS]);
+    const source = (target: string) =>
+      merged.find((entry) => entry.target === target)?.source.header;
+
+    // Profile entries whose headers exist are kept...
+    expect(source('description')).toBe('Description');
+    expect(source('specificationReference')).toBe('Clause');
+    // ...absent-header profile entries (HpWpC, Insp Meth) are dropped and the
+    // alias table fills the target from the CSV's spelling instead.
+    expect(source('pointType')).toBe('Check Type');
+    expect(source('testType')).toBe('Inspection Method');
+    // No dead mappings pointing at headers this sheet does not have.
+    const headerSet = new Set<string>(CIVILPRO_CSV_HEADERS);
+    for (const entry of merged) expect(headerSet.has(entry.source.header)).toBe(true);
+    // No target mapped twice.
+    const targets = merged.map((entry) => entry.target);
+    expect(new Set(targets).size).toBe(targets.length);
+  });
+
+  it('merge is a no-op when the profile already resolves every header (grid layout)', () => {
+    const gridHeaders = CIVILPRO_PROFILE.fieldMap.map((entry) => entry.source.header);
+    const merged = mergeFieldMapWithAliases(CIVILPRO_PROFILE.fieldMap, gridHeaders);
+    expect(merged).toEqual(CIVILPRO_PROFILE.fieldMap);
   });
 
   it('derives the grid layout from its headers alone, with no profile chosen', () => {

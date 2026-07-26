@@ -44,6 +44,7 @@ import {
   assertAllowedFieldMap,
   BUILT_IN_PROFILES,
   deriveFieldMapFromHeaders,
+  mergeFieldMapWithAliases,
   suggestBuiltInProfile,
   type FieldMapEntry,
 } from './mappingProfiles.js';
@@ -208,7 +209,13 @@ importRouter.post(
       })),
       suggestedProfile: suggested ? { key: suggested.key, name: suggested.name } : null,
       // Best-effort starting point the reviewer corrects in the mapping step.
-      suggestedFieldMap: suggested?.fieldMap ?? deriveFieldMapFromHeaders(headers),
+      // A suggested profile is filled out with alias-derived entries for any
+      // target its own fieldMap leaves unresolved against these headers (e.g.
+      // the CivilPro CSV spells pointType as "Check Type", which the grid
+      // profile does not carry but the alias table resolves).
+      suggestedFieldMap: suggested
+        ? mergeFieldMapWithAliases(suggested.fieldMap, headers)
+        : deriveFieldMapFromHeaders(headers),
     });
   }),
 );

@@ -203,6 +203,28 @@ export function deriveFieldMapFromHeaders(headers: string[]): FieldMapEntry[] {
   return entries;
 }
 
+/**
+ * A suggested profile's field map, filled out with alias-derived entries for
+ * any target the profile leaves unresolved against these headers. Profile
+ * entries whose source header is absent are dropped rather than shown as dead
+ * mappings; alias fills never reuse a header a kept profile entry claimed.
+ */
+export function mergeFieldMapWithAliases(
+  fieldMap: FieldMapEntry[],
+  headers: string[],
+): FieldMapEntry[] {
+  const present = new Set(headers.map(normalizeHeader));
+  const kept = fieldMap.filter((entry) => present.has(normalizeHeader(entry.source.header)));
+  const coveredTargets = new Set(kept.map((entry) => entry.target));
+  const claimedHeaders = new Set(kept.map((entry) => normalizeHeader(entry.source.header)));
+  const fills = deriveFieldMapFromHeaders(headers).filter(
+    (entry) =>
+      !coveredTargets.has(entry.target) &&
+      !claimedHeaders.has(normalizeHeader(entry.source.header)),
+  );
+  return [...kept, ...fills];
+}
+
 /** How well a field map fits a sheet: the share of its columns that resolve. */
 export function scoreFieldMapAgainstHeaders(fieldMap: FieldMapEntry[], headers: string[]): number {
   if (fieldMap.length === 0) return 0;
