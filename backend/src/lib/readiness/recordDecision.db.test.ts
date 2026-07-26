@@ -319,9 +319,9 @@ describe('recordDecision — serializable isolation and bounded retry (spec §3 
     await recordDecision(
       lotDecision({
         evaluate: async (tx) => {
-          const [{ transaction_isolation }] = await tx.$queryRawUnsafe<
+          const [{ transaction_isolation }] = await tx.$queryRaw<
             Array<{ transaction_isolation: string }>
-          >('SHOW transaction_isolation');
+          >`SHOW transaction_isolation`;
           observed = transaction_isolation;
           return { observed };
         },
