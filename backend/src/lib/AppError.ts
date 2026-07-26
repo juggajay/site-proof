@@ -103,6 +103,14 @@ export const ErrorCodes = {
   // from page one on this code (claim-readiness pagination, F0.2a §4).
   INVALID_CURSOR: 'INVALID_CURSOR',
 
+  // Decisions (recordDecision, F0.4a §3)
+  // Serializable retries exhausted — related evidence kept changing under the
+  // decision. Recoverable: the client refreshes readiness and re-decides.
+  DECISION_CONFLICT: 'DECISION_CONFLICT',
+  // The audit or readiness-snapshot write failed for a non-conflict reason.
+  // The whole decision rolled back; never an anonymous 500.
+  SNAPSHOT_WRITE_FAILED: 'SNAPSHOT_WRITE_FAILED',
+
   // Server errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   DATABASE_ERROR: 'DATABASE_ERROR',
