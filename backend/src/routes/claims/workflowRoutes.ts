@@ -1,17 +1,16 @@
+import { randomUUID } from 'crypto';
+
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
-import { AppError } from '../../lib/AppError.js';
+import { AppError, ErrorCodes } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
+import { recordDecision } from '../../lib/readiness/recordDecision.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { buildProjectEntityLink } from '../notifications/links.js';
-import {
-  checkConformancePrerequisitesBatch,
-  getClaimBlockingReasonsForConformedLot,
-} from '../../lib/conformancePrerequisites.js';
 import {
   buildClaimCertificationView,
   buildClaimCreatedResponse,
@@ -19,22 +18,18 @@ import {
   getClaimReadDisputeNotes,
   mapClaimCreateItem,
 } from './presentation.js';
-import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
+import { claimInclusionSnapshots, evaluateClaimInclusion } from './inclusionDecision.js';
 import {
   CLAIM_AMOUNT_EPSILON,
   CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
-  CLAIM_NUMBER_RETRY_LIMIT,
   assertCertifiedAmountCoversPaid,
   assertCertifiedAmountWithinClaimTotal,
-  assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
   assertReducedCertifiedAmountHasVariationNotes,
   buildClaimCertificationSettlement,
   createClaimSchema,
   getRequestedClaimLots,
   getRequestedClaimVariationIds,
-  getRequestedClaimPercentage,
-  isLotFullyClaimed,
   parseClaimDate,
   roundClaimAmountToCents,
   serializeCertificationMetadataForStatusTransition,
@@ -43,17 +38,9 @@ import {
 } from './workflowValidation.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
-type ClaimCreateResult = {
-  claim: Prisma.ProgressClaimGetPayload<{
-    include: { _count: { select: { claimedLots: true; variations: true } } };
-  }>;
-  totalClaimedAmount: number;
-  nextClaimNumber: number;
-  lotCount: number;
-  variationCount: number;
-  replayed?: boolean;
-  claimedLotRefs?: { id: string; lotNumber: string }[];
-};
+type ClaimWithMemberCounts = Prisma.ProgressClaimGetPayload<{
+  include: { _count: { select: { claimedLots: true; variations: true } } };
+}>;
 
 function normalizeUniqueTargetField(value: string) {
   return value.replace(/_/g, '').toLowerCase();
@@ -76,8 +63,57 @@ function isUniqueConstraintOn(error: unknown, fields: string[]) {
   return fields.every((field) => normalizedTarget.includes(normalizeUniqueTargetField(field)));
 }
 
-function isPrismaTransactionWriteConflict(error: unknown) {
-  return (error as { code?: unknown })?.code === 'P2034';
+/**
+ * ONE retry classifier (F0.4b PR 5, adoption review R2).
+ *
+ * Claim numbers are allocated by reading the project's current max inside the
+ * decision transaction, so two concurrent creates can collide on the
+ * `(projectId, claimNumber)` unique index. That collision IS a write conflict,
+ * so it is re-thrown with Prisma's write-conflict code and handled by
+ * `recordDecision`'s serializable retry — the next attempt re-runs `evaluate`,
+ * which reads a fresh max. The deleted `CLAIM_NUMBER_RETRY_LIMIT` loop is NOT
+ * replaced by a second loop around the decision: two stacked classifiers would
+ * multiply out to 15 transactions and make the exhausted-retry status depend on
+ * which loop gave up first.
+ */
+function asDecisionWriteConflict(error: unknown): Error {
+  return Object.assign(new Error('Claim number collided with a concurrent claim'), {
+    code: 'P2034',
+    cause: error,
+  });
+}
+
+/**
+ * `[R3.1-B2]` — the loser of a same-`requestKey` race.
+ *
+ * Both branches mean "another request with this key won the write", never "the
+ * client sent something invalid": the unique-index violation is the winner
+ * committing between our pre-check and our insert, and `DECISION_CONFLICT` is
+ * the same race losing `recordDecision`'s serializable retries instead. Either
+ * way F-03 requires the winner's claim, not an error.
+ */
+function lostTheRequestKeyRace(error: unknown): boolean {
+  return (
+    isUniqueConstraintOn(error, ['projectId', 'requestKey']) ||
+    (error instanceof AppError && error.code === ErrorCodes.DECISION_CONFLICT)
+  );
+}
+
+/**
+ * Claim create's idempotency mechanism, unchanged by F0.4b: the
+ * `(projectId, requestKey)` unique index. `recordDecision`'s own
+ * snapshot-backed replay is deliberately NOT used — it is inert while
+ * `READINESS_SNAPSHOTS_ENABLED` is off, so migrating onto it would silently
+ * reopen the F-03 double-billing hole (`[R3.1-B2]`, spec §9 step 2).
+ */
+async function findClaimByRequestKey(
+  projectId: string,
+  requestKey: string,
+): Promise<ClaimWithMemberCounts | null> {
+  return prisma.progressClaim.findFirst({
+    where: { projectId, requestKey },
+    include: { _count: { select: { claimedLots: true, variations: true } } },
+  });
 }
 
 async function lockClaimLotsForUpdate(
@@ -112,29 +148,6 @@ async function lockClaimVariationsForUpdate(
     ORDER BY id
     FOR UPDATE
   `;
-}
-
-function assertVariationClaimable(variation: {
-  variationNumber: string;
-  status: string;
-  claimedInId: string | null;
-  approvedAmount: unknown;
-}): void {
-  const approvedAmount = Number(variation.approvedAmount ?? 0);
-  if (
-    variation.status !== 'approved' ||
-    variation.claimedInId !== null ||
-    !Number.isFinite(approvedAmount) ||
-    approvedAmount <= 0
-  ) {
-    throw AppError.badRequest(`Variation ${variation.variationNumber} is not claimable`, {
-      code: 'VARIATION_NOT_CLAIMABLE',
-      variationNumber: variation.variationNumber,
-      status: variation.status,
-      claimedInId: variation.claimedInId,
-      approvedAmount,
-    });
-  }
 }
 
 interface ClaimWorkflowRouterDependencies {
@@ -193,359 +206,205 @@ export function createClaimWorkflowRouter({
         requestedLots.map((lot) => [lot.lotId, lot.percentageComplete]),
       );
 
-      let claimResult: ClaimCreateResult | undefined;
+      // The claim id is minted HERE, not by the database: `recordDecision` needs
+      // the decided entity's id before the transaction opens, and
+      // `entityCreatedByMutate` is the option PR 0 added for exactly this case —
+      // `mutate` creates the row, and the project-scope check re-runs on `tx`
+      // AFTER `mutate`, so a claim minted into the wrong project still fails,
+      // inside the transaction that rolls it back (`[R3.1-B1]`).
+      const claimId = randomUUID();
+      // Same for the ClaimedLot join rows: `claim_lot` snapshots key on
+      // ClaimedLot.id, and `snapshots(evaluation)` has to be able to name those
+      // ids. Pre-minting them is cheaper and clearer than re-reading the join
+      // rows — and a snapshot may never be built from a post-commit re-query.
+      const claimedLotIdByLotId = new Map(
+        uniqueLotIds.map((lotId) => [lotId, randomUUID()] as const),
+      );
 
-      for (let attempt = 1; attempt <= CLAIM_NUMBER_RETRY_LIMIT; attempt += 1) {
+      // `recordDecision` takes `auditChanges` as a value, but a claim's audit
+      // facts (its number, its member counts, which lots it completed) only exist
+      // once `evaluate` has run. `mutate` fills this object in; `recordDecision`
+      // writes the audit row strictly AFTER `mutate` within the same
+      // transaction, and a retried attempt overwrites every key, so the row can
+      // never carry a previous attempt's facts.
+      //
+      // ponytail: one mutable object beats widening `recordDecision`'s signature
+      // for its only evaluation-derived caller. If a second one appears, change
+      // `auditChanges` to accept `(evaluation) => changes`.
+      const auditChanges: Record<string, unknown> = {};
+
+      // `[R3.1-B2]` REPLAY STAYS ON THE EXISTING MACHINERY. The
+      // `(projectId, requestKey)` pre-check runs BEFORE the decision opens, and
+      // the unique index behind it is what makes concurrent same-key creates
+      // converge (see `lostTheRequestKeyRace`). `requestKey` is deliberately NOT
+      // passed to `recordDecision`: its snapshot-backed replay is inert while
+      // `READINESS_SNAPSHOTS_ENABLED` is off, so migrating onto it would
+      // silently reopen the F-03 double-billing hole.
+      let claim = requestKey ? await findClaimByRequestKey(projectId, requestKey) : null;
+
+      if (!claim) {
         try {
-          claimResult = await prisma.$transaction(async (tx) => {
-            if (requestKey) {
-              const existing = await tx.progressClaim.findFirst({
-                where: { projectId, requestKey },
+          // ONE decision (`decisionKind: 'inclusion'`): the ProgressClaim row,
+          // its N ClaimedLot rows, the variation and lot status flips, the
+          // aggregate + member snapshots and the single audit row all commit
+          // together or not at all. The audit write moving inside the
+          // transaction is a deliberate integrity change — "claimed but
+          // unaudited" stops being reachable (spec §9 `[R3.1-R1]`).
+          const decision = await recordDecision({
+            projectId,
+            entityType: 'claim',
+            entityId: claimId,
+            entityCreatedByMutate: true,
+            decisionKind: 'inclusion',
+            auditAction: AuditAction.CLAIM_CREATED,
+            // Audit vocabulary untouched: `claim_created` rows have always been
+            // written against `progress_claim`, and consumers still match on it.
+            auditEntityType: 'progress_claim',
+            actor: { kind: 'user', userId },
+            auditChanges,
+            req,
+            evaluate: async (tx) => {
+              // `SELECT … FOR UPDATE` inside Serializable is anticipated by
+              // `recordDecision` (it classifies a raw 40001 from a locking query
+              // as a retryable conflict, recordDecision.ts:184-195). Keep the
+              // lock: it is the cheap second line that makes the common
+              // two-clients-one-lot race block and serialise rather than both
+              // running to commit and one aborting.
+              await lockClaimLotsForUpdate(tx, projectId, uniqueLotIds);
+              await lockClaimVariationsForUpdate(tx, projectId, uniqueVariationIds);
+
+              return evaluateClaimInclusion(tx, {
+                projectId,
+                uniqueLotIds,
+                uniqueVariationIds,
+                percentageByLotId,
+                claimedLotIdByLotId,
+              });
+            },
+            mutate: async (tx, evaluation) => {
+              const { lotMembers, variationMembers, fullyClaimedLotIds } = evaluation;
+
+              try {
+                await tx.progressClaim.create({
+                  data: {
+                    id: claimId,
+                    projectId,
+                    claimNumber: evaluation.nextClaimNumber,
+                    claimPeriodStart,
+                    claimPeriodEnd,
+                    status: 'draft',
+                    preparedById: userId,
+                    preparedAt: new Date(),
+                    requestKey: requestKey ?? null,
+                    totalClaimedAmount: evaluation.totalClaimedAmount,
+                    claimedLots:
+                      lotMembers.length > 0
+                        ? {
+                            create: lotMembers.map((member) => ({
+                              id: member.claimedLotId,
+                              lotId: member.lot.id,
+                              quantity: 1,
+                              unit: 'ea',
+                              rate: member.lot.budgetAmount,
+                              amountClaimed: member.amountClaimed,
+                              percentageComplete: member.percentageComplete,
+                            })),
+                          }
+                        : undefined,
+                  },
+                });
+              } catch (error) {
+                // Only the claim-number collision is retryable. A
+                // `(projectId, requestKey)` violation is the replay race and must
+                // reach the route's catch untouched.
+                if (isUniqueConstraintOn(error, ['projectId', 'claimNumber'])) {
+                  throw asDecisionWriteConflict(error);
+                }
+                throw error;
+              }
+
+              if (variationMembers.length > 0) {
+                const variationIds = variationMembers.map((member) => member.variation.id);
+                const variationUpdateResult = await tx.variation.updateMany({
+                  where: {
+                    id: { in: variationIds },
+                    projectId,
+                    status: 'approved',
+                    claimedInId: null,
+                  },
+                  data: { status: 'claimed', claimedInId: claimId },
+                });
+
+                if (variationUpdateResult.count !== variationIds.length) {
+                  throw AppError.badRequest(
+                    'One or more selected variations are no longer available to claim',
+                    { code: 'VARIATION_NOT_CLAIMABLE' },
+                  );
+                }
+              }
+
+              // Flip only the lots this claim takes to 100% cumulative into the
+              // terminal `claimed` state. Lots below 100% stay `conformed` so
+              // they can be claimed again on a future claim.
+              if (fullyClaimedLotIds.length > 0) {
+                const updateResult = await tx.lot.updateMany({
+                  where: {
+                    id: { in: fullyClaimedLotIds },
+                    projectId,
+                    status: 'conformed',
+                    claimedInId: null,
+                  },
+                  data: { claimedInId: claimId, status: 'claimed' },
+                });
+
+                if (updateResult.count !== fullyClaimedLotIds.length) {
+                  throw AppError.badRequest(
+                    'One or more selected lots are no longer available to claim',
+                  );
+                }
+              }
+
+              Object.assign(auditChanges, {
+                claimNumber: evaluation.nextClaimNumber,
+                totalClaimedAmount: evaluation.totalClaimedAmount,
+                lotCount: lotMembers.length,
+                variationCount: variationMembers.length,
+                // What the deleted per-lot `lot_status_changed` loop carried,
+                // preserved on the one decision row and now CORRELATED with the
+                // claim that caused the flip (`[R3.1-R4]` precedent). The map
+                // time scrubber reads it back through
+                // `lots/statusTimeline.ts`.
+                fullyClaimedLotIds,
+              });
+
+              // Read the counts after the variation link, so `_count.variations`
+              // is this claim's real membership (the nested create above only
+              // covers `claimedLots`).
+              return tx.progressClaim.findUniqueOrThrow({
+                where: { id: claimId },
                 include: { _count: { select: { claimedLots: true, variations: true } } },
               });
-              if (existing) {
-                return {
-                  claim: existing,
-                  totalClaimedAmount: Number(existing.totalClaimedAmount ?? 0),
-                  nextClaimNumber: existing.claimNumber,
-                  lotCount: existing._count.claimedLots,
-                  variationCount: existing._count.variations,
-                  replayed: true,
-                };
-              }
-            }
-
-            await lockClaimLotsForUpdate(tx, projectId, uniqueLotIds);
-            await lockClaimVariationsForUpdate(tx, projectId, uniqueVariationIds);
-
-            // Get the next claim number for this project. A retry handles concurrent creates.
-            const lastClaim = await tx.progressClaim.findFirst({
-              where: { projectId },
-              orderBy: { claimNumber: 'desc' },
-            });
-            const nextClaimNumber = (lastClaim?.claimNumber || 0) + 1;
-
-            // Get the lots to calculate total amount. Progress claims are
-            // cumulative, so a partially-claimed lot stays `conformed`
-            // (claimedInId null) and remains selectable until its cumulative
-            // claimed percentage reaches 100%. Only fully-claimed lots are
-            // flipped to `claimed`.
-            const lots =
-              uniqueLotIds.length > 0
-                ? await tx.lot.findMany({
-                    where: {
-                      id: { in: uniqueLotIds },
-                      projectId,
-                      status: 'conformed',
-                      claimedInId: null,
-                    },
-                  })
-                : [];
-
-            if (uniqueLotIds.length > 0 && lots.length === 0) {
-              throw AppError.badRequest('No valid conformed lots found');
-            }
-
-            if (lots.length !== uniqueLotIds.length) {
-              throw AppError.badRequest(
-                'All selected lots must be conformed, unclaimed, and belong to this project',
-              );
-            }
-
-            const conformanceByLotId = await checkConformancePrerequisitesBatch(uniqueLotIds, tx);
-            const staleConformanceLots = lots
-              .map((lot) => ({
-                lot,
-                conformance: conformanceByLotId.get(lot.id),
-              }))
-              .map(({ lot, conformance }) => ({
-                lot,
-                blockingReasons: getClaimBlockingReasonsForConformedLot(conformance, {
-                  conformanceOverridden: lot.conformanceOverriddenAt != null,
-                }),
-              }))
-              .filter(({ blockingReasons }) => blockingReasons.length > 0);
-
-            if (staleConformanceLots.length > 0) {
-              throw AppError.badRequest(
-                'One or more selected lots no longer satisfy conformance prerequisites',
-                {
-                  code: 'CONFORMANCE_STALE',
-                  lots: staleConformanceLots.map(({ lot, blockingReasons }) => ({
-                    id: lot.id,
-                    lotNumber: lot.lotNumber,
-                    blockingReasons,
-                  })),
-                },
-              );
-            }
-
-            // Feature #894: Verify all lots have a rate (budgetAmount) set
-            const lotsWithoutRate = lots.filter(
-              (lot) => !lot.budgetAmount || Number(lot.budgetAmount) <= 0,
-            );
-            if (lotsWithoutRate.length > 0) {
-              throw AppError.badRequest(
-                `The following lots do not have a rate set: ${lotsWithoutRate.map((l) => l.lotNumber).join(', ')}. Please set a budget amount for each lot before adding to a claim.`,
-                {
-                  code: 'RATE_REQUIRED',
-                  lotsWithoutRate: lotsWithoutRate.map((l) => ({
-                    id: l.id,
-                    lotNumber: l.lotNumber,
-                  })),
-                },
-              );
-            }
-
-            // Cumulative claiming: reject any increment that would push a lot
-            // past 100% of its budget across all of its claims so far.
-            const priorCumulativeByLotId =
-              uniqueLotIds.length > 0
-                ? await getCumulativeClaimedPercentByLot(uniqueLotIds, tx)
-                : new Map<string, number>();
-            for (const lot of lots) {
-              const increment = getRequestedClaimPercentage(percentageByLotId, lot.id);
-              const priorCumulative = priorCumulativeByLotId.get(lot.id) ?? 0;
-              assertClaimIncrementWithinRemaining(priorCumulative, increment, lot.lotNumber);
-            }
-
-            const variations =
-              uniqueVariationIds.length > 0
-                ? await tx.variation.findMany({
-                    where: {
-                      id: { in: uniqueVariationIds },
-                      projectId,
-                    },
-                    select: {
-                      id: true,
-                      variationNumber: true,
-                      status: true,
-                      claimedInId: true,
-                      approvedAmount: true,
-                    },
-                  })
-                : [];
-
-            if (variations.length !== uniqueVariationIds.length) {
-              throw AppError.badRequest('All selected variations must belong to this project', {
-                code: 'VARIATION_NOT_CLAIMABLE',
-              });
-            }
-
-            for (const variation of variations) {
-              assertVariationClaimable(variation);
-            }
-
-            // The line amount for each lot is THIS claim's increment percentage
-            // of its budget, so claim totals always reconcile to the budget.
-            const lotClaimedAmount = roundClaimAmountToCents(
-              lots.reduce((sum, lot) => {
-                const percentageComplete = getRequestedClaimPercentage(percentageByLotId, lot.id);
-                const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
-                return sum + roundClaimAmountToCents((budgetAmount * percentageComplete) / 100);
-              }, 0),
-            );
-            const variationClaimedAmount = roundClaimAmountToCents(
-              variations.reduce(
-                (sum, variation) =>
-                  sum + roundClaimAmountToCents(Number(variation.approvedAmount ?? 0)),
-                0,
-              ),
-            );
-            const totalClaimedAmount = roundClaimAmountToCents(
-              lotClaimedAmount + variationClaimedAmount,
-            );
-
-            // Create the claim with claimed lots
-            const claim = await tx.progressClaim.create({
-              data: {
-                projectId,
-                claimNumber: nextClaimNumber,
-                claimPeriodStart,
-                claimPeriodEnd,
-                status: 'draft',
-                preparedById: userId,
-                preparedAt: new Date(),
-                requestKey: requestKey ?? null,
-                totalClaimedAmount,
-                claimedLots:
-                  lots.length > 0
-                    ? {
-                        create: lots.map((lot) => {
-                          const percentageComplete = getRequestedClaimPercentage(
-                            percentageByLotId,
-                            lot.id,
-                          );
-                          const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
-
-                          return {
-                            lotId: lot.id,
-                            quantity: 1,
-                            unit: 'ea',
-                            rate: lot.budgetAmount,
-                            amountClaimed: roundClaimAmountToCents(
-                              (budgetAmount * percentageComplete) / 100,
-                            ),
-                            percentageComplete,
-                          };
-                        }),
-                      }
-                    : undefined,
-              },
-              include: {
-                _count: {
-                  select: { claimedLots: true, variations: true },
-                },
-              },
-            });
-
-            if (uniqueVariationIds.length > 0) {
-              const variationUpdateResult = await tx.variation.updateMany({
-                where: {
-                  id: { in: uniqueVariationIds },
-                  projectId,
-                  status: 'approved',
-                  claimedInId: null,
-                },
-                data: {
-                  status: 'claimed',
-                  claimedInId: claim.id,
-                },
-              });
-
-              if (variationUpdateResult.count !== uniqueVariationIds.length) {
-                throw AppError.badRequest(
-                  'One or more selected variations are no longer available to claim',
-                  {
-                    code: 'VARIATION_NOT_CLAIMABLE',
-                  },
-                );
-              }
-            }
-
-            // Flip only the lots that this claim takes to 100% cumulative into
-            // the terminal `claimed` state, linking them to this completing
-            // claim. Lots below 100% stay `conformed` so they can be claimed
-            // again on a future claim.
-            const fullyClaimedLotIds = lots
-              .filter((lot) => {
-                const increment = getRequestedClaimPercentage(percentageByLotId, lot.id);
-                const priorCumulative = priorCumulativeByLotId.get(lot.id) ?? 0;
-                return isLotFullyClaimed(priorCumulative + increment);
-              })
-              .map((lot) => lot.id);
-
-            if (fullyClaimedLotIds.length > 0) {
-              const updateResult = await tx.lot.updateMany({
-                where: {
-                  id: { in: fullyClaimedLotIds },
-                  projectId,
-                  status: 'conformed',
-                  claimedInId: null,
-                },
-                data: {
-                  claimedInId: claim.id,
-                  status: 'claimed',
-                },
-              });
-
-              if (updateResult.count !== fullyClaimedLotIds.length) {
-                throw AppError.badRequest(
-                  'One or more selected lots are no longer available to claim',
-                );
-              }
-            }
-
-            const claimWithCounts = await tx.progressClaim.findUniqueOrThrow({
-              where: { id: claim.id },
-              include: {
-                _count: {
-                  select: { claimedLots: true, variations: true },
-                },
-              },
-            });
-
-            return {
-              claim: claimWithCounts,
-              totalClaimedAmount,
-              nextClaimNumber,
-              lotCount: lots.length,
-              variationCount: variations.length,
-              claimedLotRefs: lots
-                .filter((lot) => fullyClaimedLotIds.includes(lot.id))
-                .map((lot) => ({ id: lot.id, lotNumber: lot.lotNumber })),
-            };
-          });
-          break;
-        } catch (error) {
-          if (requestKey && isUniqueConstraintOn(error, ['projectId', 'requestKey'])) {
-            const existing = await prisma.progressClaim.findFirst({
-              where: { projectId, requestKey },
-              include: { _count: { select: { claimedLots: true, variations: true } } },
-            });
-            if (existing) {
-              claimResult = {
-                claim: existing,
-                totalClaimedAmount: Number(existing.totalClaimedAmount ?? 0),
-                nextClaimNumber: existing.claimNumber,
-                lotCount: existing._count.claimedLots,
-                variationCount: existing._count.variations,
-                replayed: true,
-              };
-              break;
-            }
-          }
-
-          if (
-            attempt < CLAIM_NUMBER_RETRY_LIMIT &&
-            (isUniqueConstraintOn(error, ['projectId', 'claimNumber']) ||
-              isPrismaTransactionWriteConflict(error))
-          ) {
-            continue;
-          }
-          throw error;
-        }
-      }
-
-      if (!claimResult) {
-        throw AppError.conflict('Could not allocate a claim number. Please try again.');
-      }
-
-      const { claim, totalClaimedAmount, nextClaimNumber, lotCount, variationCount } = claimResult;
-
-      const transformedClaim = mapClaimCreateItem(claim);
-
-      // Audit log for claim creation
-      if (!claimResult.replayed) {
-        await createAuditLog({
-          projectId,
-          userId,
-          entityType: 'progress_claim',
-          entityId: claim.id,
-          action: AuditAction.CLAIM_CREATED,
-          changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount, variationCount },
-          req,
-        });
-
-        // Per-lot status audit so the map time scrubber sees conformed -> claimed.
-        for (const lot of claimResult.claimedLotRefs ?? []) {
-          await createAuditLog({
-            projectId,
-            userId,
-            entityType: 'lot',
-            entityId: lot.id,
-            action: AuditAction.LOT_STATUS_CHANGED,
-            changes: {
-              lotNumber: lot.lotNumber,
-              status: { from: 'conformed', to: 'claimed' },
-              claimId: claim.id,
             },
-            req,
+            snapshots: (evaluation) => claimInclusionSnapshots(claimId, evaluation),
           });
+
+          claim = decision.mutation!;
+        } catch (error) {
+          // The same-key race path, unchanged in meaning: the winner's claim is
+          // the correct answer, so re-read it rather than surfacing the write
+          // failure (F-03).
+          const raced =
+            requestKey && lostTheRequestKeyRace(error)
+              ? await findClaimByRequestKey(projectId, requestKey)
+              : null;
+          if (!raced) {
+            throw error;
+          }
+          claim = raced;
         }
       }
 
-      res.status(201).json(buildClaimCreatedResponse(transformedClaim));
+      res.status(201).json(buildClaimCreatedResponse(mapClaimCreateItem(claim)));
     }),
   );
 

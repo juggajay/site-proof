@@ -29,7 +29,11 @@ import {
   getProjectSubcontractorCompanyIds,
   requireSubcontractorLotPortalModules,
 } from './lots/access.js';
-import { buildStatusTimeline, lotStatusEventsFromAudit } from './lots/statusTimeline.js';
+import {
+  CLAIM_INCLUSION_ACTION,
+  buildStatusTimeline,
+  lotStatusEventsFromAudit,
+} from './lots/statusTimeline.js';
 
 const lotStatusTimelineRouter = Router();
 
@@ -83,12 +87,24 @@ lotStatusTimelineRouter.get(
 
     // Only status-change audit rows for the visible lots — filtered on
     // entityType/action and the scoped lot id set, selecting only needed columns.
+    //
+    // Plus the project's `claim_created` decision rows: F0.4b PR 5 collapsed
+    // claim create into one decision row, so the conformed -> claimed transition
+    // now lives in that row's `fullyClaimedLotIds` rather than in per-lot rows
+    // (`[R3.1-R4]`). They cannot be filtered by lot id — their `entityId` is the
+    // claim — but `buildStatusTimeline` only reads events for VISIBLE lots, so
+    // subcontractor scoping is unchanged.
     const auditRows = await prisma.auditLog.findMany({
       where: {
         projectId,
-        entityType: 'lot',
-        action: { in: LOT_STATUS_ACTIONS },
-        entityId: { in: lots.map((l) => l.id) },
+        OR: [
+          {
+            entityType: 'lot',
+            action: { in: LOT_STATUS_ACTIONS },
+            entityId: { in: lots.map((l) => l.id) },
+          },
+          { entityType: 'progress_claim', action: CLAIM_INCLUSION_ACTION },
+        ],
       },
       select: { entityId: true, action: true, changes: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
