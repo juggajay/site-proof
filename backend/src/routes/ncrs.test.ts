@@ -101,9 +101,14 @@ async function findStatusTransitionAudits(
 async function expectConcurrentNcrTerminalState(
   responses: Array<{ status: number }>,
   ncrId: string,
-  expected: { status: string; closedById: string | null },
+  expected: { status: string; closedById: string | null; loserStatuses?: number[] },
 ) {
-  expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+  const statuses = responses.map((response) => response.status).sort();
+  expect(statuses[0]).toBe(200);
+  // The loser is always rejected; WHICH rejection depends on where it lost.
+  // Routes adopted onto `recordDecision` (F0.4b) run at Serializable isolation
+  // and can also answer 409 `DECISION_CONFLICT` when retries are exhausted.
+  expect(expected.loserStatuses ?? [400]).toContain(statuses[1]);
 
   const ncr = await prisma.nCR.findUniqueOrThrow({
     where: { id: ncrId },
@@ -2718,9 +2723,13 @@ describe('NCR Workflow', () => {
           .send({ verificationNotes: 'Second close should be rejected' }),
       ]);
 
+      // F0.4b PR 2: close now records its decision inside a Serializable
+      // transaction, so the loser can be rejected with 409 `DECISION_CONFLICT`
+      // as well as the pre-existing 400. Exactly-one-audit-row is unchanged.
       await expectConcurrentNcrTerminalState([firstCloseRes, secondCloseRes], raceNcrId, {
         status: 'closed',
         closedById: userId,
+        loserStatuses: [400, 409],
       });
 
       const closeAudits = await findStatusTransitionAudits(
@@ -3365,7 +3374,12 @@ describe('Major NCR QM Approval', () => {
           .set('Authorization', `Bearer ${authToken}`),
       ]);
 
-      expect([firstApprovalRes.status, secondApprovalRes.status].sort()).toEqual([200, 400]);
+      // F0.4b PR 2: qm-approve gained its first transaction (Serializable), so
+      // the loser may now be rejected with 409 `DECISION_CONFLICT` as well as
+      // the pre-existing 400. Exactly-one-audit-row is unchanged.
+      const approvalStatuses = [firstApprovalRes.status, secondApprovalRes.status].sort();
+      expect(approvalStatuses[0]).toBe(200);
+      expect([400, 409]).toContain(approvalStatuses[1]);
 
       const ncr = await prisma.nCR.findUniqueOrThrow({
         where: { id: raceNcrId },
