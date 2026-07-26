@@ -2,7 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { AppError, ErrorCodes } from './AppError.js';
 
-type UploadSignatureKind = 'pdf' | 'jpeg' | 'png' | 'gif' | 'webp' | 'tiff' | 'dwg' | 'dxf';
+// 'zip' covers the OOXML container formats (.xlsx, .docx) — both are zip
+// archives, so both resolve to the same kind and the "MIME and extension
+// disagree" guard in assertUploadedFileMatchesDeclaredType keeps working. The
+// legacy OLE2 formats (.xls, .doc) are deliberately NOT mapped: they are not
+// zips and mapping them would reject every real one.
+type UploadSignatureKind = 'pdf' | 'jpeg' | 'png' | 'gif' | 'webp' | 'tiff' | 'dwg' | 'dxf' | 'zip';
 
 function normalizeImageMimeType(mimeType: string): string {
   const normalizedMimeType = mimeType.toLowerCase();
@@ -100,6 +105,9 @@ function getSignatureKindForMimeType(mimeType: string): UploadSignatureKind | nu
     case 'application/x-dxf':
     case 'image/vnd.dxf':
       return 'dxf';
+    case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      return 'zip';
     default:
       return null;
   }
@@ -140,6 +148,9 @@ function getSignatureKindForExtension(filename: string): UploadSignatureKind | n
       return 'dwg';
     case '.dxf':
       return 'dxf';
+    case '.xlsx':
+    case '.docx':
+      return 'zip';
     default:
       return null;
   }
@@ -179,8 +190,17 @@ function hasDxfSignature(buffer: Buffer): boolean {
   return /^0\s*\r?\nSECTION(?:\s|\r?\n|$)/i.test(text);
 }
 
+// Local file header of the first zip entry: "PK\x03\x04". An empty archive
+// starts with the end-of-central-directory record ("PK\x05\x06") instead, but an
+// OOXML file always has entries, so requiring the local header is right here.
+function hasZipSignature(buffer: Buffer): boolean {
+  return buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+}
+
 function hasUploadSignature(buffer: Buffer, kind: UploadSignatureKind): boolean {
   switch (kind) {
+    case 'zip':
+      return hasZipSignature(buffer);
     case 'pdf':
       return hasPdfSignature(buffer);
     case 'jpeg':

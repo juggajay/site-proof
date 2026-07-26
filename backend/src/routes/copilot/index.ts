@@ -42,6 +42,10 @@ import {
   lotBreakdownUpload,
 } from './lotBreakdownExtraction.js';
 import type { ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
+// Importing this module registers the import_itp_templates apply/rollback
+// handlers and mounts the Wave-B import endpoints.
+import { importRouter } from './import/routes.js';
+import { rolesForProposalStage } from './proposalStageRoles.js';
 
 // Deciding a proposal applies its stage's handler (creating lots, control lines,
 // etc.), so it needs the same write-capable role set as lot setup. Reads are
@@ -78,7 +82,12 @@ const lotBreakdownExtractSchema = z.object({
   controlLineId: z.string().trim().min(1).max(120),
 });
 
-function mapProposal(proposal: AiProposal) {
+// `[WBR2-9]` The LIST projection: everything the rail needs to render a card,
+// and none of the unbounded fields. A single import proposal carries hundreds of
+// templates in `payload`; returning up to PROPOSAL_LIST_LIMIT of those on every
+// rail poll is the bounding problem this split fixes. The detail route below
+// still returns them, and that is where a review surface reads them from.
+function mapProposalSummary(proposal: AiProposal) {
   return {
     id: proposal.id,
     projectId: proposal.projectId,
@@ -87,19 +96,41 @@ function mapProposal(proposal: AiProposal) {
     requestedById: proposal.requestedById,
     model: proposal.model,
     sourceRefs: proposal.sourceRefs,
-    payload: proposal.payload,
     warnings: proposal.warnings,
     decidedById: proposal.decidedById,
     decidedAt: proposal.decidedAt ? proposal.decidedAt.toISOString() : null,
-    editedPayload: proposal.editedPayload,
-    appliedRecordIds: proposal.appliedRecordIds,
+    importBatchId: proposal.importBatchId,
     createdAt: proposal.createdAt.toISOString(),
   };
+}
+
+function mapProposal(proposal: AiProposal) {
+  return {
+    ...mapProposalSummary(proposal),
+    payload: proposal.payload,
+    editedPayload: proposal.editedPayload,
+    appliedRecordIds: proposal.appliedRecordIds,
+  };
+}
+
+// Load just the stage of a project-scoped proposal. Cross-project or unknown ids
+// are a 404 — never leak the existence of another project's proposal.
+async function loadProposalStage(projectId: string, proposalId: string): Promise<string> {
+  const proposal = await prisma.aiProposal.findUnique({
+    where: { id: proposalId },
+    select: { projectId: true, stage: true },
+  });
+  if (!proposal || proposal.projectId !== projectId) {
+    throw AppError.notFound('Proposal');
+  }
+  return proposal.stage;
 }
 
 const copilotRouter = Router();
 
 copilotRouter.use(requireAuth);
+
+copilotRouter.use(importRouter);
 
 // Stage 1 executor: read the four project facts off a drawing title block and
 // persist them as a 'proposed' proposal for human review. Writes NOTHING to the
@@ -339,7 +370,7 @@ copilotRouter.get(
       take: PROPOSAL_LIST_LIMIT,
     });
 
-    res.json({ proposals: proposals.map(mapProposal) });
+    res.json({ proposals: proposals.map(mapProposalSummary) });
   }),
 );
 
@@ -364,10 +395,17 @@ copilotRouter.post(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const proposalId = parseProjectRouteParam(req.params.proposalId, 'proposalId');
+    // `[WBR2-2]` The role set depends on the STAGE, which is a property of the
+    // proposal — so the proposal has to be loaded first. Project access is
+    // checked before that load and the load is project-scoped, so a user
+    // without access to the project can never tell a proposal id apart from a
+    // made-up one (404 either way), and only a member ever sees a 403.
+    await requireInternalProjectAccess(req.user!, projectId);
+    const stage = await loadProposalStage(projectId, proposalId);
     await requireProjectRoleExcludingSubcontractors(
       projectId,
       req.user!,
-      LOT_CREATORS,
+      rolesForProposalStage(stage),
       DECIDE_DENIED_MESSAGE,
       { requireWritable: true },
     );
@@ -394,10 +432,12 @@ copilotRouter.post(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const proposalId = parseProjectRouteParam(req.params.proposalId, 'proposalId');
+    await requireInternalProjectAccess(req.user!, projectId);
+    const stage = await loadProposalStage(projectId, proposalId);
     await requireProjectRoleExcludingSubcontractors(
       projectId,
       req.user!,
-      LOT_CREATORS,
+      rolesForProposalStage(stage),
       DECIDE_DENIED_MESSAGE,
       { requireWritable: true },
     );

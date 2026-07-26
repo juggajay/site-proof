@@ -24,6 +24,13 @@ export interface AppliedRecordGroup {
   meta?: unknown;
 }
 
+// Who is deciding. Stages that stamp an actor onto the records they create
+// (e.g. the Wave-B import's spec affirmation) need the DECIDER, not the
+// requester. Handlers that do not care simply declare fewer parameters.
+export interface ApplyContext {
+  userId: string;
+}
+
 // Applies an accepted proposal's payload inside the deciding transaction and
 // returns the records it created (so rollback can delete exactly them). Runs in
 // the SAME transaction as the status write — apply + audit commit or roll back
@@ -32,6 +39,7 @@ export type ApplyHandler = (
   tx: Prisma.TransactionClient,
   proposal: AiProposal,
   effectivePayload: unknown,
+  context: ApplyContext,
 ) => Promise<AppliedRecordGroup[]>;
 
 // Deletes the records an apply handler created, reversing the stage's effect.
@@ -155,7 +163,7 @@ export async function decideProposal(args: DecideProposalArgs): Promise<AiPropos
       });
     }
 
-    const appliedRecordIds = await apply(tx, proposal, effectivePayload);
+    const appliedRecordIds = await apply(tx, proposal, effectivePayload, { userId: args.userId });
 
     return tx.aiProposal.update({
       where: { id: proposal.id },

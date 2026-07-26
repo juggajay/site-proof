@@ -68,6 +68,35 @@ const EVIDENCE_LINK_GUARDS: EvidenceLinkGuard[] = [
   },
 ];
 
+/**
+ * Wave B `[WBR2-3]` §3.3 — source survival is an APPLICATION-layer rule, not an
+ * FK constraint. The `ImportBatch.sourceDocument` FK is deliberately
+ * `onDelete: SetNull`: a `Restrict` child hanging off `Document`'s cascade
+ * parent would abort project deletion outright. So the rule lives here, where it
+ * can explain itself the way `assertCreatedLotsHaveNoProgress` does.
+ *
+ * Deleting a source file behind a LIVE or APPLIED import is refused. Terminal
+ * batches (rolled_back, cancelled, failed) release their source — there is no
+ * live record left to trace back to it.
+ */
+async function assertNotLiveImportSource(prisma: PrismaClient, documentId: string): Promise<void> {
+  const batch = await prisma.importBatch.findFirst({
+    where: {
+      sourceDocumentId: documentId,
+      status: { notIn: ['rolled_back', 'cancelled', 'failed'] },
+    },
+    select: { status: true },
+  });
+  if (!batch) return;
+
+  throw AppError.conflict(
+    batch.status === 'applied'
+      ? 'This file is the source of an applied import — roll the import back first.'
+      : 'This file is the source of an import that is still in progress — cancel the import first.',
+    { code: 'IMPORT_SOURCE_DELETE_BLOCKED', importStatus: batch.status },
+  );
+}
+
 // Generic document delete must not cascade-drop a workflow evidence link.
 // Removal has to go through the owning workflow, which enforces its lifecycle.
 export async function assertDocumentDeletableOutsideEvidenceWorkflow(
@@ -82,6 +111,8 @@ export async function assertDocumentDeletableOutsideEvidenceWorkflow(
       });
     }
   }
+
+  await assertNotLiveImportSource(prisma, documentId);
 }
 
 // Generic document metadata mutation must not touch evidence whose owning

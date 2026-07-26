@@ -27,6 +27,15 @@ export interface TemplateForMatch {
   activityType: string | null;
   checklistItemCount: number;
   holdPointCount: number;
+  /**
+   * Wave B `[WBR2-6]`: when a human has affirmed this project-scoped template's
+   * specification set. Null means unaffirmed — the template stays a visible,
+   * selectable candidate but never auto-fills. Bulk import is the mass path for
+   * wrong-state project-scoped templates (the state hard filter below applies
+   * only to globals), so one accept click must not manufacture 40 Tier-A
+   * candidates. Hand-made templates are affirmed on create.
+   */
+  specAffirmedAt?: Date | string | null;
 }
 
 export interface MatchCandidate {
@@ -37,6 +46,11 @@ export interface MatchCandidate {
   matchKind: ActivityMatchKind;
   /** True for an Austroads national-baseline template offered as a gap-fill. */
   baseline?: boolean;
+  /**
+   * True for a project-scoped template whose specification set nobody has
+   * affirmed — offered as a candidate, never auto-filled (`[WBR2-6]`).
+   */
+  unaffirmed?: boolean;
   checklistItemCount: number;
   holdPointCount: number;
 }
@@ -61,7 +75,7 @@ const SPEC_SET_SYNONYMS: Record<string, string> = {
   rms: 'tfnsw',
 };
 
-function normalizeSpecSet(value: string | null): string | null {
+export function normalizeSpecSet(value: string | null): string | null {
   if (!value) return null;
   const lower = value.trim().toLowerCase();
   if (!lower) return null;
@@ -184,6 +198,7 @@ export function routeTemplateMatch(
       stateSpec: t.stateSpec,
       matchKind: kind,
       ...(isBaselineGlobal ? { baseline: true } : {}),
+      ...(isProjectScoped && !t.specAffirmedAt ? { unaffirmed: true } : {}),
       checklistItemCount: t.checklistItemCount,
       holdPointCount: t.holdPointCount,
     };
@@ -205,7 +220,10 @@ export function routeTemplateMatch(
   // Tier A demands exactly one exact-slug candidate from the project/state
   // pool; a baseline (Austroads) suggestion is always Tier B — the reviewer
   // affirms a national-baseline fallback knowingly, it is never auto-filled.
-  if (primaryExact.length === 1) {
+  // An UNAFFIRMED project-scoped template is Tier B for the same reason: the
+  // state hard filter above never examined it, so nothing has checked that its
+  // specification set suits this project (`[WBR2-6]`).
+  if (primaryExact.length === 1 && !primaryExact[0].unaffirmed) {
     return { tier: 'A', suggestedTemplateId: primaryExact[0].id, candidates };
   }
   return { tier: 'B', suggestedTemplateId: null, candidates };
@@ -236,6 +254,7 @@ export async function matchTemplatesForProject(input: {
       projectId: true,
       stateSpec: true,
       activityType: true,
+      specAffirmedAt: true,
       checklistItems: { select: { pointType: true } },
     },
   });
@@ -246,6 +265,7 @@ export async function matchTemplatesForProject(input: {
     projectId: t.projectId,
     stateSpec: t.stateSpec,
     activityType: t.activityType,
+    specAffirmedAt: t.specAffirmedAt,
     checklistItemCount: t.checklistItems.length,
     holdPointCount: t.checklistItems.filter((i) => i.pointType === 'hold_point').length,
   }));

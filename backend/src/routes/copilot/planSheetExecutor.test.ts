@@ -9,6 +9,9 @@ import { PLAN_SHEETS_STAGE } from './planSheetExecutor.js';
 import { applyHandlers, rollbackHandlers } from './proposalService.js';
 
 const CRS = 'EPSG:7856';
+// The deciding actor, passed to every apply handler. This stage ignores it; the
+// Wave-B import stage stamps it onto the records it affirms.
+const APPLY_CONTEXT = { userId: 'test-decider' };
 
 // A valid reviewed registration payload (2-point similarity fit shape). The
 // transform is arbitrary but well-formed — the executor validates shape, not the
@@ -102,7 +105,7 @@ describe('plan_sheets executor', () => {
     const proposal = await makeProposal({ planSheetId: sheet.id });
 
     const groups = await prisma.$transaction((tx) =>
-      applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(sheet.id)),
+      applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(sheet.id), APPLY_CONTEXT),
     );
 
     const stored = await prisma.planSheet.findUnique({ where: { id: sheet.id } });
@@ -117,7 +120,7 @@ describe('plan_sheets executor', () => {
     const proposal = await makeProposal({ planSheetId: sheet.id });
 
     const groups = await prisma.$transaction((tx) =>
-      applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(sheet.id)),
+      applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(sheet.id), APPLY_CONTEXT),
     );
     expect(
       (await prisma.planSheet.findUnique({ where: { id: sheet.id } }))?.registration,
@@ -140,7 +143,7 @@ describe('plan_sheets executor', () => {
     const proposal = await makeProposal({ planSheetId: sheet.id });
 
     const groups = await prisma.$transaction((tx) =>
-      applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(sheet.id)),
+      applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(sheet.id), APPLY_CONTEXT),
     );
     await prisma.$transaction((tx) => rollbackHandlers[PLAN_SHEETS_STAGE](tx, proposal, groups));
 
@@ -155,10 +158,15 @@ describe('plan_sheets executor', () => {
 
     await expect(
       prisma.$transaction((tx) =>
-        applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, {
-          planSheetId: sheet.id,
-          registration: { points: [], transform: [1, 2, 3], rmsErrorM: -1 },
-        }),
+        applyHandlers[PLAN_SHEETS_STAGE](
+          tx,
+          proposal,
+          {
+            planSheetId: sheet.id,
+            registration: { points: [], transform: [1, 2, 3], rmsErrorM: -1 },
+          },
+          APPLY_CONTEXT,
+        ),
       ),
     ).rejects.toBeInstanceOf(AppError);
   });
@@ -167,7 +175,12 @@ describe('plan_sheets executor', () => {
     const proposal = await makeProposal({ planSheetId: randomUUID() });
     await expect(
       prisma.$transaction((tx) =>
-        applyHandlers[PLAN_SHEETS_STAGE](tx, proposal, registrationPayload(randomUUID())),
+        applyHandlers[PLAN_SHEETS_STAGE](
+          tx,
+          proposal,
+          registrationPayload(randomUUID()),
+          APPLY_CONTEXT,
+        ),
       ),
     ).rejects.toBeInstanceOf(AppError);
   });

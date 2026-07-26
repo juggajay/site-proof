@@ -73,6 +73,12 @@ function buildApp(
         variationEvidenceLink ? { variation: { status: 'claimed', claimedInId: 'claim-1' } } : null,
       ),
     },
+    // Wave B: deleting a document also checks it is not the source of a live or
+    // applied import. No batch here — the import-source guard has its own suite
+    // (documents/importSourceHygiene.test.ts).
+    importBatch: {
+      findFirst: vi.fn(async () => null),
+    },
     $transaction: transaction,
   } as unknown as PrismaClient;
 

@@ -24,10 +24,11 @@ model Company {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  users                User[]
-  projects             Project[]
-  globalSubcontractors GlobalSubcontractor[]
-  webhookConfigs       WebhookConfig[]
+  users                 User[]
+  projects              Project[]
+  globalSubcontractors  GlobalSubcontractor[]
+  webhookConfigs        WebhookConfig[]
+  importMappingProfiles ImportMappingProfile[]
 
   @@map("companies")
 }
@@ -107,6 +108,7 @@ model User {
   assignedNotificationAlerts  NotificationAlert[]          @relation("AssignedNotificationAlerts")
   revokedAuthTokens           RevokedAuthToken[]
   requirementEvaluations      RequirementEvaluation[]
+  importBatches               ImportBatch[]
 
   @@index([companyId])
   @@map("users")
@@ -413,6 +415,8 @@ model Project {
   scheduledReportDeliveries   ScheduledReportRecipientDelivery[]
   aiProposals                 AiProposal[]
   requirementEvaluations      RequirementEvaluation[]
+  importBatches               ImportBatch[]
+  importMappingProfiles       ImportMappingProfile[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -609,23 +613,30 @@ model Lot {
 // ============================================================================
 
 model ITPTemplate {
-  id                     String   @id @default(uuid())
-  projectId              String?  @map("project_id")
+  id                     String    @id @default(uuid())
+  projectId              String?   @map("project_id")
   name                   String
   description            String?
-  activityType           String?  @map("activity_type")
-  specificationReference String?  @map("specification_reference")
-  stateSpec              String?  @map("state_spec")
-  version                Int      @default(1)
-  isActive               Boolean  @default(true) @map("is_active")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  activityType           String?   @map("activity_type")
+  specificationReference String?   @map("specification_reference")
+  stateSpec              String?   @map("state_spec")
+  version                Int       @default(1)
+  isActive               Boolean   @default(true) @map("is_active")
+  // Wave B: a human affirmed that this template's declared specification set is
+  // right for its project. Until then an IMPORTED project-scoped template is
+  // held out of Tier-A auto-fill (itpMatcher.routeTemplateMatch) — bulk import
+  // must not manufacture 40 silent auto-fill candidates on one accept click.
+  specAffirmedAt         DateTime? @map("spec_affirmed_at")
+  specAffirmedById       String?   @map("spec_affirmed_by_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   project        Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   checklistItems ITPChecklistItem[]
   lots           Lot[]
   itpInstances   ITPInstance[]
 
+  @@index([projectId])
   @@map("itp_templates")
 }
 
@@ -1563,6 +1574,7 @@ model Document {
   drawings                 Drawing[]
   signedUrlTokens          DocumentSignedUrlToken[]
   planSheets               PlanSheet[]
+  importBatches            ImportBatch[]
 
   @@index([projectId, documentType])
   @@index([projectId, lotId])
@@ -1964,10 +1976,90 @@ model AiProposal {
   editedPayload    Json?     @map("edited_payload") // what was actually applied when action=accept-with-edits
   appliedRecordIds Json?     @map("applied_record_ids") // [{model, ids}] created on apply — rollback target
   createdAt        DateTime  @default(now()) @map("created_at")
+  // Wave B: ONE import batch produces exactly ONE proposal. @unique makes that a
+  // database invariant rather than a convention. Nullable, so every pre-Wave-B
+  // stage is unaffected (Postgres permits many nulls in a unique index).
+  importBatchId    String?   @unique @map("import_batch_id")
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
 
   @@index([projectId, stage])
   @@index([projectId, status])
   @@map("ai_proposals")
+}
+
+// ============================================================================
+// Wave B — migration importer
+// ============================================================================
+
+// The envelope over one migration run. Owns the source file, the chosen mapping
+// profile, the dry-run result and the per-row outcome ledger. It does NOT apply
+// records itself — it spawns ONE AiProposal that does.
+model ImportBatch {
+  id     String @id @default(uuid())
+  // 'itp_template' | 'lot_register' (open set; 'test_register' is RESERVED and
+  // deliberately unimplemented until the Wave C sample/test model is final).
+  kind   String
+  // uploaded|parsed|mapped|dry_run|review|applied|rolled_back|cancelled|failed
+  status String @default("uploaded")
+
+  projectId    String @map("project_id")
+  sourceFormat String @map("source_format") // 'excel' | 'pdf' | 'word'
+
+  // Why status='failed' — operator- and user-readable, never a stack trace.
+  failedReason String? @map("failed_reason")
+  // NULLABLE + SetNull, deliberately NOT Restrict. Document.project is
+  // onDelete: Cascade, so a Restrict child hanging off a cascade parent would
+  // abort project deletion outright. Source survival is enforced in the
+  // APPLICATION layer instead, where it can produce a real error message.
+  sourceDocumentId String? @map("source_document_id")
+  mappingProfileId String? @map("mapping_profile_id")
+
+  parseResult Json? @map("parse_result") // normalized grid {sheets:[{name, headers, rows}]}, byte-capped
+  dryRun      Json? @map("dry_run") // counts + per-row outcome + reasons
+
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project        Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceDocument Document?             @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  mappingProfile ImportMappingProfile? @relation(fields: [mappingProfileId], references: [id], onDelete: SetNull)
+  createdBy      User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  proposal       AiProposal?
+
+  @@index([projectId, kind, status])
+  @@index([projectId, createdAt])
+  @@index([status, updatedAt]) // drives the abandoned-batch GC sweep
+  @@map("import_batches")
+}
+
+// A reusable, tenant-owned column/field mapping. Built-ins (CivilPro, generic
+// AU ITP) are global rows: a mapping is column-name metadata and carries no ITP
+// prose, so sharing one is not a leak of tenant specification text.
+model ImportMappingProfile {
+  id           String  @id @default(uuid())
+  projectId    String? @map("project_id") // null = built-in
+  companyId    String? @map("company_id") // company-wide reuse; null for built-ins
+  name         String
+  kind         String
+  sourceFormat String  @map("source_format")
+  // Ordered field map: target field <- source column header + transform.
+  // TENANT-WRITABLE JSON. Every `target` and `transform` is re-validated against
+  // a fixed server-side allow-list at APPLY time, not only at save time.
+  fieldMap     Json    @map("field_map")
+
+  version   Int      @default(1)
+  isBuiltIn Boolean  @default(false) @map("is_built_in")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batches ImportBatch[]
+
+  @@index([companyId, kind])
+  @@index([projectId, kind])
+  @@map("import_mapping_profiles")
 }

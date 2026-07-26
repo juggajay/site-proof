@@ -13,6 +13,9 @@ import { usePlanSheets } from '../settings/planSheetsData';
 import { fetchProjectForAdminPage } from '../settings/projectPageAccess';
 import type { Project } from '../settings/types';
 import { CopilotPanel, type StageCard } from './CopilotPanel';
+import { ImportPanel } from './ImportPanel';
+import { ItpImportReviewModal } from './ItpImportReviewModal';
+import { useCopilotProposalDetail, useImportBatches } from './importData';
 import { ProjectFactsReviewModal, type ProjectFactsCurrent } from './ProjectFactsReviewModal';
 import { ControlLineReviewModal } from './ControlLineReviewModal';
 import { PlanSheetRegistrationReviewModal } from './PlanSheetRegistrationReviewModal';
@@ -84,6 +87,8 @@ export function CopilotPage() {
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [openStage, setOpenStage] = useState<CopilotStage | null>(null);
+  // null = closed; '' = a fresh import; an id = resume that batch.
+  const [openImport, setOpenImport] = useState<string | null>(null);
   // The stage whose proposal was just applied, driving the next-step hand-off.
   const [appliedStage, setAppliedStage] = useState<CopilotStage | null>(null);
   const deepLinkConsumed = useRef(false);
@@ -100,14 +105,27 @@ export function CopilotPage() {
   const lotPresenceQuery = useProjectLotPresence(projectId);
   const { aiConfigured } = useAiStatus();
   const rollbackMutation = useRollbackProposal(projectId);
+  const importBatchesQuery = useImportBatches(projectId);
 
   const project = projectQuery.data ?? null;
   const proposals = proposalsQuery.data;
 
   const openStageFlow = (stage: CopilotStage) => {
     setAppliedStage(null);
+    setOpenImport(null);
     setOpenStage(stage);
   };
+
+  // The proposals LIST is a payload-free projection (an import proposal carries
+  // every proposed template, and the rail polls this list). A review modal needs
+  // the real payload, so the open stage's pending proposal is fetched in full
+  // and the modal waits for it rather than flashing its upload step.
+  const openStageProposal = openStage ? newestProposalForStage(proposals, openStage) : null;
+  const pendingProposalId =
+    openStageProposal?.status === 'proposed' ? openStageProposal.id : undefined;
+  const pendingDetailQuery = useCopilotProposalDetail(projectId, pendingProposalId);
+  const reviewProposal = pendingProposalId ? (pendingDetailQuery.data ?? null) : null;
+  const reviewReady = !pendingProposalId || Boolean(pendingDetailQuery.data);
 
   // Deep link (`?stage=…`): open that stage's flow as if its CTA was clicked, then
   // strip the param (replace) so refresh/back doesn't re-fire. Wait for proposals so
@@ -165,7 +183,6 @@ export function CopilotPage() {
     ? (cards.find((c) => c.status !== 'done' && c.stage !== appliedStage) ?? null)
     : null;
 
-  const factsProposal = newestProposalForStage(proposals, 'project_facts');
   const factsCurrent: ProjectFactsCurrent = {
     projectName: project?.name ?? null,
     projectNumber: project?.code ?? null,
@@ -173,13 +190,8 @@ export function CopilotPage() {
     state: project?.state ?? null,
   };
 
-  const controlLineProposal = newestProposalForStage(proposals, 'control_line');
   // Seed the review modal's fallback zone from an existing control line's datum.
   const defaultCoordinateSystem = controlLinesQuery.data?.[0]?.coordinateSystem;
-
-  const planSheetProposal = newestProposalForStage(proposals, 'plan_sheets');
-
-  const lotBreakdownProposal = newestProposalForStage(proposals, 'lot_breakdown');
 
   const handleRollback = async (proposalId: string) => {
     try {
@@ -224,46 +236,67 @@ export function CopilotPage() {
         />
       )}
 
-      {openStage === 'project_facts' && projectId && (
+      <ImportPanel
+        batches={importBatchesQuery.data ?? []}
+        onStartImport={() => {
+          setOpenStage(null);
+          setOpenImport('');
+        }}
+        onResume={(batchId) => {
+          setOpenStage(null);
+          setOpenImport(batchId);
+        }}
+        onRollback={(id) => void handleRollback(id)}
+        rollbackBusy={rollbackMutation.isLoading}
+      />
+
+      {openStage === 'project_facts' && projectId && reviewReady && (
         <ProjectFactsReviewModal
           projectId={projectId}
           current={factsCurrent}
-          existingProposal={factsProposal?.status === 'proposed' ? factsProposal : null}
+          existingProposal={reviewProposal}
           onApplied={() => setAppliedStage('project_facts')}
           onClose={() => setOpenStage(null)}
         />
       )}
 
-      {openStage === 'control_line' && projectId && (
+      {openStage === 'control_line' && projectId && reviewReady && (
         <ControlLineReviewModal
           projectId={projectId}
           defaultCoordinateSystem={defaultCoordinateSystem}
-          existingProposal={controlLineProposal?.status === 'proposed' ? controlLineProposal : null}
+          existingProposal={reviewProposal}
           onApplied={() => setAppliedStage('control_line')}
           onClose={() => setOpenStage(null)}
         />
       )}
 
-      {openStage === 'plan_sheets' && projectId && (
+      {openStage === 'plan_sheets' && projectId && reviewReady && (
         <PlanSheetRegistrationReviewModal
           projectId={projectId}
           sheets={planSheetsQuery.data ?? []}
           defaultCoordinateSystem={defaultCoordinateSystem}
-          existingProposal={planSheetProposal?.status === 'proposed' ? planSheetProposal : null}
+          existingProposal={reviewProposal}
           onApplied={() => setAppliedStage('plan_sheets')}
           onClose={() => setOpenStage(null)}
         />
       )}
 
-      {openStage === 'lot_breakdown' && projectId && (
+      {openStage === 'lot_breakdown' && projectId && reviewReady && (
         <LotBreakdownReviewModal
           projectId={projectId}
           controlLines={controlLinesQuery.data ?? []}
-          existingProposal={
-            lotBreakdownProposal?.status === 'proposed' ? lotBreakdownProposal : null
-          }
+          existingProposal={reviewProposal}
           onApplied={() => setAppliedStage('lot_breakdown')}
           onClose={() => setOpenStage(null)}
+        />
+      )}
+
+      {openImport !== null && projectId && (
+        <ItpImportReviewModal
+          projectId={projectId}
+          batchId={openImport || null}
+          onApplied={() => void importBatchesQuery.refetch()}
+          onClose={() => setOpenImport(null)}
         />
       )}
     </div>

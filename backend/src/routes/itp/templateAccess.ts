@@ -6,7 +6,7 @@ import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
-const TEMPLATE_MANAGER_ROLES = [
+export const TEMPLATE_MANAGER_ROLES = [
   'owner',
   'admin',
   'project_manager',

@@ -222,7 +222,15 @@ templatesRouter.post(
     if (!parseResult.success) {
       throw AppError.fromZodError(parseResult.error);
     }
-    const { projectId, name, description, activityType, checklistItems } = parseResult.data;
+    const {
+      projectId,
+      name,
+      description,
+      activityType,
+      stateSpec,
+      specificationReference,
+      checklistItems,
+    } = parseResult.data;
 
     await requireProjectTemplateAccess(projectId, user, true);
 
@@ -232,6 +240,13 @@ templatesRouter.post(
         name,
         description: description || null,
         activityType,
+        stateSpec: stateSpec || null,
+        specificationReference: specificationReference || null,
+        // A human typed this template into this project on purpose, so its spec
+        // set is affirmed on create. Only BULK-IMPORTED templates start
+        // unaffirmed and are held out of Tier-A auto-fill (Wave B `[WBR2-6]`).
+        specAffirmedAt: new Date(),
+        specAffirmedById: user.id,
         checklistItems: {
           create: (checklistItems || []).map((item, index: number) => ({
             description: item.description,

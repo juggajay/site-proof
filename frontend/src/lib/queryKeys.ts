@@ -230,5 +230,13 @@ export const queryKeys = {
 
   // Copilot (AI setup proposals)
   copilotProposals: (projectId: string) => ['copilot-proposals', projectId] as const,
+  copilotProposal: (projectId: string, proposalId: string) =>
+    ['copilot-proposal', projectId, proposalId] as const,
   copilotLotPresence: (projectId: string) => ['copilot-lot-presence', projectId] as const,
+
+  // Wave B — migration imports
+  importBatches: (projectId: string) => ['import-batches', projectId] as const,
+  importBatch: (projectId: string, batchId: string) =>
+    ['import-batch', projectId, batchId] as const,
+  importProfiles: (projectId: string) => ['import-profiles', projectId] as const,
 } as const;

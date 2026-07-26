@@ -75,6 +75,16 @@ function isDrawingBackedDocument(documentType?: string | null): boolean {
   return documentType === 'drawing';
 }
 
+/**
+ * Document types the client-visible register never shows. Drawings live in the
+ * drawing register; Wave-B import sources are internal provenance artefacts —
+ * a contractor migrating 40 ITPs should not find 40 raw spreadsheets in their
+ * document register, and a subcontractor should never see them at all. Both
+ * stay reachable from the surface that owns them.
+ */
+export const IMPORT_SOURCE_DOCUMENT_TYPE = 'import_source';
+export const INTERNAL_ONLY_DOCUMENT_TYPES = ['drawing', IMPORT_SOURCE_DOCUMENT_TYPE] as const;
+
 function isNcrEvidenceCategory(category?: string | null): boolean {
   return category === 'ncr_evidence';
 }
@@ -339,7 +349,9 @@ export async function applyDocumentReadScope(
   }
 
   appendDocumentWhereClause(where, { OR: scopedAccess });
-  appendDocumentWhereClause(where, { NOT: { documentType: 'drawing' } });
+  appendDocumentWhereClause(where, {
+    NOT: { documentType: { in: [...INTERNAL_ONLY_DOCUMENT_TYPES] } },
+  });
 }
 
 export async function applyDocumentPortalCategoryScope(
