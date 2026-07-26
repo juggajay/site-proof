@@ -1,42 +1,80 @@
 # Wave C1 Execution Specification — Test Sufficiency Rules Engine + Gates
 
-**Date:** 26 July 2026 · **Status:** Rev 1 — awaiting adversarial review and Jay's decisions D1–D10
+**Date:** 26 July 2026 · **Rev 1:** authored 26 Jul (`da847c55`) · **Rev 2:** 26 Jul, incorporating the Opus 5 adversarial review of Rev 1 (verdict **6/10**; 12 blockers `[C1R-B1]`…`[C1R-B12]`, 15 recommendations `[C1R-1]`…`[C1R-15]`, 12 cleared items, D1–D10 verdicts) · **Status:** implementation-ready pending no further review objections and the Jay decisions in §16.0.
 **Program contract:** `C:\Users\jayso\Documents\CIVOS-Validated-Buildout-Plan-2026-07-24.md` §3 Wave C (line 75), governed by §9 (delivery control), §6 (completion standards), §7 (security), §8 (scale targets).
-**Research register:** `C:\Users\jayso\Documents\CIVOS-Research-Appendix-2026-07-24.md` §A (grades + revalidation obligations).
-**Foundation:** `docs/plans/f0-execution-spec-2026-07-24.md` (Rev 3.1). F0 is **complete and live on prod** — C1 extends it and adds no parallel engine.
-**House style:** matches `docs/plans/wave-b-migration-importer-spec-2026-07-26.md` (Rev 2) — cited current-state map, PROPOSED Prisma, phase slicing, benchmark targets, exit gate, numbered decisions.
+**Research register:** `C:\Users\jayso\Documents\CIVOS-Research-Appendix-2026-07-24.md` §A. Claims are cited **by claim text, not row ordinal** in this revision `[C1R-6]`.
+**Foundation:** `docs/plans/f0-execution-spec-2026-07-24.md` (Rev 3.1). F0 is complete and live on prod. C1 extends it; no parallel engine.
+**House style:** matches `docs/plans/wave-b-migration-importer-spec-2026-07-26.md` (Rev 2).
 
-**All `file:line` citations in this document were read in this worktree at HEAD `3fe7eadd` (= `origin/master` at authoring time).** Re-verify line numbers at build time — the F0 staleness lesson applies (`f0-execution-spec-2026-07-24.md:4`).
+**All `file:line` citations were read in this worktree at HEAD `3fe7eadd` (= `origin/master`).** Every citation the reviewer supplied was independently re-verified before folding; two were found wrong and are refuted in §17.2 rather than encoded. Re-verify line numbers at build time — the F0 staleness lesson applies.
+
+---
+
+## 0. Rev 2 changelog — where each review finding landed
+
+| Tag         | Finding                                                                                                   | Landed in                                                                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `[C1R-B1]`  | `computeConformanceResult` is pure/sync; six fields + a relation not fetched                              | §2.2, §4.1, §5.1 (resolved-inputs parameter, `lotConformable` signature, separate warning builder, exact `select`/`include` extensions)    |
+| `[C1R-B2]`  | Conformed/claimed lots early-return — the payoff is unreachable                                           | §5.1.3 (surface chosen: extend the conformed short circuit), §5.3 (hard prohibition), §11 C1.1 (corpus regenerated), §16 D11 (Jay-visible) |
+| `[C1R-B3]`  | `resultSchemaVersion: 2` renames `requirement_set` on a live immutable table                              | §5.4 (no bump; optional always-emitted key at v1), §14 (the ~10 assertions), §13 (rollback)                                                |
+| `[C1R-B4]`  | Folded member block busts the 1 KB budget → 500s claim create, flag-off                                   | §5.4.2 (aggregate only: state + count + worst shortfall), §12 (unbounded-rule-count assertion)                                             |
+| `[C1R-B5]`  | Draft rulesets are both `unknown` and "evaluated"; day one shows nothing                                  | §4.2 (`ruleset_edition_unconfirmed` deleted), §7.1 (draft evaluates normally), §5.1.2 (structural `blocksAction` expression)               |
+| `[C1R-B6]`  | Index on free-text `activityType` cannot serve a folded-slug stream key                                   | §6 (`Lot.activitySlug` stored + backfilled, index `[projectId, activitySlug, conformedAt]`), §16 D7 (layer limb decided)                   |
+| `[C1R-B7]`  | No cursor ⇒ wrong regime for every already-conformed lot; regime read inside the serializable tx          | §3.4.3 (two-mode query contract, resolved outside the transaction, length guard), §14 (both modes + guard tested)                          |
+| `[C1R-B8]`  | Failure side is status-unqualified; `reduced` has no authority-sourced counts                             | §3.4.2 (status-qualified failure), §3.2 + §8.2 (`reduced` structurally absent from `vicroads-204.v1` + CI assertion)                       |
+| `[C1R-B9]`  | `overdue_test` has a live write path and a fail-closed read path                                          | §2.7 + §16 D10 (migration-safety steps, `byType` shape change, both `AlertType` declarations)                                              |
+| `[C1R-B10]` | No bulk path for quantity/scale; bulk create untouched ⇒ dead launch                                      | §2.6, §6, §9.1, §11 C1.1                                                                                                                   |
+| `[C1R-B11]` | R44 grade misstated; confirmation sequenced after encoding                                                | §8.1 (grade corrected to `'C'`), §8.3 (confirmation moved to C1.0/C1.1), §15.1 exit item 1, §16.0 (Jay-visible)                            |
+| `[C1R-B12]` | Permission matrix, rollback/recovery, acceptance tests, pilot metrics, field-workflow standard all absent | §10.2, §13, §14, §15.2, §15.3                                                                                                              |
+| `[C1R-1]`   | `max()` is a no-op for everything C1 ships; illustration invented                                         | §3.2.1, §16 D4, §17.2 (sourcing claim partially refuted)                                                                                   |
+| `[C1R-2]`   | `TestReasonCode` is an `Extract<>` that cannot carry the new code                                         | §4.2.1, §14 AT-2                                                                                                                           |
+| `[C1R-3]`   | `Lot.areaZone` catalogued then dropped                                                                    | §3.2 (`appliesTo.areaZoneAliases`)                                                                                                         |
+| `[C1R-4]`   | Per-production-day dropped with no owning wave                                                            | §1 non-goals (assigned to C2)                                                                                                              |
+| `[C1R-5]`   | "Fix the file path"                                                                                       | **REFUTED** — §17.2                                                                                                                        |
+| `[C1R-6]`   | Appendix ordinals off by one, twice                                                                       | Header + §8 (cite by claim text)                                                                                                           |
+| `[C1R-7]`   | Scope the 6/3 counts to compaction                                                                        | §8.2                                                                                                                                       |
+| `[C1R-8]`   | Legal caveat has no owner/date/gate                                                                       | §15.1 exit item 10                                                                                                                         |
+| `[C1R-9]`   | Confirmation edits `.v1` in place — F0 forbids it                                                         | §8.3 (confirmation emits `.v2`)                                                                                                            |
+| `[C1R-10]`  | Registry route self-exempts from tenant-isolation testing                                                 | §10.1, §14 AT-19                                                                                                                           |
+| `[C1R-11]`  | "0 queries" needs fields not selected today                                                               | §12 ("0 _additional_ queries")                                                                                                             |
+| `[C1R-12]`  | Characterization corpus does not cover the conform gate                                                   | §11 C1.1, §14 AT-14                                                                                                                        |
+| `[C1R-13]`  | Index lock; Wave B migration has already landed                                                           | §6, §11 (B/C serialization now trivial)                                                                                                    |
+| `[C1R-14]`  | `RequirementEvaluation` has a second unique key                                                           | §5.4.1 (strengthens fold-over-widen)                                                                                                       |
+| `[C1R-15]`  | Exit item 6 is unobservable through the panel                                                             | §15.1 exit item 7                                                                                                                          |
+
+Cleared items `[C1R-C1]`…`[C1R-C12]` are not re-argued; two carry positive obligations and are promoted: `[C1R-C5]` into §5.1.1, `[C1R-C11]` into §17.1.
 
 ---
 
 ## 1. Outcome, scope and non-goals
 
-**Outcome:** a contractor asks "does this lot have **enough** passing tests?" and CIVOS answers with a number, a rule citation and a plain-English explanation — _before_ the lot is covered, conformed or claimed. Today the answer is existential ("is there at least one passing verified test per test-required ITP item?", `conformancePrerequisites.ts:437-441`); C1 makes it **quantitative and spec-keyed**, and it makes the shortfall visible at the three moments where it costs money.
+**Outcome:** a contractor asks "does this lot have **enough** passing tests?" and CIVOS answers with a number, a rule citation and a plain-English explanation — before the lot is covered, conformed or claimed. Today the answer is existential ("is there at least one passing verified test per test-required ITP item?", `conformancePrerequisites.ts:437-441`); C1 makes it quantitative and spec-keyed, and makes the shortfall visible at the three moments where it costs money.
 
-**The wedge (program §1, line 15):** CivilPro already _configures_ test frequencies. C1's differentiator is the **proactive gate** — a shortfall surfaced at pre-cover / conform / claim rather than discovered at handover — plus the honest degradation semantics of §7 (a lot with no recorded quantity says "I cannot check", never "you're fine").
+**The wedge (program §1, line 15):** CivilPro already _configures_ test frequencies. C1's differentiator is the **proactive gate** — a shortfall surfaced at pre-cover / conform / claim rather than discovered at handover — plus the honest degradation of §7 (a lot with no recorded quantity says "I cannot check", never "you're fine").
 
 **Included (C1):**
 
-- A declarative, versioned **frequency-rule vocabulary** (§3) supporting: per-lot minimum count by scale · per-quantity (area / volume / tonnage / length) · maximum lot size (advisory) · the escalate/de-escalate **frequency-regime state machine**.
-- A **pure evaluator** producing an F0-shaped verdict over the existing `reasonCode` vocabulary (§4), satisfying the already-declared `TestSufficiencyVerdict` contract (`backend/src/lib/readiness/contracts/futureConsumers.ts:27-37`).
-- **Resolution** of ruleset + scale + quantity for a lot from data that already exists (`Project.state` / `Project.specificationSet`, `Lot.activityType`, `Lot.layer`, `LotGeometry.areaM2`) plus three new nullable lot fields (§6).
-- **Surfacing** in the shipped lot-readiness surface (`GET /api/lots/:id/readiness`, `qualityRoutes.ts:265`; `LotReadinessPanel.tsx:267`) — no new page, no new panel.
+- A declarative, versioned **frequency-rule vocabulary** (§3.2): per-lot minimum count by scale · per-quantity coverage · maximum lot size (advisory) · the escalate/de-escalate **frequency-regime state machine**.
+- A **pure evaluator** producing an F0-shaped verdict over the existing `reasonCode` vocabulary (§4), satisfying and widening the already-declared `TestSufficiencyVerdict` contract (`contracts/futureConsumers.ts:27-37`).
+- **Resolution** of ruleset + scale + quantity + regime, fetched **per path and passed into** the pure gate (§5.1.1) — the `releasedHoldPointItemIds` pattern already in the file.
+- **Surfacing** in the shipped lot-readiness surface (`GET /api/lots/:id/readiness`, `qualityRoutes.ts:265`; `LotReadinessPanel.tsx:267`) — no new page, no new panel — **including for already-conformed and claimed lots** (§5.1.3).
 - **Gates** at three decision points (§5): conform (block, opt-in per project), hold-point request/release = the pre-cover moment (warn, never block), claim inclusion (warn, never block).
-- **Seed packs**: VicRoads Section 204 + one TfNSW ruleset, each gated behind the **currency-confirmation step** of §8 — encoded as `draft` and advisory-only until a human re-verifies the numbers against the current published edition.
-- **Snapshot provenance**: the sufficiency verdict is recorded inside the existing `RequirementEvaluation` snapshot written by `recordDecision` (`recordDecision.ts:423`), at bumped `resultSchemaVersion` (§5.4).
+- **Seed packs**: VicRoads Section 204 + one TfNSW ruleset, with the **confirmation pass performed before encoding** (§8.3).
+- **Snapshot provenance** inside the existing `RequirementEvaluation` snapshot written by `recordDecision` (`recordDecision.ts:423`), as an optional always-emitted key at `resultSchemaVersion: 1` (§5.4).
+- **Bulk entry** for quantity/scale (§9.1) — without it the engine has no data and the launch is dead `[C1R-B10]`.
 
 **Non-goals (explicit — do not build in C1):**
 
-- **C2 sample lifecycle** — planned sample → request → sampled → lab pending → certificate → extraction → verification → recalc; certificate-to-sample reconciliation; overdue-lab chasing; external lab upload link. C1 counts the `TestResult` rows that already exist; it never models a sample.
-- **C3 spatial + LIMS** — tested/under-tested map overlay, TfNSW LIMS tabulated ingestion, and user-authored/overridable rulesets (see D3 boundary note). C1 rulesets are shipped code, not tenant data.
-- **C4 evidence integrity** — duplicate certificate/sample detection, preliminary-vs-final, anomaly flags. C1 counts distinct `TestResult` rows and does **not** detect that two rows describe the same sample (§7, known ceiling).
+- **C2 sample lifecycle** — planned sample → request → sampled → lab pending → certificate → extraction → verification → recalc; certificate-to-sample reconciliation; overdue-lab chasing; external lab upload link. C1 counts `TestResult` rows that already exist; it never models a sample.
+- **Per-production-day frequency limbs — owned by C2** `[C1R-4]`. Nothing in CIVOS records "this lot is one day's production", and the natural place to learn it is the sample/production record C2 builds. C1 evaluates only the area limb of a lot-size cap (§3.3) and never a per-day count.
+- **C3 spatial + LIMS** — tested/under-tested map overlay, TfNSW LIMS tabulated ingestion, and user-authored/overridable rulesets (program line 77). C1 rulesets are shipped code, not tenant data.
+- **C4 evidence integrity** — duplicate certificate/sample detection, preliminary-vs-final, anomaly flags. C1 counts distinct `TestResult` rows and does **not** detect that two rows describe the same sample (§7.2).
 - **C5 survey/material traceability.**
-- **Statistical acceptance computation.** TfNSW R44's Characteristic Density Ratio (CDR) with k-values is a _statistic over the results_, not a count of them. C1 encodes only the **n = 6 minimum sample count** that makes the statistic valid (appendix §A row 3) and computes **no** CDR. The CDR itself is C3/LIMS work. (D8.)
-- **Test-register import** — deferred past Wave C per program §9; Wave B §1 already excludes it, and it stays excluded until the C2 sample model is final.
-- **New alert types.** Sufficiency surfaces in readiness, not as a new alert stream (the A2 backlog is 3,669 rows). See D10 for the fate of the existing unused `overdue_test` type.
-- **Automatic compliance declarations.** Every output is decision support with a clause citation attached. CIVOS never states that a lot complies with a specification.
-- **No shell changes.** `frontend/src/shell/**` (the foreman/subbie mobile shell) is untouched. A mobile sufficiency indicator is desirable and is **Jay-gated** — listed as out of scope, not silently omitted.
+- **Statistical acceptance computation.** TfNSW R44's Characteristic Density Ratio with k-values is a statistic over result _values_, not a count of them. C1 encodes only the **n = 6 minimum sample count** and computes no CDR (§16 D8).
+- **Test-register import** — deferred past Wave C per program §9.
+- **New alert types.** Sufficiency surfaces in readiness, not as a new alert stream into the 3,669-row backlog A2 is burning down (program line 64).
+- **Automatic compliance declarations.** Every output is decision support with a clause citation attached.
+- **No shell changes.** No file under `frontend/src/shell/` changes. A foreman-facing indicator is valuable and is **Jay-gated** — out of scope, not silently omitted.
 
 ---
 
@@ -44,87 +82,110 @@
 
 ### 2.1 The F0 backbone C1 builds ON
 
-| Concern                                      | Where                                           | Note                                                                                                                                                                                                                                                                                                                    |
-| -------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Predicate library                            | `backend/src/lib/readiness/predicates.ts`       | `testPassing` = `passFail === 'pass' && status === 'verified'` (L149-151) — single-sourced, **not** divergent. `testMatchesItem` (L202-208): `itpChecklistItemId` link is strongest, case-insensitive `testType` equality is the legacy fallback. `lotConformable` (L324-332) is the authoritative conform composition. |
-| Closed reasonCode vocabulary                 | `contracts/reasonCodes.ts:29-72`                | 41 codes; `READINESS_REASON_CODES` is **closed** — "If the engine gains a code, add it here (and its provenance) in the same change; the contract test fails otherwise" (L26-27).                                                                                                                                       |
-| Provenance map                               | `contracts/reasonCodes.ts:86`                   | Every code maps to a predicate export **or** `'engine'`.                                                                                                                                                                                                                                                                |
-| Contract test teeth                          | `contracts/contracts.test.ts:59-64`             | Asserts every non-`engine` provenance predicate is a real export of `../predicates.js`. **Load-bearing for §4.2.**                                                                                                                                                                                                      |
-| Test-sufficiency contract (already declared) | `contracts/futureConsumers.ts:22-37`            | `TestReasonCode` = `no_passing_verified_test \| no_tests \| failed_tests \| pending_tests \| passing_tests`; `TestSufficiencyVerdict = { subjectType: 'lot' \| 'itp_item', subjectId, sufficient, reasonCodes }`. C1 **satisfies and extends** this — it is the minimum, explicitly marked as extensible (L34-36).      |
-| Atomic decision writer                       | `readiness/recordDecision.ts:423`               | Serializable + bounded retry; caller-supplied `evaluate` / `mutate` / `snapshots`. Size budgets: member rows ≤ 1 KB (L151), aggregate/single ≤ 64 KB (L154).                                                                                                                                                            |
-| Snapshot table                               | `backend/prisma/schema.prisma:1690`             | `RequirementEvaluation`, immutable, `@@unique([auditLogId, entityType, entityId])`.                                                                                                                                                                                                                                     |
-| Requirement-set modules                      | `readiness/requirements/*.v1.ts`                | Code-defined, versioned. `lotConformance.v1.ts:16-17` fixes the set name + `resultSchemaVersion`. `shared.ts:41` `blockingReasonCodes`, `shared.ts:61` `decodeAtVersion1`, `shared.ts:75` `truncateReasonText`.                                                                                                         |
-| The unique-key note C1 tests                 | `docs/plans/f0-execution-spec-2026-07-24.md:72` | "one decision never evaluates one entity under two requirement sets; extend the key only if that ever becomes true." **C1 is the first case where it could become true** — resolved in §5.4 without widening the key.                                                                                                   |
+| Concern                      | Where                                                      | Note                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Predicate library            | `lib/readiness/predicates.ts`                              | `testPassing` = `passFail === 'pass' && status === 'verified'` (L149-151). `testMatchesItem` (L202-208): `itpChecklistItemId` link strongest, case-insensitive `testType` equality the legacy fallback. `lotConformable` (L324-332) is the authoritative conform composition. `lotClaimEligible` (L355-361) names the claim-blocking set. |
+| Closed reasonCode vocabulary | `contracts/reasonCodes.ts:29-72`                           | 41 codes, **closed**: "If the engine gains a code, add it here (and its provenance) in the same change; the contract test fails otherwise" (L26-27).                                                                                                                                                                                      |
+| Contract test teeth          | `contracts/contracts.test.ts:59-64`                        | Asserts every non-`engine` provenance predicate is a real export of `../predicates.js`. Load-bearing for §4.3.                                                                                                                                                                                                                            |
+| Test-sufficiency contract    | `contracts/futureConsumers.ts:22-37`                       | `TestReasonCode = Extract<ReadinessReasonCode, 'no_passing_verified_test' \| 'no_tests' \| 'failed_tests' \| 'pending_tests' \| 'passing_tests'>` — **an `Extract<>`, so it cannot carry a new code until widened** `[C1R-2]`. `TestSufficiencyVerdict` is explicitly marked extensible (L34-36).                                         |
+| Atomic decision writer       | `lib/readiness/recordDecision.ts:423`                      | Serializable + bounded retry; caller-supplied `evaluate` / `mutate` / `snapshots`.                                                                                                                                                                                                                                                        |
+| Snapshot size enforcement    | `recordDecision.ts:151`, `:154`, `:248-270`, called `:453` | `MEMBER_RESULT_MAX_BYTES = 1024`; `RESULT_MAX_BYTES = 64 KB`. `assertSnapshotSizes` measures `Buffer.byteLength(JSON.stringify(row.result))` **per row**, **throws 500 `SNAPSHOT_WRITE_FAILED`**, no truncation, and its doc comment states it "runs regardless of the flag".                                                             |
+| Snapshot table               | `schema.prisma:1690-1725`                                  | Immutable. **Two** unique keys: `@@unique([auditLogId, entityType, entityId])` (`:1719`) and `@@unique([entityType, entityId, requestKey])` (`:1721`) `[C1R-14]`.                                                                                                                                                                         |
+| Requirement-set modules      | `requirements/*.v1.ts`                                     | `shared.ts:41` `blockingReasonCodes`, `:61` `decodeAtVersion1` (**hard-throws** on any version ≠ 1), `:75` `truncateReasonText`.                                                                                                                                                                                                          |
+| Version/name coupling        | `requirements/requirements.test.ts:95-108`                 | `expect(set.name.endsWith('.v' + set.version)).toBe(true)` **and** `expect(set.version).toBe(1)`. Bumping a version forces a `requirement_set` **name string** change in a live immutable column `[C1R-B3]`.                                                                                                                              |
+| Aggregate built from members | `requirements/claimReadiness.v1.ts:46`                     | `buildClaimReadinessResultV1(members: readonly ClaimMemberResultV1[])` — a member-payload change drags the aggregate into the diff and is **silently ignored** unless the aggregate is taught about it.                                                                                                                                   |
+| The unique-key note C1 tests | `docs/plans/f0-execution-spec-2026-07-24.md:72`            | "extend the key only if that ever becomes true." §5.4 resolves it without widening.                                                                                                                                                                                                                                                       |
 
-### 2.2 Today's test gate — existential, not quantitative
+### 2.2 The plug-in point is pure and sync — and the data is NOT all fetched `[C1R-B1]`
 
-| Concern                        | Where                                      | Behaviour                                                                                                                                                                                  |
-| ------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Which ITP items require a test | `conformancePrerequisites.ts:250-256`      | `isRequiredTestItem` = `evidenceRequired === 'test' \|\| Boolean(testType)`.                                                                                                               |
-| Per-item satisfaction          | `conformancePrerequisites.ts:258-270`      | `hasVerifiedPassingTestForItem` — **`.some()`**: one matching passing verified test satisfies the item, however large the lot.                                                             |
-| Lot-level gate                 | `conformancePrerequisites.ts:437-441`      | `hasPassingTest = requiredTestItems.length > 0 && requiredTestItems.every(hasVerifiedPassingTestForItem)`. **This is the count ceiling C1 raises: `every` over items, `some` over tests.** |
-| Outstanding-test breakdown     | `conformancePrerequisites.ts:276-311`      | Presentation-only per-item states `no_result \| awaiting_verification \| failing \| unmatched_result_exists`. C1 adds a _count_ dimension alongside, and reuses this shape.                |
-| Data the gate fetches          | `conformancePrerequisites.ts:316-353`      | `CONFORMANCE_LOT_INCLUDE` selects `testResults { id, itpChecklistItemId, testType, passFail, status }` — **already enough to count**; no extra per-lot test query is needed.               |
-| Single + batch entry points    | `conformancePrerequisites.ts:520`, `:543`  | `checkConformancePrerequisites(lotId, client)` and `checkConformancePrerequisitesBatch(lotIds, client)` — the batch path is what claim create uses, so C1 must be batchable (§9).          |
-| Blocker items                  | `evidenceReadiness/conformanceItems.ts:68` | `buildConformanceBlockerItems`; the test blocker `no_passing_verified_test` is L104-122 and already carries a structured `outstandingTests[]`.                                             |
-| Pending-test whitelist         | `backend/src/lib/testResultStatus.ts:1-8`  | `PENDING_TEST_RESULT_STATUSES` = pending, submitted, requested, at_lab, results_received, entered.                                                                                         |
+Rev 1 §5.1 said sufficiency "becomes a new prerequisite limb inside `computeConformanceResult`", and Rev 1 §4.1 headed its input table "all already fetched, except the three new lot fields". **Both were wrong.** Verified:
 
-### 2.3 Ruleset-keying data that already exists
+| Constraint                                                                                  | Where                                                                                                                                                                                                    | Consequence                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The gate is **pure and synchronous by design**                                              | `conformancePrerequisites.ts:374-382` — the M39 comment: "Pure (DB-free) conformance computation… so the single path and the batched create-claim path produce byte-identical results from one place"    | Sufficiency cannot query from inside it. Making it async destroys the batch path's constant-query guarantee and (per `[C1R-B7]`) puts a history read inside the serializable transaction. |
+| Its client type has no `project`                                                            | `conformancePrerequisites.ts:9` — `type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' \| 'lot'>`                                                                                             | Even the per-path fetch helpers cannot reach `project` through this client.                                                                                                               |
+| `CONFORMANCE_LOT_INCLUDE` has **no `project` and no `geometries`**                          | `conformancePrerequisites.ts:316-353`                                                                                                                                                                    | `Project.state`, `Project.specificationSet`, `Project.testSufficiencyMode`, `LotGeometry.areaM2` are all absent on **both** conformance paths.                                            |
+| The readiness path uses `select:`, and takes only `project: { select: { settings: true } }` | `qualityRoutes.ts:109-127`                                                                                                                                                                               | `Lot.activityType`, `Lot.layer`, `Lot.areaZone` and the new columns are **also** absent on the readiness path.                                                                            |
+| Parity is asserted on every permutation                                                     | `predicates.parity.test.ts:1-9` — "assert `lotConformable(result.prerequisites)` reproduces `result.canConform` on every permutation. If this ever diverges, the predicate has drifted from the source." | Anything entering `canConform` must enter **both** the `ConformancePrerequisites` shape and `lotConformable`.                                                                             |
+| The blocker builder is contractually the five gate conditions                               | `evidenceReadiness/conformanceItems.ts:64-68` — "the five conditions the conform gate enforces (`lotConformable`), and nothing else."                                                                    | A `warn`-severity sufficiency item cannot live there. §5.1.4 adds a separate warning builder.                                                                                             |
 
-| Key                    | Where                                                                                                                                                             | Note                                                                                                                                                                                                                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authority / spec set   | `schema.prisma:373-374`                                                                                                                                           | `Project.state` (required) and `Project.specificationSet` (required).                                                                                                                                                                                                                                                                     |
-| Spec-set normalization | `itpMatcher.ts:74-83`                                                                                                                                             | `SPEC_SET_SYNONYMS = { rms: 'tfnsw' }`; `normalizeSpecSet` lowercases + folds. Prod holds `{TfNSW, MRTS, rms, AUS-SPEC}` (L67-73). **C1 reuses this function — it does not write a second normalizer.**                                                                                                                                   |
-| National baselines     | `itpMatcher.ts:96`                                                                                                                                                | `NATIONAL_BASELINE_SPECS = {austroads, aus-spec, ipwea, wsa, national}`. A project on a national baseline has **no authority frequency ruleset** → `unknown`, never `insufficient` (§7).                                                                                                                                                  |
-| Activity taxonomy      | `activityTaxonomy.ts:61` (`CANONICAL_ACTIVITIES`, 38 Level-2 slugs / 10 families), `:286` (`foldActivityValue` → `{slug, confidence: 'exact'\|'family'\|'none'}`) | Rules key on Level-2 slugs. A **family-level** or **unmappable** fold cannot select a rule confidently → `unknown` (§7). Taxonomy spec: `docs/research/wave2-itp-matching-taxonomy-spec-2026-07-15.md` §1.                                                                                                                                |
-| Layer / material zone  | `schema.prisma:552-553`                                                                                                                                           | `Lot.layer`, `Lot.areaZone` — free text (`bulkCreateCore.ts:33`). Rules that discriminate by layer match case-insensitively against a declared alias list; no match → the rule's layer-agnostic variant, or `unknown`.                                                                                                                    |
-| Test-type vocabulary   | `backend/src/routes/testResults/specifications.ts:23-`                                                                                                            | 13 keys (`compaction`, `cbr`, `moisture_content`, `plasticity_index`, `liquid_limit`, `grading`, `sand_equivalent`, `concrete_slump`, `concrete_strength`, `asphalt_density`, `asphalt_thickness`, `dcp`, `permeability`) with `specificationMin/Max` and a `specReference`. **This is the existing test-type vocabulary rules bind to.** |
-| Chainage               | `schema.prisma:548-549`, `:463-502`                                                                                                                               | `Lot.chainageStart/End` (Decimal), `LotGeometry.chainageStart/End`, `offsetLeft/Right`. Enables the "no sample for CH 1,240–1,310" phrasing the program asks for (line 75) **only** where tests carry a location — see §7 ceiling.                                                                                                        |
+The fix is the pattern already in the file: `releasedHoldPointItemIds` is fetched per path (`:494` single, `:557-582` batch) and passed **into** the pure function `[C1R-C5]`. §5.1.1 does the same for sufficiency.
 
-### 2.4 What does **not** exist (verified absences — these are the real gaps)
+### 2.3 Conformed and claimed lots early-return `[C1R-B2]`
 
-1. **No lot quantity of any kind.** `Lot` (`schema.prisma:542-609`) has `chainageStart/End`, `layer`, `areaZone`, `budgetAmount` — and **no area, volume, tonnage or production-quantity field**. The only quantity anywhere is `LotGeometry.areaM2` (`schema.prisma:492`, "computed; user-overridable") and `LotGeometry.lengthM` (`:493`), present only for spatially-defined lots. **Every per-quantity rule is unevaluable without new storage** (§6, D5).
-2. **No test scale.** VicRoads 204's Scale A/B/C selection has no home. (§6, D6.)
-3. **No "cover" concept — zero occurrences.** `grep -riE "\bpre-?cover|cover-?up|coverUp|preCover"` over `backend/src` + `frontend/src` returns **0 matches**. The program's "proactive gates before cover" (line 75) has **no existing event to hang on**. §5.2 proposes riding the hold/witness-point request instead of inventing a workflow; D2 is the decision.
-4. **No production-day grouping.** `Lot` carries `createdAt` only — nothing records "this lot is one day's production". The "one day's production or 5,000 m², whichever the lesser" rule is therefore encoded as a **lot-sizing advisory** on the area limb only (§3.3), never as a hard count input.
-5. **No frequency-regime state.** Nothing records "this stream is on reduced testing". §3.4 computes it.
-6. **`overdue_test` alert type exists but is never produced.** `notificationAlertConfig.ts:8` declares it, `:32` comments "kept though unused (F0 spec)", `:44` configures it; `alertMappers.ts:22,49` and `systemAlertResponses.ts:56` carry it. F0 open decision 3 (`f0-execution-spec-2026-07-24.md:167`) is "wire in C1 or delete" → D10.
-7. **No `@@index` supporting a frequency-stream lookup.** `Lot` has `@@index([projectId, conformedAt])` (`schema.prisma:606`) but nothing including `activityType`. §6 adds one.
+`buildConformanceItems` (`evidenceReadiness.ts:28-79`) returns a **single support item and nothing else** for:
 
-### 2.5 Existing spec-fact precedent in the seeders
+- `lot.status === 'claimed'` → `lot_already_claimed` (`:32-43`);
+- `lot.status === 'conformed'` with `getClaimBlockingReasonsForConformedLot(...).length === 0` → `lot_already_conformed` (`:45-61`).
 
-`backend/scripts/seeds/itp-templates/index.mjs` registers 41 seeders keyed `(state, activity)`; VIC/VicRoads packs exist for earthworks, asphalt, drainage, environmental, pavements, road-furniture, structures, conduits. The VIC earthworks seeder already carries clause-level provenance in prose:
+So Rev 1's headline argument for computing rather than storing the regime — "those lots immediately report a shortfall" — was **unreachable through the surface Rev 1 chose**. §5.1.3 fixes the surface.
 
-- `seed-itp-templates-vic-earthworks.js:9` — "Based on: VicRoads Section 204 (Earthworks), Section 173"
-- `:23` — "VicRoads Section 204 Earthworks (December 2015, Version 7)" — **the same 2015 edition the research appendix flags for revalidation**
-- `:55` — `acceptanceCriteria: 'Lot sizes comply with Table 204.142; max 500 m2 under paved areas; testing scale and frequency defined per RC 500.05'`
-- `:118` — `notes: 'Section 204.06. W - Notify Superintendent before covering.'` ← **the existing "cover" moment in CIVOS is a witness point on an ITP item.** This is the evidence behind §5.2/D2.
+And the tempting workaround is a trap: `getClaimBlockingReasonsForConformedLot` (`conformancePrerequisites.ts:166-207`) feeds `lotClaimEligible`'s blocking set (`predicates.ts:355-361` — any non-empty `conformanceBlockingReasons` returns `false`). Routing sufficiency through it would make retroactive shortfalls **un-claim** previously claimable lots, violating §5.3. §5.3 states the prohibition.
 
-The seeders prove the provenance discipline is already practised, and they prove the numbers are currently embedded in **prose strings** that nothing can evaluate. C1 lifts the _facts_ into structured rules and leaves the prose where it is.
+### 2.4 Today's test gate — existential, not quantitative
+
+| Concern                        | Where                                      | Behaviour                                                                                                                                               |
+| ------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Which ITP items require a test | `conformancePrerequisites.ts:250-256`      | `isRequiredTestItem` = `evidenceRequired === 'test' \|\| Boolean(testType)`.                                                                            |
+| Per-item satisfaction          | `conformancePrerequisites.ts:258-270`      | `.some()` — one matching passing verified test satisfies the item, however large the lot.                                                               |
+| Lot-level gate                 | `conformancePrerequisites.ts:437-441`      | `hasPassingTest = requiredTestItems.length > 0 && requiredTestItems.every(...)`. **The ceiling C1 raises: `every` over items, `some` over tests.**      |
+| Outstanding-test breakdown     | `conformancePrerequisites.ts:276-311`      | Per-item states `no_result \| awaiting_verification \| failing \| unmatched_result_exists`. C1 adds a count dimension and reuses this shape.            |
+| Tests the gate already fetches | `conformancePrerequisites.ts:327-335`      | `testResults { id, itpChecklistItemId, testType, passFail, status }` — enough to count. **No new per-lot test query.**                                  |
+| Single + batch entry points    | `conformancePrerequisites.ts:520`, `:543`  | `checkConformancePrerequisites` and `checkConformancePrerequisitesBatch` (one `lot.findMany` + at most one `holdPoint.findMany`) — C1 must extend both. |
+| Blocker items                  | `evidenceReadiness/conformanceItems.ts:68` | `buildConformanceBlockerItems`; the test blocker `no_passing_verified_test` is L104-122 with a structured `outstandingTests[]`.                         |
+| Pending-test whitelist         | `lib/testResultStatus.ts:1-8`              | pending, submitted, requested, at_lab, results_received, entered.                                                                                       |
+
+### 2.5 Ruleset-keying data that already exists
+
+| Key                                 | Where                                                                                                                                                 | Note                                                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Authority / spec set                | `schema.prisma:373-374`                                                                                                                               | `Project.state` and `Project.specificationSet`, both required Strings.                                                                   |
+| Spec-set normalization              | `itpMatcher.ts:74-83`                                                                                                                                 | `SPEC_SET_SYNONYMS = { rms: 'tfnsw' }`; `normalizeSpecSet` lowercases + folds. **Reused, never re-implemented** `[C1R-C7]`.              |
+| National baselines                  | `itpMatcher.ts:96`                                                                                                                                    | `{austroads, aus-spec, ipwea, wsa, national}` — no authority frequency ruleset ⇒ `unknown`, never `insufficient`.                        |
+| Activity taxonomy                   | `activityTaxonomy.ts:61` (38 Level-2 slugs / 10 families), `:286-297` (`foldActivityValue`)                                                           | The fold is many-to-one through `CANONICAL_SLUG_SET`, `LEGACY_FOLD` and a **case-insensitive** `LEGACY_FOLD_CI`.                         |
+| **`Lot.activityType` is free text** | `schema.prisma:556`; validated only as `requiredTextSchema('activityType', MAX_SHORT_TEXT_LENGTH)` at `routes/lots/validation.ts:112`, `:174`, `:249` | **Never constrained to `CANONICAL_ACTIVITIES`.** An index on this column cannot serve a folded-slug key `[C1R-B6]` — §6 stores the slug. |
+| Layer / material zone               | `schema.prisma:552-553`                                                                                                                               | `Lot.layer`, `Lot.areaZone` — free text (`bulkCreateCore.ts:33`).                                                                        |
+| Test-type vocabulary                | `routes/testResults/specifications.ts:23-`                                                                                                            | 13 keys with `specificationMin/Max` and a `specReference`. What rules bind to.                                                           |
+| Quantity, where it exists           | `schema.prisma:492-493`                                                                                                                               | `LotGeometry.areaM2` ("computed; user-overridable"), `lengthM`. Spatially-defined lots only.                                             |
+
+### 2.6 Bulk paths that must carry the new fields `[C1R-B10]`
+
+| Surface                  | Where                                | Note                                                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bulk lot **create** core | `routes/lots/bulkCreateCore.ts:1-12` | Its own header: the shared core behind `POST /api/lots/bulk` **and the copilot `lot_breakdown` apply handler** — i.e. the primary way lots are actually created. Untouched by Rev 1, so every future lot is born with NULL scale and quantity. |
+| Bulk mutation routes     | `routes/lots/bulkMutationRoutes.ts`  | `bulk-update-status`, `bulk-assign-subcontractor`, `bulk-delete`; guard `assertLotsBulkMutable` at `:74` and `:182` (`bulkMutationGuards.ts:22`).                                                                                              |
+
+### 2.7 `overdue_test` is not inert `[C1R-B9]`
+
+| Path                  | Where                                                                                                                                                                                                                           | Consequence of a naive removal                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Live write**        | `POST /api/notifications/alerts` → `alerts.ts:118` `parseAlertType(req.body.type)` → `:170` `createAlertRecord` → `alertPersistence.ts:43`                                                                                      | Any `ALERT_TYPES` member, including `overdue_test`, is creatable in production **today**.                                                                 |
+| **Fail-closed read**  | `parseAlertType` (`alertMappers.ts:55-60`) **throws** `AppError.badRequest` on an unknown type; called unconditionally from `toAlert` (`:103`), mapped over the whole list in `GET /api/notifications/alerts` (`alerts.ts:269`) | **One legacy row turns the alerts list into a 400 for that project.**                                                                                     |
+| Duplicate declaration | `notificationAlertConfig.ts:8` **and** `alertMappers.ts:22`                                                                                                                                                                     | Both must change.                                                                                                                                         |
+| Public response shape | `systemAlertResponses.ts:56`                                                                                                                                                                                                    | Removing the key changes the `byType` response shape.                                                                                                     |
+| Escalation scan       | `notificationAlertConfig.ts:33` `ALERT_ESCALATION_CONFIG` → `notificationAutomation/alertEscalations.ts:16` `ESCALATABLE_TYPES` → `:228` `type: { in: ESCALATABLE_TYPES }`                                                      | Narrows the escalation `IN` list. (The reviewer cited `alertEscalations.ts` without its `notificationAutomation/` directory; the line numbers are right.) |
+| Tests                 | `alertMappers.test.ts:53`, `alertPersistence.test.ts:71-94` (whole-object `toEqual`), `systemAlertResponses.test.ts:64`, `:75`                                                                                                  | Four assertions to update.                                                                                                                                |
+
+Cleared in D10's favour: **no Prisma enum, no migration**, zero frontend references, no saved user preference keyed to it.
 
 ---
 
 ## 3. Domain model — how a sufficiency ruleset is represented
 
-### 3.1 Placement decision: code, not database
+### 3.1 Placement: code, not database
 
-Rulesets are **code-defined, versioned TypeScript modules**, exactly as F0 realises `RequirementDefinition` (`f0-execution-spec-2026-07-24.md:29`: "Code-defined, versioned requirement sets … No DB table in F0"). F0 §1 lists "DB-authored RequirementDefinitions / rule engine → C1" as excluded-with-owning-wave (`:23`) — C1 owns the **rule engine**; it deliberately does **not** take the _DB-authored_ half.
+Rulesets are **code-defined, versioned TypeScript modules**, exactly as F0 realises `RequirementDefinition` (`f0-execution-spec-2026-07-24.md:29`: "Code-defined, versioned requirement sets … No DB table in F0"). F0 lists "DB-authored RequirementDefinitions / rule engine → C1" as excluded-with-owning-wave (`:23`) — C1 owns the **rule engine**; it deliberately does not take the _DB-authored_ half.
 
-Why code:
-
-- A seeded authority ruleset is **shipped product data with provenance**, not tenant data. It must be reviewable in a PR diff, testable in CI, and revertable by `git revert`. A DB table gives none of that.
-- Versioning is free: `vicroads-204.v1.ts` beside `vicroads-204.v2.ts`, the registry pins which is active per effective date, and a snapshot recorded under v1 stays decodable (`shared.ts:61` `decodeAtVersion1` is the precedent).
-- **Tenant-authored / overridable rulesets are explicitly C3** (program line 77: "controlled overrides (selectable spec regimes + audited free override)"). Building a definition table in C1 for a C3 requirement is speculative. When C3 needs it, the code registry becomes the seed source for the table — the shape is unchanged.
+Why code: a seeded authority ruleset is shipped product data with provenance, not tenant data. It must be reviewable in a PR diff, CI-testable, and revertable by `git revert`. Versioning is free (`vicroads-204.v1.ts` beside `.v2.ts`). Tenant-authored / overridable rulesets are explicitly C3 (program line 77) — building a definition table in C1 for a C3 requirement is speculative.
 
 `ponytail:` code-defined rulesets, zero ruleset DDL. The DB gets a definition table when C3 needs tenant overrides, not before.
 
-Proposed layout:
-
 ```
 backend/src/lib/readiness/sufficiency/
-  types.ts            # the rule vocabulary + provenance shape (§3.2)
-  registry.ts         # resolve (state, specSet, activitySlug, layer, effectiveDate) -> ruleset
-  regime.ts           # the frequency-regime state machine (§3.4)
+  types.ts            # rule vocabulary + provenance (§3.2)
+  registry.ts         # resolve (state, specSet, activitySlug, layer, areaZone, date) -> ruleset
+  regime.ts           # the frequency-regime lookback + fold (§3.4)
+  resolve.ts          # per-path input resolution, DB-touching (§5.1.1)
   evaluate.ts         # PURE: resolved inputs -> SufficiencyVerdict (§4)
   rulesets/
     vicroads-204.v1.ts
@@ -135,45 +196,65 @@ backend/src/lib/readiness/sufficiency/
 ### 3.2 The rule vocabulary (PROPOSED)
 
 ```ts
-/** Authority provenance. Every field is required — an unprovenanced rule cannot be registered. */
+/** Authority provenance. Every field required — an unprovenanced rule cannot be registered. */
 export interface RulesetProvenance {
-  authority: string; // 'VicRoads' | 'TfNSW' | ...
+  authority: string; // 'VicRoads' | 'TfNSW'
   document: string; // 'Section 204 — Earthworks'
   edition: string; // 'December 2015, Version 7'
   clause: string; // '204.14(c)' — clause/table, never prose
-  pdfPage?: number; // recorded at the confirmation pass (§8)
-  sourceUrl: string; // the URL the appendix row cites
-  evidenceGrade: "A" | "B" | "C" | "D"; // from the research appendix; C1 accepts A only for gating
+  pdfPage?: number; // recorded at the confirmation pass (§8.3)
+  sourceUrl: string;
+  /**
+   * From the research appendix. A SPLIT grade (e.g. R44's "A (portal) / C (aetg)")
+   * is encoded at its WEAKEST limb — the grade of the source the NUMBERS came
+   * from, never the strongest limb available [C1R-B11].
+   */
+  evidenceGrade: "A" | "B" | "C" | "D";
   checkedOn: string; // ISO date a human last read the source
-  revalidateBy: string; // ISO date; CI fails a `confirmed` ruleset past this (§8)
+  revalidateBy: string; // ISO; CI fails a `confirmed` ruleset past this (§8.3)
 }
 
 export type QuantityUnit = "m2" | "m3" | "t" | "m" | "each";
 
 export interface FrequencyRule {
-  /** Stable, referenced by snapshots forever. e.g. 'vicroads-204.v1/compaction-density'. */
+  /** Stable, referenced by snapshots forever: 'vicroads-204.v1/compaction-density'. */
   id: string;
-  /** Short human label. Facts only — NEVER a quotation of specification prose (§10). */
+  /** Short factual label. NEVER a quotation of specification prose (§8.4). */
   label: string;
   /** Test-type key from `routes/testResults/specifications.ts`. */
   testType: string;
   appliesTo: {
     activitySlugs: readonly string[]; // Level-2 slugs (activityTaxonomy.ts:61)
     layerAliases?: readonly string[]; // case-insensitive match against Lot.layer
+    /** [C1R-3] Material/zone discrimination, e.g. 'under paved areas'. */
+    areaZoneAliases?: readonly string[];
   };
   /** Statistical-validity floor, per scale. Scale key set is ruleset-defined. */
   minCountByScale: Readonly<Record<string, number>>;
-  /** Coverage limb: one test per `every` units of `unit`. */
+  /**
+   * Coverage limb: one test per `every` units. OPTIONAL and, for everything C1
+   * ships, ABSENT — no cited authority in the appendix supplies a per-area
+   * frequency figure [C1R-1]. The limb exists because the program names it
+   * (line 75) and because a confirmed edition may supply one; it ships
+   * unexercised, covered by a synthetic rule only (§14 AT-4).
+   */
   perQuantity?: { unit: QuantityUnit; every: number };
   /** Advisory only: the ruleset's maximum lot size. Never blocks (§3.3). */
   maxLotSize?: { unit: QuantityUnit; value: number };
-  /** The de-escalated regime. Absent = this rule has no reduced regime. */
+  /**
+   * The de-escalated regime. STRUCTURALLY ABSENT unless a CONFIRMED edition
+   * supplies reduced figures [C1R-B8] — the appendix supplies the 204.14(c)
+   * TRIGGER ("test every lot until 3 consecutive conform → reduced frequency;
+   * any failure reverts to full testing") and NO reduced count. A guessed
+   * reduced count would emit a confident wrong required count, the exact defect
+   * §3.4 exists to prevent. CI asserts `reduced` cannot exist on a `draft`
+   * ruleset (§8.3).
+   */
   reduced?: {
     minCountByScale: Readonly<Record<string, number>>;
     perQuantity?: { unit: QuantityUnit; every: number };
-    /** N consecutive conforming lots in the stream to earn it. */
     consecutiveConformingLots: number;
-    /** The only escalation shape C1 implements (§3.4). */
+    /** The only escalation shape C1 implements (§3.4.1). */
     escalationShape: "reset_on_any_failure";
   };
   provenance: RulesetProvenance;
@@ -183,13 +264,15 @@ export interface Ruleset {
   id: string; // 'vicroads-204.v1'
   state: string; // matched case-insensitively against Project.state
   specSet: string; // pre-normalized via itpMatcher.normalizeSpecSet
-  scaleKeys: readonly string[]; // e.g. ['A','B','C'] — what a lot may declare
-  effectiveFrom: string; // ISO
-  effectiveTo?: string; // ISO; set when superseded
+  scaleKeys: readonly string[]; // what a lot may declare
+  /** Applied when Lot.testScale is null (§16 D6). Absent = no default. */
+  defaultScale?: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
   /**
-   * 'draft'  — registered, evaluated, but ADVISORY ONLY and labelled
-   *            "unconfirmed edition"; can never block (§8).
-   * 'confirmed' — a human verified every number against the cited edition.
+   * 'draft'     — registered and EVALUATED NORMALLY, numbers shown, citation
+   *               tagged unconfirmed; structurally cannot block (§5.1.2).
+   * 'confirmed' — a human verified every number against the cited edition (§8.3).
    */
   status: "draft" | "confirmed";
   rules: readonly FrequencyRule[];
@@ -197,63 +280,143 @@ export interface Ruleset {
 }
 ```
 
-**Required count for a rule** (given a resolved scale + quantity, in the resolved regime):
+#### 3.2.1 Required count `[C1R-1]`
 
 ```
-requiredCount = max( minCountByScale[scale] ,
+requiredCount = max( minCountByScale[scale],
                      perQuantity ? ceil(quantity / perQuantity.every) : 0 )
 ```
 
-The `max` is deliberate and is the appendix's reading: the per-lot minimum count exists "for statistical validity" **separately** from area coverage (appendix §A rows 1 and 3). A 200 m² lot at 1-test-per-500 m² still needs its 6-test floor. **D4** puts this reading to Jay explicitly because it is the single most consequential arithmetic choice in the wave.
+The `max` is the right reading of a statistical-validity floor (§17.2 records the exact sourcing). **But it is a no-op for everything C1 ships**: no rule in either seed pack carries a `perQuantity` limb, because no cited authority in the appendix supplies a per-area frequency figure. The arithmetic is specified so a confirmed edition can supply one without a redesign, and it is tested against a synthetic rule only (§14 AT-4). Rev 1's illustrative "1-test-per-500 m²" was invented and is withdrawn.
+
+Consequence, stated plainly: **`Lot.quantityValue` / `quantityUnit` are dead weight for C1 counting** — they serve only the lot-size advisory of §3.3. They ship because §3.3 needs the area, because bulk entry (§9.1) is cheapest to build once, and because the C2/C3 limbs will need them — not because a C1 count depends on them. `[C1R-1]`, §16 D5.
 
 ### 3.3 "Whichever is the lesser" is a lot-SIZING rule, not a count rule
 
-The appendix's VicRoads clause is _"Type A lot = one day's production or 5,000 m², whichever is the lesser"_ — that constrains how big a lot may be, not how many tests it needs. CIVOS has **no production-day record** (§2.4 item 4), so the day limb is unevaluable and C1 does not pretend otherwise. C1 evaluates only the area limb, as `maxLotSize`, and only as a **warning**:
+The appendix's claim is _"Type A lot = one day's production or 5,000 m², whichever is the lesser"_ — that constrains lot size, not test count. CIVOS has no production-day record (§2.5; per-day limbs are C2 per `[C1R-4]`), so the day limb is unevaluable and C1 says so. Only the area limb is evaluated, as `maxLotSize`, and only as a **warning**:
 
 > `lot_exceeds_max_lot_size` — "This lot is 7,400 m². VicRoads Sec 204 Table 204.142 caps a Type A lot at 5,000 m² (or one day's production, whichever is lesser — CIVOS cannot check the production-day limb). Consider splitting the lot."
 
-It never blocks: the lot already exists, and blocking would punish the user for a decision already taken. The 500 m²-under-paved-areas limb (`seed-itp-templates-vic-earthworks.js:55`) is encoded as a second `maxLotSize` variant on the paved-area rule.
+It never blocks: the lot already exists, and blocking punishes a decision already taken. The "≤ 500 m² under paved areas" limb is a second `maxLotSize` on the rule whose `appliesTo.areaZoneAliases` matches paved-area zones `[C1R-3]`.
 
 ### 3.4 The frequency-regime state machine — COMPUTED, never stored
 
-**The tension.** F0's governing principle is "readiness is computed, never a stored `ready=true` flag — a stored value must not silently go stale when evidence is superseded" (program §2, F0 spec `:6`). But the VicRoads 204.14(c) regime is inherently _sequential_: "test every lot until 3 consecutive conform → reduced frequency; any failure reverts to full testing" (appendix §A row 2, grade A). Sequence memory looks like state.
+#### 3.4.1 Why computed, and the bounded reduction
 
-**Resolution: compute the regime from history at evaluation time.** Not for doctrinal tidiness — because a stored regime would be **wrong**, in exactly the way F0 warns about:
+F0's principle is "readiness is computed, never a stored `ready=true` flag — a stored value must not silently go stale when evidence is superseded" (F0 spec `:6`). The 204.14(c) regime is sequential, which looks like state. It is computed anyway, because a stored regime would be **wrong**:
 
-> A test on lot 2 is later corrected to `fail`. A stored regime on lots 5–12 would still read "reduced", and every one of them would keep reporting "3 tests required" when the authority requires 6. The failure would be invisible until handover — the precise defect Wave C exists to prevent. A computed regime re-derives and those lots immediately report a shortfall, which is `conformance_no_longer_current` semantics the claim gate already implements (`reasonCodes.ts:122-125`).
+> A test on lot 2 is later corrected to `fail`. A stored regime on lots 5–12 would still read "reduced", and every one would keep reporting 3 tests required where the authority requires 6 — invisible until handover, the precise defect Wave C exists to prevent. A computed regime re-derives on the next read.
 
-**The bounded computation.** A naive fold over a 5,000-lot stream would be O(n) per evaluation. It is unnecessary. For the only escalation shape C1 implements (`reset_on_any_failure`), the regime is a **function of the last N stream entries alone**:
+_(Rev 1 added "…which is `conformance_no_longer_current` semantics the claim gate already implements." **That sentence is deleted** — `[C1R-B2]` proved it would route sufficiency into an action-blocking path. §5.3 forbids it.)_
 
-> _Claim._ Let the stream be a sequence of decided lots, each conforming or failing. Regime is `reduced` iff the last `N` entries are all conforming.
-> _Proof sketch._ Full → reduced requires N consecutive conforming entries. Any failure resets to full and discards accumulated credit, so re-entry requires N fresh consecutive conforming entries. Therefore at any point, `reduced` holds iff no failure has occurred in the last N entries and at least N entries exist — i.e. iff the last N entries are all conforming. ∎
+Naive folding over a 5,000-lot stream would be O(n) and is unnecessary. For the only shape C1 implements (`reset_on_any_failure`):
 
-So the query is `take: N` (N = 3 for VicRoads 204), ordered descending — **three rows, index-covered**, not five thousand.
+> _Claim._ Regime is `reduced` iff the stream has **at least N** entries in the lookback window **and** the last N are all conforming.
+> _Proof sketch._ Full → reduced requires N consecutive conforming entries. Any failure resets to full and discards accumulated credit, so re-entry requires N fresh consecutive conforming entries. Therefore `reduced` holds iff no failure occurred in the last N entries **and at least N entries exist**. ∎
 
-`ponytail:` bounded 3-row lookback, valid for the `reset_on_any_failure` shape only. A ruleset with a different escalation shape (credit that survives a failure, time-windowed regimes, per-subcontractor regimes) must declare a new `escalationShape` and gets its own evaluator — the registry rejects an unknown shape rather than silently mis-evaluating it.
+The **length guard is part of the rule, not a footnote** `[C1R-B7]`: without it, `[].every(...)` is vacuously true and the first lot of every project reads `reduced`. It appears in the implementation sentence, in §14 AT-6, and — critically — the fold-vs-lookback property test only catches the bug if the **reference fold independently implements the guard**; §14 AT-7 says so.
 
-**Stream identity.** `streamKey = (projectId, rulesetId, ruleId, activitySlug, normalizedLayer)`. "Work of the same type in the same project" is the defensible reading; subcontractor and material source are _not_ in the key (D7).
+`ponytail:` bounded N-row lookback, valid for `reset_on_any_failure` only. A ruleset declaring a different `escalationShape` gets its own evaluator; the registry **rejects an unknown shape** rather than silently mis-evaluating it.
 
-**Stream order.** `Lot.conformedAt ASC`, tiebreak `Lot.createdAt ASC`, tiebreak `Lot.id ASC` (total order, deterministic). Only lots with a non-null `conformedAt` are stream entries — an undecided lot has not yet established conformity. This makes the dependency acyclic: lot N's regime depends only on lots decided before it, so there is no circularity between "can this lot conform" and "what regime applies".
+#### 3.4.2 Stream membership and entry conformity
 
-**Stream entry conformity** for regime purposes = the lot conformed **and** has no `passFail === 'fail'` test result attributable to the rule. A force-conformed lot (`Lot.conformanceOverriddenAt`, `schema.prisma:568`) counts as **non-conforming for regime purposes** — an override is a commercial/programme decision, not evidence that the material passed. That asymmetry is deliberate and is recorded in the snapshot.
+- **Stream key:** `(projectId, rulesetId, ruleId, activitySlug, layerBucket)`. "Work of the same type in the same project" is the defensible reading; subcontractor and material source are not in the key (§16 D7).
+- **`layerBucket`:** for a rule with `layerAliases`, the matched alias; for a layer-agnostic rule, the constant `'*'`. A lot with a **NULL layer is a member of the layer-agnostic stream only**, never of a layer-discriminated rule's stream (§16 D7).
+- **Stream order:** `conformedAt ASC, createdAt ASC, id ASC` — a total order, so the cursor of §3.4.3 is well-defined.
+- **Membership requires a resolved slug.** A lot whose `activitySlug` is NULL (fold confidence `none` or `family`) is **not a stream member**, and its presence inside another lot's window makes that window **incomplete** — §16 D7 records the decision and the argument.
+- **Entry conformity** = the lot conformed **and** has no _status-qualified_ failing test attributable to the rule. Status-qualified means the mirror of `testPassing` `[C1R-B8]`:
 
-**Provenance.** The snapshot records `regime: 'full' | 'reduced'`, `regimeBasis: { streamKey, lotIds: string[] }` (≤ 3 ids) and `requiredCount` — so an auditor can see exactly which three lots earned a reduced frequency, years later, without re-running the engine.
+```ts
+// predicates.ts (new, mirrors testPassing at :149-151)
+export function testFailing(t: TestResultRow): boolean {
+  return t.passFail === "fail" && t.status === "verified";
+}
+```
+
+Rev 1 said "no `passFail === 'fail'` test result" with **no status filter**, which was asymmetric: a rejected or never-verified failure would permanently reset a stream while a pass must clear verification to count. `TestResult` carries `rejectedById` / `rejectedAt` / `rejectionReason` and `status` defaults to `'requested'` (`schema.prisma:846-853`), so unverified failures are a real population. Symmetry restored.
+
+- **A force-conformed lot** (`Lot.conformanceOverriddenAt`, `schema.prisma:568`) is **non-conforming for regime purposes**. An override is a programme decision, not evidence the material passed. Deliberate, and recorded in the snapshot.
+
+#### 3.4.3 The query contract — two modes, resolved OUTSIDE the transaction `[C1R-B7]`
+
+Rev 1 said "`take: N`, ordered descending" for all cases. That is right for a lot being conformed now and **wrong for every already-conformed lot** — for those, "the most recent N" returns today's last N lots, not the N preceding that lot. Silently wrong `requiredCount` on the historical path, which is the commercial path. Two modes:
+
+| Subject                                                           | Query                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `conformedAt IS NULL` (being conformed now, or not yet conformed) | No cursor. `where: { conformedAt: { not: null }, ...streamFilter }`, `orderBy: [{conformedAt:'desc'},{createdAt:'desc'},{id:'desc'}]`, `take: N`.                                                                                                      |
+| `conformedAt IS NOT NULL` (already conformed / claimed)           | **Strictly-before compound cursor** over the full total order: `cursor: { id: subjectLotId }` + `skip: 1` with an `orderBy` matching the total order — **not** a simple `lt` on `conformedAt`, which is wrong whenever two lots share a `conformedAt`. |
+
+Both modes are pinned by §14 AT-5 and AT-6.
+
+**Where it runs: outside the serializable transaction.** `evaluate` runs inside it (`qualityRoutes.ts:464-465`) and `mutate` writes `conformedAt` (`:487-492`). A regime read placed there is a predicate read over exactly the range concurrent conforms write, guaranteeing 40001/P2034 retries for concurrent conforms in one activity stream. The regime derives from **history**, and F0's own precedent puts history-shaped reads outside: "Authorization reads stay OUTSIDE the decision transaction: the no-stale-readiness guarantee covers EVIDENCE, not permissions" (`qualityRoutes.ts:414-416`, F0 `[R3.1-R6]`).
+
+So the regime is resolved **before** `recordDecision` opens its transaction and passed in as data — which `[C1R-B1]`'s resolved-inputs parameter already requires. The honest cost: the regime can be one commit stale relative to a concurrent conform in the same stream. That is bounded and lands in the safe direction — a stale regime is either `full` when `reduced` was just earned (over-testing) or `reduced` when a concurrent failure just reverted it, and the latter is caught on the next read by the retroactive re-derivation of §3.4.1. Trading a guaranteed retry storm for a one-commit staleness window is the right trade, recorded rather than hidden.
 
 ---
 
 ## 4. Rule evaluation — inputs, outputs, plug-in points
 
-### 4.1 Inputs (all already fetched, except the three new lot fields)
+### 4.1 Inputs — resolved per path, passed in as data `[C1R-B1]`
 
-| Input                      | Source                                                                                                          | Note                                                                                                                                                                                                                                           |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Passing tests              | `conformancePrerequisites.ts:316-353` `CONFORMANCE_LOT_INCLUDE.testResults`                                     | `{id, itpChecklistItemId, testType, passFail, status}` — **no new query for the lot's own tests**.                                                                                                                                             |
-| Test attribution to a rule | `predicates.ts:202-208` `testMatchesItem`, plus direct `TestResult.testType` equality                           | A test counts toward rule R iff `testPassing(t)` **and** (`t.itpChecklistItemId` links an item whose `testType` normalizes to `R.testType`, **or** `normalize(t.testType) === R.testType`). Reuses the shipped matcher — no second match rule. |
-| Required ITP items         | `conformancePrerequisites.ts:250-256` `isRequiredTestItem`                                                      | Sufficiency only applies where the ITP already requires a test. A lot whose ITP has no test point gets **no** sufficiency item — mirroring the existing guard at `conformanceItems.ts:101-104`.                                                |
-| Ruleset + rules            | `sufficiency/registry.ts`                                                                                       | Keyed `(normalizeSpecSet(Project.specificationSet), Project.state, foldActivityValue(Lot.activityType).slug, Lot.layer)`.                                                                                                                      |
-| Scale                      | `Lot.testScale` (new, §6)                                                                                       | Must be a member of the resolved ruleset's `scaleKeys`; otherwise `unknown`.                                                                                                                                                                   |
-| Quantity                   | `Lot.quantityValue`/`quantityUnit` (new, §6), falling back to `LotGeometry.areaM2` when the rule's unit is `m2` | Resolution order and the fallback are recorded in the verdict so the user can see _which_ number was used.                                                                                                                                     |
-| Regime                     | `sufficiency/regime.ts`                                                                                         | One bounded `take: 3` query per (lot, rule) stream; memoized per request.                                                                                                                                                                      |
+Rev 1's "all already fetched" claim is withdrawn (§2.2). The resolved bundle is:
+
+```ts
+/** Everything the PURE evaluator needs. Resolved by `resolve.ts` per path. */
+export interface ResolvedSufficiency {
+  mode: "off" | "warn" | "block"; // Project.testSufficiencyMode
+  ruleset: Ruleset | null; // null => no ruleset for this project/activity
+  rules: readonly FrequencyRule[]; // the subset matching activity/layer/areaZone
+  scale: { value: string | null; source: "lot" | "ruleset_default" | "none" };
+  quantity: {
+    value: number | null;
+    unit: QuantityUnit | null;
+    source: "lot" | "geometry" | "none";
+  };
+  /** Per rule id. Absent entry => regime unresolvable for that rule. */
+  regimeByRuleId: ReadonlyMap<
+    string,
+    { regime: "full" | "reduced"; basisLotIds: string[] }
+  >;
+}
+```
+
+| Input                                                                                      | Where it comes from                                                               | Fetch change required                                          |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Lot's own tests                                                                            | `conformancePrerequisites.ts:327-335` (existing `testResults` select)             | **none**                                                       |
+| Required ITP items                                                                         | `conformancePrerequisites.ts:250-256` `isRequiredTestItem`                        | **none**                                                       |
+| Test attribution to a rule                                                                 | `predicates.ts:202-208` `testMatchesItem` + direct `TestResult.testType` equality | **none** — reuses the shipped matcher, no second match rule    |
+| `Project.state` / `specificationSet` / `testSufficiencyMode`                               | `Project`                                                                         | **new** — see §4.1.1                                           |
+| `Lot.activitySlug` / `layer` / `areaZone` / `testScale` / `quantityValue` / `quantityUnit` | `Lot`                                                                             | **new** — see §4.1.1                                           |
+| `LotGeometry.areaM2` fallback                                                              | `LotGeometry`                                                                     | **new** — see §4.1.1                                           |
+| Regime                                                                                     | `sufficiency/regime.ts` (§3.4.3)                                                  | **new**, one grouped query per stream, outside any transaction |
+
+A test counts toward rule R iff `testPassing(t)` **and** (`t.itpChecklistItemId` links an item whose `testType` normalizes to `R.testType`, **or** `normalize(t.testType) === R.testType`).
+
+#### 4.1.1 The exact fetch extensions, per path `[C1R-B1]`
+
+**Path A — conformance (single + batch).** `CONFORMANCE_LOT_INCLUDE` (`conformancePrerequisites.ts:316-353`) gains:
+
+```ts
+// added to CONFORMANCE_LOT_INCLUDE
+project: { select: { state: true, specificationSet: true, testSufficiencyMode: true } },
+geometries: { select: { areaM2: true, lengthM: true } },
+```
+
+…and `LotForConformance` (`:358-372`) gains `activitySlug`, `layer`, `areaZone`, `testScale`, `quantityValue`, `quantityUnit` (all already on the row — the interface simply stops omitting them; `include` returns scalars by default). `ConformancePrismaClient` (`:9`) is **unchanged**. `[C1R-B1]` correctly notes it is `Pick<typeof prisma, 'holdPoint' | 'lot'>` with no `project` — that constrains nothing here, because the widened `include` rides the existing `lot` delegate (`lot.findUnique({ include: { project: … } })`) and the regime query is also a `lot` query. Recorded so a build agent does not widen the client type unnecessarily.
+
+**Path B — readiness.** `fetchLotReadinessRecord` (`qualityRoutes.ts:109-127`) uses `select:`, so each field must be named:
+
+```ts
+// added to fetchLotReadinessRecord's select
+activitySlug: true, layer: true, areaZone: true,
+testScale: true, quantityValue: true, quantityUnit: true,
+project: { select: { settings: true, state: true, specificationSet: true, testSufficiencyMode: true } },
+geometries: { select: { areaM2: true, lengthM: true } },
+```
+
+Both paths then call `resolveSufficiency(...)` (which owns the registry lookup and the regime query) and pass the result **into** `computeConformanceResult(lot, releasedHoldPointItemIds, sufficiency)` — the third parameter, mirroring `releasedHoldPointItemIds` exactly `[C1R-C5]`. `computeConformanceResult` stays **sync and DB-free**; the M39 byte-identity guarantee (`:374-379`) survives because both paths feed it the same shape.
+
+The batch path (`checkConformancePrerequisitesBatch`, `:543`) resolves sufficiency for all lots with **one grouped regime query per distinct stream**, never per lot — the same collapse it already performs for `holdPoint.findMany` (`:557-582`).
 
 ### 4.2 Outputs — three-valued, over the F0 vocabulary
 
@@ -264,63 +427,67 @@ export interface RuleSufficiency {
   ruleId: string;
   testType: string;
   state: SufficiencyState;
-  requiredCount: number | null; // null when unknown
+  requiredCount: number | null; // null only when state === 'unknown'
   passingCount: number;
   pendingCount: number;
   failedCount: number;
   regime: "full" | "reduced" | null;
   regimeBasis?: { streamKey: string; lotIds: string[] };
-  /** Why it is unknown; empty otherwise. */
   unknownCauses: readonly UnknownCause[];
   citation: {
     authority: string;
     document: string;
     clause: string;
     edition: string;
+    /** false for a `draft` ruleset — the carrier for "unconfirmed", NOT an UnknownCause. */
     confirmed: boolean;
   };
 }
 
 export type UnknownCause =
   | "no_ruleset_for_project" // national-baseline spec set, or no pack for this authority
-  | "no_rule_for_activity" // ruleset exists, no rule matches the activity/layer
-  | "activity_not_canonical" // foldActivityValue confidence 'family' | 'none'
-  | "scale_not_selected" // rule is scale-keyed, Lot.testScale is null
+  | "no_rule_for_activity" // ruleset exists, no rule matches activity/layer/zone
+  | "activity_not_canonical" // activitySlug NULL (fold 'family' | 'none')
+  | "scale_not_selected" // scale-keyed rule, no lot scale and no ruleset default
   | "scale_not_recognised" // Lot.testScale not in ruleset.scaleKeys
-  | "quantity_missing" // rule has a perQuantity limb, no quantity resolvable
-  | "ruleset_edition_unconfirmed"; // ruleset.status === 'draft' (§8) — advisory only
+  | "quantity_missing"; // rule has a perQuantity limb, no quantity resolvable
 ```
 
-The lot-level verdict satisfies the declared contract (`futureConsumers.ts:27-37`) and extends it:
+**`ruleset_edition_unconfirmed` is deleted from `UnknownCause` `[C1R-B5]`.** Rev 1 contradicted itself three ways: §4.2 made draft an `UnknownCause` (⇒ `requiredCount: null`), §7's table called draft "evaluated, but", and §4.4's specimen sentence showed real counts _and_ an "unconfirmed" tag. Since **both** shipped packs may be draft, the Rev 1 wiring produced a launch where a user picks a scale, enters an area, and still gets nothing. Draft now **evaluates normally** — numbers shown, `citation.confirmed: false` — and non-blocking is made structural in §5.1.2 instead.
+
+#### 4.2.1 The contract widening `[C1R-2]`
+
+`TestReasonCode` is an `Extract<>` (`futureConsumers.ts:22-27`) and **cannot carry `insufficient_test_count`** until widened. C1.0 widens the `Extract<>` union and extends `TestSufficiencyVerdict`:
 
 ```ts
 export interface TestSufficiencyVerdict {
-  // extended, not replaced
   subjectType: "lot" | "itp_item";
   subjectId: string;
   sufficient: boolean; // true iff EVERY rule is 'satisfied'
-  reasonCodes: TestReasonCode[]; // existing subset, unchanged
-  // C1 additions:
-  state: SufficiencyState; // 'unknown' when any rule is unknown and none insufficient
-  rules: RuleSufficiency[];
+  reasonCodes: TestReasonCode[]; // widened union
+  // C1 additions, OPTIONAL so the shipped contract fixture keeps compiling [C1R-2]:
+  state?: SufficiencyState;
+  rules?: RuleSufficiency[];
 }
 ```
 
-`sufficient: false` for an `unknown` verdict — **unknown never reads as satisfied.** But `unknown` also never blocks (§7).
+`state` and `rules` are **optional**, not required: `contracts.test.ts:140-150` constructs a `TestSufficiencyVerdict` with only the four original keys, and making the additions required would break that fixture for no benefit. The real implementation always populates both; §14 AT-2 asserts it does.
+
+`sufficient: false` for an `unknown` verdict — **unknown never reads as satisfied.** It also never blocks (§7).
 
 ### 4.3 New reason codes (extend the CLOSED vocabulary — required, not optional)
 
-`READINESS_REASON_CODES` (`reasonCodes.ts:29-72`) is closed and contract-tested. C1 adds five codes **and their provenance entries in the same change**, or CI fails:
+`READINESS_REASON_CODES` (`reasonCodes.ts:29-72`) is closed and contract-tested. C1.0 adds five codes **and their provenance entries in the same change**, or CI fails:
 
-| New code                     | Severity                        | Meaning                                                                                                                 |
-| ---------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `insufficient_test_count`    | blocker (`blocksAction` per §5) | Required N, have M passing verified.                                                                                    |
-| `test_sufficiency_unknown`   | warning                         | One or more `UnknownCause` — names the missing input.                                                                   |
-| `lot_exceeds_max_lot_size`   | warning                         | §3.3, never blocks.                                                                                                     |
-| `tests_unlinked_to_itp_item` | warning                         | Passing tests exist that no rule could attribute (the count-side twin of the existing `unmatched_result_exists` state). |
-| `test_sufficiency_met`       | positive (support)              | The satisfied case, so the panel can show the _proof_, not just silence.                                                |
+| New code                     | Severity                      | Meaning                                                        |
+| ---------------------------- | ----------------------------- | -------------------------------------------------------------- |
+| `insufficient_test_count`    | blocker or warning per §5.1.2 | Required N, have M passing verified.                           |
+| `test_sufficiency_unknown`   | warning                       | One or more `UnknownCause` — names the missing input.          |
+| `lot_exceeds_max_lot_size`   | warning                       | §3.3, never blocks.                                            |
+| `tests_unlinked_to_itp_item` | warning                       | Passing tests exist that no rule could attribute.              |
+| `test_sufficiency_met`       | support (positive)            | The satisfied case, so the panel shows the proof, not silence. |
 
-**Provenance and the contract test.** `contracts.test.ts:59-64` asserts every non-`engine` predicate name is a real export of `../predicates.js`. So `predicates.ts` gains **one** re-export:
+**Provenance and the contract test.** `contracts.test.ts:59-64` asserts every non-`engine` predicate name is a real export of `../predicates.js`. So `predicates.ts` gains **two** exports: the new `testFailing` (§3.4.2) and one re-export:
 
 ```ts
 // predicates.ts — the sufficiency evaluator's boolean limb, re-exported so the
@@ -328,15 +495,15 @@ export interface TestSufficiencyVerdict {
 export { testCountSufficient } from "./sufficiency/evaluate.js";
 ```
 
-No test is weakened, no provenance entry is dishonestly tagged `'engine'`, and the sufficiency logic still lives in its own module. This is the one structural accommodation C1 makes to F0's machinery, and it is a re-export, not a move.
+No test is weakened and no provenance entry is dishonestly tagged `'engine'`.
 
 ### 4.4 Plain-English explanation
 
-The program (line 75) specifies the target sentence. The evaluator produces it from facts only:
+Facts only. Counts and clause references; no quotation of specification prose (§8.4); the unconfirmed tag whenever `citation.confirmed === false`; the regime sentence only when the rule has a `reduced` limb, always naming its basis:
 
-> **Not ready to conform.** Requires **6** density tests (VicRoads Sec 204, Table 204.142, Scale B, full frequency — 2015 edition, unconfirmed). **4** verified conforming, **1** pending at lab, **1** without a result. _Full frequency applies: lot LOT-0104 failed within the last 3 lots of this stream._
+> **Not ready to conform.** Requires **6** density tests (VicRoads Sec 204, Table 204.142, Scale B — 2015 edition, **unconfirmed**). **4** verified conforming, **1** pending at lab, **1** without a result.
 
-Rules: counts and clause references only; no quotation of specification prose (§10); the "unconfirmed" tag appears whenever `ruleset.status === 'draft'`; the regime sentence appears only when a `reduced` regime exists for the rule, and always names its basis.
+The chainage clause Rev 1 showed ("no sample for CH 1,240–1,310") is **removed** — it needs per-test location data C1 does not have (§7.2). It returns with C3.
 
 ---
 
@@ -344,52 +511,147 @@ Rules: counts and clause references only; no quotation of specification prose (�
 
 ### 5.1 Conform — BLOCK, opt-in per project
 
-`POST /api/lots/:id/conform` already runs through `recordDecision` (`qualityRoutes.ts:446`) with `evaluate` calling `checkConformancePrerequisites(id, tx)` inside the serializable transaction (`:464-465`) and rejecting when `!canConform && !force` (`:472-477`).
+`POST /api/lots/:id/conform` runs through `recordDecision` (`qualityRoutes.ts:446`) with `evaluate` calling `checkConformancePrerequisites(id, tx)` inside the serializable transaction (`:464-465`) and rejecting when `!canConform && !force` (`:472-477`).
 
-Sufficiency becomes a **new prerequisite limb** inside `computeConformanceResult` — one place, so the single path (`:520`) and the batched claim path (`:543`) cannot diverge, and `lotConformable` (`predicates.ts:324-332`) stays the authoritative composition.
+#### 5.1.1 Where the limb goes
 
-**Why not simply block everywhere on day one.** Turning sufficiency into a hard prerequisite changes conformance for every lot in every live project at once: today a 5,000 m² earthworks lot conforms on one passing density test. Flipping that to six would mass-block real production work with no warning — the "silently changes behaviour under users" failure mode. So the gate is **per-project, three-valued**, mirroring F0's flag discipline (`f0-execution-spec-2026-07-24.md:117-124`):
+Sufficiency enters `computeConformanceResult` as its **third parameter** (`ResolvedSufficiency | null`), resolved per path before the call (§4.1.1). The function stays sync and DB-free. One place, so the single path (`:520`) and the batched claim path (`:543`) cannot diverge.
 
-| `Project.testSufficiencyMode` | Behaviour                                                                                                                                                                                                                                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `off`                         | Sufficiency is evaluated and **shown** in readiness; never contributes to `canConform`.                                                                                                                                                                                                                       |
-| `warn` (**proposed default**) | Same, plus items rendered at warning severity with the shortfall named. Never blocks.                                                                                                                                                                                                                         |
-| `block`                       | A `state === 'insufficient'` rule sets `blocksAction: true` and `canConform: false`. `state === 'unknown'` **still never blocks** (§7). Force-conform (`decisionKind: 'override'`, existing owner/admin path, `qualityRoutes.ts:434-436`) remains the escape hatch and records the shortfall in the snapshot. |
+`ConformancePrerequisites` gains one field and `lotConformable` gains one parameter `[C1R-B1]`:
 
-D1 puts the default to Jay. Rollout: ship `warn`, flip a pilot project to `block`, measure, then decide whether `block` becomes the default — an evidence-gated flip, not a code change.
+```ts
+// conformancePrerequisites.ts — added to ConformancePrerequisites
+/** Null when sufficiency is unresolved or mode !== 'block' — see lotConformable. */
+sufficiencyBlocks: boolean;
+
+// predicates.ts — lotConformable (:324-332) gains the limb
+export function lotConformable(p: ConformablePrerequisites): boolean {
+  return (
+    p.itpAssigned &&
+    p.itpCompleted &&
+    (!p.testRequired || p.hasPassingTest) &&
+    p.noOpenNcrs &&
+    (p.noNaHoldPointBypass ?? true) &&
+    !(p.sufficiencyBlocks ?? false) // C1: default false keeps every existing caller identical
+  );
+}
+```
+
+`sufficiencyBlocks` is optional with a `false` default **precisely so `predicates.parity.test.ts:1-9` keeps passing unchanged for every pre-C1 permutation**, and so the C1 permutations extend it rather than rewrite it. The mode decision is folded into the boolean by the resolver, not read inside the predicate — the predicate stays a pure function of prerequisites.
+
+#### 5.1.2 The structural non-blocking expression `[C1R-B5]`
+
+`sufficiencyBlocks` is computed in exactly one place, and a draft ruleset cannot block by construction:
+
+```ts
+sufficiencyBlocks =
+  mode === "block" &&
+  ruleset?.status === "confirmed" &&
+  rules.some((r) => r.state === "insufficient");
+```
+
+`state === 'unknown'` never blocks (no branch can reach it). `mode: 'off' | 'warn'` never blocks. A `draft` ruleset never blocks. Three guarantees, one expression, one test (§14 AT-9).
+
+| `Project.testSufficiencyMode` | Behaviour                                                                                                                                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `off`                         | Evaluated and **shown** in readiness; never contributes to `canConform`.                                                                                                                                                     |
+| `warn` (**proposed default**) | Same, plus items at warning severity naming the shortfall. Never blocks.                                                                                                                                                     |
+| `block`                       | `insufficient` + `confirmed` ruleset ⇒ `blocksAction: true`, `canConform: false`. Force-conform (`decisionKind: 'override'`, `qualityRoutes.ts:434-436`) remains the escape hatch and records the shortfall in the snapshot. |
+
+Why not block everywhere on day one: today a 5,000 m² earthworks lot conforms on one passing density test. Flipping that to six would mass-block live production work with no warning. Rollout mirrors F0's flag discipline (`f0-execution-spec-2026-07-24.md:117-124`): ship `warn`, flip a pilot project to `block`, measure, then decide the default.
+
+#### 5.1.3 The surface for already-conformed and claimed lots — DECIDED `[C1R-B2]`
+
+`buildConformanceItems` (`evidenceReadiness.ts:28-79`) early-returns one support item for `claimed` (`:32-43`) and for `conformed`-with-no-regressions (`:45-61`). **Decision (orchestrator, §16 D11 keeps it Jay-visible): extend those short circuits to carry advisory sufficiency items.** That retroactive visibility _is_ the wave's payoff — a shortfall discovered after conformance is exactly what must be visible before handover.
+
+Concretely, both early-return branches become:
+
+```ts
+return [
+  item({ code: 'lot_already_conformed', severity: 'support', ... }),
+  ...buildSufficiencyAdvisoryItems(sufficiency), // §5.1.4 — warnings/support only, never blocking
+];
+```
+
+Consequences accepted:
+
+- **The characterization corpus changes.** `lot-readiness.snapshot.json` gains items for conformed/claimed lots. C1.1's gate is therefore **"regenerate the corpus, review the diff, and accept it explicitly"** — not "byte-identical" `[C1R-12]`. The diff must contain **only** added sufficiency items on lots that resolve a ruleset, and **zero** change on lots that resolve none (which is every lot in the corpus today, since the corpus project carries no C1 ruleset). In practice the regenerated file should be identical; the phase gate does not _assume_ it.
+- **`blocksAction: false` always**, for every item on these branches. Enforced by the builder's type (§5.1.4), not by discipline.
+- The alternative (retroactive shortfalls visible only in the claim bucket and monitoring) is preserved as §16 D11 for Jay to flip to.
+
+#### 5.1.4 A separate warning-items builder `[C1R-B1]`
+
+`buildConformanceBlockerItems` (`evidenceReadiness/conformanceItems.ts:64-68`) documents itself as "the five conditions the conform gate enforces (`lotConformable`), and nothing else". A warn-severity item cannot live there. C1 adds a sibling in the same file:
+
+```ts
+/**
+ * Sufficiency items. Split from buildConformanceBlockerItems because that
+ * function is contractually the five lotConformable conditions and nothing
+ * else. The ONE blocking case (mode 'block' + confirmed + insufficient) is
+ * emitted by the blocker builder via prerequisites.sufficiencyBlocks; every
+ * item here is advisory by construction.
+ */
+export function buildSufficiencyAdvisoryItems(
+  sufficiency: ResolvedSufficiency | null,
+  verdict: TestSufficiencyVerdict | null,
+): EvidenceReadinessItem[]; // every returned item has blocksAction: false
+```
+
+So there are two emitters with a clean split: the blocking case rides the existing blocker builder through `sufficiencyBlocks` (keeping its "five conditions" contract true, since `sufficiencyBlocks` _is_ a `lotConformable` condition once §5.1.1 lands); everything advisory rides the new builder.
 
 ### 5.2 Pre-cover — WARN, riding the hold/witness point (no new workflow)
 
-There is **no cover event in the codebase** (§2.4 item 3, 0 grep hits). The program asks for a pre-cover gate; inventing a lot status transition, a new route and a new mobile affordance to carry it would be the largest and least-evidenced part of the wave.
+There is **no cover event in the codebase** (§17.1, 0 grep hits). The evidence says the cover moment already has a home: the VIC earthworks seeder's witness point — `seed-itp-templates-vic-earthworks.js:118`, `notes: 'Section 204.06. W - Notify Superintendent before covering.'` In CIVOS that is a `HoldPoint` on an `ITPChecklistItem` (`schema.prisma:730-734`).
 
-The evidence says the cover moment already has a home: the VIC earthworks seeder's witness point _"Section 204.06. W — Notify Superintendent before covering."_ (`seed-itp-templates-vic-earthworks.js:118`). In CIVOS that is a `HoldPoint` on an `ITPChecklistItem` (`schema.prisma:730-733`, `pointType` at `:734`).
-
-**Proposal.** The pre-cover gate rides the hold-point request/release path:
-
-1. **At request time** — when a release is requested for a lot's hold/witness point, the sufficiency verdict is attached to the request surface. This is the highest-value moment: it is exactly the 1–5 business-day lab window the appendix identifies (§A row 5) as _why_ a pre-cover gate has value.
+1. **At request time** — the sufficiency verdict is attached to the hold-point release-request surface. Highest-value moment: it is exactly the lab turnaround window the appendix flags (the claim _"field density same/next day; lab classification 2–5 business days; no universal lab API"_ — whose own caveat is "turnarounds are advertised, not SLAs; two labs ≠ the industry — treat as directional") `[C1R-6]`.
 2. **At release time** — `POST /api/holdpoints/:id/release` already runs through `recordDecision` (`holdpoints/actionRoutes.ts:417`); the verdict is recorded in the release snapshot.
-3. **WARN only, never block.** A hold-point release is the _client's_ decision. CIVOS must not refuse to record a superintendent's release because our count says six. We inform; they decide; the snapshot records what we told them. This is also the External-collaboration standard (program §6): the action must work without CIVOS inserting itself into the client's authority.
+3. **WARN only, never block.** A hold-point release is the client's decision. CIVOS informs; they decide; the snapshot records what we told them. Also the External-collaboration standard (program §6).
 
-D2 asks Jay whether that satisfies "pre-cover gate", or whether a dedicated cover event is genuinely wanted (in which case it is its own spec, and it needs the shell — Jay-gated).
+### 5.3 Claim inclusion — WARN, never block, and one hard prohibition
 
-### 5.3 Claim inclusion — WARN, never block
+`POST /api/claims` runs through `recordDecision` with `evaluateClaimInclusion` (`claims/inclusionDecision.ts:130`) and `claimInclusionSnapshots` (`:322`). Sufficiency joins as an **advisory** item, matching the shipped precedent that `unreleased_hold_points` and `pending_tests` are non-blocking (`predicates.ts:347-353`) `[C1R-C4]`.
 
-`POST /api/claims` runs through `recordDecision` with `evaluateClaimInclusion` (`claims/inclusionDecision.ts:130`) and `claimInclusionSnapshots` (`:322`). Sufficiency joins as an **advisory** item, matching the shipped precedent that `pending_tests` and `unreleased_hold_points` are `blocksAction: false` (`predicates.ts:347-353`).
+Non-negotiable: sufficiency must never block a claim. Program §Wave F is explicit that claim surfaces are "project-management indicator, not an accounting balance or entitlement", and the appendix's security-of-payment claim warns never to imply evidence = payable amount.
 
-Non-negotiable: sufficiency must never block a claim. Program §Wave F is explicit that claim surfaces are "project-management indicator, not an accounting balance or entitlement", and appendix §F's security-of-payment row warns never to imply evidence = payable amount. A test-count gate on a claim would be CIVOS asserting an entitlement position. **Warn, always.** Not offered as a decision.
+**PROHIBITION `[C1R-B2]`:** sufficiency **never** enters `getClaimBlockingReasonsForConformedLot` (`conformancePrerequisites.ts:166-207`). That function's return feeds `lotClaimEligible`'s blocking set (`predicates.ts:355-361` — any non-empty `conformanceBlockingReasons` returns `false`), so a sufficiency reason placed there would silently make previously-claimable lots un-claimable on a retroactive regime change. Enforced by §14 AT-11, which asserts the function's output is unchanged across every sufficiency state.
 
-### 5.4 Snapshot shape — fold into existing requirement sets; do NOT widen F0's unique key
+### 5.4 Snapshot shape — fold, and do NOT bump the version
 
-A sufficiency verdict is not its own decision, so it needs no decision of its own. It must ride the snapshot of the decision it informed.
+#### 5.4.1 Fold, not a second row `[C1R-14]`
 
-`RequirementEvaluation` is `@@unique([auditLogId, entityType, entityId])` (`schema.prisma:1690`+), and the F0 spec justifies the narrowness explicitly: _"one decision never evaluates one entity under two requirement sets; extend the key only if that ever becomes true"_ (`f0-execution-spec-2026-07-24.md:72`). **C1 is the first candidate for "ever".** A second `entityType: 'lot'` row carrying `test_sufficiency.v1` under the same audit row is barred by that constraint.
+`RequirementEvaluation` has **two** unique keys — `@@unique([auditLogId, entityType, entityId])` (`schema.prisma:1719`) and `@@unique([entityType, entityId, requestKey])` (`:1721`). A second `entityType: 'lot'` row under the same audit row is barred by the first, and would also collide on the second whenever a `requestKey` is present. Widening either means a migration on a live immutable table. **Fold.** This answers the question F0 left open at `f0-execution-spec-2026-07-24.md:72`: the key stays narrow.
 
-Two options:
+#### 5.4.2 Do NOT bump `resultSchemaVersion` `[C1R-B3]`
 
-- **(A, PROPOSED) Fold.** Add an optional `sufficiency` block to the existing payloads and bump `resultSchemaVersion` 1 → 2 for `lot_conformance`, `hold_point_release` and `claim_member`. Readers dispatch on the version column — the mechanism F0 already built (`shared.ts:61`, and F0 acceptance test "snapshot JSON version decoding", `f0-execution-spec-2026-07-24.md:157`). **No migration. No index change.** One snapshot row still equals one verdict per entity per decision — the auditable shape.
-- **(B) Widen** the unique key to `[auditLogId, entityType, entityId, requirementSet]` and write a second row. Costs a migration on a live prod table, and permanently loosens the invariant that a decision's verdict for an entity is _one_ row.
+Rev 1's D3 claimed a bump to `2` was free. The DDL claim was true; the cost claim was false. `requirements.test.ts:95-108` couples the version integer to the set **name string**:
 
-Option A, and it validates F0's versioning design rather than amending its schema. The size budget is the binding constraint: `claim_member` rows are capped at 1 KB (`recordDecision.ts:151`), so the folded block on a member row is **counts and rule ids only** — no `regimeBasis`, no citation strings. `lot_conformance` and `hold_point_release` rows have 64 KB (`:154`) and carry the full block. A CI test asserts the member payload stays under budget at the worst realistic rule count. D3 records the choice.
+```ts
+expect(set.name.endsWith(`.v${set.version}`)).toBe(true);
+expect(set.version).toBe(1);
+```
+
+Bumping forces `lot_conformance.v1` → `lot_conformance.v2` **in the `requirement_set` column of a live immutable table**, splitting historical from new rows — or forces relaxing a shipped contract test. Blast radius verified: `shared.ts:61-66` `decodeAtVersion1` hard-throws on 2; `requirements.test.ts:351-356` asserts version 2 _throws_ (so it keeps passing while production is broken); eleven hardcoded `resultSchemaVersion: 1` literals across `recordDecision.db.test.ts` (`:75`, `:252`, `:280`, `:287`, `:311`, `:390`, `:563`, `:570`, `:838`, `:889`, `:897`); and `buildClaimReadinessResultV1` (`claimReadiness.v1.ts:46`) consumes `ClaimMemberResultV1[]`, so a member change drags the aggregate in and is silently ignored unless taught.
+
+**So: stay at version 1 and add `sufficiency` as an optional key that is ALWAYS EMITTED** on the three sets that carry it. Its absence then unambiguously marks a pre-C1 row — exactly the discriminator the version bump was going to provide, at zero DB cost. Safe because there is no read surface for snapshot payloads at all (`[C1R-C3]`: zero frontend references, no route selects `result` into a response, no zod `.strict()`/`.passthrough()` in `backend/src`), so an extra JSON key cannot throw at any boundary. The ~10 `toEqual` assertions in `requirements.test.ts` are updated (§14 AT-12). `buildClaimReadinessResultV1` is taught to summarise the member sufficiency states so the aggregate cannot disagree with its rows.
+
+#### 5.4.3 Member rows carry an AGGREGATE only `[C1R-B4]`
+
+`MEMBER_RESULT_MAX_BYTES = 1024` (`recordDecision.ts:151`); `assertSnapshotSizes` (`:248-270`) measures per row, **throws 500 `SNAPSHOT_WRITE_FAILED`**, does not truncate, and runs **regardless of the flag** — so an oversized member payload 500s claim create even with snapshots disabled. Measured worst case today: **429 bytes**, headroom **595** (reproduced independently: the 17 `CLAIM_MEMBER_REASON_CODES`, `claimedValue: 999999999.99`, `claimedPercentage: 100` — `requirements.test.ts:272-282`).
+
+Rev 1 allowed "counts and rule ids only". At the spec's own 35-char id format, one rule costs ~50 bytes even with single-letter keys, so **~11 rules exhausts the headroom** — and `Ruleset.rules` has no cap while `CLAIM_LOTS_MAX = 5000` (`claims/workflowValidation.ts:22`). Rev 1's "worst _realistic_ rule count" was the wrong bound for a failure mode that 500s a whole claim.
+
+**Member payload is bounded by construction — no arrays, no ids:**
+
+```ts
+/** Added to ClaimMemberResultV1. Fixed width regardless of rule count. */
+sufficiency: {
+  state: SufficiencyState; // <= 12 chars
+  insufficientRules: number; // count only
+  worstShortfall: number; // max(required - passing) across rules, 0 when none
+}
+```
+
+~60 bytes, constant. `lot_conformance` and `hold_point_release` rows have the 64 KB budget (`:154`) and carry the full block including `regimeBasis` and citations. §12 asserts the member size at an **unbounded** rule count (10,000 synthetic rules), not a realistic one.
 
 ---
 
@@ -399,271 +661,437 @@ Option A, and it validates F0's versioning design rather than amending its schem
 model Lot {
   // ... existing fields (schema.prisma:542-574) ...
 
-  // C1: the production quantity a per-quantity frequency rule divides.
-  // NULL is first-class and means "unknown" — never zero, never assumed
-  // (§7). `quantityUnit` is validated against QuantityUnit at the route.
+  // C1 [C1R-B6]: the FOLDED activity slug, stored. `activityType` is free text
+  // (validation.ts:112,174,249 — never constrained to CANONICAL_ACTIVITIES), so
+  // an index on it cannot serve a folded-slug stream key: the fold is many-to-one
+  // through LEGACY_FOLD and a CASE-INSENSITIVE LEGACY_FOLD_CI
+  // (activityTaxonomy.ts:286-297), and Postgres b-tree equality is case-sensitive.
+  // NULL = fold confidence 'family' or 'none' (§16 D7). This is a CLASSIFICATION,
+  // not a readiness verdict, so F0's no-stored-state doctrine does not bite — and
+  // Wave 2 matching plus A5 register filtering want it independently.
+  activitySlug  String?  @map("activity_slug")
+
+  // C1: the production quantity a per-quantity rule divides. NULL is
+  // first-class and means "unknown" — never zero, never assumed (§7).
+  // Ships unexercised by C1 counting (§3.2.1) — §3.3's lot-size advisory and
+  // C2/C3 are its consumers.
   quantityValue Decimal? @map("quantity_value")
   quantityUnit  String?  @map("quantity_unit")   // 'm2'|'m3'|'t'|'m'|'each'
 
-  // C1: the testing scale the governing specification regiments by
-  // (e.g. VicRoads Sec 204 Scale A/B/C). Validated against the resolved
-  // ruleset's `scaleKeys`; NULL => unknown, not a default scale.
+  // C1: the testing scale the governing specification regiments by. Validated
+  // against the resolved ruleset's `scaleKeys`; NULL falls back to
+  // `ruleset.defaultScale` when the ruleset declares one (§16 D6), else unknown.
   testScale     String?  @map("test_scale")
 
-  // C1: bounded frequency-stream lookback (§3.4) — the last 3 decided lots
-  // of an (activity) stream, index-covered. Existing
-  // @@index([projectId, conformedAt]) (schema.prisma:606) cannot serve it.
-  @@index([projectId, activityType, conformedAt], map: "lots_project_activity_conformed_idx")
+  // C1 [C1R-B6]: bounded frequency-stream lookback (§3.4.3), index-covered.
+  // Existing @@index([projectId, conformedAt]) (:606) cannot serve it.
+  @@index([projectId, activitySlug, conformedAt], map: "lots_project_activity_slug_conformed_idx")
 }
 
 model Project {
   // ... existing fields ...
 
-  // C1 gate strength (§5.1). Default 'warn' NEVER changes conformance
-  // outcomes for existing projects; 'block' is opt-in per project. (D1)
+  // C1 gate strength (§5.1.2). Default 'warn' NEVER changes conformance
+  // outcomes; 'block' is opt-in per project (§16 D1).
   testSufficiencyMode String @default("warn") @map("test_sufficiency_mode")
 }
 ```
 
-That is the whole migration: **three nullable columns, one defaulted column, one index.** No ruleset tables (§3.1), no sufficiency-evaluation table (§5.4), no enum types (the codebase uses defaulted strings throughout — `Lot.status`, `HoldPoint.pointType`).
+Four nullable columns, one defaulted column, one index. **No ruleset tables** (§3.1), **no sufficiency-evaluation table** (§5.4), **no version bump** (§5.4.2), **no enum types** (the codebase uses defaulted strings throughout — `[C1R-C2]` confirms zero enums in the schema).
 
-Notes:
+**Backfill.** `activitySlug` is populated in the same migration's data step by folding `activityType` through `foldActivityValue` — a one-time pass over `lots`, written as a code-driven backfill script (the fold lives in TypeScript; it cannot be expressed in SQL), invoked after the additive DDL. Lots whose fold yields `family`/`none` keep NULL. Every write path that sets `activityType` sets `activitySlug` in the same statement thereafter: `createRoutes.ts`, `bulkCreateCore.ts`, the lot PATCH path, and the Wave B lot-register importer.
 
-- **Additive and backwards-compatible.** Existing rows get NULL quantities/scale and `'warn'` mode. No backfill. No data loss. Reviewed Prisma migration; prod apply via the production-migrations workflow; **never `prisma db push`**, never `--accept-data-loss`.
-- **Local test DBs only** for every DB-backed test in every C1 phase — `src/test/databaseSafety.ts` refuses non-local hosts. Never point a C1 test at Railway.
-- **Quantity is not derived-and-stored.** Where `LotGeometry.areaM2` exists (`schema.prisma:492`) it is used as a _read-time fallback_ for `m2` rules; it is never copied into `Lot.quantityValue`, because the geometry is the better source and copying creates a staleness bug the moment the geometry is edited. The verdict records which source was used.
+`ponytail:` fold-on-write plus a one-time backfill, no trigger, no generated column — the fold is TypeScript and must stay single-sourced in `activityTaxonomy.ts`.
+
+**Migration safety `[C1R-13]`:**
+
+- The defaulted `Project.testSufficiencyMode` column is metadata-only on PG 11+ (no table rewrite).
+- The repo has **zero** `CONCURRENTLY` index creations, so `CREATE INDEX` on `lots` takes a write-blocking `SHARE` lock. At the reference dataset's 5,000 lots that is milliseconds; stated rather than assumed. If a pilot project is materially larger the migration adds `CONCURRENTLY` and drops out of the transaction — a decision at apply time, not a guess now.
+- **Wave B's migration has already landed** (`backend/prisma/migrations/20260726120000_wave_b_import_batches`), so B/C serialization is now trivially "C1 goes after". Residual contention is the `schema.prisma` **file**, not the migration order.
+- Reviewed Prisma migration; prod apply via the production-migrations workflow. **Never `prisma db push`, never `--accept-data-loss`.**
+- **Every DB-backed test in every C1 phase runs on a local test DB only** — `src/test/databaseSafety.ts` refuses non-local hosts. Never point a C1 test at Railway.
+
+**Quantity is not derived-and-stored.** `LotGeometry.areaM2` (`schema.prisma:492`) is a read-time fallback for `m2` rules; it is never copied into `Lot.quantityValue`, because copying stales on the next geometry edit. The verdict records which source was used (§4.1).
 
 ---
 
 ## 7. Missing-data behaviour — honest degradation
 
-**The semantics, stated as a rule:** `unknown` is a third state. It is **never** `satisfied` and **never** `blocked-by-default`.
+### 7.1 The three-valued rule
 
-| Situation                                                                                           | State                                         | Surfaced as                                                                         | Blocks?                           |
-| --------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------- |
-| No ruleset for the project's authority (incl. every national-baseline spec set, `itpMatcher.ts:96`) | `unknown` / `no_ruleset_for_project`          | _silent_ — no item at all                                                           | No                                |
-| Ruleset exists, no rule matches the activity/layer                                                  | `unknown` / `no_rule_for_activity`            | _silent_                                                                            | No                                |
-| `Lot.activityType` folds to family-level or unmappable (`activityTaxonomy.ts:286`)                  | `unknown` / `activity_not_canonical`          | warning: "classify this lot's activity to check test frequency"                     | No                                |
-| Rule is scale-keyed, `Lot.testScale` null                                                           | `unknown` / `scale_not_selected`              | warning naming the scale options from `ruleset.scaleKeys`                           | No                                |
-| `Lot.testScale` not in `scaleKeys`                                                                  | `unknown` / `scale_not_recognised`            | warning naming the valid keys                                                       | No                                |
-| Rule has a `perQuantity` limb, no quantity resolvable                                               | `unknown` / `quantity_missing`                | warning: "record this lot's area to check test frequency (or draw its geometry)"    | No                                |
-| Ruleset `status: 'draft'`                                                                           | evaluated, but                                | every item labelled "unconfirmed edition — advisory"                                | **No, even in `block` mode** (§8) |
-| Passing tests exist that no rule could attribute                                                    | `insufficient` + `tests_unlinked_to_itp_item` | warning: "N verified tests are not linked to a checklist item and were not counted" | No (the warning, not the count)   |
-| Rule resolved, everything known, count short                                                        | `insufficient`                                | blocker text with the required/have numbers                                         | Only when `mode === 'block'`      |
+`unknown` is a third state. It is **never** `satisfied` and **never** `blocked-by-default`. `draft` is **not** an unknown cause `[C1R-B5]` — it is a confidence tag on a real answer.
 
-**Why the first two are silent, not warnings.** Most CIVOS projects today will resolve no ruleset (only VIC + one NSW pack ship in C1). Emitting a warning per lot per rule in that state would add noise to every readiness panel in the product on day one and teach users to ignore the section. A resolved-nothing state produces nothing. The ones that _do_ warn are the ones the user can fix in under a minute (pick a scale, enter an area, classify the activity) — the A3b field-speed standard applied to a data-quality nudge.
+| Situation                                                                                           | State                                                      | Surfaced as                                                                         | Blocks?                                                  |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| No ruleset for the project's authority (incl. every national-baseline spec set, `itpMatcher.ts:96`) | `unknown` / `no_ruleset_for_project`                       | _silent_ — no item at all                                                           | No                                                       |
+| Ruleset exists, no rule matches activity / layer / zone                                             | `unknown` / `no_rule_for_activity`                         | _silent_                                                                            | No                                                       |
+| `activitySlug` NULL (fold `family` or `none`)                                                       | `unknown` / `activity_not_canonical`                       | warning: "classify this lot's activity to check test frequency"                     | No                                                       |
+| Scale-keyed rule, no `Lot.testScale` **and** no `ruleset.defaultScale`                              | `unknown` / `scale_not_selected`                           | warning naming `ruleset.scaleKeys`                                                  | No                                                       |
+| `Lot.testScale` not in `scaleKeys`                                                                  | `unknown` / `scale_not_recognised`                         | warning naming the valid keys                                                       | No                                                       |
+| Rule has a `perQuantity` limb, no quantity resolvable                                               | `unknown` / `quantity_missing`                             | warning: "record this lot's area (or draw its geometry)"                            | No                                                       |
+| **Ruleset `status: 'draft'`**                                                                       | **evaluated normally** — real `requiredCount`, real counts | every item tagged "unconfirmed edition" via `citation.confirmed: false`             | **No, structurally** (§5.1.2)                            |
+| Passing tests exist that no rule could attribute                                                    | `insufficient` + `tests_unlinked_to_itp_item`              | warning: "N verified tests are not linked to a checklist item and were not counted" | The count blocks per §5.1.2; the warning never does      |
+| Everything known, count short                                                                       | `insufficient`                                             | blocker text with required/have numbers                                             | Only when `mode === 'block'` **and** ruleset `confirmed` |
 
-**`blockIfUnknown` is deliberately not built.** A contractor who wants strictness has `mode: 'block'` plus a resolvable ruleset; blocking on unknown punishes missing data rather than missing tests, and no user has asked for it (YAGNI). If a pilot asks, it is one enum value.
+**Why the first two are silent, not warnings.** Most CIVOS projects resolve no ruleset (two packs ship). A warning per lot per rule in that state would add noise to every readiness panel in the product on day one and teach users to ignore the section. A resolved-nothing state produces nothing. The ones that _do_ warn are fixable in under a minute — the A3b field-speed standard applied to a data-quality nudge.
 
-**Known C1 ceilings, stated rather than hidden:**
+**`blockIfUnknown` is deliberately not built.** A contractor wanting strictness has `mode: 'block'` plus a confirmed ruleset; blocking on unknown punishes missing data rather than missing tests, and nobody has asked for it. If a pilot asks, it is one enum value.
 
-- **Duplicate/re-test inflation.** C1 counts distinct `TestResult` rows. Two rows describing the same sample count twice. Detection is C4 (`ponytail:` count distinct rows; C4's duplicate detection tightens it). The verdict is decision support, and the snapshot records exactly which test ids were counted, so an auditor can see the double-count.
-- **No spatial coverage check.** "No sample for CH 1,240–1,310" (program line 75) requires per-test location; `TestResult.sampleLocation` (`schema.prisma:836`) is free text and `sampleDate`/chainage are not structured for coverage. C1 reports **counts**, not spatial gaps. Spatial under-tested overlay is C3 (program line 77). The plain-English string in §4.4 therefore omits the chainage clause until C3 — stated here so nobody ships the sentence without the data behind it.
-- **No production-day limb** (§3.3).
+### 7.2 Known C1 ceilings, stated rather than hidden
+
+- **Duplicate/re-test inflation.** C1 counts distinct `TestResult` rows; two rows describing the same sample count twice. Detection is C4. The snapshot records which test ids were counted, so an auditor can see a double count. `ponytail:` count distinct rows; C4's duplicate detection tightens it.
+- **No spatial coverage check.** "No sample for CH 1,240–1,310" needs per-test location; `TestResult.sampleLocation` (`schema.prisma:836`) is free text. C1 reports **counts**, not spatial gaps, and §4.4's sentence omits the chainage clause accordingly. C3 (program line 77) restores it.
+- **No production-day limb** (§3.3), owned by C2 `[C1R-4]`.
+- **The `perQuantity` limb ships unexercised** (§3.2.1) — no cited authority supplies a per-area frequency figure.
 
 ---
 
-## 8. Seeding + the currency-confirmation step
+## 8. Seeding, evidence grades and the confirmation step
 
-**The obligation.** The research appendix grades the VicRoads 204 and TfNSW R44 frequency facts **A**, but both rows carry a caveat: the VicRoads source is a **council republication of the December 2015 edition** and must be _"revalidate[d] against current VicRoads/DTP edition before seeding the pack (by C1 start)"_ (appendix §A row 1); R44's edition is **not pinned** and the TfNSW link is a _portal record_ that must be resolved to the actual specification document (§A row 3). Neither number may be asserted as current. TMR MRTS04's numeric values are on the standing **never-assert** list (appendix §G) — no TMR pack in C1, at all.
+### 8.1 The grade correction `[C1R-B11]`
 
-**The mechanism.** `Ruleset.status` is the enforcement point, not a comment:
+Rev 1 said "the research appendix grades the VicRoads 204 and TfNSW R44 frequency facts **A**". **That was wrong for R44.** The appendix's grade for the R44 row is verbatim **"A (portal) / C (aetg)"**: the A attaches to a TfNSW standards-portal **annotation record** (which the appendix itself flags must "be resolved to the current R44 document page"), and the numbers come from the **C-graded** aetg secondary page. VicRoads 204 (both its rows) **is** A.
 
-1. **A pack lands as `status: 'draft'`.** It is registered and evaluated, every item is labelled _"unconfirmed edition — advisory"_, and it **cannot block** even where `Project.testSufficiencyMode === 'block'`. A draft ruleset informs; it never gates.
-2. **The confirmation pass** is a discrete, human, reviewable act:
-   - open the **current published** VicRoads/DTP (resp. TfNSW) document — not the council republication, not a secondary site;
-   - verify every encoded number against its cited clause/table;
-   - record `edition`, `clause`, `pdfPage`, `sourceUrl`, `checkedOn`, `revalidateBy` in the ruleset module;
-   - flip `status` to `'confirmed'` in a PR whose body states who checked what against which edition, and lists any number that **changed** from the 2015 figures.
-     Numbers that cannot be confirmed are **deleted from the pack**, not left in as drafts.
-3. **CI enforces currency** — a runnable check that survives sessions:
-   - every `status: 'confirmed'` ruleset has non-empty `edition`, `clause`, `sourceUrl`, `pdfPage`, `checkedOn`, `revalidateBy`;
-   - `revalidateBy` is **in the future** — an expired confirmed ruleset **fails CI**, forcing a revalidation pass rather than silent drift;
-   - `evidenceGrade === 'A'` for any `confirmed` ruleset (a B/C/D-graded source may inform a draft, never gate);
-   - `status: 'draft'` rulesets are exempt from the date check but are asserted non-blocking by a behaviour test.
-4. **Revalidation cadence.** `revalidateBy` is set 12 months out by default, or earlier where the appendix says so.
+`RulesetProvenance.evidenceGrade` is a single scalar, so §3.2 fixes the encoding rule: **a split grade is encoded at its weakest limb — the grade of the source the numbers came from.** Therefore:
 
-**What ships (both `draft` at authoring; confirmation is a C1.3 gate item):**
+- `vicroads-204.v1` → `evidenceGrade: 'A'`.
+- `tfnsw-r44.v1` → `evidenceGrade: 'C'`. Under §8.3's CI rule (`evidenceGrade === 'A'` required for `confirmed`), R44 is **permanently unconfirmable and permanently non-blocking** until appendix §H item 5 resolves the portal record to the real specification document and someone reads it. That is the correct outcome and the spec claims it rather than obscuring it.
 
-- **`vicroads-204.v1`** — VIC / VicRoads. Rules for the `earthworks` family. The figures _as cited in the 2015 edition, pending confirmation_: minimum count 6 at Scale A/B and 3 at Scale C; `maxLotSize` 5,000 m² (Type A) and 500 m² under paved areas; `reduced` regime with `consecutiveConformingLots: 3`, `escalationShape: 'reset_on_any_failure'`, per 204.14(c). **These numbers are recorded here as the research's reading of a 2015 republication and must not be treated as current until step 2 is done.**
-- **`tfnsw-r44.v1`** — NSW / TfNSW, `specSet` normalizing `rms` → `tfnsw` (`itpMatcher.ts:74-76`). Encodes the **n = 6 minimum sample count** only; no CDR statistic (D8). The R44 edition must be pinned during step 2 — the appendix cannot supply it.
+### 8.2 What the packs contain
 
-**Legal boundary (appendix §A row 8, grade C).** Facts, numbers and thresholds are encoded; specification **prose is not**, and no Standards Australia text appears anywhere. `FrequencyRule.label` is a short factual label, capped in length by a CI assertion, and the rule type has **no free-prose field** — there is nowhere for a copied clause to live. Test methods are referenced by AS number only, as `specifications.ts` already does. The appendix's own caveat stands: obtain legal confirmation before shipping seeded spec packs commercially.
+- **`vicroads-204.v1`** — VIC / VicRoads, earthworks family. Minimum counts **scoped to compaction** `[C1R-7]`: the appendix's claim is _"6 tests/lot (Scale A/B compaction), 3 (Scale C)"_ — a compaction-density rule, not a blanket per-lot count for every test type. `maxLotSize` 5,000 m² (Type A) and 500 m² under paved areas (`areaZoneAliases`). **No `reduced` limb** `[C1R-B8]`: the appendix supplies the 204.14(c) trigger and no reduced figure, and CI asserts `reduced` cannot exist on a `draft` ruleset (§8.3). The regime machinery is still built and tested — against a synthetic confirmed ruleset (§14 AT-5..AT-8) — so it is ready the moment a confirmed edition supplies figures.
+- **`tfnsw-r44.v1`** — NSW / TfNSW, `specSet` normalizing `rms` → `tfnsw` (`itpMatcher.ts:74-76`). Encodes the **n = 6 minimum sample count** only; no CDR statistic (§16 D8). Grade `'C'`, therefore `draft`-forever until §H item 5 resolves.
+- **No TMR / DIT SA / MRWA pack, and no numbers from them.** They are on the appendix's standing never-assert list.
+
+### 8.3 The confirmation step — BEFORE encoding `[C1R-B11]` `[C1R-9]`
+
+Rev 1 encoded at C1.3 and confirmed afterwards, and allowed exiting with both packs draft. Combined with a `warn` default, C1 could have satisfied its whole exit gate **while gating nothing, on unconfirmed numbers**. Both source documents say otherwise: plan line 75 — currency "must be confirmed against the current published edition **before encoding**"; the appendix's VicRoads row — "revalidate against current VicRoads/DTP edition before seeding the pack (**by C1 start**)"; its R44 row — "Verify against current R44 edition **at C1 start**".
+
+**The sequence, corrected:**
+
+1. **C1.0 (before any pack is authored): the confirmation pass.** A human opens the **current published** VicRoads/DTP document — not the council republication — verifies every number against its cited clause/table, and records `edition`, `clause`, `pdfPage`, `sourceUrl`, `checkedOn`, `revalidateBy`. Numbers that cannot be confirmed are **not encoded**. This is a Jay-visible sequencing change because it front-loads a human verification task (§16.0).
+2. **C1.1: the pack is authored from confirmed figures**, landing directly at `status: 'confirmed'` where step 1 succeeded, or `draft` where it did not (R44, necessarily).
+3. **Confirmation of an already-shipped draft emits a NEW version** `[C1R-9]`: `vicroads-204.v2.ts`, with `effectiveTo` set on v1. F0 forbids editing a definition in place once instances exist (program §2: "definitions are never edited in place once instances exist"), and snapshots reference `ruleId` strings that must keep resolving. Never an in-place edit of a `.v1`.
+4. **CI enforces currency** — a runnable check that survives sessions:
+   - every `confirmed` ruleset has non-empty `edition`, `clause`, `sourceUrl`, `pdfPage`, `checkedOn`, `revalidateBy`;
+   - `revalidateBy` is **in the future** — an expired `confirmed` ruleset **fails CI**;
+   - `evidenceGrade === 'A'` for any `confirmed` ruleset;
+   - **no `draft` ruleset declares a `reduced` limb** `[C1R-B8]`;
+   - a `draft` ruleset is asserted non-blocking by behaviour test (§14 AT-9), not by inspection;
+   - the check is itself tested against a synthetic expired `confirmed` ruleset (§14 AT-17).
+5. **Revalidation cadence:** `revalidateBy` 12 months out by default, earlier where the appendix says so.
+
+### 8.4 Legal boundary
+
+Facts, numbers and thresholds are encoded; specification **prose is not**, and no Standards Australia text appears anywhere. `FrequencyRule.label` is a short factual label with a CI-asserted length cap, and the rule type has **no free-prose field** — there is nowhere for a copied clause to live. Test methods are referenced by AS number only, as `specifications.ts` already does.
+
+The appendix's copyright claim is grade **C** (university guidance) with the caveat "obtain legal confirmation before shipping seeded spec packs commercially". Rev 1 restated the caveat with no owner. **Owner: Jay. Gate: §15.1 exit item 10** `[C1R-8]` — legal confirmation obtained, or the packs ship internal-only with a recorded risk acceptance, before any pack reaches a paying customer.
 
 ---
 
 ## 9. API + UI surface
 
-**New API routes: one.**
+### 9.1 Data entry — bulk paths included `[C1R-B10]`
 
-- `GET /api/test-sufficiency/rulesets` — the registry as data (id, authority, document, edition, `scaleKeys`, `status`, rule labels + citations). Read-only, authenticated, **not** project-scoped (it is shipped product data, no tenant content, no isolation surface). The lot edit form needs it to render scale options honestly instead of a hardcoded A/B/C.
+Rev 1 offered `PATCH /api/lots/:id` only, which meant every lot created after C1 was **born** with NULL scale and quantity and a PM on a 500-lot project would open 500 forms. Corrected:
 
-**Extended, not added:**
+- **`bulkCreateCore.ts` gains a field pass-through** for `testScale`, `quantityValue`, `quantityUnit` (and sets `activitySlug` from the fold). This is the shared core behind `POST /api/lots/bulk` **and** the copilot `lot_breakdown` apply handler (`bulkCreateCore.ts:1-12`) — i.e. the chainage generator and the AI breakdown, the two ways lots are really created. Near-zero cost: three optional fields through an existing validated shape.
+- **One new bulk-set route** — `POST /api/lots/bulk-set-test-attributes` — reusing `assertLotsBulkMutable` (`bulkMutationGuards.ts:22`) exactly as the three existing bulk routes do (`bulkMutationRoutes.ts:74`, `:182`). Sets scale and/or quantity across a selection.
+- Wave B's lot-register importer maps these columns when present. Coordination note only; no Wave B file is touched by C1.
 
-- `GET /api/lots/:id/readiness` (`qualityRoutes.ts:265`) — the conformance bucket gains the new items. Response shape is additive; `buildLotReadinessResponse` is unchanged in structure. This is the only read surface sufficiency needs — no `/test-sufficiency` per-lot route (`ponytail:` the readiness route already answers the question; a second endpoint would be a second source of truth).
-- `PATCH /api/lots/:id` — accepts `quantityValue`, `quantityUnit`, `testScale`. Permissions follow the existing lot-edit gate (`LOT_EDITORS`, `routes/lots/roles.ts`) — **foreman excluded**, per `project_foreman_not_lot_setup_manager`.
-- `PATCH /api/projects/:id` — accepts `testSufficiencyMode`, restricted to `owner` / `admin` / `project_manager`. Changing the gate strength writes an audit row.
+### 9.2 New read routes: one
+
+`GET /api/test-sufficiency/rulesets` — the registry as data (id, authority, document, edition, `scaleKeys`, `defaultScale`, `status`, rule labels + citations). Read-only, **authenticated**, not project-scoped: it is shipped product data with no tenant content. §10.1 states the test that proves it `[C1R-10]`.
+
+### 9.3 Extended, not added
+
+- `GET /api/lots/:id/readiness` (`qualityRoutes.ts:265`) — the conformance bucket gains the new items, **including on the conformed/claimed branches** (§5.1.3). Additive response shape. The only read surface sufficiency needs; no per-lot `/test-sufficiency` route (`ponytail:` a second endpoint would be a second source of truth).
+- `PATCH /api/lots/:id` — accepts `quantityValue`, `quantityUnit`, `testScale`.
+- `PATCH /api/projects/:id` — accepts `testSufficiencyMode`; the change writes an audit row.
 - `POST /api/lots/:id/conform` — no signature change; the extra prerequisite arrives through `computeConformanceResult`.
 
-**UI (office surfaces only):**
+### 9.4 UI (office surfaces only)
 
-- `frontend/src/pages/lots/components/LotReadinessPanel.tsx:267` — renders the new items through the existing blocker/warning/support buckets. **No new component**, no new panel, no card-rule change.
-- `frontend/src/pages/lots/components/LotEditFormFields.tsx` — three fields: quantity + unit, and scale as a `NativeSelect` populated from the resolved ruleset (rhf `register()` needs `NativeSelect`, not Radix).
-- `frontend/src/pages/lots/components/ConformLotDialogs.tsx` — the shortfall appears in the existing blocker list; force-conform copy names it.
-- Project settings — one control for `testSufficiencyMode` with plain-English copy of what each mode does.
-- **Register column / map overlay: OUT.** A lots-register sufficiency column is deferred until a pilot asks; the map overlay is C3 (program line 77).
-- **The mobile shell is UNTOUCHED** — no file under `frontend/src/shell/` changes. A foreman-facing sufficiency indicator is genuinely valuable and is **Jay-gated**: it does not appear in any C1 PR without an explicit go.
+- `frontend/src/pages/lots/components/LotReadinessPanel.tsx:267` — renders the new items through the existing blocker/warning/support buckets. **No new component**, no card-rule change.
+- `LotEditFormFields.tsx` — quantity + unit, and scale as a `NativeSelect` populated from `GET /api/test-sufficiency/rulesets` (rhf `register()` needs `NativeSelect`, not Radix).
+- `ConformLotDialogs.tsx` — the shortfall appears in the existing blocker list; force-conform copy names it.
+- Bulk-set affordance on `LotsPage` reusing the existing bulk-selection toolbar.
+- Project settings — one control for `testSufficiencyMode` with plain-English copy per mode.
+- **Register column / map overlay: OUT.** Deferred until a pilot asks; the overlay is C3.
+- **The mobile shell is UNTOUCHED** — no file under `frontend/src/shell/` changes. A foreman-facing indicator is **Jay-gated**.
 
 ---
 
 ## 10. Security review (program §7)
 
-C1 adds no upload surface, no external link, no AI call, and no offline storage — most of §7 is not engaged. What is:
+C1 is correctly **not** on §7's threat-model gate list (that list is A3, C2, D2, E) `[C1R-C10]`; a security review is the right form. It adds no upload surface, no external link, no AI call, no offline storage.
 
-| Threat                                      | Control                                                                                                                                                                                                                                                                                             |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tenant isolation on a new query surface** | The regime query is the only new cross-lot read. It is `projectId`-scoped in the `where` clause, and a DB-backed test asserts that a lot in project B never appears in project A's stream. Non-negotiable per §7.                                                                                   |
-| **Input validation at a trust boundary**    | `quantityValue` — positive, finite, bounded (reject ≤ 0, NaN, > 1e9), Decimal not float. `quantityUnit` — enum whitelist. `testScale` — must be in the resolved ruleset's `scaleKeys` (rejected at the route, not silently coerced). `testSufficiencyMode` — enum whitelist.                        |
-| **Gate bypass via data**                    | Setting `quantityValue` to `1` to shrink a required count is possible and is **audited**: quantity/scale edits write an audit row, and the decision snapshot records the quantity and source that produced the required count. Detection, not prevention — the field is legitimately user-recorded. |
-| **Permission escalation**                   | `testSufficiencyMode` is owner/admin/PM only; a foreman cannot weaken a gate. Sufficiency reads inherit the existing readiness-route authorization (`qualityRoutes.ts:277-294`), which already covers subcontractor portal scoping.                                                                 |
-| **Authorization vs stale readiness**        | Authorization reads stay **outside** the decision transaction, per F0 `[R3.1-R6]` (`qualityRoutes.ts:414-416`). C1 changes nothing here.                                                                                                                                                            |
-| **Commercial leakage**                      | Sufficiency payloads contain no money. Snapshot rows carry unfiltered commercial values generally (F0 §5), so any future read surface still re-applies `filterCommercialReadiness` — C1 adds no such surface.                                                                                       |
-| **Copyright / DRM'd content**               | §8: facts only; no prose field in the rule type; CI-capped label length; no Standards Australia text.                                                                                                                                                                                               |
-| **Audit-log integrity**                     | Unchanged — sufficiency rides `recordDecision`'s existing atomic audit+snapshot write.                                                                                                                                                                                                              |
+### 10.1 Threats and controls
 
-No new dependencies are proposed (D9).
+| Threat                                      | Control                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tenant isolation on a new query surface** | The regime query is the only new cross-lot read. `projectId`-scoped in the `where`; §14 AT-18 asserts a lot in project B never appears in project A's stream. Non-negotiable per §7.                                                                                                                                                                             |
+| **The registry route** `[C1R-10]`           | `GET /api/test-sufficiency/rulesets` is not project-scoped, so it cannot leak tenant data by construction — but §7 says "tenant-isolation tests on every new query surface" with no exemption. §14 AT-19 asserts it (a) requires authentication, (b) returns byte-identical payloads to two users in different companies. Stated here rather than self-exempted. |
+| **Input validation at a trust boundary**    | `quantityValue`: positive, finite, bounded (reject ≤ 0, NaN, > 1e9), Decimal not float. `quantityUnit`, `testSufficiencyMode`: enum whitelist. `testScale`: must be in the resolved ruleset's `scaleKeys`, rejected at the route, never silently coerced. Bulk routes validate per row and reject the whole batch on any invalid row.                            |
+| **Gate bypass via data**                    | Setting `quantityValue` low to shrink a required count is possible and **audited**: quantity/scale edits write audit rows, and the decision snapshot records the quantity and its source. Detection, not prevention — the field is legitimately user-recorded. (Also currently inert: no C1 rule divides by quantity, §3.2.1.)                                   |
+| **Permission escalation**                   | §10.2. A foreman cannot weaken a gate.                                                                                                                                                                                                                                                                                                                           |
+| **Authorization vs stale readiness**        | Authorization reads stay outside the decision transaction, per F0 `[R3.1-R6]` (`qualityRoutes.ts:414-416`). C1 changes nothing here and adds the regime read to the same outside-the-transaction category (§3.4.3).                                                                                                                                              |
+| **Commercial leakage**                      | Sufficiency payloads contain no money. Snapshot rows carry unfiltered commercial values generally (F0 §5), so any future read surface re-applies `filterCommercialReadiness`; C1 adds no such surface.                                                                                                                                                           |
+| **Copyright / DRM'd content**               | §8.4: facts only, no prose field, CI-capped label length.                                                                                                                                                                                                                                                                                                        |
+| **Audit-log integrity**                     | Unchanged — sufficiency rides `recordDecision`'s existing atomic audit+snapshot write.                                                                                                                                                                                                                                                                           |
+
+### 10.2 Permission matrix `[C1R-B12]`
+
+The plan and appendix say nothing about who may author or override rulesets, so these are **the spec's own design calls, stated as such** and open to Jay's correction (§16 D12). Canonical role values are `backend/src/lib/roles.ts`.
+
+| Action                                                                      | Allowed                                                                                        | Rationale                                                                                                                                               |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Author / edit a ruleset**                                                 | Nobody at runtime — code-only, PR-reviewed                                                     | §3.1. Tenant-authored rulesets are C3.                                                                                                                  |
+| **Read the registry** (`GET /api/test-sufficiency/rulesets`)                | any authenticated user                                                                         | Public specification facts; needed to render scale options.                                                                                             |
+| **See a sufficiency verdict** on a lot                                      | anyone with existing lot-readiness read access, incl. subcontractors within their portal scope | Rides `GET /:id/readiness`, whose authorization (`qualityRoutes.ts:277-294`) already covers subcontractor scoping. No new visibility.                   |
+| **Set `Lot.testScale` / `quantityValue` / `quantityUnit`** (single or bulk) | `LOT_EDITORS` (`routes/lots/roles.ts`) — **foreman excluded**                                  | These are lot setup attributes, and foreman is deliberately not a lot setup manager. Consistent with the existing lot-edit gate rather than a new rule. |
+| **Set `Project.testSufficiencyMode`**                                       | `owner`, `admin`, `project_manager`                                                            | Changing gate strength is a project governance decision, not a field one. Audited.                                                                      |
+| **Force-conform past a sufficiency block**                                  | `LOT_FORCE_CONFORMERS` (existing owner/admin set, `qualityRoutes.ts:434-436`)                  | Reuses the shipped override authority; the shortfall is recorded in the snapshot. No new override concept, no new role.                                 |
+| **Waive a sufficiency rule for a lot**                                      | **nobody — not built**                                                                         | A per-lot waiver is a C3 "controlled override" (program line 77). Force-conform is the C1 escape hatch. `ponytail:` one escape hatch, not two.          |
 
 ---
 
 ## 11. Build phases
 
-Each phase is one reviewable PR (or a small ordered set), with its own exit condition. Order is strict — later phases depend on earlier ones.
+Order is strict. The confirmation pass moved into C1.0/C1.1 `[C1R-B11]`, so the packs are no longer last.
 
-### C1.0 — Vocabulary, registry, evaluator, reason codes (S–M) · no migration, no call sites
+### C1.0 — Confirmation pass + vocabulary + evaluator + reason codes (M) · no migration, no call sites
 
-Mirrors F0.1's shape: the pure layer lands first and is unused.
+- **The §8.3 step-1 confirmation pass runs FIRST**, before any pack is authored. Output: verified numbers with `edition` / `clause` / `pdfPage` / `sourceUrl` / `checkedOn` / `revalidateBy`, or a recorded failure to confirm. Jay-visible (§16.0).
+- `sufficiency/types.ts`, `registry.ts`, `regime.ts`, `resolve.ts`, `evaluate.ts`, `rulesets/index.ts` — **no pack content yet**; a synthetic fixture ruleset in tests only.
+- Five new codes + provenance in `contracts/reasonCodes.ts`; `testFailing` added and `testCountSufficient` re-exported in `predicates.ts` (§4.3).
+- `TestReasonCode` widened and `TestSufficiencyVerdict` extended with **optional** `state`/`rules` (§4.2.1) so `contracts.test.ts:140-150` keeps compiling.
+- **D10:** `overdue_test` removal with its migration-safety step (§16 D10). Independent of everything else; lands here so it is not left dangling.
+- Tests: §14 AT-1 … AT-9, AT-17.
+- **Exit:** pure layer fully tested, zero production call sites; fallow may flag the exports unused — expected-by-design, stated in the PR body (the F0.1 precedent, `predicates.ts:15-17`, `[C1R-C1]`).
 
-- `sufficiency/types.ts`, `registry.ts`, `regime.ts`, `evaluate.ts`, `rulesets/index.ts` — **no ruleset content yet** (a synthetic fixture ruleset in tests only).
-- Five new codes + provenance in `contracts/reasonCodes.ts`; the `testCountSufficient` re-export in `predicates.ts` (§4.3).
-- `TestSufficiencyVerdict` extended in `contracts/futureConsumers.ts`; `contracts.test.ts` extended to assert the real implementation satisfies it.
-- Unit tests: the `max(minCount, perQuantity)` arithmetic; every `UnknownCause`; the regime state machine including the force-conform asymmetry and the "failure retroactively reverts a later lot" case; the bounded-lookback equivalence (fold-over-full-history vs `take: 3` produce identical regimes over generated sequences).
-- **Exit:** the pure layer is fully tested with zero production call sites; fallow may flag the exports as unused — expected-by-design for this phase, stated in the PR body (the F0.1 precedent, `predicates.ts:15-17`).
+### C1.1 — Migration + packs + resolution + entry + WARN-only surfacing (L)
 
-### C1.1 — Migration + resolution + WARN-only surfacing (M)
+- The §6 migration (four nullable columns, one defaulted column, one index) plus the `activitySlug` backfill script. **Orchestrator applies to prod.**
+- **The packs, authored from C1.0's confirmed figures** — `vicroads-204.v1` at its verified status, `tfnsw-r44.v1` at grade `'C'`/`draft`. CI currency assertions land with them.
+- `resolve.ts` wired: registry + scale + quantity + regime, per path, with the exact `select`/`include` extensions of §4.1.1.
+- `computeConformanceResult` third parameter; `ConformancePrerequisites.sufficiencyBlocks`; `lotConformable` limb (§5.1.1); `buildSufficiencyAdvisoryItems` (§5.1.4); conformed/claimed short circuits extended (§5.1.3).
+- **Data entry:** `bulkCreateCore` pass-through, `POST /api/lots/bulk-set-test-attributes`, `PATCH` fields, `LotEditFormFields`, bulk affordance, project-settings control (§9).
+- All projects at `warn`, so nothing blocks.
+- **Characterization gate, restated `[C1R-12]` `[C1R-B2]`:** the corpus (`readiness/characterization/`) covers the **lot-readiness and claim-readiness endpoints only** (`characterization.test.ts:80`, `:98`) — it does **not** cover the conform gate. So C1.1's gate is three things, not one:
+  1. **Regenerate** `lot-readiness.snapshot.json` and `claim-readiness.snapshot.json`, review the diff, accept it explicitly in the PR body. Expected diff: **empty**, because the corpus project resolves no ruleset. A non-empty diff must be only added sufficiency items on ruleset-resolving lots.
+  2. **`predicates.parity.test.ts`** extended with the sufficiency permutations — it is one of the two real conform-gate pins.
+  3. **`lotConformanceDecision.db.test.ts`** — the other pin — asserts the conform decision is unchanged at `mode: 'off'`/`warn`.
+- **Exit:** a lot with a resolved ruleset shows real counts in the panel (including a conformed lot); no live project's conform outcome changes; local-DB tests green; `npm run fallow:audit` verdict in the PR body.
 
-- The §6 migration (reviewed Prisma; **orchestrator applies to prod**).
-- Resolver: project/lot → ruleset + scale + quantity, with the `LotGeometry.areaM2` read-time fallback.
-- Sufficiency limb inside `computeConformanceResult`, contributing items but **not** `canConform` (all projects at `warn`).
-- Route + form work: `PATCH /api/lots/:id` fields, `GET /api/test-sufficiency/rulesets`, `LotEditFormFields`, `LotReadinessPanel` rendering.
-- **Characterization gate:** with no ruleset registered (the state of every existing project), `GET /api/lots/:id/readiness` and the conform gate are **byte-identical to master**. Pinned by the existing readiness characterization corpus (`readiness/characterization/`).
-- **Exit:** a lot with a fixture ruleset shows a shortfall in the panel; no live project's behaviour changes; local-DB tests green; `npm run fallow:audit` verdict in the PR body.
+### C1.2 — Snapshots + the `block` mode (M)
 
-### C1.2 — Decision-point adoption + the `block` mode (M)
+- Optional always-emitted `sufficiency` key at `resultSchemaVersion: 1` on `lot_conformance`, `hold_point_release`, `claim_member` (§5.4.2); member payload is the fixed-width aggregate (§5.4.3); `buildClaimReadinessResultV1` taught to summarise it.
+- `Project.testSufficiencyMode === 'block'` honoured through `sufficiencyBlocks` (§5.1.2).
+- Hold-point request/release advisory (§5.2); claim-inclusion advisory + the §5.3 prohibition test.
+- Batched path resolves sufficiency for N lots with one grouped regime query per stream.
+- Tests: §14 AT-10 … AT-16, AT-18, AT-19.
+- **Exit:** all three decision points record the block; claim create at the 5,000-member ceiling still meets F0's p95 < 2 s (§12); `block` proven on a **confirmed** pack and proven inert at `warn`/`off`.
 
-- `resultSchemaVersion` 1 → 2 with the optional `sufficiency` block for `lot_conformance`, `hold_point_release`, `claim_member` (§5.4), with version-dispatching readers and a v1-still-decodes test.
-- `Project.testSufficiencyMode === 'block'` honoured in the conform gate; `unknown` still never blocks.
-- Hold-point request/release advisory (§5.2); claim-inclusion advisory (§5.3).
-- Batched path: `checkConformancePrerequisitesBatch` resolves sufficiency for N lots **without** a per-lot regime query (one grouped lookback query per stream, memoized).
-- **Exit:** all three decision points record a sufficiency block; claim create at the 5,000-member ceiling still meets F0's p95 < 2s (§12); `block` mode proven on a test project and proven inert at `warn`/`off`.
+### C1.3 — Benchmark, monitoring, exit evidence (S–M)
 
-### C1.3 — Seed packs + confirmation + benchmark (M)
+- §12 benchmarks against the reference dataset; §15.2 monitoring wired; §15.1 exit evidence assembled.
 
-- `vicroads-204.v1` and `tfnsw-r44.v1` land as `status: 'draft'`; the CI currency assertions land with them.
-- The **confirmation pass** (§8 step 2) is performed and each pack flips to `confirmed` — or ships `draft` with that stated in the exit evidence. Numbers that cannot be confirmed are deleted.
-- Benchmarks against the reference dataset (§12).
-- **Exit:** §13.
-
-**B/C overlap.** Program §9 permits B and C1 to overlap "only across disjoint subsystems with strict file ownership". They are disjoint: Wave B owns `routes/copilot/**`, `ImportBatch`/`ImportMappingProfile`, parsers, `routes/itp/**`. C1 owns `lib/readiness/sufficiency/**`, `conformancePrerequisites.ts`, `evidenceReadiness/conformanceItems.ts`, `routes/lots/qualityRoutes.ts`. **Contended files: `backend/prisma/schema.prisma` (both add models/columns) and `contracts/reasonCodes.ts` (Wave B does not touch it today, but any new import reason code would).** Schema changes must be serialized between the two waves — one migration at a time, coordinated by the orchestrator.
+**B/C overlap `[C1R-13]`.** Program §9 permits overlap "only across disjoint subsystems with strict file ownership". Wave B's migration has already landed, so migration serialization is trivially "C1 goes after". Wave B owns `routes/copilot/**`, `ImportBatch`/`ImportMappingProfile`, parsers, `routes/itp/**`. C1 owns `lib/readiness/sufficiency/**`, `conformancePrerequisites.ts`, `evidenceReadiness.ts` + `evidenceReadiness/conformanceItems.ts`, `routes/lots/qualityRoutes.ts`, `routes/lots/bulk*`. **Residual contention is the `schema.prisma` file and `bulkCreateCore.ts`** (Wave B's lot-register importer writes through it) — both need a single-owner window, coordinated by the orchestrator.
 
 ---
 
 ## 12. Scale & performance targets (program §8 form: percentile + dataset + device/network)
 
-Measured against the **defined production-like reference dataset** (5,000 lots, 10,000 map features, 50 GB evidence, 10k-row registers — built once, reused).
+Measured against the defined production-like reference dataset (5,000 lots, 10,000 map features, 50 GB evidence, 10k-row registers — program line 138).
 
-| Target                                             | Budget                                                                                                                                                                                | Method                                                                                                                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Sufficiency added to `GET /api/lots/:id/readiness` | **p95 < 25 ms** server-side, on a lot whose ITP has 500 checklist items (`MAX_CHECKLIST_ITEMS`, `templateValidation.ts:8`) at 5,000 project lots                                      | Server-side timing; the lot's own tests come from the existing include (no new query).                                     |
-| Total `GET /:id/readiness`                         | **p95 < 400 ms** server-side, and interactive on a mid-tier Android over 4G                                                                                                           | Regression guard: the route must not regress more than 10% vs master.                                                      |
-| New queries per readiness call                     | **≤ 1** per distinct stream, memoized per request; **0** when no ruleset resolves                                                                                                     | Query-count assertion in a DB-backed test (query counting, not timing — deterministic in CI).                              |
-| Regime lookback                                    | **`take: 3`, index-covered** by `lots_project_activity_conformed_idx`                                                                                                                 | Assert row count fetched ≤ 3 per stream; assert p95 < 5 ms at 5,000 lots.                                                  |
-| Conform decision overhead                          | sufficiency adds **p95 < 15 ms** inside the decision transaction, keeping the whole single-entity decision inside F0's **p95 < 50 ms** budget (`f0-execution-spec-2026-07-24.md:115`) | Same harness as F0.5's decision benchmark.                                                                                 |
-| Claim create at the 5,000-member ceiling           | **p95 < 2 s unchanged** (F0's revised claim target); sufficiency adds **≤ 1 grouped query per stream**, never per member                                                              | The maximum-size claim benchmark F0.5 already built.                                                                       |
-| `claim_member` snapshot size                       | **≤ 1 KB** with the folded sufficiency block at the worst realistic rule count (`MEMBER_RESULT_MAX_BYTES`, `recordDecision.ts:151`)                                                   | Size assertion in the requirement-set test.                                                                                |
-| Serializable retry rate                            | no measurable increase vs master under the concurrency load                                                                                                                           | The regime read is inside the decision transaction and widens its read set; a hot retry loop is a perf failure, per F0 §8. |
-
----
-
-## 13. Exit gate
-
-C1 is not complete until **all** of the following hold, with evidence in the PR bodies:
-
-1. **The third F0 consumer contract turns green.** `TestSufficiencyVerdict` (`futureConsumers.ts:27-37`) is satisfied by the real implementation, not a stub — lot readiness (live), claim readiness (live), **test sufficiency (C1)**. Three of six. The "one definition everywhere" claim still waits on My Work, hold-point packages and handover readiness.
-2. **Both seed packs are either `confirmed`** (edition + clause + PDF page + `checkedOn` + future `revalidateBy` recorded, verified against the current published edition) **or shipped `draft` and provably non-blocking**, with the choice stated in the exit evidence. No number is asserted as current without step 8.2.
-3. **CI currency assertions are green** and demonstrably fail on a synthetic expired `confirmed` ruleset (the check is tested, not just present).
-4. **No behaviour change at `mode: 'off'`/`warn`**, characterization-pinned against the shipped readiness corpus; no live project's conform outcome changes without an explicit mode flip.
-5. **`block` mode demonstrated end to end** on a real project: a lot short on tests is blocked with the numbers and clause cited; force-conform overrides it and the shortfall is recorded in the snapshot; the snapshot is verified by direct query (the established prod verification ritual).
-6. **Regime correctness proven, including retroactivity**: a corrected-to-fail test on an earlier lot flips later lots' regime and required counts on the next read, with no stored state to migrate.
-7. **All §12 benchmarks met** on the reference dataset.
-8. **Tenant-isolation test green** for the regime query.
-9. **Docs + Clancy knowledge mirror updated** (standing boundary, program line 5).
-10. **Pilot acceptance owner: Jay** — a real lot on a real project, gate visible, explanation readable by a quality manager without training.
-11. `npm run fallow:audit` verdict recorded per PR.
-
-**Monitoring after enable:** count of lots by sufficiency state per project; count of force-conforms that overrode an `insufficient` verdict (the number that says whether the gate is calibrated or being routed around); `unknown` cause distribution (tells us which missing input to chase); regime distribution full-vs-reduced; sufficiency query p95.
+| Target                                             | Budget                                                                                                                                                                | Method                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sufficiency added to `GET /api/lots/:id/readiness` | **p95 < 25 ms** server-side, on a lot whose ITP has 500 checklist items (`templateValidation.ts:8`) at 5,000 project lots                                             | Server-side timing.                                                                                                                                                                                                                                                                  |
+| Total `GET /:id/readiness`                         | **p95 < 400 ms** server-side; must not regress > 10% vs master                                                                                                        | Existing route benchmark.                                                                                                                                                                                                                                                            |
+| Additional queries per readiness call `[C1R-11]`   | **≤ 1 _additional_ query** per distinct stream, memoized per request; **0 additional** when no ruleset resolves                                                       | Query-count assertion (deterministic in CI). Rev 1 said "0 queries", which was wrong: `Project.state`/`specificationSet` are not selected today. They are added to the **existing** `select`/`include` (§4.1.1), so the correct claim is zero _additional_ queries, not zero fields. |
+| Regime lookback                                    | **`take: N` (N = 3), index-covered** by `lots_project_activity_slug_conformed_idx`; **p95 < 5 ms** at 5,000 lots                                                      | Assert rows fetched ≤ N per stream. Now well-founded because the index is on the **stored slug**, not free-text `activityType` `[C1R-B6]`.                                                                                                                                           |
+| Conform decision overhead                          | sufficiency adds **p95 < 5 ms** inside the transaction (the regime read is outside it, §3.4.3), keeping the single-entity decision inside F0's **p95 < 50 ms** budget | F0.5's decision benchmark harness.                                                                                                                                                                                                                                                   |
+| Serializable retry rate                            | **no measurable increase** vs master under the concurrency test load                                                                                                  | Directly testable because the regime read is outside the transaction; a rise here means the read leaked back in.                                                                                                                                                                     |
+| Claim create at the 5,000-member ceiling           | **p95 < 2 s unchanged**; sufficiency adds ≤ 1 grouped query per stream, never per member                                                                              | F0.5's maximum-size claim benchmark.                                                                                                                                                                                                                                                 |
+| `claim_member` snapshot size                       | **≤ 1 KB with an UNBOUNDED rule count** — asserted at 10,000 synthetic rules `[C1R-B4]`                                                                               | Fixed-width aggregate (§5.4.3) makes this provable, not probable. Rev 1's "worst realistic count" was the wrong bound for a 500-on-claim-create failure.                                                                                                                             |
+| `activitySlug` backfill                            | completes inside the migration window at 5,000 lots; measured before prod apply                                                                                       | Batched update, progress logged.                                                                                                                                                                                                                                                     |
 
 ---
 
-## 14. Open decisions for Jay (D1–D10)
+## 13. Rollback / recovery `[C1R-B12]`
 
-Each carries a recommendation. D2, D3, D4 and D8 are the ones that change the shape of the wave.
+Program §9 mandates a rollback/recovery process. Per phase:
 
-**D1 — Default `Project.testSufficiencyMode`.** `off` (invisible until switched on), `warn` (visible, never blocks), or `block`?
-→ **Rec: `warn` for all projects, new and existing.** It makes the wedge visible immediately with zero risk of blocking live production work, and it generates the data needed to decide whether `block` should ever become the default. `block` stays opt-in per project until a pilot proves the calibration.
+| Phase                                    | Rollback                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Anything stranded?                                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **C1.0** (pure layer, D10)               | Plain `git revert`. No DB objects, no call sites. D10's alert-type removal reverts by restoring the two `AlertType` declarations and the config key.                                                                                                                                                                                                                                                                                                                      | No.                                                                                                                                                    |
+| **C1.1** (migration + packs + surfacing) | **Code reverts cleanly; the migration is not reverted.** The four nullable columns and the defaulted column are inert without the code — a reverted build simply never reads them, and `testSufficiencyMode` defaulting to `'warn'` gates nothing. The index is inert. Dropping columns is **not** part of rollback (data loss for no gain).                                                                                                                              | User-entered scale/quantity survives the revert and is still there when the code returns. `activitySlug` is a classification, safe to leave populated. |
+| **C1.2** (snapshots + block)             | **The no-bump decision is what makes this clean `[C1R-B3]`.** Rollback = stop emitting the optional `sufficiency` key. Rows already written keep it; `decodeAtVersion1` still decodes them because the version never changed; no reader breaks; nothing is stranded. Had the version been bumped, rolled-back code would hard-throw on every v2 row already in the immutable table (`shared.ts:61-66`) and the only recovery would be a data migration of audit evidence. | No. This is the single strongest argument for §5.4.2.                                                                                                  |
+| **C1.2 `block` mode**                    | Per-project: set `testSufficiencyMode` back to `warn`. Instant, no deploy, audited.                                                                                                                                                                                                                                                                                                                                                                                       | No.                                                                                                                                                    |
+| **A wrong number in a shipped pack**     | Emit a corrected `.vN+1` with `effectiveTo` on the old version (§8.3 step 3) — never an in-place edit `[C1R-9]`. Historical snapshots keep resolving their original `ruleId`, so past decisions stay readable exactly as they were made.                                                                                                                                                                                                                                  | No, by construction.                                                                                                                                   |
 
-**D2 — The pre-cover gate.** There is **no cover event in CIVOS** (0 grep hits). Does riding the hold/witness-point request + release path (§5.2, warn-only) satisfy the program's "proactive gates before cover", or do you want a dedicated cover event?
-→ **Rec: ride the hold/witness point.** The evidence is in our own seeder (`seed-itp-templates-vic-earthworks.js:118`, "W — Notify Superintendent before covering") — the cover moment is already modelled as a witness point. A dedicated cover event means a new lot state, a new route, and a **mobile shell touch** (Jay-gated) for an event nobody has asked to record. If you want it, it is its own spec.
-
-**D3 — Snapshot shape.** Fold sufficiency into the existing requirement sets at `resultSchemaVersion: 2` (no migration), or widen F0's `@@unique([auditLogId, entityType, entityId])` to include `requirementSet` and write a second row (migration on a live prod table)?
-→ **Rec: fold.** It exercises the version-dispatch mechanism F0 built for exactly this, needs no migration, and keeps "one decision, one verdict row per entity". Note this **answers the open question F0 left at `f0-execution-spec-2026-07-24.md:72`** — the key stays narrow.
-
-**D4 — Required-count arithmetic.** `required = max(minCountByScale, ceil(quantity / every))` — the per-lot minimum is a **floor** that a small lot cannot fall below?
-→ **Rec: yes, `max`.** The appendix describes the minimum count as existing "for statistical validity", _separately_ from area coverage (§A rows 1 and 3) — that is a floor, not an alternative. Flagged because it is the single most consequential arithmetic choice in the wave and a wrong reading is silently wrong on every lot.
-
-**D5 — Quantity storage.** New `Lot.quantityValue` + `quantityUnit`, or rely on `LotGeometry.areaM2` alone?
-→ **Rec: both, in that order.** Geometry only exists for spatially-defined lots and only ever gives m² / m — volume and tonnage rules would be permanently unevaluable. Explicit lot quantity wins; geometry is the read-time fallback for `m2`; the verdict names the source used. Never copied (it would go stale on the next geometry edit).
-
-**D6 — Scale selection grain.** Per-lot (`Lot.testScale`), per-project, or a per-activity project default?
-→ **Rec: per-lot, no default.** VicRoads scale tracks the material/zone, which varies within a project. A project-level default would be silently wrong for some lots — and "silently wrong" is the failure mode this wave exists to remove. `NULL` → `unknown` → a one-click warning, not a guess. A per-activity default is a later convenience if PMs ask.
-
-**D7 — Frequency-stream key.** `(projectId, rulesetId, ruleId, activitySlug, normalizedLayer)`, or should subcontractor / material source be in the key?
-→ **Rec: as proposed, no subcontractor.** The authority regiments "work of the same type", not "work by the same subcontractor". Adding the subcontractor would let a contractor earn a reduced frequency per crew, which is a defensible-only-if-the-spec-says-so reading, and no cited spec says so. Revisit only with a clause reference.
-
-**D8 — TfNSW pack scope.** Encode R44's **n = 6 minimum sample count only**, or also the Characteristic Density Ratio statistic with k-values?
-→ **Rec: count only in C1.** The CDR is a statistic over result _values_, not a count of results — it needs the LIMS-grade structured data C3 brings, and a half-implemented statistical acceptance test would produce confident wrong answers about compliance. Count now, statistic in C3.
-
-**D9 — New dependencies.** **None proposed.** The whole engine is arithmetic over data already fetched, plus one bounded query. Recorded explicitly so "no new deps" is a decision, not an omission.
-
-**D10 — The unused `overdue_test` alert type** (F0 open decision 3, `f0-execution-spec-2026-07-24.md:167`; declared `notificationAlertConfig.ts:8`, commented unused at `:32`). Wire it in C1 or delete it?
-→ **Rec: delete it in C1.0.** "Overdue test" is a _lab-turnaround_ concern, which is C2's sample lifecycle, not C1's count. Sufficiency surfaces in readiness where the user is already looking, not as a new alert stream into a 3,669-row backlog that A2 is still burning down. C2 can add a real, resolvable alert with a real underlying condition.
+**Recovery from a mis-backfilled `activitySlug`:** re-run the backfill script (idempotent — it derives from `activityType`, which it never writes). A wrong slug affects stream membership only; it cannot corrupt a decision, because decisions record their own regime basis in the snapshot.
 
 ---
 
-## 15. Verification notes and unresolved research items
+## 14. Acceptance tests `[C1R-B12]`
 
-Recorded plainly so a reviewer knows the difference between "verified" and "assumed".
+Named artifact, per program §9. Every item is a real test file assertion, not a review checklist.
 
-**Verified against code at `3fe7eadd`** — every `file:line` in §2, including the three absences that shape the design: no lot quantity field, no test-scale field, and **zero occurrences of any cover/pre-cover concept** in `backend/src` or `frontend/src`.
+**Pure layer (C1.0, no DB):**
 
-**Program/research claims this spec carries forward without independent verification:**
+- **AT-1** `requiredCount = max(minCount, ceil(quantity/every))` across the boundary cases; and the floor case where `perQuantity` is absent.
+- **AT-2** The real evaluator satisfies `TestSufficiencyVerdict` and **always populates `state` and `rules`** even though both are optional (§4.2.1); `contracts.test.ts:140-150`'s existing four-key fixture still compiles.
+- **AT-3** Every `UnknownCause` fires from its own minimal input, and each produces `sufficient: false` and `blocksAction: false`.
+- **AT-4** The `perQuantity` limb, against a **synthetic** rule — explicitly marked as covering an unshipped limb `[C1R-1]`.
+- **AT-5** Regime, **unconformed subject**: no cursor, `take: N`, most-recent-N semantics.
+- **AT-6** Regime, **conformed subject**: strictly-before compound cursor; a stream where "most recent N" and "N preceding the subject" differ yields **different** regimes, and the conformed subject gets the latter. Plus the **length guard**: a stream with < N entries is `full`, never `reduced`.
+- **AT-7** Property test: bounded lookback ≡ fold over full history, over generated conform/fail sequences. **The reference fold implements the length guard independently** — stated in the test's own comment, because a reference that shares the bug proves nothing `[C1R-B7]`.
+- **AT-8** Regime asymmetries: a force-conformed lot is non-conforming; an **unverified** failing test does **not** reset the regime while a **verified** one does (`testFailing`, §3.4.2) `[C1R-B8]`.
+- **AT-9** `sufficiencyBlocks` is false for every combination of `mode: 'off'|'warn'`, `status: 'draft'`, and `state: 'unknown'` — the structural non-blocking guarantee (§5.1.2) `[C1R-B5]`.
+- **AT-17** The CI currency check fails on: a `confirmed` ruleset with a past `revalidateBy`; a `confirmed` ruleset at grade ≠ `'A'`; a `draft` ruleset declaring `reduced`; a missing `pdfPage` on a `confirmed` pack.
 
-- **VicRoads Sec 204 numbers** (6 tests Scale A/B, 3 Scale C, 5,000 m² / 500 m² lot caps, 204.14(c) three-consecutive-conforming regime). Sourced from a **council republication of the December 2015 edition**. Not verified against the current VicRoads/DTP edition in this session. §8 makes that verification a gate, and the pack ships `draft` until it happens.
-- **TfNSW R44** (n = 6, lot ≤ one shift, narrow lots ≤ 150 m). Edition not pinned; the appendix's own portal link is a record, not the document. Only n = 6 is encoded, and only as `draft`.
-- **TMR MRTS04, DIT SA, MRWA numeric frequencies** — on the appendix's standing never-assert list (§G). **No pack, no numbers, in C1.**
-- **Whether CivilPro alerts on a testing shortfall** — never-assert (§G). This spec claims only that CivilPro _configures_ frequencies (appendix §A row 6, grade B) and does not claim the gate is unique.
+**Integration (C1.1/C1.2, local test DB only):**
 
-**Contradiction found between the plan and the code:** the program specifies "proactive gates before **cover**/conform/claim" (line 75) as if cover were an existing decision point. It is not — the concept does not exist anywhere in the codebase. §5.2/D2 resolve it by mapping "cover" onto the witness point that already models it; this is a **design decision, not an implementation of something already present**, and it is the one place where the program's wording overstates the current system.
+- **AT-10** A lot with a resolved confirmed ruleset and a shortfall: `mode: 'off'` → item present, `canConform` unchanged; `warn` → warning; `block` → `canConform: false` with required/have numbers in the detail.
+- **AT-11** **The §5.3 prohibition:** `getClaimBlockingReasonsForConformedLot` returns byte-identical output across every sufficiency state, including `insufficient` under `mode: 'block'`.
+- **AT-12** The three requirement-set payloads carry `sufficiency`, always emitted; the ~10 `toEqual` assertions in `requirements.test.ts` updated; a pre-C1 row **without** the key still decodes at version 1; `set.version` is still `1` for all five sets (`requirements.test.ts:95-108` unchanged) `[C1R-B3]`.
+- **AT-13** `claim_member` payload ≤ `MEMBER_RESULT_MAX_BYTES` at **10,000** synthetic rules `[C1R-B4]`; and the aggregate (`buildClaimReadinessResultV1`) summarises member sufficiency rather than ignoring it.
+- **AT-14** Conform-gate pins `[C1R-12]`: `predicates.parity.test.ts` extended with sufficiency permutations (parity preserved); `lotConformanceDecision.db.test.ts` asserts an unchanged decision at `mode: 'off'`/`warn`.
+- **AT-15** **Retroactivity, observable:** conform lots 1–5 into `reduced`; correct lot 2's test to a verified fail; re-read lot 5 → regime `full`, `requiredCount` risen, and **the advisory item is present on lot 5's readiness response even though lot 5 is `conformed`** (§5.1.3) — the assertion Rev 1's surface made impossible `[C1R-B2]`.
+- **AT-16** Force-conform past a block records the shortfall in the `lot_conformance` snapshot.
+- **AT-18** **Tenant isolation:** a lot in project B never appears in project A's stream, including when both share an `activitySlug`.
+- **AT-19** **Registry route** `[C1R-10]`: requires authentication; returns byte-identical payloads to two users in different companies.
+- **AT-20** Bulk paths: `bulkCreateCore` persists scale/quantity/`activitySlug`; `bulk-set-test-attributes` respects `assertLotsBulkMutable` and rejects an invalid `testScale` for the whole batch.
+- **AT-21** D10 safety: with a legacy `overdue_test` row present, `GET /api/notifications/alerts` does **not** 400 (whichever mitigation §16 D10 selects).
 
-**Tension surfaced, not contradicted:** the program's C1 line asks for the plain-English explanation to include _"no sample for CH 1,240–1,310"_. That is a **spatial coverage** statement and requires per-test location data C1 does not have (`TestResult.sampleLocation` is free text). Spatial overlay is explicitly C3 (line 77). C1's explanation therefore reports counts and omits the chainage clause — stated in §7 so the sentence is never shipped without the data behind it.
+---
 
-**Also noted:** `ImportBatch` (`schema.prisma:1999`) and `ImportMappingProfile` (`:2041`) are already in the schema at `3fe7eadd`, so Wave B has begun landing since its spec was written as "PROPOSED". §11's file-ownership note reflects the current tree, not the Wave B spec's snapshot.
+## 15. Exit gate, monitoring, completion standards
+
+### 15.1 Exit gate
+
+1. **≥ 1 pack `confirmed`, with `block` proven end to end on it** `[C1R-B11]`. Promoted to item 1 because Rev 1's ordering let C1 exit having gated nothing on unconfirmed numbers. A lot short on tests is blocked with the numbers and clause cited; force-conform overrides it; the shortfall is verified in the snapshot by direct query (the established prod verification ritual). If **no** pack can be confirmed, C1 **does not exit** — it reports the confirmation failure and Jay decides (§16.0).
+2. **The third F0 consumer contract turns green.** `TestSufficiencyVerdict` (`futureConsumers.ts:27-37`) satisfied by the real implementation, not a stub — lot readiness (live), claim readiness (live), **test sufficiency (C1)**. Three of six. "One definition everywhere" still waits on My Work, hold-point packages and handover readiness.
+3. **CI currency assertions green** and demonstrably failing on the synthetic cases of AT-17.
+4. **No behaviour change at `mode: 'off'`/`warn'`**, proven by the three-part gate of §11 C1.1 (regenerated corpus with an accepted diff, extended parity test, conform-decision DB test) — not by a "byte-identical" claim the corpus cannot support `[C1R-12]`.
+5. **`tfnsw-r44.v1` ships `draft` at grade `'C'`** with its unconfirmability stated in the exit evidence and appendix §H item 5 named as the unblocker `[C1R-B11]`.
+6. **Regime correctness proven, including retroactivity and both query modes** (AT-5, AT-6, AT-7, AT-8).
+7. **Retroactivity observable** `[C1R-15]`: AT-15 asserts it three ways — a `RequirementEvaluation` row query showing the changed `requiredCount` in a later decision's snapshot, a unit test over the regime function, **and** the readiness response of an already-conformed lot. Rev 1's exit item 6 was unobservable through the panel; §5.1.3 made it observable and this item asserts all three.
+8. **All §12 benchmarks met** on the reference dataset, including the unbounded-rule-count member size (AT-13) and no serializable-retry increase.
+9. **Tenant isolation green** for the regime query and the registry route (AT-18, AT-19).
+10. **Legal confirmation on the seeded packs obtained, or an explicit recorded risk acceptance** `[C1R-8]` — owner **Jay**, gated before any pack reaches a paying customer.
+11. **Docs + Clancy knowledge mirror updated** (standing boundary, program line 5).
+12. **Pilot acceptance owner: Jay** — a real lot on a real project, gate visible, explanation readable by a quality manager without training.
+13. `npm run fallow:audit` verdict recorded per PR.
+
+### 15.2 Monitoring and pilot adoption metrics `[C1R-B12]`
+
+**Engine-internal (Rev 1's list, retained):** lots by sufficiency state per project; force-conforms that overrode an `insufficient` verdict (the number that says whether the gate is calibrated or routed around); `unknown` cause distribution; regime full-vs-reduced distribution; sufficiency query p95; serializable-retry rate.
+
+**Program §6 pilot adoption metrics — which ones C1 moves, and how they are read.** Rev 1 omitted these entirely; §6 requires them per pilot and A6 instrumentation is the collection prerequisite.
+
+| §6 metric                                    | C1's expected effect                                                                        | How it is read                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Same-day evidence-capture rate               | **Up** — the pre-cover warning is a same-day prompt to sample                               | A6 funnel: test-result creation date vs lot activity date                 |
+| Median field completion time                 | **Neutral** — no new field task; three office-form fields only                              | A6 task timing; a regression here means the gate leaked into a field flow |
+| Unsynchronised-item age                      | **Unaffected**                                                                              | —                                                                         |
+| Hold points decided through CIVOS            | **Neutral to up** — the request surface gains information, not friction                     | Existing hold-point counts                                                |
+| External-link completion rate                | **Unaffected**                                                                              | —                                                                         |
+| Client outputs accepted without reformatting | **Unaffected in C1** (D1's folio is the consumer)                                           | —                                                                         |
+| Parallel spreadsheets eliminated             | **The headline C1 metric** — a frequency-tracking spreadsheet is exactly what this replaces | Pilot interview, per §6; asked explicitly at pilot review                 |
+
+Plus two C1-specific pilot questions: does the quality manager trust the number (if not, the citation is not doing its job), and how many lots did the pilot have to enter a scale for before the panel became useful (the D6 default's real test).
+
+### 15.3 Completion standards (program §6) `[C1R-B12]`
+
+- **Quality and audit standard — engaged, and satisfied.** Source, actor, timestamp and revision are attributable: every verdict carries its ruleset id, edition, clause and `citation.confirmed`; every gated decision records the verdict in an immutable snapshot with the regime basis; a force-conform past a block is recorded with its reason. No sufficiency change can rewrite an approved historical decision — snapshots are immutable and a corrected pack emits a new version rather than editing `.v1` (§8.3 step 3).
+- **Field workflow standard — engaged, contrary to Rev 1's silence.** Rev 1 implied C1 was office-only. It is not: **three new lot-edit form fields and one bulk affordance ship** (§9). So the standard applies to them: the bulk-set path exists precisely so the common case is not 500 forms (`[C1R-B10]`); the scale control is populated from the registry rather than typed; the fields are optional everywhere, so no existing flow gains a required step; and they sit on `LotEditFormFields`/`LotsPage`, which are **office** surfaces on a desktop or tablet — no foreman flow, no shell file, no new field task. Accessibility and touch targets follow the existing form components unchanged. The parts of the standard about offline, reconnection, restart and duplicate submission are **not applicable**: no C1 surface is offline-capable and no C1 write is a field capture.
+- **External collaboration standard — engaged at §5.2 only**, and satisfied by the warn-never-block rule: a superintendent's release is never refused by CIVOS's count.
+- **Output standard — not engaged in C1.** No new client-facing output; the folio is D1.
+
+---
+
+## 16. Decisions
+
+### 16.0 Jay decisions — the four that need a person, not a reviewer
+
+1. **D11 (surface for retroactive shortfalls).** The orchestrator has decided: extend the conformed/claimed short circuits to carry advisory items (§5.1.3), which is the wave's payoff. **Jay can flip to claim-bucket-only** — cheaper, no corpus regeneration, but retroactive shortfalls then surface only in the claim bucket and monitoring.
+2. **D13 (confirmation sequencing).** §8.3 moves the confirmation pass **before** encoding, per plan line 75 and the appendix. This **front-loads a human verification task on Jay or his dev** at the very start of C1.0 — reading the current published VicRoads/DTP Section 204 against every encoded number. The alternative is an explicit recorded deviation, which the plan permits only as a deviation.
+3. **D1 (default gate mode).** `warn` recommended. It is also what allowed Rev 1 to exit gating nothing — which exit item 1 now closes independently.
+4. **D12 (permission matrix).** §10.2's rows are the spec's own design calls because the plan and appendix are silent. Worth thirty seconds of Jay's eyes, especially "nobody may waive a rule per lot; force-conform is the only escape hatch".
+
+### 16.1 The full list
+
+**D1 — Default `Project.testSufficiencyMode`.** → **`warn` for all projects.** Visible wedge, zero risk of blocking live work; `block` opt-in per project. Reviewer agrees. Its one hazard (exiting having gated nothing) is closed by exit item 1.
+
+**D2 — The pre-cover gate.** → **Ride the hold/witness point** (§5.2), warn-only. Evidence is in our own seeder (`seed-itp-templates-vic-earthworks.js:118`). A dedicated cover event means a new lot state, a new route and a **shell touch** for an event nobody asked to record. Reviewer agrees.
+
+**D3 — Snapshot shape.** → **Fold, and do NOT bump the version** (§5.4). Rev 1 said fold at `v2`; the reviewer proved the bump renames `requirement_set` in a live immutable column (`requirements.test.ts:95-108`). Now an optional always-emitted key at `v1`, whose absence is the pre-C1 discriminator. Two unique keys (`schema.prisma:1719`, `:1721`) strengthen fold-over-widen `[C1R-14]`. Answers F0's open note at `f0-execution-spec-2026-07-24.md:72`: the key stays narrow.
+
+**D4 — Required-count arithmetic.** → **`max`, and the framing is withdrawn** `[C1R-1]`. The floor reading is right, but **no rule C1 ships has a `perQuantity` limb**, so `max` is a no-op in practice and Rev 1's "most consequential arithmetic choice in the wave" was overstated. The limb ships unexercised (§3.2.1), tested synthetically.
+
+**D5 — Quantity storage.** → **New `Lot.quantityValue`/`quantityUnit`, `LotGeometry.areaM2` as read-time fallback for `m2`, never copied.** Copying stales on the next geometry edit; geometry can never serve volume or tonnage. **Honest caveat:** dead weight for C1 counting (§3.2.1) — it serves §3.3's lot-size advisory and C2/C3. Ships now because bulk entry is cheapest built once.
+
+**D6 — Scale selection grain.** → **Per-lot, WITH an optional per-project ruleset default** — changed from Rev 1's "no default" `[C1R-B5]`/`[C1R-B10]`. With no default and no bulk path, 100% of lots would read `unknown` forever, which is a dead launch. So: `Ruleset.defaultScale` supplies a fallback when `Lot.testScale` is NULL, the verdict **always names the scale's source** (`'lot' | 'ruleset_default' | 'none'`), and a lot may override. A ruleset with no defensible default declares none and its lots stay `unknown` until a scale is entered — the honest case is still reachable.
+
+**D7 — Frequency-stream key, and its two membership holes.** → `(projectId, rulesetId, ruleId, activitySlug, layerBucket)`. **No subcontractor**: the authority regiments "work of the same type", not "work by the same crew", and no cited spec says otherwise. The reviewer's two holes, closed:
+
+- **NULL layer** → **member of the layer-agnostic stream only** (`layerBucket = '*'`), never of a layer-discriminated rule's stream. Agrees with the orchestrator's default.
+- **A lot whose `activitySlug` is NULL** (fold `family`/`none`) → **not a stream member, and its presence in another lot's window makes that window INCOMPLETE, so `reduced` cannot be earned across it.** This **differs from the orchestrator's stated default** ("absence is skipped, not counted as non-conforming"), and the argument is the spec's own doctrine: §7.1 says unknown is never satisfied, and a `reduced` regime is a **relaxation** — earning it across a history entry CIVOS cannot read is precisely "treating unknown as satisfied". The orchestrator's skip can grant 3-instead-of-6 off an unreadable history, an **under-testing** error; this version's cost is that a mis-typed lot keeps its neighbours at **full** frequency until someone classifies it — an over-testing error plus a nudge toward the data hygiene C1 wants. Note it does **not** mark the stream non-conforming permanently: classify the lot and the stream heals on the next read. Jay/orchestrator can overrule; the flag is here because the two options differ in which direction they fail.
+
+**D8 — TfNSW pack scope.** → **Count only (n = 6); no CDR.** A statistic over result values needs C3's LIMS-grade data, and a half-implemented statistical acceptance test produces confident wrong compliance answers. Reviewer strongly agrees, and adds the sharper point now encoded in §8.1: even the count is C-graded, so R44 is `draft`-forever pending appendix §H item 5.
+
+**D9 — New dependencies.** → **None.** Arithmetic over data already fetched plus one bounded query. Recorded as a decision, not an omission.
+
+**D10 — The unused `overdue_test` alert type** (F0 open decision 3, `f0-execution-spec-2026-07-24.md:167`). → **Delete it in C1.0, with migration safety** `[C1R-B9]`. Rev 1 called it unconsumed; §2.7 proves it has a **live write path** (`alerts.ts:118` → `alertPersistence.ts:43`) and a **fail-closed read path** (`parseAlertType` throws → `toAlert` → `GET /api/notifications/alerts` maps the whole list, so one legacy row 400s the alerts list). Required steps:
+
+1. **Either** a pre-deploy assertion that `SELECT count(*) FROM notification_alerts WHERE type = 'overdue_test'` is **0**, **or** make `toAlert` tolerant of unknown types (skip-and-log) **first**, in a separate earlier PR. Recommended: the tolerant-`toAlert` route, because it is a permanent robustness win and does not depend on prod state at deploy time.
+2. Remove **both** `AlertType` declarations (`notificationAlertConfig.ts:8` **and** `alertMappers.ts:22`).
+3. Name the **`byType` public response-shape change** (`systemAlertResponses.ts:56`) in the PR body.
+4. Note the escalation `IN`-list narrowing (`notificationAlertConfig.ts:33` → `notificationAutomation/alertEscalations.ts:16` → `:228`).
+5. Update four assertions: `alertMappers.test.ts:53`, `alertPersistence.test.ts:71-94`, `systemAlertResponses.test.ts:64`, `:75`.
+   Cleared: no Prisma enum, no migration, zero frontend references, no saved preference keyed to it.
+
+**D11 — Surface for retroactive shortfalls (NEW).** → **Extend the conformed/claimed short circuits** (§5.1.3), with the corpus regenerated and reviewed in C1.1 and the §5.3 prohibition enforced by AT-11. Alternative for Jay: claim-bucket-only. See §16.0.
+
+**D12 — Permission matrix (NEW).** → §10.2 as written; the spec's own design calls, Jay-visible. See §16.0.
+
+**D13 — Confirmation sequencing (NEW).** → **Confirm before encoding** (§8.3), per plan line 75. Front-loads a human task; the alternative is a recorded deviation. See §16.0.
+
+---
+
+## 17. Verification notes, plan corrections, and refutations
+
+### 17.1 Verified, and two corrections to the plan itself
+
+**Verified against code at `3fe7eadd`** — every `file:line` in §2, plus the absences that shape the design: no lot quantity or scale field; `Lot.activityType` free text; **zero occurrences** of any cover/pre-cover concept in `backend/src` or `frontend/src` (`grep -riE "\bpre-?cover|cover-?up|coverUp|preCover"` → 0).
+
+**Plan correction 1 — "gates before cover".** Program line 75 lists "proactive gates before cover/conform/claim" as if cover were an existing decision point. It is not. §5.2/D2 map it onto the witness point that already models it; that is a **design decision, not an implementation of something present** — the one place the program's wording overstates the current system.
+
+**Plan correction 2 — "whichever is lesser" `[C1R-C11]`.** Program line 15 frames the "whichever is the lesser" clause as part of the _frequency_ rule. The appendix's underlying claim scopes it to **lot size** ("Type A lot = one day's production or 5,000 m², whichever is the lesser"). §3.3 follows the appendix, not the plan; the plan's framing is the mangled one. Promoted here on the reviewer's recommendation.
+
+**Plan tension — the chainage sentence.** The program's target explanation includes "no sample for CH 1,240–1,310", a **spatial coverage** claim needing per-test location. §4.4 drops the clause; C3 restores it.
+
+**Carried forward without independent verification:** the VicRoads 204 figures (2015 council republication) and R44's unpinned edition. §8.3 makes confirmation a C1.0 precondition rather than a promise. TMR / DIT SA / MRWA numerics excluded entirely.
+
+### 17.2 Reviewer claims REFUTED with evidence
+
+Two of the fifteen recommendations do not survive checking. Both are recorded rather than folded, per the standing rule that a wrong fix must not be encoded.
+
+**`[C1R-5]` — "Fix the file path: the gate lives at `backend/src/lib/conformancePrerequisites.ts`, NOT under `evidenceReadiness/`." → REFUTED. There is no wrong path in Rev 1.** Rev 1 contains exactly two `evidenceReadiness`-prefixed citations, and both are correct:
+
+- `evidenceReadiness/conformanceItems.ts:68` — the file **is** `backend/src/lib/evidenceReadiness/conformanceItems.ts`, and `buildConformanceBlockerItems` **is** its export at that line.
+- The §11 file-ownership list names `conformancePrerequisites.ts` **and** `evidenceReadiness/conformanceItems.ts` as two separate C1-owned files, which is right.
+
+Every one of Rev 1's nine `conformancePrerequisites.ts` citations already used the correct un-prefixed path. Verified by `grep -n "evidenceReadiness" docs/plans/wave-c1-test-sufficiency-spec-2026-07-26.md` at Rev 1's `da847c55` content — two hits, both correct. Nothing changed.
+
+**`[C1R-1]` (sourcing limb only) — "The 'for statistical validity' quote is plan line 15's, not the appendix's." → PARTIALLY REFUTED.** The phrase appears in **both**. Plan line 15 has "separate minimum count for statistical validity"; the appendix's R44 row states, in its Decision-supported column, "**C1 statistical-validity constraint separate from area coverage**". So Rev 1's attribution to the appendix was defensible. **The substantive half of `[C1R-1]` is accepted in full and folded** (§3.2.1): no cited authority supplies a per-area frequency figure, so `max()` is a no-op for everything C1 ships, and Rev 1's illustrative "1-test-per-500 m²" was invented and is withdrawn. Only the sourcing accusation is corrected.
+
+**Minor citation slips in the review, folded with corrections rather than as-written:**
+
+- `[C1R-B9]` cited `alertEscalations.ts:16`/`:228` without its directory; the file is `backend/src/lib/notificationAutomation/alertEscalations.ts` and both line numbers are right (§2.7).
+- `[C1R-B3]` counted "six hardcoded `resultSchemaVersion: 1` assertions"; there are **eleven** in `recordDecision.db.test.ts` alone (`:75`, `:252`, `:280`, `:287`, `:311`, `:390`, `:563`, `:570`, `:838`, `:889`, `:897`). The finding is strengthened, not weakened (§5.4.2).
+- `[C1R-B1]` notes `ConformancePrismaClient` has no `project` key. True, and it constrains nothing — the widened `include` rides the existing `lot` delegate (§4.1.1). Recorded so a build agent does not widen the client type for no reason.
+- `[C1R-B4]`'s measured figures were reproduced independently: worst-case `claim_member` payload **429 bytes**, headroom **595**. Exact.
