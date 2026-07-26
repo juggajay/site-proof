@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A4 — Lot header primary action</title>
+<style>
+/* Tokens copied from frontend/src/index.css:8-104 (HSL triplets). */
+:root{
+  --background:40 14% 96%; --foreground:24 14% 9%;
+  --card:0 0% 100%; --primary:24 14% 9%; --primary-foreground:40 33% 98%;
+  --secondary:40 15% 93%; --muted:40 15% 93%; --muted-foreground:30 8% 32%;
+  --accent:40 15% 93%; --destructive:4 74% 40%; --success:142 72% 29%;
+  --warning:32 95% 44%; --info:217 79% 45%; --brand:26 90% 37%;
+  --border:38 18% 89%; --input:38 18% 89%; --radius:0.5rem;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --background:30 16% 7%; --foreground:40 30% 94%; --card:30 16% 10%;
+    --primary:40 30% 94%; --primary-foreground:30 16% 7%; --secondary:33 14% 15%;
+    --muted:33 14% 15%; --muted-foreground:36 16% 70%; --accent:33 14% 17%;
+    --destructive:0 88% 71%; --success:156 64% 52%; --warning:43 96% 56%;
+    --info:213 92% 68%; --brand:38 92% 50%; --border:33 15% 17%; --input:33 15% 17%;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:32px 20px 64px;background:hsl(var(--background));color:hsl(var(--foreground));
+  font-family:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;letter-spacing:-0.006em;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums}
+.spec-note{max-width:1000px;margin:0 auto 28px;font-size:13px;color:hsl(var(--muted-foreground));line-height:1.55}
+.spec-note code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
+.frames{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+.frame-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground));margin-bottom:4px}
+.frame-note{font-size:12.5px;color:hsl(var(--muted-foreground));margin:0 0 10px;line-height:1.5}
+.viewport{position:relative;border:1px solid hsl(var(--border));border-radius:12px;background:hsl(var(--background));overflow:hidden;padding:24px}
+.viewport.mobile{width:390px;max-width:100%;padding:16px}
+.viewport.stale{opacity:.72}
+
+/* Lot header — LotHeader.tsx:242-308 */
+.lot-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.lot-id{display:flex;align-items:flex-start;gap:16px;min-width:0}
+.qr{width:56px;height:56px;flex:0 0 56px;border:1px solid hsl(var(--border));border-radius:6px;background:
+  repeating-conic-gradient(hsl(var(--foreground)) 0% 25%, transparent 0% 50%) 50%/12px 12px}
+h1{font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0}
+.lot-desc{margin:2px 0 0;font-size:14px;color:hsl(var(--muted-foreground))}
+.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* buttons — button.tsx:7-33 + LotHeader.tsx raw-button classes */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 16px;border-radius:8px;font-size:14px;font-weight:500;border:1px solid transparent;cursor:default;white-space:nowrap;background:transparent;color:inherit}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn-outline{border-color:hsl(var(--border));color:hsl(var(--foreground))}
+.btn-primary{background:hsl(var(--primary));color:hsl(var(--primary-foreground));font-weight:600}
+.btn-icon{width:38px;padding:0;border-color:hsl(var(--border))}
+
+/* status chip — LotHeader.tsx:86 + LOT_STATUS_BADGE_CLASSES (lotStatusOverview.ts:64-73) */
+.status{padding:5px 12px;border-radius:6px;font-size:14px;font-weight:500;white-space:nowrap}
+.status-hold{background:hsl(var(--warning)/.12);color:hsl(var(--warning))}      /* hold_point */
+.status-conformed{background:hsl(var(--foreground)/.10);color:hsl(var(--foreground))} /* conformed */
+
+/* the "why" line: one sentence, reasonCode-derived, tied to the primary action.
+   It sits under the action cluster, not under a card label — the no-subtitle rule
+   governs CARDS; this is page chrome on a detail screen. */
+.why{margin-top:12px;display:flex;align-items:center;gap:8px;font-size:13px;color:hsl(var(--muted-foreground));border-top:1px solid hsl(var(--border));padding-top:12px;flex-wrap:wrap}
+.why svg{width:15px;height:15px;stroke:hsl(var(--destructive));fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 15px}
+.why .code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;background:hsl(var(--muted));border-radius:4px;padding:1px 6px}
+.why .overdue{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;font-weight:600;background:hsl(var(--destructive)/.10);color:hsl(var(--destructive));border-radius:4px;padding:1px 6px}
+
+/* overflow menu (illustrative popover) — mirrors the shipped mobile BottomSheet
+   action list at LotHeader.tsx:98-138 */
+.viewport:has(.menu){padding-bottom:120px}
+.menu{position:absolute;top:118px;right:24px;z-index:2;width:250px;border:1px solid hsl(var(--border));border-radius:10px;background:hsl(var(--card));padding:6px;box-shadow:0 8px 24px -8px hsl(var(--foreground)/.18)}
+.menu-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-size:14px;color:hsl(var(--foreground))}
+.menu-row svg{width:16px;height:16px;stroke:hsl(var(--muted-foreground));fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 16px}
+.menu-cap{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:hsl(var(--muted-foreground));padding:6px 10px 4px}
+
+/* lot summary strip — LotSummaryCards.tsx:10-30 */
+.summary{margin-top:18px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.viewport.mobile .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sum{border:1px solid hsl(var(--border));border-radius:var(--radius);padding:14px;background:hsl(var(--card))}
+.sum .k{font-size:13px;color:hsl(var(--muted-foreground))}
+.sum .v{margin:2px 0 0;font-size:17px;font-weight:500}
+
+.viewport.mobile h1{font-size:22px}
+.viewport.mobile .actions{width:100%;gap:8px}
+.viewport.mobile .actions .btn-primary{flex:1;min-height:46px}
+.viewport.mobile .lot-head{flex-direction:column;align-items:stretch}
+</style>
+</head>
+<body>
+
+<div class="spec-note">
+  <strong>A4 · Screen (c) — Lot header primary action.</strong> Today the desktop lot header renders five
+  equal-weight outlined buttons and no primary
+  (<code>LotHeader.tsx:254-307</code> — Ask Clancy, Copy Link, Print, Edit Lot, Override Workflow Status),
+  so nothing on the screen says what to do next. A4 phase 1 promotes exactly ONE solid button — the
+  <code>primaryAction</code> of the highest-ranked <code>needsAction</code> assignment on this lot — and folds every
+  remaining action into an overflow. That overflow is not new: it is the pattern the mobile branch already
+  ships (<code>LotHeader.tsx:162-181</code>), adopted by desktop.
+</div>
+
+<div class="frames">
+
+<!-- ── BEFORE ────────────────────────────────────────────────────────────── -->
+<div>
+  <div class="frame-label">Before — today at HEAD (LotHeader.tsx:242-308)</div>
+  <p class="frame-note">Five outline buttons of identical weight; the status chip is last in the row. No action hierarchy: the urgent decision (an overdue hold point) is invisible.</p>
+  <div class="viewport stale">
+    <div class="lot-head">
+      <div class="lot-id">
+        <div class="qr"></div>
+        <div>
+          <h1>LOT-0142</h1>
+          <p class="lot-desc">Subgrade CH 1240–1380 EB — Cudgegong Rd Upgrade Stage 2</p>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="btn btn-outline"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 7 6 12 6 12s6-5 6-12a6 6 0 0 0-6-6Z"/></svg>Ask Clancy</span>
+        <span class="btn btn-outline"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Copy Link</span>
+        <span class="btn btn-outline"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print</span>
+        <span class="btn btn-outline">Edit Lot</span>
+        <span class="btn btn-outline"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3H21"/><path d="M21 3v6h-6"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3H3"/><path d="M3 21v-6h6"/></svg>Override Workflow Status</span>
+        <span class="status status-hold">Hold Point</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AFTER: needsAction === true ───────────────────────────────────────── -->
+<div>
+  <div class="frame-label">After — a needs-action assignment exists on this lot</div>
+  <p class="frame-note">One solid primary, first in the cluster. Status chip stays. Everything else collapses behind the overflow. The line under the divider names the <code>reasonCode</code> that produced the button, so the button is never unexplained — and it carries the overdue truth separately from the ball-in-court truth.</p>
+  <div class="viewport">
+    <div class="lot-head">
+      <div class="lot-id">
+        <div class="qr"></div>
+        <div>
+          <h1>LOT-0142</h1>
+          <p class="lot-desc">Subgrade CH 1240–1380 EB — Cudgegong Rd Upgrade Stage 2</p>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="btn btn-primary"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Release hold point</span>
+        <span class="status status-hold">Hold Point</span>
+        <span class="btn btn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></span>
+      </div>
+    </div>
+
+    <div class="why">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      <span><strong style="font-weight:600;color:hsl(var(--foreground))">HP-014 Subgrade proof roll</strong> is unreleased — the lot cannot be conformed until it is.</span>
+      <span class="code">unreleased_hold_points</span>
+      <span class="overdue">6 days overdue</span>
+    </div>
+
+    <!-- overflow contents, shown open for the mockup -->
+    <div class="menu">
+      <div class="menu-cap">More actions</div>
+      <div class="menu-row"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit Lot</div>
+      <div class="menu-row"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3H21"/><path d="M21 3v6h-6"/><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3H3"/><path d="M3 21v-6h6"/></svg>Override Workflow Status</div>
+      <div class="menu-row"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Copy Link</div>
+      <div class="menu-row"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print</div>
+      <div class="menu-row"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 7 6 12 6 12s6-5 6-12a6 6 0 0 0-6-6Z"/></svg>Ask Clancy</div>
+    </div>
+
+    <div class="summary">
+      <div class="sum"><span class="k">Chainage</span><p class="v">1240 - 1380</p></div>
+      <div class="sum"><span class="k">Activity Type</span><p class="v">Earthworks</p></div>
+      <div class="sum"><span class="k">Layer</span><p class="v">Subgrade</p></div>
+      <div class="sum"><span class="k">Area/Zone</span><p class="v">EB carriageway</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AFTER: no needsAction ─────────────────────────────────────────────── -->
+<div>
+  <div class="frame-label">After — no needs-action assignment (the honest empty case)</div>
+  <p class="frame-note">Nothing is waiting on this viewer, so there is <em>no</em> solid button — we never invent urgency to fill the slot. The slot falls back to the existing outline <code>Edit Lot</code>. If the lot is waiting on someone else, that fact is stated in the same line the reason would occupy.</p>
+  <div class="viewport">
+    <div class="lot-head">
+      <div class="lot-id">
+        <div class="qr"></div>
+        <div>
+          <h1>LOT-0138</h1>
+          <p class="lot-desc">DGB20 Basecourse CH 980–1120 — Cudgegong Rd Upgrade Stage 2</p>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="btn btn-outline">Edit Lot</span>
+        <span class="status status-conformed">Conformed</span>
+        <span class="btn btn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></span>
+      </div>
+    </div>
+    <div class="why">
+      <svg style="stroke:hsl(var(--muted-foreground))" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <span>Waiting on <strong style="font-weight:600;color:hsl(var(--foreground))">Riverina Civil Pty Ltd</strong> — claim submission. Nothing for you to action.</span>
+      <span class="code">already_claimed</span>
+    </div>
+    <div class="summary">
+      <div class="sum"><span class="k">Chainage</span><p class="v">980 - 1120</p></div>
+      <div class="sum"><span class="k">Activity Type</span><p class="v">Pavement</p></div>
+      <div class="sum"><span class="k">Layer</span><p class="v">Basecourse</p></div>
+      <div class="sum"><span class="k">Area/Zone</span><p class="v">EB carriageway</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MOBILE ────────────────────────────────────────────────────────────── -->
+<div>
+  <div class="frame-label">Mobile — 390px</div>
+  <p class="frame-note">Same rule; the shipped mobile layout already had the shape (primary + <code>MoreVertical</code>, <code>LotHeader.tsx:162-181</code>). Only the primary's identity changes: it becomes the readiness action instead of always "Edit Lot".</p>
+  <div class="viewport mobile">
+    <div class="lot-head">
+      <div class="lot-id">
+        <div class="qr"></div>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <h1>LOT-0142</h1>
+            <span class="status status-hold">Hold Point</span>
+          </div>
+          <p class="lot-desc">Subgrade CH 1240–1380 EB</p>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <span class="btn btn-primary"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Release hold point</span>
+        <span class="btn btn-icon" style="height:46px;width:46px"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></span>
+      </div>
+    </div>
+    <div class="why">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      <span><strong style="font-weight:600;color:hsl(var(--foreground))">HP-014</strong> unreleased</span>
+      <span class="overdue">6 days overdue</span>
+    </div>
+    <div class="summary">
+      <div class="sum"><span class="k">Chainage</span><p class="v">1240 - 1380</p></div>
+      <div class="sum"><span class="k">Layer</span><p class="v">Subgrade</p></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

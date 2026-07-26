@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A4 — My Work overview (uniform cards)</title>
+<style>
+/* Tokens copied from frontend/src/index.css:8-104 (HSL triplets). */
+:root{
+  --background:40 14% 96%; --foreground:24 14% 9%;
+  --card:0 0% 100%; --primary:24 14% 9%; --primary-foreground:40 33% 98%;
+  --secondary:40 15% 93%; --muted:40 15% 93%; --muted-foreground:30 8% 32%;
+  --accent:40 15% 93%; --destructive:4 74% 40%; --success:142 72% 29%;
+  --warning:32 95% 44%; --info:217 79% 45%; --brand:26 90% 37%;
+  --border:38 18% 89%; --radius:0.5rem;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --background:30 16% 7%; --foreground:40 30% 94%; --card:30 16% 10%;
+    --primary:40 30% 94%; --primary-foreground:30 16% 7%; --secondary:33 14% 15%;
+    --muted:33 14% 15%; --muted-foreground:36 16% 70%; --accent:33 14% 17%;
+    --destructive:0 88% 71%; --success:156 64% 52%; --warning:43 96% 56%;
+    --info:213 92% 68%; --brand:38 92% 50%; --border:33 15% 17%;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:32px 20px 64px;background:hsl(var(--background));color:hsl(var(--foreground));
+  font-family:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;letter-spacing:-0.006em;
+  -webkit-font-smoothing:antialiased;
+}
+.spec-note{max-width:1120px;margin:0 auto 28px;font-size:13px;color:hsl(var(--muted-foreground));line-height:1.55}
+.spec-note code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
+.frames{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+.frame-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground));margin-bottom:10px}
+.viewport{border:1px solid hsl(var(--border));border-radius:12px;background:hsl(var(--background));overflow:hidden}
+.viewport.mobile{width:390px;max-width:100%}
+.chrome{display:flex;min-height:100%}
+
+/* sidebar — Sidebar.tsx:264-284, 95-113 */
+.sidebar{width:224px;flex:0 0 224px;border-right:1px solid hsl(var(--border));background:hsl(var(--card));padding-bottom:12px}
+.sidebar-brand{height:56px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid hsl(var(--border));font-size:17px;font-weight:600;letter-spacing:-0.01em}
+.sidebar-brand span{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;font-weight:400;color:hsl(var(--muted-foreground))}
+.sidebar-nav{padding:14px}
+.nav-section{font-size:11px;font-weight:600;text-transform:uppercase;color:hsl(var(--muted-foreground));padding:0 12px;margin:16px 0 4px}
+.nav-item{position:relative;display:flex;align-items:center;gap:12px;border-radius:8px;padding:7px 12px;font-size:14px;color:hsl(var(--muted-foreground));text-decoration:none}
+.nav-item svg{width:18px;height:18px;flex:0 0 18px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.nav-item.active{background:hsl(var(--accent));color:hsl(var(--foreground));font-weight:500}
+.nav-item.active::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2.5px;border-radius:0 999px 999px 0;background:hsl(var(--brand))}
+.nav-item.active svg{color:hsl(var(--brand))}
+/* Optional count on an EXISTING nav item — Jay decision D1, option C. Shown here
+   so the option can be judged, not because it is chosen. */
+.nav-count{margin-left:auto;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;background:hsl(var(--destructive)/.10);color:hsl(var(--destructive));border-radius:999px;padding:1px 7px}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{height:56px;display:flex;align-items:center;gap:10px;border-bottom:1px solid hsl(var(--border));background:hsl(var(--card));padding:0 24px;font-size:13px;color:hsl(var(--muted-foreground))}
+.crumb-sep{opacity:.5}.crumb-current{color:hsl(var(--foreground));font-weight:500}
+.content{padding:24px;display:flex;flex-direction:column;gap:22px}
+.viewport.mobile .content{padding:16px;gap:18px}
+.viewport.mobile .sidebar{display:none}
+.viewport.mobile .topbar{padding:0 16px}
+
+h1{font-size:24px;font-weight:600;letter-spacing:-0.02em;margin:0}
+.viewport.mobile h1{font-size:21px}
+.page-sub{margin:4px 0 0;font-size:14px;color:hsl(var(--muted-foreground))}
+
+/* Section eyebrow — DashboardQuickLinks.tsx:52. Demotion is by POSITION only:
+   the second section uses the identical card, just lower on the page. */
+.eyebrow{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:hsl(var(--muted-foreground));margin:0 0 10px 2px}
+
+/* ── THE UNIFORM CARD ──────────────────────────────────────────────────────
+   icon + label + optional status chip + chevron. Nothing else. No subtitle,
+   no second line, no size variation — every card on this screen is this card.
+   Production equivalent (DashboardQuickLinks.tsx:21-27 + the chevron from
+   ItemsRequiringAttentionWidget.tsx:89):
+     "flex items-center gap-3 rounded-lg border bg-card p-4 transition-colors
+      hover:border-foreground/20 hover:bg-muted"
+   label: "text-sm font-medium"   icon: "h-5 w-5 text-muted-foreground"        */
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.viewport.mobile .grid{grid-template-columns:1fr}
+.card{
+  display:flex;align-items:center;gap:12px;
+  border:1px solid hsl(var(--border));background:hsl(var(--card));
+  border-radius:var(--radius);padding:16px;text-decoration:none;color:inherit;
+  min-height:60px;
+}
+.card > svg.ico{width:20px;height:20px;flex:0 0 20px;stroke:hsl(var(--muted-foreground));fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.card .label{font-size:14px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .chip{
+  font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap;
+  background:hsl(var(--muted));color:hsl(var(--muted-foreground));
+}
+/* colour only where a human must act — lotStatusOverview.ts:63 */
+.card .chip.act{background:hsl(var(--destructive)/.10);color:hsl(var(--destructive))}
+.card .chip.soon{background:hsl(var(--warning)/.12);color:hsl(var(--warning))}
+.card .chip.ok{background:hsl(var(--foreground)/.08);color:hsl(var(--foreground))}
+.card > svg.chev{width:16px;height:16px;flex:0 0 16px;stroke:hsl(var(--muted-foreground));fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+
+<div class="spec-note">
+  <strong>A4 · Screen (b) — My Work overview.</strong> Pure uniform anatomy: <em>icon + label + optional status chip +
+  chevron</em>, one card style, one card height, no subtitles anywhere. Every card is a filtered entry into screen (a).
+  The three ball-in-court cards are the <code>status</code> partition (exhaustive, mutually exclusive); the two time
+  cards are the orthogonal <code>isOverdue</code> / <code>dueAt</code> lenses and deliberately overlap the first three —
+  the counts are not meant to sum. Projects are demoted <em>by position</em>, not by size or by a smaller card.
+  Viewer below: <code>quality_manager</code>.
+</div>
+
+<div class="frames">
+
+<!-- ─────────────────────────── DESKTOP ─────────────────────────── -->
+<div>
+<div class="frame-label">Desktop — 1120px</div>
+<div class="viewport desktop">
+<div class="chrome">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">CIVOS<span>·v3</span></div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="#"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard<span class="nav-count">8</span></a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Portfolio</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>Projects</a>
+
+      <div class="nav-section">Quality</div>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Lots</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>ITPs</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Hold Points</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M9 2v6.2L4.6 16A2 2 0 0 0 6.3 19h11.4a2 2 0 0 0 1.7-3L15 8.2V2"/><path d="M8 2h8"/></svg>Test Results</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v3"/><path d="M12 17h.01"/></svg>NCRs</a>
+
+      <div class="nav-section">Commercial</div>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Progress Claims</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>Variations</a>
+
+      <div class="nav-section">Records</div>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Documents</a>
+      <a class="nav-item" href="#"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-3"/></svg>Reports</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar"><span>Dashboard</span><span class="crumb-sep">/</span><span class="crumb-current">My Work</span></div>
+
+    <div class="content">
+      <div>
+        <h1>My Work</h1>
+        <p class="page-sub">Dana Whitmore · Quality Manager · 3 active projects</p>
+      </div>
+
+      <!-- Ball-in-court partition. These three are exhaustive over open items. -->
+      <section>
+        <p class="eyebrow">Ball in court</p>
+        <div class="grid">
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="m9 11 3 3L22 4"/></svg>
+            <span class="label">Needs you</span>
+            <span class="chip act">6</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span class="label">Your court — needs another role</span>
+            <span class="chip">2</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            <span class="label">Waiting on others</span>
+            <span class="chip">6</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="label">Closed this week</span>
+            <span class="chip ok">31</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+      <!-- Orthogonal time lenses. Same card, lower position. Counts intentionally
+           overlap the partition above — an overdue item is also in exactly one of
+           the three ball-in-court cards. -->
+      <section>
+        <p class="eyebrow">By timing</p>
+        <div class="grid">
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span class="label">Overdue</span>
+            <span class="chip act">5</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+            <span class="label">Due in 7 days</span>
+            <span class="chip soon">4</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+      <!-- Projects demoted by POSITION. Identical card, identical height. -->
+      <section>
+        <p class="eyebrow">By project</p>
+        <div class="grid">
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">Cudgegong Rd Upgrade — Stage 2</span>
+            <span class="chip act">8</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">Pacific Highway M1 Widening</span>
+            <span class="chip">4</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">Wagga Depot Hardstand</span>
+            <span class="chip">2</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            <span class="label">All projects</span>
+            <span class="chip">14</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ─────────────────────────── MOBILE ─────────────────────────── -->
+<div>
+<div class="frame-label">Mobile — 390px</div>
+<div class="viewport mobile">
+<div class="chrome">
+  <div class="main">
+    <div class="topbar"><span class="crumb-current">My Work</span></div>
+    <div class="content">
+      <div>
+        <h1>My Work</h1>
+        <p class="page-sub">Dana Whitmore · Quality Manager</p>
+      </div>
+
+      <section>
+        <p class="eyebrow">Ball in court</p>
+        <div class="grid">
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="m9 11 3 3L22 4"/></svg>
+            <span class="label">Needs you</span><span class="chip act">6</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span class="label">Needs another role</span><span class="chip">2</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            <span class="label">Waiting on others</span><span class="chip">6</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="label">Closed this week</span><span class="chip ok">31</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+      <section>
+        <p class="eyebrow">By timing</p>
+        <div class="grid">
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span class="label">Overdue</span><span class="chip act">5</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+            <span class="label">Due in 7 days</span><span class="chip soon">4</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+      <section>
+        <p class="eyebrow">By project</p>
+        <div class="grid">
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">Cudgegong Rd — Stage 2</span><span class="chip act">8</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">Pacific Hwy M1 Widening</span><span class="chip">4</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+          <a class="card" href="#">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">Wagga Depot Hardstand</span><span class="chip">2</span>
+            <svg class="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+</div>
+</body>
+</html>
