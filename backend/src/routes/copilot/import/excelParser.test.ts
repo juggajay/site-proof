@@ -5,9 +5,12 @@ import { AppError } from '../../../lib/AppError.js';
 import {
   AU_ITP_HEADERS,
   buildAuItpWorkbook,
+  buildCivilProWorkbook,
   buildWorkbook,
+  CIVILPRO_GRID_HEADERS,
 } from '../../../test/itpWorkbookFixture.js';
 import { MAX_IMPORT_ROWS_PER_SHEET, MAX_IMPORT_SHEETS, parseExcelWorkbook } from './excelParser.js';
+import { deriveFieldMapFromHeaders } from './mappingProfiles.js';
 
 describe('parseExcelWorkbook', () => {
   it('parses a realistic AU ITP workbook into a normalized grid', async () => {
@@ -113,6 +116,47 @@ describe('parseExcelWorkbook', () => {
       expect(sheet.rows[0][1]).toBe(`Inspection item ${i}`);
     });
   }, 60_000);
+
+  // The header band: real exports lead with a merged title row. Binding columns
+  // to that banner imports garbage under confident-looking column names.
+  it('looks past a merged title banner and takes the real header row', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildCivilProWorkbook({ banner: 'ITP 04-01 - Clear and Grub - Revision 2' }),
+    );
+
+    expect(grid.sheets[0].headers).toEqual([...CIVILPRO_GRID_HEADERS]);
+    // The banner is dropped, not imported as a checklist row.
+    expect(grid.sheets[0].rows).toHaveLength(3);
+    expect(grid.sheets[0].rows[1][CIVILPRO_GRID_HEADERS.indexOf('HpWpC')]).toBe('Hold Point');
+  });
+
+  it('keeps row 1 as headers when nothing below it scores better', async () => {
+    const grid = await parseExcelWorkbook(await buildAuItpWorkbook());
+    expect(grid.sheets[0].headers).toEqual([...AU_ITP_HEADERS]);
+    expect(grid.sheets[0].rows).toHaveLength(3);
+  });
+
+  // A sheet with no recognisable headers anywhere must NOT be rescued by the
+  // scan: row 1 stays the header row and the import fails loudly downstream
+  // (unmapped columns / no description column), never silently half-mapped.
+  it('leaves a headerless sheet exactly as loud as it was', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildWorkbook([
+        {
+          name: 'Notes',
+          headers: ['Some rambling note', 'and another', 'third'],
+          rows: [
+            ['free text', 'more free text', 'x'],
+            ['second line', 'y', 'z'],
+          ],
+        },
+      ]),
+    );
+
+    expect(grid.sheets[0].headers).toEqual(['Some rambling note', 'and another', 'third']);
+    expect(grid.sheets[0].rows).toHaveLength(2);
+    expect(deriveFieldMapFromHeaders(grid.sheets[0].headers)).toHaveLength(0);
+  });
 
   it('refuses a workbook with no readable sheet', async () => {
     const workbook = new ExcelJS.Workbook();

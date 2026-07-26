@@ -145,6 +145,11 @@ const ITP_HEADER_ALIASES: Record<ItpImportTarget, string[]> = {
   pointType: [
     'whs',
     'wh',
+    // CivilPro: the grid column is "HpWpC", the CSV column is "Check Type" and
+    // the KB spells the same field out in full.
+    'hpwpc',
+    'checktype',
+    'holdpointandwitnesspointcheck',
     'hwspoint',
     'pointtype',
     'inspectiontype',
@@ -155,7 +160,18 @@ const ITP_HEADER_ALIASES: Record<ItpImportTarget, string[]> = {
   ],
   responsibleParty: ['responsible', 'responsibleparty', 'responsibility', 'by', 'verifiedby'],
   evidenceRequired: ['evidence', 'evidencerequired', 'record', 'records', 'recordrequired'],
-  testType: ['testtype', 'testmethod', 'test', 'testreference', 'testfrequency'],
+  testType: [
+    'testtype',
+    'testmethod',
+    // CivilPro: "Insp Meth" in the grid, "Inspection Method" in the CSV.
+    'inspectionmethod',
+    'methodofinspection',
+    'methofinspection',
+    'inspmeth',
+    'test',
+    'testreference',
+    'testfrequency',
+  ],
 };
 
 /**
@@ -226,6 +242,12 @@ const POINT_TYPE_RULES: VocabularyRule[] = [
   [/^h|hold/, 'hold_point'],
   [/^w|witness/, 'witness'],
   [/^s|surveill|standard/, 'standard'],
+  // CivilPro's controlled vocabulary is Check Item / Witness Point / Hold Point
+  // / Milestone. LAST on purpose: "Check Item" must not shadow "Hold Point" (a
+  // hold point that imported as a plain check is a gate that never gets held).
+  // Milestone folds to 'standard' — lossy, and a deliberate open question: this
+  // vocabulary has no fourth value, and adding one is a product decision.
+  [/^c|check|milestone/, 'standard'],
 ];
 
 const RESPONSIBLE_PARTY_RULES: VocabularyRule[] = [
@@ -239,6 +261,10 @@ const EVIDENCE_REQUIRED_RULES: VocabularyRule[] = [
   [/test/, 'test'],
   [/inspect/, 'inspection'],
   [/doc|cert|record/, 'document'],
+  // CivilPro's Records column: QVC | QVC/ATP | QVC/Tests | QVC/Test records.
+  // LAST on purpose — the /test/ arm above must keep claiming "QVC/Tests" and
+  // "QVC/Test records", so only QVC and QVC/ATP land here.
+  [/qvc|checklist|atp/, 'inspection'],
 ];
 
 function toVocabulary(rules: VocabularyRule[], raw: string): string {
@@ -276,13 +302,32 @@ export interface BuiltInProfile {
   fieldMap: FieldMapEntry[];
 }
 
-// NOTE: the CivilPro column names below are a reasoned starting point, NOT a
-// measurement — no real CivilPro export was available at build time. They must
-// be calibrated against a genuine export before the "imports a real CivilPro
-// export without hand-mapping" exit claim can be made (the same posture the
-// spec takes toward its provisional §9-D5 benchmark counts). Every column is
-// still correctable in the mapping UI, so a wrong alias costs a re-map, not a
-// bad import.
+// NOTE on the CivilPro profile below: the column names are no longer guessed.
+// They are calibrated against CivilPro's OWN published layout — the verbatim
+// column list in civilpro.zendesk.com article 16952308349071 ("Converting ITPs
+// to CivilPro Format using AI") plus the ITP grid and register screenshots in
+// articles 4407191198351 (Create ITP) and 4406603407375 (Export Registers as
+// Excel Files). What is still missing for the full tick is one real customer
+// export: vendor documentation fixes the column NAMES, only a live file proves
+// the sheet name, header band and value spellings a customer's build emits.
+//
+// Deliberately absent, and why:
+//  - templateName: the ITP name is header-level metadata in CivilPro, not a row
+//    column, so the sheet IS the template (the grouping the dry run already
+//    falls back to).
+//  - activityType: CivilPro has no activity column. The importer will block
+//    each template as `unresolvable_activity` and the reviewer picks the slug —
+//    correct, since a defaulted activity silently mis-files an ITP.
+//  - acceptanceCriteria: by vendor design the criteria live INSIDE Description.
+//    Mapping them to a second column would invent data that is not there.
+//
+// Future importer improvements, not built here: CivilPro's `Unique ID` column
+// is a natural round-trip/dedup key (no import target exists for it yet), and
+// `Included on ITP = FALSE` marks rows the customer excluded from the printed
+// ITP — today they import like any other row.
+//
+// Every column is still correctable in the mapping UI, so a wrong alias costs a
+// re-map, not a bad import.
 export const BUILT_IN_PROFILES: BuiltInProfile[] = [
   {
     key: 'generic_au_itp_excel',
@@ -308,18 +353,18 @@ export const BUILT_IN_PROFILES: BuiltInProfile[] = [
     kind: 'itp_template',
     sourceFormat: 'excel',
     fieldMap: [
-      { target: 'templateName', source: { header: 'ITP' } },
-      { target: 'activityType', source: { header: 'Activity/Process' } },
-      { target: 'description', source: { header: 'Inspection/Test Detail' } },
-      { target: 'acceptanceCriteria', source: { header: 'Acceptance Criteria/Standard' } },
-      { target: 'pointType', source: { header: 'Insp Type' }, transform: 'whs_to_point_type' },
+      // Description carries the check AND its acceptance criteria; Reference
+      // Text is CivilPro's own short label and must NOT win the description.
+      { target: 'description', source: { header: 'Description' } },
+      { target: 'pointType', source: { header: 'HpWpC' }, transform: 'whs_to_point_type' },
       {
         target: 'responsibleParty',
         source: { header: 'Responsibility' },
         transform: 'responsible_party',
       },
-      { target: 'testType', source: { header: 'Test Method' } },
-      { target: 'specificationReference', source: { header: 'Specification' } },
+      { target: 'evidenceRequired', source: { header: 'Records' }, transform: 'evidence_required' },
+      { target: 'testType', source: { header: 'Insp Meth' } },
+      { target: 'specificationReference', source: { header: 'Clause' } },
     ],
   },
 ];

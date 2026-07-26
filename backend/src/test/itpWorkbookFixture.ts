@@ -113,3 +113,113 @@ export function auItpSheets(): FixtureSheet[] {
 export function buildAuItpWorkbook(): Promise<Buffer> {
   return buildWorkbook(auItpSheets());
 }
+
+// ---------------------------------------------------------------------------
+// CivilPro calibration fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * CivilPro's ITP item grid, reconstructed from the vendor's own published
+ * layout: the verbatim column list in civilpro.zendesk.com article
+ * 16952308349071 plus the grid screenshots in 4407191198351 / 4406603407375.
+ * Row values are transcribed from those screenshots (a TMR MRTS04 clear-and-grub
+ * ITP), not invented, so the vocabularies below ("Check Item", "QVC/ATP",
+ * "Visual/Test") are the real ones a customer's export carries.
+ *
+ * SYNTHETIC, and knowingly so: this is the vendor's documented layout, not a
+ * customer file. It cannot prove sheet naming or header-band quirks of a live
+ * export — only calibrate against what CivilPro publishes.
+ */
+export const CIVILPRO_SHEET_NAME = 'ITP Items';
+
+export const CIVILPRO_GRID_HEADERS = [
+  'Item Type',
+  'HpWpC',
+  'Reference Text',
+  'Description',
+  'AltQvcText',
+  'Has Tests',
+  'Responsibility',
+  'Records',
+  'Insp Meth',
+  'Included on ITP',
+  'Clause',
+] as const;
+
+/** The same fields as CivilPro's register CSV export spells them. */
+export const CIVILPRO_CSV_HEADERS = [
+  'Reference Text',
+  'Description',
+  'Clause',
+  'Responsibility',
+  'Records',
+  'Inspection Method',
+  'Check Type',
+  'Item Type',
+  'Inspection Reqd',
+  'Verify Reqd',
+  'Approve Reqd',
+] as const;
+
+export const CIVILPRO_GRID_ROWS: string[][] = [
+  [
+    'Quality',
+    'Check Item',
+    '',
+    'Limits of clearing identified and set out completed by survey.',
+    '',
+    'FALSE',
+    'Engineer and Supervisor',
+    'QVC',
+    'Visual',
+    'TRUE',
+    'MRTS04 Cl. 7.2.1',
+  ],
+  [
+    'Quality',
+    'Hold Point',
+    '',
+    'Any trees, shrubs and overhanging branches to be left undisturbed shall be clearly marked prior to clearing operations reaching the area concerned.',
+    '',
+    'FALSE',
+    'Engineer and Supervisor',
+    'QVC/ATP',
+    'Visual',
+    'TRUE',
+    'MRTS04 Cl. 7.2.2',
+  ],
+  [
+    'Quality',
+    'Check Item',
+    '',
+    'Ground surface shall be scarified and recompacted to a depth >= 150mm in accordance with MRTS04 Cl. 15',
+    '',
+    'TRUE',
+    'Engineer and Supervisor',
+    'QVC/Test records',
+    'Visual/Test',
+    'TRUE',
+    'MRTS04 Cl.12.2.1.3',
+  ],
+];
+
+/** The grid above as a real .xlsx, optionally behind a title banner row. */
+export async function buildCivilProWorkbook(options: { banner?: string } = {}): Promise<Buffer> {
+  if (!options.banner) {
+    return buildWorkbook([
+      {
+        name: CIVILPRO_SHEET_NAME,
+        headers: CIVILPRO_GRID_HEADERS,
+        rows: CIVILPRO_GRID_ROWS,
+      },
+    ]);
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(CIVILPRO_SHEET_NAME);
+  worksheet.addRow([options.banner]);
+  worksheet.mergeCells(1, 1, 1, CIVILPRO_GRID_HEADERS.length);
+  worksheet.addRow([...CIVILPRO_GRID_HEADERS]);
+  for (const row of CIVILPRO_GRID_ROWS) worksheet.addRow(row);
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}

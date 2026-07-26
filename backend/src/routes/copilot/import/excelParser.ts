@@ -28,6 +28,7 @@ import {
   readZipEntry,
   type ZipEntrySummary,
 } from '../../../lib/zipSafety.js';
+import { deriveFieldMapFromHeaders } from './mappingProfiles.js';
 
 export const MAX_IMPORT_SHEETS = 50;
 export const MAX_IMPORT_ROWS_PER_SHEET = 5_000;
@@ -99,6 +100,34 @@ function normalizeCell(value: unknown, sheetName: string): string {
 
 function isEmptyRow(cells: string[]): boolean {
   return cells.every((cell) => cell === '');
+}
+
+/** How many non-empty rows may sit above the header row before we stop looking. */
+const HEADER_SCAN_ROWS = 5;
+
+/**
+ * Which of the first few non-empty rows is the real header band.
+ *
+ * Real exports lead with a title banner — CivilPro prints "ITP 04-01 - Clear and
+ * Grub - Revision 2" in row 1 and the column names in row 2 — and taking row 1
+ * blindly binds every column to garbage. So each candidate is scored by how many
+ * of its cells the alias table recognises as ITP columns, and a later row is
+ * only preferred when it scores STRICTLY better: a sheet whose headers really do
+ * sit in row 1, and a sheet with no recognisable headers at all, both keep
+ * today's behaviour (the latter then fails loudly downstream as unmapped
+ * columns, which is the correct outcome — never a silent partial import).
+ */
+function pickHeaderRow(candidates: string[][]): number {
+  let bestIndex = 0;
+  let bestScore = deriveFieldMapFromHeaders(candidates[0]).length;
+  for (let index = 1; index < candidates.length; index += 1) {
+    const score = deriveFieldMapFromHeaders(candidates[index]).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
 }
 
 // fast-xml-parser is already a backend dependency; no new one is added here.
@@ -227,9 +256,11 @@ function readSheetNames(buffer: Buffer, entries: ZipEntrySummary[]): Map<string,
 }
 
 /**
- * Parse an .xlsx buffer to a normalized grid. Every sheet contributes its first
- * non-empty row as headers and the rest as rows, padded/clipped to the header
- * width so downstream code can index by column position without bounds checks.
+ * Parse an .xlsx buffer to a normalized grid. Every sheet contributes one header
+ * row — the best of its first few non-empty rows, see `pickHeaderRow` — and the
+ * rows below it, padded/clipped to the header width so downstream code can index
+ * by column position without bounds checks. Anything above the header row is a
+ * title banner and is dropped.
  */
 export async function parseExcelWorkbook(buffer: Buffer): Promise<ParsedGrid> {
   const entries = assertSafeOoxmlArchive(buffer);
@@ -273,6 +304,16 @@ export async function parseExcelWorkbook(buffer: Buffer): Promise<ParsedGrid> {
     const sheetName = (sheetNames.get(sheetNo) ?? `Sheet ${sheets.length + 1}`).slice(0, 200);
     let headers: string[] | null = null;
     const rows: string[][] = [];
+    // Non-empty rows held back while the header band is still being chosen.
+    const leading: string[][] = [];
+
+    const pushRow = (cells: string[]) => rows.push(headers!.map((_, index) => cells[index] ?? ''));
+    const chooseHeaders = () => {
+      const pick = pickHeaderRow(leading);
+      headers = leading[pick].map((cell, index) => cell || `Column ${index + 1}`);
+      for (const cells of leading.slice(pick + 1)) pushRow(cells);
+      leading.length = 0;
+    };
 
     for await (const row of worksheet) {
       if (rows.length >= MAX_IMPORT_ROWS_PER_SHEET) {
@@ -293,13 +334,16 @@ export async function parseExcelWorkbook(buffer: Buffer): Promise<ParsedGrid> {
       if (isEmptyRow(cells)) continue;
 
       if (!headers) {
-        headers = cells.map((cell, index) => cell || `Column ${index + 1}`);
+        leading.push(cells);
+        if (leading.length >= HEADER_SCAN_ROWS) chooseHeaders();
         continue;
       }
 
-      const aligned = headers.map((_, index) => cells[index] ?? '');
-      rows.push(aligned);
+      pushRow(cells);
     }
+
+    // A sheet shorter than the scan window still has to pick a header row.
+    if (!headers && leading.length > 0) chooseHeaders();
 
     if (headers) {
       sheets.push({ name: sheetName, headers, rows });
