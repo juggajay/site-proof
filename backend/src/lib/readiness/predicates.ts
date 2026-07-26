@@ -151,12 +151,15 @@ export function testPassing(test: TestResultRow): boolean {
 }
 
 /**
- * "Pending test" by the status whitelist (`PENDING_TEST_RESULT_STATUSES`):
- * status in {pending, submitted, requested, at_lab, results_received, entered}.
+ * CANONICAL "pending test" (execution spec §2, §12): status is in the whitelist
+ * `PENDING_TEST_RESULT_STATUSES` {pending, submitted, requested, at_lab,
+ * results_received, entered}. F0.2b unified every call site onto this, retiring
+ * the not-fail-not-verified variant below.
  *
  * Call sites (map §5 A3): `qualityRoutes.ts:255`, `readRoutes.ts:255-257`
- * (the lot-readiness / claim-readiness `pendingTests` count). Reuses
- * `isPendingTestResultStatus` so the whitelist stays single-sourced.
+ * (lot-readiness / claim-readiness), plus (F0.2b) `claimReview.ts` and
+ * `claims/evidenceRoutes.ts`. Reuses `isPendingTestResultStatus` so the
+ * whitelist stays single-sourced.
  *
  * DIVERGES from {@link testPendingNotFailNotVerified} on the edge statuses:
  *  - a FAILED test in a whitelisted status (e.g. passFail='fail', status='entered')
@@ -169,15 +172,15 @@ export function testPendingByStatus(test: TestResultRow): boolean {
 }
 
 /**
- * "Pending test" as claim-evidence review defines it: anything that has not
- * failed and is not yet verified.
+ * @deprecated F0.2b unified pending-test semantics onto {@link testPendingByStatus}
+ * (the `PENDING_TEST_RESULT_STATUSES` whitelist). No production call site uses
+ * this any more; kept only so the divergence stays named/testable until the
+ * F0.2b pending-test PR is approved, then removed.
  *
- * Definition (map §5 A3, `claimReview.ts:135-137`, `evidenceRoutes.ts:242`):
- * `passFail !== 'fail' && status !== 'verified'`. This is the
- * "candidate behaviour change" the spec flags (§2, §12) for migration to
- * {@link testPendingByStatus}. F0.1 keeps BOTH so the divergence is named and
- * characterization-testable; F0.2 decides. See {@link testPendingByStatus} for
- * the exact inputs where the two disagree.
+ * "Pending test" as claim-evidence review previously defined it: anything that
+ * has not failed and is not yet verified —
+ * `passFail !== 'fail' && status !== 'verified'` (map §5 A3). See
+ * {@link testPendingByStatus} for the exact inputs where the two disagree.
  */
 export function testPendingNotFailNotVerified(test: TestResultRow): boolean {
   return test.passFail !== 'fail' && test.status !== 'verified';
