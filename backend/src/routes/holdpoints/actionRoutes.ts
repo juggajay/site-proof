@@ -40,7 +40,7 @@ import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 import { assertHoldPointCompletionCanBeReleased } from './releaseCompletionGuard.js';
 import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
 import { recordDecision } from '../../lib/readiness/recordDecision.js';
-import { evaluateHoldPointReleaseReadiness, holdPointReleaseSnapshot } from './releaseDecision.js';
+import { evaluateHoldPointReleaseReadiness, holdPointReleaseSnapshots } from './releaseDecision.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -353,7 +353,7 @@ async function evaluateAuthenticatedHoldPointRelease(tx: Prisma.TransactionClien
   }
 
   return {
-    ...(await evaluateHoldPointReleaseReadiness(tx, id, current.lotId)),
+    ...(await evaluateHoldPointReleaseReadiness(tx, [id], current.lotId)),
     itpInstanceId: itpInstance?.id ?? null,
   };
 }
@@ -524,7 +524,7 @@ holdPointActionRouter.post(
 
         return { holdPoint: updatedHoldPoint, releasedItpInstanceId: evaluation.itpInstanceId };
       },
-      snapshots: (evaluation) => holdPointReleaseSnapshot(id, evaluation),
+      snapshots: (evaluation) => holdPointReleaseSnapshots([id], evaluation),
     });
 
     // No requestKey on this route, so a replay is impossible and `mutation` is

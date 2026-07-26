@@ -1,11 +1,9 @@
 import type { Prisma } from '@prisma/client';
-import type { Request } from 'express';
 
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
-import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import { projectTimeZoneFromState } from '../../lib/projectTimeZone.js';
 import { sendHPReleaseConfirmationEmail } from '../../lib/email.js';
@@ -216,9 +214,8 @@ export interface HoldPointPublicReleaseAuditChangesParams {
 
 /**
  * The `hp_public_released` audit payload, shared by the single-token decision
- * (which writes it INSIDE its transaction via `recordDecision`) and the batch
- * route (which still writes it post-commit until PR 4). One builder so the two
- * cannot drift while they are temporarily written from two places.
+ * and the batch decision — both write it INSIDE their `recordDecision`
+ * transaction (F0.4b PR 3, PR 4). One builder so the two doors cannot drift.
  *
  * SECURITY — do NOT rename these keys. `tokenRecipient` / `tokenRecipientName`
  * match `sanitizeAuditChanges`'s `/token/i` pattern and are therefore stored
@@ -244,21 +241,15 @@ export function buildHoldPointPublicReleaseAuditChanges({
   };
 }
 
-export interface RunHoldPointReleasePostCommitParams extends HoldPointPublicReleaseAuditChangesParams {
+export interface RunHoldPointReleasePostCommitParams {
   holdPoint: ReleasedHoldPoint;
   project: HoldPointReleaseProject;
   releasedItpInstanceId: string | null;
   releasedAt: Date;
+  /** Identity recorded on the hold point — the token recipient, not free text. */
+  effectiveReleasedByName: string;
+  releasedByOrg?: string | null;
   releaseNotes?: string | null;
-  req: Request;
-  /**
-   * F0.4b PR 3: the single-token release records its audit row inside the
-   * decision transaction, so this helper must not write a second one. The BATCH
-   * route passes nothing and keeps its own post-commit write until PR 4 moves it
-   * into one batch decision — including the write's position here, between the
-   * emails and the webhook, so batch behaviour is unchanged this PR.
-   */
-  auditRecordedByDecision?: true;
 }
 
 // Post-commit side effects for a single released hold point: lot-status
@@ -268,22 +259,19 @@ export interface RunHoldPointReleasePostCommitParams extends HoldPointPublicRele
 // rolls back the already-committed release. Safe to call once per hold point in
 // a batch.
 //
-// The audit write is NO LONGER unconditionally part of this: callers that
-// record their decision through `recordDecision` get the audit row inside their
-// transaction and pass `auditRecordedByDecision` (F0.4b PR 3).
+// NO audit write lives here any more (F0.4b PR 4). Both public doors record
+// their audit row inside their `recordDecision` transaction, so "released but
+// unaudited" has stopped being a reachable state on either of them — which also
+// retired the `auditRecordedByDecision` flag PR 3 needed while the batch route
+// still wrote its own.
 export async function runHoldPointReleasePostCommit({
   holdPoint,
   project,
   releasedItpInstanceId,
   releasedAt,
   effectiveReleasedByName,
-  submittedReleasedByName,
   releasedByOrg,
   releaseNotes,
-  tokenRecipientEmail,
-  tokenRecipientName,
-  auditRecordedByDecision,
-  req,
 }: RunHoldPointReleasePostCommitParams): Promise<void> {
   if (releasedItpInstanceId) {
     try {
@@ -414,25 +402,6 @@ export async function runHoldPointReleasePostCommit({
       logError('[HP Secure Release] Failed to send confirmation emails:', emailError);
       // Don't fail the main request
     }
-  }
-
-  // Audit log for public HP release (no userId - public endpoint). Skipped when
-  // the caller already wrote it inside its decision transaction.
-  if (!auditRecordedByDecision) {
-    await createAuditLog({
-      projectId: project.id,
-      entityType: 'hold_point',
-      entityId: holdPoint.id,
-      action: AuditAction.HP_PUBLIC_RELEASED,
-      changes: buildHoldPointPublicReleaseAuditChanges({
-        effectiveReleasedByName,
-        submittedReleasedByName,
-        releasedByOrg,
-        tokenRecipientEmail,
-        tokenRecipientName,
-      }),
-      req,
-    });
   }
 
   emitHoldPointWebhookEvent(project.id, 'hold_point.released', {

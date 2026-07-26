@@ -34,7 +34,7 @@ import { AuditAction } from '../lib/auditLog.js';
 import { recordDecision } from '../lib/readiness/recordDecision.js';
 import {
   evaluateHoldPointReleaseReadiness,
-  holdPointReleaseSnapshot,
+  holdPointReleaseSnapshots,
 } from './holdpoints/releaseDecision.js';
 
 const holdpointsRouter = Router();
@@ -220,7 +220,7 @@ holdpointsRouter.post(
       evaluate: (tx) =>
         evaluateHoldPointReleaseReadiness(
           tx,
-          releaseToken.holdPoint.id,
+          [releaseToken.holdPoint.id],
           releaseToken.holdPoint.lotId,
         ),
       // Unchanged, and still shared verbatim with the batch route: the token
@@ -235,7 +235,7 @@ holdpointsRouter.post(
           releaseNotes,
           signatureDataUrl,
         }),
-      snapshots: (evaluation) => holdPointReleaseSnapshot(releaseToken.holdPoint.id, evaluation),
+      snapshots: (evaluation) => holdPointReleaseSnapshots([releaseToken.holdPoint.id], evaluation),
     });
 
     // No requestKey on this route: token semantics are unchanged, so a reused
@@ -249,13 +249,8 @@ holdpointsRouter.post(
       releasedItpInstanceId,
       releasedAt,
       effectiveReleasedByName,
-      submittedReleasedByName: releasedByName,
       releasedByOrg,
       releaseNotes,
-      tokenRecipientEmail: releaseToken.recipientEmail,
-      tokenRecipientName: releaseToken.recipientName,
-      auditRecordedByDecision: true,
-      req,
     });
 
     res.json(buildPublicHoldPointReleasedResponse(holdPoint));

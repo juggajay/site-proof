@@ -23,9 +23,13 @@ import { buildPublicHoldPointEvidencePackageResponse } from './evidencePackage.j
 import { buildPublicHoldPointReleasedResponse } from './actionResponses.js';
 import { requireSuperintendentApprovalRecipients } from './superintendentRecipients.js';
 import {
+  buildHoldPointPublicReleaseAuditChanges,
   executeHoldPointTokenRelease,
   runHoldPointReleasePostCommit,
 } from './publicReleaseExecution.js';
+import { AuditAction } from '../../lib/auditLog.js';
+import { recordDecision } from '../../lib/readiness/recordDecision.js';
+import { evaluateHoldPointReleaseReadiness, holdPointReleaseSnapshots } from './releaseDecision.js';
 
 // =============================================================================
 // PUBLIC batch review-room endpoints — no authentication required. A batch
@@ -221,6 +225,8 @@ holdPointPublicBatchRouter.get(
 
 // d) Release the selected hold points of a batch under one signed identity.
 // All requested ids succeed atomically or the request fails naming the blocker.
+// ONE signed release = ONE decision = ONE audit row + N `hold_point` snapshot
+// rows (F0.4b PR 4 `[R3.1-R4]`).
 holdPointPublicBatchRouter.post(
   '/public/batch/:batchToken/release',
   asyncHandler(async (req: Request, res: Response) => {
@@ -289,47 +295,109 @@ holdPointPublicBatchRouter.post(
     ]);
 
     const batchRecipientName = batch.recipientName?.trim();
+    const effectiveReleasedByName = batchRecipientName || releasedByName;
     const releasedAt = new Date();
+    const releasedHoldPointIds = prepared.map((item) => item.holdPoint.id);
+    // Deterministic anchor for the whole batch decision. `recordDecision` takes
+    // ONE decided entity (audit target + cross-project check), but a batch
+    // release decides N — so the first prepared item anchors the row and the
+    // full membership is carried explicitly: N snapshot rows keyed by their own
+    // `entityId`, plus `releasedHoldPointIds` on the audit row. The anchor is an
+    // index handle, never the claim that only this hold point was released.
+    const anchor = prepared[0];
 
-    const releasedResults = await prisma.$transaction(async (tx) => {
-      const results = [];
-      for (const item of prepared) {
-        const effectiveReleasedByName = batchRecipientName || releasedByName;
-        const { holdPoint, releasedItpInstanceId } = await executeHoldPointTokenRelease(tx, {
-          tokenId: item.token.id,
-          holdPointId: item.holdPoint.id,
-          releasedAt,
+    // ONE decision for the whole batch `[R3.1-R4]`: N hold point releases, N
+    // token claims, N ITP reconciliations, N snapshot rows and ONE audit row
+    // commit together or not at all. All-or-nothing is unchanged — it was
+    // already one `$transaction`; this one is serializable and now includes the
+    // audit row, so a failed audit write also rolls the releases back.
+    const decision = await recordDecision({
+      projectId: project.id,
+      entityType: 'hold_point',
+      entityId: anchor.holdPoint.id,
+      decisionKind: 'release',
+      auditAction: AuditAction.HP_PUBLIC_RELEASED,
+      // One decision has ONE actor, and a batch link genuinely has one: every
+      // token row in the batch shares the batch's recipient. The `tokenId` must
+      // still be a real `HoldPointReleaseToken` row, so it is the anchor item's
+      // — the full set is on the audit row as `releaseLinkIds`. Label is the
+      // recipient NAME, never an email (`[R3.1]`, review R7).
+      actor: {
+        kind: 'external_token',
+        tokenId: anchor.token.id,
+        label: batch.recipientName ?? undefined,
+      },
+      auditChanges: {
+        ...buildHoldPointPublicReleaseAuditChanges({
           effectiveReleasedByName,
+          submittedReleasedByName: releasedByName,
           releasedByOrg,
-          releaseNotes,
-          signatureDataUrl,
-        });
-        results.push({
-          holdPoint,
-          releasedItpInstanceId,
-          effectiveReleasedByName,
-          token: item.token,
-        });
-      }
-      return results;
+          tokenRecipientEmail: batch.recipientEmail,
+          tokenRecipientName: batch.recipientName,
+        }),
+        // What the collapsed row must carry that N separate rows never did:
+        // which release link, and exactly which hold points went with it.
+        // `releaseLinkIds`, NOT `tokenIds` — any key matching
+        // `sanitizeAuditChanges`' /token/i is stored `[REDACTED]`, which would
+        // silently erase the correlation this whole field exists to provide.
+        batchId: batch.id,
+        batchSize: releasedHoldPointIds.length,
+        releasedHoldPointIds,
+        releaseLinkIds: prepared.map((item) => item.token.id),
+      },
+      req,
+      // Read-only, exactly as the single public release: every eligibility gate
+      // (token unused + unexpired, hold point non-terminal, ITP completion not
+      // failed) already runs in-transaction inside `executeHoldPointTokenRelease`
+      // and owns this route's pinned 400/410 responses.
+      evaluate: (tx) => evaluateHoldPointReleaseReadiness(tx, releasedHoldPointIds, batch.lotId),
+      // The previous `$transaction` body, verbatim, now as the decision's mutate.
+      mutate: async (tx) => {
+        const results = [];
+        for (const item of prepared) {
+          const { holdPoint, releasedItpInstanceId } = await executeHoldPointTokenRelease(tx, {
+            tokenId: item.token.id,
+            holdPointId: item.holdPoint.id,
+            releasedAt,
+            effectiveReleasedByName,
+            releasedByOrg,
+            releaseNotes,
+            signatureDataUrl,
+          });
+          results.push({ holdPoint, releasedItpInstanceId });
+        }
+        return results;
+      },
+      snapshots: (evaluation) =>
+        holdPointReleaseSnapshots(releasedHoldPointIds, {
+          ...evaluation,
+          batchId: batch.id,
+          batchSize: releasedHoldPointIds.length,
+        }),
     });
 
+    // No requestKey on this route: batch link semantics are unchanged, so a
+    // reused or expired link still gets the existing 400/410 from the
+    // in-transaction guards rather than a `recordDecision` replay (`[R3.1-B2]`).
+    const releasedResults = decision.mutation!;
+
     // Post-commit side effects per hold point (progression, notifications,
-    // confirmation emails, audit, webhook). Failures here never roll back the
+    // confirmation emails, webhook). Failures here never roll back the
     // committed releases.
+    //
+    // ponytail: still N calls, so the N-fold duplicate notification/email volley
+    // is unchanged. That is a pre-existing defect with its own fix (spec §11
+    // F0.4b PR 4 explicitly scopes it out); collapsing it here would hide a
+    // behaviour change inside an audit-grain PR.
     for (const result of releasedResults) {
       await runHoldPointReleasePostCommit({
         holdPoint: result.holdPoint,
         project,
         releasedItpInstanceId: result.releasedItpInstanceId,
         releasedAt,
-        effectiveReleasedByName: result.effectiveReleasedByName,
-        submittedReleasedByName: releasedByName,
+        effectiveReleasedByName,
         releasedByOrg,
         releaseNotes,
-        tokenRecipientEmail: result.token.recipientEmail,
-        tokenRecipientName: result.token.recipientName,
-        req,
       });
     }
 
