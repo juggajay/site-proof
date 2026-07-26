@@ -1185,12 +1185,19 @@ describe('Hold Points API', () => {
           }),
         ]);
 
-        const statuses = [firstRes.status, secondRes.status].sort();
-        expect(statuses).toEqual([200, 400]);
+        const statuses = [firstRes.status, secondRes.status].sort((a, b) => a - b);
+        expect(statuses[0]).toBe(200);
+        // F0.4b PR 3: the loser is still ALWAYS rejected, never silently
+        // accepted — but the decision now runs at Serializable isolation, so it
+        // can lose either to the in-transaction status gate / optimistic guard
+        // (400) or to exhausted serialization retries (409 DECISION_CONFLICT).
+        expect([400, 409]).toContain(statuses[1]);
         const successRes = [firstRes, secondRes].find((res) => res.status === 200);
-        const rejectedRes = [firstRes, secondRes].find((res) => res.status === 400);
+        const rejectedRes = [firstRes, secondRes].find((res) => res.status !== 200);
         expect(successRes?.body.holdPoint.status).toBe('released');
-        expect(rejectedRes?.body.error.message).toContain('already been released');
+        expect(rejectedRes?.body.error.message).toMatch(
+          /already been released|conflicted with a concurrent change/,
+        );
 
         const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: hp.id } });
         expect(holdPoint.releasedByName).toBe(successRes?.body.holdPoint.releasedByName);
