@@ -65,7 +65,11 @@ jobs:
         run: npm ci
 
       - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+        # Same policy as CI: high/critical block (with documented GHSA
+        # exceptions in scripts/audit-allowlist.json); moderate advisories in
+        # transitive deps must not block an unrelated production migration.
+        # (A moderate uuid advisory skipped the deploy step on 2026-07-26.)
+        run: node ../scripts/audit-check.mjs
 
       - name: Generate Prisma client
         run: npx prisma generate
