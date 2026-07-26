@@ -10,6 +10,7 @@ import {
   resolveDashboardProject,
 } from './access.js';
 import { parseOptionalDashboardString } from './operationalQuery.js';
+import { SERIOUS_NCR_SEVERITY } from '../../lib/readiness/predicates.js';
 import {
   buildEmptyProjectManagerDashboardResponse,
   buildProjectManagerDashboardResponse,
@@ -113,12 +114,21 @@ projectManagerDashboardRouter.get(
       overdueNCRList,
       majorNCRList,
     ] = await Promise.all([
-      // 2. NCR counts
+      // 2. NCR counts (F0.2b: major/minor split keyed off canonical `severity`,
+      //    not the freeform `category` column; minor mirrors `!ncrSerious`).
       prisma.nCR.count({
-        where: { projectId, category: 'major', status: { notIn: ['closed', 'closed_concession'] } },
+        where: {
+          projectId,
+          severity: SERIOUS_NCR_SEVERITY,
+          status: { notIn: ['closed', 'closed_concession'] },
+        },
       }),
       prisma.nCR.count({
-        where: { projectId, category: 'minor', status: { notIn: ['closed', 'closed_concession'] } },
+        where: {
+          projectId,
+          severity: { not: SERIOUS_NCR_SEVERITY },
+          status: { notIn: ['closed', 'closed_concession'] },
+        },
       }),
       prisma.nCR.count({
         where: {
@@ -200,7 +210,7 @@ projectManagerDashboardRouter.get(
       prisma.nCR.findMany({
         where: {
           projectId,
-          category: 'major',
+          severity: SERIOUS_NCR_SEVERITY,
           status: { notIn: ['closed', 'closed_concession'] },
           dueDate: { gte: today },
         },
