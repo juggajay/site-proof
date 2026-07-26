@@ -32,7 +32,13 @@ export type NcrClosureResultV1 = {
   closed: boolean;
   /** Closed by concession rather than by rectification (`decisionKind: 'concession'`). */
   byConcession: boolean;
-  /** Serious at decision time — `ncrSeriousIncludingCritical` (F0.2b unification). */
+  /**
+   * Serious at decision time — the CANONICAL `ncrSerious` (`severity ===
+   * 'major'`, execution spec §2). PR 0's comment cited
+   * `ncrSeriousIncludingCritical`; that is the DEPRECATED pre-F0.2b variant with
+   * no production call site, so PR 2's adoption binds to the unified predicate
+   * instead (identical verdict — `'critical'` is not a schema severity value).
+   */
   serious: boolean;
   /** Still-blocking codes at decision time; empty when the NCR closed clean. */
   blockingReasonCodes: NcrClosureReasonCode[];

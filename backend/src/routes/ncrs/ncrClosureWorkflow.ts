@@ -1,4 +1,5 @@
 // NCR closure workflow transitions: QM approval, closure, client notification, reopen
+import type { Prisma } from '@prisma/client';
 import { Router, type Request, type Response } from 'express';
 
 import { type AuthUser } from '../../lib/auth.js';
@@ -8,6 +9,13 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sendEmail } from '../../lib/email.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import { prisma } from '../../lib/prisma.js';
+import { ncrSerious } from '../../lib/readiness/predicates.js';
+import { recordDecision, type DecisionSnapshotInput } from '../../lib/readiness/recordDecision.js';
+import {
+  NCR_CLOSURE_REQUIREMENT_SET,
+  NCR_CLOSURE_RESULT_SCHEMA_VERSION,
+  buildNcrClosureResultV1,
+} from '../../lib/readiness/requirements/ncrClosure.v1.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
   NCR_QM_APPROVAL_ROLES,
@@ -67,12 +75,16 @@ async function releaseClientNotificationClaim(ncrId: string, notificationTime: D
   });
 }
 
-async function ensureQmApprovalClaimed(ncrId: string, updateCount: number) {
+async function ensureQmApprovalClaimed(
+  ncrId: string,
+  updateCount: number,
+  client: Pick<typeof prisma, 'nCR'> = prisma,
+) {
   if (updateCount === 1) {
     return;
   }
 
-  const currentNcr = await prisma.nCR.findUnique({
+  const currentNcr = await client.nCR.findUnique({
     where: { id: ncrId },
     select: { qmApprovedAt: true },
   });
@@ -121,6 +133,220 @@ async function ensureReopenClaimed(updateCount: number) {
   throw AppError.badRequest('NCR is not closed');
 }
 
+interface NcrQmApprovalState {
+  status: string;
+  qmApprovalRequired: boolean;
+  qmApprovedAt: Date | null;
+}
+
+interface NcrCloseState extends NcrQmApprovalState {
+  severity: string;
+  qmApprovedById: string | null;
+  clientNotificationRequired: boolean;
+  clientNotifiedAt: Date | null;
+}
+
+/**
+ * The QM-approval gates that read NCR STATE. Called twice (F0.4b PR 2): once on
+ * the pre-transaction read for a cheap rejection, once inside `evaluate(tx)` so
+ * the decision is made against the row it actually writes.
+ */
+function assertNcrQmApprovable(ncr: NcrQmApprovalState): void {
+  if (!ncr.qmApprovalRequired) {
+    throw AppError.badRequest('This NCR does not require QM approval');
+  }
+
+  if (ncr.qmApprovedAt) {
+    throw AppError.badRequest('This NCR has already been approved by QM');
+  }
+
+  if (ncr.status !== 'verification') {
+    throw AppError.badRequest('NCR must be in verification status before QM approval', {
+      currentStatus: ncr.status,
+    });
+  }
+}
+
+/**
+ * The closure gates that read NCR STATE rather than permissions: verification
+ * status, the major-NCR QM approval and its segregation of duties, M27 client
+ * notification, H9 concession client approval.
+ *
+ * Called twice for the same reason as {@link assertNcrQmApprovable}. Role and
+ * membership reads stay OUTSIDE the decision transaction — the
+ * no-stale-readiness guarantee covers evidence, not permissions (execution spec
+ * §11 F0.4b `[R3.1-R6]`). The segregation-of-duties comparison lives here rather
+ * than with those role reads because it is a comparison against NCR columns this
+ * function already holds, not a permissions lookup.
+ *
+ * Returns whether the M27 client-notification requirement was overridden, which
+ * the caller records in the audit row.
+ */
+interface NcrCloseGateOptions {
+  userId: string;
+  withConcession?: boolean;
+  overrideClientNotification?: boolean;
+  clientApprovalReference?: string;
+}
+
+function assertNcrClosable(
+  ncr: NcrCloseState,
+  options: NcrCloseGateOptions,
+): { clientNotificationOverridden: boolean } {
+  // Closing is the final verification decision; rectification must be submitted first.
+  if (ncr.status !== 'verification') {
+    throw AppError.badRequest('NCR must be in verification status to close', {
+      currentStatus: ncr.status,
+    });
+  }
+
+  // CRITICAL: For major NCRs, require independent QM approval before closing.
+  if (ncr.severity === 'major' && ncr.qmApprovalRequired) {
+    if (!ncr.qmApprovedAt || !ncr.qmApprovedById) {
+      throw AppError.forbidden(
+        'Major NCRs require Quality Manager approval before closure. Please request QM approval first.',
+      );
+    }
+
+    if (ncr.qmApprovedById === options.userId) {
+      throw AppError.forbidden(
+        'Major NCR closure must be completed by a different user than the QM approver.',
+      );
+    }
+  }
+
+  // M27: don't let a "client notification required" NCR be closed before the
+  // client was actually notified, unless the closer supplies an explicit,
+  // reasoned override (audited by the caller).
+  const clientNotificationOutstanding = ncr.clientNotificationRequired && !ncr.clientNotifiedAt;
+  if (clientNotificationOutstanding && !options.overrideClientNotification) {
+    throw AppError.badRequest(
+      'This NCR requires client notification before it can be closed. Record the client notification, or close with an explicit override and reason.',
+      { clientNotificationRequired: true, clientNotifiedAt: null },
+    );
+  }
+
+  // H9: a major NCR accepted by concession must carry the client's approval
+  // reference, so an accepted major defect has a durable record of sign-off.
+  requireMajorConcessionClientApproval({
+    severity: ncr.severity,
+    withConcession: options.withConcession,
+    clientApprovalReference: options.clientApprovalReference,
+  });
+
+  return { clientNotificationOverridden: clientNotificationOutstanding };
+}
+
+/**
+ * Every input a closure decision depends on, read INSIDE the decision's
+ * serializable transaction: the gate columns AND the affected lots' statuses.
+ *
+ * Before F0.4b PR 2 the lot side came from the route's pre-transaction read, so
+ * a lot that moved in between was cascaded on stale data. Reading it here means
+ * a lot (or another NCR on it) moving mid-decision conflicts and retries against
+ * fresh data instead.
+ */
+async function evaluateNcrClosure(
+  tx: Prisma.TransactionClient,
+  ncrId: string,
+  gate: NcrCloseGateOptions,
+) {
+  const current = await tx.nCR.findUnique({
+    where: { id: ncrId },
+    select: {
+      severity: true,
+      status: true,
+      qmApprovalRequired: true,
+      qmApprovedAt: true,
+      qmApprovedById: true,
+      clientNotificationRequired: true,
+      clientNotifiedAt: true,
+      ncrLots: { select: { lotId: true, lot: { select: { status: true } } } },
+    },
+  });
+
+  if (!current) {
+    throw AppError.notFound('NCR not found');
+  }
+
+  assertNcrClosable(current, gate);
+
+  // Which affected lots this closure may clear, and to what. A lot another NCR
+  // still holds open is left alone and counted as a blocker.
+  const cascade: Array<{ lotId: string; nextStatus: string }> = [];
+  let lotsWithOtherOpenNcrs = 0;
+
+  for (const ncrLot of current.ncrLots) {
+    const otherOpenNcrs = await tx.nCRLot.count({
+      where: {
+        lotId: ncrLot.lotId,
+        ncr: { id: { not: ncrId }, status: { notIn: ['closed', 'closed_concession'] } },
+      },
+    });
+
+    if (otherOpenNcrs > 0) {
+      lotsWithOtherOpenNcrs += 1;
+      continue;
+    }
+
+    // No other open NCRs, so clear the NCR-raised state without reopening
+    // terminal lots.
+    const nextStatus = getLotStatusAfterNcrClosure(ncrLot.lot.status);
+    if (nextStatus) {
+      cascade.push({ lotId: ncrLot.lotId, nextStatus });
+    }
+  }
+
+  return {
+    serious: ncrSerious(current),
+    affectedLotCount: current.ncrLots.length,
+    lotsWithOtherOpenNcrs,
+    cascade,
+  };
+}
+
+/**
+ * The single `ncr_closure.v1` row every NCR closure/concession/QM-approval
+ * decision records (execution spec §11 F0.4b PR 2). The grain is `ncr` ONLY —
+ * the lots this closure cascades over get no snapshot row of their own, they are
+ * carried as `affectedLotCount`.
+ *
+ * `evaluate` produced these numbers INSIDE the decision's serializable
+ * transaction, so they are what readiness genuinely looked like at the instant
+ * the status changed.
+ */
+function ncrClosureSnapshot(
+  ncrId: string,
+  evaluation: {
+    closed: boolean;
+    byConcession?: boolean;
+    serious: boolean;
+    affectedLotCount: number;
+    /** Affected lots another open NCR still blocks; > 0 emits `open_ncrs`. */
+    lotsWithOtherOpenNcrs?: number;
+  },
+  reason?: string,
+): DecisionSnapshotInput[] {
+  return [
+    {
+      entityType: 'ncr',
+      entityId: ncrId,
+      requirementSet: NCR_CLOSURE_REQUIREMENT_SET,
+      resultSchemaVersion: NCR_CLOSURE_RESULT_SCHEMA_VERSION,
+      result: buildNcrClosureResultV1({
+        closed: evaluation.closed,
+        byConcession: evaluation.byConcession,
+        serious: evaluation.serious,
+        // The one blocker a closure decision can leave behind: affected lots it
+        // could not clear because a DIFFERENT NCR is still open on them.
+        items: (evaluation.lotsWithOtherOpenNcrs ?? 0) > 0 ? [{ code: 'open_ncrs' }] : [],
+        affectedLotCount: evaluation.affectedLotCount,
+        reason,
+      }),
+    },
+  ];
+}
+
 // POST /api/ncrs/:id/qm-approve - QM approval for major NCRs (Quality Manager only)
 ncrClosureWorkflowRouter.post(
   '/:id/qm-approve',
@@ -148,44 +374,21 @@ ncrClosureWorkflowRouter.post(
     );
     await assertProjectAllowsWrite(ncr.projectId);
 
-    if (!ncr.qmApprovalRequired) {
-      throw AppError.badRequest('This NCR does not require QM approval');
-    }
-
-    if (ncr.qmApprovedAt) {
-      throw AppError.badRequest('This NCR has already been approved by QM');
-    }
-
-    if (ncr.status !== 'verification') {
-      throw AppError.badRequest('NCR must be in verification status before QM approval', {
-        currentStatus: ncr.status,
-      });
-    }
+    // A cheap rejection before a serializable transaction is opened; `evaluate`
+    // re-runs the same gates on transaction data below.
+    assertNcrQmApprovable(ncr);
 
     const qmApprovedAt = new Date();
-    const approvalUpdate = await prisma.nCR.updateMany({
-      where: { id, qmApprovalRequired: true, qmApprovedAt: null, status: 'verification' },
-      data: {
-        qmApprovedById: user.userId,
-        qmApprovedAt,
-      },
-    });
-    await ensureQmApprovalClaimed(id, approvalUpdate.count);
-
-    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
-      where: { id },
-      include: {
-        qmApprovedBy: { select: { id: true, fullName: true, email: true } },
-      },
-    });
-
-    await createAuditLog({
+    // F0.4b PR 2: this route's FIRST transaction — the approval columns and its
+    // audit row now commit together (execution spec §9 `[R3.1-R1]`).
+    const decision = await recordDecision({
       projectId: ncr.projectId,
-      userId: user.userId,
       entityType: 'ncr',
-      entityId: ncr.id,
-      action: AuditAction.NCR_QM_APPROVED,
-      changes: {
+      entityId: id,
+      decisionKind: 'approval',
+      auditAction: AuditAction.NCR_QM_APPROVED,
+      actor: { kind: 'user', userId: user.userId },
+      auditChanges: {
         ncrNumber: ncr.ncrNumber,
         severity: ncr.severity,
         status: ncr.status,
@@ -193,10 +396,61 @@ ncrClosureWorkflowRouter.post(
         qmApproved: true,
       },
       req,
+      evaluate: async (tx) => {
+        const current = await tx.nCR.findUnique({
+          where: { id },
+          select: {
+            severity: true,
+            status: true,
+            qmApprovalRequired: true,
+            qmApprovedAt: true,
+            _count: { select: { ncrLots: true } },
+          },
+        });
+
+        if (!current) {
+          throw AppError.notFound('NCR not found');
+        }
+
+        assertNcrQmApprovable(current);
+
+        return { serious: ncrSerious(current), affectedLotCount: current._count.ncrLots };
+      },
+      // The existing optimistic guard stays as the cheap second line inside the
+      // transaction.
+      mutate: async (tx) => {
+        const approvalUpdate = await tx.nCR.updateMany({
+          where: { id, qmApprovalRequired: true, qmApprovedAt: null, status: 'verification' },
+          data: {
+            qmApprovedById: user.userId,
+            qmApprovedAt,
+          },
+        });
+        await ensureQmApprovalClaimed(id, approvalUpdate.count, tx);
+
+        return tx.nCR.findUniqueOrThrow({
+          where: { id },
+          include: {
+            qmApprovedBy: { select: { id: true, fullName: true, email: true } },
+          },
+        });
+      },
+      // QM approval is a step TOWARD closure, never the closure itself.
+      snapshots: (evaluation) =>
+        ncrClosureSnapshot(id, {
+          closed: false,
+          serious: evaluation.serious,
+          affectedLotCount: evaluation.affectedLotCount,
+        }),
     });
 
+    // No requestKey on this route, so a replay is impossible and `mutation` is
+    // always present (spec §11 F0.4b — replay is inert flag-off `[R3.1-B2]`).
     res.json(
-      buildNcrWorkflowMessageResponse(updatedNcr, 'QM approval granted. NCR can now be closed.'),
+      buildNcrWorkflowMessageResponse(
+        decision.mutation!,
+        'QM approval granted. NCR can now be closed.',
+      ),
     );
   }),
 );
@@ -224,10 +478,24 @@ ncrClosureWorkflowRouter.post(
       clientApprovalReference,
     } = validation.data;
 
+    // Deliberately does NOT read the affected lots' statuses: before F0.4b PR 2
+    // the in-transaction lot cascade decided each lot's next status from THIS
+    // pre-transaction snapshot, so a lot that moved in between was cascaded on
+    // stale data. `evaluate(tx)` re-reads them inside the decision now.
     const ncr = await prisma.nCR.findUnique({
       where: { id },
-      include: {
-        ncrLots: { select: { lotId: true, lot: { select: { status: true } } } },
+      select: {
+        id: true,
+        projectId: true,
+        ncrNumber: true,
+        status: true,
+        severity: true,
+        qmApprovalRequired: true,
+        qmApprovedAt: true,
+        qmApprovedById: true,
+        clientNotificationRequired: true,
+        clientNotifiedAt: true,
+        _count: { select: { ncrLots: true } },
       },
     });
 
@@ -243,124 +511,33 @@ ncrClosureWorkflowRouter.post(
     );
     await assertProjectAllowsWrite(ncr.projectId);
 
-    // Closing is the final verification decision; rectification must be submitted first.
-    if (ncr.status !== 'verification') {
-      throw AppError.badRequest('NCR must be in verification status to close', {
-        currentStatus: ncr.status,
-      });
-    }
-
-    // CRITICAL: For major NCRs, require independent QM approval before closing.
-    if (ncr.severity === 'major' && ncr.qmApprovalRequired) {
-      if (!ncr.qmApprovedAt || !ncr.qmApprovedById) {
-        throw AppError.forbidden(
-          'Major NCRs require Quality Manager approval before closure. Please request QM approval first.',
-        );
-      }
-
-      if (ncr.qmApprovedById === user.userId) {
-        throw AppError.forbidden(
-          'Major NCR closure must be completed by a different user than the QM approver.',
-        );
-      }
-    }
-
-    // M27: don't let a "client notification required" NCR be closed before the
-    // client was actually notified, unless the closer supplies an explicit,
-    // reasoned override (audited below).
-    const clientNotificationOutstanding = ncr.clientNotificationRequired && !ncr.clientNotifiedAt;
-    if (clientNotificationOutstanding && !overrideClientNotification) {
-      throw AppError.badRequest(
-        'This NCR requires client notification before it can be closed. Record the client notification, or close with an explicit override and reason.',
-        { clientNotificationRequired: true, clientNotifiedAt: null },
-      );
-    }
-    const clientNotificationOverridden =
-      clientNotificationOutstanding && overrideClientNotification;
-
-    // H9: a major NCR accepted by concession must carry the client's approval
-    // reference, so an accepted major defect has a durable record of sign-off.
-    requireMajorConcessionClientApproval({
-      severity: ncr.severity,
+    const gate: NcrCloseGateOptions = {
+      userId: user.userId,
       withConcession,
+      overrideClientNotification,
       clientApprovalReference,
-    });
+    };
+    // A cheap rejection before a serializable transaction is opened;
+    // `evaluateNcrClosure` re-runs the same gates on transaction data below.
+    const { clientNotificationOverridden } = assertNcrClosable(ncr, gate);
 
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
     const closedAt = new Date();
 
-    const updatedNcr = await prisma.$transaction(async (tx) => {
-      const closeUpdate = await tx.nCR.updateMany({
-        where: { id, status: 'verification', ncrEvidence: { some: {} } },
-        data: {
-          status: closeStatus,
-          verifiedById: user.userId,
-          verifiedAt: closedAt,
-          verificationNotes,
-          closedById: user.userId,
-          closedAt,
-          lessonsLearned,
-          concessionJustification: withConcession ? concessionJustification : null,
-          concessionRiskAssessment: withConcession ? concessionRiskAssessment : null,
-          clientApprovalReference: withConcession ? (clientApprovalReference ?? null) : null,
-        },
-      });
-      await ensureCloseClaimed(id, closeUpdate.count, tx);
-
-      const closedNcr = await tx.nCR.findUniqueOrThrow({
-        where: { id },
-        include: {
-          closedBy: { select: { fullName: true, email: true } },
-          qmApprovedBy: { select: { id: true, fullName: true, email: true } },
-        },
-      });
-
-      // Update affected lots - revert status from ncr_raised
-      if (ncr.ncrLots.length > 0) {
-        const lotIds = ncr.ncrLots.map((nl) => nl.lotId);
-
-        // Check if any other open NCRs exist for these lots
-        for (const lotId of lotIds) {
-          const otherOpenNcrs = await tx.nCRLot.count({
-            where: {
-              lotId,
-              ncr: {
-                id: { not: ncr.id },
-                status: { notIn: ['closed', 'closed_concession'] },
-              },
-            },
-          });
-
-          if (otherOpenNcrs === 0) {
-            const currentLot = ncr.ncrLots.find((nl) => nl.lotId === lotId)?.lot;
-            const nextStatus = currentLot ? getLotStatusAfterNcrClosure(currentLot.status) : null;
-            if (nextStatus) {
-              // No other open NCRs, clear the NCR-raised state without reopening terminal lots.
-              await tx.lot.update({
-                where: { id: lotId },
-                data: { status: nextStatus },
-              });
-            }
-          }
-        }
-      }
-
-      return closedNcr;
-    });
-
-    await createAuditLog({
+    const decision = await recordDecision({
       projectId: ncr.projectId,
-      userId: user.userId,
       entityType: 'ncr',
-      entityId: ncr.id,
-      action: AuditAction.NCR_STATUS_CHANGED,
-      changes: {
+      entityId: id,
+      decisionKind: withConcession ? 'concession' : 'closure',
+      auditAction: AuditAction.NCR_STATUS_CHANGED,
+      actor: { kind: 'user', userId: user.userId },
+      auditChanges: {
         ncrNumber: ncr.ncrNumber,
-        status: { from: ncr.status, to: updatedNcr.status },
+        status: { from: ncr.status, to: closeStatus },
         withConcession: Boolean(withConcession),
         verificationNotesPresent: Boolean(verificationNotes),
         lessonsLearnedPresent: Boolean(lessonsLearned),
-        affectedLotCount: ncr.ncrLots.length,
+        affectedLotCount: ncr._count.ncrLots,
         ...(withConcession ? { clientApprovalReference: clientApprovalReference ?? null } : {}),
         ...(clientNotificationOverridden
           ? {
@@ -370,8 +547,60 @@ ncrClosureWorkflowRouter.post(
           : {}),
       },
       req,
+      evaluate: (tx) => evaluateNcrClosure(tx, id, gate),
+      // The existing optimistic guard (status + evidence-present) stays as the
+      // cheap second line inside the transaction.
+      mutate: async (tx, evaluation) => {
+        const closeUpdate = await tx.nCR.updateMany({
+          where: { id, status: 'verification', ncrEvidence: { some: {} } },
+          data: {
+            status: closeStatus,
+            verifiedById: user.userId,
+            verifiedAt: closedAt,
+            verificationNotes,
+            closedById: user.userId,
+            closedAt,
+            lessonsLearned,
+            concessionJustification: withConcession ? concessionJustification : null,
+            concessionRiskAssessment: withConcession ? concessionRiskAssessment : null,
+            clientApprovalReference: withConcession ? (clientApprovalReference ?? null) : null,
+          },
+        });
+        await ensureCloseClaimed(id, closeUpdate.count, tx);
+
+        for (const { lotId, nextStatus } of evaluation.cascade) {
+          await tx.lot.update({ where: { id: lotId }, data: { status: nextStatus } });
+        }
+
+        return tx.nCR.findUniqueOrThrow({
+          where: { id },
+          include: {
+            closedBy: { select: { fullName: true, email: true } },
+            qmApprovedBy: { select: { id: true, fullName: true, email: true } },
+          },
+        });
+      },
+      snapshots: (evaluation) =>
+        ncrClosureSnapshot(
+          id,
+          {
+            closed: true,
+            byConcession: Boolean(withConcession),
+            serious: evaluation.serious,
+            affectedLotCount: evaluation.affectedLotCount,
+            lotsWithOtherOpenNcrs: evaluation.lotsWithOtherOpenNcrs,
+          },
+          // Closure provenance: the concession's justification when the defect
+          // was accepted, otherwise the verification the closer recorded.
+          withConcession ? concessionJustification : verificationNotes,
+        ),
     });
 
+    // No requestKey on this route, so `mutation` is always present.
+    const updatedNcr = decision.mutation!;
+
+    // Post-commit, fire-and-forget: never dispatched from inside the decision,
+    // so a rolled-back or retried attempt cannot emit a user-visible signal.
     emitNcrWebhookEvent(ncr.projectId, 'ncr.closed', {
       ncrId: ncr.id,
       projectId: ncr.projectId,
