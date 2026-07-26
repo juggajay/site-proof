@@ -101,6 +101,23 @@ export interface RecordDecisionInput<TEvaluation, TMutation> {
   actor: DecisionActor;
   /** Opaque client idempotency key. Never interpreted (spec §7). */
   requestKey?: string;
+  /**
+   * The decided entity does not exist yet — `mutate` CREATES it inside the
+   * transaction (claim create; spec §11 F0.4b PR 0 `[R3.1-B1]`). The caller
+   * mints `entityId` itself and passes it to its `create`, so the audit row and
+   * snapshots still key on the real id.
+   *
+   * Two pre-transaction checks are inapplicable and are skipped:
+   *  - the {@link ENTITY_PROJECT_SCOPE} existence check — nothing to find yet.
+   *    It is NOT dropped: the same project-scoped count re-runs on `tx` AFTER
+   *    `mutate`, so a route that mints its entity in the wrong project still
+   *    fails, and fails inside the transaction that rolls it back.
+   *  - {@link assertRequestKeyIsPersistable} — these routes keep their own
+   *    replay mechanism through F0.4b (claim create's `(projectId, requestKey)`
+   *    unique + P2002 race path), and `recordDecision`'s snapshot-backed replay
+   *    is inert while the flag is off anyway (spec §9 step 2 `[R3.1-B2]`).
+   */
+  entityCreatedByMutate?: true;
   /** Merged into `AuditLog.changes` alongside `decisionKind`. */
   auditChanges?: Record<string, unknown>;
   req?: Request;
@@ -197,18 +214,36 @@ function snapshotWriteFailed(error: unknown): AppError {
  *
  * Only the DECIDED entity is checked. Claim member rows inherit the aggregate's
  * project; per-member checks would be 5,000 extra queries for no extra safety.
+ *
+ * Takes its client so the SAME check serves both call sites: before the
+ * transaction normally, and on `tx` after `mutate` when the entity is created
+ * by the decision itself (`entityCreatedByMutate`).
  */
 const ENTITY_PROJECT_SCOPE: Record<
   DecisionEntityType,
-  (entityId: string, projectId: string) => Promise<number>
+  (client: Prisma.TransactionClient, entityId: string, projectId: string) => Promise<number>
 > = {
-  lot: (id, projectId) => prisma.lot.count({ where: { id, projectId } }),
-  hold_point: (id, projectId) => prisma.holdPoint.count({ where: { id, lot: { projectId } } }),
-  ncr: (id, projectId) => prisma.nCR.count({ where: { id, projectId } }),
-  claim: (id, projectId) => prisma.progressClaim.count({ where: { id, projectId } }),
-  claim_lot: (id, projectId) => prisma.claimedLot.count({ where: { id, claim: { projectId } } }),
-  claim_variation: (id, projectId) => prisma.variation.count({ where: { id, projectId } }),
+  lot: (db, id, projectId) => db.lot.count({ where: { id, projectId } }),
+  hold_point: (db, id, projectId) => db.holdPoint.count({ where: { id, lot: { projectId } } }),
+  ncr: (db, id, projectId) => db.nCR.count({ where: { id, projectId } }),
+  claim: (db, id, projectId) => db.progressClaim.count({ where: { id, projectId } }),
+  claim_lot: (db, id, projectId) => db.claimedLot.count({ where: { id, claim: { projectId } } }),
+  claim_variation: (db, id, projectId) => db.variation.count({ where: { id, projectId } }),
 };
+
+async function assertEntityInProject(
+  client: Prisma.TransactionClient,
+  entityType: DecisionEntityType,
+  entityId: string,
+  projectId: string,
+): Promise<void> {
+  if ((await ENTITY_PROJECT_SCOPE[entityType](client, entityId, projectId)) === 0) {
+    throw AppError.badRequest(
+      `Cannot record a decision: ${entityType} ${entityId} is not in project ${projectId}`,
+      { entityType, entityId, projectId },
+    );
+  }
+}
 
 /**
  * Runs regardless of the flag. An oversized snapshot is a caller defect, and
@@ -372,7 +407,8 @@ async function writeDecisionRecords<TEvaluation, TMutation>(
  * Record a decision atomically.
  *
  * @throws AppError 400 when the decided entity is missing or belongs to another
- *   project (checked before the transaction opens).
+ *   project (checked before the transaction opens — or, with
+ *   `entityCreatedByMutate`, immediately after `mutate` inside it).
  * @throws AppError 409 `DECISION_CONFLICT` when {@link MAX_DECISION_ATTEMPTS}
  *   serialization retries are exhausted — the client refreshes readiness and
  *   re-decides.
@@ -391,11 +427,8 @@ export async function recordDecision<TEvaluation, TMutation>(
 
   const snapshotsEnabled = readinessSnapshotsEnabled();
 
-  if ((await ENTITY_PROJECT_SCOPE[entityType](entityId, projectId)) === 0) {
-    throw AppError.badRequest(
-      `Cannot record a decision: ${entityType} ${entityId} is not in project ${projectId}`,
-      { entityType, entityId, projectId },
-    );
+  if (!input.entityCreatedByMutate) {
+    await assertEntityInProject(prisma, entityType, entityId, projectId);
   }
 
   if (requestKey) {
@@ -410,9 +443,17 @@ export async function recordDecision<TEvaluation, TMutation>(
           const evaluation = await evaluate(tx);
           const mutation = await mutate(tx, evaluation);
 
+          // The check the pre-transaction one could not perform: the entity now
+          // exists, so verify the decision minted it in the project it claims.
+          if (input.entityCreatedByMutate) {
+            await assertEntityInProject(tx, entityType, entityId, projectId);
+          }
+
           const rows = snapshots(evaluation);
           assertSnapshotSizes(rows);
-          assertRequestKeyIsPersistable(rows, entityType, entityId, requestKey);
+          if (!input.entityCreatedByMutate) {
+            assertRequestKeyIsPersistable(rows, entityType, entityId, requestKey);
+          }
 
           const { auditLog, created } = await writeDecisionRecords(
             tx,

@@ -7,11 +7,25 @@
 // are database behaviours. A mocked Prisma client would prove nothing about any
 // of them.
 
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { AppError } from '../AppError.js';
 import { prisma } from '../prisma.js';
+import {
+  CLAIM_MEMBER_REQUIREMENT_SET,
+  CLAIM_MEMBER_RESULT_SCHEMA_VERSION,
+  buildClaimMemberResultV1,
+  decodeClaimMemberResult,
+  type ClaimMemberResultV1,
+} from './requirements/claimMember.v1.js';
+import {
+  CLAIM_READINESS_REQUIREMENT_SET,
+  CLAIM_READINESS_RESULT_SCHEMA_VERSION,
+  buildClaimReadinessResultV1,
+  decodeClaimReadinessResult,
+} from './requirements/claimReadiness.v1.js';
 import {
   DecisionSnapshotInput,
   MAX_DECISION_ATTEMPTS,
@@ -152,8 +166,15 @@ beforeAll(async () => {
 
 afterEach(async () => {
   disableSnapshots();
-  await prisma.requirementEvaluation.deleteMany({ where: { projectId } });
-  await prisma.auditLog.deleteMany({ where: { projectId } });
+  await prisma.requirementEvaluation.deleteMany({
+    where: { projectId: { in: [projectId, otherProjectId] } },
+  });
+  await prisma.auditLog.deleteMany({ where: { projectId: { in: [projectId, otherProjectId] } } });
+  // Claims minted by the create-style decisions below (the seeded `claimId` stays).
+  await prisma.claimedLot.deleteMany({ where: { claim: { projectId } } });
+  await prisma.progressClaim.deleteMany({
+    where: { projectId: { in: [projectId, otherProjectId] }, id: { not: claimId } },
+  });
   await prisma.lot.update({ where: { id: lotId }, data: { status: 'not_started' } });
   await prisma.testResult.update({
     where: { id: testResultId },
@@ -162,10 +183,14 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.requirementEvaluation.deleteMany({ where: { projectId } });
+  await prisma.requirementEvaluation.deleteMany({
+    where: { projectId: { in: [projectId, otherProjectId] } },
+  });
   await prisma.auditLog.deleteMany({ where: { projectId: { in: [projectId, otherProjectId] } } });
   await prisma.testResult.deleteMany({ where: { projectId } });
-  await prisma.progressClaim.deleteMany({ where: { projectId } });
+  await prisma.progressClaim.deleteMany({
+    where: { projectId: { in: [projectId, otherProjectId] } },
+  });
   await prisma.lot.deleteMany({ where: { projectId: { in: [projectId, otherProjectId] } } });
   await prisma.project.deleteMany({ where: { id: { in: [projectId, otherProjectId] } } });
   await prisma.user.delete({ where: { id: userId } });
@@ -579,6 +604,221 @@ describe('recordDecision — claim aggregate + members (spec §3 [R3-3])', () =>
 
     await prisma.progressClaim.update({ where: { id: claimId }, data: { status: 'draft' } });
   }, 60_000);
+});
+
+describe('recordDecision — entityCreatedByMutate (spec §11 F0.4b PR 0 [R3.1-B1])', () => {
+  /**
+   * Claim create, as PR 5 will call it: the route mints the claim id, `mutate`
+   * creates the claim AND its members inside the decision transaction, and the
+   * snapshots are built by the PR 0 requirement-set builders.
+   */
+  function claimCreateDecision(options: {
+    newClaimId: string;
+    createInProjectId?: string;
+    entityCreatedByMutate?: true;
+    requestKey?: string;
+    snapshotsOverride?: (member: ClaimMemberResultV1) => DecisionSnapshotInput[];
+  }) {
+    const claimedLotId = randomUUID();
+    return {
+      projectId,
+      entityType: 'claim' as const,
+      entityId: options.newClaimId,
+      decisionKind: 'inclusion' as const,
+      auditAction: 'claim_created',
+      actor: { kind: 'user' as const, userId },
+      ...(options.entityCreatedByMutate ? { entityCreatedByMutate: true as const } : {}),
+      ...(options.requestKey ? { requestKey: options.requestKey } : {}),
+      evaluate: async (tx: Prisma.TransactionClient) => {
+        const lot = await tx.lot.findUniqueOrThrow({
+          where: { id: lotId },
+          select: { id: true, status: true },
+        });
+        return {
+          claimedLotId,
+          member: buildClaimMemberResultV1({
+            memberType: 'lot',
+            items:
+              lot.status === 'conformed' ? [] : [{ code: 'not_conformed', blocksAction: true }],
+            claimedValue: 5000,
+          }),
+        };
+      },
+      mutate: async (tx: Prisma.TransactionClient, evaluation: { claimedLotId: string }) => {
+        const claim = await tx.progressClaim.create({
+          data: {
+            id: options.newClaimId,
+            projectId: options.createInProjectId ?? projectId,
+            claimNumber: Math.floor(Math.random() * 1_000_000) + 100,
+            claimPeriodStart: new Date('2026-08-01'),
+            claimPeriodEnd: new Date('2026-08-31'),
+          },
+        });
+        await tx.claimedLot.create({
+          data: { id: evaluation.claimedLotId, claimId: claim.id, lotId, amountClaimed: 5000 },
+        });
+        return claim;
+      },
+      snapshots: (evaluation: {
+        claimedLotId: string;
+        member: ClaimMemberResultV1;
+      }): DecisionSnapshotInput[] =>
+        options.snapshotsOverride?.(evaluation.member) ?? [
+          {
+            entityType: 'claim',
+            entityId: options.newClaimId,
+            requirementSet: CLAIM_READINESS_REQUIREMENT_SET,
+            resultSchemaVersion: CLAIM_READINESS_RESULT_SCHEMA_VERSION,
+            result: buildClaimReadinessResultV1([evaluation.member]),
+          },
+          {
+            entityType: 'claim_lot',
+            entityId: evaluation.claimedLotId,
+            requirementSet: CLAIM_MEMBER_REQUIREMENT_SET,
+            resultSchemaVersion: CLAIM_MEMBER_RESULT_SCHEMA_VERSION,
+            result: evaluation.member,
+          },
+        ],
+    } as Parameters<typeof recordDecision>[0];
+  }
+
+  it('records a decision whose entity is minted by mutate, with aggregate + member snapshots', async () => {
+    enableSnapshots();
+    const newClaimId = randomUUID();
+
+    const outcome = await recordDecision(
+      claimCreateDecision({ newClaimId, entityCreatedByMutate: true }),
+    );
+
+    expect(outcome.replayed).toBe(false);
+    expect(outcome.snapshotIds).toHaveLength(2);
+
+    // The entity really was created by the decision.
+    const claim = await prisma.progressClaim.findUniqueOrThrow({ where: { id: newClaimId } });
+    expect(claim.projectId).toBe(projectId);
+
+    const rows = await prisma.requirementEvaluation.findMany({
+      where: { auditLogId: outcome.auditLogId },
+      orderBy: { entityType: 'asc' },
+    });
+    expect(rows.map((row) => row.entityType)).toEqual(['claim', 'claim_lot']);
+    expect(rows[0]).toMatchObject({
+      entityId: newClaimId,
+      requirementSet: CLAIM_READINESS_REQUIREMENT_SET,
+      decisionKind: 'inclusion',
+      actorKind: 'user',
+    });
+    expect(decodeClaimReadinessResult(rows[0]).memberCounts).toMatchObject({
+      total: 1,
+      lots: 1,
+      blocked: 1,
+    });
+    expect(rows[1].requirementSet).toBe(CLAIM_MEMBER_REQUIREMENT_SET);
+    expect(decodeClaimMemberResult(rows[1])).toMatchObject({
+      memberType: 'lot',
+      ready: false,
+      blockingReasonCodes: ['not_conformed'],
+      claimedValue: 5000,
+    });
+
+    // One audit row for the whole decision, carrying the decision kind.
+    const audits = await prisma.auditLog.findMany({ where: { projectId, entityId: newClaimId } });
+    expect(audits).toHaveLength(1);
+    expect(JSON.parse(audits[0].changes ?? '{}')).toMatchObject({ decisionKind: 'inclusion' });
+  });
+
+  // REGRESSION PIN (direction 1): the option is opt-in. Without it, a decision
+  // on an entity that does not exist yet still fails 400 before the transaction
+  // opens, and neither `evaluate` nor `mutate` runs.
+  it('without the option, a not-yet-existing entity still 400s pre-transaction', async () => {
+    enableSnapshots();
+    const newClaimId = randomUUID();
+    let evaluated = false;
+
+    await expect(
+      recordDecision({
+        ...claimCreateDecision({ newClaimId }),
+        evaluate: async () => {
+          evaluated = true;
+          return {
+            claimedLotId: randomUUID(),
+            member: buildClaimMemberResultV1({ memberType: 'lot', claimedValue: 0 }),
+          };
+        },
+      } as Parameters<typeof recordDecision>[0]),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(evaluated).toBe(false);
+    expect(await prisma.progressClaim.findUnique({ where: { id: newClaimId } })).toBeNull();
+    expect(await snapshotRowsForProject()).toHaveLength(0);
+  });
+
+  // REGRESSION PIN (direction 2): the project-scope check is DEFERRED, not
+  // dropped. A decision that mints its entity in another project fails 400 from
+  // inside the transaction and rolls the created rows back.
+  it('with the option, an entity minted in another project 400s and rolls back', async () => {
+    enableSnapshots();
+    const newClaimId = randomUUID();
+
+    await expect(
+      recordDecision(
+        claimCreateDecision({
+          newClaimId,
+          entityCreatedByMutate: true,
+          createInProjectId: otherProjectId,
+        }),
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(await prisma.progressClaim.findUnique({ where: { id: newClaimId } })).toBeNull();
+    expect(await snapshotRowsForProject()).toHaveLength(0);
+    expect(await prisma.auditLog.findMany({ where: { entityId: newClaimId } })).toHaveLength(0);
+  });
+
+  // REGRESSION PIN (both directions) for the requestKey-persistability assert:
+  // skipped with the option (the route owns its own replay per [R3.1-B2]),
+  // enforced without it.
+  it('skips the requestKey-persistability assert only when the option is set', async () => {
+    enableSnapshots();
+    // Snapshots deliberately cover ONLY the member, never the decided claim.
+    const memberOnly = (member: ClaimMemberResultV1): DecisionSnapshotInput[] => [
+      {
+        entityType: 'claim_lot',
+        entityId: randomUUID(),
+        requirementSet: CLAIM_MEMBER_REQUIREMENT_SET,
+        resultSchemaVersion: CLAIM_MEMBER_RESULT_SCHEMA_VERSION,
+        result: member,
+      },
+    ];
+
+    const allowed = await recordDecision(
+      claimCreateDecision({
+        newClaimId: randomUUID(),
+        entityCreatedByMutate: true,
+        requestKey: `key-${randomUUID()}`,
+        snapshotsOverride: memberOnly,
+      }),
+    );
+    expect(allowed.snapshotIds).toHaveLength(1);
+
+    // Same shape on an EXISTING entity without the option: still a hard failure.
+    await expect(
+      recordDecision(
+        lotDecision({
+          requestKey: `key-${randomUUID()}`,
+          snapshots: (): DecisionSnapshotInput[] => [
+            {
+              entityType: 'claim_lot',
+              entityId: randomUUID(),
+              requirementSet: CLAIM_MEMBER_REQUIREMENT_SET,
+              resultSchemaVersion: CLAIM_MEMBER_RESULT_SCHEMA_VERSION,
+              result: { ready: true },
+            },
+          ],
+        }),
+      ),
+    ).rejects.toMatchObject({ statusCode: 500, code: 'SNAPSHOT_WRITE_FAILED' });
+  });
 });
 
 describe('requirement_evaluations — DB-enforced integrity (spec §3)', () => {
