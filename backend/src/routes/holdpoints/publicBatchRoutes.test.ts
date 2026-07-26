@@ -355,7 +355,7 @@ describe('Hold Point batch review-room public routes', () => {
     expect(outsideToken.usedAt).toBeNull();
   });
 
-  it('releases the selected batch hold points atomically with per-hold-point audit entries', async () => {
+  it('releases the selected batch hold points atomically under ONE audit entry', async () => {
     const res = await request(app)
       .post(`/api/holdpoints/public/batch/${batchRawToken}/release`)
       .send({
@@ -382,13 +382,26 @@ describe('Hold Point batch review-room public routes', () => {
     });
     expect(tokens.every((token) => token.usedAt !== null)).toBe(true);
 
+    // F0.4b PR 4 `[R3.1-R4]`: ONE signed release = ONE decision = ONE audit row.
+    // This used to expect 2 (one per hold point). Those N rows were themselves
+    // the defect: nothing linked the siblings, so an auditor reading one row
+    // could not tell it was part of a single signed batch release, which hold
+    // points went with it, or whether more had been released under the same
+    // signature. The batch context now lives ON the row.
     const audits = await prisma.auditLog.findMany({
       where: {
         entityId: { in: [holdPoint1Id, holdPoint2Id] },
         action: AuditAction.HP_PUBLIC_RELEASED,
       },
     });
-    expect(audits).toHaveLength(2);
+    expect(audits).toHaveLength(1);
+    // The anchor is the first requested hold point; membership is explicit.
+    expect(audits[0].entityId).toBe(holdPoint1Id);
+    expect(JSON.parse(audits[0].changes ?? '{}')).toMatchObject({
+      decisionKind: 'release',
+      batchSize: 2,
+      releasedHoldPointIds: [holdPoint1Id, holdPoint2Id],
+    });
 
     // The matching ITP completions are reconciled to verified/completed.
     const completions = await prisma.iTPCompletion.findMany({ where: { itpInstanceId } });
