@@ -15,8 +15,21 @@
 // Audit actions whose `changes.status` is a real lot-status transition.
 const LOT_STATUS_ACTIONS = new Set(['lot_updated', 'lot_status_changed', 'lot_force_conformed']);
 
+/**
+ * F0.4b PR 5 collapsed claim create into ONE decision audit row, replacing the
+ * per-lot `lot_status_changed` rows it used to emit for every lot the claim took
+ * to 100%. The transition itself is unchanged, and the row still carries which
+ * lots it was — as `changes.fullyClaimedLotIds` — so this reader expands that
+ * array back into conformed -> claimed events rather than losing them.
+ *
+ * The array is the ONLY place the correlation survives, which is the point of
+ * `[R3.1-R4]`: one decision, one row, membership carried explicitly.
+ */
+export const CLAIM_INCLUSION_ACTION = 'claim_created';
+
 export interface AuditRowForTimeline {
-  entityId: string; // lotId
+  /** lotId — or, for `claim_created`, the ProgressClaim id. */
+  entityId: string;
   action: string;
   changes: string | null; // JSON string
   createdAt: Date;
@@ -26,6 +39,67 @@ export interface LotStatusEvent {
   at: string; // ISO instant
   from: string | null;
   to: string;
+}
+
+/** One event and the lot it belongs to. */
+type AttributedEvent = [lotId: string, event: LotStatusEvent];
+
+/** `null` for a missing or unparseable payload — never a throw. */
+function parseChanges(changes: string | null): Record<string, unknown> | null {
+  if (!changes) return null;
+  try {
+    const parsed: unknown = JSON.parse(changes);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The single transition a lot-status row carries, in `changes.status`. */
+function lotStatusRowEvents(
+  row: AuditRowForTimeline,
+  changes: Record<string, unknown>,
+): AttributedEvent[] {
+  const status = changes.status;
+  if (!status || typeof status !== 'object') return [];
+  const to = (status as { to?: unknown }).to;
+  if (typeof to !== 'string') return [];
+  const fromRaw = (status as { from?: unknown }).from;
+  return [
+    [
+      row.entityId,
+      { at: row.createdAt.toISOString(), from: typeof fromRaw === 'string' ? fromRaw : null, to },
+    ],
+  ];
+}
+
+/**
+ * conformed -> claimed for every lot the claim took to 100%. The row's own
+ * `entityId` is the CLAIM, so the lots come from `changes.fullyClaimedLotIds`;
+ * a claim that completed no lot legitimately has none.
+ */
+function claimInclusionRowEvents(
+  row: AuditRowForTimeline,
+  changes: Record<string, unknown>,
+): AttributedEvent[] {
+  const lotIds = changes.fullyClaimedLotIds;
+  if (!Array.isArray(lotIds)) return [];
+  const at = row.createdAt.toISOString();
+  return lotIds
+    .filter((lotId): lotId is string => typeof lotId === 'string')
+    .map((lotId) => [lotId, { at, from: 'conformed', to: 'claimed' }]);
+}
+
+function eventsFromRow(row: AuditRowForTimeline): AttributedEvent[] {
+  const isClaimInclusion = row.action === CLAIM_INCLUSION_ACTION;
+  if (!isClaimInclusion && !LOT_STATUS_ACTIONS.has(row.action)) return [];
+
+  const changes = parseChanges(row.changes);
+  if (!changes) return [];
+
+  return isClaimInclusion
+    ? claimInclusionRowEvents(row, changes)
+    : lotStatusRowEvents(row, changes);
 }
 
 /**
@@ -39,26 +113,11 @@ export function lotStatusEventsFromAudit(
   const byLot = new Map<string, LotStatusEvent[]>();
 
   for (const row of rows) {
-    if (!LOT_STATUS_ACTIONS.has(row.action)) continue;
-    if (!row.changes) continue;
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(row.changes);
-    } catch {
-      continue;
+    for (const [lotId, event] of eventsFromRow(row)) {
+      const list = byLot.get(lotId) ?? [];
+      list.push(event);
+      byLot.set(lotId, list);
     }
-
-    const status = (parsed as { status?: unknown })?.status;
-    if (!status || typeof status !== 'object') continue;
-    const to = (status as { to?: unknown }).to;
-    if (typeof to !== 'string') continue;
-    const fromRaw = (status as { from?: unknown }).from;
-    const from = typeof fromRaw === 'string' ? fromRaw : null;
-
-    const list = byLot.get(row.entityId) ?? [];
-    list.push({ at: row.createdAt.toISOString(), from, to });
-    byLot.set(row.entityId, list);
   }
 
   for (const list of byLot.values()) {

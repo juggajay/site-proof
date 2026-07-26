@@ -71,6 +71,42 @@ describe('lotStatusEventsFromAudit', () => {
     ]);
     expect(events.get('lot-1')?.[0].from).toBeNull();
   });
+
+  // F0.4b PR 5: claim create writes ONE decision row against the CLAIM, so the
+  // conformed -> claimed transition for every lot the claim completed has to be
+  // expanded out of `changes.fullyClaimedLotIds` (`[R3.1-R4]`).
+  it('expands a claim_created decision row into per-lot conformed -> claimed events', () => {
+    const events = lotStatusEventsFromAudit([
+      row({
+        entityId: 'claim-9',
+        action: 'claim_created',
+        createdAt: new Date('2026-04-01T00:00:00Z'),
+        changes: JSON.stringify({
+          decisionKind: 'inclusion',
+          claimNumber: 3,
+          fullyClaimedLotIds: ['lot-7', 'lot-8'],
+        }),
+      }),
+    ]);
+
+    expect(events.get('lot-7')).toEqual([
+      { at: '2026-04-01T00:00:00.000Z', from: 'conformed', to: 'claimed' },
+    ]);
+    expect(events.get('lot-8')).toHaveLength(1);
+    // The claim itself is never a timeline subject.
+    expect(events.has('claim-9')).toBe(false);
+  });
+
+  it('ignores a claim_created row with no or malformed fullyClaimedLotIds', () => {
+    // A claim that completed no lots (every member partial) legitimately has no
+    // array, and a malformed one must not break the scrubber.
+    const events = lotStatusEventsFromAudit([
+      row({ action: 'claim_created', changes: JSON.stringify({ claimNumber: 1 }) }),
+      row({ action: 'claim_created', changes: JSON.stringify({ fullyClaimedLotIds: 'lot-7' }) }),
+      row({ action: 'claim_created', changes: JSON.stringify({ fullyClaimedLotIds: [42] }) }),
+    ]);
+    expect(events.size).toBe(0);
+  });
 });
 
 describe('buildStatusTimeline', () => {

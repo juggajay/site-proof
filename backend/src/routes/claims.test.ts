@@ -1349,19 +1349,27 @@ describe('Progress Claims API', () => {
       expect(lockedLot?.status).toBe('claimed');
       expect(lockedLot?.claimedInId).toBe(completing.body.claim.id);
 
-      // Claiming to 100% must audit conformed -> claimed so the map time scrubber
-      // can replay it (the status flip happens via updateMany inside the tx).
+      // Claiming to 100% must still record conformed -> claimed so the map time
+      // scrubber can replay it. F0.4b PR 5 collapsed claim create into ONE
+      // decision audit row (`[R3.1-R4]`), so the transition now lives in that
+      // row's `fullyClaimedLotIds` instead of a per-lot `lot_status_changed`
+      // row — same information, now correlated with the claim that caused it,
+      // and `lots/statusTimeline.ts` expands it back for the scrubber.
+      expect(
+        await prisma.auditLog.count({
+          where: { entityType: 'lot', entityId: lot.id, action: AuditAction.LOT_STATUS_CHANGED },
+        }),
+      ).toBe(0);
       const claimAudit = await prisma.auditLog.findFirst({
         where: {
-          entityType: 'lot',
-          entityId: lot.id,
-          action: AuditAction.LOT_STATUS_CHANGED,
+          entityType: 'progress_claim',
+          entityId: completing.body.claim.id,
+          action: AuditAction.CLAIM_CREATED,
         },
-        orderBy: { createdAt: 'desc' },
       });
-      expect(JSON.parse(claimAudit?.changes ?? '{}').status).toEqual({
-        from: 'conformed',
-        to: 'claimed',
+      expect(JSON.parse(claimAudit?.changes ?? '{}')).toMatchObject({
+        decisionKind: 'inclusion',
+        fullyClaimedLotIds: [lot.id],
       });
 
       // Deleting the completing draft claim must release its 60% increment and

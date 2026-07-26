@@ -11,6 +11,15 @@ export const CLAIM_VARIATION_NOTES_MAX_LENGTH = 2000;
 const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 export const MAX_CERTIFICATION_DOCUMENT_ID_LENGTH = 120;
 const CLAIM_VARIATION_IDS_MAX = 100;
+/**
+ * F0.4b PR 5 — the claim-size bound decision from the F0 execution spec §3
+ * `[R3-3]`: 5,000 members × 1 KB is the BENCHMARKED ceiling for one claim
+ * decision's snapshot rows (`MEMBER_RESULT_MAX_BYTES`, `SNAPSHOT_CHUNK_SIZE`,
+ * `DECISION_TRANSACTION_TIMEOUT_MS` are all sized against it). `lots` previously
+ * had no `.max()` at all, so an unbounded array could open a serializable
+ * transaction that cannot finish inside the timeout.
+ */
+export const CLAIM_LOTS_MAX = 5000;
 export const CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE =
   'Each claimed lot must include percentageComplete';
 
@@ -66,6 +75,7 @@ export const createClaimSchema = z
             .max(100, 'Percentage complete cannot exceed 100'),
         }),
       )
+      .max(CLAIM_LOTS_MAX, `lots cannot contain more than ${CLAIM_LOTS_MAX} items`)
       .optional(),
     requestKey: z.string().uuid('requestKey must be a valid UUID').optional(),
   })
@@ -300,7 +310,10 @@ const GENERIC_CLAIM_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   partially_paid: ['paid', 'disputed'],
 };
 
-export const CLAIM_NUMBER_RETRY_LIMIT = 5;
+// F0.4b PR 5 deleted `CLAIM_NUMBER_RETRY_LIMIT`: claim create now has exactly
+// ONE retry classifier, `recordDecision`'s `MAX_DECISION_ATTEMPTS`. A
+// claim-number collision is re-thrown as a write conflict so that loop retries
+// it (see `claims/inclusionDecision.ts`), rather than nesting a second loop.
 
 type RequestedClaimLot = {
   lotId: string;
