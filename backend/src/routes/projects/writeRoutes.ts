@@ -475,6 +475,9 @@ export function createProjectWriteRouter({
           workingHoursEnd: true,
           settings: true,
           status: true,
+          // C1 (F7): prior gate strength, so an audit reader can see a
+          // block -> warn -> block round trip, not just "mode was touched".
+          testSufficiencyMode: true,
         },
       });
 
@@ -597,6 +600,14 @@ export function createProjectWriteRouter({
             settingsKeys: sortedRecordKeys(settings),
             previousStatus: status !== undefined ? project.status : undefined,
             newStatus: status !== undefined ? status : undefined,
+            ...(testSufficiencyMode !== undefined
+              ? {
+                  testSufficiencyMode: {
+                    from: project.testSufficiencyMode,
+                    to: updatedProject.testSufficiencyMode,
+                  },
+                }
+              : {}),
           },
           req,
         });

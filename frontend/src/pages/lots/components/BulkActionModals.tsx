@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   ModalHeader,
@@ -289,6 +289,17 @@ export function BulkTestAttributesModal({
   const [quantityValue, setQuantityValue] = useState('');
   const [quantityUnit, setQuantityUnit] = useState('');
 
+  // C1 (F9): the component stays mounted between openings, so without this the
+  // next selected batch inherits the previous batch's armed scale/quantity and
+  // one Confirm silently overwrites it. A successful save closes the modal, so
+  // resetting on open covers both "new selection" and "after save".
+  useEffect(() => {
+    if (!isOpen) return;
+    setTestScale('');
+    setQuantityValue('');
+    setQuantityUnit('');
+  }, [isOpen]);
+
   const parsedQuantity = parseOptionalNonNegativeDecimalInput(quantityValue);
   // A quantity is a number AND a unit or it is not a quantity — the backend
   // refuses half of one, so the button refuses it too rather than round-tripping
@@ -317,9 +328,9 @@ export function BulkTestAttributesModal({
       <ModalHeader>Set Testing Attributes</ModalHeader>
       <ModalBody>
         <p className="text-sm text-muted-foreground">
-          Applies to <span className="font-semibold text-foreground">{selectedCount} lot(s)</span>,
-          checked against {ruleset.authority} {ruleset.document}. Leave a field blank to leave it
-          unchanged.
+          Applies to <span className="font-semibold text-foreground">{selectedCount} lot(s)</span>.
+          Testing scale sets the test frequency required by {ruleset.authority} {ruleset.document};
+          quantity is recorded for rules that use it. Leave a field blank to leave it unchanged.
         </p>
         <div className="mt-4 space-y-4">
           <div>

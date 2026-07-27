@@ -2064,6 +2064,44 @@ describe('Projects API', () => {
       expect(changes.settingsKeys).toEqual(['enabledModules', 'hpMinimumNoticeDays']);
     });
 
+    // F7 (external review 2026-07-27): flipping block -> warn -> block is how a
+    // sufficiency gate gets bypassed. `changedFields` alone cannot show which
+    // direction the gate moved, so the audit carries from/to.
+    it('records from/to for testSufficiencyMode changes', async () => {
+      const before = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { testSufficiencyMode: true },
+      });
+
+      const res = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ testSufficiencyMode: 'block' });
+      expect(res.status).toBe(200);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          entityType: 'project',
+          entityId: projectId,
+          action: AuditAction.PROJECT_UPDATED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+      expect(changes.testSufficiencyMode).toEqual({
+        from: before?.testSufficiencyMode,
+        to: 'block',
+      });
+
+      // Restore so later tests see the default gate strength.
+      const restore = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ testSufficiencyMode: before?.testSufficiencyMode });
+      expect(restore.status).toBe(200);
+    });
+
     it('should update the specification standard and return it', async () => {
       const res = await request(app)
         .patch(`/api/projects/${projectId}`)

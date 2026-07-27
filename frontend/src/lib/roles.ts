@@ -129,6 +129,19 @@ export const ROLE_GROUPS = {
   // excluded: foreman is a field-execution role, not a lot setup role.
   LOT_CREATORS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER] as const,
 
+  // Can edit an existing lot's fields (including the Wave C1 testing
+  // attributes, single and bulk). MUST mirror the backend LOT_EDITORS in
+  // backend/src/routes/lots/updateFields.ts — it is deliberately NOT the same
+  // set as LOT_CREATORS: site_manager can create lots but not edit them, and
+  // site_engineer/quality_manager can edit but not create.
+  LOT_EDITORS: [
+    ROLES.OWNER,
+    ROLES.ADMIN,
+    ROLES.PROJECT_MANAGER,
+    ROLES.SITE_ENGINEER,
+    ROLES.QUALITY_MANAGER,
+  ] as const,
+
   // Can delete lots.
   LOT_DELETERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
 
@@ -219,6 +232,10 @@ export function canDeleteProjects(role: string | undefined | null): boolean {
 
 export function canCreateLots(role: string | undefined | null): boolean {
   return hasRoleInGroup(role, ROLE_GROUPS.LOT_CREATORS);
+}
+
+export function canEditLots(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.LOT_EDITORS);
 }
 
 export function canDeleteLots(role: string | undefined | null): boolean {

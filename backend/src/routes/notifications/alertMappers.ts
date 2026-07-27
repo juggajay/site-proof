@@ -43,7 +43,12 @@ export interface Alert {
   escalatedTo?: string[]; // User IDs of escalation recipients
 }
 
-const ALERT_TYPES: AlertType[] = ['overdue_ncr', 'stale_hold_point', 'pending_approval'];
+/**
+ * The single source of truth for which stored alert rows are representable.
+ * `toAlert` drops anything else, so counts must filter on the SAME list or the
+ * check endpoints report active alerts that no list or summary can show (F10).
+ */
+export const ALERT_TYPES: AlertType[] = ['overdue_ncr', 'stale_hold_point', 'pending_approval'];
 const ALERT_SEVERITIES: AlertSeverity[] = ['low', 'medium', 'high', 'critical'];
 const ALERT_STATUS_FILTERS = ['active', 'resolved', 'escalated'] as const;
 type AlertStatusFilter = (typeof ALERT_STATUS_FILTERS)[number];

@@ -20,7 +20,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { processSystemAlertsWithLock } from '../../lib/notificationAutomation.js';
 import { prisma } from '../../lib/prisma.js';
 import { getAccessibleActiveProjectIds, getManageableActiveProjectIds } from './access.js';
-import { toAlert } from './alertMappers.js';
+import { ALERT_TYPES, toAlert } from './alertMappers.js';
 import {
   buildSystemAlertsCheckResponse,
   buildSystemAlertsSummaryResponse,
@@ -60,6 +60,10 @@ notificationSystemAlertsRouter.post(
       where: {
         resolvedAt: null,
         projectId: { in: accessibleProjectIds },
+        // F10: count only rows the list/summary endpoints can actually show —
+        // legacy/retired types are dropped by `toAlert`, so counting them here
+        // produced an active count nothing in the API could reconcile.
+        type: { in: ALERT_TYPES },
       },
     });
 

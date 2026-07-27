@@ -38,6 +38,7 @@ import {
   requireProjectNotificationAdminAccess,
 } from './access.js';
 import {
+  ALERT_TYPES,
   generateAlertId,
   parseAlertSeverity,
   parseAlertStatusFilter,
@@ -444,6 +445,9 @@ notificationAlertsRouter.post(
       where: {
         resolvedAt: null,
         OR: [{ assignedToId: userId }, { projectId: { in: [...accessibleProjectIds] } }],
+        // F10: same supported-type set the list mapper uses, so check and list
+        // never disagree about how many alerts are active.
+        type: { in: ALERT_TYPES },
       },
     });
 

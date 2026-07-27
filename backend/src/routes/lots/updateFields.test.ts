@@ -61,6 +61,8 @@ describe('lots update-field helpers (pure, DB-free)', () => {
         'site_engineer',
         'quality_manager',
       ]);
+      // F8: frontend/src/lib/roles.ts ROLE_GROUPS.LOT_EDITORS pins this same
+      // list — if either side drifts, one of the two tests fails.
       // site_manager can create lots but is intentionally not a lot editor.
       expect(LOT_EDITORS).not.toContain('site_manager');
       // Foreman is field execution, not lot setup — must not edit lot metadata.

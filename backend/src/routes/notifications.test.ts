@@ -2348,6 +2348,66 @@ describe('Notifications API', () => {
         expect(res.status).toBe(401);
       });
     });
+
+    // F10 (external review 2026-07-27): lists and summaries drop rows whose
+    // type is retired, but the raw counts in the two check endpoints used to
+    // include them — so a single legacy row made the API report an active
+    // alert that no list could show and no route could resolve.
+    describe('check endpoints count only currently-supported alert types', () => {
+      it('does not move either check count when a legacy overdue_test row exists', async () => {
+        const legacyId = `alert-legacy-count-${Date.now()}`;
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const runChecks = async () => {
+          const systemRes = await request(app)
+            .post('/api/notifications/system-alerts/check')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ projectId });
+          expect(systemRes.status).toBe(200);
+          const escalationRes = await request(app)
+            .post('/api/notifications/alerts/check-escalations')
+            .set('Authorization', `Bearer ${authToken}`);
+          expect(escalationRes.status).toBe(200);
+          return {
+            activeAlerts: systemRes.body.activeAlerts as number,
+            totalActiveAlerts: escalationRes.body.totalActiveAlerts as number,
+          };
+        };
+
+        // Run once first so the automation has already created whatever alerts
+        // this fixture warrants — the baseline below is then a steady state.
+        await runChecks();
+        const baseline = await runChecks();
+
+        try {
+          await prisma.notificationAlert.create({
+            data: {
+              id: legacyId,
+              type: 'overdue_test',
+              severity: 'high',
+              title: 'Legacy overdue_test alert',
+              message: 'Written before overdue_test was removed',
+              entityId: `legacy-count-entity-${Date.now()}`,
+              entityType: 'ncr',
+              projectId,
+              assignedToId: userId,
+              escalationLevel: 0,
+            },
+          });
+
+          // The row IS unresolved in the DB — it is only excluded because its
+          // type is retired, exactly as the list mapper excludes it.
+          expect(
+            await prisma.notificationAlert.count({ where: { id: legacyId, resolvedAt: null } }),
+          ).toBe(1);
+
+          expect(await runChecks()).toEqual(baseline);
+        } finally {
+          warn.mockRestore();
+          await prisma.notificationAlert.deleteMany({ where: { id: legacyId } });
+        }
+      });
+    });
   });
 
   describe('Diary Reminder System', () => {
