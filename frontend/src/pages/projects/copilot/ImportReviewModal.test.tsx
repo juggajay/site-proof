@@ -237,6 +237,47 @@ describe('ImportReviewModal', () => {
     );
   });
 
+  // B2/PDF: a PDF has no printed column headers — the reader emits the import
+  // targets as its columns, so the batch's mapping is the map stored with its
+  // dry run, never a spreadsheet profile whose columns are not in the file.
+  it('re-runs a batch on the map stored with its dry run, not on a profile', () => {
+    const pdfFieldMap = [{ target: 'description', source: { header: 'description' } }];
+    const blocked = dryRun({
+      counts: {
+        willCreate: 0,
+        willUpdate: 0,
+        willSkip: 0,
+        needsReview: 0,
+        ambiguous: 0,
+        blocked: 1,
+      },
+      canApply: false,
+      fieldMap: pdfFieldMap,
+      rows: [
+        {
+          key: 'ITP Pack::ITP-03 Kerbing',
+          unit: 'template',
+          rowRef: { sheet: 'ITP Pack', rowIndex: 2 },
+          label: 'ITP-03 Kerbing',
+          outcome: 'blocked',
+          reason: 'unresolvable_activity',
+        },
+      ],
+    });
+    state.detail = detailFor(blocked);
+    renderModal();
+
+    expect(screen.getByRole('option', { name: 'Columns read from the file' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Activity for ITP-03 Kerbing'), {
+      target: { value: 'kerb_channel' },
+    });
+
+    const [args] = state.dryRunSpy.mock.calls.at(-1) as [Record<string, unknown>];
+    expect(args.fieldMap).toEqual(pdfFieldMap);
+    expect(args.profileId).toBeUndefined();
+  });
+
   it('spells out an over-length cell rather than offering to truncate it', () => {
     const blocked = dryRun({
       counts: {

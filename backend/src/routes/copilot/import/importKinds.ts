@@ -35,7 +35,9 @@ export interface ImportDryRunOutput {
 
 export interface ImportKindConfig {
   kind: string;
-  sourceFormat: string;
+  /** NOTE: there is deliberately no `sourceFormat` here. Every kind reads from
+   *  every accepted format (B2 added PDF beside Excel), so the format is a
+   *  property of the uploaded FILE and lives on the batch. */
   stage: string;
   roles: readonly string[];
   deniedMessage: string;
@@ -57,11 +59,10 @@ export interface ImportKindConfig {
 
 const ITP_TEMPLATE_KIND: ImportKindConfig = {
   kind: 'itp_template',
-  sourceFormat: 'excel',
   stage: IMPORT_ITP_TEMPLATES_STAGE,
   roles: TEMPLATE_MANAGER_ROLES,
   deniedMessage: 'You do not have permission to import ITP templates',
-  sourceNote: 'Imported from spreadsheet',
+  sourceNote: 'Imported from an ITP document',
   reconciliationTitle: 'ITP import reconciliation',
   appliedModel: 'ITPTemplate',
   storedPayloadKeys(payload) {
@@ -95,7 +96,6 @@ const ITP_TEMPLATE_KIND: ImportKindConfig = {
 
 const LOT_REGISTER_KIND: ImportKindConfig = {
   kind: 'lot_register',
-  sourceFormat: 'excel',
   stage: IMPORT_LOT_REGISTER_STAGE,
   // A quality manager is not a lot setup manager — the same call `lot_breakdown`
   // already makes, and the reason the stage-role map exists.

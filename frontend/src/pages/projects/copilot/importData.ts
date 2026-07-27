@@ -63,6 +63,9 @@ export interface DryRunResult {
   rows: DryRunRow[];
   unmappedHeaders: { sheet: string; headers: string[] }[];
   canApply: boolean;
+  /** The map that produced this dry run. Stored with it by the server, so a
+   *  resumed batch can re-run without the reviewer re-picking the mapping. */
+  fieldMap?: unknown[];
 }
 
 export interface ParsedSheet {
@@ -194,12 +197,17 @@ export function useImportDryRun(projectId: string | undefined, kind: ImportKind)
     mutationFn: async ({
       batchId,
       profileId,
+      fieldMap,
       resolutions,
       saveProfileName,
       saveProfileScope,
     }: {
       batchId: string;
-      profileId: string;
+      /** A saved or built-in profile. Omitted when `fieldMap` is sent instead. */
+      profileId?: string;
+      /** The columns read straight off the file — what a PDF and an
+       *  unrecognised sheet layout both map with. */
+      fieldMap?: unknown[];
       resolutions?: Resolutions;
       saveProfileName?: string;
       saveProfileScope?: 'project' | 'company';
@@ -208,7 +216,12 @@ export function useImportDryRun(projectId: string | undefined, kind: ImportKind)
         `${importPath(projectId!)}/${encodeURIComponent(batchId)}/dry-run`,
         {
           method: 'POST',
-          body: JSON.stringify({ profileId, resolutions, saveProfileName, saveProfileScope }),
+          body: JSON.stringify({
+            ...(fieldMap ? { fieldMap } : { profileId }),
+            resolutions,
+            saveProfileName,
+            saveProfileScope,
+          }),
         },
       ),
     onSuccess: () => invalidateImports(queryClient, projectId, kind),

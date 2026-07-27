@@ -38,10 +38,12 @@ import { parseExcelWorkbook, type ParsedGrid } from './excelParser.js';
 import { requireImportKind, type ImportKindConfig } from './importKinds.js';
 import {
   assertImportUploadContent,
+  importSourceFormat,
   importUpload,
   storeImportSource,
   IMPORT_SOURCE_DOCUMENT_TYPE,
 } from './importSourceStorage.js';
+import { extractPdfGrid } from './pdfExtraction.js';
 import {
   assertAllowedFieldMap,
   BUILT_IN_PROFILES,
@@ -159,6 +161,43 @@ async function failBatch(batchId: string, status: string, reason: string): Promi
 // Upload → parse
 // ---------------------------------------------------------------------------
 
+/**
+ * Gate an uploaded file and read it into the normalized grid.
+ *
+ * Excel is parsed; a PDF has no grid to parse, so the model reads one out of it
+ * (spec §6-B2) — same shape, and everything after this point is identical.
+ */
+async function readSourceFile(
+  file: Express.Multer.File,
+  kind: string,
+): Promise<{ grid: ParsedGrid; sourceFormat: string }> {
+  // Magic bytes are the authoritative gate; the multer filter only gave a cheap
+  // early rejection on a client-controlled name and MIME type.
+  assertImportUploadContent(file);
+  // Re-derived rather than carried from the filter, so the reader that runs and
+  // the format recorded on the batch can never disagree.
+  const sourceFormat = importSourceFormat(file.originalname);
+  if (!sourceFormat) {
+    throw AppError.badRequest('Only .xlsx spreadsheets and .pdf documents can be imported.');
+  }
+
+  const grid =
+    sourceFormat === 'pdf'
+      ? await extractPdfGrid(file, kind)
+      : await parseExcelWorkbook(file.buffer, kind);
+
+  const serialized = JSON.stringify(grid);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_PARSE_RESULT_BYTES) {
+    const rowCount = grid.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
+    throw AppError.badRequest(
+      `That file holds ${rowCount} rows across ${grid.sheets.length} sheets — too much to review in one import. Split it into smaller files.`,
+      { code: 'IMPORT_PARSE_RESULT_TOO_LARGE' },
+    );
+  }
+
+  return { grid, sourceFormat };
+}
+
 importRouter.post(
   '/:projectId/copilot/imports',
   importUpload.single('file'),
@@ -168,29 +207,17 @@ importRouter.post(
     await requireImportAccess(projectId, req.user, config);
 
     if (!req.file) {
-      throw AppError.badRequest('A spreadsheet is required.');
+      throw AppError.badRequest('A file is required.');
     }
-    // Magic bytes are the authoritative gate; the multer filter above only gave
-    // a cheap early rejection on a client-controlled name and MIME type.
-    assertImportUploadContent(req.file);
-
-    // Parse BEFORE persisting anything: a hostile or unreadable file leaves no
+    // Read BEFORE persisting anything: a hostile or unreadable file leaves no
     // batch and no stored document behind.
-    const grid = await parseExcelWorkbook(req.file.buffer, config.kind);
-    const serialized = JSON.stringify(grid);
-    if (Buffer.byteLength(serialized, 'utf8') > MAX_PARSE_RESULT_BYTES) {
-      const rowCount = grid.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
-      throw AppError.badRequest(
-        `That workbook holds ${rowCount} rows across ${grid.sheets.length} sheets — too much to review in one import. Split it into smaller files.`,
-        { code: 'IMPORT_PARSE_RESULT_TOO_LARGE' },
-      );
-    }
+    const { grid, sourceFormat } = await readSourceFile(req.file, config.kind);
 
     const batch = await prisma.importBatch.create({
       data: {
         projectId,
         kind: config.kind,
-        sourceFormat: config.sourceFormat,
+        sourceFormat,
         status: 'uploaded',
         createdById: req.user!.id,
       },
@@ -359,7 +386,7 @@ importRouter.post(
         data: {
           name: body.data.saveProfileName,
           kind: config.kind,
-          sourceFormat: config.sourceFormat,
+          sourceFormat: batch.sourceFormat,
           fieldMap: fieldMap as unknown as object,
           // Company scope is the point (§9-D9): a contractor with eight
           // projects maps their standard sheet once, not eight times.

@@ -213,7 +213,7 @@ describe('CopilotPage — Wave B import rail', () => {
     renderAt('/projects/p1/copilot');
     await screen.findByRole('heading', { name: 'Bring your ITPs across', level: 2 });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Import a spreadsheet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import a file' }));
     expect(await screen.findByTestId('modal-itp-import')).toHaveTextContent('new');
   });
 

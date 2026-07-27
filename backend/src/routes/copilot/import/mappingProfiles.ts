@@ -220,7 +220,17 @@ const LOT_HEADER_ALIASES: Record<LotImportTarget, string[]> = {
   materialType: ['materialtype', 'material'],
   quantityValue: ['quantity', 'qty', 'quantityvalue', 'amount'],
   quantityUnit: ['quantityunit', 'unit', 'uom', 'units'],
-  itpTemplateName: ['itp', 'itpname', 'itpref', 'inspectiontestplan', 'template'],
+  // `itptemplatename` last but present: it is the target's own name, which is
+  // what the PDF reader emits as its column header (`pdfExtraction.ts`), and
+  // real registers do spell the column out in full.
+  itpTemplateName: [
+    'itp',
+    'itpname',
+    'itpref',
+    'inspectiontestplan',
+    'template',
+    'itptemplatename',
+  ],
 };
 
 interface KindMapping {
