@@ -137,6 +137,15 @@ import {
   emptySyncKindCounts,
   type SyncQueueSummary,
 } from './offline/syncKinds';
+// The same failure-tolerant helpers the hook uses. Direct localStorage access
+// anywhere under src/ is blocked by the production-readiness guardrail
+// (e2e/productionReadiness.spec.ts, 'browser storage access goes through safe
+// helpers'), test files included.
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from './storagePreferences';
 import { useOfflineStatus, type SyncCallbacks } from './useOfflineStatus';
 
 // --- Typed mock handles ----------------------------------------------------
@@ -254,7 +263,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   // navigator.onLine is read once at mount; force it true so the worker runs.
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-  localStorage.clear();
+  removeLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY);
 
   // Default: empty queue and zeroed counts. Individual tests override the queue.
   getPendingSyncItemsMock.mockResolvedValue([]);
@@ -1261,7 +1270,7 @@ describe('lastSyncedAt', () => {
 
     await runSync();
 
-    const stored = localStorage.getItem(LAST_SYNCED_AT_STORAGE_KEY);
+    const stored = readLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY);
     expect(stored).not.toBeNull();
     expect(Number.isNaN(Date.parse(stored as string))).toBe(false);
   });
@@ -1271,7 +1280,7 @@ describe('lastSyncedAt', () => {
 
     await runSync();
 
-    expect(localStorage.getItem(LAST_SYNCED_AT_STORAGE_KEY)).toBeNull();
+    expect(readLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY)).toBeNull();
   });
 
   // [SC-A4] — the guard is syncedCount alone. Fourteen of the fifteen call
@@ -1285,7 +1294,7 @@ describe('lastSyncedAt', () => {
       await result.current.syncPendingChanges();
     });
 
-    expect(localStorage.getItem(LAST_SYNCED_AT_STORAGE_KEY)).not.toBeNull();
+    expect(readLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY)).not.toBeNull();
   });
 
   // [SC-B2] — the cross-instance case. A value written by the app-root
@@ -1300,7 +1309,7 @@ describe('lastSyncedAt', () => {
 
     // Another instance flushes and writes the timestamp.
     const written = '2026-07-28T10:42:00.000Z';
-    localStorage.setItem(LAST_SYNCED_AT_STORAGE_KEY, written);
+    writeLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY, written);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
@@ -1310,7 +1319,7 @@ describe('lastSyncedAt', () => {
   });
 
   it('exposes an existing value at mount', async () => {
-    localStorage.setItem(LAST_SYNCED_AT_STORAGE_KEY, '2026-07-28T09:00:00.000Z');
+    writeLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY, '2026-07-28T09:00:00.000Z');
 
     const { result } = renderHook(() => useOfflineStatus());
 
