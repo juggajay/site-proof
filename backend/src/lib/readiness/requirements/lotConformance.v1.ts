@@ -4,6 +4,8 @@
 // Execution spec §11 F0.4b PR 0 `[R3.1-B3]`; `decisionKind` for both
 // force-conform and de-conform is `override`, never `waiver` `[R3.1-B4]`.
 
+import type { SufficiencyEvaluation } from '../sufficiency/evaluate.js';
+import { buildSufficiencySnapshotV1, type SufficiencySnapshotV1 } from '../sufficiency/snapshot.js';
 import type { ReadinessReasonCode } from '../contracts/reasonCodes.js';
 import {
   blockingReasonCodes,
@@ -41,6 +43,17 @@ export type LotConformanceResultV1 = {
   blockingReasonCodes: LotConformanceReasonCode[];
   /** Override/de-conform provenance, truncated (spec §6). Absent when not given. */
   reason?: string;
+  /**
+   * Wave C1.2 (spec §5.4.2 `[C1R-B3]`). OPTIONAL in the type, ALWAYS EMITTED by
+   * {@link buildLotConformanceResultV1} — absence marks a pre-C1 row, which is
+   * the discriminator a `resultSchemaVersion` bump would have provided, without
+   * splitting a live immutable table.
+   *
+   * This is where a FORCE-CONFORM past a `block` records exactly what was
+   * overridden (§14 AT-16): `blocks: true` plus the per-rule required/have
+   * numbers and the clause that carries them.
+   */
+  sufficiency?: SufficiencySnapshotV1;
 };
 
 export interface LotConformanceEvaluation {
@@ -51,6 +64,8 @@ export interface LotConformanceEvaluation {
   /** Force-conform / de-conform sets this; a plain conform does not. */
   overridden?: boolean;
   reason?: string | null;
+  /** C1.2: `ConformanceCheckResult.sufficiency`, read inside the decision tx. */
+  sufficiency?: SufficiencyEvaluation | null;
 }
 
 export function buildLotConformanceResultV1(
@@ -62,6 +77,7 @@ export function buildLotConformanceResultV1(
     overridden: evaluation.overridden === true,
     blockingReasonCodes: blockingReasonCodes(evaluation.items, LOT_CONFORMANCE_REASON_CODES),
     ...(reason ? { reason } : {}),
+    sufficiency: buildSufficiencySnapshotV1(evaluation.sufficiency),
   };
 }
 

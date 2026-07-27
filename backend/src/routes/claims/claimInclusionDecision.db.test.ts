@@ -270,6 +270,9 @@ describe('claim inclusion decision — feature flag (spec §9 rollout step 2)', 
       memberCounts: { total: 1, lots: 1, variations: 0, ready: 1, blocked: 0 },
       totalClaimedValue: 40000,
       blockingReasonCounts: {},
+      // C1.2 (§14 AT-13): summarised FROM the member rows. No ruleset resolves
+      // for this NSW fixture, so every member is `unknown` and so is the total.
+      sufficiency: { state: 'unknown', insufficientMembers: 0, worstShortfall: 0 },
     });
   });
 });
@@ -338,6 +341,8 @@ describe('claim inclusion decision — multi-grain snapshots (spec §3 [R3-3])',
       blockingReasonCodes: [],
       claimedValue: 25000,
       claimedPercentage: 25,
+      // C1.2 (§5.4.3): the FIXED-WIDTH aggregate, never a rule list.
+      sufficiency: { state: 'unknown', insufficientRules: 0, worstShortfall: 0 },
     });
     expect(memberByLotId.get(lotB.id)).toEqual({
       memberType: 'lot',
@@ -345,12 +350,16 @@ describe('claim inclusion decision — multi-grain snapshots (spec §3 [R3-3])',
       blockingReasonCodes: [],
       claimedValue: 50000,
       claimedPercentage: 100,
+      sufficiency: { state: 'unknown', insufficientRules: 0, worstShortfall: 0 },
     });
     expect(decodeClaimMemberResult(variationRows[0])).toEqual({
       memberType: 'variation',
       ready: true,
       blockingReasonCodes: [],
       claimedValue: 1250.5,
+      // A variation has no lot, so sufficiency is structurally unresolvable —
+      // and the key is still emitted, because its ABSENCE means "pre-C1 row".
+      sufficiency: { state: 'unknown', insufficientRules: 0, worstShortfall: 0 },
     });
 
     // The aggregate is COUNTS AND TOTALS ONLY, derived from the member verdicts
@@ -360,6 +369,7 @@ describe('claim inclusion decision — multi-grain snapshots (spec §3 [R3-3])',
       memberCounts: { total: 3, lots: 2, variations: 1, ready: 3, blocked: 0 },
       totalClaimedValue: 76250.5,
       blockingReasonCounts: {},
+      sufficiency: { state: 'unknown', insufficientMembers: 0, worstShortfall: 0 },
     });
     const aggregateJson = JSON.stringify(aggregate.result);
     for (const memberId of [...claimedLots.map((row) => row.id), variation.id]) {

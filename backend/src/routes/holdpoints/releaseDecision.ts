@@ -13,6 +13,13 @@
 
 import type { Prisma } from '@prisma/client';
 
+import {
+  checkConformancePrerequisites,
+  type ConformancePrismaClient,
+} from '../../lib/conformancePrerequisites.js';
+import { prisma } from '../../lib/prisma.js';
+import type { SufficiencyEvaluation } from '../../lib/readiness/sufficiency/evaluate.js';
+import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
 import type { DecisionSnapshotInput } from '../../lib/readiness/recordDecision.js';
 import {
   HOLD_POINT_RELEASE_REQUIREMENT_SET,
@@ -23,6 +30,38 @@ import {
 
 /** The two statuses `holdPointReleased` treats as done (see publicReleaseExecution). */
 const TERMINAL_HOLD_POINT_STATUSES = ['released', 'completed'];
+
+/**
+ * Wave C1.2 (spec §5.2). The lot's test-sufficiency verdict for a release
+ * decision — WARN ONLY, always. A hold-point release is the client's decision;
+ * CIVOS informs, they decide, and the snapshot records what we told them. That
+ * is the External-collaboration standard, not a rollout choice, so this value
+ * reaches the SNAPSHOT and nothing else: `evaluateHoldPointReleaseReadiness`
+ * never reads it, so it cannot become a blocker by accident.
+ *
+ * Resolved BEFORE `recordDecision`, deliberately: the frequency-stream read is
+ * a predicate read over exactly the range concurrent conforms write, so inside
+ * the serializable transaction it would guarantee 40001/P2034 retries
+ * `[C1R-B7]` (§3.4.3). The honest cost is one commit of staleness, bounded and
+ * self-healing — the same trade the readiness path already makes.
+ *
+ * Never throws: a release must not fail because the advisory could not be
+ * computed. An unresolvable verdict records as absent, which reads as "not
+ * checked" rather than "checked and fine".
+ */
+export async function resolveHoldPointReleaseSufficiency(
+  lotId: string,
+  client: ConformancePrismaClient = prisma,
+): Promise<SufficiencyEvaluation | null> {
+  try {
+    const conformance = await checkConformancePrerequisites(lotId, client, {
+      regimeFetcher: prismaRegimeStreamFetcher(),
+    });
+    return conformance.sufficiency ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Readiness for ONE release decision covering `holdPointIds`, read inside the
@@ -53,6 +92,8 @@ export async function evaluateHoldPointReleaseReadiness(
   tx: Prisma.TransactionClient,
   holdPointIds: readonly string[],
   lotId: string,
+  /** C1.2: resolved by {@link resolveHoldPointReleaseSufficiency} OUTSIDE this tx. */
+  sufficiency: SufficiencyEvaluation | null = null,
 ): Promise<HoldPointReleaseEvaluation> {
   const outstandingSiblings = await tx.holdPoint.count({
     where: {
@@ -65,6 +106,7 @@ export async function evaluateHoldPointReleaseReadiness(
   return {
     released: true,
     items: outstandingSiblings > 0 ? [{ code: 'unreleased_hold_points' }] : [],
+    sufficiency,
   };
 }
 

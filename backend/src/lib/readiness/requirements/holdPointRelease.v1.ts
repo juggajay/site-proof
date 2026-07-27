@@ -8,6 +8,8 @@
 // (execution spec §11 F0.4b PR 0 `[R3.1-B3]`).
 
 import type { HoldPointPackageVerdict, HoldPointReasonCode } from '../contracts/futureConsumers.js';
+import type { SufficiencyEvaluation } from '../sufficiency/evaluate.js';
+import { buildSufficiencySnapshotV1, type SufficiencySnapshotV1 } from '../sufficiency/snapshot.js';
 import {
   blockingReasonCodes,
   decodeAtVersion1,
@@ -48,6 +50,16 @@ export type HoldPointReleaseResultV1 = Omit<
   batchId?: string;
   /** Members in the batch decision, on every row of that batch. Absent for singles. */
   batchSize?: number;
+  /**
+   * Wave C1.2 (spec §5.2, §5.4.2). ALWAYS EMITTED; optional in the type so a
+   * pre-C1 row still decodes at version 1.
+   *
+   * The hold-point moment is WARN ONLY and always will be — a release is the
+   * client's decision, and `blocks` on this row records what CIVOS TOLD them,
+   * never a gate CIVOS applied. `evaluateHoldPointReleaseReadiness` never reads
+   * it, so no future edit can turn it into a blocker by accident.
+   */
+  sufficiency?: SufficiencySnapshotV1;
 };
 
 export interface HoldPointReleaseEvaluation {
@@ -57,6 +69,12 @@ export interface HoldPointReleaseEvaluation {
   items: readonly ReadinessItemLike[];
   batchId?: string;
   batchSize?: number;
+  /**
+   * C1.2 (§5.2 step 2). Resolved for the hold point's LOT, OUTSIDE the decision
+   * transaction `[C1R-B7]` — the frequency-stream read is a predicate read over
+   * exactly the range concurrent conforms write.
+   */
+  sufficiency?: SufficiencyEvaluation | null;
 }
 
 export function buildHoldPointReleaseResultV1(
@@ -67,6 +85,7 @@ export function buildHoldPointReleaseResultV1(
     reasonCodes: blockingReasonCodes(evaluation.items, HOLD_POINT_RELEASE_REASON_CODES),
     ...(evaluation.batchId ? { batchId: evaluation.batchId } : {}),
     ...(evaluation.batchSize === undefined ? {} : { batchSize: evaluation.batchSize }),
+    sufficiency: buildSufficiencySnapshotV1(evaluation.sufficiency),
   };
 }
 

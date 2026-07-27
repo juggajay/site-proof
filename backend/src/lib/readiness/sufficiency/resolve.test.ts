@@ -3,8 +3,13 @@
 // stream reader, so the whole resolver is testable without the C1.1 migration.
 
 import { describe, expect, it } from 'vitest';
-import { resolveSufficiency, toSufficiencyMode, type SufficiencyLotInput } from './resolve.js';
-import type { RegimeStreamFetcher } from './regime.js';
+import {
+  resolveSufficiency,
+  resolveSufficiencyBatch,
+  toSufficiencyMode,
+  type SufficiencyLotInput,
+} from './resolve.js';
+import type { RegimeStreamEntry, RegimeStreamFetcher, RegimeStreamQuery } from './regime.js';
 
 function lotInput(overrides: Partial<SufficiencyLotInput> = {}): SufficiencyLotInput {
   return {
@@ -157,5 +162,178 @@ describe('resolveSufficiency', () => {
     // can never land inside the serializable transaction [C1R-B7].
     const resolved = await resolveSufficiency(lotInput(), null, NOW);
     expect(resolved.regimeByRuleId.size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave C1.2 — the grouped batch (spec §11 C1.2, §12).
+// ---------------------------------------------------------------------------
+
+const RULE_ID = 'vicroads-204.v1/compaction-density';
+
+/** A conformed stream entry with no failing test — a CONFORMING entry. */
+function streamEntry(id: string, conformedAt: string): RegimeStreamEntry {
+  return {
+    id,
+    activitySlug: 'earthworks_general',
+    conformedAt: new Date(conformedAt),
+    conformanceOverriddenAt: null,
+    testResults: [{ testType: 'compaction', passFail: 'pass', status: 'verified' }],
+  };
+}
+
+describe('resolveSufficiencyBatch', () => {
+  it('issues ONE query per stream for N lots — never one per member (§12)', async () => {
+    const queries: RegimeStreamQuery[] = [];
+    const counting: RegimeStreamFetcher = async (query) => {
+      queries.push(query);
+      return [];
+    };
+
+    // 50 lots, all in the SAME project/activity/layer stream. The per-lot loop
+    // this replaces would have fired 50 reads.
+    const lots = Array.from({ length: 50 }, (_unused, index) => lotInput({ id: `lot-${index}` }));
+    const resolved = await resolveSufficiencyBatch(lots, counting, NOW);
+
+    expect(queries).toHaveLength(1);
+    expect(resolved.size).toBe(50);
+    // Cursor-less: one read serves every subject, and each subject's own cursor
+    // is applied in memory.
+    expect(queries[0].cursor).toBeUndefined();
+    expect(queries[0].where.projectId).toBe('project-1');
+  });
+
+  it('splits by stream: a different project or activity is a different read', async () => {
+    const queries: RegimeStreamQuery[] = [];
+    const counting: RegimeStreamFetcher = async (query) => {
+      queries.push(query);
+      return [];
+    };
+
+    await resolveSufficiencyBatch(
+      [
+        lotInput({ id: 'a1' }),
+        lotInput({ id: 'a2' }),
+        lotInput({ id: 'b1', projectId: 'project-2' }),
+        lotInput({ id: 'c1', activitySlug: 'earthworks_subgrade_prep' }),
+      ],
+      counting,
+      NOW,
+    );
+
+    // Three streams: (p1, general), (p2, general), (p1, subgrade_prep).
+    expect(queries).toHaveLength(3);
+    // AT-18 tenant isolation survives the grouping: every query is
+    // project-scoped, so project 2's lots can never enter project 1's stream.
+    expect(new Set(queries.map((query) => query.where.projectId))).toEqual(
+      new Set(['project-1', 'project-2']),
+    );
+  });
+
+  it('issues ZERO queries when nothing regime-bearing resolves', async () => {
+    let calls = 0;
+    const counting: RegimeStreamFetcher = async () => {
+      calls += 1;
+      return [];
+    };
+    await resolveSufficiencyBatch(
+      [
+        lotInput({
+          id: 'nsw',
+          project: { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' },
+        }),
+        lotInput({ id: 'unclassified', activitySlug: null }),
+      ],
+      counting,
+      NOW,
+    );
+    expect(calls).toBe(0);
+  });
+
+  it('gives a CONFORMED subject its OWN predecessors, not the stream tail (§3.4.3)', async () => {
+    // Stream, newest first. `mid` sits third; its three predecessors are
+    // older-1..3, and the three most recent are newest-1..3 — different sets, so
+    // an implementation that handed every subject the tail would be caught.
+    const rowsDesc = [
+      streamEntry('newest-1', '2026-07-20T00:00:00Z'),
+      streamEntry('newest-2', '2026-07-19T00:00:00Z'),
+      streamEntry('mid', '2026-07-18T00:00:00Z'),
+      streamEntry('older-1', '2026-07-17T00:00:00Z'),
+      streamEntry('older-2', '2026-07-16T00:00:00Z'),
+      streamEntry('older-3', '2026-07-15T00:00:00Z'),
+      streamEntry('older-4', '2026-07-14T00:00:00Z'),
+    ];
+    const fetcher: RegimeStreamFetcher = async () => rowsDesc;
+
+    const resolved = await resolveSufficiencyBatch(
+      [
+        lotInput({ id: 'mid', conformedAt: new Date('2026-07-18T00:00:00Z') }),
+        lotInput({ id: 'unconformed', conformedAt: null }),
+      ],
+      fetcher,
+      NOW,
+    );
+
+    expect(resolved.get('mid')!.regimeByRuleId.get(RULE_ID)!.basisLotIds).toEqual([
+      'older-3',
+      'older-2',
+      'older-1',
+    ]);
+    expect(resolved.get('unconformed')!.regimeByRuleId.get(RULE_ID)!.basisLotIds).toEqual([
+      'mid',
+      'newest-2',
+      'newest-1',
+    ]);
+  });
+
+  it('falls back to `full` for a subject outside the fetched window', async () => {
+    // The `ponytail:` ceiling made observable: a conformed subject the read did
+    // not reach resolves to the over-testing (safe) direction, never to
+    // `reduced` and never to a per-lot query.
+    const fetcher: RegimeStreamFetcher = async () => [
+      streamEntry('other-1', '2026-07-20T00:00:00Z'),
+      streamEntry('other-2', '2026-07-19T00:00:00Z'),
+    ];
+    const resolved = await resolveSufficiencyBatch(
+      [lotInput({ id: 'deep', conformedAt: new Date('2020-01-01T00:00:00Z') })],
+      fetcher,
+      NOW,
+    );
+    expect(resolved.get('deep')!.regimeByRuleId.size).toBe(0);
+  });
+
+  it('matches the single-lot resolver exactly, so the two paths cannot drift', async () => {
+    const rowsDesc = [
+      streamEntry('s1', '2026-07-20T00:00:00Z'),
+      streamEntry('s2', '2026-07-19T00:00:00Z'),
+      streamEntry('s3', '2026-07-18T00:00:00Z'),
+    ];
+    const fetcher: RegimeStreamFetcher = async () => rowsDesc;
+    const lot = lotInput({ id: 'subject', conformedAt: null });
+
+    const single = await resolveSufficiency(lot, fetcher, NOW);
+    const batched = await resolveSufficiencyBatch([lot], fetcher, NOW);
+
+    expect(batched.get('subject')!.regimeByRuleId.get(RULE_ID)).toEqual(
+      single.regimeByRuleId.get(RULE_ID),
+    );
+    // Three consecutive conforming entries meet the trigger — reported as
+    // ELIGIBILITY at `regime: 'full'`, never as a reduction [C1C-6].
+    expect(batched.get('subject')!.regimeByRuleId.get(RULE_ID)).toMatchObject({
+      regime: 'full',
+      eligible: true,
+    });
+  });
+
+  it('passing NO fetcher resolves everything DB-free — the claim DECISION path', async () => {
+    // What `checkConformancePrerequisitesBatch` does inside the serializable
+    // claim transaction: zero regime queries, so the read can never land inside
+    // it [C1R-B7].
+    const resolved = await resolveSufficiencyBatch([lotInput(), lotInput({ id: 'lot-2' })], null);
+    expect(resolved.size).toBe(2);
+    for (const entry of resolved.values()) {
+      expect(entry.ruleset?.id).toBe('vicroads-204.v1');
+      expect(entry.regimeByRuleId.size).toBe(0);
+    }
   });
 });

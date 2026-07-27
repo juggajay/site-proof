@@ -9,6 +9,8 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { buildSufficiencySnapshotV1 } from '../../lib/readiness/sufficiency/snapshot.js';
+import { resolveHoldPointReleaseSufficiency } from './releaseDecision.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
 import {
@@ -963,6 +965,14 @@ holdPointRequestReleaseRouter.post(
 
     res.json({
       ...buildHoldPointReleaseRequestedResponse(holdPoint),
+      // Wave C1.2 (§5.2 step 1). The request is the HIGHEST-VALUE moment for
+      // this advisory: it is exactly the lab-turnaround window, so "you are 1 of
+      // 6 compaction tests short" is still actionable here and is not once the
+      // Superintendent has stood in the trench. ADVISORY — nothing about the
+      // request is gated on it, and a release never blocks (§5.2 step 3).
+      testSufficiency: buildSufficiencySnapshotV1(
+        await resolveHoldPointReleaseSufficiency(holdPoint.lotId),
+      ),
       ...(failedDeliveryCount > 0 && {
         emailDelivery: {
           sent: sentDeliveryCount,

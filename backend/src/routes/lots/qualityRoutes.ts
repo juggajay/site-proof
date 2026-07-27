@@ -78,6 +78,10 @@ function lotConformanceSnapshot(
           : [],
         overridden: options.overridden,
         reason: options.reason,
+        // Wave C1.2 (§5.4, §14 AT-16). The evaluation `recordDecision` produced
+        // INSIDE the transaction, so a force-conform past a `block` records the
+        // shortfall exactly as it stood when the status changed.
+        sufficiency: evaluation.sufficiency ?? null,
       }),
     },
   ];

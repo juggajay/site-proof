@@ -18,7 +18,9 @@ import type {
   MaxLotSizeExceedance,
   ResolvedSufficiency,
   RuleSufficiency,
+  RulesetStatus,
   SufficiencyChecklistItem,
+  SufficiencyMode,
   SufficiencyState,
   SufficiencyTestRow,
   UnknownCause,
@@ -36,6 +38,15 @@ export interface SufficiencyEvaluationInput {
 export interface SufficiencyEvaluation {
   /** Worst state across rules; `unknown` when no rule resolved. */
   state: SufficiencyState;
+  /**
+   * C1.2: carried through from the resolved inputs so a DECISION SNAPSHOT can
+   * record which pack governed and what gate strength was in force, without the
+   * snapshot builder needing the `ResolvedSufficiency` the evaluator consumed
+   * (`ConformanceCheckResult` exposes the evaluation, not the resolution).
+   */
+  mode: SufficiencyMode;
+  /** Null when no ruleset resolved for the project/activity. */
+  ruleset: { id: string; status: RulesetStatus } | null;
   /** ALWAYS populated, even though the verdict's field is optional (§14 AT-2). */
   rules: RuleSufficiency[];
   /** Lot-level causes, set only when NO rule resolved (§7.1 rows 1-3). */
@@ -243,6 +254,8 @@ export function evaluateSufficiency(input: SufficiencyEvaluationInput): Sufficie
 
   return {
     state,
+    mode: resolved.mode,
+    ruleset: resolved.ruleset ? { id: resolved.ruleset.id, status: resolved.ruleset.status } : null,
     rules,
     unknownCauses,
     maxLotSizeExceedances,
