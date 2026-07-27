@@ -1,6 +1,6 @@
 # Wave C1 Execution Specification — Test Sufficiency Rules Engine + Gates
 
-**Date:** 26 July 2026 · **Rev 1:** authored 26 Jul (`da847c55`) · **Rev 2:** 26 Jul, incorporating the Opus 5 adversarial review of Rev 1 (verdict **6/10**; 12 blockers `[C1R-B1]`…`[C1R-B12]`, 15 recommendations `[C1R-1]`…`[C1R-15]`, 12 cleared items, D1–D10 verdicts) · **Rev 2.1:** 27 Jul, folding the two **primary-source pack confirmation passes** (§0.1, amendments `[C1C-1]`…`[C1C-8]`) · **Status:** implementation-ready pending no further review objections and the Jay decisions in §16.0.
+**Date:** 26 July 2026 · **Rev 1:** authored 26 Jul (`da847c55`) · **Rev 2:** 26 Jul, incorporating the Opus 5 adversarial review of Rev 1 (verdict **6/10**; 12 blockers `[C1R-B1]`…`[C1R-B12]`, 15 recommendations `[C1R-1]`…`[C1R-15]`, 12 cleared items, D1–D10 verdicts) · **Rev 2.1:** 27 Jul, folding the two **primary-source pack confirmation passes** (§0.1, amendments `[C1C-1]`…`[C1C-8]`) · **Rev 2.2:** 27 Jul, folding **F1 §18** (§0.2, amendments `[C1C-15]`…`[C1C-20]` — test-type canonicalization: attribution is by resolved category, not raw string) · **Status:** implementation-ready pending no further review objections and the Jay decisions in §16.0.
 **Program contract:** `C:\Users\jayso\Documents\CIVOS-Validated-Buildout-Plan-2026-07-24.md` §3 Wave C (line 75), governed by §9 (delivery control), §6 (completion standards), §7 (security), §8 (scale targets).
 **Research register:** `C:\Users\jayso\Documents\CIVOS-Research-Appendix-2026-07-24.md` §A. Claims are cited **by claim text, not row ordinal** in this revision `[C1R-6]`.
 **Foundation:** `docs/plans/f0-execution-spec-2026-07-24.md` (Rev 3.1). F0 is complete and live on prod. C1 extends it; no parallel engine.
@@ -77,6 +77,29 @@ safe: a `draft` ruleset is advisory-only and **structurally cannot block**
 nothing a user can be gated by. The pack code corrections — `[C1C-1]` through
 `[C1C-3]`, `[C1C-5]`, `[C1C-7]` — are a **later slice built from this amended
 spec**, and no pack may reach `status: 'confirmed'` before it.
+
+### 0.2 Rev 2.2 changelog — the F1 test-type canonicalization fold
+
+**Source:** `docs/plans/test-type-canonicalization-spec-2026-07-27.md` (F1, Rev 2)
+§18, which files `[C1C-15]` … `[C1C-20]` against this document. F1 found that
+sufficiency attributed tests to rules by **raw string equality** — so a lot with
+six passing `Density Ratio` tests read **0 of 6** against a rule keyed
+`compaction`. F1.1 shipped the alias registry and resolver (#1598, `7180304f`);
+F1.2 made the engine count **resolved categories** through
+`testCategories.candidateCategories` (#1602, `2319594d`). The gate-matcher slice
+(F1 §19) is **not** part of F1: it is filed as issue **#1604** and is Jay-gated.
+
+| Tag        | Amendment                                                                                                                                                                                                                                                                                                     | Landed in                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `[C1C-15]` | §4.1's "reuses the shipped matcher, no second match rule" was **the defect** — raw-string equality is not an attribution rule, it is a coincidence that holds only for synthetic fixtures. Replaced by F1 §4.4's category rule. There **is** now a second match rule, deliberately.                            | §4.1 table, §7.2, §14         |
+| `[C1C-16]` | §4.1's closing sentence (both `normalize(...)` limbs) is superseded: both limbs compare **resolved categories**, and the item limb is **conditional on the test's own resolution** `[F1C-B2]`.                                                                                                                | §4.1                          |
+| `[C1C-17]` | §3.2's `FrequencyRule.testType` doc comment was correct as intent and **unenforced in fact**. F1 §4.1 / AT-22 make it a CI-asserted contract. `vicroads-204.v1`'s `'compaction'` was right all along — the resolver was wrong, not the pack.                                                                   | §3.2                          |
+| `[C1C-18]` | The implicit assumption in §2.4 and §7.2 that `predicates.ts` `testMatchesItem` and the sufficiency attribution rule are "the same matcher" is **withdrawn**. They are deliberately different for the duration of F1; F1 §19 (issue **#1604**) is the named slice that converges them, and it is a loosening. | §4.1 table, §7.2              |
+| `[C1C-19]` | "Uncategorized" is no longer one state. Resolution distinguishes **unknown** (`null` — nobody has mapped this string) from **lab reference** (`LAB_REFERENCE` — mapped, and deliberately not a countable field test). Any code reading a resolution handles **three** cases `[F1C-B2]`.                        | §4.1, §7.2                    |
+| `[C1C-20]` | `sufficiency/regime.ts` `streamEntryConforming` is a **second consumer** of the attribution rule, not a pass-through of the evaluator's. Any change to attribution semantics is made in the shared helper of F1 §4.4, **never in `counts.ts` alone** `[F1C-B1]`.                                               | §4.1 (regime note)            |
+
+**Not folded here.** D14 §18's `[C1C-10]` … `[C1C-14]` are a separate list
+against this same file and are **not** applied by this revision.
 
 ---
 
@@ -267,7 +290,13 @@ export interface FrequencyRule {
   id: string;
   /** Short factual label. NEVER a quotation of specification prose (§8.4). */
   label: string;
-  /** Test-type key from `routes/testResults/specifications.ts`. */
+  /**
+   * Test-type key from `routes/testResults/specifications.ts`. CI-ENFORCED as of
+   * F1, not aspirational [C1C-17]: F1 §4.1 / AT-22 assert that every
+   * `rule.testType` across SUFFICIENCY_RULESETS is a key of that map and has at
+   * least one alias resolving to it. The shipped `vicroads-204.v1` value
+   * 'compaction' was right all along — the resolver was wrong, not the pack.
+   */
   testType: string;
   appliesTo: {
     activitySlugs: readonly string[]; // Level-2 slugs (activityTaxonomy.ts:61)
@@ -517,13 +546,20 @@ export interface ResolvedSufficiency {
 | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Lot's own tests                                                                            | `conformancePrerequisites.ts:327-335` (existing `testResults` select)             | **none**                                                       |
 | Required ITP items                                                                         | `conformancePrerequisites.ts:250-256` `isRequiredTestItem`                        | **none**                                                       |
-| Test attribution to a rule                                                                 | `predicates.ts:202-208` `testMatchesItem` + direct `TestResult.testType` equality | **none** — reuses the shipped matcher, no second match rule    |
+| Test attribution to a rule `[C1C-15]` `[C1C-18]`                                           | `sufficiency/testCategories.ts` `candidateCategories` — **resolved test categories**, never raw `TestResult.testType` equality (F1 §4.4) | **none** — but there **IS** now a second match rule, deliberately. `predicates.ts:231-237` `testMatchesItem` still gates conformance on raw equality and is **not** unified with this one; F1 §17.1 and §19 say why. |
 | `Project.state` / `specificationSet` / `testSufficiencyMode`                               | `Project`                                                                         | **new** — see §4.1.1                                           |
 | `Lot.activitySlug` / `layer` / `areaZone` / `testScale` / `quantityValue` / `quantityUnit` | `Lot`                                                                             | **new** — see §4.1.1                                           |
 | `LotGeometry.areaM2` fallback                                                              | `LotGeometry`                                                                     | **new** — see §4.1.1                                           |
 | Regime                                                                                     | `sufficiency/regime.ts` (§3.4.3)                                                  | **new**, one grouped query per stream, outside any transaction |
 
-A test counts toward rule R iff `testPassing(t)` **and** (`t.itpChecklistItemId` links an item whose `testType` normalizes to `R.testType`, **or** `normalize(t.testType) === R.testType`).
+**`[C1C-16]` `[C1C-19]`** A test counts toward rule R iff `testPassing(t)` **and** `R.testType` is among the test's **candidate categories**, computed by the shared `candidateCategories(own, linkedItem)` helper (F1 §4.4). Both limbs compare **resolved categories**; Rev 2's two `normalize(...)` limbs are superseded:
+
+- `own = resolveTestCategory(t.testType)`, and `linkedItem = resolveTestCategory(item.testType)` for the item `t.itpChecklistItemId` links, where there is one.
+- **The item limb is conditional on the test's own resolution** `[F1C-B2]`: if `own` is `LAB_REFERENCE`, the test attributes to **nothing**, however it is linked — six `MDD Standard` tests hung off a compaction ITP item are still six laboratory tests.
+- Otherwise the candidates are `own` (when it resolves to a category) plus `linkedItem` when it resolves to a **different** category. A `LAB_REFERENCE` or unknown item contributes nothing.
+- Resolution is **three-valued, not two** `[C1C-19]`: a category, `LAB_REFERENCE` (mapped, and deliberately not a countable field test), or `null` (nobody has mapped this string). Any code reading a resolution handles three cases.
+
+**`[C1C-20]` The regime is a SECOND CONSUMER of that rule, not a pass-through of the evaluator's.** `sufficiency/regime.ts` `streamEntryConforming` (the Regime row above, §3.4.2) decides independently of `counts.ts` whether a stream entry carries a failing test attributable to the rule. It **must** route through the same shared `candidateCategories` helper; any change to attribution semantics is made there and **never in `counts.ts` alone** `[F1C-B1]`.
 
 #### 4.1.1 The exact fetch extensions, per path `[C1R-B1]`
 
@@ -894,6 +930,8 @@ Four nullable columns, one defaulted column, one index. **No ruleset tables** (�
 - **No material-type discrimination**, so Section 204's Type A / Type B / Type C lot-size caps cannot be expressed and **none** is encoded `[C1C-3]` (§3.3.2).
 - **No small-lot / small-area concept** (Section 173) `[C1C-1]` `[C1C-6]`: the count rule over-states the requirement for a small lot, and the 204.14(c) streak may include lots the specification excludes. Both are stated in the citation text rather than silently approximated.
 - **No Superintendent-approval input**, so a reduced frequency is only ever reported as **eligibility**, never applied (§3.4.1a) `[C1C-6]`.
+- **Free-text test types are resolved by an alias registry** (F1 §4.2), not matched as raw strings `[C1C-15]` `[C1C-19]`. Unmapped values attribute to **nothing** and surface through `tests_unlinked_to_itp_item` (§7.1); **laboratory references are excluded on both limbs** — a test whose own type is a laboratory reference never counts, however it is linked.
+- **The sufficiency matcher and the conformance gate are deliberately different** `[C1C-18]`. Any implicit assumption here or in §2.4 that `predicates.ts` `testMatchesItem` and the sufficiency attribution rule are "the same matcher" is **withdrawn**: for the duration of F1, `testMatchesItem` still requires the link or raw equality, while attribution resolves categories. F1 §19 is the named slice that converges them, and it is a gate **loosening** with its own evidence and its own decision.
 
 ---
 
@@ -1143,6 +1181,8 @@ Program §9 mandates a rollback/recovery process. Per phase:
 ## 14. Acceptance tests `[C1R-B12]`
 
 Named artifact, per program §9. Every item is a real test file assertion, not a review checklist.
+
+**AT numbering across the wave `[C1C-15]`.** C1 owns **AT-1 … AT-21**. **AT-22 … AT-33** and **AT-56 … AT-62** are claimed by the F1 test-type canonicalization slice (F1 §14), and **AT-34 … AT-55** by D14 (`docs/plans/d14-q6-pack-spec-2026-07-27.md` §14). A later C1 test takes the next free number, not the next integer.
 
 **Pure layer (C1.0, no DB):**
 
