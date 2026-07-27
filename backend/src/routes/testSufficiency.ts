@@ -62,6 +62,13 @@ testSufficiencyRouter.get(
           // lot both halves are false. Derived from the rule SHAPE so a pack can
           // never declare the two out of step.
           scaleIndependent: !!rule.countByAreaBand?.bands,
+          // Same discipline, the other stale sentence: the card tells every user
+          // quantity "does not change this check today", which was true when the
+          // only shipped rule was `minCountByScale`. A banded rule reads the lot
+          // area to pick its row and yields `quantity_missing` without one. The
+          // ADVISORY limbs (`maxLotSize`, `smallLot`) are deliberately excluded —
+          // they move a warning, never the required count.
+          quantityDrivesCount: !!(rule.countByAreaBand || rule.perQuantity),
         })),
       })),
     });

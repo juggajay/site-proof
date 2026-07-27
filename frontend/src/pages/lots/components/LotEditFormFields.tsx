@@ -7,6 +7,7 @@ import { foldActivityValue } from '@/lib/activityTaxonomy';
 import type { SufficiencyRuleset } from '@/lib/testSufficiency';
 import {
   QUANTITY_UNIT_OPTIONS,
+  quantityDrivesCountForActivity,
   rulesetAppliesToActivity,
   scaleAppliesToActivity,
 } from '@/lib/testSufficiency';
@@ -58,6 +59,9 @@ export function LotEditFormFields({
   // D14.5: every rule this lot matches counts off lot area alone, so there is
   // nothing to ask — see `scaleAppliesToActivity`.
   const showScaleControl = !!ruleset && scaleAppliesToActivity(ruleset, activitySlug);
+  // D14.5: an area-banded rule picks its required count off the lot area, so the
+  // card must stop saying the quantity changes nothing.
+  const quantityCounts = !!ruleset && quantityDrivesCountForActivity(ruleset, activitySlug);
   return (
     <>
       {/* Basic Info */}
@@ -275,7 +279,9 @@ export function LotEditFormFields({
               (ruleset.defaultScale
                 ? ` Leaving the scale blank uses the specification default (Scale ${ruleset.defaultScale}).`
                 : ' Leaving the scale blank means CIVOS cannot check this lot.')}{' '}
-            Quantity is recorded for rules that use it; it does not change this check today.
+            {quantityCounts
+              ? 'Quantity selects how many tests this lot needs, so this check reads it (falling back to the mapped lot area).'
+              : 'Quantity is recorded for rules that use it; it does not change this check today.'}
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

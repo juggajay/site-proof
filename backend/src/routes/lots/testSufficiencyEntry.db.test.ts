@@ -762,6 +762,7 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
       'clause',
       'id',
       'label',
+      'quantityDrivesCount',
       'scaleIndependent',
       'testType',
     ]);
@@ -800,7 +801,7 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
     const res = await request(app)
       .get('/api/test-sufficiency/rulesets')
       .set('Authorization', `Bearer ${adminToken}`);
-    const rulesById = new Map<string, { scaleIndependent: boolean }>(
+    const rulesById = new Map<string, { scaleIndependent: boolean; quantityDrivesCount: boolean }>(
       res.body.rulesets.flatMap((ruleset: { rules: { id: string }[] }) =>
         ruleset.rules.map((rule) => [rule.id, rule] as const),
       ),
@@ -809,6 +810,15 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
     // Same pack, `byScale` table — the band is a real question there.
     expect(rulesById.get('tfnsw-q6.v1/compaction-density')?.scaleIndependent).toBe(false);
     expect(rulesById.get('vicroads-204.v2/compaction-density')?.scaleIndependent).toBe(false);
+
+    // Both Q6 tables are keyed on lot area, so the quantity is not merely
+    // "recorded" there. VicRoads counts off the scale alone — and its `maxLotSize`
+    // and `smallLot` limbs are advisory, so they must NOT flip this.
+    expect(rulesById.get('tfnsw-q6.v1/pavement-compaction-density')?.quantityDrivesCount).toBe(
+      true,
+    );
+    expect(rulesById.get('tfnsw-q6.v1/compaction-density')?.quantityDrivesCount).toBe(true);
+    expect(rulesById.get('vicroads-204.v2/compaction-density')?.quantityDrivesCount).toBe(false);
   });
 
   // D14.2 §6.5 — the regression minting `.v2` would otherwise have shipped.

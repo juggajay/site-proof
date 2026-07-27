@@ -188,6 +188,9 @@ describe('LotEditFormFields', () => {
             testType: 'compaction',
             clause: 'Annexure Q6/L cl. L1, Table Q6/L.1',
             activitySlugs: ['earthworks_general', 'earthworks_subgrade_prep'],
+            // Q6's earthworks table is (band × lot area), so it reads the scale
+            // AND the quantity — unlike VicRoads' scale-only count.
+            quantityDrivesCount: true,
           },
         ],
       };
@@ -223,6 +226,7 @@ describe('LotEditFormFields', () => {
               clause: 'Annexure Q6/L cl. L1, Table Q6/L.1',
               activitySlugs: ['pavement_unbound', 'pavement_bound'],
               scaleIndependent: true,
+              quantityDrivesCount: true,
             },
           ],
         };
@@ -237,8 +241,11 @@ describe('LotEditFormFields', () => {
           expect(screen.queryByLabelText('Specified relative compaction')).not.toBeInTheDocument();
           expect(screen.queryByText(/cannot check this lot/i)).not.toBeInTheDocument();
           expect(screen.queryByText(/Leaving the scale blank/i)).not.toBeInTheDocument();
-          // Quantity still matters — the bands are keyed on lot area.
+          // Quantity still matters — the bands are keyed on lot area — and the
+          // copy has to stop claiming it changes nothing.
           expect(screen.getByLabelText('Quantity')).toBeInTheDocument();
+          expect(screen.getByText(/selects how many tests this lot needs/i)).toBeInTheDocument();
+          expect(screen.queryByText(/does not change this check today/i)).not.toBeInTheDocument();
         });
 
         it('KEEPS the scale control on an earthworks lot in the same pack', () => {
@@ -246,6 +253,9 @@ describe('LotEditFormFields', () => {
 
           expect(screen.getByLabelText('Specified relative compaction')).toBeInTheDocument();
           expect(screen.getByText(/cannot check this lot/i)).toBeInTheDocument();
+          // Q6's earthworks table is banded on lot area TOO, so the quantity
+          // sentence is honest here as well — the scale sentence is what differs.
+          expect(screen.getByText(/selects how many tests this lot needs/i)).toBeInTheDocument();
         });
       });
 

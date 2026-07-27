@@ -24,6 +24,13 @@ export interface SufficiencyRulesetRule {
    * behaviour rather than hiding a control that is needed.
    */
   scaleIndependent?: boolean;
+  /**
+   * D14.5: this rule's REQUIRED COUNT is computed from the lot quantity (an area
+   * band table, or a per-quantity limb), so the quantity is not merely recorded.
+   * Optional for the same reason as {@link SufficiencyRulesetRule.scaleIndependent}
+   * — absent keeps today's wording.
+   */
+  quantityDrivesCount?: boolean;
 }
 
 /**
@@ -64,6 +71,26 @@ export function scaleAppliesToActivity(
   if (!activitySlug) return true;
   return ruleset.rules.some(
     (rule) => rule.activitySlugs.includes(activitySlug) && !rule.scaleIndependent,
+  );
+}
+
+/**
+ * D14.5 — does the quantity actually feed the count on this lot?
+ *
+ * The card's "it does not change this check today" was written when the only
+ * shipped rule counted off the scale alone. It is false for a lot matching an
+ * area-banded rule, where the lot area SELECTS the required count.
+ *
+ * A lot with no canonical slug keeps today's wording: nothing is known to match,
+ * and such a lot evaluates `activity_not_canonical` anyway.
+ */
+export function quantityDrivesCountForActivity(
+  ruleset: SufficiencyRuleset,
+  activitySlug: string | null,
+): boolean {
+  if (!activitySlug) return false;
+  return ruleset.rules.some(
+    (rule) => rule.activitySlugs.includes(activitySlug) && rule.quantityDrivesCount,
   );
 }
 
