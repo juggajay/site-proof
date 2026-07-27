@@ -3,6 +3,8 @@
 // offline-save, and lock derivation stay in LotEditPage; values and the
 // change handler come down as props.
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
+import type { SufficiencyRuleset } from '@/lib/testSufficiency';
+import { QUANTITY_UNIT_OPTIONS } from '@/lib/testSufficiency';
 import type { LotEditFormData, Subcontractor } from '../lotEditData';
 
 const OFFSET_OPTIONS = ['left', 'right', 'full', 'custom'];
@@ -24,6 +26,8 @@ interface LotEditFormFieldsProps {
   budgetLocked: boolean;
   canViewBudgets: boolean;
   subcontractors: Subcontractor[];
+  /** Wave C1: the governing frequency ruleset, or null when the project has none. */
+  ruleset?: SufficiencyRuleset | null;
 }
 
 export function LotEditFormFields({
@@ -33,6 +37,7 @@ export function LotEditFormFields({
   budgetLocked,
   canViewBudgets,
   subcontractors,
+  ruleset,
 }: LotEditFormFieldsProps) {
   return (
     <>
@@ -219,6 +224,84 @@ export function LotEditFormFields({
           </div>
         </div>
       </div>
+
+      {/* Testing — Wave C1 (spec §9.4). Only rendered when the project's
+          authority actually has a shipped frequency ruleset: on every other
+          project these fields would be three inputs nothing reads. */}
+      {ruleset && (
+        <div className="rounded-lg border p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Testing</h2>
+          <p className="text-sm text-muted-foreground">
+            Used to check this lot has enough tests under {ruleset.authority} {ruleset.document}.
+            Leave blank if you do not know — CIVOS will say it cannot check rather than assume.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="testScale" className="block text-sm font-medium mb-1">
+                Testing Scale
+              </label>
+              <select
+                id="testScale"
+                name="testScale"
+                value={formData.testScale}
+                onChange={onInputChange}
+                disabled={detailsLocked}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {ruleset.defaultScale
+                    ? `Use specification default (${ruleset.defaultScale})`
+                    : 'Not selected'}
+                </option>
+                {ruleset.scaleKeys.map((scale) => (
+                  <option key={scale} value={scale}>
+                    {scale}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="quantityValue" className="block text-sm font-medium mb-1">
+                Quantity
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                id="quantityValue"
+                name="quantityValue"
+                value={formData.quantityValue}
+                onChange={onInputChange}
+                disabled={detailsLocked}
+                placeholder="e.g. 3200"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="quantityUnit" className="block text-sm font-medium mb-1">
+                Unit
+              </label>
+              <select
+                id="quantityUnit"
+                name="quantityUnit"
+                value={formData.quantityUnit}
+                onChange={onInputChange}
+                disabled={detailsLocked}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+              >
+                <option value="">Not set</option>
+                {QUANTITY_UNIT_OPTIONS.map((unit) => (
+                  <option key={unit.value} value={unit.value}>
+                    {unit.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Commercial (only for users with budget access) */}
       {canViewBudgets && (

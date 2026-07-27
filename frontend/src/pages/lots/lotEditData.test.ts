@@ -45,6 +45,9 @@ const baseForm: LotEditFormData = {
   status: 'in_progress',
   budgetAmount: '1250.25',
   assignedSubcontractorId: 'sub-9',
+  testScale: '',
+  quantityValue: '',
+  quantityUnit: '',
 };
 
 const baseOfflineLot: OfflineLotEdit = {
@@ -132,6 +135,9 @@ describe('mapLotToFormData', () => {
       status: '',
       budgetAmount: '',
       assignedSubcontractorId: '',
+      testScale: '',
+      quantityValue: '',
+      quantityUnit: '',
     });
   });
 });
@@ -151,6 +157,10 @@ describe('mapOfflineLotToFormData', () => {
       status: 'awaiting_test',
       budgetAmount: '999',
       assignedSubcontractorId: '',
+      // The offline record predates C1 and carries none of these.
+      testScale: '',
+      quantityValue: '',
+      quantityUnit: '',
     });
   });
 
@@ -320,6 +330,10 @@ describe('buildLotUpdatePayload', () => {
       status: 'in_progress',
       budgetAmount: 1250.25,
       assignedSubcontractorId: 'sub-9',
+      // Wave C1: an empty quantity sends null ("not recorded"), never zero.
+      testScale: null,
+      quantityValue: null,
+      quantityUnit: null,
       expectedUpdatedAt: '2026-01-15T00:00:00.000Z',
     });
   });

@@ -28,6 +28,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { activitySlugForWrite } from '../../lib/activityTaxonomy.js';
 import { createLotSchema, bulkCreateLotsSchema, cloneLotSchema } from './validation.js';
 import { requireProjectRole } from './access.js';
 import { parseLotRouteParam } from './requestParsing.js';
@@ -73,6 +74,9 @@ lotCreateRouter.post(
       structureId,
       structureElement,
       budgetAmount,
+      testScale,
+      quantityValue,
+      quantityUnit,
     } = validation.data;
 
     // Feature #853: Area zone required for area lot type
@@ -124,6 +128,9 @@ lotCreateRouter.post(
           lotNumber,
           description: description || null,
           activityType: activityType || 'Earthworks',
+          // Wave C1 (§6): the folded slug is written in the SAME statement as the
+          // free text it derives from, so the two can never drift.
+          activitySlug: activitySlugForWrite(activityType || 'Earthworks'),
           lotType: lotType || 'chainage',
           chainageStart,
           chainageEnd,
@@ -131,6 +138,9 @@ lotCreateRouter.post(
           areaZone: areaZone || null,
           structureId: structureId || null, // Feature #854
           structureElement: structureElement || null, // Feature #854
+          testScale: testScale ?? null,
+          quantityValue: quantityValue ?? null,
+          quantityUnit: quantityUnit ?? null,
           ...(canSetBudgetAmount && budgetAmount !== undefined ? { budgetAmount } : {}),
         },
         select: {
@@ -372,6 +382,7 @@ lotCreateRouter.post(
           lotNumber: newLotNumber,
           description: sourceLot.description,
           activityType: sourceLot.activityType,
+          activitySlug: activitySlugForWrite(sourceLot.activityType),
           lotType: sourceLot.lotType,
           chainageStart: finalChainageStart,
           chainageEnd: finalChainageEnd,

@@ -6,6 +6,13 @@ import {
   parseTemplateSnapshot,
   type ChecklistItem,
 } from '../routes/itp/helpers/templateSnapshot.js';
+import {
+  evaluateSufficiency,
+  type SufficiencyEvaluation,
+} from './readiness/sufficiency/evaluate.js';
+import { resolveSufficiency, resolveSufficiencySync } from './readiness/sufficiency/resolve.js';
+import type { RegimeStreamFetcher } from './readiness/sufficiency/regime.js';
+import type { ResolvedSufficiency } from './readiness/sufficiency/types.js';
 
 type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot' | 'iTPChecklistItem'>;
 
@@ -136,6 +143,12 @@ interface ConformancePrerequisites {
   // how many are still blocked (unreleased hold point + N/A status).
   naHoldPointBlockerCount: number;
   noNaHoldPointBypass: boolean;
+  // Wave C1 (spec §5.1.1). The ONE sufficiency limb that reaches `lotConformable`,
+  // and it is already mode- and status-folded by the evaluator (§5.1.2): it can
+  // only be true at `mode: 'block'` on a CONFIRMED ruleset with a real shortfall.
+  // Everything else sufficiency has to say is advisory and rides
+  // `ConformanceCheckResult.sufficiency` instead.
+  sufficiencyBlocks: boolean;
 }
 
 interface ClaimConformancePrerequisites {
@@ -162,6 +175,14 @@ interface ConformanceCheckResult {
   prerequisites?: ConformancePrerequisites;
   canConform?: boolean;
   blockingReasons?: string[];
+  /**
+   * Wave C1 (spec §5.1.4). The ADVISORY half of the sufficiency verdict — counts,
+   * citations, unknown causes, lot-size exceedances. Null when no ruleset
+   * resolves, which is every project without a shipped authority pack. Kept OFF
+   * `prerequisites` because that shape is snapshotted and consumed by
+   * `lotConformable`; only `sufficiencyBlocks` belongs there.
+   */
+  sufficiency?: SufficiencyEvaluation | null;
 }
 
 export function getClaimBlockingReasonsForConformedLot(
@@ -331,11 +352,37 @@ function buildOutstandingTestItems(
 // legacy/null-snapshot instances and is preserved by
 // `attachLegacyChecklistItems` below — one extra query, deduplicated per
 // template rather than repeated per instance.
+//
+// Wave C1 (spec §4.1.1 Path A) adds the sufficiency inputs. The perf cost was
+// MEASURED, not assumed, because this select dominates the 5,000-lot claim
+// decision (F0.5 Target 1, p95 < 3s):
+//   * six Lot SCALARS — free, they ride the row already being read;
+//   * `project` — Prisma resolves a to-one relation with ONE extra query keyed
+//     by the distinct parent ids, and every lot in a claim shares one project,
+//     so this is 1 query returning 1 row regardless of lot count.
+//
+// `geometries` is DELIBERATELY ABSENT, against §4.1.1's literal text. It is a
+// to-many relation, so it costs O(lots) hydrated rows on the claim path, and it
+// buys exactly nothing today: it feeds §3.3's lot-size advisory and the `m2`
+// quantity fallback, and NO shipped pack declares `maxLotSize` or `perQuantity`
+// [C1C-2] [C1C-3] [C1C-5]. Adding it measured a Target 1 regression. It comes
+// back with the first pack that declares either limb — `resolveSufficiency`
+// already accepts the geometries and falls back to `quantity.source: 'none'`
+// without them.
 const CONFORMANCE_LOT_SELECT = {
   id: true,
   lotNumber: true,
   status: true,
   projectId: true,
+  // C1 sufficiency inputs (§4.1.1).
+  activitySlug: true,
+  layer: true,
+  areaZone: true,
+  testScale: true,
+  quantityValue: true,
+  quantityUnit: true,
+  conformedAt: true,
+  project: { select: { state: true, specificationSet: true, testSufficiencyMode: true } },
   itpInstance: {
     select: {
       templateId: true,
@@ -383,6 +430,23 @@ interface LotForConformance {
   lotNumber: string;
   status: string;
   projectId: string;
+  // C1 sufficiency inputs (§4.1.1). `Decimal | null` is widened to the structural
+  // shape the resolver already parses.
+  //
+  // OPTIONAL, like `noNaHoldPointBypass` before them: `CONFORMANCE_LOT_SELECT`
+  // always supplies them, so both production paths are complete, but a caller
+  // holding a partial lot (unit-test fixtures) stays valid and simply resolves no
+  // sufficiency. `project` is the discriminator — without it there is no
+  // authority to resolve a ruleset from, so resolution is skipped entirely.
+  activitySlug?: string | null;
+  layer?: string | null;
+  areaZone?: string | null;
+  testScale?: string | null;
+  quantityValue?: { toString(): string } | null;
+  quantityUnit?: string | null;
+  conformedAt?: Date | null;
+  project?: { state: string; specificationSet: string; testSufficiencyMode: string };
+  geometries?: { areaM2: { toString(): string } | null }[];
   itpInstance: ItpInstanceForConformance | null;
   testResults: {
     id: string;
@@ -400,9 +464,17 @@ interface LotForConformance {
 // path and the batched create-claim path produce byte-identical results from
 // one place — the only difference between them is HOW the released-hold-point
 // ids are fetched (one query per lot vs one query for all lots).
+//
+// Wave C1 adds a THIRD parameter, mirroring `releasedHoldPointItemIds` exactly
+// [C1R-B1] [C1R-C5]: sufficiency is resolved per path (registry lookup, scale,
+// quantity and — where a rule is regime-bearing — one history read) and passed
+// IN as data. The function stays sync and DB-free, so the M39 byte-identity
+// guarantee survives. `null` means "not resolved on this path" and is treated
+// exactly like "no ruleset": advisory-free, never blocking.
 export function computeConformanceResult(
   lot: LotForConformance,
   releasedHoldPointItemIds: ReadonlySet<string>,
+  sufficiency: ResolvedSufficiency | null = null,
 ): ConformanceCheckResult {
   const prerequisites: ConformancePrerequisites = {
     itpAssigned: false,
@@ -418,6 +490,7 @@ export function computeConformanceResult(
     openNcrs: [],
     naHoldPointBlockerCount: 0,
     noNaHoldPointBypass: true,
+    sufficiencyBlocks: false,
   };
 
   let checklistItems: NormalizedChecklistItem[] = [];
@@ -474,6 +547,20 @@ export function computeConformanceResult(
   }));
   prerequisites.noOpenNcrs = ncrs.length === 0;
 
+  // Wave C1 (§5.1.1, §5.1.2). Evaluated before `lotConformable` so its single
+  // blocking limb is in the prerequisites the predicate reads. The evaluator owns
+  // the structural non-blocking expression, so nothing here needs to re-check the
+  // mode or the ruleset status.
+  const sufficiencyEvaluation = sufficiency
+    ? evaluateSufficiency({
+        subjectId: lot.id,
+        resolved: sufficiency,
+        tests: lot.testResults,
+        checklistItems,
+      })
+    : null;
+  prerequisites.sufficiencyBlocks = sufficiencyEvaluation?.sufficiencyBlocks ?? false;
+
   // Determine if lot can be conformed (shared authoritative predicate).
   const canConform = lotConformable(prerequisites);
 
@@ -497,6 +584,11 @@ export function computeConformanceResult(
       `${prerequisites.naHoldPointBlockerCount} hold point item${prerequisites.naHoldPointBlockerCount === 1 ? '' : 's'} marked N/A but not released`,
     );
   }
+  if (prerequisites.sufficiencyBlocks && sufficiencyEvaluation) {
+    for (const reason of describeSufficiencyShortfalls(sufficiencyEvaluation)) {
+      blockingReasons.push(reason);
+    }
+  }
 
   return {
     lot: {
@@ -508,7 +600,25 @@ export function computeConformanceResult(
     prerequisites,
     canConform,
     blockingReasons,
+    sufficiency: sufficiencyEvaluation,
   };
+}
+
+/**
+ * The blocking-reason strings for a sufficiency shortfall — facts only: counts
+ * and the clause that carries them, never a quotation of specification prose
+ * (§8.4). One line per insufficient rule so a force-conform records exactly
+ * which requirement was overridden.
+ */
+function describeSufficiencyShortfalls(evaluation: SufficiencyEvaluation): string[] {
+  return evaluation.rules
+    .filter((rule) => rule.state === 'insufficient' && rule.requiredCount !== null)
+    .map(
+      (rule) =>
+        `Requires ${rule.requiredCount} ${rule.testType} test${rule.requiredCount === 1 ? '' : 's'} ` +
+        `(${rule.citation.authority} ${rule.citation.document}, clause ${rule.citation.clause}) — ` +
+        `${rule.passingCount} verified conforming`,
+    );
 }
 
 // The shape CONFORMANCE_LOT_SELECT returns: a LotForConformance whose instance
@@ -587,9 +697,60 @@ async function fetchReleasedHoldPointItemIdsForLot(
   );
 }
 
+/**
+ * Wave C1 (§3.4.3 [C1R-B7]). The frequency-stream read is a predicate read over
+ * exactly the range concurrent conforms write, so it must never run inside the
+ * serializable decision transaction. Callers opt IN by supplying a fetcher; the
+ * default is `null`, which resolves every regime to `full` — the over-testing,
+ * safe direction — and issues no history query at all.
+ *
+ * In C1.1 the conform DECISION path takes the default, which is behaviour-neutral
+ * because no shipped pack carries reduced FIGURES: `requiredCount` is identical
+ * at `full` and at an eligibility-only streak (§3.4.1a [C1C-6]). The readiness
+ * path, which runs outside any transaction, supplies the real fetcher.
+ */
+export interface ConformanceSufficiencyOptions {
+  regimeFetcher?: RegimeStreamFetcher | null;
+  /** Evaluation date for ruleset effectivity; defaults to now. */
+  now?: Date;
+}
+
+function sufficiencyInput(
+  lot: LotForConformance,
+  project: NonNullable<LotForConformance['project']>,
+) {
+  return {
+    id: lot.id,
+    projectId: lot.projectId,
+    activitySlug: lot.activitySlug ?? null,
+    layer: lot.layer ?? null,
+    areaZone: lot.areaZone ?? null,
+    testScale: lot.testScale ?? null,
+    quantityValue: lot.quantityValue ?? null,
+    quantityUnit: lot.quantityUnit ?? null,
+    conformedAt: lot.conformedAt ?? null,
+    project,
+    geometries: lot.geometries ?? [],
+  };
+}
+
+async function resolveSufficiencyForLot(
+  lot: LotForConformance,
+  options: ConformanceSufficiencyOptions | undefined,
+): Promise<ResolvedSufficiency | null> {
+  const project = lot.project;
+  if (!project) return null;
+  return resolveSufficiency(
+    sufficiencyInput(lot, project),
+    options?.regimeFetcher ?? null,
+    options?.now ?? new Date(),
+  );
+}
+
 export async function checkConformancePrerequisites(
   lotId: string,
   client: ConformancePrismaClient = prisma,
+  options?: ConformanceSufficiencyOptions,
 ): Promise<ConformanceCheckResult> {
   const fetched = await client.lot.findUnique({
     where: { id: lotId },
@@ -602,7 +763,8 @@ export async function checkConformancePrerequisites(
 
   const [lot] = await attachLegacyChecklistItems([fetched], client);
   const releasedHoldPointItemIds = await fetchReleasedHoldPointItemIdsForLot(lot, client);
-  return computeConformanceResult(lot, releasedHoldPointItemIds);
+  const sufficiency = await resolveSufficiencyForLot(lot, options);
+  return computeConformanceResult(lot, releasedHoldPointItemIds, sufficiency);
 }
 
 // Batched conformance for many lots — collapses the per-lot ~2N+1 queries the
@@ -615,6 +777,7 @@ export async function checkConformancePrerequisites(
 export async function checkConformancePrerequisitesBatch(
   lotIds: string[],
   client: ConformancePrismaClient = prisma,
+  options?: ConformanceSufficiencyOptions,
 ): Promise<Map<string, ConformanceCheckResult>> {
   const results = new Map<string, ConformanceCheckResult>();
   if (lotIds.length === 0) return results;
@@ -656,8 +819,25 @@ export async function checkConformancePrerequisitesBatch(
     }
   }
 
+  // Sufficiency resolution is per lot but entirely DB-FREE here: the registry
+  // lookup, scale and quantity are pure over the row already fetched, and this
+  // path takes no regime fetcher (the grouped per-stream read is C1.2, spec §11).
+  // So it calls the SYNC core — at 5,000 lots the async wrapper's per-lot
+  // microtask turn is real time inside the F0.5 Target 1 budget — and the batch
+  // keeps its constant-query guarantee: one lot.findMany, at most one
+  // holdPoint.findMany, at most one legacy-checklist findMany, plus the single
+  // `project` row Prisma hydrates for the whole set.
+  const now = options?.now ?? new Date();
   for (const lot of lots) {
-    results.set(lot.id, computeConformanceResult(lot, releasedByLot.get(lot.id) ?? new Set()));
+    const sufficiency = options?.regimeFetcher
+      ? await resolveSufficiencyForLot(lot, options)
+      : lot.project
+        ? resolveSufficiencySync(sufficiencyInput(lot, lot.project), now)
+        : null;
+    results.set(
+      lot.id,
+      computeConformanceResult(lot, releasedByLot.get(lot.id) ?? new Set(), sufficiency),
+    );
   }
 
   return results;

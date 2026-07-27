@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -13,7 +14,9 @@ import { assertLotsBulkMutable } from './bulkMutationGuards.js';
 import {
   buildLotsBulkStatusUpdatedResponse,
   buildLotsBulkSubcontractorAssignedResponse,
+  buildLotsBulkTestAttributesSetResponse,
 } from './bulkMutationResponses.js';
+import { resolveRuleset } from '../../lib/readiness/sufficiency/registry.js';
 import { buildLegacyLotAssignmentMutationResponse } from './remainingResponses.js';
 import {
   parseLotRouteParam,
@@ -21,15 +24,49 @@ import {
   assertAllRequestedLotsFound,
 } from './requestParsing.js';
 import { LOT_CREATORS } from './roles.js';
+import { LOT_EDITORS } from './updateFields.js';
 import {
   bulkUpdateStatusSchema,
   bulkAssignSubcontractorSchema,
+  bulkSetTestAttributesSchema,
   assignSubcontractorSchema,
 } from './validation.js';
 import { buildSubcontractorPortalEntityLink } from '../notifications/links.js';
 import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
 
 export const lotBulkMutationRouter = Router();
+
+/**
+ * Wave C1 (§10.1). A testing scale is checked against the RESOLVED ruleset's
+ * `scaleKeys` and rejected at the boundary, NEVER silently coerced. Rejecting
+ * the WHOLE batch on any invalid row matches the three bulk routes around this
+ * one — a partially-applied bulk edit is worse than a refused one.
+ */
+function assertTestScaleValidForLots(
+  testScale: string | null | undefined,
+  lots: readonly {
+    lotNumber: string;
+    project: { state: string; specificationSet: string };
+  }[],
+): void {
+  if (!testScale) return;
+  for (const lot of lots) {
+    const ruleset = resolveRuleset({
+      state: lot.project.state,
+      specSet: lot.project.specificationSet,
+    });
+    if (!ruleset) {
+      throw AppError.badRequest(
+        `Lot ${lot.lotNumber} is on a project with no governing test-frequency specification, so a testing scale cannot be set on it.`,
+      );
+    }
+    if (!ruleset.scaleKeys.includes(testScale)) {
+      throw AppError.badRequest(
+        `"${testScale}" is not a testing scale ${ruleset.provenance.document} uses on lot ${lot.lotNumber}. Valid scales: ${ruleset.scaleKeys.join(', ')}.`,
+      );
+    }
+  }
+}
 
 // POST /api/lots/bulk-update-status - Bulk update lot status (requires creator role)
 lotBulkMutationRouter.post(
@@ -126,6 +163,110 @@ lotBulkMutationRouter.post(
     }
 
     res.json(buildLotsBulkStatusUpdatedResponse(result.count, status));
+  }),
+);
+
+// POST /api/lots/bulk-set-test-attributes — Wave C1 (spec §9.1 [C1R-B10]).
+//
+// Without this route the engine has no data and the launch is dead: a PM on a
+// 500-lot project would open 500 forms. Reuses `assertLotsBulkMutable` exactly as
+// the two routes around it do, and gates on LOT_EDITORS (foreman excluded) —
+// these are lot SETUP attributes and foreman is deliberately not a lot setup
+// manager (§10.2).
+lotBulkMutationRouter.post(
+  '/bulk-set-test-attributes',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+
+    const validation = bulkSetTestAttributesSchema.safeParse(req.body);
+    if (!validation.success) {
+      throw AppError.fromZodError(validation.error);
+    }
+    const { lotIds, testScale, quantityValue, quantityUnit } = validation.data;
+    const uniqueLotIds = getUniqueLotIds(lotIds);
+
+    const lotsToUpdate = await prisma.lot.findMany({
+      where: { id: { in: uniqueLotIds } },
+      select: {
+        id: true,
+        projectId: true,
+        lotNumber: true,
+        status: true,
+        project: { select: { state: true, specificationSet: true } },
+      },
+    });
+    assertAllRequestedLotsFound(uniqueLotIds, lotsToUpdate);
+
+    const projectIds = [...new Set(lotsToUpdate.map((lot) => lot.projectId))];
+    for (const projectId of projectIds) {
+      await requireProjectRole(
+        projectId,
+        user,
+        LOT_EDITORS,
+        'You do not have permission to edit lots',
+        { requireWritable: true },
+      );
+    }
+
+    assertLotsBulkMutable(lotsToUpdate);
+
+    assertTestScaleValidForLots(testScale, lotsToUpdate);
+
+    const data: Prisma.LotUpdateManyMutationInput = { updatedAt: new Date() };
+    if (testScale !== undefined) data.testScale = testScale;
+    if (quantityValue !== undefined) data.quantityValue = quantityValue;
+    if (quantityUnit !== undefined) data.quantityUnit = quantityUnit;
+
+    const result = await prisma.lot.updateMany({
+      where: { id: { in: uniqueLotIds }, status: { notIn: ['conformed', 'claimed'] } },
+      data,
+    });
+
+    // Audited per lot: §10.1 records quantity/scale edits as DETECTION for the
+    // "shrink the quantity to shrink the required count" path. The field is
+    // legitimately user-recorded, so the control is the audit trail, not a
+    // prohibition.
+    const changedFields = Object.keys(data).filter((field) => field !== 'updatedAt');
+    for (const lot of lotsToUpdate) {
+      await createAuditLog({
+        projectId: lot.projectId,
+        userId: user.id,
+        entityType: 'lot',
+        entityId: lot.id,
+        action: AuditAction.LOT_UPDATED,
+        changes: {
+          lotNumber: lot.lotNumber,
+          ...(testScale !== undefined ? { testScale } : {}),
+          ...(quantityValue !== undefined ? { quantityValue } : {}),
+          ...(quantityUnit !== undefined ? { quantityUnit } : {}),
+          bulk: true,
+        },
+        req,
+      });
+    }
+
+    for (const projectId of projectIds) {
+      emitLotWebhookEvents(
+        projectId,
+        lotsToUpdate
+          .filter((lot) => lot.projectId === projectId)
+          .map((lot) => ({
+            event: 'lot.updated',
+            payload: {
+              lotId: lot.id,
+              projectId: lot.projectId,
+              lotNumber: lot.lotNumber,
+              status: lot.status,
+              actorUserId: user.id,
+              action: 'bulk_set_test_attributes',
+              bulk: true,
+              changedFields,
+            },
+          })),
+      );
+    }
+
+    res.json(buildLotsBulkTestAttributesSetResponse(result.count));
   }),
 );
 

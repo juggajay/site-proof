@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma.js';
+import { activitySlugForWrite } from '../../activityTaxonomy.js';
 
 // Characterization corpus seeder (F0.1). Builds a fixed set of fixture lots in
 // the LOCAL test database that spans the readiness permutation space, so the
@@ -294,6 +295,12 @@ async function seedLot(
       description: `Fixture ${spec.lotNumber}`,
       status: spec.status,
       activityType: 'Earthworks',
+      // Wave C1: the fixture writes the folded slug exactly as every production
+      // write path does (`activitySlugForWrite`), so the corpus pins the
+      // ruleset-RESOLVING branch rather than a lot that looks unclassified.
+      // The corpus project is NSW/TfNSW, so these lots resolve `tfnsw-r44.v1` —
+      // draft, therefore advisory-only and structurally non-blocking (§5.1.2).
+      activitySlug: activitySlugForWrite('Earthworks'),
       budgetAmount: spec.budgetAmount ?? null,
       conformedAt: spec.conformedAt ?? null,
       conformedById: spec.conformedAt ? userId : null,

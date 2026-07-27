@@ -10,6 +10,7 @@ import { buildProjectDeletedResponse, buildProjectDetailResponse } from './listD
 import { buildProjectCreatedResponse } from './costResponses.js';
 import { assertCompanyProjectCapacity } from './projectCreationLimit.js';
 import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../../lib/projectAccess.js';
+import { SUFFICIENCY_MODES } from '../../lib/readiness/sufficiency/types.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -89,6 +90,21 @@ export function resolveProjectSpecificationSet(
   state: string | null | undefined,
 ): string {
   return specificationSet || getDefaultProjectSpecificationSet(state);
+}
+
+/**
+ * Wave C1 (§5.1.2). Whitelist only — an unrecognised mode is REFUSED, never
+ * coerced. Coercion toward 'block' would start gating live production work on a
+ * typo; coercion toward 'warn' would silently disarm a gate an admin turned on.
+ */
+function parseSufficiencyMode(value: unknown): string {
+  const mode = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!(SUFFICIENCY_MODES as readonly string[]).includes(mode)) {
+    throw AppError.badRequest(
+      `Test sufficiency mode must be one of: ${SUFFICIENCY_MODES.join(', ')}`,
+    );
+  }
+  return mode;
 }
 
 function nonZeroRetainedProjectCounts(
@@ -389,6 +405,15 @@ export function createProjectWriteRouter({
               'Specification set',
               projectSpecificationSetMaxLength,
             );
+      // Wave C1 (spec §5.1.2, §10.2). Gate STRENGTH is a project governance
+      // decision, so it rides the admin-gated project PATCH and is audited like
+      // every other field here. Whitelist-validated: an unrecognised value is
+      // refused rather than coerced, because coercing toward 'block' would start
+      // gating live production work on a typo.
+      const testSufficiencyMode =
+        req.body.testSufficiencyMode === undefined
+          ? undefined
+          : parseSufficiencyMode(req.body.testSufficiencyMode);
       const lotPrefix =
         req.body.lotPrefix === undefined
           ? undefined
@@ -509,6 +534,7 @@ export function createProjectWriteRouter({
       if (name !== undefined) updateData.name = name;
       if (code !== undefined) updateData.projectNumber = code;
       if (specificationSet !== undefined) updateData.specificationSet = specificationSet;
+      if (testSufficiencyMode !== undefined) updateData.testSufficiencyMode = testSufficiencyMode;
       if (lotPrefix !== undefined) updateData.lotPrefix = lotPrefix;
       if (lotStartingNumber !== undefined) updateData.lotStartingNumber = lotStartingNumber;
       if (ncrPrefix !== undefined) updateData.ncrPrefix = ncrPrefix;
@@ -546,6 +572,7 @@ export function createProjectWriteRouter({
           ncrPrefix: true,
           ncrStartingNumber: true,
           specificationSet: true,
+          testSufficiencyMode: true,
           workingHoursStart: true,
           workingHoursEnd: true,
           workingDays: true,

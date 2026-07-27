@@ -9,6 +9,7 @@ import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { buildConformanceBlockerItems } from '../../lib/evidenceReadiness/conformanceItems.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 import { holdPointTerminal } from '../../lib/readiness/predicates.js';
+import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
 import { recordDecision, type DecisionSnapshotInput } from '../../lib/readiness/recordDecision.js';
 import {
   LOT_CONFORMANCE_REQUIREMENT_SET,
@@ -73,7 +74,7 @@ function lotConformanceSnapshot(
       result: buildLotConformanceResultV1({
         canConform: Boolean(evaluation.canConform),
         items: evaluation.prerequisites
-          ? buildConformanceBlockerItems(evaluation.prerequisites)
+          ? buildConformanceBlockerItems(evaluation.prerequisites, evaluation.sufficiency)
           : [],
         overridden: options.overridden,
         reason: options.reason,
@@ -302,7 +303,10 @@ lotQualityRouter.get(
       pendingTests,
       fallbackRecipientCount,
     ] = await Promise.all([
-      checkConformancePrerequisites(id),
+      // Wave C1 (§3.4.3 [C1R-B7]). The readiness read runs outside any
+      // transaction, so this is where the frequency-stream history read is
+      // allowed — and the only C1.1 path that supplies a fetcher.
+      checkConformancePrerequisites(id, prisma, { regimeFetcher: prismaRegimeStreamFetcher() }),
       prisma.holdPoint.count({ where: { lotId: id, status: { not: 'released' } } }),
       prisma.holdPoint.count({ where: { lotId: id, status: 'released' } }),
       prisma.document.count({ where: { lotId: id } }),
@@ -340,6 +344,7 @@ lotQualityRouter.get(
         blockingReasons: conformStatus.blockingReasons ?? [],
         prerequisites: conformStatus.prerequisites,
       },
+      sufficiency: conformStatus.sufficiency ?? null,
       evidenceCounts: {
         unreleasedHoldPoints,
         releasedHoldPoints,

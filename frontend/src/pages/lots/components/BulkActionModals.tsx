@@ -8,8 +8,11 @@ import {
   AlertModalFooter,
 } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
+import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import { QUANTITY_UNIT_OPTIONS, type SufficiencyRuleset } from '@/lib/testSufficiency';
 import type { BulkAssignSubcontractorOptions } from '../lotsPageTypes';
 
 // =====================
@@ -248,6 +251,130 @@ export function BulkAssignModal({
         </Button>
         <Button onClick={handleAssign} disabled={assigning}>
           {assigning ? 'Assigning...' : 'Assign'}
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
+}
+
+// =====================
+// Bulk Set Test Attributes Modal — Wave C1 (spec §9.1 [C1R-B10])
+//
+// Without a bulk path the frequency engine has no data and the launch is dead:
+// a PM on a 500-lot project would open 500 forms. Only rendered where a shipped
+// ruleset governs the project, so the scale options are the authority's own.
+// =====================
+
+interface BulkTestAttributesModalProps {
+  isOpen: boolean;
+  selectedCount: number;
+  ruleset: SufficiencyRuleset;
+  onClose: () => void;
+  onConfirm: (values: {
+    testScale?: string;
+    quantityValue?: number;
+    quantityUnit?: string;
+  }) => Promise<void>;
+}
+
+export function BulkTestAttributesModal({
+  isOpen,
+  selectedCount,
+  ruleset,
+  onClose,
+  onConfirm,
+}: BulkTestAttributesModalProps) {
+  const [saving, setSaving] = useState(false);
+  const [testScale, setTestScale] = useState('');
+  const [quantityValue, setQuantityValue] = useState('');
+  const [quantityUnit, setQuantityUnit] = useState('');
+
+  const parsedQuantity = parseOptionalNonNegativeDecimalInput(quantityValue);
+  // A quantity is a number AND a unit or it is not a quantity — the backend
+  // refuses half of one, so the button refuses it too rather than round-tripping
+  // a 400.
+  const quantityComplete =
+    quantityValue.trim() === '' ? !quantityUnit : Boolean(parsedQuantity && quantityUnit);
+  const canSave = Boolean(testScale || (parsedQuantity && quantityUnit)) && quantityComplete;
+
+  const handleSave = async () => {
+    if (saving || !canSave) return;
+    setSaving(true);
+    try {
+      await onConfirm({
+        ...(testScale ? { testScale } : {}),
+        ...(parsedQuantity && quantityUnit ? { quantityValue: parsedQuantity, quantityUnit } : {}),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHeader>Set Testing Attributes</ModalHeader>
+      <ModalBody>
+        <p className="text-sm text-muted-foreground">
+          Applies to <span className="font-semibold text-foreground">{selectedCount} lot(s)</span>,
+          checked against {ruleset.authority} {ruleset.document}. Leave a field blank to leave it
+          unchanged.
+        </p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <Label htmlFor="bulk-test-scale">Testing Scale</Label>
+            <NativeSelect
+              id="bulk-test-scale"
+              value={testScale}
+              onChange={(e) => setTestScale(e.target.value)}
+              className="mt-1"
+            >
+              <option value="">Leave unchanged</option>
+              {ruleset.scaleKeys.map((scale) => (
+                <option key={scale} value={scale}>
+                  {scale}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="bulk-quantity-value">Quantity</Label>
+              <Input
+                id="bulk-quantity-value"
+                inputMode="decimal"
+                value={quantityValue}
+                onChange={(e) => setQuantityValue(e.target.value)}
+                placeholder="e.g. 3200"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bulk-quantity-unit">Unit</Label>
+              <NativeSelect
+                id="bulk-quantity-unit"
+                value={quantityUnit}
+                onChange={(e) => setQuantityUnit(e.target.value)}
+                className="mt-1"
+              >
+                <option value="">Leave unchanged</option>
+                {QUANTITY_UNIT_OPTIONS.map((unit) => (
+                  <option key={unit.value} value={unit.value}>
+                    {unit.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          </div>
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={saving || !canSave}>
+          {saving ? 'Saving...' : 'Set Attributes'}
         </Button>
       </ModalFooter>
     </Modal>

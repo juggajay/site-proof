@@ -13,6 +13,7 @@
     "scripts/lib/database-target.ts",
     "scripts/lib/run-script.ts",
     "scripts/backfill-one-time-token-hashes.ts",
+    "scripts/backfill-lot-activity-slug.ts",
     "scripts/check-unique-migration-preconditions.ts",
     "scripts/data-retention.ts",
     "scripts/migrate-passwords.ts",

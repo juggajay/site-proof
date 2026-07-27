@@ -12,6 +12,13 @@ export function buildLotsBulkStatusUpdatedResponse(count: number, status: string
   };
 }
 
+export function buildLotsBulkTestAttributesSetResponse(count: number) {
+  return {
+    message: `Successfully updated test attributes on ${count} lot(s)`,
+    count,
+  };
+}
+
 export function buildLotsBulkSubcontractorAssignedResponse(
   count: number,
   subcontractorId: string | null | undefined,

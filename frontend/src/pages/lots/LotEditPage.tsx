@@ -1,5 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { resolveProjectRuleset, useSufficiencyRulesets } from '@/lib/testSufficiency';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { getAuthToken, getCurrentUser } from '@/lib/auth';
 import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
@@ -47,6 +50,24 @@ export function LotEditPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const subcontractorsQuery = useProjectSubcontractorsQuery(projectId);
   const subcontractors = subcontractorsQuery.data ?? [];
+  // Wave C1 (§9.4): the Testing fields only appear when the project's authority
+  // actually has a shipped frequency ruleset. Both reads share caches that other
+  // surfaces already populate — `queryKeys.project` is the UNWRAPPED project, so
+  // this consumer must resolve the same shape or it poisons the shared cache.
+  const { data: projectAuthority } = useQuery({
+    queryKey: queryKeys.project(projectId ?? 'none'),
+    queryFn: () =>
+      apiFetch<{ project?: { state?: string; specificationSet?: string } }>(
+        `/api/projects/${projectId}`,
+      ).then((response) => response.project ?? null),
+    enabled: !!projectId,
+  });
+  const rulesetsQuery = useSufficiencyRulesets();
+  const governingRuleset = resolveProjectRuleset(
+    rulesetsQuery.data?.rulesets,
+    projectAuthority?.state,
+    projectAuthority?.specificationSet,
+  );
   const [offlineSyncStatus, setOfflineSyncStatus] = useState<LotEditOfflineSyncStatus>('synced');
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
 
@@ -64,6 +85,9 @@ export function LotEditPage() {
     status: '',
     budgetAmount: '',
     assignedSubcontractorId: '',
+    testScale: '',
+    quantityValue: '',
+    quantityUnit: '',
   });
 
   // Track if form has unsaved changes
@@ -440,6 +464,7 @@ export function LotEditPage() {
           budgetLocked={budgetLocked}
           canViewBudgets={canViewBudgets}
           subcontractors={subcontractors}
+          ruleset={governingRuleset}
         />
 
         <LotEditFormActions

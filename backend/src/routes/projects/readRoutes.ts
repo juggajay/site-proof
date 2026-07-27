@@ -296,6 +296,7 @@ export function createProjectReadRouter({
           status: true,
           state: true,
           specificationSet: true,
+          testSufficiencyMode: true, // Wave C1 (§9.3) — hydrates the settings control
           startDate: true,
           targetCompletion: true,
           contractValue: true,

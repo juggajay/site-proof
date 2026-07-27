@@ -63,6 +63,29 @@ export interface ReducedFrequency {
   escalationShape: EscalationShape;
 }
 
+/**
+ * `[C1C-6]` The authority's reduced-frequency TRIGGER **without** its figures.
+ *
+ * VicRoads Section 204 cl. 204.14(c) makes a reduction conditional on the
+ * **Superintendent's agreement** plus an established compaction procedure —
+ * three consecutive conforming lots is a precondition to **ask**, not an
+ * entitlement, and re-entry after a failure needs a FRESH approval. CIVOS has no
+ * recorded-approval input, so the streak may only ever be reported as
+ * ELIGIBILITY.
+ *
+ * Declaring this limb makes the engine compute the streak and report
+ * `reducedFrequencyEligible`; it can NEVER lower `requiredCount` — that needs
+ * {@link ReducedFrequency}, which carries the figures and which no shipped pack
+ * declares. The split is structural precisely so no future change can quietly
+ * turn eligibility into a reduction (§3.4.1a, §14 AT-8b).
+ */
+export interface ReducedFrequencyEligibility {
+  consecutiveConformingLots: number;
+  escalationShape: EscalationShape;
+  /** The clause that grants the request — a DIFFERENT clause from the count (§3.2). */
+  clause: string;
+}
+
 export interface FrequencyRule {
   /** Stable, referenced by snapshots forever: 'vicroads-204.v1/compaction-density'. */
   id: string;
@@ -108,6 +131,13 @@ export interface FrequencyRule {
    * `validateRuleset` asserts `reduced` cannot exist on a `draft` ruleset (§8.3).
    */
   reduced?: ReducedFrequency;
+  /**
+   * `[C1C-6]` Eligibility-only regime trigger — the streak is computed and
+   * REPORTED, never applied. Mutually exclusive with `reduced` in practice: a
+   * rule carrying figures does not need the eligibility-only limb.
+   * `validateRuleset` rejects declaring both.
+   */
+  reducedFrequencyEligibility?: ReducedFrequencyEligibility;
   provenance: RulesetProvenance;
 }
 
@@ -147,7 +177,16 @@ export type QuantitySource = 'lot' | 'geometry' | 'none';
 export type FrequencyRegime = 'full' | 'reduced';
 
 export interface ResolvedRegime {
+  /**
+   * The OPERATIVE regime — what `requiredCount` is actually computed at. Only a
+   * rule carrying `reduced` FIGURES can ever be 'reduced' (§3.4.1a `[C1C-6]`).
+   */
   regime: FrequencyRegime;
+  /**
+   * `[C1C-6]` The streak is met, so the contractor is eligible to REQUEST a
+   * reduced frequency from the Superintendent. Advisory: it never lowers a count.
+   */
+  eligible: boolean;
   /** The stream entries the regime was derived from — recorded in the snapshot. */
   basisLotIds: string[];
   /** Serialized stream key (§3.4.2), for the verdict's `regimeBasis`. */
@@ -229,7 +268,15 @@ export interface RuleSufficiency {
   passingCount: number;
   pendingCount: number;
   failedCount: number;
+  /**
+   * The OPERATIVE regime — what `requiredCount` was actually computed at.
+   * `[C1C-6]` For `vicroads-204` this is ALWAYS 'full' in C1: 204.14(c) makes a
+   * reduction conditional on the Superintendent's agreement, and no approval
+   * input exists. Eligibility is reported separately and never lowers the count.
+   */
   regime: FrequencyRegime | null;
+  /** `[C1C-6]` Advisory only: "eligible to REQUEST reduced frequency" (§3.4.1a). */
+  reducedFrequencyEligible?: boolean;
   regimeBasis?: { streamKey: string; lotIds: string[] };
   unknownCauses: readonly UnknownCause[];
   citation: RuleCitation;

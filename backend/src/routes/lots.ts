@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
+import { activitySlugForWrite } from '../lib/activityTaxonomy.js';
 import { updateLotSchema } from './lots/validation.js';
 import { canViewLotBudget, requireProjectRole } from './lots/access.js';
 import { parseLotRouteParam } from './lots/requestParsing.js';
@@ -112,6 +113,9 @@ lotsRouter.patch(
       lotType: validatedLotType,
       structureId: validatedStructureId,
       structureElement: validatedStructureElement,
+      testScale,
+      quantityValue,
+      quantityUnit,
     } = validation.data;
     const providedUpdateFields = getProvidedUpdateFields(validation.data);
     const isConformedBudgetOnlyUpdate =
@@ -194,7 +198,16 @@ lotsRouter.patch(
     if (validatedLotType !== undefined) updateData.lotType = validatedLotType;
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber;
     if (description !== undefined) updateData.description = description;
-    if (activityType !== undefined) updateData.activityType = activityType;
+    if (activityType !== undefined) {
+      updateData.activityType = activityType;
+      // Wave C1 (§6): the folded slug never drifts from the free text — it is
+      // written in the same statement, by the same helper every other write path
+      // uses.
+      updateData.activitySlug = activitySlugForWrite(activityType);
+    }
+    if (testScale !== undefined) updateData.testScale = testScale;
+    if (quantityValue !== undefined) updateData.quantityValue = quantityValue;
+    if (quantityUnit !== undefined) updateData.quantityUnit = quantityUnit;
     if (chainageStart !== undefined) updateData.chainageStart = chainageStart;
     if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd;
     if (offset !== undefined) updateData.offset = offset;

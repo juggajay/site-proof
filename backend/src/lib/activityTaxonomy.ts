@@ -304,6 +304,21 @@ export function isCanonicalActivitySlug(slug: string): boolean {
   return CANONICAL_SLUG_SET.has(slug);
 }
 
+/**
+ * The value `Lot.activitySlug` takes when `Lot.activityType` is written (Wave C1,
+ * spec §6). Every write path that sets `activityType` sets this in the same
+ * statement, so the stored slug can never drift from the free text it folds.
+ *
+ * NULL for a 'family' or 'none' fold: a family-level match ('Pavement' →
+ * `pavements`) is NOT a Level-2 slug, and a lot carrying one is deliberately not
+ * a frequency-stream member (§16 D7) rather than a member of a stream it might
+ * not belong to.
+ */
+export function activitySlugForWrite(activityType: string | null | undefined): string | null {
+  const fold = foldActivityValue(activityType);
+  return fold.confidence === 'exact' ? fold.slug : null;
+}
+
 /** Display name for a canonical slug; returns the input unchanged if unknown. */
 export function activityDisplayName(slug: string): string {
   return CANONICAL_ACTIVITIES.find((a) => a.slug === slug)?.displayName ?? slug;

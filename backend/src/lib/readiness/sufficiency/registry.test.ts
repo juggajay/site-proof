@@ -13,6 +13,8 @@ import {
   rulesForLot,
   validateRuleset,
 } from './registry.js';
+import { normalizeSpecSet } from '../../itpMatcher.js';
+import { TFNSW_R44_V1 } from './rulesets/tfnsw-r44.v1.js';
 import type { FrequencyRule, Ruleset, RulesetProvenance } from './types.js';
 
 const CONFIRMABLE_PROVENANCE: RulesetProvenance = {
@@ -63,31 +65,84 @@ describe('the shipped packs are registrable and honestly graded', () => {
     }
   });
 
-  it('ships exactly the two specced packs and no TMR / DIT SA / MRWA numbers (§8.2)', () => {
-    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v1', 'tfnsw-r44.v1']);
+  it('ships ONE pack — and no TMR / DIT SA / MRWA numbers (§8.2, [C1C-9])', () => {
+    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v1']);
   });
 
-  it('vicroads-204.v1: compaction-scoped counts 6/6/3, the 5,000 m² cap, NO reduced limb', () => {
+  it('vicroads-204.v1 is CONFIRMED on primary-source provenance (§8.1.1 [C1C-1])', () => {
     const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
+    expect(vicroads?.status).toBe('confirmed');
     expect(vicroads?.state).toBe('vic');
     expect(vicroads?.scaleKeys).toEqual(['A', 'B', 'C']);
+    // "Where the compaction scale has not been specified, Compaction Scale A
+    // shall apply" — confirmed verbatim, so VIC lots evaluate with no data entry.
+    expect(vicroads?.defaultScale).toBe('A');
+    expect(vicroads?.provenance.edition).toBe('v8.0, November 2025');
+    expect(vicroads?.provenance.evidenceGrade).toBe('A');
+    expect(vicroads?.provenance.checkedOn).toBe('2026-07-27');
+  });
+
+  it('vicroads-204.v1: 6/6/3 counts cite clause 204.13(a), NOT Table 204.142 [C1C-1] [C1C-4]', () => {
+    const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
     const compaction = vicroads?.rules[0];
     expect(compaction?.testType).toBe('compaction');
     expect(compaction?.minCountByScale).toEqual({ A: 6, B: 6, C: 3 });
-    expect(compaction?.maxLotSize?.map((cap) => cap.value)).toEqual([5000]);
-    // [C1R-B8]: the appendix supplies the 204.14(c) TRIGGER and no reduced count.
+    // Table 204.142 carries lot SIZE and the reduced sampling interval; it
+    // contains no test counts at all. The count comes from clause 204.13(a).
+    expect(compaction?.provenance.clause).toBe('204.13(a)');
+    // The Section 173 small-lot escape is visible to the user, not hidden (§4.4).
+    expect(compaction?.label).toContain('Sec 173');
+  });
+
+  it('vicroads-204.v1 encodes NEITHER maxLotSize limb [C1C-2] [C1C-3]', () => {
+    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1')?.rules[0];
+    // The 500 m² "under paved areas" cap is a Wyndham City Council amendment
+    // that appears in NO version of the VicRoads/DTP document — shipping it
+    // would assert an authority requirement the authority never wrote.
+    // The 5,000 m² cap is TYPE A MATERIAL ONLY, and `appliesTo` has no
+    // material-type discriminator, so a bare cap would fire falsely on a Type B
+    // lot and invent a cap for Type C (which has none).
+    expect(compaction?.maxLotSize).toBeUndefined();
+  });
+
+  it('vicroads-204.v1: the regime is ELIGIBILITY-ONLY, never a reduction [C1C-6]', () => {
+    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1')?.rules[0];
+    // No `reduced` FIGURES. Table 204.142's third column publishes a lot-SAMPLING
+    // INTERVAL (every 2nd/3rd/6th lot), not a per-lot count — clause 204.13(a)'s
+    // six is unconditional. Encoding {A:2,B:2,C:6} as counts would be
+    // catastrophically wrong [C1C-5].
     expect(compaction?.reduced).toBeUndefined();
-    // [C1R-1]: no cited authority supplies a per-area frequency figure.
+    // The TRIGGER is encoded, and it cites its OWN clause (§3.2: one rule, one
+    // clause — the count and the regime are different rules).
+    expect(compaction?.reducedFrequencyEligibility).toEqual({
+      consecutiveConformingLots: 3,
+      escalationShape: 'reset_on_any_failure',
+      clause: '204.14(c)',
+    });
+    // Section 204 v8.0 publishes no per-area frequency figure (confirmed). This
+    // is NOT true of every authority — TfNSW Q6 Table Q6/L.1 is one [C1C-7].
     expect(compaction?.perQuantity).toBeUndefined();
   });
 
-  it('tfnsw-r44.v1 is grade C and therefore draft-forever, so it can never block (§8.1)', () => {
-    const tfnsw = SUFFICIENCY_RULESETS.find((set) => set.id === 'tfnsw-r44.v1');
-    expect(tfnsw?.provenance.evidenceGrade).toBe('C');
-    expect(tfnsw?.status).toBe('draft');
-    expect(tfnsw?.rules[0]?.minCountByScale).toEqual({ standard: 6 });
+  it('tfnsw-r44.v1 is DEREGISTERED, not deleted [C1C-9]', () => {
+    // `draft` means plausible-but-unconfirmed. It does NOT mean confirmed-wrong,
+    // and we hold grade-A primary-source evidence that this pack is the latter:
+    // R44 Ed 6 publishes no frequencies at all, and the n = 6 is one cell of Q6
+    // Table Q6/L.1 — wrong in BOTH directions. Evaluating it even tagged
+    // "unconfirmed" is the confident-wrong-number defect [C1C-5] [C1C-7] exist
+    // to prevent, so it is out of the registry until the Q6 re-author (D14).
+    expect(SUFFICIENCY_RULESETS).not.toContain(TFNSW_R44_V1);
+    expect(resolveRuleset({ state: 'NSW', specSet: 'TfNSW', at: NOW })).toBeNull();
+    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })).toBeNull();
+
+    // The FILE stays: it pins the vocabulary and is the starting point for the
+    // `tfnsw-q6.v1` re-author, so its shape is still asserted here.
+    expect(TFNSW_R44_V1.status).toBe('draft');
+    expect(TFNSW_R44_V1.provenance.evidenceGrade).toBe('C');
+    expect(TFNSW_R44_V1.provenance.clause).toContain('deferred to TfNSW Q');
+    expect(TFNSW_R44_V1.rules[0]?.minCountByScale).toEqual({ standard: 6 });
     // Promoting it to `confirmed` at grade C is impossible — CI refuses it.
-    expect(validateRuleset({ ...(tfnsw as Ruleset), status: 'confirmed' }, NOW)).toContainEqual(
+    expect(validateRuleset({ ...TFNSW_R44_V1, status: 'confirmed' }, NOW)).toContainEqual(
       expect.stringContaining("requires evidenceGrade 'A'"),
     );
   });
@@ -248,9 +303,12 @@ describe('resolveRuleset (§7.1 rows 1-2)', () => {
     );
   });
 
-  it('folds the pre-2019 spec-set name `rms` to tfnsw rather than resolving nothing', () => {
-    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })?.id).toBe('tfnsw-r44.v1');
-    expect(resolveRuleset({ state: 'nsw', specSet: 'TfNSW', at: NOW })?.id).toBe('tfnsw-r44.v1');
+  it('still folds `rms` to tfnsw — the fold is intact, there is just no NSW pack', () => {
+    // The 9 live projects carrying the pre-2019 name must not resolve a
+    // DIFFERENT authority's pack once a Q6 pack lands (§8.2, [C1C-9]).
+    expect(normalizeSpecSet('rms')).toBe('tfnsw');
+    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })).toBeNull();
+    expect(resolveRuleset({ state: 'nsw', specSet: 'TfNSW', at: NOW })).toBeNull();
   });
 
   it('returns null for national-baseline spec sets and unknown authorities — unknown, never insufficient', () => {

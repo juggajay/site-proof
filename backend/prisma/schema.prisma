@@ -372,6 +372,9 @@ model Project {
   status            String    @default("active")
   state             String
   specificationSet  String    @map("specification_set")
+  // C1 gate strength (§5.1.2). Default 'warn' NEVER changes conformance
+  // outcomes; 'block' is opt-in per project (§16 D1).
+  testSufficiencyMode String  @default("warn") @map("test_sufficiency_mode")
   chainageStart     Decimal?  @map("chainage_start")
   chainageEnd       Decimal?  @map("chainage_end")
   lotPrefix         String?   @default("LOT-") @map("lot_prefix")
@@ -554,6 +557,22 @@ model Lot {
   structureId             String?   @map("structure_id")
   structureElement        String?   @map("structure_element")
   activityType            String    @map("activity_type")
+  // C1 [C1R-B6]: the FOLDED activity slug, stored. `activityType` is free text
+  // (never constrained to CANONICAL_ACTIVITIES), so an index on it cannot serve a
+  // folded-slug frequency-stream key: the fold is many-to-one through LEGACY_FOLD
+  // and a CASE-INSENSITIVE LEGACY_FOLD_CI, and Postgres b-tree equality is
+  // case-sensitive. NULL = fold confidence 'family' or 'none' (§16 D7). A
+  // CLASSIFICATION, not a readiness verdict, so F0's no-stored-state doctrine
+  // does not bite. Written by every path that writes activityType.
+  activitySlug            String?   @map("activity_slug")
+  // C1: the production quantity a per-quantity rule divides. NULL is first-class
+  // and means "unknown" — never zero, never assumed (§7).
+  quantityValue           Decimal?  @map("quantity_value")
+  quantityUnit            String?   @map("quantity_unit")
+  // C1: the testing scale the governing specification regiments by. Validated
+  // against the resolved ruleset's `scaleKeys`; NULL falls back to
+  // `ruleset.defaultScale` when the ruleset declares one (§16 D6), else unknown.
+  testScale               String?   @map("test_scale")
   status                  String    @default("not_started")
   itpTemplateId           String?   @map("itp_template_id")
   assignedSubcontractorId String?   @map("assigned_subcontractor_id")
@@ -605,6 +624,9 @@ model Lot {
   @@index([projectId, status])
   @@index([projectId, conformedAt])
   @@index([createdById, createdAt], map: "lots_created_by_created_at_idx")
+  // C1 [C1R-B6]: bounded frequency-stream lookback (§3.4.3), index-covered.
+  // The existing @@index([projectId, conformedAt]) cannot serve it.
+  @@index([projectId, activitySlug, conformedAt], map: "lots_project_activity_slug_conformed_idx")
   @@map("lots")
 }
 

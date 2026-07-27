@@ -41,6 +41,7 @@ import webhooksRouter from './routes/webhooks.js';
 import { pushNotificationsRouter } from './routes/pushNotifications.js';
 import { aiStatusRouter } from './routes/aiStatus.js';
 import { productEventsRouter } from './routes/productEvents.js';
+import { testSufficiencyRouter } from './routes/testSufficiency.js';
 import {
   buildBackendUrl,
   getExpressTrustProxySetting,
@@ -173,6 +174,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/ai', aiStatusRouter); // Wave 0: expose AI-extraction availability to the UI
   app.use('/api/copilot', chatRouter); // Clancy: company-level chat copilot (works before any project)
   app.use('/api/product-events', productEventsRouter); // A6: privacy-conscious UX telemetry ingestion
+  app.use('/api/test-sufficiency', testSufficiencyRouter); // Wave C1: the shipped frequency-rule registry
 
   // Error handling
   app.use(errorHandler);

@@ -20,6 +20,9 @@ const baseFormData: LotEditFormData = {
   status: 'in_progress',
   budgetAmount: '48000',
   assignedSubcontractorId: '',
+  testScale: '',
+  quantityValue: '',
+  quantityUnit: '',
 };
 
 const subcontractors: Subcontractor[] = [

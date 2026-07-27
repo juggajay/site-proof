@@ -23,6 +23,11 @@ export interface Lot {
   areaZone: string | null;
   budgetAmount?: number | null;
   assignedSubcontractorId?: string | null;
+  // Wave C1 test-sufficiency attributes. Optional so an offline lot cached
+  // before C1 still parses.
+  testScale?: string | null;
+  quantityValue?: number | null;
+  quantityUnit?: string | null;
 }
 
 export interface Subcontractor {
@@ -53,6 +58,9 @@ export interface LotUpdatePayload {
   budgetAmount?: number | null;
   assignedSubcontractorId?: string | null;
   expectedUpdatedAt?: string;
+  testScale?: string | null;
+  quantityValue?: number | null;
+  quantityUnit?: string | null;
 }
 
 // The editable form buffer. Every field is a string because it is bound to a
@@ -70,6 +78,9 @@ export interface LotEditFormData {
   status: string;
   budgetAmount: string;
   assignedSubcontractorId: string;
+  testScale: string;
+  quantityValue: string;
+  quantityUnit: string;
 }
 
 // ===== Path builders =====
@@ -116,6 +127,9 @@ export function mapLotToFormData(lot: Lot): LotEditFormData {
     status: lot.status || '',
     budgetAmount: lot.budgetAmount?.toString() || '',
     assignedSubcontractorId: lot.assignedSubcontractorId || '',
+    testScale: lot.testScale || '',
+    quantityValue: lot.quantityValue?.toString() || '',
+    quantityUnit: lot.quantityUnit || '',
   };
 }
 
@@ -135,6 +149,11 @@ export function mapOfflineLotToFormData(offlineLot: OfflineLotEdit): LotEditForm
     status: offlineLot.status || '',
     budgetAmount: offlineLot.budget?.toString() || '',
     assignedSubcontractorId: '',
+    // The offline record predates C1 and carries none of these; the fields stay
+    // blank offline rather than being invented (§7's "unknown, never assumed").
+    testScale: '',
+    quantityValue: '',
+    quantityUnit: '',
   };
 }
 
@@ -257,6 +276,11 @@ export function buildLotUpdatePayload(params: {
         layer: formData.layer || null,
         areaZone: formData.areaZone || null,
         status: formData.status || null,
+        // Wave C1 test-sufficiency attributes. An empty quantity sends null —
+        // "not recorded" — rather than zero, which the backend refuses anyway.
+        testScale: formData.testScale || null,
+        quantityValue: parseOptionalNonNegativeDecimalInput(formData.quantityValue),
+        quantityUnit: formData.quantityUnit || null,
       };
 
   // Only include budget if user has access
