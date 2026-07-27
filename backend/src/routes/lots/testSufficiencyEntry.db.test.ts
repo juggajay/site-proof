@@ -762,6 +762,8 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
       'clause',
       'id',
       'label',
+      'quantityDrivesCount',
+      'scaleIndependent',
       'testType',
     ]);
     expect(vicroads.rules[0].activitySlugs).toEqual([
@@ -789,6 +791,34 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
     expect(q6.materialTypes).toBeNull();
     // J2 — the Major Works scope reaches the user through the citation.
     expect(q6.document).toContain('Major Works');
+  });
+
+  // D14.5 — the lot-edit card must know WHICH rules read a scale, or it asks a
+  // pavement lot for a band that provably cannot change its count and tells the
+  // user CIVOS cannot check the lot without one. Derived from the rule shape
+  // (`countByAreaBand.bands` vs `byScale`), never declared by a pack.
+  it('flags the scale-independent rules so the form can stop asking', async () => {
+    const res = await request(app)
+      .get('/api/test-sufficiency/rulesets')
+      .set('Authorization', `Bearer ${adminToken}`);
+    const rulesById = new Map<string, { scaleIndependent: boolean; quantityDrivesCount: boolean }>(
+      res.body.rulesets.flatMap((ruleset: { rules: { id: string }[] }) =>
+        ruleset.rules.map((rule) => [rule.id, rule] as const),
+      ),
+    );
+    expect(rulesById.get('tfnsw-q6.v1/pavement-compaction-density')?.scaleIndependent).toBe(true);
+    // Same pack, `byScale` table — the band is a real question there.
+    expect(rulesById.get('tfnsw-q6.v1/compaction-density')?.scaleIndependent).toBe(false);
+    expect(rulesById.get('vicroads-204.v2/compaction-density')?.scaleIndependent).toBe(false);
+
+    // Both Q6 tables are keyed on lot area, so the quantity is not merely
+    // "recorded" there. VicRoads counts off the scale alone — and its `maxLotSize`
+    // and `smallLot` limbs are advisory, so they must NOT flip this.
+    expect(rulesById.get('tfnsw-q6.v1/pavement-compaction-density')?.quantityDrivesCount).toBe(
+      true,
+    );
+    expect(rulesById.get('tfnsw-q6.v1/compaction-density')?.quantityDrivesCount).toBe(true);
+    expect(rulesById.get('vicroads-204.v2/compaction-density')?.quantityDrivesCount).toBe(false);
   });
 
   // D14.2 §6.5 — the regression minting `.v2` would otherwise have shipped.

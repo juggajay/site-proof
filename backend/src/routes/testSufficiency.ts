@@ -55,6 +55,20 @@ testSufficiencyRouter.get(
           // a label reading "Specified relative compaction". Shipped product
           // data, no tenant content, on an already-cached payload.
           activitySlugs: [...rule.appliesTo.activitySlugs],
+          // D14.5: a rule whose counts come from ONE band list (`bands`, not
+          // `byScale`) reads no scale at all — `evaluateRule` suppresses its
+          // scale causes. The lot-edit card must not then ask for a band and
+          // tell the user CIVOS cannot check the lot without one: on a pavement
+          // lot both halves are false. Derived from the rule SHAPE so a pack can
+          // never declare the two out of step.
+          scaleIndependent: !!rule.countByAreaBand?.bands,
+          // Same discipline, the other stale sentence: the card tells every user
+          // quantity "does not change this check today", which was true when the
+          // only shipped rule was `minCountByScale`. A banded rule reads the lot
+          // area to pick its row and yields `quantity_missing` without one. The
+          // ADVISORY limbs (`maxLotSize`, `smallLot`) are deliberately excluded —
+          // they move a warning, never the required count.
+          quantityDrivesCount: !!(rule.countByAreaBand || rule.perQuantity),
         })),
       })),
     });

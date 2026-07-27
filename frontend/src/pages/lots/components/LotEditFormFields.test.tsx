@@ -188,6 +188,9 @@ describe('LotEditFormFields', () => {
             testType: 'compaction',
             clause: 'Annexure Q6/L cl. L1, Table Q6/L.1',
             activitySlugs: ['earthworks_general', 'earthworks_subgrade_prep'],
+            // Q6's earthworks table is (band × lot area), so it reads the scale
+            // AND the quantity — unlike VicRoads' scale-only count.
+            quantityDrivesCount: true,
           },
         ],
       };
@@ -205,6 +208,55 @@ describe('LotEditFormFields', () => {
           formData: { ...baseFormData, activityType: 'kerb_channel' },
         });
         expect(screen.queryByText('Testing')).not.toBeInTheDocument();
+      });
+
+      // D14.5 — Q6's PAVEMENT rules count off lot area alone (`bands`, not
+      // `byScale`), so the engine reads no scale at all on a pavement lot. Asking
+      // for one and saying CIVOS cannot check the lot without it is two lies in
+      // one sentence.
+      describe('a scale-independent activity', () => {
+        const q6WithPavement: SufficiencyRuleset = {
+          ...q6,
+          rules: [
+            ...q6.rules,
+            {
+              id: 'tfnsw-q6.v1/pavement-compaction-density',
+              label: 'Pavement compaction samples per lot by area',
+              testType: 'compaction',
+              clause: 'Annexure Q6/L cl. L1, Table Q6/L.1',
+              activitySlugs: ['pavement_unbound', 'pavement_bound'],
+              scaleIndependent: true,
+              quantityDrivesCount: true,
+            },
+          ],
+        };
+
+        it('hides the scale control and its sentence on a pavement lot', () => {
+          renderFields({
+            ruleset: q6WithPavement,
+            formData: { ...baseFormData, activityType: 'pavement_unbound' },
+          });
+
+          expect(screen.getByText('Testing')).toBeInTheDocument();
+          expect(screen.queryByLabelText('Specified relative compaction')).not.toBeInTheDocument();
+          expect(screen.queryByText(/cannot check this lot/i)).not.toBeInTheDocument();
+          expect(screen.queryByText(/Leaving the scale blank/i)).not.toBeInTheDocument();
+          // Quantity still matters — the bands are keyed on lot area — and the
+          // copy has to stop claiming it changes nothing.
+          expect(screen.getByLabelText('Quantity')).toBeInTheDocument();
+          expect(screen.getByText(/selects how many tests this lot needs/i)).toBeInTheDocument();
+          expect(screen.queryByText(/does not change this check today/i)).not.toBeInTheDocument();
+        });
+
+        it('KEEPS the scale control on an earthworks lot in the same pack', () => {
+          renderFields({ ruleset: q6WithPavement });
+
+          expect(screen.getByLabelText('Specified relative compaction')).toBeInTheDocument();
+          expect(screen.getByText(/cannot check this lot/i)).toBeInTheDocument();
+          // Q6's earthworks table is banded on lot area TOO, so the quantity
+          // sentence is honest here as well — the scale sentence is what differs.
+          expect(screen.getByText(/selects how many tests this lot needs/i)).toBeInTheDocument();
+        });
       });
 
       it('KEEPS the card when the activity does not fold to a canonical slug', () => {
