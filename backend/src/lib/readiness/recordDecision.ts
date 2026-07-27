@@ -29,6 +29,7 @@
 // `changes.snapshotSkipped: true` so the evidence gap is itself countable.
 // Enabled, a snapshot failure blocks the decision (spec §9 step 4).
 
+import { randomInt } from 'node:crypto';
 import { AuditLog, Prisma } from '@prisma/client';
 import { Request } from 'express';
 
@@ -184,15 +185,17 @@ export const DECISION_RETRY_MAX_DELAY_MS = 400;
  * they are also a young project's `progress_claims`, `hold_points` and
  * `requirement_evaluations`. The zero-delay retry loop under-served both.
  *
- * ponytail: `Math.random`, not a seeded generator — this is jitter, not crypto,
- * and nothing asserts on the delay.
+ * `crypto.randomInt`, not `Math.random`: the productionReadiness guardrail bans
+ * Math.random in backend runtime code (frontend/e2e/productionReadiness.spec.ts
+ * "backend runtime identifiers avoid Math.random"); stdlib randomInt gives the
+ * same uniform [0, ceiling) draw. Nothing asserts on the delay.
  */
 export function serializationBackoffMs(attempt: number): number {
   const ceiling = Math.min(
     DECISION_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
     DECISION_RETRY_MAX_DELAY_MS,
   );
-  return Math.floor(Math.random() * ceiling);
+  return randomInt(ceiling);
 }
 
 /**
