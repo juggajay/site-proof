@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { TestSufficiencyVerdict } from '../contracts/futureConsumers.js';
 import { isReadinessReasonCode } from '../contracts/reasonCodes.js';
 import { evaluateSufficiency } from './evaluate.js';
+import { createCategoryResolver, type Resolution } from './testCategories.js';
 import {
   UNKNOWN_CAUSES,
   type FrequencyRule,
@@ -160,6 +161,47 @@ describe('AT-2 the real evaluator satisfies TestSufficiencyVerdict', () => {
       checklistItems: [{ id: 'item-1', evidenceRequired: 'test', testType: 'Compaction' }],
     });
     expect(result.rules[0].passingCount).toBe(1);
+    expect(result.unlinkedPassingTestIds).toEqual([]);
+  });
+
+  // F1 §4.4 [F1C-B1]. The gap the #1602 review found: every resolver-backed case
+  // combined a resolved OWN category with an item that resolved to the SAME
+  // category or to nothing, so dropping the item limb whenever `own` is non-null
+  // left the suite green. Here both limbs resolve, to DIFFERENT categories, and
+  // the test must attribute to BOTH rules.
+  //
+  // The second category is injected through `createCategoryResolver`'s documented
+  // `cache` seam (§4.6), not through a hand-built candidate array: the shipped
+  // alias table maps to `compaction` and nothing else today (§5.4 scope), so a
+  // second REAL category does not exist to resolve yet. Everything downstream of
+  // the resolver — `candidateCategories`, `ruleCategoryOf`, the evaluator — is the
+  // production path. `CBR Field DCP` is the modal datalist's own string
+  // (`CreateTestModal.tsx:272`), i.e. what the seam will carry when `cbr` ships.
+  it('attributes ONE test to BOTH its own category and a DIFFERENT linked-item category', () => {
+    const resolveCategory = createCategoryResolver(
+      new Map<string, Resolution>([
+        ['CBR Field DCP', 'cbr'],
+        ['cbr', 'cbr'], // the rule key, resolved through the same resolver
+      ]),
+    );
+    const cbrRule = rule({ id: 'synthetic.v1/cbr', testType: 'cbr', minCountByScale: { A: 1 } });
+    const set = ruleset({ rules: [rule({ minCountByScale: { A: 1 } }), cbrRule] });
+
+    const result = evaluateSufficiency({
+      subjectId: 'lot-1',
+      resolved: resolved({ ruleset: set, rules: set.rules }),
+      // Own type resolves `compaction` through the REAL alias table; the linked
+      // item resolves `cbr` through the seam.
+      tests: [testRow({ id: 'both', testType: 'Density Ratio', itpChecklistItemId: 'item-1' })],
+      checklistItems: [{ id: 'item-1', evidenceRequired: 'test', testType: 'CBR Field DCP' }],
+      resolveCategory,
+    });
+
+    expect(result.rules.map((r) => [r.testType, r.passingCount])).toEqual([
+      ['compaction', 1],
+      ['cbr', 1],
+    ]);
+    expect(result.state).toBe('satisfied');
     expect(result.unlinkedPassingTestIds).toEqual([]);
   });
 

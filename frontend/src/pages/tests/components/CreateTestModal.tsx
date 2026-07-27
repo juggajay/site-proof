@@ -256,6 +256,18 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                   }`}
                   list="test-types"
                 />
+                {/*
+                  ponytail: adding an option here is only half the change (F1
+                  §8.1). Its canonical category lives in
+                  `backend/src/lib/readiness/sufficiency/testCategories.ts` —
+                  add the alias there too, or the sufficiency engine resolves
+                  the new string to "unknown" and tests entered with it count
+                  toward no frequency rule. The backend fixture copies this
+                  list by CITATION, not by import (there is no shared package,
+                  F1 §17.3), so the two are kept in step by hand; drift is
+                  one-directional and safe — an unaliased option counts toward
+                  nothing rather than toward the wrong thing.
+                */}
                 <datalist id="test-types">
                   <optgroup label="Compaction/Density">
                     <option value="Density Ratio" />
