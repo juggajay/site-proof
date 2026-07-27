@@ -33,13 +33,19 @@ interface LotShape {
   quantity?: { value: number; unit: QuantityUnit } | null;
   /** Summed `LotGeometry.areaM2` — a SECOND source, m² only (§4.6). */
   geometryAreaM2?: number | null;
+  /** Defaults to earthworks; D14.5's pavement cases pass a pavement slug. */
+  activitySlug?: string;
 }
 
 function resolved(lot: LotShape): ResolvedSufficiency {
   return {
     mode: 'warn',
     ruleset: PACK,
-    rules: rulesForLot(PACK, { activitySlug: 'earthworks_general', layer: null, areaZone: null }),
+    rules: rulesForLot(PACK, {
+      activitySlug: lot.activitySlug ?? 'earthworks_general',
+      layer: null,
+      areaZone: null,
+    }),
     scale:
       lot.scale === undefined || lot.scale === null
         ? { value: null, source: 'none' }
@@ -355,6 +361,128 @@ describe('AT-54 an NSW lot measured in m³ or chainage metres, with geometry dra
     });
     expect(evaluation.rules[0]?.requiredCount).toBeNull();
     expect(evaluation.rules[0]?.unknownCauses).toEqual(['quantity_missing']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D14.5 — the pavement rules (§5.6). AT-55(b), and the same
+// published-numbers-not-code-output discipline as AT-36: every expectation below
+// is Table Q6/L.1's `> 100.0` row, transcribed in
+// `docs/research/c1-q6-pavements-2026-07-27.md` §2.6 and independently
+// republished cell-for-cell by R71's heavy-duty override (§3.1, PDF p. 42).
+// ---------------------------------------------------------------------------
+const PAVEMENT_SLUGS = ['pavement_unbound', 'pavement_bound', 'pavement_stabilisation'] as const;
+
+/** A pavement lot with NO band recorded — the whole point of the scale-independent limb. */
+function pavementRequired(activitySlug: string, areaM2: number, scale: string | null = null) {
+  return (
+    evaluate({ activitySlug, scale, quantity: { value: areaM2, unit: 'm2' } }).rules[0]
+      ?.requiredCount ?? null
+  );
+}
+
+describe('D14.5 pavement lots ride Table Q6/L.1 row "> 100.0" with no band selected', () => {
+  it.each(PAVEMENT_SLUGS)(
+    '%s — the five published cells, at the AT-36 representative areas',
+    (slug) => {
+      expect(pavementRequired(slug, 25)).toBe(1); // <= 50 m²: published 1
+      expect(pavementRequired(slug, 300)).toBe(3); // > 50-500: published 3
+      expect(pavementRequired(slug, 800)).toBe(4); // > 500-1,000: published 4
+      expect(pavementRequired(slug, 3000)).toBe(6); // "1 per 500 (min 5)" -> max(5, 6) = 6
+      expect(pavementRequired(slug, 9000)).toBe(10); // "1 per 1,000 (min 10)" -> max(10, 9) = 10
+    },
+  );
+
+  it('AT-55b the two pins: 3,000 m² requires 6 and 6,000 m² requires 10, with NO testScale', () => {
+    // The research's own §7 example said 5 for the first and was wrong — the
+    // `> 1,000, <= 5,000` cell publishes 1 per 500 m² (min 5), so 3,000 m² is
+    // max(5, ceil(3000/500)) = 6. These are the CORRECTED figures (spec §0.3.3).
+    expect(pavementRequired('pavement_unbound', 3000)).toBe(6);
+    expect(pavementRequired('pavement_unbound', 6000)).toBe(10); // max(10, ceil(6000/1000)=6)
+  });
+
+  it('band EDGES are inclusive above, and the published floors bind where the rate does not', () => {
+    expect(pavementRequired('pavement_bound', 50)).toBe(1); // published 1
+    expect(pavementRequired('pavement_bound', 50.1)).toBe(3); // published 3
+    expect(pavementRequired('pavement_bound', 500)).toBe(3); // published 3
+    expect(pavementRequired('pavement_bound', 500.1)).toBe(4); // published 4
+    expect(pavementRequired('pavement_bound', 1000)).toBe(4); // published 4
+    expect(pavementRequired('pavement_bound', 1000.1)).toBe(5); // max(5, ceil(1000.1/500)=3)
+    // 4,500 m² is the mutation probe for the 5,000 edge: the two cells COINCIDE
+    // at 10 for every area in (4,500, 5,000], so moving the edge inside that
+    // interval is unobservable — but below it the cells diverge and this fails.
+    expect(pavementRequired('pavement_bound', 4500)).toBe(9); // max(5, ceil(4500/500)=9)
+    expect(pavementRequired('pavement_bound', 5000)).toBe(10); // max(5, ceil(5000/500)=10)
+    expect(pavementRequired('pavement_bound', 5000.1)).toBe(10); // floor 10 beats ceil(5000.1/1000)=6
+    expect(pavementRequired('pavement_bound', 12000)).toBe(12); // rate above the floor of 10
+  });
+
+  it('the band is IGNORED, whatever the lot carries — the specification fixed the row', () => {
+    // A pavement lot on this pack can still have a band set (the form offers the
+    // pack's five earthworks bands). It must change nothing: R71/R73/R75 pin
+    // specified relative compaction at 100 %/102 %, so the row is not the user's
+    // to choose, and a mis-set band must not lower a count.
+    for (const scale of [null, '<=90.0%', '>95.0-98.0%', '>100.0%', 'A']) {
+      const evaluation = evaluate({
+        activitySlug: 'pavement_unbound',
+        scale,
+        quantity: { value: 3000, unit: 'm2' },
+      });
+      expect(evaluation.rules[0]?.requiredCount, `${scale}`).toBe(6);
+      // Both scale causes are suppressed — including `scale_not_recognised`, which
+      // pre-§9.2 rows can carry. Without the suppression this lot reads `unknown`
+      // forever: the pack declares no `defaultScale`.
+      expect(evaluation.rules[0]?.unknownCauses, `${scale}`).toEqual([]);
+      expect(evaluation.rules[0]?.state, `${scale}`).toBe('insufficient');
+    }
+  });
+
+  it('the AREA is still required — a pavement lot with none reads unknown, never a floor', () => {
+    const evaluation = evaluate({ activitySlug: 'pavement_unbound', quantity: null });
+    expect(evaluation.rules[0]?.requiredCount).toBeNull();
+    expect(evaluation.rules[0]?.unknownCauses).toEqual(['quantity_missing']);
+    expect(evaluation.sufficiencyBlocks).toBe(false);
+  });
+
+  it('an m³-measured pavement lot with a drawn polygon still resolves (§4.6)', () => {
+    expect(
+      evaluate({
+        activitySlug: 'pavement_stabilisation',
+        quantity: { value: 900, unit: 'm3' },
+        geometryAreaM2: 3000,
+      }).rules[0]?.requiredCount,
+    ).toBe(6);
+  });
+
+  it('earthworks and pavement lots see ONE rule each — the two never cross', () => {
+    for (const slug of PAVEMENT_SLUGS) {
+      const rules = rulesForLot(PACK, { activitySlug: slug, layer: null, areaZone: null });
+      expect(rules.map((rule) => rule.id)).toEqual([`${PACK.id}/pavement-compaction-density`]);
+    }
+    expect(
+      rulesForLot(PACK, { activitySlug: 'earthworks_general', layer: null, areaZone: null }).map(
+        (rule) => rule.id,
+      ),
+    ).toEqual([`${PACK.id}/compaction-density`]);
+    // `pavement_concrete` is excluded — no concrete-pavement specification was read.
+    expect(
+      rulesForLot(PACK, { activitySlug: 'pavement_concrete', layer: null, areaZone: null }),
+    ).toEqual([]);
+  });
+
+  it('the pack carries these two rules and nothing else (§5.6.3 exit item 16)', () => {
+    // The five out-of-counter frequencies — binder spread rate per spreader run,
+    // water quality per contract, ride quality (a continuous reading), the 3051
+    // supply table and Q6 cl. 5.4.2's lot-size constraints — are ABSENT and named
+    // in the pack header. So are the four one-quantity-per-lot scope items and the
+    // two rules blocked on a canonical test category (straight edge, core integrity).
+    expect(PACK.rules.map((rule) => rule.id)).toEqual([
+      `${PACK.id}/compaction-density`,
+      `${PACK.id}/pavement-compaction-density`,
+    ]);
+    // The added rule edits no shipped definition — the §6.5 branch this took.
+    expect(PACK.rules[0]?.countByAreaBand?.byScale).toBeDefined();
+    expect(PACK.effectiveTo).toBeUndefined();
   });
 });
 

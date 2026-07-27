@@ -6,7 +6,13 @@
 import { isCanonicalActivitySlug } from '../../activityTaxonomy.js';
 import { normalizeSpecSet } from '../../itpMatcher.js';
 import { SUFFICIENCY_RULESETS } from './rulesets/index.js';
-import { ESCALATION_SHAPES, QUANTITY_UNITS, type FrequencyRule, type Ruleset } from './types.js';
+import {
+  ESCALATION_SHAPES,
+  QUANTITY_UNITS,
+  type AreaBand,
+  type FrequencyRule,
+  type Ruleset,
+} from './types.js';
 
 export { SUFFICIENCY_RULESETS };
 
@@ -176,6 +182,52 @@ function validateAreaBands(
     problems.push(`${where}: countByAreaBand.unit '${banded.unit}' is not a QuantityUnit`);
   }
 
+  // D14.5 §4.3.1 — the two shapes are alternatives, never a pair: `byScale` asks
+  // the lot for a band, `bands` states that the specification fixed it (and the
+  // evaluator then suppresses the scale causes, §4.3.2). A rule declaring both
+  // would make that suppression depend on which limb the evaluator read first.
+  if ((banded.byScale === undefined) === (banded.bands === undefined)) {
+    problems.push(
+      `${where}: countByAreaBand declares exactly one of 'byScale' or 'bands' — ${banded.bands ? 'both are' : 'neither is'} declared`,
+    );
+  }
+
+  // Ordering is what makes the evaluator's first-match scan reproduce the
+  // published `> x, <= y` columns; an unsorted or multi-open list silently
+  // returns the wrong cell rather than failing.
+  const checkBandList = (bands: readonly AreaBand[], at: string): void => {
+    if (bands.length === 0) {
+      problems.push(`${at} is empty`);
+      return;
+    }
+    let previous = -Infinity;
+    bands.forEach((band, index) => {
+      const atBand = `${at}[${index}]`;
+      if (band.upToInclusive === undefined) {
+        if (index !== bands.length - 1) {
+          problems.push(`${atBand} omits upToInclusive but is not the last band`);
+        }
+      } else {
+        if (index === bands.length - 1) {
+          problems.push(`${atBand} is the last band and must be open — omit upToInclusive`);
+        }
+        if (!(band.upToInclusive > previous)) {
+          problems.push(`${atBand}: upToInclusive ${band.upToInclusive} is not strictly ascending`);
+        }
+        previous = band.upToInclusive;
+      }
+      if (!Number.isInteger(band.minCount) || band.minCount < 1) {
+        problems.push(`${atBand}: minCount must be an integer >= 1, got ${band.minCount}`);
+      }
+      if (band.every !== undefined && !(band.every > 0)) {
+        problems.push(`${atBand}: every must be > 0, got ${band.every}`);
+      }
+    });
+  };
+
+  if (banded.bands) checkBandList(banded.bands, `${where}: countByAreaBand.bands`);
+  if (!banded.byScale) return;
+
   for (const scaleKey of ruleset.scaleKeys) {
     if (!banded.byScale[scaleKey]) {
       problems.push(`${where}: countByAreaBand declares no bands for scale '${scaleKey}'`);
@@ -188,36 +240,7 @@ function validateAreaBands(
       );
       continue;
     }
-    if (bands.length === 0) {
-      problems.push(`${where}: countByAreaBand['${scaleKey}'] is empty`);
-      continue;
-    }
-    // Ordering is what makes the evaluator's first-match scan reproduce the
-    // published `> x, <= y` columns; an unsorted or multi-open list silently
-    // returns the wrong cell rather than failing.
-    let previous = -Infinity;
-    bands.forEach((band, index) => {
-      const at = `${where}: countByAreaBand['${scaleKey}'][${index}]`;
-      if (band.upToInclusive === undefined) {
-        if (index !== bands.length - 1) {
-          problems.push(`${at} omits upToInclusive but is not the last band`);
-        }
-      } else {
-        if (index === bands.length - 1) {
-          problems.push(`${at} is the last band and must be open — omit upToInclusive`);
-        }
-        if (!(band.upToInclusive > previous)) {
-          problems.push(`${at}: upToInclusive ${band.upToInclusive} is not strictly ascending`);
-        }
-        previous = band.upToInclusive;
-      }
-      if (!Number.isInteger(band.minCount) || band.minCount < 1) {
-        problems.push(`${at}: minCount must be an integer >= 1, got ${band.minCount}`);
-      }
-      if (band.every !== undefined && !(band.every > 0)) {
-        problems.push(`${at}: every must be > 0, got ${band.every}`);
-      }
-    });
+    checkBandList(bands, `${where}: countByAreaBand['${scaleKey}']`);
   }
 }
 

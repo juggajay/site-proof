@@ -107,6 +107,101 @@
 //     lots. Transplanting it would be the same class of error as the R44
 //     misattribution.
 //
+// ---------------------------------------------------------------------------
+// D14.5 — PAVEMENTS RIDE THIS SAME PACK AND THIS SAME TABLE (§5.6).
+// Authority: docs/research/c1-q6-pavements-2026-07-27.md, grade A.
+// ---------------------------------------------------------------------------
+//
+// THE DELEGATION CHAIN. Q6 cl. 3.8.3 (PDF p. 20) is a two-way ownership map that
+// TfNSW added as an Ed 2 clarification: work output "areal in nature such as
+// constructed earthworks OR PAVEMENTS" takes its sampling frequency from
+// Annexure Q6/L; everything not areal (stockpiled granular supply) is stated in
+// the respective specification. Annexure Q6/L's own scope line says the same.
+// R71 (unbound/modified), R73 (plant-mixed heavily bound) and R75 (insitu
+// stabilisation, slow-setting binders) each publish the literal frequency cell
+// "As per TfNSW Q for specified relative compaction" against every compaction
+// characteristic — the same delegation R44 uses for earthworks, on three more
+// primary documents. So there is NO separate pavement table and nothing new to
+// transcribe: pavements are RULES in this pack, never a second NSW pack
+// (`resolveRuleset` returns one pack per (state, specSet, window), so two would
+// shadow each other and silently delete one rule set).
+//
+// WHY THE ROW IS FIXED, AND WHY THE PAVEMENT RULE ASKS FOR NO BAND. Every
+// specified relative compaction those specs publish is >= 100 %: R71 Table
+// R71.1 gives 100 % (Modified) for Class 1 DGB in a Traffic Category A base and
+// 102 % (Standard) otherwise; R73 cl. 8.4.3 and R75 cl. 7.4.3 give >= 102 % for
+// courses <= 250 mm. A TfNSW pavement lot therefore lands on Table Q6/L.1's
+// `> 100.0` row in every case but one (below). CROSS-CHECK: R71's own Annexure
+// R71/L heavy-duty override (PDF p. 42) republishes that row's five cells
+// verbatim — 1 | 3 | 4 | 1 per 500 (min 5) | 1 per 1,000 (min 10) — so two
+// independent primary documents publish the same five numbers. The rule carries
+// `bands` rather than five identical `byScale` entries because the difference is
+// user-visible: `byScale` would demand a band this pack has no default for and
+// leave every pavement lot reading `unknown` forever, to answer a question that
+// provably cannot change the number.
+//
+// OVER-STRICT, DELIBERATELY, ON ONE CASE. R75 cl. 7.4.3 specifies a stabilised
+// course THICKER than 250 mm at >= 100 %, which is the `> 98.0, <= 100.0` row —
+// materially different in the top two bands (5 vs 1 per 500 (min 5); 1 per 2,000
+// (min 6) vs 1 per 1,000 (min 10)). CIVOS records no course thickness, and
+// `scaleKeys` is RULESET-level and already spent on the five earthworks bands,
+// so the thickness cannot ride `testScale` either. `pavement_stabilisation`
+// therefore ships on the `> 100.0` bands with the <= 250 mm scope in its label:
+// over-strict on a thick stabilised course (10 where 6 is published on a
+// > 5,000 m² lot), which is the safe direction and the one C1 doctrine picks
+// when it must pick. Closes when §17.2 R8 is researched.
+//
+// TWO Q6 EXCEPTIONS ARE STRUCTURALLY UNREACHABLE FOR PAVEMENTS, and must not be
+// encoded: cl. 5.4.3(a) (non-contiguous lots) requires compaction < 100.0 %, and
+// cl. 5.4.3(b) + Table Q6/L.1 note (1) (the multi-layer minimums) require below
+// 98.0 %. Neither can engage at 100 %/102 %. CONSEQUENCE: the multi-layer
+// UNDER-STATEMENT the earthworks rule carries above does not exist on the
+// pavement rule.
+//
+// SCOPE EXCLUSIONS, named rather than assumed:
+//   * NO `pavement_concrete`. No concrete-pavement specification was read.
+//   * NO foamed bitumen. R76 (IC-QA-R76, Major Works) could not be retrieved from
+//     the portal — only a D&C R76, which is the wrong contract family. R71/R73/R75
+//     all delegate identically so R76 very probably does too, and "very probably"
+//     is exactly what produced the R44 misattribution (§17.2 R9).
+//   * NO TfNSW 3051 numbers. Table 3051/L.1 governs mass-lotted material SUPPLY
+//     (15 properties x 4 mass bands, max lot 4,000 t) — the "not areal" limb of
+//     cl. 3.8.3, a different lot concept, with its own quantified reduced column
+//     that must not be transplanted onto an areal rule.
+//   * The Q6 cl. 3.8.3 50 % reduction restated by R71 cl. 1.2.5, R73 and R75
+//     stays unencoded for the reason given above — Principal-approved and
+//     revocable, so nothing in a lot record can establish it.
+//
+// FIVE PUBLISHED PAVEMENT FREQUENCIES ARE OUT OF THIS COUNTER PERMANENTLY (§5.6.3):
+// binder spread rate (1 per 200 m PER SPREADER RUN — a process event); water
+// quality (1 per contract per source — contract-scoped, not lot-scoped); ride
+// quality (a continuous reading, not a count); the 3051 supply table; and Q6 cl.
+// 5.4.2's lot-size constraints (one shift's output; < 2 m wide -> <= 150 m long).
+// None of them should ever enter a per-lot test counter.
+//
+// FOUR MORE ARE SCOPE ITEMS, blocked on ONE QUANTITY PER LOT (§17.2 R10): course
+// thickness (1 per 75 m, min 2), pavement width (1 per 20 linear m), binder
+// percentage (1 per 200 t) and UCS (one pair per 400 t). NOT blocked on
+// `QuantityUnit` — `types.ts` already ships ['m2','m3','t','m','each'] — but on
+// the fact that a lot records ONE quantity in ONE unit, so a pavement lot
+// measured in m² for this rule cannot also supply the tonnage or chainage length
+// those count against.
+//
+// TWO RULES THE SPEC LISTED FOR D14.5 ARE NOT SHIPPED, and the blocker is not
+// the numbers (both are grade A: deviation from straight edge, min 1 per 20 m²,
+// R71/L 8.7, R73/L 8.7, R75/L 7.7; integrity of a multi-layer course, 1 core per
+// 250 m², R73/L 8.2). Both need a `testType` — and F1's canonicalisation, which
+// landed AFTER this spec was written, makes that a pack-class change this
+// research cannot fund: `testCategories.test.ts` AT-22 requires every shipped
+// `rule.testType` to be a key of `routes/testResults/specifications.ts`
+// (`straight_edge` / `core_integrity` are not) AND to have at least one alias
+// resolving to it, "because a rule whose category nothing can ever resolve to is
+// a silent zero-count rule". The alias governance in `testCategories.ts` admits
+// only strings a lot under a resolved pack can actually carry from a shipped
+// seed, and no NSW pavement seed emits either. Shipping them anyway would put
+// two permanently-unsatisfiable rules on every NSW pavement lot. They wait for a
+// canonical category with an observed source string.
+//
 // KNOWN CEILING — a lab MDD is never one of the n. Q6 counts SAMPLES at
 // semi-random locations within the lot area, indexed by specified relative
 // compaction (cl. L2, Figure Q6/L.1); a laboratory maximum-dry-density
@@ -146,6 +241,16 @@ const PROVENANCE: RulesetProvenance = {
   evidenceGrade: 'A',
   checkedOn: CHECKED_ON,
   revalidateBy: REVALIDATE_BY,
+};
+
+/**
+ * D14.5: the pavement rule's own citation. Same document, same table, same page —
+ * a DIFFERENT clause path, and the citation is the one channel that reaches a
+ * user, so it names the routing clause and the row the R-specs pin the lot to.
+ */
+const PAVEMENT_PROVENANCE: RulesetProvenance = {
+  ...PROVENANCE,
+  clause: 'cl. 3.8.3 with Annexure Q6/L Table Q6/L.1, row > 100.0',
 };
 
 /**
@@ -234,6 +339,53 @@ const COMPACTION_DENSITY: FrequencyRule = {
   provenance: PROVENANCE,
 };
 
+/**
+ * D14.5 §5.6.2 — pavement compaction, Table Q6/L.1's `> 100.0` row, fixed by the
+ * governing R-spec rather than chosen by the user.
+ *
+ * ONE rule, not four: R71/L cl. 8.4.2-8.4.5 (insitu density, maximum wet/dry
+ * density, relative compaction, field moisture content), R73/L cl. 8.4.1-8.4.4
+ * and R75/L cl. 7.4.1-7.4.4 all publish the SAME delegated frequency, and CIVOS
+ * counts by test TYPE, not by characteristic. Four rules on one `testType` would
+ * quadruple the same requirement and emit four identical shortfalls.
+ *
+ * The five cells, from `docs/research/c1-q6-pavements-2026-07-27.md` §2.6 (Table
+ * Q6/L.1, PDF p. 42) and independently republished by R71's heavy-duty override
+ * at §3.1 (Annexure R71/L, PDF p. 42):
+ *
+ * | <= 50 m² | > 50, <= 500 | > 500, <= 1,000 | > 1,000, <= 5,000 | > 5,000 |
+ * | 1        | 3            | 4               | 1 per 500 (min 5) | 1 per 1,000 (min 10) |
+ */
+const PAVEMENT_COMPACTION_DENSITY: FrequencyRule = {
+  id: `${RULESET_ID}/pavement-compaction-density`,
+  // 71 chars, measured. Developer-facing: `shortfallSentence` renders the
+  // CITATION, never a label [D14X-3] — the <= 250 mm scope note is a record of
+  // the deliberate over-strictness above, not its disclosure.
+  label: 'Pavement compaction samples per lot by area (stabilised course <=250mm)',
+  testType: 'compaction',
+  appliesTo: {
+    // R71 = pavement_unbound, R73 = pavement_bound, R75 = pavement_stabilisation.
+    // Canonical Level-2 slugs, already in `activityTaxonomy.ts`. `pavement_concrete`
+    // is excluded: no concrete-pavement specification was read.
+    activitySlugs: ['pavement_unbound', 'pavement_bound', 'pavement_stabilisation'],
+  },
+  countByAreaBand: {
+    unit: 'm2',
+    // `bands`, NOT `byScale`: the specification fixes the row (>= 100 % on every
+    // R71/R73/R75 compaction requirement), so this rule asks the user nothing and
+    // `evaluateRule` suppresses its scale causes. Five identical `byScale` entries
+    // would be arithmetically the same and would still demand a band.
+    bands: [
+      { upToInclusive: 50, minCount: 1 },
+      { upToInclusive: 500, minCount: 3 },
+      { upToInclusive: 1000, minCount: 4 },
+      { upToInclusive: 5000, minCount: 5, every: 500 },
+      { minCount: 10, every: 1000 },
+    ],
+  },
+  provenance: PAVEMENT_PROVENANCE,
+};
+
 export const TFNSW_Q6_V1: Ruleset = {
   id: RULESET_ID,
   state: 'nsw',
@@ -254,6 +406,18 @@ export const TFNSW_Q6_V1: Ruleset = {
   // at the edition actually read rather than at a guessed earlier date.
   effectiveFrom: '2024-02-01',
   status: 'confirmed',
-  rules: [COMPACTION_DENSITY],
+  // D14.5 ADDS A RULE IN PLACE rather than minting `tfnsw-q6.v2`, and the branch
+  // is deliberate. §6.5's bar — "definitions are never edited in place once
+  // instances exist" — protects the `ruleId` strings immutable decision evidence
+  // already cites. C1.2 (#1594) does write them, so `vicroads-204.v2` was minted
+  // when D14.2 EDITED an existing rule's definition. This change edits no shipped
+  // definition: `tfnsw-q6.v1/compaction-density` keeps its cells, its scoping and
+  // its citation byte-for-byte, and the new rule carries a NEW id that appears in
+  // no snapshot anywhere. A `.v2` would instead duplicate all 25 transcribed
+  // cells — the pack's highest-risk surface — and re-id an earthworks rule whose
+  // numbers never changed, for zero protection. THE BOUNDARY: this branch is
+  // available for ADDITIVE new rule ids only. Any change to an existing rule's
+  // figures, `appliesTo` or citation mints `tfnsw-q6.v2` with `effectiveTo` here.
+  rules: [COMPACTION_DENSITY, PAVEMENT_COMPACTION_DENSITY],
   provenance: PROVENANCE,
 };

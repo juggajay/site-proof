@@ -186,9 +186,16 @@ export function quantityFor(resolved: ResolvedSufficiency, unit: QuantityUnit): 
  * exactly one open band, last — so the first band whose bound the area does not
  * exceed IS the published cell, and the authority's `> x, ≤ y` column reproduces
  * exactly. The arithmetic inside the band is the shipped `max(floor, ceil(q/rate))`.
+ *
+ * D14.5: a rule declaring `bands` is scale-independent, so the scale is not read
+ * at all — the specification fixed the row (§4.3.2).
  */
-function bandedCount(banded: AreaBandedCounts, scaleValue: string, area: number): number | null {
-  const bands = banded.byScale[scaleValue];
+function bandedCount(
+  banded: AreaBandedCounts,
+  scaleValue: string | null,
+  area: number,
+): number | null {
+  const bands = banded.bands ?? (scaleValue === null ? undefined : banded.byScale?.[scaleValue]);
   if (!bands || bands.length === 0) return null;
   const band = bands.find(
     (entry) => entry.upToInclusive === undefined || area <= entry.upToInclusive,
@@ -246,6 +253,19 @@ function evaluateRule(
   // A banded rule REQUIRES its area: an unresolvable one is `quantity_missing`,
   // never a floor (the floors are per-band and several are inert placeholders).
   const banded = regime === 'reduced' ? undefined : rule.countByAreaBand;
+  // D14.5 §4.3.2(a) — a rule declaring `bands` is SCALE-INDEPENDENT: the
+  // governing specification fixes the row (every TfNSW pavement compaction spec
+  // pins relative compaction at 100 %/102 %), so no answer the user could give
+  // changes the number. Drop the scale causes rather than asking the question:
+  // `tfnsw-q6.v1` declares no `defaultScale`, so leaving them would read
+  // `unknown` FOREVER on every pavement lot. Before the guard below, which turns
+  // any surviving cause into a null count.
+  if (banded?.bands) {
+    for (const cause of ['scale_not_selected', 'scale_not_recognised'] as const) {
+      const at = causes.indexOf(cause);
+      if (at !== -1) causes.splice(at, 1);
+    }
+  }
   const bandedQuantity = banded ? quantityFor(resolved, banded.unit) : null;
   if (banded && bandedQuantity === null) {
     causes.push('quantity_missing');
@@ -297,7 +317,7 @@ function evaluateRule(
     causes.length > 0
       ? null
       : banded
-        ? bandedCount(banded, scaleValue as string, bandedQuantity as number)
+        ? bandedCount(banded, scaleValue, bandedQuantity as number)
         : minCount === null
           ? null
           : requiredTestCount(minCount, perQuantity, perQuantityValue);
