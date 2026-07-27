@@ -160,11 +160,20 @@ export const documentationSections: DocumentationSection[] = [
         description:
           'The Create Claim modal disables only lots with true action blockers and explains why each lot can or cannot be selected.',
       },
+      {
+        title: 'Check the test frequency count',
+        description:
+          'Where the project state and specification set resolve a governing specification — VicRoads Section 204 for Victorian earthworks, TfNSW Q6 for NSW earthworks and pavements — readiness shows how many compaction tests the lot requires against how many verified passing tests it has.',
+      },
     ],
     tips: [
       'Blockers stop the action. Warnings do not stop the action but should be reviewed.',
       'Hold points are claim evidence blockers, not conformance blockers.',
       'Force Conform is an admin override and requires an audit reason.',
+      'The required test count comes from the lot activity and its testing scale, which NSW projects call Specified relative compaction. In NSW the count also varies with the lot area, taken from the lot quantity in square metres or from its drawn geometry. Victorian earthworks lots need 6 compaction tests on Compaction Scale A or B and 3 on Scale C, and Scale A applies where the specification does not state one.',
+      'Test frequency checking is advisory on every project today. It can be set to block per project, which stops a lot short of its required count being conformed.',
+      '"Test frequency cannot be checked" means an input is missing. Set the lot activity, testing scale, and quantity, or draw the lot geometry, on the lot edit page.',
+      'After three consecutive conforming lots a VicRoads lot can become eligible to request a reduced frequency from the Superintendent. CIVOS reports the eligibility only and never reduces the count itself.',
     ],
   },
   {
@@ -194,6 +203,7 @@ export const documentationSections: DocumentationSection[] = [
       'Seeded jurisdictional templates are global and can be copied into a project.',
       'Assigned the wrong ITP? It can be unassigned from the lot until work is recorded against it.',
       'Test results count toward conformance once linked to their ITP checklist item and verified.',
+      'Where a governing specification sets a test frequency, only verified passing tests whose type is recognised for that rule count toward it. Density Ratio, AS 1289.5.4.1, and RC 316.00 all count as compaction; laboratory reference tests such as MDD never count toward the field test number. A "Verified tests not counted" warning means the test type is not recognised, not that the test is unlinked.',
       'Verified ITP and test records are protected from unsafe edits.',
       'Failing an ITP checklist item online requires a photo of the issue first, and still raises an NCR automatically.',
       'Hold point release and request events are written to the audit log.',
@@ -356,6 +366,7 @@ export const documentationSections: DocumentationSection[] = [
       'Audit log search covers actions, entities, users, projects, and detail text.',
       'Subcontractor portal access is separate from head-contractor company membership.',
       'Use Notifications for pending approvals, queries, and workflow items that need attention.',
+      'Test Frequency Checking in the project General settings decides whether a lot short of its required test count is only warned about or cannot be conformed. It can be off, warn, or block, and is set per project.',
       'Foremen and subcontractors use simplified mobile shells (foreman /m, subbie portal /p) rather than these office pages.',
     ],
   },
