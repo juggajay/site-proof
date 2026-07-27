@@ -54,7 +54,7 @@ export function ImportPanel({
   onRollback,
   rollbackBusy,
   title = 'Bring your ITPs across',
-  description = 'Import an existing ITP spreadsheet or PDF. You see every ITP beside what it was read from, and the counts, before anything is written.',
+  description = 'Import an existing ITP spreadsheet, PDF or Word document. You see every ITP beside what it was read from, and the counts, before anything is written.',
   ctaLabel = 'Import a file',
 }: ImportPanelProps) {
   return (

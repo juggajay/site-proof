@@ -21,7 +21,13 @@ import {
   MAX_TEMPLATE_NAME_LENGTH,
 } from '../../itp/templateValidation.js';
 import { countDryRunRows } from './dryRunTypes.js';
-import type { DryRunCounts, DryRunResult, DryRunRow, DryRunRowRef } from './dryRunTypes.js';
+import type {
+  ChecklistDiff,
+  DryRunCounts,
+  DryRunResult,
+  DryRunRow,
+  DryRunRowRef,
+} from './dryRunTypes.js';
 import type { ParsedGrid } from './excelParser.js';
 import {
   applyTransform,
@@ -96,6 +102,12 @@ export interface ExistingTemplate {
   id: string;
   name: string;
   activityType: string | null;
+  /** The project's controlled copy, for the corporate-master diff (§4.5). */
+  checklistItems?: {
+    description: string;
+    acceptanceCriteria?: string | null;
+    pointType?: string | null;
+  }[];
 }
 
 export interface DryRunInput {
@@ -215,6 +227,74 @@ function collectTemplates(input: DryRunInput): {
   }
 
   return { templates, unmapped, unmappedDescriptionSheets };
+}
+
+/** How many changed items a diff spells out before it just counts them. */
+const MAX_DIFF_ITEMS = 20;
+
+function checklistIdentity(description: string): string {
+  return description.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function checklistContent(item: {
+  acceptanceCriteria?: string | null;
+  pointType?: string | null;
+}): string {
+  return `${(item.acceptanceCriteria ?? '').trim()}::${(item.pointType ?? '').trim()}`;
+}
+
+/**
+ * B3 §4.5 — what applying this master would change in the project's controlled
+ * copy: checklist items the master adds, items the project has that the master
+ * no longer carries, and items whose acceptance criteria or point type moved.
+ *
+ * Items are paired by their description, which is the only stable identity a
+ * checklist row has across two independently-edited copies.
+ *
+ * // ponytail: descriptions pair by exact (normalized) text. A reworded item
+ * // reads as one removed + one added, which is honest — fuzzy pairing only if a
+ * // real master revision makes the noise unworkable.
+ */
+export function diffChecklistItems(
+  existing: NonNullable<ExistingTemplate['checklistItems']>,
+  proposed: ProposedTemplate['checklistItems'],
+): ChecklistDiff | null {
+  const existingByKey = new Map(
+    existing.map((item) => [checklistIdentity(item.description), item]),
+  );
+  const proposedByKey = new Map(
+    proposed.map((item) => [checklistIdentity(item.description), item]),
+  );
+
+  const items: ChecklistDiff['items'] = [];
+  let added = 0;
+  let removed = 0;
+  let changed = 0;
+
+  const push = (change: ChecklistDiff['items'][number]['change'], description: string) => {
+    if (items.length < MAX_DIFF_ITEMS)
+      items.push({ change, description: description.slice(0, 200) });
+  };
+
+  for (const item of proposed) {
+    const key = checklistIdentity(item.description);
+    const match = existingByKey.get(key);
+    if (!match) {
+      added += 1;
+      push('added', item.description);
+    } else if (checklistContent(match) !== checklistContent(item)) {
+      changed += 1;
+      push('changed', item.description);
+    }
+  }
+  for (const item of existing) {
+    if (!proposedByKey.has(checklistIdentity(item.description))) {
+      removed += 1;
+      push('removed', item.description);
+    }
+  }
+
+  return added + removed + changed === 0 ? null : { added, removed, changed, items };
 }
 
 interface LengthCheck {
@@ -446,6 +526,17 @@ export function computeItpImportDryRun(input: DryRunInput): {
       continue;
     }
 
+    // Built here rather than at the end because the duplicate branch below has
+    // to diff against them (§4.5).
+    const checklistItems: ProposedTemplate['checklistItems'] = keptRows.map((row) => ({
+      description: row.values.description as string,
+      acceptanceCriteria: row.values.acceptanceCriteria ?? null,
+      ...(row.values.pointType ? { pointType: row.values.pointType } : {}),
+      ...(row.values.responsibleParty ? { responsibleParty: row.values.responsibleParty } : {}),
+      ...(row.values.evidenceRequired ? { evidenceRequired: row.values.evidenceRequired } : {}),
+      testType: row.values.testType ?? null,
+    }));
+
     const dedupKey = templateDedupKey(template.name, fold.slug);
 
     // Intra-batch twins: two rows IN THIS FILE resolving to the same identity.
@@ -468,10 +559,17 @@ export function computeItpImportDryRun(input: DryRunInput): {
 
     const duplicate = existingByKey.get(dedupKey);
     if (duplicate) {
+      // §4.5: the project's copy is CONTROLLED. A re-imported master never
+      // overwrites it — but where the two differ, the difference is shown
+      // instead of the row disappearing into a silent skip.
+      const diff = duplicate.checklistItems
+        ? diffChecklistItems(duplicate.checklistItems, checklistItems)
+        : null;
       rows.push({
         ...base,
-        outcome: 'skip',
+        outcome: diff ? 'needs_review' : 'skip',
         reason: 'duplicate',
+        ...(diff ? { diff } : {}),
         duplicateOf: {
           model: 'ITPTemplate',
           id: duplicate.id,
@@ -503,14 +601,7 @@ export function computeItpImportDryRun(input: DryRunInput): {
       specAffirmed,
       sourceRowRefs: keptRows.map((row) => row.rowRef),
       match: { activitySlug: fold.slug, foldConfidence: fold.confidence, resolvedBy },
-      checklistItems: keptRows.map((row) => ({
-        description: row.values.description as string,
-        acceptanceCriteria: row.values.acceptanceCriteria ?? null,
-        ...(row.values.pointType ? { pointType: row.values.pointType } : {}),
-        ...(row.values.responsibleParty ? { responsibleParty: row.values.responsibleParty } : {}),
-        ...(row.values.evidenceRequired ? { evidenceRequired: row.values.evidenceRequired } : {}),
-        testType: row.values.testType ?? null,
-      })),
+      checklistItems,
     });
   }
 

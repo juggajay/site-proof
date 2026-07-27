@@ -42,6 +42,14 @@ export interface DryRunRow {
   /** Free text the reason code cannot carry — the server's own wording. */
   detail?: string;
   duplicateOf?: { model: string; id: string; matchedOn: string };
+  /** B3 §4.5 — what a corporate master would change in this project's copy.
+   *  Present only when the project already has this ITP AND it differs. */
+  diff?: {
+    added: number;
+    removed: number;
+    changed: number;
+    items: { change: 'added' | 'removed' | 'changed'; description: string }[];
+  };
   collidesWith?: { sheet: string; rowIndex: number }[];
   overLength?: { field: string; length: number; max: number };
   proposedActivitySlug?: string;
@@ -167,7 +175,7 @@ export function useImportProfiles(projectId: string | undefined, kind: ImportKin
 }
 
 /**
- * Upload a spreadsheet. authFetch (not apiFetch) so the browser sets the
+ * Upload a source file. authFetch (not apiFetch) so the browser sets the
  * multipart boundary itself. Writes nothing — it parses the file and opens a
  * batch for review.
  */
@@ -186,6 +194,50 @@ export function useUploadImport(projectId: string | undefined, kind: ImportKind)
       }
       return (await response.json()) as UploadImportResult;
     },
+    onSuccess: () => invalidateImports(queryClient, projectId, kind),
+  });
+}
+
+/**
+ * B3 §4.5 — ITP sets already applied on another project this user can read.
+ * Rolling one out here creates a controlled COPY, reviewed like any other
+ * import; the dry run shows what it would change against what is already here.
+ */
+export interface CorporateMaster {
+  id: string;
+  projectId: string;
+  projectName: string;
+  sourceFileName: string | null;
+  sourceFormat: string;
+  appliedAt: string;
+  templateCount: number;
+}
+
+export function useCorporateMasters(projectId: string | undefined, kind: ImportKind) {
+  return useQuery({
+    queryKey: queryKeys.importMasters(projectId ?? 'none', kind),
+    queryFn: async () => {
+      const data = await apiFetch<{ masters: CorporateMaster[] }>(
+        `/api/projects/${encodeURIComponent(projectId!)}/copilot/import-masters?kind=${kind}`,
+      );
+      return data.masters ?? [];
+    },
+    // Only ITP sets travel between projects; a lot register never does.
+    enabled: Boolean(projectId) && kind === 'itp_template',
+    staleTime: IMPORT_STALE_TIME_MS,
+  });
+}
+
+/** Open a batch in THIS project from a master applied elsewhere. Writes no
+ *  templates — it is the upload step, with the master's grid instead of a file. */
+export function useImportFromMaster(projectId: string | undefined, kind: ImportKind) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (masterBatchId: string) =>
+      apiFetch<UploadImportResult>(`${importPath(projectId!)}/from-master?kind=${kind}`, {
+        method: 'POST',
+        body: JSON.stringify({ masterBatchId }),
+      }),
     onSuccess: () => invalidateImports(queryClient, projectId, kind),
   });
 }

@@ -35,6 +35,20 @@ export interface DryRunRowRef {
   rowIndex: number;
 }
 
+/**
+ * B3 §4.5 — what a corporate master would change in the project's controlled
+ * copy. Present only on a `duplicate` row whose content actually differs, so the
+ * reviewer SEES the difference instead of the import silently overwriting the
+ * project's copy or silently skipping a real revision.
+ */
+export interface ChecklistDiff {
+  added: number;
+  removed: number;
+  changed: number;
+  /** Capped sample, so the stored ledger stays inside the §3.7 byte budget. */
+  items: { change: 'added' | 'removed' | 'changed'; description: string }[];
+}
+
 export interface DryRunRow {
   /** Stable handle the reviewer's resolutions key off. */
   key: string;
@@ -47,6 +61,8 @@ export interface DryRunRow {
    *  validator's own "valid scales are …" message. */
   detail?: string;
   duplicateOf?: { model: string; id: string; matchedOn: string };
+  /** Set with `reason: 'duplicate'` when the project's copy differs (§4.5). */
+  diff?: ChecklistDiff;
   collidesWith?: DryRunRowRef[];
   overLength?: { field: string; length: number; max: number };
   proposedActivitySlug?: string;

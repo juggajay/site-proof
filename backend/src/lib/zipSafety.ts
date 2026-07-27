@@ -181,7 +181,7 @@ export function assertSafeOoxmlArchive(
 
   if (hasMacroPart(entries)) {
     rejectArchive(
-      'Macro-enabled workbooks are not accepted. Save the file as .xlsx (no macros) and try again.',
+      'Macro-enabled Office files are not accepted. Save the file as .xlsx or .docx (no macros) and try again.',
     );
   }
 

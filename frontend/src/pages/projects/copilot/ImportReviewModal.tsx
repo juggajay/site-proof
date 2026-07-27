@@ -19,25 +19,30 @@ import { ImportPanel } from './ImportPanel';
 import {
   reconciliationCsvPath,
   useCancelImport,
+  useCorporateMasters,
   useImportBatch,
   useImportDryRun,
+  useImportFromMaster,
   useImportProfiles,
   useSendImportToReview,
   useUploadImport,
+  type CorporateMaster,
   type DryRunResult,
   type DryRunRow,
   type ImportBatchSummary,
   type ImportKind,
   type ParsedSheet,
   type Resolutions,
+  type UploadImportResult,
 } from './importData';
 
-const ACCEPT = '.xlsx,.pdf';
+const ACCEPT = '.xlsx,.pdf,.docx';
 const MAX_FILE_MB = 25;
 
 /** Not a real profile: the columns read straight off the uploaded file. It is
  *  the ONLY mapping a PDF can have (its columns are read, not printed), and the
- *  right starting point for a spreadsheet whose layout matches no profile. */
+ *  right starting point for a spreadsheet or Word table whose layout matches no
+ *  profile. */
 const DERIVED_PROFILE = '__derived__';
 
 /** The only copy that differs between one migration and another. */
@@ -90,6 +95,12 @@ const OUTCOME_CHIP: Record<DryRunRow['outcome'], string> = {
   blocked: 'bg-destructive/10 text-destructive',
 };
 
+const DIFF_LABEL: Record<'added' | 'removed' | 'changed', string> = {
+  added: 'New',
+  removed: 'Not in this version',
+  changed: 'Changed',
+};
+
 const REASON_TEXT: Record<string, string> = {
   duplicate: 'Already in this project',
   slug_collision: 'Another row in this file has the same identity',
@@ -106,9 +117,22 @@ const REASON_TEXT: Record<string, string> = {
   empty: 'Nothing to import from this row',
 };
 
+/** §4.5: the project's copy is controlled. Say what differs; never overwrite. */
+function diffSummary(diff: NonNullable<DryRunRow['diff']>): string {
+  const parts = [
+    [diff.added, 'new'],
+    [diff.changed, 'changed'],
+    [diff.removed, 'not in this version'],
+  ]
+    .filter(([count]) => count)
+    .map(([count, label]) => `${count} ${label}`);
+  return `This project already has this ITP, and its copy differs — ${parts.join(', ')}. It is left as it is; update it by hand if you want these changes.`;
+}
+
 function rowDetail(row: DryRunRow): string {
   // The server's own wording, where a reason code alone cannot say enough.
   if (row.detail) return row.detail;
+  if (row.diff) return diffSummary(row.diff);
   if (row.overLength) {
     return `${row.overLength.field} is ${row.overLength.length} characters (max ${row.overLength.max}). Shorten it at the source, or skip the row.`;
   }
@@ -187,6 +211,58 @@ function SourcePane({
   );
 }
 
+/**
+ * B3 §4.5 — ITP sets already applied on another project, offered as corporate
+ * masters. Picking one opens it here as a CONTROLLED COPY: the same dry run,
+ * the same review, the same rollback, and a visible difference against anything
+ * this project already has.
+ */
+function CorporateMasterPanel({
+  masters,
+  busy,
+  onUse,
+}: {
+  masters: CorporateMaster[];
+  busy: boolean;
+  onUse: (masterId: string) => void;
+}) {
+  return (
+    <section aria-label="Corporate masters" className="rounded-lg border bg-card">
+      <div className="border-b p-4">
+        <h3 className="text-sm font-medium">Bring in a corporate master</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          An ITP set you already imported on another project. This project gets its own controlled
+          copy — nothing here is overwritten.
+        </p>
+      </div>
+      <ul className="divide-y">
+        {masters.map((master) => (
+          <li key={master.id} className="flex items-center gap-2 p-3">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {master.sourceFileName ?? 'ITP set'}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {master.projectName} · {master.templateCount}{' '}
+                {master.templateCount === 1 ? 'ITP' : 'ITPs'}
+              </span>
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => onUse(master.id)}
+            >
+              Use this master
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Right pane: one card per proposed ITP, exceptions drilled into. */
 function ProposalRow({
   row,
@@ -226,6 +302,16 @@ function ProposalRow({
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {detail}
         </p>
+      )}
+
+      {row.diff && row.diff.items.length > 0 && (
+        <ul className="mt-2 space-y-1 border-l pl-3 text-xs text-muted-foreground">
+          {row.diff.items.map((item, index) => (
+            <li key={`${item.change}-${index}`} className="truncate">
+              <span className="font-medium">{DIFF_LABEL[item.change]}:</span> {item.description}
+            </li>
+          ))}
+        </ul>
       )}
 
       {row.unit !== 'checklist_row' && (
@@ -313,7 +399,9 @@ export function ImportReviewModal({
 
   const batchQuery = useImportBatch(projectId, batchId ?? undefined);
   const profilesQuery = useImportProfiles(projectId, kind);
+  const mastersQuery = useCorporateMasters(projectId, kind);
   const uploadMutation = useUploadImport(projectId, kind);
+  const masterMutation = useImportFromMaster(projectId, kind);
   const dryRunMutation = useImportDryRun(projectId, kind);
   const reviewMutation = useSendImportToReview(projectId, kind);
   const cancelMutation = useCancelImport(projectId, kind);
@@ -321,6 +409,7 @@ export function ImportReviewModal({
 
   const busy =
     uploadMutation.isLoading ||
+    masterMutation.isLoading ||
     dryRunMutation.isLoading ||
     reviewMutation.isLoading ||
     decideMutation.isLoading;
@@ -328,6 +417,12 @@ export function ImportReviewModal({
   const sheets = batchQuery.data?.grid?.sheets ?? [];
   const effectiveDryRun = dryRun ?? batchQuery.data?.dryRun ?? null;
   const blockedCount = effectiveDryRun?.counts.blocked ?? 0;
+  // What would actually be written: rows that will be created, plus the
+  // family-fold rows that still create. A `needs_review` row flagged as a
+  // duplicate, a twin or an unresolved milestone creates nothing, so counting
+  // every needs_review row would promise the reviewer records they will not get.
+  const willImportCount =
+    (effectiveDryRun?.counts.willCreate ?? 0) + (effectiveDryRun?.counts.ambiguous ?? 0);
   const derivedFieldMap = uploadFieldMap ?? effectiveDryRun?.fieldMap ?? null;
 
   /** What the next dry run maps with: an explicit map, or a named profile. */
@@ -354,14 +449,16 @@ export function ImportReviewModal({
     }
   };
 
-  const handleFile = async (file: File) => {
+  /** A freshly opened batch — from an uploaded file or a corporate master —
+   *  mapped and dry-run, so the reviewer lands on the counts either way. */
+  const openBatch = async (open: () => Promise<UploadImportResult>, failureTitle: string) => {
     try {
-      const result = await uploadMutation.mutateAsync(file);
+      const result = await open();
       setBatchId(result.batch.id);
       setActiveSheet(result.sheets[0]?.name ?? null);
       // No profile fits (always the case for a PDF, and for an unrecognised
-      // sheet layout): map with the columns read off the file rather than
-      // falling back to a profile whose columns are not in it.
+      // sheet or Word table layout): map with the columns read off the file
+      // rather than falling back to a profile whose columns are not in it.
       const suggested = result.suggestedProfile?.key ?? DERIVED_PROFILE;
       setProfileId(suggested);
       setUploadFieldMap(result.suggestedFieldMap ?? null);
@@ -373,14 +470,23 @@ export function ImportReviewModal({
       });
       setDryRun(dry.dryRun);
     } catch (error) {
-      logError('Import upload failed:', error);
+      logError('Import open failed:', error);
       toast({
-        title: 'Could not read that file',
+        title: failureTitle,
         description: extractErrorMessage(error, 'Check the file and try again.'),
         variant: 'error',
       });
     }
   };
+
+  const handleFile = (file: File) =>
+    openBatch(() => uploadMutation.mutateAsync(file), 'Could not read that file');
+
+  const handleMaster = (masterId: string) =>
+    openBatch(
+      () => masterMutation.mutateAsync(masterId),
+      'Could not bring in that corporate master',
+    );
 
   const handleResolve = (key: string, patch: Resolutions[string]) => {
     const next = { ...resolutions, [key]: { ...resolutions[key], ...patch } };
@@ -442,8 +548,8 @@ export function ImportReviewModal({
     >
       <ModalHeader>{copy.title}</ModalHeader>
       <ModalDescription>
-        {copy.blurb}, with the counts before anything is written. Excel or PDF, up to {MAX_FILE_MB}{' '}
-        MB.
+        {copy.blurb}, with the counts before anything is written. Excel, PDF or Word, up to{' '}
+        {MAX_FILE_MB} MB.
       </ModalDescription>
       <ModalBody>
         <div className="space-y-4">
@@ -461,6 +567,14 @@ export function ImportReviewModal({
             />
           )}
 
+          {!batchId && (mastersQuery.data?.length ?? 0) > 0 && (
+            <CorporateMasterPanel
+              masters={mastersQuery.data ?? []}
+              busy={busy}
+              onUse={(masterId) => void handleMaster(masterId)}
+            />
+          )}
+
           {!batchId && (
             <div
               onDragOver={(event) => event.preventDefault()}
@@ -473,7 +587,7 @@ export function ImportReviewModal({
             >
               <FileUp className="mx-auto h-8 w-8 text-muted-foreground/60" />
               <p className="mt-2 text-sm text-muted-foreground">
-                Drag an .xlsx or .pdf file here, or
+                Drag an .xlsx, .pdf or .docx file here, or
               </p>
               <Button
                 type="button"
@@ -609,11 +723,7 @@ export function ImportReviewModal({
           >
             {decideMutation.isLoading
               ? 'Importing…'
-              : `Import ${effectiveDryRun.counts.willCreate + effectiveDryRun.counts.needsReview} ${
-                  effectiveDryRun.counts.willCreate + effectiveDryRun.counts.needsReview === 1
-                    ? copy.noun
-                    : copy.nounPlural
-                }`}
+              : `Import ${willImportCount} ${willImportCount === 1 ? copy.noun : copy.nounPlural}`}
           </Button>
         )}
       </ModalFooter>

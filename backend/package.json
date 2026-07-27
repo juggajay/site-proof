@@ -61,6 +61,7 @@
     "fast-xml-parser": "^5.10.1",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "mammoth": "1.12.0",
     "multer": "^2.2.0",
     "otplib": "^13.1.1",
     "proj4": "^2.20.9",
@@ -71,11 +72,12 @@
     "zod": "^3.22.4"
   },
   "overrides": {
+    "@xmldom/xmldom": "^0.8.13",
+    "brace-expansion": "^5.0.8",
     "js-cookie": "3.0.7",
     "minimatch": "^9.0.9",
     "qs": "6.15.2",
-    "ws": "8.21.0",
-    "brace-expansion": "^5.0.8"
+    "ws": "8.21.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

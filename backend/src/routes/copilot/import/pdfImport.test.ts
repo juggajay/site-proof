@@ -428,13 +428,21 @@ describe('Wave B B2 — PDF import', () => {
       expect(spoofed.status).toBe(400);
       expect(fetchMock).not.toHaveBeenCalled();
 
-      const wrongFormat = await upload(
+      // B3 accepts .docx, so the name alone no longer refuses this — the MAGIC
+      // BYTES do. A .docx must be a zip; a PDF wearing that name is not one.
+      const pdfAsWord = await upload(
         pdfBuffer(),
         'itps.docx',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       );
+      expect(pdfAsWord.status).toBe(400);
+      expect(pdfAsWord.body.error.message).toMatch(/does not match the declared file type/i);
+
+      const wrongFormat = await upload(pdfBuffer(), 'itps.csv', 'text/csv');
       expect(wrongFormat.status).toBe(400);
-      expect(wrongFormat.body.error.message).toMatch(/\.xlsx spreadsheets and \.pdf documents/);
+      expect(wrongFormat.body.error.message).toMatch(
+        /\.xlsx spreadsheets, \.pdf documents and \.docx Word files/,
+      );
 
       expect(await prisma.importBatch.count({ where: { projectId } })).toBe(0);
     });

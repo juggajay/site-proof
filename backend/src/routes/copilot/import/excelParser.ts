@@ -106,7 +106,8 @@ function isEmptyRow(cells: string[]): boolean {
 const HEADER_SCAN_ROWS = 5;
 
 /**
- * Which of the first few non-empty rows is the real header band.
+ * Which of the first few non-empty rows is the real header band. Shared with the
+ * Word parser (B3), whose tables lead with the same kind of title banner.
  *
  * Real exports lead with a title banner — CivilPro prints "ITP 04-01 - Clear and
  * Grub - Revision 2" in row 1 and the column names in row 2 — and taking row 1
@@ -117,7 +118,7 @@ const HEADER_SCAN_ROWS = 5;
  * today's behaviour (the latter then fails loudly downstream as unmapped
  * columns, which is the correct outcome — never a silent partial import).
  */
-function pickHeaderRow(candidates: string[][], kind: string): number {
+export function pickHeaderRow(candidates: string[][], kind: string): number {
   let bestIndex = 0;
   let bestScore = deriveFieldMapFromHeaders(candidates[0], kind).length;
   for (let index = 1; index < candidates.length; index += 1) {

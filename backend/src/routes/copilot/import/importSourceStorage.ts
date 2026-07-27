@@ -35,11 +35,12 @@ const IMPORT_SOURCES_SUBDIR = 'import-sources';
 export const MAX_IMPORT_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-// Macro-enabled workbooks are refused by extension AND by MIME type here, and
+// Macro-enabled Office files are refused by extension AND by MIME type here, and
 // again by the vbaProject.bin check in `assertSafeOoxmlArchive`. SiteProof never
 // executes macros, so nothing is lost — but accepting them would mean storing
 // and re-serving live malware carriers to a contractor's own Windows machines.
-const MACRO_EXTENSIONS = new Set(['.xlsm', '.xlsb', '.xltm']);
+// B3 adds Word's macro-enabled extensions beside Excel's, for the same reason.
+const MACRO_EXTENSIONS = new Set(['.xlsm', '.xlsb', '.xltm', '.docm', '.dotm']);
 
 /**
  * The accepted source formats, keyed by extension. The extension is
@@ -49,7 +50,15 @@ const MACRO_EXTENSIONS = new Set(['.xlsm', '.xlsb', '.xltm']);
 const SOURCE_FORMAT_BY_EXTENSION = new Map<string, string>([
   ['.xlsx', 'excel'],
   ['.pdf', 'pdf'],
+  ['.docx', 'word'],
 ]);
+
+/** One wording, used by the multer filter and by the reader that runs after it. */
+export const UNSUPPORTED_SOURCE_MESSAGE =
+  'Only .xlsx spreadsheets, .pdf documents and .docx Word files can be imported.';
+
+const MACRO_REJECTION_MESSAGE =
+  'Macro-enabled Office files are not accepted. Save the file as .xlsx or .docx (no macros) and try again.';
 
 export function importSourceFormat(filename: string): string | null {
   return SOURCE_FORMAT_BY_EXTENSION.get(path.extname(filename).toLowerCase()) ?? null;
@@ -65,15 +74,11 @@ export const importUpload = multer({
   fileFilter: (_req, file, cb) => {
     const extension = path.extname(file.originalname).toLowerCase();
     if (MACRO_EXTENSIONS.has(extension) || file.mimetype.toLowerCase().includes('macroenabled')) {
-      cb(
-        rejectUpload(
-          'Macro-enabled workbooks are not accepted. Save the file as .xlsx (no macros) and try again.',
-        ),
-      );
+      cb(rejectUpload(MACRO_REJECTION_MESSAGE));
       return;
     }
     if (!SOURCE_FORMAT_BY_EXTENSION.has(extension)) {
-      cb(rejectUpload('Only .xlsx spreadsheets and .pdf documents can be imported.'));
+      cb(rejectUpload(UNSUPPORTED_SOURCE_MESSAGE));
       return;
     }
     cb(null, true);
