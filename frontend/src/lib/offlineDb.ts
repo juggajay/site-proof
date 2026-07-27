@@ -111,15 +111,13 @@ export {
 export {
   MAX_SYNC_ATTEMPTS,
   clearAllOfflineData,
-  getFailedSyncCount,
-  getLiveSyncCount,
-  getOldestPendingItemAge,
   getPendingSyncCount,
   getPendingSyncItems,
   markSyncItemTerminalError,
   markSyncItemError,
   removeSyncQueueItem,
   resetFailedSyncItems,
+  summariseSyncQueue,
 } from './offline/syncQueue';
 
 type LotEditSyncQueueItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
