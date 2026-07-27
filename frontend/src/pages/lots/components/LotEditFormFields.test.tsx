@@ -39,7 +39,18 @@ const ruleset: SufficiencyRuleset = {
   authority: 'VicRoads',
   document: 'Section 204',
   edition: 'v8.0',
-  rules: [],
+  // D14.3 §9.3: the card gates on a rule matching the lot's activity, so the
+  // fixture has to carry one — `activityType: 'Earthworks'` folds to
+  // `earthworks_general`.
+  rules: [
+    {
+      id: 'vicroads-204.v1/compaction-density',
+      label: 'Compaction density tests per lot',
+      testType: 'compaction',
+      clause: '204.13(a)',
+      activitySlugs: ['earthworks_general', 'earthworks_subgrade_prep'],
+    },
+  ],
 };
 
 const subcontractors: Subcontractor[] = [
@@ -155,6 +166,55 @@ describe('LotEditFormFields', () => {
     it('is simply absent when the project has no governing pack', () => {
       renderFields({ ruleset: null, rulesetLoadFailed: false });
       expect(screen.queryByText('Testing')).not.toBeInTheDocument();
+    });
+
+    // D14.3 §9.3 `[D14R-R10]` — the card gates on a rule matching the LOT'S
+    // ACTIVITY, not merely on a pack resolving. Before this, a drainage or kerb
+    // lot on an NSW project would be asked for a "Specified relative compaction"
+    // band off an earthworks table that can never score it.
+    describe('the activity gate', () => {
+      const q6: SufficiencyRuleset = {
+        ...ruleset,
+        id: 'tfnsw-q6.v1',
+        state: 'NSW',
+        specSet: 'TfNSW',
+        scaleKeys: ['<=90.0%', '>95.0-98.0%'],
+        defaultScale: null,
+        scaleLabel: 'Specified relative compaction',
+        rules: [
+          {
+            id: 'tfnsw-q6.v1/compaction-density',
+            label: 'Compaction samples per lot by band and area',
+            testType: 'compaction',
+            clause: 'Annexure Q6/L cl. L1, Table Q6/L.1',
+            activitySlugs: ['earthworks_general', 'earthworks_subgrade_prep'],
+          },
+        ],
+      };
+
+      it("shows the card, with the PACK's word for the scale, on a matching activity", () => {
+        renderFields({ ruleset: q6 });
+        expect(screen.getByText('Testing')).toBeInTheDocument();
+        expect(screen.getByLabelText('Specified relative compaction')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Testing Scale')).not.toBeInTheDocument();
+      });
+
+      it('hides the card on a lot whose activity no rule in the pack covers', () => {
+        renderFields({
+          ruleset: q6,
+          formData: { ...baseFormData, activityType: 'kerb_channel' },
+        });
+        expect(screen.queryByText('Testing')).not.toBeInTheDocument();
+      });
+
+      it('KEEPS the card when the activity does not fold to a canonical slug', () => {
+        // No activity to mismatch — hiding the control would hide the fix.
+        renderFields({
+          ruleset: q6,
+          formData: { ...baseFormData, activityType: 'Pavement' },
+        });
+        expect(screen.getByText('Testing')).toBeInTheDocument();
+      });
     });
 
     it('stays visible with an error and a retry when the pack lookup fails (F14)', () => {

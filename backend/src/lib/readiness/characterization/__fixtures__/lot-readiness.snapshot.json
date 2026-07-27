@@ -39,7 +39,16 @@
             "actionLabel": "Assign ITP"
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -76,7 +85,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 0,
         "actionBlockerCount": 2
       }
@@ -138,7 +147,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -189,7 +207,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -245,7 +263,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -296,7 +323,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -328,9 +355,18 @@
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -389,7 +425,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -450,7 +486,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -500,7 +545,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -569,7 +614,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -630,7 +684,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -699,7 +753,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -760,7 +823,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -829,7 +892,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -890,7 +962,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -930,9 +1002,18 @@
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -991,7 +1072,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -1048,7 +1129,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1098,7 +1188,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -1155,7 +1245,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1205,7 +1304,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -1237,9 +1336,18 @@
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -1337,7 +1445,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 2,
+        "warningCount": 3,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -1369,9 +1477,18 @@
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -1455,7 +1572,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 3,
         "actionBlockerCount": 1
       }
@@ -1487,9 +1604,18 @@
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -1573,7 +1699,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -1620,7 +1746,16 @@
             "count": 1
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1709,7 +1844,7 @@
       },
       "summary": {
         "blockerCount": 3,
-        "warningCount": 2,
+        "warningCount": 3,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -1751,7 +1886,16 @@
       "conformance": {
         "state": "already_conformed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "lot_already_conformed",
@@ -1801,7 +1945,7 @@
       },
       "summary": {
         "blockerCount": 0,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 0
       }
@@ -1843,7 +1987,16 @@
       "conformance": {
         "state": "already_conformed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "lot_already_conformed",
@@ -1903,7 +2056,7 @@
       },
       "summary": {
         "blockerCount": 0,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 3,
         "actionBlockerCount": 0
       }
@@ -1960,7 +2113,16 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -2011,7 +2173,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -2047,7 +2209,16 @@
       "conformance": {
         "state": "already_claimed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "lot_already_claimed",
@@ -2093,7 +2264,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 1
       }
@@ -2127,7 +2298,16 @@
       "conformance": {
         "state": "already_conformed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "test_sufficiency_unknown",
+            "severity": "warning",
+            "area": "test",
+            "title": "Test frequency cannot be checked",
+            "detail": "Select this lot’s specified relative compaction to check its test frequency. Record this lot’s quantity (or draw its geometry) to check test frequency.",
+            "blocksAction": false
+          }
+        ],
         "support": [
           {
             "code": "lot_already_conformed",
@@ -2187,7 +2367,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 1
       }

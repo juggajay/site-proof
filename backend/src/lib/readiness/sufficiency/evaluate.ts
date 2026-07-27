@@ -23,6 +23,7 @@ import {
   type Resolution,
 } from './testCategories.js';
 import type {
+  AreaBandedCounts,
   FrequencyRule,
   MaxLotSizeExceedance,
   QuantityUnit,
@@ -178,6 +179,28 @@ export function quantityFor(resolved: ResolvedSufficiency, unit: QuantityUnit): 
   return null;
 }
 
+/**
+ * D14 §4.3 — pick the lot-area band and compute its published count.
+ *
+ * `validateRule` guarantees the list is non-empty, strictly ascending, and has
+ * exactly one open band, last — so the first band whose bound the area does not
+ * exceed IS the published cell, and the authority's `> x, ≤ y` column reproduces
+ * exactly. The arithmetic inside the band is the shipped `max(floor, ceil(q/rate))`.
+ */
+function bandedCount(banded: AreaBandedCounts, scaleValue: string, area: number): number | null {
+  const bands = banded.byScale[scaleValue];
+  if (!bands || bands.length === 0) return null;
+  const band = bands.find(
+    (entry) => entry.upToInclusive === undefined || area <= entry.upToInclusive,
+  );
+  if (!band) return null;
+  return requiredTestCount(
+    band.minCount,
+    band.every === undefined ? undefined : { unit: banded.unit, every: band.every },
+    area,
+  );
+}
+
 function evaluateRule(
   rule: FrequencyRule,
   input: SufficiencyEvaluationInput,
@@ -217,6 +240,17 @@ function evaluateRule(
     causes.push('quantity_missing');
   }
 
+  // D14 §4.3 — the 2-D (scale × lot-area band) table. `countByAreaBand` is
+  // forbidden on a `reduced` limb (§4.3.1) and `ReducedFrequency` has no such
+  // field, so a rule evaluating at the reduced regime has no banded table.
+  // A banded rule REQUIRES its area: an unresolvable one is `quantity_missing`,
+  // never a floor (the floors are per-band and several are inert placeholders).
+  const banded = regime === 'reduced' ? undefined : rule.countByAreaBand;
+  const bandedQuantity = banded ? quantityFor(resolved, banded.unit) : null;
+  if (banded && bandedQuantity === null) {
+    causes.push('quantity_missing');
+  }
+
   // --- counts ------------------------------------------------------------
   // The rule's own testType goes through the SAME resolver, so a pack could in
   // principle declare an alias as its key and still work — AT-22 requires it to
@@ -247,11 +281,26 @@ function evaluateRule(
     smallArea < smallLot.maxArea.value &&
     smallAreaCount !== undefined;
 
-  const minCount = scaleValue === null ? null : (figures.minCountByScale[scaleValue] ?? null);
-  const requiredCount =
-    causes.length > 0 || minCount === null
+  // D14 §4.3.1a: `minCountByScale` is now OPTIONAL, so this reader is conditional.
+  // Indexing an absent limb would read `undefined` at runtime on every banded pack.
+  const minCount =
+    scaleValue === null || figures.minCountByScale === undefined
       ? null
-      : requiredTestCount(minCount, perQuantity, perQuantityValue);
+      : (figures.minCountByScale[scaleValue] ?? null);
+
+  // The `causes.length > 0` guard is load-bearing on BOTH branches `[D14R-B2]`:
+  // `scale_not_recognised` is API-reachable on rows written before the §9.2
+  // whitelist shipped, and indexing `byScale` with such a value then scanning the
+  // result would THROW inside `computeConformanceResult` — 500ing the lot
+  // readiness route and, at the 5,000-member ceiling, claim create.
+  const requiredCount =
+    causes.length > 0
+      ? null
+      : banded
+        ? bandedCount(banded, scaleValue as string, bandedQuantity as number)
+        : minCount === null
+          ? null
+          : requiredTestCount(minCount, perQuantity, perQuantityValue);
 
   const state: SufficiencyState =
     requiredCount === null

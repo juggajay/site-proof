@@ -84,14 +84,17 @@ describe('resolveSufficiency', () => {
     // `scale_not_recognised` instead of silently substituting the default.
     const unrecognised = await resolveSufficiency(lotInput({ testScale: 'Z' }), null, NOW);
     expect(unrecognised.scale).toEqual({ value: 'Z', source: 'lot' });
-    // No pack, no default: an NSW project resolves nothing at all since
-    // tfnsw-r44 was deregistered [C1C-9].
+    // D14.3: an NSW project now resolves `tfnsw-q6.v1`, and that pack declares
+    // NO `defaultScale` — Q6 publishes no "where unspecified, assume X"
+    // sentence. So an NSW lot with no band recorded resolves the pack and still
+    // reads no scale, which the evaluator reports as `scale_not_selected`
+    // rather than guessing the strictest row.
     const nsw = await resolveSufficiency(
       lotInput({ project: { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' } }),
       null,
       NOW,
     );
-    expect(nsw.ruleset).toBeNull();
+    expect(nsw.ruleset?.id).toBe('tfnsw-q6.v1');
     expect(nsw.scale).toEqual({ value: null, source: 'none' });
   });
 

@@ -13,8 +13,9 @@
 //     was corrected shows up on an ALREADY-CONFORMED lot.
 //
 // VIC / VicRoads, so the CONFIRMED `vicroads-204.v2` pack resolves and the
-// assertions have teeth. (`tfnsw-r44.v1` is DEREGISTERED `[C1C-9]`, so an NSW
-// fixture would resolve nothing and every assertion here would be vacuous.)
+// assertions have teeth. (An NSW fixture now resolves `tfnsw-q6.v1`, but that
+// pack declares no `defaultScale`, so it would read `unknown` until a band were
+// recorded and the shortfall assertions here would be vacuous.)
 //
 // DB-backed: `Project.testSufficiencyMode` is a real column and the snapshot is
 // a real row. Local disposable database only (`src/test/databaseSafety.ts`).

@@ -125,7 +125,16 @@ export function buildSufficiencySnapshotV1(
   return {
     ...aggregate,
     mode: evaluation.mode,
-    ...(evaluation.ruleset ? { ruleset: evaluation.ruleset } : {}),
+    // D14.3: PICKED, not spread. `SufficiencyEvaluation.ruleset` gained
+    // `scaleLabel` in D14.1 for the readiness prompts (§4.7), and spreading it
+    // wrote that DISPLAY COPY into an immutable decision row it is not declared
+    // on — invisible while every NSW project resolved no pack, and permanent the
+    // moment one did. A snapshot records WHICH PACK GOVERNED and at what gate
+    // strength; the word an authority uses for its scale is not decision
+    // evidence, and freezing it would make a copy edit a schema change.
+    ...(evaluation.ruleset
+      ? { ruleset: { id: evaluation.ruleset.id, status: evaluation.ruleset.status } }
+      : {}),
     blocks: evaluation.sufficiencyBlocks,
     unknownCauses: [...evaluation.unknownCauses],
     rules: evaluation.rules.map((rule) => ({

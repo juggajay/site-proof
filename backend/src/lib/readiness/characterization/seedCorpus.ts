@@ -386,12 +386,14 @@ async function seedLot(
       // write path does (`activitySlugForWrite`), so the corpus pins the
       // CLASSIFIED-lot branch rather than a lot that looks unclassified.
       //
-      // F1.1 correction: the note here used to say the main corpus project
-      // (NSW/TfNSW) resolves `tfnsw-r44.v1` as a draft ruleset. It does not —
-      // that pack was DEREGISTERED (`rulesets/index.ts:34` lists only
-      // `VICROADS_204_V1`), so those lots resolve NO ruleset at all and read
-      // `unknown` / `no_ruleset_for_project`. Lots that must exercise a resolved
-      // pack live on the separate VIC/`vicroads` project instead (VIC_CORPUS).
+      // D14.3: the main corpus project (NSW/TfNSW) now resolves the CONFIRMED
+      // `tfnsw-q6.v1`, which replaced the deleted `tfnsw-r44.v1`. These lots
+      // therefore carry a matching earthworks rule and read `unknown` /
+      // `scale_not_selected` — Q6 declares no `defaultScale` and the corpus
+      // records no band — which surfaces as ONE advisory, non-blocking warning
+      // per lot in the committed snapshot. Lots exercising a SATISFIED or
+      // INSUFFICIENT verdict still live on the VIC/`vicroads` project
+      // (VIC_CORPUS), which has a default scale and real counts.
       activitySlug: activitySlugForWrite('Earthworks'),
       budgetAmount: spec.budgetAmount ?? null,
       conformedAt: spec.conformedAt ?? null,

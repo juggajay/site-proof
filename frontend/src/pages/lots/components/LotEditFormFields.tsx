@@ -3,8 +3,9 @@
 // offline-save, and lock derivation stay in LotEditPage; values and the
 // change handler come down as props.
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
+import { foldActivityValue } from '@/lib/activityTaxonomy';
 import type { SufficiencyRuleset } from '@/lib/testSufficiency';
-import { QUANTITY_UNIT_OPTIONS } from '@/lib/testSufficiency';
+import { QUANTITY_UNIT_OPTIONS, rulesetAppliesToActivity } from '@/lib/testSufficiency';
 import type { LotEditFormData, Subcontractor } from '../lotEditData';
 
 const OFFSET_OPTIONS = ['left', 'right', 'full', 'custom'];
@@ -44,6 +45,16 @@ export function LotEditFormFields({
   rulesetLoadFailed = false,
   onRetryRulesetLoad,
 }: LotEditFormFieldsProps) {
+  // D14.3 §9.3 `[D14R-R10]`: the card renders only when a rule in the governing
+  // pack actually applies to this lot's activity. A 'family' or 'none' fold
+  // yields no slug and keeps the card — see `rulesetAppliesToActivity`.
+  const activityFold = foldActivityValue(formData.activityType);
+  const showTestingCard =
+    !!ruleset &&
+    rulesetAppliesToActivity(
+      ruleset,
+      activityFold.confidence === 'exact' ? activityFold.slug : null,
+    );
   return (
     <>
       {/* Basic Info */}
@@ -252,7 +263,7 @@ export function LotEditFormFields({
         </div>
       )}
 
-      {ruleset && (
+      {showTestingCard && ruleset && (
         <div className="rounded-lg border p-6 space-y-4">
           <h2 className="text-lg font-semibold">Testing</h2>
           <p className="text-sm text-muted-foreground">

@@ -753,9 +753,42 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
     expect(vicroads.status).toBe('confirmed');
     // D14.2 — the material control's option list rides the same payload.
     expect(vicroads.materialTypes).toEqual(['Type A', 'Type B', 'Type C']);
-    // A rule carries a label and a clause; there is no free-prose field on the
-    // type at all, so no specification text can reach this payload (§8.4).
-    expect(Object.keys(vicroads.rules[0]).sort()).toEqual(['clause', 'id', 'label', 'testType']);
+    // A rule carries a label, a clause and its activity slugs; there is no
+    // free-prose field on the type at all, so no specification text can reach
+    // this payload (§8.4). `activitySlugs` is shipped product data — D14.3 §9.3
+    // gates the lot-edit Testing card on it.
+    expect(Object.keys(vicroads.rules[0]).sort()).toEqual([
+      'activitySlugs',
+      'clause',
+      'id',
+      'label',
+      'testType',
+    ]);
+    expect(vicroads.rules[0].activitySlugs).toEqual([
+      'earthworks_general',
+      'earthworks_subgrade_prep',
+    ]);
+  });
+
+  it('D14.3 serves the NSW pack with its own band vocabulary and label', async () => {
+    const res = await request(app)
+      .get('/api/test-sufficiency/rulesets')
+      .set('Authorization', `Bearer ${adminToken}`);
+    const q6 = res.body.rulesets.find((ruleset: { id: string }) => ruleset.id === 'tfnsw-q6.v1');
+    expect(q6.scaleKeys).toEqual([
+      '<=90.0%',
+      '>90.0-95.0%',
+      '>95.0-98.0%',
+      '>98.0-100.0%',
+      '>100.0%',
+    ]);
+    // The form must stop saying "Testing Scale" on an NSW project (AT-55).
+    expect(q6.scaleLabel).toBe('Specified relative compaction');
+    // Q6 publishes no default and no material classification.
+    expect(q6.defaultScale).toBeNull();
+    expect(q6.materialTypes).toBeNull();
+    // J2 — the Major Works scope reaches the user through the citation.
+    expect(q6.document).toContain('Major Works');
   });
 
   // D14.2 §6.5 — the regression minting `.v2` would otherwise have shipped.
