@@ -240,6 +240,36 @@ jobs:
           # platform (Vercel). The build artifact here is not deployed.
           VITE_SENTRY_DSN: https://ci-placeholder@o0.ingest.sentry.io/0
 
+  readiness-guardrails-backend-only:
+    # The productionReadiness suite scans backend/src too (e.g. the Math.random
+    # ban that #1595 hotfixed), but it lives in the Frontend job, which
+    # backend-only PRs skip — so a backend diff could trip a guardrail that only
+    # fires after merge, on the master push run. This job fills exactly that
+    # gap: it runs the same suite when backend changed and frontend did not.
+    # Frontend-change PRs still get it via the Frontend job — never both.
+    name: Production readiness guardrails (backend-only diff)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' && needs.changes.outputs.frontend != 'true'
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production readiness guardrails
+        run: npm run test:readiness
+
   frontend-pr-e2e-smoke:
     name: Frontend PR E2E smoke
     runs-on: ubuntu-latest
