@@ -1,7 +1,8 @@
 /**
- * syncChipState — pure state computation for SyncChip.
- * Exported separately from SyncChip.tsx so tests can import the logic
- * without violating react-refresh/only-export-components.
+ * syncChipState — pure state computation and labelling for SyncChip.
+ * Exported separately from SyncChip.tsx so tests (and SyncPanel, which must
+ * show the same words as the chip that opened it) can import the logic without
+ * violating react-refresh/only-export-components.
  */
 
 export type SyncState = 'saved' | 'waiting' | 'syncing' | 'failed' | 'offline';
@@ -19,4 +20,25 @@ export function deriveSyncState(
   if (!isOnline && pendingSyncCount === 0) return 'offline';
   if (!isOnline || pendingSyncCount > 0) return 'waiting';
   return 'saved';
+}
+
+// One label source for the chip and the panel it opens, so the two can never
+// disagree about what state the queue is in.
+export function syncChipLabel(
+  state: SyncState,
+  pendingSyncCount: number,
+  failedSyncCount: number,
+): string {
+  switch (state) {
+    case 'saved':
+      return 'All saved';
+    case 'syncing':
+      return 'Syncing…';
+    case 'failed':
+      return `${failedSyncCount} failed`;
+    case 'offline':
+      return 'Offline';
+    case 'waiting':
+      return `${pendingSyncCount} waiting`;
+  }
 }
