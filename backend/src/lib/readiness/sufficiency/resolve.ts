@@ -172,19 +172,16 @@ function precedingEntries(
   return rowsDesc.slice(index + 1, index + 1 + lookback);
 }
 
-export async function resolveSufficiencyBatch(
+/**
+ * (lot, rule) pairs bucketed by stream key. Pairs that can issue no query at all
+ * — no ruleset, an unclassified lot, a rule with no regime concept, a lot that
+ * is not a member of the rule's layer stream — are dropped here, which is what
+ * makes "ZERO reads when nothing is regime-bearing" true by construction.
+ */
+function groupBySufficiencyStream(
   lots: readonly SufficiencyLotInput[],
-  fetchStream: RegimeStreamFetcher | null = null,
-  now: Date = new Date(),
-): Promise<Map<string, ResolvedSufficiency>> {
-  const resolved = new Map<string, ResolvedSufficiency>();
-  const regimes = new Map<string, Map<string, ResolvedRegime>>();
-  for (const lot of lots) {
-    resolved.set(lot.id, resolveSufficiencySync(lot, now));
-    regimes.set(lot.id, new Map<string, ResolvedRegime>());
-  }
-  if (!fetchStream) return resolved;
-
+  resolved: ReadonlyMap<string, ResolvedSufficiency>,
+): Map<string, StreamGroup> {
   const streams = new Map<string, StreamGroup>();
   for (const lot of lots) {
     const base = resolved.get(lot.id)!;
@@ -207,8 +204,23 @@ export async function resolveSufficiencyBatch(
       streams.set(serialized, group);
     }
   }
+  return streams;
+}
 
-  for (const group of streams.values()) {
+export async function resolveSufficiencyBatch(
+  lots: readonly SufficiencyLotInput[],
+  fetchStream: RegimeStreamFetcher | null = null,
+  now: Date = new Date(),
+): Promise<Map<string, ResolvedSufficiency>> {
+  const resolved = new Map<string, ResolvedSufficiency>();
+  const regimes = new Map<string, Map<string, ResolvedRegime>>();
+  for (const lot of lots) {
+    resolved.set(lot.id, resolveSufficiencySync(lot, now));
+    regimes.set(lot.id, new Map<string, ResolvedRegime>());
+  }
+  if (!fetchStream) return resolved;
+
+  for (const group of groupBySufficiencyStream(lots, resolved).values()) {
     // Cursor-less by construction: one read serves every subject in the stream,
     // and each subject's cursor is applied in memory by `precedingEntries`.
     const rowsDesc = await fetchStream(
