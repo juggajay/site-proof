@@ -595,7 +595,10 @@ async function benchClaimDecisions(project: SeededProject): Promise<void> {
   );
 
   console.log('');
-  verdict(`Target 1: claim decision at ${LOT_COUNT} members`, total.p95, 2000);
+  // Budget revised 2s -> 3s at the 5,000-member ceiling (Jay, 2026-07-27) after
+  // #1578/#1580 measured the remaining time as a floor: ~60k completion rows
+  // genuinely read + 5,001 snapshot inserts under one serializable tx.
+  verdict(`Target 1: claim decision at ${LOT_COUNT} members`, total.p95, 3000);
   await resetClaimState(project.projectId);
 }
 
