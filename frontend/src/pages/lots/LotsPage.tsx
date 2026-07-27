@@ -37,10 +37,7 @@ import {
   BulkAssignModal,
   BulkTestAttributesModal,
 } from './components/BulkActionModals';
-import { resolveProjectRuleset, useSufficiencyRulesets } from '@/lib/testSufficiency';
-import { queryKeys } from '@/lib/queryKeys';
-import { apiFetch } from '@/lib/api';
-import { useQuery } from '@tanstack/react-query';
+import { useGoverningRuleset } from '@/hooks/useGoverningRuleset';
 
 // Extracted hooks
 import { useLotsData } from './hooks/useLotsData';
@@ -62,31 +59,8 @@ export function LotsPage() {
   const { isSubcontractor } = useSubcontractorAccess();
   const isMobile = useIsMobile();
   // Wave C1 (§9.4): the bulk affordance only appears where a shipped frequency
-  // ruleset governs the project. `queryKeys.project` caches the UNWRAPPED
-  // project — every consumer must resolve the same shape or they poison each
-  // other's cache.
-  const projectAuthorityQuery = useQuery({
-    queryKey: queryKeys.project(projectId ?? 'none'),
-    queryFn: () =>
-      apiFetch<{ project?: { state?: string; specificationSet?: string } }>(
-        `/api/projects/${projectId}`,
-      ).then((response) => response.project ?? null),
-    enabled: !!projectId,
-  });
-  const projectAuthority = projectAuthorityQuery.data;
-  const rulesetsQuery = useSufficiencyRulesets();
-  const governingRuleset = resolveProjectRuleset(
-    rulesetsQuery.data?.rulesets,
-    projectAuthority?.state,
-    projectAuthority?.specificationSet,
-  );
-  // C1 (F14): a failed fetch is not "this project has no pack". Silently
-  // dropping the affordance reads as an authoritative "not supported here".
-  const rulesetLoadFailed = rulesetsQuery.isError || projectAuthorityQuery.isError;
-  const retryRulesetLoad = () => {
-    void rulesetsQuery.refetch();
-    void projectAuthorityQuery.refetch();
-  };
+  // ruleset governs the project.
+  const { governingRuleset, rulesetLoadFailed, retryRulesetLoad } = useGoverningRuleset(projectId);
 
   // URL-based filter state
   const statusFilterParam = searchParams.get('status') || '';
