@@ -134,6 +134,93 @@ export function layerBucketFor(rule: FrequencyRule, layer: string | null): strin
   return matched ? normalizeKey(matched) : null;
 }
 
+/**
+ * D14 §4.3.1 — the `countByAreaBand` limb: exactly-one-of, the three mutual
+ * exclusions, and the band-list shape the evaluator's first-match scan depends on.
+ */
+function validateAreaBands(
+  ruleset: Ruleset,
+  rule: FrequencyRule,
+  where: string,
+  problems: string[],
+): void {
+  const banded = rule.countByAreaBand;
+  if ((banded === undefined) === (rule.minCountByScale === undefined)) {
+    problems.push(
+      `${where}: declare exactly one of 'minCountByScale' or 'countByAreaBand' — ${banded ? 'both are' : 'neither is'} declared`,
+    );
+  }
+  if (!banded) return;
+
+  // A banded rule carries its rate INSIDE the band. The outer `perQuantity`
+  // block runs independently of the banded branch and would push
+  // `quantity_missing` beside it `[D14R-R2]`.
+  if (rule.perQuantity) {
+    problems.push(
+      `${where}: countByAreaBand carries its own per-area rate — a 'perQuantity' limb beside it double-counts`,
+    );
+  }
+  // §4.4's substitution replaces `minCountByScale[scale]`, which a banded rule
+  // does not have. No pack needs both; when one does, design the interaction.
+  if (rule.smallLot) {
+    problems.push(`${where}: countByAreaBand and smallLot cannot be combined (§4.3.1)`);
+  }
+  // `ReducedFrequency` carries no banded table, so a rule evaluating at the
+  // reduced regime would silently fall back to figures it does not have.
+  if (rule.reduced) {
+    problems.push(
+      `${where}: countByAreaBand is forbidden beside a 'reduced' limb — a banded reduced table is not modelled (§4.3.1)`,
+    );
+  }
+  if (!(QUANTITY_UNITS as readonly string[]).includes(banded.unit)) {
+    problems.push(`${where}: countByAreaBand.unit '${banded.unit}' is not a QuantityUnit`);
+  }
+
+  for (const scaleKey of ruleset.scaleKeys) {
+    if (!banded.byScale[scaleKey]) {
+      problems.push(`${where}: countByAreaBand declares no bands for scale '${scaleKey}'`);
+    }
+  }
+  for (const [scaleKey, bands] of Object.entries(banded.byScale)) {
+    if (!ruleset.scaleKeys.includes(scaleKey)) {
+      problems.push(
+        `${where}: countByAreaBand declares scale '${scaleKey}' outside ruleset.scaleKeys`,
+      );
+      continue;
+    }
+    if (bands.length === 0) {
+      problems.push(`${where}: countByAreaBand['${scaleKey}'] is empty`);
+      continue;
+    }
+    // Ordering is what makes the evaluator's first-match scan reproduce the
+    // published `> x, <= y` columns; an unsorted or multi-open list silently
+    // returns the wrong cell rather than failing.
+    let previous = -Infinity;
+    bands.forEach((band, index) => {
+      const at = `${where}: countByAreaBand['${scaleKey}'][${index}]`;
+      if (band.upToInclusive === undefined) {
+        if (index !== bands.length - 1) {
+          problems.push(`${at} omits upToInclusive but is not the last band`);
+        }
+      } else {
+        if (index === bands.length - 1) {
+          problems.push(`${at} is the last band and must be open — omit upToInclusive`);
+        }
+        if (!(band.upToInclusive > previous)) {
+          problems.push(`${at}: upToInclusive ${band.upToInclusive} is not strictly ascending`);
+        }
+        previous = band.upToInclusive;
+      }
+      if (!Number.isInteger(band.minCount) || band.minCount < 1) {
+        problems.push(`${at}: minCount must be an integer >= 1, got ${band.minCount}`);
+      }
+      if (band.every !== undefined && !(band.every > 0)) {
+        problems.push(`${at}: every must be > 0, got ${band.every}`);
+      }
+    });
+  }
+}
+
 function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems: string[]): void {
   const where = `${ruleset.id} rule ${rule.id}`;
   if (!rule.id.startsWith(`${ruleset.id}/`)) {
@@ -172,7 +259,12 @@ function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems
       }
     }
   };
-  checkCounts(rule.minCountByScale, 'minCountByScale');
+  // D14 §4.3.1a — CONDITIONAL. `checkCounts` demands a count for every
+  // `scaleKeys` entry, so an unconditional call rejects every banded pack with
+  // five "declares no count for scale …" problems and it never registers. The
+  // exactly-one-of check below is what stops "optional" meaning "absent".
+  if (rule.minCountByScale) checkCounts(rule.minCountByScale, 'minCountByScale');
+  validateAreaBands(ruleset, rule, where, problems);
 
   const checkPerQuantity = (
     perQuantity: { unit: string; every: number } | undefined,

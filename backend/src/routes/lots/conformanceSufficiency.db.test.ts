@@ -13,11 +13,11 @@
 //      un-claim a previously claimable lot.
 //
 // A SEPARATE file from `lotConformanceDecision.db.test.ts`, which spec §11 C1.1
-// names: that suite's fixture project is NSW/TfNSW, and `tfnsw-r44.v1` is DRAFT,
-// so it can never block at any mode and an "unchanged decision" assertion there
-// would be vacuous. This fixture is VIC/VicRoads, where the CONFIRMED pack
-// resolves and the assertion has teeth. (The draft-can-never-block guarantee is
-// pinned end-to-end in that other suite.)
+// names: that suite's fixture project is NSW/TfNSW, and its lots carry no
+// canonical activity, so no rule matches and an "unchanged decision" assertion
+// there would be vacuous. This fixture's MAIN project is VIC/VicRoads, where the
+// confirmed pack resolves at its default scale and the assertion has teeth.
+// D14.3 adds a second, NSW project here for AT-41a only.
 //
 // DB-backed: `Project.testSufficiencyMode` is a real column and the gate reads
 // through Prisma. Local disposable database only (`src/test/databaseSafety.ts`).
@@ -26,6 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   checkConformancePrerequisites,
+  checkConformancePrerequisitesBatch,
   getClaimBlockingReasonsForConformedLot,
 } from '../../lib/conformancePrerequisites.js';
 import { prisma } from '../../lib/prisma.js';
@@ -37,6 +38,8 @@ let companyId: string;
 let userId: string;
 let projectId: string;
 let shortLotId: string;
+let nswProjectId: string;
+let nswBadScaleLotId: string;
 
 async function setMode(mode: string): Promise<void> {
   await prisma.project.update({ where: { id: projectId }, data: { testSufficiencyMode: mode } });
@@ -117,14 +120,45 @@ beforeAll(async () => {
       enteredById: userId,
     },
   });
+
+  // D14.3 AT-41a — an NSW project resolving `tfnsw-q6.v1`, carrying a lot whose
+  // `testScale` is the VIC value 'A'. That is not a Q6 band, and it is exactly
+  // what any row written before the §9.2 whitelist shipped can hold; a validator
+  // cannot clean those rows retroactively.
+  const nswProject = await prisma.project.create({
+    data: {
+      name: `Project ${tag} NSW`,
+      projectNumber: `${tag}-P2`,
+      companyId,
+      state: 'NSW',
+      specificationSet: 'TfNSW',
+      testSufficiencyMode: 'block',
+    },
+  });
+  nswProjectId = nswProject.id;
+  const nswLot = await prisma.lot.create({
+    data: {
+      projectId: nswProjectId,
+      lotNumber: `${tag}-NSW-BADSCALE`,
+      lotType: 'chainage',
+      activityType: 'Earthworks',
+      activitySlug: 'earthworks_general',
+      status: 'in_progress',
+      testScale: 'A',
+      quantityValue: 3000,
+      quantityUnit: 'm2',
+    },
+  });
+  nswBadScaleLotId = nswLot.id;
 }, 60_000);
 
 afterAll(async () => {
   await prisma.testResult.deleteMany({ where: { projectId } });
   await prisma.iTPInstance.deleteMany({ where: { lot: { projectId } } });
   await prisma.lot.deleteMany({ where: { projectId } });
+  await prisma.lot.deleteMany({ where: { projectId: nswProjectId } });
   await prisma.iTPTemplate.deleteMany({ where: { projectId } });
-  await prisma.project.deleteMany({ where: { id: projectId } });
+  await prisma.project.deleteMany({ where: { id: { in: [projectId, nswProjectId] } } });
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.company.deleteMany({ where: { id: companyId } });
 });
@@ -173,6 +207,36 @@ describe('AT-14 the conform decision is UNCHANGED at mode off and warn', () => {
     const result = await checkConformancePrerequisites(shortLotId);
     expect(result.prerequisites!.sufficiencyBlocks).toBe(false);
     expect(result.canConform).toBe(true);
+  });
+});
+
+describe('AT-41a an unrecognised band on an NSW lot cannot 500 the claim path', () => {
+  // The banded branch indexes `countByAreaBand.byScale[scaleValue]`. With the
+  // VIC value 'A' on a Q6 lot that lookup is `undefined`, and scanning it would
+  // THROW inside `computeConformanceResult` — which is DB-free and shared by the
+  // single-conform path AND the batched claim path, so ONE such row would 500
+  // claim create at the 5,000-member ceiling. Asserted at the BATCH level too,
+  // because that is where the production 500 would land.
+  it('degrades honestly on the single-conform path, at mode=block', async () => {
+    const result = await checkConformancePrerequisites(nswBadScaleLotId);
+    expect(result.sufficiency?.ruleset?.id).toBe('tfnsw-q6.v1');
+    const rule = result.sufficiency!.rules[0];
+    expect(rule.state).toBe('unknown');
+    expect(rule.requiredCount).toBeNull();
+    expect(rule.unknownCauses).toEqual(['scale_not_recognised']);
+    // `unknown` never blocks — the honest consequence of unrecognised data.
+    expect(result.prerequisites!.sufficiencyBlocks).toBe(false);
+  });
+
+  it('and inside a BATCH containing that lot beside a VIC lot — no throw, both resolved', async () => {
+    await setMode('block');
+    const batch = await checkConformancePrerequisitesBatch([nswBadScaleLotId, shortLotId]);
+    expect(batch.size).toBe(2);
+    expect(batch.get(nswBadScaleLotId)!.sufficiency!.rules[0].state).toBe('unknown');
+    // The VIC member of the same batch still gets its real, blocking shortfall,
+    // so the NSW lot degrading did not poison the shared pass.
+    expect(batch.get(shortLotId)!.sufficiency!.rules[0].requiredCount).toBe(6);
+    expect(batch.get(shortLotId)!.prerequisites!.sufficiencyBlocks).toBe(true);
   });
 });
 

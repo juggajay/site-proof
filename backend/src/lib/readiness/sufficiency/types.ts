@@ -143,6 +143,52 @@ export interface SmallLotException {
   provenance: RulesetProvenance;
 }
 
+/**
+ * D14 §4.3 — one lot-area band's count figures. Bands are ordered and
+ * exhaustive: `validateRule` requires strictly ascending `upToInclusive` with
+ * exactly one band omitting it, and that band last.
+ */
+export interface AreaBand {
+  /**
+   * Band upper bound, INCLUSIVE — so the authority's `> 1,000, ≤ 5,000 m²` is
+   * `upToInclusive: 5000` and the first band whose bound the area does not
+   * exceed wins. Omit on exactly one band: the open top band, which must be last.
+   */
+  upToInclusive?: number;
+  /**
+   * The band's published floor. Use 1 where the authority publishes no floor —
+   * it is inert under the band's own rate, and the pack file must say so inline
+   * so nobody reads it as an authority figure.
+   */
+  minCount: number;
+  /** One test per `every` units, combined with `minCount` by `max()` — `requiredTestCount` unchanged. */
+  every?: number;
+}
+
+/**
+ * D14 §4.3 — a TWO-DIMENSIONAL count table, keyed by scale and then by lot area.
+ */
+export interface AreaBandedCounts {
+  /**
+   * The unit the bands are expressed in. The quantity is resolved PER THIS UNIT
+   * (§4.6): the lot's own quantity when it is already in this unit, else the
+   * summed geometry area when this unit is 'm2'. Nothing else resolves, and
+   * nothing is ever converted.
+   */
+  unit: QuantityUnit;
+  /**
+   * Keyed by scale key. Must declare a non-empty band list for EVERY
+   * `Ruleset.scaleKeys` entry and no key outside it, mirroring `checkCounts`.
+   *
+   * D14.5 adds a sibling `bands?` limb — ONE list used whatever the lot's scale,
+   * for the case where the governing specification FIXES the row (TfNSW pavement
+   * compaction is pinned at 100 %/102 %, so it is always on Table Q6/L.1's
+   * `> 100.0` row). It is deliberately NOT here: it needs the §4.3.2 scale-cause
+   * suppression to be worth anything, and that ships with the pavement rules.
+   */
+  byScale: Readonly<Record<string, readonly AreaBand[]>>;
+}
+
 export interface FrequencyRule {
   /** Stable, referenced by snapshots forever: 'vicroads-204.v1/compaction-density'. */
   id: string;
@@ -156,8 +202,29 @@ export interface FrequencyRule {
     /** [C1R-3] Material/zone discrimination, e.g. 'under paved areas'. */
     areaZoneAliases?: readonly string[];
   };
-  /** Statistical-validity floor, per scale. Scale key set is ruleset-defined. */
-  minCountByScale: Readonly<Record<string, number>>;
+  /**
+   * Statistical-validity floor, per scale. Scale key set is ruleset-defined.
+   *
+   * D14 §4.3: now OPTIONAL — a rule supplies its counts through this OR
+   * {@link FrequencyRule.countByAreaBand}. `validateRule` rejects a rule
+   * declaring both or neither, so "optional" never means "absent".
+   */
+  minCountByScale?: Readonly<Record<string, number>>;
+  /**
+   * D14 §4.3 — a TWO-DIMENSIONAL count table, (scale key) × (lot area band).
+   *
+   * TfNSW Q6 Table Q6/L.1 is exactly this shape and is NOT expressible as
+   * `minCountByScale` + `perQuantity`, contrary to C1 spec §8.2 `[C1C-13]`: that
+   * pairing reproduces only the open top column. Worked counter-example — a
+   * 400 m² lot at `> 95.0, ≤ 98.0` is published as 3, and
+   * `max(6, ceil(400/2000))` yields 6, over-strict by 100 % on the commonest
+   * small-lot case.
+   *
+   * MUTUALLY EXCLUSIVE with `minCountByScale`, `perQuantity` and `smallLot`
+   * (§4.3.1). When present the resolved quantity is REQUIRED — an unresolvable
+   * one yields `quantity_missing`, never a floor.
+   */
+  countByAreaBand?: AreaBandedCounts;
   /**
    * Coverage limb: one test per `every` units. OPTIONAL and, for everything C1
    * ships, ABSENT — no cited authority in the appendix supplies a per-area

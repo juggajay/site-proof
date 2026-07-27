@@ -14,6 +14,28 @@ export interface SufficiencyRulesetRule {
   label: string;
   testType: string;
   clause: string;
+  /** D14.3 §9.3: the Level-2 activity slugs this rule applies to. */
+  activitySlugs: string[];
+}
+
+/**
+ * D14.3 §9.3 `[D14R-R10]` — does any rule in this pack apply to the lot's
+ * activity?
+ *
+ * The Testing card used to render whenever a ruleset resolved at all, which is
+ * fine for VicRoads' Compaction Scale A/B/C and wrong for TfNSW Q6: a drainage
+ * or kerb lot on an NSW project would be asked for a "Specified relative
+ * compaction" band off an earthworks table that will never score it.
+ *
+ * A lot whose activity does not fold to a canonical Level-2 slug KEEPS the card:
+ * it has no activity to mismatch, and hiding the control would hide the fix.
+ */
+export function rulesetAppliesToActivity(
+  ruleset: SufficiencyRuleset,
+  activitySlug: string | null,
+): boolean {
+  if (!activitySlug) return true;
+  return ruleset.rules.some((rule) => rule.activitySlugs.includes(activitySlug));
 }
 
 export interface SufficiencyRuleset {

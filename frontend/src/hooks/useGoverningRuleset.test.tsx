@@ -10,14 +10,14 @@ const apiFetchMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api', () => ({ apiFetch: apiFetchMock }));
 
 const RULESET = {
-  id: 'tfnsw-r44',
+  id: 'tfnsw-q6.v1',
   state: 'NSW',
   specSet: 'tfnsw',
   scaleKeys: ['lot'],
   defaultScale: 'lot',
   status: 'confirmed' as const,
   authority: 'TfNSW',
-  document: 'R44',
+  document: 'Q6',
   edition: '2024',
   rules: [],
 };

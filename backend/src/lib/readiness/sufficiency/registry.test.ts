@@ -14,8 +14,7 @@ import {
   validateRuleset,
 } from './registry.js';
 import { normalizeSpecSet } from '../../itpMatcher.js';
-import { TFNSW_R44_V1 } from './rulesets/tfnsw-r44.v1.js';
-import type { FrequencyRule, Ruleset, RulesetProvenance } from './types.js';
+import type { AreaBand, FrequencyRule, Ruleset, RulesetProvenance } from './types.js';
 
 const CONFIRMABLE_PROVENANCE: RulesetProvenance = {
   authority: 'SyntheticAuthority',
@@ -67,18 +66,41 @@ describe('the shipped packs are registrable and honestly graded', () => {
     }
   });
 
-  it('ships ONE authority — and no TMR / DIT SA / MRWA numbers (§8.2, [C1C-9])', () => {
-    // Two ids, one authority, one LIVE pack: D14.2 §6.5 minted `.v2` rather than
-    // editing `.v1` in place, because C1.2 (#1594) writes `ruleId` into immutable
-    // decision evidence. The windows abut, so this is not the shadowing the spec
-    // warns about — `resolveRuleset` returns exactly one pack at any instant.
+  it('AT-43 ships TWO authorities — and no TMR / DIT SA / MRWA numbers (§8.2)', () => {
+    // Three ids, two authorities, one LIVE pack each: D14.2 §6.5 minted `.v2`
+    // rather than editing `.v1` in place, because C1.2 (#1594) writes `ruleId`
+    // into immutable decision evidence. The VIC windows abut, so this is not the
+    // shadowing the spec warns about — `resolveRuleset` returns exactly one pack
+    // at any instant, and there is exactly ONE live NSW pack for the same reason.
     expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual([
       'vicroads-204.v1',
       'vicroads-204.v2',
+      'tfnsw-q6.v1',
     ]);
     expect(resolveRuleset({ state: 'VIC', specSet: 'VicRoads', at: NOW })?.id).toBe(
       'vicroads-204.v2',
     );
+    // D14.3 §5.5 — the `tfnsw-r44.v1` FILE IS DELETED, superseding [C1C-9]'s
+    // deregistration. Its stated job was to be the starting point for this pack.
+    expect(SUFFICIENCY_RULESETS.some((set) => set.id.startsWith('tfnsw-r44'))).toBe(false);
+    // AT-43's teeth: no NSW input, at any band and any area, can yield the flat
+    // `minCount: 6` the deleted pack encoded. It was one CELL of Table Q6/L.1 —
+    // the > 5,000 m² floor at > 95.0-100.0 % — presented as unconditional.
+    const nsw = resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW });
+    expect(nsw?.id).toBe('tfnsw-q6.v1');
+    const banded = nsw?.rules[0]?.countByAreaBand;
+    expect(nsw?.rules.every((rule) => rule.minCountByScale === undefined)).toBe(true);
+    const floors = Object.values(banded?.byScale ?? {}).flatMap((bands: readonly AreaBand[]) =>
+      bands.map((band) => band.minCount),
+    );
+    // A flat 6 would have to appear as a floor on a band with no rate; the only
+    // 6s in the table are `1 per 2,000 m² (min 6)` on the two open top bands.
+    expect(
+      Object.values(banded?.byScale ?? {})
+        .flat()
+        .filter((band: AreaBand) => band.minCount === 6 && band.every === undefined),
+    ).toEqual([]);
+    expect(floors).not.toContain(0);
   });
 
   it('vicroads-204.v1 is FROZEN and closed — its content is decision evidence (§6.5)', () => {
@@ -184,25 +206,49 @@ describe('the shipped packs are registrable and honestly graded', () => {
     expect(compaction?.perQuantity).toBeUndefined();
   });
 
-  it('tfnsw-r44.v1 is DEREGISTERED, not deleted [C1C-9]', () => {
-    // `draft` means plausible-but-unconfirmed. It does NOT mean confirmed-wrong,
-    // and we hold grade-A primary-source evidence that this pack is the latter:
-    // R44 Ed 6 publishes no frequencies at all, and the n = 6 is one cell of Q6
-    // Table Q6/L.1 — wrong in BOTH directions. Evaluating it even tagged
-    // "unconfirmed" is the confident-wrong-number defect [C1C-5] [C1C-7] exist
-    // to prevent, so it is out of the registry until the Q6 re-author (D14).
-    expect(SUFFICIENCY_RULESETS).not.toContain(TFNSW_R44_V1);
-    expect(resolveRuleset({ state: 'NSW', specSet: 'TfNSW', at: NOW })).toBeNull();
-    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })).toBeNull();
+  it('AT-42 tfnsw-q6.v1 is CONFIRMED on grade-A primary-source provenance (§5.1, §5.4)', () => {
+    const q6 = SUFFICIENCY_RULESETS.find((set) => set.id === 'tfnsw-q6.v1');
+    expect(q6?.status).toBe('confirmed');
+    expect(q6?.state).toBe('nsw');
+    expect(q6?.specSet).toBe('tfnsw');
+    // Table Q6/L.1's row headings, as ASCII band labels spelling BOTH bounds —
+    // Q6's edges are exclusive-below/inclusive-above, which 'B' could not say.
+    expect(q6?.scaleKeys).toEqual([
+      '<=90.0%',
+      '>90.0-95.0%',
+      '>95.0-98.0%',
+      '>98.0-100.0%',
+      '>100.0%',
+    ]);
+    // Table Q6/L.1's column-1 heading. The pack owns the word, not the form.
+    expect(q6?.scaleLabel).toBe('Specified relative compaction');
+    // NO default: Q6 publishes no "where unspecified, assume X" sentence, so an
+    // NSW lot with no band reads `unknown` rather than a guessed strictest row.
+    expect(q6?.defaultScale).toBeUndefined();
+    // TfNSW has no Type A/B/C equivalent in evidence.
+    expect(q6?.materialTypes).toBeUndefined();
+    // J2: NSW major works IS the market, and the scope must reach the USER. It
+    // rides the CITATION (`document`), which `shortfallSentence` renders — a
+    // rule label would reach nobody `[D14X-3]`.
+    expect(q6?.provenance.document).toContain('Major Works');
+    expect(q6?.provenance.clause).toBe('Annexure Q6/L cl. L1, Table Q6/L.1');
+    expect(q6?.provenance.edition).toContain('Ed 2 / Rev 0, February 2024');
+    expect(q6?.provenance.pdfPage).toBe(42);
+    expect(q6?.provenance.evidenceGrade).toBe('A');
+    expect(q6?.provenance.checkedOn).toBe('2026-07-27');
+  });
 
-    // The FILE stays: it pins the vocabulary and is the starting point for the
-    // `tfnsw-q6.v1` re-author, so its shape is still asserted here.
-    expect(TFNSW_R44_V1.status).toBe('draft');
-    expect(TFNSW_R44_V1.provenance.evidenceGrade).toBe('C');
-    expect(TFNSW_R44_V1.provenance.clause).toContain('deferred to TfNSW Q');
-    expect(TFNSW_R44_V1.rules[0]?.minCountByScale).toEqual({ standard: 6 });
-    // Promoting it to `confirmed` at grade C is impossible — CI refuses it.
-    expect(validateRuleset({ ...TFNSW_R44_V1, status: 'confirmed' }, NOW)).toContainEqual(
+  it('AT-42 the currency gate has teeth on tfnsw-q6.v1 — expired and non-A both fail', () => {
+    const q6 = SUFFICIENCY_RULESETS.find((set) => set.id === 'tfnsw-q6.v1') as Ruleset;
+    // Synthetic variants only — the shipped pack itself validates clean above.
+    expect(validateRuleset(q6, new Date('2028-01-01T00:00:00.000Z'))).toContainEqual(
+      expect.stringContaining('expired'),
+    );
+    const downgraded: Ruleset = {
+      ...q6,
+      provenance: { ...q6.provenance, evidenceGrade: 'C' },
+    };
+    expect(validateRuleset(downgraded, NOW)).toContainEqual(
       expect.stringContaining("requires evidenceGrade 'A'"),
     );
   });
@@ -392,6 +438,146 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
     ).toContainEqual(expect.stringContaining('every must be > 0'));
   });
 
+  // D14.3 §4.3.1 — the `countByAreaBand` limb. `banded()` builds a VALID banded
+  // rule so each case below perturbs exactly one thing.
+  describe('AT-41 the countByAreaBand limb', () => {
+    const bandedRule = (overrides: Partial<FrequencyRule> = {}): FrequencyRule =>
+      rule({
+        minCountByScale: undefined,
+        countByAreaBand: {
+          unit: 'm2',
+          byScale: {
+            A: [
+              { upToInclusive: 500, minCount: 3 },
+              { minCount: 6, every: 2000 },
+            ],
+          },
+        },
+        ...overrides,
+      });
+
+    it('registers a banded pack cleanly — the direction that fails if the readers stay unconditional', () => {
+      // `checkCounts` demands a count for EVERY scaleKeys entry, so an
+      // unconditional call at `registry.ts` would reject this with "declares no
+      // count for scale 'A'" and `tfnsw-q6.v1` would never register (§4.3.1a).
+      expect(validateRuleset(ruleset({ rules: [bandedRule()] }), NOW)).toEqual([]);
+    });
+
+    it.each([
+      [
+        'BOTH limbs',
+        bandedRule({ minCountByScale: { A: 6 } }),
+        "declare exactly one of 'minCountByScale' or 'countByAreaBand'",
+      ],
+      [
+        'NEITHER limb',
+        rule({ minCountByScale: undefined }),
+        "declare exactly one of 'minCountByScale' or 'countByAreaBand'",
+      ],
+      [
+        'beside perQuantity',
+        bandedRule({ perQuantity: { unit: 'm2', every: 100 } }),
+        'double-counts',
+      ],
+      [
+        'beside smallLot',
+        bandedRule({
+          smallLot: {
+            maxArea: { unit: 'm2', value: 500 },
+            minCountByScale: { A: 3 },
+            acceptanceShiftPct: 2,
+            provenance: CONFIRMABLE_PROVENANCE,
+          },
+        }),
+        'countByAreaBand and smallLot cannot be combined',
+      ],
+      [
+        'beside a reduced limb',
+        bandedRule({
+          reduced: {
+            minCountByScale: { A: 3 },
+            consecutiveConformingLots: 3,
+            escalationShape: 'reset_on_any_failure',
+          },
+        }),
+        "forbidden beside a 'reduced' limb",
+      ],
+      [
+        'an invalid unit',
+        bandedRule({
+          countByAreaBand: {
+            unit: 'furlong' as never,
+            byScale: { A: [{ minCount: 1 }] },
+          },
+        }),
+        'is not a QuantityUnit',
+      ],
+      [
+        'a scaleKeys entry with no bands',
+        bandedRule({ countByAreaBand: { unit: 'm2', byScale: { B: [{ minCount: 1 }] } } }),
+        "declares no bands for scale 'A'",
+      ],
+      [
+        'a scale outside scaleKeys',
+        bandedRule({
+          countByAreaBand: { unit: 'm2', byScale: { A: [{ minCount: 1 }], Z: [{ minCount: 1 }] } },
+        }),
+        "declares scale 'Z' outside ruleset.scaleKeys",
+      ],
+      [
+        'an empty band list',
+        bandedRule({ countByAreaBand: { unit: 'm2', byScale: { A: [] } } }),
+        "countByAreaBand['A'] is empty",
+      ],
+      [
+        'non-ascending bounds',
+        bandedRule({
+          countByAreaBand: {
+            unit: 'm2',
+            byScale: {
+              A: [
+                { upToInclusive: 500, minCount: 1 },
+                { upToInclusive: 100, minCount: 2 },
+                { minCount: 3 },
+              ],
+            },
+          },
+        }),
+        'is not strictly ascending',
+      ],
+      [
+        'ZERO open bands — the top of the table would be unreachable',
+        bandedRule({
+          countByAreaBand: { unit: 'm2', byScale: { A: [{ upToInclusive: 500, minCount: 1 }] } },
+        }),
+        'must be open — omit upToInclusive',
+      ],
+      [
+        'TWO open bands — the second could never be reached',
+        bandedRule({
+          countByAreaBand: { unit: 'm2', byScale: { A: [{ minCount: 1 }, { minCount: 2 }] } },
+        }),
+        'omits upToInclusive but is not the last band',
+      ],
+      [
+        'a zero rate, which would divide to Infinity',
+        bandedRule({
+          countByAreaBand: { unit: 'm2', byScale: { A: [{ minCount: 1, every: 0 }] } },
+        }),
+        'every must be > 0',
+      ],
+      [
+        'a floor below 1',
+        bandedRule({ countByAreaBand: { unit: 'm2', byScale: { A: [{ minCount: 0 }] } } }),
+        'minCount must be an integer >= 1',
+      ],
+    ])('rejects %s', (_name, badRule, expected) => {
+      expect(validateRuleset(ruleset({ rules: [badRule] }), NOW)).toContainEqual(
+        expect.stringContaining(expected),
+      );
+    });
+  });
+
   // D14 §4.4 — the small-area limb. `minCountByScale` here is deliberately NOT
   // required to cover every `scaleKeys` entry (Scale C has no reduction to
   // grant), so the checks are the per-key ones plus the limb's OWN provenance,
@@ -487,12 +673,16 @@ describe('resolveRuleset (§7.1 rows 1-2)', () => {
     );
   });
 
-  it('still folds `rms` to tfnsw — the fold is intact, there is just no NSW pack', () => {
-    // The 9 live projects carrying the pre-2019 name must not resolve a
-    // DIFFERENT authority's pack once a Q6 pack lands (§8.2, [C1C-9]).
+  it('folds `rms` to tfnsw, so a pre-2019-named NSW project resolves the Q6 pack', () => {
+    // The 9 live projects carrying the pre-2019 name resolve the SAME authority
+    // as a `TfNSW` one — the whole point of the fold (§8.2).
     expect(normalizeSpecSet('rms')).toBe('tfnsw');
-    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })).toBeNull();
-    expect(resolveRuleset({ state: 'nsw', specSet: 'TfNSW', at: NOW })).toBeNull();
+    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })?.id).toBe('tfnsw-q6.v1');
+    expect(resolveRuleset({ state: 'nsw', specSet: 'TfNSW', at: NOW })?.id).toBe('tfnsw-q6.v1');
+    // The window opens at the edition actually read, not earlier.
+    expect(
+      resolveRuleset({ state: 'nsw', specSet: 'tfnsw', at: new Date('2023-01-01') }),
+    ).toBeNull();
   });
 
   it('returns null for national-baseline spec sets and unknown authorities — unknown, never insufficient', () => {

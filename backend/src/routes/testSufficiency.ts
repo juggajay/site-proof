@@ -47,6 +47,14 @@ testSufficiencyRouter.get(
           label: rule.label,
           testType: rule.testType,
           clause: rule.provenance.clause,
+          // D14.3 §9.3 `[D14R-R10]`: the lot-edit Testing card gates on a rule
+          // actually matching the lot's activity. Until `tfnsw-q6.v1` shipped,
+          // the card's only gate was "a ruleset resolves", which is tolerable
+          // for VIC's A/B/C and obviously wrong for Q6 — a drainage or kerb lot
+          // on an NSW project would offer five EARTHWORKS compaction bands under
+          // a label reading "Specified relative compaction". Shipped product
+          // data, no tenant content, on an already-cached payload.
+          activitySlugs: [...rule.appliesTo.activitySlugs],
         })),
       })),
     });

@@ -22,7 +22,7 @@ import {
   decodeHoldPointReleaseResult,
 } from '../../lib/readiness/requirements/holdPointRelease.v1.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
-import { NO_RULESET_SUFFICIENCY } from '../../test/sufficiencySnapshots.js';
+import { NSW_UNCLASSIFIED_SUFFICIENCY } from '../../test/sufficiencySnapshots.js';
 import { holdpointsRouter } from '../holdpoints.js';
 
 vi.mock('./webhookEvents.js', async (importOriginal) => ({
@@ -341,7 +341,7 @@ describe('HP batch release decision — feature flag (spec §9 rollout step 2)',
         reasonCodes: [],
         batchId: batch.id,
         batchSize: 2,
-        sufficiency: NO_RULESET_SUFFICIENCY,
+        sufficiency: NSW_UNCLASSIFIED_SUFFICIENCY,
       });
     }
   });
