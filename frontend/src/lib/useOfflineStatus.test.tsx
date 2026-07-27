@@ -56,9 +56,7 @@ vi.mock('./offlineDb', () => ({
   markLotSynced: vi.fn(),
   markLotSyncError: vi.fn(),
   getConflictedLotsCount: vi.fn(),
-  getLiveSyncCount: vi.fn(),
-  getFailedSyncCount: vi.fn(),
-  getOldestPendingItemAge: vi.fn(),
+  summariseSyncQueue: vi.fn(),
   resetFailedSyncItems: vi.fn(),
   offlineDb: {
     diaries: { get: vi.fn() },
@@ -121,9 +119,7 @@ import {
   markLotSynced,
   markLotSyncError,
   getConflictedLotsCount,
-  getLiveSyncCount,
-  getFailedSyncCount,
-  getOldestPendingItemAge,
+  summariseSyncQueue,
   offlineDb,
   type SyncQueueItem,
 } from './offlineDb';
@@ -136,6 +132,11 @@ import {
 import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './offline/diaryMessages';
 import { buildOfflineLotEditPayload } from './offline/syncPayloads';
 import { devWarn } from './logger';
+import {
+  LAST_SYNCED_AT_STORAGE_KEY,
+  emptySyncKindCounts,
+  type SyncQueueSummary,
+} from './offline/syncKinds';
 import { useOfflineStatus, type SyncCallbacks } from './useOfflineStatus';
 
 // --- Typed mock handles ----------------------------------------------------
@@ -161,9 +162,7 @@ const detectLotSyncConflictMock = detectLotSyncConflict as Mock;
 const markLotSyncedMock = markLotSynced as Mock;
 const markLotSyncErrorMock = markLotSyncError as Mock;
 const getConflictedLotsCountMock = getConflictedLotsCount as Mock;
-const getLiveSyncCountMock = getLiveSyncCount as Mock;
-const getFailedSyncCountMock = getFailedSyncCount as Mock;
-const getOldestPendingItemAgeMock = getOldestPendingItemAge as Mock;
+const summariseSyncQueueMock = summariseSyncQueue as Mock;
 const diariesGetMock = offlineDb.diaries.get as unknown as Mock;
 const docketsGetMock = offlineDb.dockets.get as unknown as Mock;
 const diaryDeliveriesGetMock = offlineDb.diaryDeliveries.get as unknown as Mock;
@@ -238,17 +237,29 @@ async function runSync(callbacks?: Partial<SyncCallbacks>) {
   return { onConflictDetected, onSyncComplete, result, unmount };
 }
 
+// The single queue-summary read the hook now makes: live/failed/age/by-kind in
+// one pass (replacing getLiveSyncCount + getFailedSyncCount +
+// getOldestPendingItemAge).
+function summary(overrides: Partial<SyncQueueSummary> = {}): SyncQueueSummary {
+  return {
+    live: 0,
+    failed: 0,
+    oldestPendingAgeMs: null,
+    byKind: emptySyncKindCounts(),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   // navigator.onLine is read once at mount; force it true so the worker runs.
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+  localStorage.clear();
 
   // Default: empty queue and zeroed counts. Individual tests override the queue.
   getPendingSyncItemsMock.mockResolvedValue([]);
-  getLiveSyncCountMock.mockResolvedValue(0);
-  getFailedSyncCountMock.mockResolvedValue(0);
+  summariseSyncQueueMock.mockResolvedValue(summary());
   getConflictedLotsCountMock.mockResolvedValue(0);
-  getOldestPendingItemAgeMock.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -1162,7 +1173,7 @@ describe('loop resilience and tail tally', () => {
       queueItem({ id: 91, type: 'lot_conflict', attempts: 0, data: {} }),
     ]);
     // After the pass, the queue reports 2 dead-lettered items.
-    getFailedSyncCountMock.mockResolvedValue(2);
+    summariseSyncQueueMock.mockResolvedValue(summary({ failed: 2 }));
 
     const { onSyncComplete } = await runSync();
 
@@ -1184,7 +1195,7 @@ describe('loop resilience and tail tally', () => {
     authFetchMock
       .mockResolvedValueOnce(okJson({ instance: { id: 'i' } }))
       .mockResolvedValueOnce(okJson({ ok: true }));
-    getFailedSyncCountMock.mockResolvedValue(3);
+    summariseSyncQueueMock.mockResolvedValue(summary({ failed: 3 }));
 
     const { onSyncComplete } = await runSync();
 
@@ -1221,5 +1232,128 @@ describe('exclusivity (invariant 5)', () => {
     expect(runExclusiveOfflineSync).toHaveBeenCalledWith(expect.any(Function));
     // The removal happened, proving the worker body ran inside the wrapper.
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(101);
+  });
+});
+
+// ===========================================================================
+// lastSyncedAt — written on a successful flush, read back on the 5 s poll.
+// The hook is per-instance state, so localStorage + the poll is the only
+// channel between the instance that flushes and the instances that display.
+// ===========================================================================
+describe('lastSyncedAt', () => {
+  // One item that actually reports 'synced' (lot_conflict removal does not).
+  function oneSyncableItem() {
+    getPendingSyncItemsMock.mockResolvedValue([
+      queueItem({
+        id: 201,
+        type: 'itp_completion',
+        attempts: 0,
+        data: { lotId: 'l', checklistItemId: 'c', status: 'completed' },
+      }),
+    ]);
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'i' } }))
+      .mockResolvedValueOnce(okJson({ ok: true }));
+  }
+
+  it('records the time after a pass that synced at least one item', async () => {
+    oneSyncableItem();
+
+    await runSync();
+
+    const stored = localStorage.getItem(LAST_SYNCED_AT_STORAGE_KEY);
+    expect(stored).not.toBeNull();
+    expect(Number.isNaN(Date.parse(stored as string))).toBe(false);
+  });
+
+  it('does not record a time for a pass that synced nothing', async () => {
+    getPendingSyncItemsMock.mockResolvedValue([]);
+
+    await runSync();
+
+    expect(localStorage.getItem(LAST_SYNCED_AT_STORAGE_KEY)).toBeNull();
+  });
+
+  // [SC-A4] — the guard is syncedCount alone. Fourteen of the fifteen call
+  // sites pass no callbacks at all; hanging the write off onSyncComplete would
+  // mean the timestamp was only ever recorded for the one that does.
+  it('records the time when no onSyncComplete callback was supplied', async () => {
+    oneSyncableItem();
+
+    const { result } = renderHook(() => useOfflineStatus({ enableSyncWorker: true }));
+    await act(async () => {
+      await result.current.syncPendingChanges();
+    });
+
+    expect(localStorage.getItem(LAST_SYNCED_AT_STORAGE_KEY)).not.toBeNull();
+  });
+
+  // [SC-B2] — the cross-instance case. A value written by the app-root
+  // instance (the only one that flushes) must reach a read-only instance
+  // within one poll, or the panel reads "not synced yet" forever.
+  it('picks up a value written by another hook instance within one poll', async () => {
+    const { result } = renderHook(() => useOfflineStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.lastSyncedAt).toBeNull();
+
+    // Another instance flushes and writes the timestamp.
+    const written = '2026-07-28T10:42:00.000Z';
+    localStorage.setItem(LAST_SYNCED_AT_STORAGE_KEY, written);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(result.current.lastSyncedAt).toBe(written);
+  });
+
+  it('exposes an existing value at mount', async () => {
+    localStorage.setItem(LAST_SYNCED_AT_STORAGE_KEY, '2026-07-28T09:00:00.000Z');
+
+    const { result } = renderHook(() => useOfflineStatus());
+
+    expect(result.current.lastSyncedAt).toBe('2026-07-28T09:00:00.000Z');
+  });
+
+  it('reads back as null when localStorage is unavailable', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: storage disabled');
+    });
+
+    const { result } = renderHook(() => useOfflineStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.lastSyncedAt).toBeNull();
+  });
+});
+
+// ===========================================================================
+// pendingByKind — the breakdown the summary read makes free.
+// ===========================================================================
+describe('pendingByKind', () => {
+  it('exposes the summary breakdown and keeps its identity while counts hold', async () => {
+    const byKind = { ...emptySyncKindCounts(), photos: 3, dockets: 1 };
+    summariseSyncQueueMock.mockResolvedValue(summary({ live: 4, byKind }));
+
+    const { result } = renderHook(() => useOfflineStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.pendingByKind).toEqual(byKind);
+    const first = result.current.pendingByKind;
+
+    // A later poll returns an equal-but-new object; the hook must not hand
+    // consumers a fresh identity (and a re-render) every five seconds.
+    summariseSyncQueueMock.mockResolvedValue(summary({ live: 4, byKind: { ...byKind } }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(result.current.pendingByKind).toBe(first);
   });
 });

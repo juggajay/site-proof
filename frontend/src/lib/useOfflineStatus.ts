@@ -1,13 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MAX_SYNC_ATTEMPTS,
-  getFailedSyncCount,
-  getLiveSyncCount,
-  getOldestPendingItemAge,
   getPendingSyncItems,
   getConflictedLotsCount,
   resetFailedSyncItems,
+  summariseSyncQueue,
 } from './offlineDb';
+import {
+  LAST_SYNCED_AT_STORAGE_KEY,
+  SYNC_KINDS,
+  emptySyncKindCounts,
+  type SyncKind,
+} from './offline/syncKinds';
+import { readLocalStorageItem, writeLocalStorageItem } from './storagePreferences';
 import { devWarn } from './logger';
 import { runExclusiveOfflineSync } from './offline/syncClient';
 import { syncSingleItem } from './offline/syncWorker';
@@ -37,6 +42,17 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [conflictCount, setConflictCount] = useState(0);
   const [oldestPendingItemAge, setOldestPendingItemAge] = useState<number | null>(null);
+  const [pendingByKind, setPendingByKind] = useState<Record<SyncKind, number>>(emptySyncKindCounts);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() =>
+    readLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY),
+  );
+  // Keep the previous object identity when the counts are unchanged, so the
+  // 5 s poll does not force a re-render in all fifteen consumers every tick.
+  const applyPendingByKind = useCallback((next: Record<SyncKind, number>) => {
+    setPendingByKind((prev) =>
+      SYNC_KINDS.every((kind) => prev[kind] === next[kind]) ? prev : next,
+    );
+  }, []);
   // Stable ref so foreground-flush effects can read latest isSyncing without
   // being listed as deps (which would restart the interval on every sync tick).
   const isSyncingRef = useRef(isSyncing);
@@ -61,23 +77,27 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
   // retrying are surfaced separately as "failed" so they are never hidden.
   useEffect(() => {
     const updateCounts = async () => {
-      const [liveCount, failedCount, conflicts, ageMs] = await Promise.all([
-        getLiveSyncCount(),
-        getFailedSyncCount(),
+      const [summary, conflicts] = await Promise.all([
+        summariseSyncQueue(),
         getConflictedLotsCount(),
-        getOldestPendingItemAge(),
       ]);
-      setPendingSyncCount(liveCount);
-      setFailedSyncCount(failedCount);
+      setPendingSyncCount(summary.live);
+      setFailedSyncCount(summary.failed);
       setConflictCount(conflicts);
-      setOldestPendingItemAge(ageMs);
+      setOldestPendingItemAge(summary.oldestPendingAgeMs);
+      applyPendingByKind(summary.byKind);
+      // Re-read the timestamp every tick, not just at mount: it is written by
+      // whichever instance owns the sync worker, and this hook is per-instance
+      // state, so localStorage plus this existing poll is the only channel
+      // between instances. Worst-case staleness is one tick.
+      setLastSyncedAt(readLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY));
     };
 
     updateCounts();
     const interval = setInterval(updateCounts, 5000); // Check every 5 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [applyPendingByKind]);
 
   // Sync function
   const syncPendingChanges = useCallback(async () => {
@@ -111,29 +131,33 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
         }
 
         // Update counts after sync
-        const [liveCount, failedCount, conflicts, ageMs] = await Promise.all([
-          getLiveSyncCount(),
-          getFailedSyncCount(),
+        const [summary, conflicts] = await Promise.all([
+          summariseSyncQueue(),
           getConflictedLotsCount(),
-          getOldestPendingItemAge(),
         ]);
-        setPendingSyncCount(liveCount);
-        setFailedSyncCount(failedCount);
+        setPendingSyncCount(summary.live);
+        setFailedSyncCount(summary.failed);
         setConflictCount(conflicts);
-        setOldestPendingItemAge(ageMs);
+        setOldestPendingItemAge(summary.oldestPendingAgeMs);
+        applyPendingByKind(summary.byKind);
 
-        // Notify of sync completion if any items were synced. The handler also
-        // receives the number of items that ended up dead-lettered so the UI can
-        // suppress an "all synced" message while failures remain.
-        if (syncedCount > 0 && callbacks?.onSyncComplete) {
-          callbacks.onSyncComplete({ syncedCount, failedCount });
+        // Record the successful flush, then notify. The timestamp is guarded on
+        // syncedCount ALONE — hanging it off the callback check would mean it
+        // was only ever recorded when a caller happened to pass a handler, and
+        // fourteen of the fifteen call sites pass none.
+        if (syncedCount > 0) {
+          writeLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY, new Date().toISOString());
+          // The handler also receives the number of items that ended up
+          // dead-lettered so the UI can suppress an "all synced" message while
+          // failures remain.
+          callbacks?.onSyncComplete?.({ syncedCount, failedCount: summary.failed });
         }
         return { syncedCount };
       });
     } finally {
       setIsSyncing(false);
     }
-  }, [enableSyncWorker, isOnline, isSyncing, callbacks]);
+  }, [enableSyncWorker, isOnline, isSyncing, callbacks, applyPendingByKind]);
 
   // Retry items that previously stopped syncing. Resetting their attempt count
   // makes the worker pick them up again; we refresh the badges immediately and
@@ -141,15 +165,15 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
   const retryFailedSyncs = useCallback(async () => {
     const revived = await resetFailedSyncItems();
     if (revived > 0) {
-      const [liveCount, failedCount] = await Promise.all([
-        getLiveSyncCount(),
-        getFailedSyncCount(),
-      ]);
-      setPendingSyncCount(liveCount);
-      setFailedSyncCount(failedCount);
+      // One summary read, so the kind rows move with the totals instead of
+      // staying stale until the next poll tick.
+      const summary = await summariseSyncQueue();
+      setPendingSyncCount(summary.live);
+      setFailedSyncCount(summary.failed);
+      applyPendingByKind(summary.byKind);
     }
     await syncPendingChanges();
-  }, [syncPendingChanges]);
+  }, [syncPendingChanges, applyPendingByKind]);
 
   // Auto-sync when coming back online (with debounce to prevent rapid re-triggering).
   // pendingSyncCount excludes dead-lettered items, so failed items never retrigger
@@ -220,5 +244,7 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     retryFailedSyncs,
     conflictCount,
     oldestPendingItemAge,
+    pendingByKind,
+    lastSyncedAt,
   };
 }

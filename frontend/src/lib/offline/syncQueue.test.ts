@@ -27,9 +27,6 @@ vi.mock('./core', () => ({
 import {
   MAX_SYNC_ATTEMPTS,
   clearAllOfflineData,
-  getFailedSyncCount,
-  getLiveSyncCount,
-  getOldestPendingItemAge,
   getPendingSyncCount,
   getPendingSyncItems,
   markSyncItemTerminalError,
@@ -37,6 +34,7 @@ import {
   offlineDb,
   removeSyncQueueItem,
   resetFailedSyncItems,
+  summariseSyncQueue,
   type SyncQueueItem,
 } from '@/lib/offlineDb';
 
@@ -61,30 +59,43 @@ describe('sync queue queries', () => {
   });
 });
 
-describe('live vs failed split', () => {
-  const item = (id: number, attempts: number): SyncQueueItem =>
-    ({ id, type: 'photo_upload', attempts }) as SyncQueueItem;
+// The live/failed/by-kind/age folding itself is unit-tested in syncKinds.test.ts
+// against a fixed `now`; these cases pin the Dexie wrapper — one table read,
+// wired to the real clock.
+describe('summariseSyncQueue', () => {
+  const item = (id: number, attempts: number, createdAt: string): SyncQueueItem =>
+    ({ id, type: 'photo_upload', attempts, createdAt }) as SyncQueueItem;
 
-  it('counts only items below the dead-letter threshold as live', async () => {
+  it('reads the queue once and returns the folded summary', async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
-      item(1, 0),
-      item(2, MAX_SYNC_ATTEMPTS - 1),
-      item(3, MAX_SYNC_ATTEMPTS),
-      item(4, MAX_SYNC_ATTEMPTS + 2),
+      item(1, 0, new Date().toISOString()),
+      item(2, MAX_SYNC_ATTEMPTS - 1, new Date().toISOString()),
+      item(3, MAX_SYNC_ATTEMPTS, tenMinutesAgo),
+      item(4, MAX_SYNC_ATTEMPTS + 2, new Date().toISOString()),
     ]);
 
-    await expect(getLiveSyncCount()).resolves.toBe(2);
+    const summary = await summariseSyncQueue();
+
+    // One scan replaces the three that getLiveSyncCount / getFailedSyncCount /
+    // getOldestPendingItemAge used to run in parallel.
+    expect(offlineDb.syncQueue.toArray).toHaveBeenCalledTimes(1);
+    expect(summary.live).toBe(2);
+    expect(summary.failed).toBe(2);
+    expect(summary.byKind.photos).toBe(4);
+    // The oldest row is dead-lettered and still sets the age (the stuck signal).
+    expect(summary.oldestPendingAgeMs).toBeGreaterThanOrEqual(10 * 60 * 1000 - 100);
+    expect(summary.oldestPendingAgeMs).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
   });
 
-  it('counts only items at or beyond the dead-letter threshold as failed', async () => {
-    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
-      item(1, 0),
-      item(2, MAX_SYNC_ATTEMPTS - 1),
-      item(3, MAX_SYNC_ATTEMPTS),
-      item(4, MAX_SYNC_ATTEMPTS + 2),
-    ]);
+  it('returns a null age for an empty queue', async () => {
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([]);
 
-    await expect(getFailedSyncCount()).resolves.toBe(2);
+    await expect(summariseSyncQueue()).resolves.toMatchObject({
+      live: 0,
+      failed: 0,
+      oldestPendingAgeMs: null,
+    });
   });
 });
 
@@ -160,37 +171,6 @@ describe('sync queue mutations', () => {
       attempts: MAX_SYNC_ATTEMPTS,
       lastError: 'Validation failed',
     });
-  });
-});
-
-describe('getOldestPendingItemAge', () => {
-  const item = (id: number, createdAt: string): SyncQueueItem =>
-    ({ id, type: 'photo_upload', attempts: 0, createdAt }) as SyncQueueItem;
-
-  it('returns null when the queue is empty', async () => {
-    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([]);
-    await expect(getOldestPendingItemAge()).resolves.toBeNull();
-  });
-
-  it('returns the age of the single item when there is only one', async () => {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([item(1, fiveMinutesAgo)]);
-    const age = await getOldestPendingItemAge();
-    expect(age).toBeGreaterThanOrEqual(5 * 60 * 1000 - 100);
-    expect(age).toBeLessThanOrEqual(5 * 60 * 1000 + 1000);
-  });
-
-  it('returns the age of the oldest item when there are multiple', async () => {
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
-      item(1, twoMinutesAgo),
-      item(2, tenMinutesAgo),
-    ]);
-    const age = await getOldestPendingItemAge();
-    // Should be ~10 min, not ~2 min
-    expect(age).toBeGreaterThanOrEqual(10 * 60 * 1000 - 100);
-    expect(age).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
   });
 });
 

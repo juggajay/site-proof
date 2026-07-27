@@ -25,7 +25,8 @@ import {
   writeRememberMePreference,
 } from './authStorage';
 import { AUTHED_MAP_CACHES } from './pwaRuntimeCaching';
-import { isRecord, readLocalStorageItem } from './storagePreferences';
+import { isRecord, readLocalStorageItem, removeLocalStorageItem } from './storagePreferences';
+import { LAST_SYNCED_AT_STORAGE_KEY } from './offline/syncKinds';
 
 // Simple user type for local development
 export interface User {
@@ -126,6 +127,10 @@ async function clearOfflineDataSafely() {
   } catch (error) {
     logError('Failed to clear offline data:', error);
   }
+  // The last-sync timestamp lives in localStorage, so the Dexie table purge
+  // above cannot reach it. Leaving it would show the next account on this
+  // device the previous user's sync time.
+  removeLocalStorageItem(LAST_SYNCED_AT_STORAGE_KEY);
   // The service worker's map caches hold authed API responses (lot
   // geometries, plan-sheet rasters) keyed by URL only — drop them so they
   // cannot leak to the next account on this device. Public imagery tiles stay.
