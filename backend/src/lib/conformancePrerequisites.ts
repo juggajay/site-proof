@@ -10,11 +10,11 @@ import {
   evaluateSufficiency,
   type SufficiencyEvaluation,
 } from './readiness/sufficiency/evaluate.js';
-import { resolveSufficiency, resolveSufficiencySync } from './readiness/sufficiency/resolve.js';
+import { resolveSufficiency, resolveSufficiencyBatch } from './readiness/sufficiency/resolve.js';
 import type { RegimeStreamFetcher } from './readiness/sufficiency/regime.js';
 import type { ResolvedSufficiency } from './readiness/sufficiency/types.js';
 
-type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot' | 'iTPChecklistItem'>;
+export type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot' | 'iTPChecklistItem'>;
 
 // A checklist item counts as finished for conformance when its completion
 // status is 'completed' OR 'not_applicable'. Owner decision (2026-06-11):
@@ -819,24 +819,36 @@ export async function checkConformancePrerequisitesBatch(
     }
   }
 
-  // Sufficiency resolution is per lot but entirely DB-FREE here: the registry
-  // lookup, scale and quantity are pure over the row already fetched, and this
-  // path takes no regime fetcher (the grouped per-stream read is C1.2, spec §11).
-  // So it calls the SYNC core — at 5,000 lots the async wrapper's per-lot
-  // microtask turn is real time inside the F0.5 Target 1 budget — and the batch
-  // keeps its constant-query guarantee: one lot.findMany, at most one
-  // holdPoint.findMany, at most one legacy-checklist findMany, plus the single
-  // `project` row Prisma hydrates for the whole set.
+  // Sufficiency for the whole set in ONE pass (C1.2, spec §11 C1.2, §12).
+  //
+  // Without a fetcher this is entirely DB-FREE — registry lookup, scale and
+  // quantity are pure over rows already fetched — so the batch keeps its
+  // constant-query guarantee: one lot.findMany, at most one holdPoint.findMany,
+  // at most one legacy-checklist findMany, plus the single `project` row Prisma
+  // hydrates for the whole set. That is the shape the claim DECISION path takes,
+  // deliberately: it runs inside a serializable transaction, where the
+  // frequency-stream read must never go `[C1R-B7]`.
+  //
+  // With a fetcher (the non-transactional readiness paths) it adds at most ONE
+  // grouped query per distinct STREAM — never one per member, which a per-lot
+  // loop would have made 5,000 reads on a full claim-readiness page.
   const now = options?.now ?? new Date();
+  const withProject = lots.filter(
+    (lot): lot is typeof lot & { project: NonNullable<typeof lot.project> } => lot.project != null,
+  );
+  const sufficiencyByLotId = await resolveSufficiencyBatch(
+    withProject.map((lot) => sufficiencyInput(lot, lot.project)),
+    options?.regimeFetcher ?? null,
+    now,
+  );
   for (const lot of lots) {
-    const sufficiency = options?.regimeFetcher
-      ? await resolveSufficiencyForLot(lot, options)
-      : lot.project
-        ? resolveSufficiencySync(sufficiencyInput(lot, lot.project), now)
-        : null;
     results.set(
       lot.id,
-      computeConformanceResult(lot, releasedByLot.get(lot.id) ?? new Set(), sufficiency),
+      computeConformanceResult(
+        lot,
+        releasedByLot.get(lot.id) ?? new Set(),
+        sufficiencyByLotId.get(lot.id) ?? null,
+      ),
     );
   }
 

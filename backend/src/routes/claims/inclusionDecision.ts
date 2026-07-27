@@ -27,6 +27,7 @@ import {
   checkConformancePrerequisitesBatch,
   getClaimBlockingReasonsForConformedLot,
 } from '../../lib/conformancePrerequisites.js';
+import type { SufficiencyEvaluation } from '../../lib/readiness/sufficiency/evaluate.js';
 import type { DecisionSnapshotInput } from '../../lib/readiness/recordDecision.js';
 import {
   CLAIM_MEMBER_REQUIREMENT_SET,
@@ -72,6 +73,15 @@ export interface ClaimInclusionLotMember {
   /** Cumulative percentage claimed once THIS claim commits. */
   cumulativePercentage: number;
   fullyClaimed: boolean;
+  /**
+   * Wave C1.2 (§5.3, §5.4.3). ADVISORY, from the conformance batch this
+   * decision already ran — no extra query, and never per member. It reaches the
+   * `claim_member` snapshot as the fixed-width aggregate and NOTHING else: it
+   * is not in `getClaimBlockingReasonsForConformedLot` (§5.3's hard prohibition,
+   * pinned by §14 AT-11) and it cannot enter `blockingReasonCodes`, whose
+   * vocabulary (`CLAIM_MEMBER_REASON_CODES`) contains no sufficiency code.
+   */
+  sufficiency: SufficiencyEvaluation | null;
 }
 
 export interface ClaimInclusionVariationMember {
@@ -218,6 +228,7 @@ export async function evaluateClaimInclusion(
     return {
       lot,
       claimedLotId,
+      sufficiency: conformanceByLotId.get(lot.id)?.sufficiency ?? null,
       percentageComplete,
       // The line amount is THIS claim's increment percentage of the lot budget,
       // so claim totals always reconcile to the budget.
@@ -298,6 +309,7 @@ function claimMemberResults(evaluation: ClaimInclusionEvaluation): {
         memberType: 'lot',
         claimedValue: member.amountClaimed,
         claimedPercentage: member.cumulativePercentage,
+        sufficiency: member.sufficiency,
       }),
     })),
     ...evaluation.variationMembers.map((member) => ({

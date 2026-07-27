@@ -29,7 +29,11 @@ import {
 } from './publicReleaseExecution.js';
 import { AuditAction } from '../../lib/auditLog.js';
 import { recordDecision } from '../../lib/readiness/recordDecision.js';
-import { evaluateHoldPointReleaseReadiness, holdPointReleaseSnapshots } from './releaseDecision.js';
+import {
+  evaluateHoldPointReleaseReadiness,
+  holdPointReleaseSnapshots,
+  resolveHoldPointReleaseSufficiency,
+} from './releaseDecision.js';
 
 // =============================================================================
 // PUBLIC batch review-room endpoints — no authentication required. A batch
@@ -306,6 +310,10 @@ holdPointPublicBatchRouter.post(
     // index handle, never the claim that only this hold point was released.
     const anchor = prepared[0];
 
+    // Wave C1.2 (§5.2, §3.4.3 `[C1R-B7]`): one advisory for the whole batch —
+    // every member shares the batch's lot — resolved outside the transaction.
+    const releaseSufficiency = await resolveHoldPointReleaseSufficiency(batch.lotId);
+
     // ONE decision for the whole batch `[R3.1-R4]`: N hold point releases, N
     // token claims, N ITP reconciliations, N snapshot rows and ONE audit row
     // commit together or not at all. All-or-nothing is unchanged — it was
@@ -350,7 +358,13 @@ holdPointPublicBatchRouter.post(
       // (token unused + unexpired, hold point non-terminal, ITP completion not
       // failed) already runs in-transaction inside `executeHoldPointTokenRelease`
       // and owns this route's pinned 400/410 responses.
-      evaluate: (tx) => evaluateHoldPointReleaseReadiness(tx, releasedHoldPointIds, batch.lotId),
+      evaluate: (tx) =>
+        evaluateHoldPointReleaseReadiness(
+          tx,
+          releasedHoldPointIds,
+          batch.lotId,
+          releaseSufficiency,
+        ),
       // The previous `$transaction` body, verbatim, now as the decision's mutate.
       mutate: async (tx) => {
         const results = [];

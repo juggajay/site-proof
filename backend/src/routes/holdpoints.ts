@@ -35,6 +35,7 @@ import { recordDecision } from '../lib/readiness/recordDecision.js';
 import {
   evaluateHoldPointReleaseReadiness,
   holdPointReleaseSnapshots,
+  resolveHoldPointReleaseSufficiency,
 } from './holdpoints/releaseDecision.js';
 
 const holdpointsRouter = Router();
@@ -187,6 +188,11 @@ holdpointsRouter.post(
     );
 
     const releasedAt = new Date();
+    // Wave C1.2 (§5.2, §3.4.3 `[C1R-B7]`): the sufficiency advisory is resolved
+    // outside the decision transaction, as on the other two release doors.
+    const releaseSufficiency = await resolveHoldPointReleaseSufficiency(
+      releaseToken.holdPoint.lotId,
+    );
     // F0.4b PR 3: the token claim, the release columns, the ITP reconciliation
     // and the audit row now commit as ONE serializable transaction.
     const decision = await recordDecision({
@@ -222,6 +228,7 @@ holdpointsRouter.post(
           tx,
           [releaseToken.holdPoint.id],
           releaseToken.holdPoint.lotId,
+          releaseSufficiency,
         ),
       // Unchanged, and still shared verbatim with the batch route: the token
       // claim and both optimistic guards stay exactly as they were.

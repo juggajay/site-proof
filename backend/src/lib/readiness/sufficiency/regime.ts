@@ -242,6 +242,18 @@ function regimeTrigger(
 }
 
 /**
+ * How many stream entries this rule's regime looks back over, or null when the
+ * rule is not regime-bearing and issues no query at all.
+ *
+ * Exported for the BATCHED resolver (C1.2), which needs the window length up
+ * front to slice one grouped per-stream read into each subject's own tail —
+ * `resolveRegimeForRule` reads it from the trigger it already has.
+ */
+export function regimeLookback(rule: FrequencyRule): number | null {
+  return regimeTrigger(rule)?.consecutiveConformingLots ?? null;
+}
+
+/**
  * Resolve the regime for one rule: build the two-mode query, fetch, fold.
  * Returns null when the rule declares neither `reduced` nor
  * `reducedFrequencyEligibility` — no regime concept, and no query is issued.
