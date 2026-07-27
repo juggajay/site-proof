@@ -7,7 +7,14 @@ import { apiFetch, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { getResponseErrorMessage } from './utils';
-import type { TestResult, Lot, FailedTestForNcr, NcrFormData, CreateTestFormData } from './types';
+import type {
+  TestResult,
+  Lot,
+  FailedTestForNcr,
+  NcrFormData,
+  CreateTestFormData,
+  ExtractionResult,
+} from './types';
 import { TestFilters } from './components/TestFilters';
 import { TestResultsTable } from './components/TestResultsTable';
 import { TestResultsMobileList } from './components/TestResultsMobileList';
@@ -15,7 +22,11 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { CreateTestModal } from './components/CreateTestModal';
 import { LinkItpItemModal } from './components/LinkItpItemModal';
 import { EnterResultsModal, type EnterResultsValues } from './components/EnterResultsModal';
-import { UploadCertificateModal } from './components/UploadCertificateModal';
+import {
+  UploadCertificateModal,
+  type AttachedCertificateReview,
+} from './components/UploadCertificateModal';
+import { seedAttachReviewForm } from './certificateReview';
 import { BatchUploadModal } from './components/BatchUploadModal';
 import { RejectTestModal } from './components/RejectTestModal';
 import { NcrPromptModal, NcrCreateModal } from './components/NcrModals';
@@ -102,6 +113,9 @@ export function TestResultsPage() {
   const [linkItpTest, setLinkItpTest] = useState<TestResult | null>(null);
   const [enterResultsTest, setEnterResultsTest] = useState<TestResult | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  // C2 Phase 1: set when a certificate was attached to an EXISTING row with
+  // `?extract=true`; carries the returned extraction into the shipped review step.
+  const [attachedReview, setAttachedReview] = useState<AttachedCertificateReview | null>(null);
   const [showBatchUploadModal, setShowBatchUploadModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showNcrPromptModal, setShowNcrPromptModal] = useState(false);
@@ -454,14 +468,20 @@ export function TestResultsPage() {
   // manually-created test can satisfy the verification gate. Mirrors the
   // UploadCertificateModal upload pattern (FormData + authFetch for multipart),
   // then refreshes the list so the now-attachable Verify action unblocks.
+  //
+  // C2 Phase 1: with `extract`, the same call also runs the shipped AI extraction
+  // and returns it. Nothing extracted is written — the response opens the shipped
+  // review step, and PATCH /:id/confirm-extraction writes what the human approved.
+  // [C2R-A7]: that call carries the 120 s AI timeout, so the row-level button
+  // stays in its busy state for the duration rather than fire-and-forget.
   const handleAttachCertificate = useCallback(
-    async (testId: string, file: File) => {
+    async (testId: string, file: File, extract = false) => {
       try {
         const formData = new FormData();
         formData.append('certificate', file);
 
         const response = await authFetch(
-          `/api/test-results/${encodeURIComponent(testId)}/certificate`,
+          `/api/test-results/${encodeURIComponent(testId)}/certificate${extract ? '?extract=true' : ''}`,
           {
             method: 'POST',
             body: formData,
@@ -470,11 +490,26 @@ export function TestResultsPage() {
 
         if (!response.ok) {
           toast({
-            title: 'Failed to attach certificate',
+            title: extract ? 'Failed to read certificate' : 'Failed to attach certificate',
             description: await getResponseErrorMessage(response, 'Please try again.'),
             variant: 'error',
           });
           return;
+        }
+
+        const row = getTestById(testId);
+        if (extract && row) {
+          const data = (await response.json()) as { extraction?: ExtractionResult };
+          if (data.extraction) {
+            setAttachedReview({
+              testResultId: testId,
+              extraction: data.extraction,
+              reviewFormData: seedAttachReviewForm(data.extraction.extractedFields, row),
+              file,
+            });
+            setShowUploadModal(true);
+            return;
+          }
         }
 
         await refreshTestResults([getTestLotId(testId)]);
@@ -485,13 +520,13 @@ export function TestResultsPage() {
         });
       } catch (err) {
         toast({
-          title: 'Failed to attach certificate',
+          title: extract ? 'Failed to read certificate' : 'Failed to attach certificate',
           description: extractErrorMessage(err, 'Please try again.'),
           variant: 'error',
         });
       }
     },
-    [getTestLotId, refreshTestResults],
+    [getTestById, getTestLotId, refreshTestResults],
   );
 
   // Create test handler
@@ -841,10 +876,19 @@ export function TestResultsPage() {
 
       <UploadCertificateModal
         isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
+        onClose={() => {
+          setShowUploadModal(false);
+          // Abandoning the review still leaves the certificate attached, so the
+          // register has to pick up the new certificateDocId either way.
+          if (attachedReview) {
+            void refreshTestResults([getTestLotId(attachedReview.testResultId)]);
+          }
+          setAttachedReview(null);
+        }}
         projectId={projectId || ''}
         onTestResultsUpdated={handleTestResultsUpdated}
         onFailedResult={promptNcrForFailedTest}
+        attachedReview={attachedReview}
       />
 
       <BatchUploadModal

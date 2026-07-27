@@ -31,7 +31,7 @@ interface TestResultsTableProps {
   // no-data status POST.
   onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
-  onAttachCertificate: (testId: string, file: File) => Promise<void>;
+  onAttachCertificate: (testId: string, file: File, extract?: boolean) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
   // Migration action: link an existing test to one of its lot's ITP items.

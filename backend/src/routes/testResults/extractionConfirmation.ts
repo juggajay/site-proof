@@ -1,6 +1,8 @@
 import type { Prisma } from '@prisma/client';
+import type { Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
+import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { applyTestResultCorrections, type TestResultCorrections } from './corrections.js';
 import { assertItpChecklistItemLink, requireLotInProject } from './accessControl.js';
 import { derivePassFail } from './certificateExtraction.js';
@@ -159,6 +161,9 @@ export interface ConfirmExtractionInput {
   // The route owns the access policy and throws on denial; the service invokes
   // this at the exact point the inline handler called requireTestProjectRole.
   authorize: (projectId: string) => Promise<void>;
+  // Only for the audit record's ip/user-agent; optional so the service stays
+  // callable without an HTTP context.
+  req?: Request;
 }
 
 // Orchestrates PATCH /:id/confirm-extraction: load → authorize (throws) → apply
@@ -169,6 +174,7 @@ export async function confirmExtraction({
   corrections,
   userId,
   authorize,
+  req,
 }: ConfirmExtractionInput) {
   const testResult = await prisma.testResult.findUnique({
     where: { id },
@@ -224,6 +230,21 @@ export async function confirmExtraction({
         },
       },
     },
+  });
+
+  // [C2R-A4] / AT-77: confirming forces `status = 'entered'` (see
+  // buildConfirmationUpdateData), a transition that until now left no audit
+  // record at all. C2 Phase 1 is what first aims this write at a human's planned
+  // row, so it gets the same audit shape POST /:id/status writes — same action,
+  // same `changes` keys — keeping the audit stream uniform.
+  await createAuditLog({
+    projectId: testResult.projectId,
+    userId,
+    entityType: 'test_result',
+    entityId: id,
+    action: AuditAction.TEST_RESULT_STATUS_CHANGED,
+    changes: { previousStatus: testResult.status, newStatus: 'entered' },
+    req,
   });
 
   return {
