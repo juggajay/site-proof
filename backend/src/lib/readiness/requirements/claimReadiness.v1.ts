@@ -7,6 +7,7 @@
 // array here would be a second, unindexed copy (execution spec §3 `[R3-3]`, §11
 // F0.4b PR 0 `[R3.1-B3]`).
 
+import type { SufficiencyState } from '../sufficiency/types.js';
 import type { ClaimMemberReasonCode, ClaimMemberResultV1 } from './claimMember.v1.js';
 import { decodeAtVersion1, type SnapshotResultRow } from './shared.js';
 
@@ -33,6 +34,25 @@ export type ClaimReadinessResultV1 = {
    * pins.
    */
   blockingReasonCounts: Partial<Record<ClaimMemberReasonCode, number>>;
+  /**
+   * Wave C1.2 (spec §5.4.2, §14 AT-13). SUMMARISED from the member rows, never
+   * computed independently — the aggregate cannot disagree with the rows it
+   * summarises if it is derived from them, which is the same reason
+   * `blockingReasonCounts` is.
+   *
+   * Counts and worsts only, so it does not grow with member count: the property
+   * the 5,000-member budget test pins.
+   *
+   * ALWAYS EMITTED; optional in the type so a pre-C1 row still decodes.
+   */
+  sufficiency?: {
+    /** Worst state across members. */
+    state: SufficiencyState;
+    /** Members carrying at least one insufficient rule. */
+    insufficientMembers: number;
+    /** The largest single shortfall on any member. */
+    worstShortfall: number;
+  };
 };
 
 function round2(value: number): number {
@@ -50,6 +70,11 @@ export function buildClaimReadinessResultV1(
   let lots = 0;
   let ready = 0;
   let totalClaimedValue = 0;
+  let insufficientMembers = 0;
+  let worstShortfall = 0;
+  let anyInsufficient = false;
+  let anySatisfied = false;
+  let anyUnknown = false;
 
   for (const member of members) {
     if (member.memberType === 'lot') lots += 1;
@@ -58,7 +83,23 @@ export function buildClaimReadinessResultV1(
     for (const code of member.blockingReasonCodes) {
       blockingReasonCounts[code] = (blockingReasonCounts[code] ?? 0) + 1;
     }
+    // A pre-C1 member row has no `sufficiency`; it counts as unknown rather
+    // than being skipped, so a mixed set can never read `satisfied`.
+    const sufficiency = member.sufficiency;
+    if (sufficiency === undefined || sufficiency.state === 'unknown') anyUnknown = true;
+    else if (sufficiency.state === 'insufficient') anyInsufficient = true;
+    else anySatisfied = true;
+    if (sufficiency && sufficiency.insufficientRules > 0) insufficientMembers += 1;
+    if (sufficiency) worstShortfall = Math.max(worstShortfall, sufficiency.worstShortfall);
   }
+
+  // Worst-wins, matching `evaluateSufficiency`: `unknown` NEVER reads as
+  // satisfied, so a set has to be all-satisfied to say so.
+  const state: SufficiencyState = anyInsufficient
+    ? 'insufficient'
+    : anySatisfied && !anyUnknown
+      ? 'satisfied'
+      : 'unknown';
 
   return {
     memberCounts: {
@@ -70,6 +111,7 @@ export function buildClaimReadinessResultV1(
     },
     totalClaimedValue: round2(totalClaimedValue),
     blockingReasonCounts,
+    sufficiency: { state, insufficientMembers, worstShortfall },
   };
 }
 

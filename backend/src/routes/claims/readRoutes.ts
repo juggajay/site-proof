@@ -7,6 +7,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { checkConformancePrerequisitesBatch } from '../../lib/conformancePrerequisites.js';
 import { holdPointReleased, testPendingByStatus } from '../../lib/readiness/predicates.js';
+import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   buildClaimCertificationView,
@@ -218,7 +219,15 @@ async function computeClaimReadinessItems(lots: ClaimReadinessLotRow[]) {
   // M39: resolve conformance for every lot in a constant number of queries
   // (one lot.findMany + at most one holdPoint.findMany) instead of the old
   // per-lot ~2N+1 fan-out.
-  const conformStatusByLotId = await checkConformancePrerequisitesBatch(lots.map((lot) => lot.id));
+  // Wave C1.2 (§11 C1.2, §12): this path runs OUTSIDE any transaction, so it is
+  // the one that may supply the regime fetcher. The batch groups (lot, rule)
+  // pairs by stream and issues at most ONE read per stream — never one per
+  // member, which a per-lot loop would have made N reads on this page.
+  const conformStatusByLotId = await checkConformancePrerequisitesBatch(
+    lots.map((lot) => lot.id),
+    prisma,
+    { regimeFetcher: prismaRegimeStreamFetcher() },
+  );
 
   return lots.map((lot) => {
     const conformStatus = conformStatusByLotId.get(lot.id);

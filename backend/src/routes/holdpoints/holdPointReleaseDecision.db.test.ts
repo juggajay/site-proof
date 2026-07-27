@@ -23,6 +23,7 @@ import {
   decodeHoldPointReleaseResult,
 } from '../../lib/readiness/requirements/holdPointRelease.v1.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
+import { NO_RULESET_SUFFICIENCY } from '../../test/sufficiencySnapshots.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
 import { authRouter } from '../auth.js';
 import { holdpointsRouter } from '../holdpoints.js';
@@ -390,6 +391,9 @@ describe('Hold point release decisions — recorded readiness (spec §11 F0.4b P
     expect(decodeHoldPointReleaseResult(row)).toEqual({
       released: true,
       reasonCodes: [],
+      // C1.2 (§5.2): the release records the advisory verdict. WARN only — the
+      // reason codes above are unchanged by it, at any sufficiency state.
+      sufficiency: NO_RULESET_SUFFICIENCY,
     });
   });
 
@@ -404,6 +408,7 @@ describe('Hold point release decisions — recorded readiness (spec §11 F0.4b P
     expect(decodeHoldPointReleaseResult(row)).toEqual({
       released: true,
       reasonCodes: ['unreleased_hold_points'],
+      sufficiency: NO_RULESET_SUFFICIENCY,
     });
     // Single releases carry no batch correlation — that grain is PR 4's.
     expect(decodeHoldPointReleaseResult(row)).not.toHaveProperty('batchId');
@@ -421,6 +426,7 @@ describe('Hold point release decisions — recorded readiness (spec §11 F0.4b P
     expect(decodeHoldPointReleaseResult(row)).toEqual({
       released: true,
       reasonCodes: ['unreleased_hold_points'],
+      sufficiency: NO_RULESET_SUFFICIENCY,
     });
   });
 });

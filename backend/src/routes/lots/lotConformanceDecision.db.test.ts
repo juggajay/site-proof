@@ -22,6 +22,7 @@ import {
   decodeLotConformanceResult,
 } from '../../lib/readiness/requirements/lotConformance.v1.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
+import { NO_RULESET_SUFFICIENCY } from '../../test/sufficiencySnapshots.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
 import { authRouter } from '../auth.js';
 import { lotsRouter } from '../lots.js';
@@ -233,6 +234,7 @@ describe('lot conformance decisions — recorded readiness (spec §11 F0.4b PR 1
       overridden: true,
       blockingReasonCodes: ['no_itp_assigned'],
       reason: 'Client accepted as-built deviation',
+      sufficiency: NO_RULESET_SUFFICIENCY,
     });
   });
 
@@ -304,6 +306,7 @@ describe('lot conformance decisions — recorded readiness (spec §11 F0.4b PR 1
         conformable: true,
         overridden: false,
         blockingReasonCodes: [],
+        sufficiency: NO_RULESET_SUFFICIENCY,
       });
       const changes = await auditChanges(lot.id, AuditAction.LOT_STATUS_CHANGED);
       expect(changes).toMatchObject({ decisionKind: 'approval' });

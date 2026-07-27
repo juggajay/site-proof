@@ -9,6 +9,11 @@
 // evidence list: the full detail stays request-time computable from the same
 // predicates.
 
+import type { SufficiencyEvaluation } from '../sufficiency/evaluate.js';
+import {
+  buildSufficiencyAggregateV1,
+  type SufficiencyAggregateV1,
+} from '../sufficiency/snapshot.js';
 import type { ReadinessReasonCode } from '../contracts/reasonCodes.js';
 import {
   blockingReasonCodes,
@@ -62,6 +67,18 @@ export type ClaimMemberResultV1 = {
   claimedValue: number;
   /** Cumulative percentage claimed after this decision, when the member is a lot. */
   claimedPercentage?: number;
+  /**
+   * Wave C1.2 (spec §5.4.3 `[C1R-B4]`). The FIXED-WIDTH aggregate — never the
+   * rule list. `MEMBER_RESULT_MAX_BYTES` is 1 KB with ~595 bytes of headroom
+   * today, `assertSnapshotSizes` THROWS 500 instead of truncating, and it runs
+   * regardless of the snapshot flag — so an oversized member payload would 500
+   * a whole 5,000-member claim create. At the spec's 35-character rule-id
+   * format ~11 rules would exhaust the headroom, and `Ruleset.rules` has no
+   * cap. Three scalars cannot. §14 AT-13 asserts it at 10,000 synthetic rules.
+   *
+   * ALWAYS EMITTED; optional in the type so a pre-C1 row still decodes.
+   */
+  sufficiency?: SufficiencyAggregateV1;
 };
 
 export interface ClaimMemberEvaluation {
@@ -69,6 +86,8 @@ export interface ClaimMemberEvaluation {
   items?: readonly ReadinessItemLike[];
   claimedValue: number;
   claimedPercentage?: number;
+  /** Null for a variation member: sufficiency is a LOT concept (§5.3). */
+  sufficiency?: SufficiencyEvaluation | null;
 }
 
 /** Money/percentage rounding, so a float sum never lands `100.00000000000001` in evidence. */
@@ -86,6 +105,7 @@ export function buildClaimMemberResultV1(evaluation: ClaimMemberEvaluation): Cla
     ...(evaluation.claimedPercentage === undefined
       ? {}
       : { claimedPercentage: round2(evaluation.claimedPercentage) }),
+    sufficiency: buildSufficiencyAggregateV1(evaluation.sufficiency),
   };
 }
 

@@ -40,7 +40,12 @@ import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 import { assertHoldPointCompletionCanBeReleased } from './releaseCompletionGuard.js';
 import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
 import { recordDecision } from '../../lib/readiness/recordDecision.js';
-import { evaluateHoldPointReleaseReadiness, holdPointReleaseSnapshots } from './releaseDecision.js';
+import type { SufficiencyEvaluation } from '../../lib/readiness/sufficiency/evaluate.js';
+import {
+  evaluateHoldPointReleaseReadiness,
+  holdPointReleaseSnapshots,
+  resolveHoldPointReleaseSufficiency,
+} from './releaseDecision.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -321,7 +326,11 @@ function assertHoldPointReleaseRequested(holdPoint: { status: string }) {
  * against. Nothing in it depends on the request payload, so it takes only the
  * transaction client and the hold point id.
  */
-async function evaluateAuthenticatedHoldPointRelease(tx: Prisma.TransactionClient, id: string) {
+async function evaluateAuthenticatedHoldPointRelease(
+  tx: Prisma.TransactionClient,
+  id: string,
+  sufficiency: SufficiencyEvaluation | null,
+) {
   const current = await tx.holdPoint.findUnique({
     where: { id },
     select: { status: true, lotId: true, itpChecklistItemId: true },
@@ -353,7 +362,7 @@ async function evaluateAuthenticatedHoldPointRelease(tx: Prisma.TransactionClien
   }
 
   return {
-    ...(await evaluateHoldPointReleaseReadiness(tx, [id], current.lotId)),
+    ...(await evaluateHoldPointReleaseReadiness(tx, [id], current.lotId, sufficiency)),
     itpInstanceId: itpInstance?.id ?? null,
   };
 }
@@ -411,6 +420,11 @@ holdPointActionRouter.post(
     const projectTimeZone = projectTimeZoneFromState(existingHP.lot.project.state);
     const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime, projectTimeZone);
 
+    // Wave C1.2 (§5.2, §3.4.3 `[C1R-B7]`): the sufficiency advisory is resolved
+    // HERE, outside the decision transaction — its frequency-stream read covers
+    // exactly the range concurrent conforms write.
+    const releaseSufficiency = await resolveHoldPointReleaseSufficiency(existingHP.lotId);
+
     // F0.4b PR 3: the release columns, the ITP reconciliation and the audit row
     // now commit as ONE serializable transaction instead of a transaction
     // followed by an unsynchronised best-effort audit write.
@@ -443,7 +457,7 @@ holdPointActionRouter.post(
       // write commits against. Authorization reads deliberately stay outside —
       // the no-stale-readiness guarantee covers evidence, not permissions
       // (spec §11 F0.4b `[R3.1-R6]`).
-      evaluate: (tx) => evaluateAuthenticatedHoldPointRelease(tx, id),
+      evaluate: (tx) => evaluateAuthenticatedHoldPointRelease(tx, id, releaseSufficiency),
       // The existing optimistic guard stays as the cheap second line inside the
       // transaction.
       mutate: async (tx, evaluation) => {

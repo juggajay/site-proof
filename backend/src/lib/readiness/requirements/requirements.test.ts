@@ -55,6 +55,9 @@ import {
   decodeNcrClosureResult,
 } from './ncrClosure.v1.js';
 import { REASON_TEXT_MAX_CHARS, blockingReasonCodes, decodeAtVersion1 } from './shared.js';
+import type { SufficiencyEvaluation } from '../sufficiency/evaluate.js';
+import { UNRESOLVED_SUFFICIENCY } from '../sufficiency/snapshot.js';
+import type { RuleSufficiency } from '../sufficiency/types.js';
 
 const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value), 'utf8');
 
@@ -154,7 +157,13 @@ describe('lot_conformance.v1', () => {
         canConform: true,
         items: [{ code: 'conformance_prerequisites_met', blocksAction: false }],
       }),
-    ).toEqual({ conformable: true, overridden: false, blockingReasonCodes: [] });
+    ).toEqual({
+      conformable: true,
+      overridden: false,
+      blockingReasonCodes: [],
+      // AT-12: `sufficiency` is ALWAYS emitted, even with nothing resolved.
+      sufficiency: UNRESOLVED_SUFFICIENCY,
+    });
   });
 
   it('records a force-conform with its blockers and truncated provenance', () => {
@@ -196,12 +205,17 @@ describe('hold_point_release.v1', () => {
       reasonCodes: ['missing_hold_point_recipients'],
       batchId: 'batch-1',
       batchSize: 12,
+      sufficiency: UNRESOLVED_SUFFICIENCY,
     });
   });
 
   it('omits batch fields for a single release', () => {
     const result = buildHoldPointReleaseResultV1({ released: true, items: [] });
-    expect(result).toEqual({ released: true, reasonCodes: [] });
+    expect(result).toEqual({
+      released: true,
+      reasonCodes: [],
+      sufficiency: UNRESOLVED_SUFFICIENCY,
+    });
   });
 });
 
@@ -253,6 +267,7 @@ describe('claim_member.v1', () => {
       blockingReasonCodes: [],
       claimedValue: 1234.57,
       claimedPercentage: 33.33,
+      sufficiency: UNRESOLVED_SUFFICIENCY,
     });
   });
 
@@ -318,6 +333,7 @@ describe('claim_readiness.v1 (aggregate)', () => {
       memberCounts: { total: 0, lots: 0, variations: 0, ready: 0, blocked: 0 },
       totalClaimedValue: 0,
       blockingReasonCounts: {},
+      sufficiency: { state: 'unknown', insufficientMembers: 0, worstShortfall: 0 },
     });
   });
 
@@ -335,6 +351,211 @@ describe('claim_readiness.v1 (aggregate)', () => {
     // and 10 members serialize to within a few bytes of each other.
     const serialized = JSON.stringify(aggregate);
     expect(serialized).not.toContain('[');
+    expect(bytes(aggregate)).toBeLessThan(1_024);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave C1.2 — the `sufficiency` key (spec §5.4, §14 AT-12, AT-13).
+// ---------------------------------------------------------------------------
+
+/** A synthetic evaluation with `ruleCount` short rules, at 35-character rule ids. */
+function evaluationWithRules(ruleCount: number): SufficiencyEvaluation {
+  const rules: RuleSufficiency[] = Array.from({ length: ruleCount }, (_unused, index) => ({
+    // The spec's own id format, padded to 35 characters — the length that made
+    // "counts and rule ids only" blow the member budget at ~11 rules.
+    ruleId: `vicroads-204.v1/compaction-density-${index}`.slice(0, 35),
+    testType: 'compaction',
+    state: 'insufficient',
+    requiredCount: 6,
+    passingCount: index % 6,
+    pendingCount: 0,
+    failedCount: 0,
+    regime: 'full',
+    unknownCauses: [],
+    citation: {
+      authority: 'DTP (VicRoads)',
+      document: 'Section 204 – Earthworks',
+      clause: '204.13(a)',
+      edition: 'v8.0, November 2025',
+      confirmed: true,
+    },
+  }));
+  return {
+    state: ruleCount > 0 ? 'insufficient' : 'unknown',
+    mode: 'block',
+    ruleset: { id: 'vicroads-204.v1', status: 'confirmed' },
+    rules,
+    unknownCauses: [],
+    maxLotSizeExceedances: [],
+    unlinkedPassingTestIds: [],
+    sufficiencyBlocks: ruleCount > 0,
+    verdict: {
+      subjectType: 'lot',
+      subjectId: 'lot-1',
+      sufficient: false,
+      reasonCodes: [],
+    },
+  };
+}
+
+describe('AT-12 `sufficiency` is optional in the type and ALWAYS emitted', () => {
+  it('rides all three sets that carry it, with nothing resolved', () => {
+    expect(buildLotConformanceResultV1({ canConform: true, items: [] })).toHaveProperty(
+      'sufficiency',
+      UNRESOLVED_SUFFICIENCY,
+    );
+    expect(buildHoldPointReleaseResultV1({ released: true, items: [] })).toHaveProperty(
+      'sufficiency',
+      UNRESOLVED_SUFFICIENCY,
+    );
+    expect(buildClaimMemberResultV1({ memberType: 'lot', claimedValue: 0 })).toHaveProperty(
+      'sufficiency',
+      UNRESOLVED_SUFFICIENCY,
+    );
+  });
+
+  it('carries the full block on the two 64 KB sets, and the aggregate ONLY on members', () => {
+    const evaluation = evaluationWithRules(2);
+
+    const conformance = buildLotConformanceResultV1({
+      canConform: false,
+      items: [],
+      sufficiency: evaluation,
+    });
+    expect(conformance.sufficiency).toMatchObject({
+      state: 'insufficient',
+      insufficientRules: 2,
+      worstShortfall: 6, // rule 0 has 0 passing of 6
+      mode: 'block',
+      blocks: true,
+      ruleset: { id: 'vicroads-204.v1', status: 'confirmed' },
+    });
+    expect(conformance.sufficiency?.rules).toHaveLength(2);
+    expect(conformance.sufficiency?.rules?.[0].citation.clause).toBe('204.13(a)');
+
+    const release = buildHoldPointReleaseResultV1({
+      released: true,
+      items: [],
+      sufficiency: evaluation,
+    });
+    expect(release.sufficiency?.rules).toHaveLength(2);
+
+    // The member row carries the aggregate and NOTHING else — no rule list, no
+    // ids, no citations. This is the property the 1 KB budget depends on.
+    const member = buildClaimMemberResultV1({
+      memberType: 'lot',
+      claimedValue: 1,
+      sufficiency: evaluation,
+    });
+    expect(member.sufficiency).toEqual({
+      state: 'insufficient',
+      insufficientRules: 2,
+      worstShortfall: 6,
+    });
+    expect(JSON.stringify(member)).not.toContain('vicroads');
+  });
+
+  it('a pre-C1 row WITHOUT the key still decodes at version 1', () => {
+    // The absence of `sufficiency` is exactly the pre-C1 discriminator a
+    // `resultSchemaVersion` bump would have provided `[C1R-B3]`.
+    const legacy = { conformable: true, overridden: false, blockingReasonCodes: [] };
+    expect(decodeLotConformanceResult({ resultSchemaVersion: 1, result: legacy })).toEqual(legacy);
+    expect(
+      decodeClaimMemberResult({
+        resultSchemaVersion: 1,
+        result: { memberType: 'lot', ready: true, blockingReasonCodes: [], claimedValue: 0 },
+      }).sufficiency,
+    ).toBeUndefined();
+  });
+});
+
+describe('AT-13 the member payload is fixed width', () => {
+  it('stays inside MEMBER_RESULT_MAX_BYTES at 10,000 synthetic rules', () => {
+    // UNBOUNDED rule count, not a realistic one: `assertSnapshotSizes` throws a
+    // 500 rather than truncating, and it runs regardless of the snapshot flag,
+    // so an oversized member payload 500s a whole 5,000-member claim create.
+    const worstCase = buildClaimMemberResultV1({
+      memberType: 'lot',
+      items: CLAIM_MEMBER_REASON_CODES.map((code) => ({ code, blocksAction: true })),
+      claimedValue: 999_999_999.99,
+      claimedPercentage: 100,
+      sufficiency: evaluationWithRules(10_000),
+    });
+
+    expect(worstCase.sufficiency).toEqual({
+      state: 'insufficient',
+      insufficientRules: 10_000,
+      worstShortfall: 6,
+    });
+    expect(bytes(worstCase)).toBeLessThanOrEqual(MEMBER_RESULT_MAX_BYTES);
+
+    // Fixed width, provably: 10,000 rules and 1 rule serialize to the same size
+    // once the counts match.
+    const oneRule = buildClaimMemberResultV1({
+      memberType: 'lot',
+      claimedValue: 1,
+      sufficiency: evaluationWithRules(1),
+    });
+    expect(bytes(oneRule)).toBe(
+      bytes(
+        buildClaimMemberResultV1({
+          memberType: 'lot',
+          claimedValue: 1,
+          sufficiency: evaluationWithRules(1),
+        }),
+      ),
+    );
+    expect(JSON.stringify(worstCase.sufficiency)).not.toContain('[');
+  });
+
+  it('the aggregate SUMMARISES member sufficiency instead of ignoring it', () => {
+    const aggregate = buildClaimReadinessResultV1([
+      buildClaimMemberResultV1({
+        memberType: 'lot',
+        claimedValue: 1,
+        sufficiency: evaluationWithRules(3),
+      }),
+      buildClaimMemberResultV1({ memberType: 'lot', claimedValue: 1 }),
+      buildClaimMemberResultV1({ memberType: 'variation', claimedValue: 1 }),
+    ]);
+
+    expect(aggregate.sufficiency).toEqual({
+      state: 'insufficient',
+      insufficientMembers: 1,
+      worstShortfall: 6,
+    });
+  });
+
+  it('worst-wins: one unknown member stops the aggregate reading `satisfied`', () => {
+    const satisfied: SufficiencyEvaluation = {
+      ...evaluationWithRules(1),
+      state: 'satisfied',
+      sufficiencyBlocks: false,
+      rules: [{ ...evaluationWithRules(1).rules[0], state: 'satisfied', passingCount: 6 }],
+    };
+    const allSatisfied = buildClaimReadinessResultV1([
+      buildClaimMemberResultV1({ memberType: 'lot', claimedValue: 1, sufficiency: satisfied }),
+    ]);
+    expect(allSatisfied.sufficiency?.state).toBe('satisfied');
+
+    const mixed = buildClaimReadinessResultV1([
+      buildClaimMemberResultV1({ memberType: 'lot', claimedValue: 1, sufficiency: satisfied }),
+      buildClaimMemberResultV1({ memberType: 'variation', claimedValue: 1 }),
+    ]);
+    expect(mixed.sufficiency?.state).toBe('unknown');
+  });
+
+  it('the 5,000-member aggregate still fits, sufficiency and all', () => {
+    const memberList = Array.from({ length: 5_000 }, () =>
+      buildClaimMemberResultV1({
+        memberType: 'lot',
+        claimedValue: 100.01,
+        sufficiency: evaluationWithRules(4),
+      }),
+    );
+    const aggregate = buildClaimReadinessResultV1(memberList);
+    expect(aggregate.sufficiency?.insufficientMembers).toBe(5_000);
     expect(bytes(aggregate)).toBeLessThan(1_024);
   });
 });
