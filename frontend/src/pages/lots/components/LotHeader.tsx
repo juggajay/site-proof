@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { Link2, Check, RefreshCw, Printer, MoreVertical } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link2, Check, RefreshCw, Printer, MoreVertical, Pencil } from 'lucide-react';
 import { LotQRCode } from '@/components/lots/LotQRCode';
 import { AskClancyButton } from '@/components/copilot/AskClancy';
-import type { Lot, LotSubcontractorAssignment } from '../types';
+import { Button } from '@/components/ui/button';
+import type { Lot, LotSubcontractorAssignment, LotTab } from '../types';
+import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
+import { pickPrimaryReadinessAction } from '../lib/readinessActions';
 import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection';
 import { LotSummaryCards } from './LotSummaryCards';
@@ -24,6 +27,11 @@ export interface LotHeaderProps {
   isEditable: boolean;
   // State
   linkCopied: boolean;
+  // Evidence readiness for this lot. Its top-ranked actionable item earns the
+  // header's single solid primary button (A4 spec §7); everything else in the
+  // cluster collapses behind the overflow.
+  readiness?: LotEvidenceReadiness | null;
+  onReadinessAction?: (tab: LotTab, actionCode?: string) => void;
   assignments: LotSubcontractorAssignment[];
   removeAssignmentPending: boolean;
   // Handlers
@@ -69,6 +77,8 @@ export function LotHeader({
   canEditLot = canManageLot,
   isEditable,
   linkCopied,
+  readiness,
+  onReadinessAction,
   assignments,
   removeAssignmentPending,
   onCopyLink,
@@ -80,7 +90,19 @@ export function LotHeader({
   onRemoveAssignment,
 }: LotHeaderProps) {
   const isMobile = useIsMobile();
-  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Desktop overflow is a plain anchored popover (the LotContextMenu pattern),
+  // so it closes on any outside click.
+  useEffect(() => {
+    if (!moreOpen || isMobile) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [moreOpen, isMobile]);
 
   const statusBadge = (
     <span className={`px-3 py-1 rounded text-sm font-medium ${getLotStatusBadgeClass(lot.status)}`}>
@@ -88,55 +110,95 @@ export function LotHeader({
     </span>
   );
 
-  if (isMobile) {
-    // Determine primary action: Edit Lot when the user can edit, else null
-    // (Copy Link is always in the overflow sheet on mobile to keep it uncluttered).
-    const hasPrimary = canEditLot && isEditable;
+  // The one action that earns the solid primary slot. A tab action needs a
+  // handler to run through; without one there is no primary — we never
+  // fabricate an action to fill the slot.
+  const topAction = pickPrimaryReadinessAction(readiness);
+  const primary = topAction && (topAction.href || onReadinessAction) ? topAction : null;
+  const canEdit = Boolean(canEditLot && isEditable);
+  // Edit Lot only holds the slot when nothing outranked it.
+  const editIsFallback = !primary && canEdit;
 
-    // Build overflow actions list (respects same permission gating as desktop).
-    // Copy Link and Print always appear; management actions are gated.
-    const overflowActions: {
-      key: string;
-      icon: React.ReactNode;
-      label: string;
-      handler: () => void;
-    }[] = [
-      {
-        key: 'copy-link',
-        icon: linkCopied ? (
-          <Check className="h-5 w-5 text-success" />
-        ) : (
-          <Link2 className="h-5 w-5" />
-        ),
-        label: linkCopied ? 'Copied!' : 'Copy Link',
-        handler: () => {
-          onCopyLink();
-          setMoreSheetOpen(false);
-        },
-      },
-      {
-        key: 'print',
-        icon: <Printer className="h-5 w-5" />,
-        label: 'Print',
-        handler: () => {
-          onPrint();
-          setMoreSheetOpen(false);
-        },
-      },
-    ];
-
-    if (canConformLots && lot.status !== 'claimed') {
-      overflowActions.push({
-        key: 'override-status',
-        icon: <RefreshCw className="h-5 w-5" />,
-        label: 'Override Workflow Status',
-        handler: () => {
-          onOverrideStatus();
-          setMoreSheetOpen(false);
-        },
-      });
+  const primaryButton = (className: string) => {
+    if (primary) {
+      return primary.href ? (
+        <Button asChild className={className}>
+          <a href={primary.href}>{primary.label}</a>
+        </Button>
+      ) : (
+        <Button
+          className={className}
+          onClick={() => {
+            if (primary.tab) onReadinessAction?.(primary.tab, primary.code);
+          }}
+        >
+          {primary.label}
+        </Button>
+      );
     }
+    if (editIsFallback) {
+      return (
+        <Button variant="outline" className={className} onClick={onEdit}>
+          Edit Lot
+        </Button>
+      );
+    }
+    return null;
+  };
 
+  // Everything the primary slot displaced, in one list shared by the mobile
+  // sheet and the desktop popover. Permission gating is unchanged.
+  const overflowActions: {
+    key: string;
+    icon: React.ReactNode;
+    label: string;
+    handler: () => void;
+  }[] = [
+    {
+      key: 'copy-link',
+      icon: linkCopied ? <Check className="h-5 w-5 text-success" /> : <Link2 className="h-5 w-5" />,
+      label: linkCopied ? 'Copied!' : 'Copy Link',
+      handler: () => {
+        onCopyLink();
+        setMoreOpen(false);
+      },
+    },
+    {
+      key: 'print',
+      icon: <Printer className="h-5 w-5" />,
+      label: 'Print',
+      handler: () => {
+        onPrint();
+        setMoreOpen(false);
+      },
+    },
+  ];
+
+  if (canEdit && !editIsFallback) {
+    overflowActions.push({
+      key: 'edit-lot',
+      icon: <Pencil className="h-5 w-5" />,
+      label: 'Edit Lot',
+      handler: () => {
+        onEdit();
+        setMoreOpen(false);
+      },
+    });
+  }
+
+  if (canConformLots && lot.status !== 'claimed') {
+    overflowActions.push({
+      key: 'override-status',
+      icon: <RefreshCw className="h-5 w-5" />,
+      label: 'Override Workflow Status',
+      handler: () => {
+        onOverrideStatus();
+        setMoreOpen(false);
+      },
+    });
+  }
+
+  if (isMobile) {
     return (
       <>
         {/* Mobile header */}
@@ -160,18 +222,10 @@ export function LotHeader({
 
           {/* Action row: primary + overflow More button */}
           <div className="flex items-center gap-2">
-            {hasPrimary && (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="flex-1 rounded-lg border border-border px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors min-h-[44px]"
-              >
-                Edit Lot
-              </button>
-            )}
+            {primaryButton('flex-1 min-h-[44px]')}
             <button
               type="button"
-              onClick={() => setMoreSheetOpen(true)}
+              onClick={() => setMoreOpen(true)}
               className="rounded-lg border border-border p-2.5 hover:bg-muted/50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="More actions"
               data-testid="lot-header-more-button"
@@ -218,11 +272,7 @@ export function LotHeader({
         />
 
         {/* Overflow actions bottom sheet */}
-        <BottomSheet
-          isOpen={moreSheetOpen}
-          onClose={() => setMoreSheetOpen(false)}
-          title="More actions"
-        >
+        <BottomSheet isOpen={moreOpen} onClose={() => setMoreOpen(false)} title="More actions">
           <div className="space-y-1">
             {overflowActions.map((action) => (
               <OverflowActionRow
@@ -251,59 +301,42 @@ export function LotHeader({
             <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
           </div>
         </div>
+        {/* One primary action, the status chip, then everything else behind the
+            overflow (A4 spec §7). Subcontractor assignment lives in the
+            Subcontractor Assignments section below; the legacy single-assignment
+            header button is retired. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <AskClancyButton
-            question={`What is the status of lot ${lot.lotNumber}?`}
-            label="Ask Clancy"
-          />
-          <button
-            onClick={onCopyLink}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-            title="Copy link to this lot"
-          >
-            {linkCopied ? (
-              <>
-                <Check className="h-4 w-4 text-success" />
-                <span className="text-success">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Link2 className="h-4 w-4" />
-                <span>Copy Link</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={onPrint}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors print:hidden"
-            title="Print lot details"
-          >
-            <Printer className="h-4 w-4" />
-            <span>Print</span>
-          </button>
-          {canEditLot && isEditable && (
-            <button
-              onClick={onEdit}
-              className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
-            >
-              Edit Lot
-            </button>
-          )}
-          {/* Subcontractor assignment lives in the Subcontractor Assignments
-              section below (per-lot permissions, many companies). The legacy
-              single-assignment header button is retired. */}
-          {/* Override Workflow Status Button - only for quality managers and above */}
-          {canConformLots && lot.status !== 'claimed' && (
-            <button
-              onClick={onOverrideStatus}
-              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
-              title="Manually override lot workflow status"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Override Workflow Status</span>
-            </button>
-          )}
+          {primaryButton('')}
           {statusBadge}
+          <div className="relative print:hidden" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              className="flex items-center justify-center rounded-lg border border-border p-2 hover:bg-muted/50 transition-colors"
+              aria-label="More actions"
+              aria-expanded={moreOpen}
+              data-testid="lot-header-more-button"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+            {moreOpen && (
+              <div className="absolute right-0 z-50 mt-2 min-w-[240px] rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
+                <AskClancyButton
+                  question={`What is the status of lot ${lot.lotNumber}?`}
+                  label="Ask Clancy"
+                  className="w-full justify-start gap-3 px-4 py-3"
+                />
+                {overflowActions.map((action) => (
+                  <OverflowActionRow
+                    key={action.key}
+                    icon={action.icon}
+                    label={action.label}
+                    onClick={action.handler}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

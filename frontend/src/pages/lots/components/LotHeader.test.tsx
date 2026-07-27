@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LotHeader, type LotHeaderProps } from './LotHeader';
 import type { Lot } from '../types';
+import type { EvidenceReadinessItem, LotEvidenceReadiness } from '@/types/evidenceReadiness';
 
 // Mock framer-motion to keep tests synchronous (BottomSheet uses AnimatePresence)
 vi.mock('framer-motion', () => ({
@@ -57,6 +58,37 @@ const baseLot: Lot = {
   assignedSubcontractor: null,
 };
 
+/** Readiness payload carrying only the conformance items a test cares about. */
+function readinessWith(items: EvidenceReadinessItem[]): LotEvidenceReadiness {
+  return {
+    lotId: 'lot-1',
+    lotNumber: 'LOT-001',
+    status: 'in_progress',
+    conformStatus: {
+      canConform: false,
+      blockingReasons: [],
+      prerequisites: {
+        itpAssigned: true,
+        itpCompleted: false,
+        itpCompletedCount: 1,
+        itpTotalCount: 4,
+        testRequired: false,
+        hasPassingTest: false,
+        noOpenNcrs: true,
+        openNcrs: [],
+      },
+    },
+    conformance: {
+      state: 'blocked',
+      blockers: items.filter((item) => item.severity === 'blocker'),
+      warnings: items.filter((item) => item.severity === 'warning'),
+      support: items.filter((item) => item.severity === 'support'),
+    },
+    claim: { state: 'not_conformed', blockers: [], warnings: [], support: [] },
+    summary: { blockerCount: 0, warningCount: 0, supportCount: 0, actionBlockerCount: 0 },
+  };
+}
+
 function renderHeader(overrides: Partial<LotHeaderProps> = {}) {
   const props: LotHeaderProps = {
     lot: baseLot,
@@ -92,7 +124,9 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
     // Modern subcontractor management (the Add button in the assignments section) is gated too.
     expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
 
-    // Field/non-configuration controls stay available to every non-viewer.
+    // Field/non-configuration controls stay available to every non-viewer,
+    // now behind the overflow.
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
     expect(screen.getByText('In Progress')).toBeInTheDocument();
@@ -115,11 +149,13 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
   });
 });
 
-describe('LotHeader desktop layout snapshot', () => {
+describe('LotHeader desktop layout', () => {
   it('renders the action cluster with flex-wrap and desktop layout classes', () => {
     renderHeader({ canManageLot: true });
 
-    const actionCluster = screen.getByRole('button', { name: 'Copy Link' }).parentElement;
+    // More button sits in the relative popover anchor inside the action cluster.
+    const actionCluster = screen.getByRole('button', { name: 'More actions' }).parentElement
+      ?.parentElement;
     // The action buttons wrap onto multiple lines instead of overflowing.
     expect(actionCluster).toHaveClass('flex-wrap');
 
@@ -127,6 +163,124 @@ describe('LotHeader desktop layout snapshot', () => {
     // Title block and actions stack vertically on mobile, side-by-side on >= sm.
     expect(headerRow).toHaveClass('flex-col');
     expect(headerRow).toHaveClass('sm:flex-row');
+  });
+});
+
+// ── Readiness primary action (A4 spec §7) ───────────────────────────────────
+
+describe('LotHeader readiness primary action', () => {
+  const blocker: EvidenceReadinessItem = {
+    code: 'unreleased_hold_points',
+    severity: 'blocker',
+    area: 'hold_point',
+    title: 'Hold points not released',
+    detail: '2 outstanding',
+    blocksAction: true,
+    actionLabel: 'Release hold point',
+    actionHref: '?tab=itp',
+  };
+  const warning: EvidenceReadinessItem = {
+    code: 'a_low_photo_evidence',
+    severity: 'warning',
+    area: 'document',
+    title: 'Thin photo evidence',
+    detail: '1 photo',
+    blocksAction: false,
+    actionLabel: 'Add photos',
+    actionHref: '?tab=documents',
+  };
+
+  it('promotes the blocker over the warning even when the warning sorts first by code', () => {
+    const onReadinessAction = vi.fn();
+    renderHeader({
+      canManageLot: true,
+      readiness: readinessWith([warning, blocker]),
+      onReadinessAction,
+    });
+
+    const primary = screen.getByRole('button', { name: 'Release hold point' });
+    expect(primary).toHaveClass('bg-primary');
+    expect(screen.queryByRole('button', { name: 'Add photos' })).not.toBeInTheDocument();
+
+    fireEvent.click(primary);
+    expect(onReadinessAction).toHaveBeenCalledWith('itp', 'unreleased_hold_points');
+  });
+
+  it('demotes Edit Lot, Copy Link, Print and Override into the overflow when a primary exists', () => {
+    renderHeader({
+      canManageLot: true,
+      canConformLots: true,
+      readiness: readinessWith([blocker]),
+      onReadinessAction: vi.fn(),
+    });
+
+    expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy Link' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Override Workflow Status' })).toBeInTheDocument();
+  });
+
+  it('keeps the permission-gated Override out of the overflow for a disallowed role', () => {
+    renderHeader({
+      canManageLot: true,
+      canConformLots: false,
+      readiness: readinessWith([blocker]),
+      onReadinessAction: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(
+      screen.queryByRole('button', { name: 'Override Workflow Status' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders no solid button and falls back to outline Edit Lot when nothing is actionable', () => {
+    // A support item with no actionLabel is not an action — the slot stays honest.
+    renderHeader({
+      canManageLot: true,
+      readiness: readinessWith([
+        {
+          code: 'photos',
+          severity: 'support',
+          area: 'document',
+          title: 'Photos attached',
+          detail: '12 photos',
+          blocksAction: false,
+        },
+      ]),
+      onReadinessAction: vi.fn(),
+    });
+
+    const editLot = screen.getByRole('button', { name: 'Edit Lot' });
+    expect(editLot).not.toHaveClass('bg-primary');
+    expect(document.querySelector('.bg-primary')).toBeNull();
+  });
+
+  it('renders no primary at all when the fallback is not permitted either', () => {
+    renderHeader({ canManageLot: false, readiness: readinessWith([]) });
+
+    expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    expect(document.querySelector('.bg-primary')).toBeNull();
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument();
+  });
+
+  it('uses the readiness action as the mobile primary and pushes Edit Lot into the sheet', () => {
+    mockIsMobile = true;
+    renderHeader({
+      canManageLot: true,
+      readiness: readinessWith([blocker]),
+      onReadinessAction: vi.fn(),
+    });
+
+    expect(screen.getByRole('button', { name: 'Release hold point' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
   });
 });
 

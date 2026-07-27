@@ -384,6 +384,8 @@ export function LotDetailPage() {
         canEditLot={canEditLot}
         isEditable={isEditable}
         linkCopied={linkCopied}
+        readiness={readinessData?.readiness ?? null}
+        onReadinessAction={handleReadinessTabChange}
         assignments={assignments}
         removeAssignmentPending={removeAssignmentPending}
         onCopyLink={copyLotLink}
