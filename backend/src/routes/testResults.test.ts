@@ -2545,6 +2545,102 @@ describe('Test Results API', () => {
       expect(unchanged?.enteredById).toBe(userId);
     });
 
+    // Regression: the reject response reported `notification.sent: true` while
+    // the handler only ever BUILT a payload — no Notification row, no email.
+    it('creates an in-app notification and emails the engineer who entered the result', async () => {
+      const engineer = await registerTestUser('Rejection Notified Engineer', 'member', companyId);
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'Compaction Test',
+          status: 'entered',
+          resultValue: 88,
+          passFail: 'pass',
+          enteredById: engineer.userId,
+          enteredAt: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/reject`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: 'Values do not match the certificate.' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.notification.sent).toBe(true);
+
+        const notification = await prisma.notification.findFirst({
+          where: { userId: engineer.userId, projectId, type: 'test_result_rejected' },
+        });
+        expect(notification).toMatchObject({
+          title: 'Test Result Rejected',
+          message:
+            'Your test result "Compaction Test" was rejected. Reason: Values do not match the certificate.',
+          linkUrl: `/projects/${projectId}/tests?test=${testResult.id}`,
+        });
+
+        expect(mockSendNotificationIfEnabled).toHaveBeenCalledOnce();
+        expect(mockSendNotificationIfEnabled).toHaveBeenCalledWith(engineer.userId, 'enabled', {
+          title: 'Test Result Rejected',
+          message:
+            'Your test result "Compaction Test" was rejected. Reason: Values do not match the certificate.',
+          linkUrl: `/projects/${projectId}/tests?test=${testResult.id}`,
+          projectName: expect.any(String),
+        });
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: engineer.userId } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(engineer.userId);
+      }
+    });
+
+    it('reports notification.sent=false when the project test-result toggle is off', async () => {
+      const engineer = await registerTestUser('Rejection Toggle-Off Engineer', 'member', companyId);
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'CBR Test',
+          status: 'entered',
+          resultValue: 12,
+          passFail: 'pass',
+          enteredById: engineer.userId,
+          enteredAt: new Date(),
+        },
+      });
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { settings: JSON.stringify({ notificationPreferences: { testResults: false } }) },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/reject`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: 'Suppressed category.' });
+
+        // The rejection still happens; only the notification is suppressed —
+        // and the response says so instead of claiming a phantom send.
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('results_received');
+        expect(res.body.notification).toEqual({ sent: false, recipient: null });
+
+        const notification = await prisma.notification.findFirst({
+          where: { userId: engineer.userId, type: 'test_result_rejected' },
+        });
+        expect(notification).toBeNull();
+        expect(mockSendNotificationIfEnabled).not.toHaveBeenCalled();
+      } finally {
+        await prisma.project.update({ where: { id: projectId }, data: { settings: null } });
+        await prisma.notification.deleteMany({ where: { userId: engineer.userId } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(engineer.userId);
+      }
+    });
+
     it('should trim and store valid rejection reasons', async () => {
       const testResult = await createEnteredTestResult();
 

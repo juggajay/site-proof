@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildTestResultAlreadyVerifiedResponse,
+  buildTestResultRejectedNotificationRow,
   buildTestResultRejectedResponse,
   buildTestResultRejectionNotification,
   buildTestResultVerifiedResponse,
@@ -36,6 +37,30 @@ describe('test result verification response helpers', () => {
         'Missing page',
       ),
     ).toBeNull();
+  });
+
+  it('builds the persisted rejection notification row from the recipient payload', () => {
+    const recipient = buildTestResultRejectionNotification(
+      {
+        testType: 'Compaction Test',
+        enteredBy: { id: 'user-1', fullName: 'Site Engineer', email: 'engineer@example.com' },
+      },
+      'Certificate mismatch',
+    )!;
+
+    expect(
+      buildTestResultRejectedNotificationRow(recipient, {
+        projectId: 'project-1',
+        testResultId: 'test-1',
+      }),
+    ).toEqual({
+      userId: 'user-1',
+      projectId: 'project-1',
+      type: 'test_result_rejected',
+      title: 'Test Result Rejected',
+      message: 'Your test result "Compaction Test" was rejected. Reason: Certificate mismatch',
+      linkUrl: '/projects/project-1/tests?test=test-1',
+    });
   });
 
   it('builds the rejected response shape with sent=true when a recipient exists', () => {
