@@ -1,9 +1,16 @@
 import { AlertCircle, AlertTriangle, ChevronRight, Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export interface AttentionItem {
   id: string;
   type: 'ncr' | 'holdpoint';
   title: string;
+  /**
+   * Free text, no longer rendered in this widget's rows (richer detail lives on
+   * /dashboard/needs-attention). Kept required so AttentionItem stays
+   * structurally assignable to DashboardPDFAttentionItem, which still prints it
+   * (src/lib/pdf/types.ts:86, src/lib/pdf/dashboardPdf.ts:103).
+   */
   description: string;
   status: string;
   daysOverdue?: number;
@@ -48,9 +55,15 @@ export function ItemsRequiringAttentionWidget({
       <div className="flex items-center gap-2 border-b p-4">
         <AlertCircle className="h-4 w-4 text-destructive" />
         <h2 className="text-sm font-semibold text-foreground">Items Requiring Attention</h2>
-        <span className="ml-auto rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 font-mono text-xs font-semibold tabular-nums text-destructive">
+        <span className="rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 font-mono text-xs font-semibold tabular-nums text-destructive">
           {attentionItems.total}
         </span>
+        <Link
+          to="/dashboard/needs-attention"
+          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+        >
+          View all →
+        </Link>
       </div>
       <div className="divide-y">
         {/* Overdue NCRs */}
@@ -82,7 +95,7 @@ export function ItemsRequiringAttentionWidget({
                         </span>
                       </div>
                       <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {item.project.name} • {item.description}
+                        {item.project.name}
                       </p>
                     </div>
                   </div>
@@ -122,7 +135,7 @@ export function ItemsRequiringAttentionWidget({
                         </span>
                       </div>
                       <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {item.project.name} • {item.description}
+                        {item.project.name}
                       </p>
                     </div>
                   </div>

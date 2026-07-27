@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ItemsRequiringAttentionWidget, type AttentionItem } from './ItemsRequiringAttentionWidget';
 
@@ -32,24 +33,26 @@ describe('ItemsRequiringAttentionWidget', () => {
     expect(screen.queryByText('Items Requiring Attention')).not.toBeInTheDocument();
   });
 
-  it('renders overdue NCRs and stale hold points with their counts', () => {
+  it('renders overdue NCRs and stale hold points with their counts, without free-text descriptions', () => {
     render(
-      <ItemsRequiringAttentionWidget
-        attentionItems={{
-          overdueNCRs: [buildItem({ id: 'ncr-1', title: 'NCR-001', daysOverdue: 3 })],
-          staleHoldPoints: [
-            buildItem({
-              id: 'hp-1',
-              type: 'holdpoint',
-              title: 'HP-009',
-              description: 'Awaiting inspection',
-              daysStale: 1,
-            }),
-          ],
-          total: 2,
-        }}
-        onNavigate={vi.fn()}
-      />,
+      <MemoryRouter>
+        <ItemsRequiringAttentionWidget
+          attentionItems={{
+            overdueNCRs: [buildItem({ id: 'ncr-1', title: 'NCR-001', daysOverdue: 3 })],
+            staleHoldPoints: [
+              buildItem({
+                id: 'hp-1',
+                type: 'holdpoint',
+                title: 'HP-009',
+                description: 'Awaiting inspection',
+                daysStale: 1,
+              }),
+            ],
+            total: 2,
+          }}
+          onNavigate={vi.fn()}
+        />
+      </MemoryRouter>,
     );
 
     expect(screen.getByRole('heading', { name: 'Items Requiring Attention' })).toBeInTheDocument();
@@ -59,22 +62,45 @@ describe('ItemsRequiringAttentionWidget', () => {
     expect(screen.getByText(/3 days overdue/)).toBeInTheDocument();
     expect(screen.getByText(/Stale Hold Points \(1\)/)).toBeInTheDocument();
     expect(screen.getByText(/1 day waiting/)).toBeInTheDocument();
+    // Rows keep the project name but drop the free-text description (A4 P1.3);
+    // the PDF still prints it.
+    expect(screen.getAllByText('Highway Upgrade')).toHaveLength(2);
+    expect(screen.queryByText(/Cracked slab/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Awaiting inspection/)).not.toBeInTheDocument();
+  });
+
+  it('links the header through to the needs-attention screen', () => {
+    render(
+      <MemoryRouter>
+        <ItemsRequiringAttentionWidget
+          attentionItems={{ overdueNCRs: [buildItem()], staleHoldPoints: [], total: 1 }}
+          onNavigate={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'View all →' })).toHaveAttribute(
+      'href',
+      '/dashboard/needs-attention',
+    );
   });
 
   it('navigates to the item link, falling back to /projects for unsafe links', () => {
     const onNavigate = vi.fn();
     render(
-      <ItemsRequiringAttentionWidget
-        attentionItems={{
-          overdueNCRs: [
-            buildItem({ id: 'safe', title: 'Safe NCR', link: '/projects/p1/ncrs/n1' }),
-            buildItem({ id: 'unsafe', title: 'Unsafe NCR', link: 'https://evil.example' }),
-          ],
-          staleHoldPoints: [],
-          total: 2,
-        }}
-        onNavigate={onNavigate}
-      />,
+      <MemoryRouter>
+        <ItemsRequiringAttentionWidget
+          attentionItems={{
+            overdueNCRs: [
+              buildItem({ id: 'safe', title: 'Safe NCR', link: '/projects/p1/ncrs/n1' }),
+              buildItem({ id: 'unsafe', title: 'Unsafe NCR', link: 'https://evil.example' }),
+            ],
+            staleHoldPoints: [],
+            total: 2,
+          }}
+          onNavigate={onNavigate}
+        />
+      </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByText('Safe NCR'));
