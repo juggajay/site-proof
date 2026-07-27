@@ -87,7 +87,9 @@ describe('zipSafety', () => {
       { name: 'xl/vbaProject.bin', compressed: 200, uncompressed: 800 },
     ]);
     expect(hasMacroPart(readZipCentralDirectory(macro))).toBe(true);
-    expect(() => assertSafeOoxmlArchive(macro)).toThrow(/Macro-enabled workbooks are not accepted/);
+    expect(() => assertSafeOoxmlArchive(macro)).toThrow(
+      /Macro-enabled Office files are not accepted/,
+    );
   });
 
   it('treats zero declared compressed bytes with real content as a bomb', () => {

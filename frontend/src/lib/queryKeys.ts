@@ -241,4 +241,5 @@ export const queryKeys = {
     ['import-batch', projectId, batchId] as const,
   importProfiles: (projectId: string, kind: string) =>
     ['import-profiles', projectId, kind] as const,
+  importMasters: (projectId: string, kind: string) => ['import-masters', projectId, kind] as const,
 } as const;

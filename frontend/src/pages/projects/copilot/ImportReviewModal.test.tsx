@@ -8,9 +8,11 @@ import type { DryRunResult, ImportBatchDetail } from './importData';
 
 const state = vi.hoisted(() => ({
   detail: null as unknown,
+  masters: [] as unknown[],
   dryRunSpy: vi.fn(),
   decideSpy: vi.fn(),
   reviewSpy: vi.fn(),
+  masterSpy: vi.fn(),
 }));
 
 vi.mock('./importData', async () => {
@@ -28,6 +30,8 @@ vi.mock('./importData', async () => {
     useImportDryRun: () => ({ mutateAsync: state.dryRunSpy, isLoading: false }),
     useSendImportToReview: () => ({ mutateAsync: state.reviewSpy, isLoading: false }),
     useCancelImport: () => ({ mutateAsync: vi.fn(), isLoading: false }),
+    useCorporateMasters: () => ({ data: state.masters }),
+    useImportFromMaster: () => ({ mutateAsync: state.masterSpy, isLoading: false }),
   };
 });
 vi.mock('./copilotData', () => ({
@@ -82,11 +86,14 @@ function detailFor(result: DryRunResult): ImportBatchDetail {
   };
 }
 
-function renderModal(kind: 'itp_template' | 'lot_register' = 'itp_template'): ReactElement {
+function renderModal(
+  kind: 'itp_template' | 'lot_register' = 'itp_template',
+  batchId: string | null = 'batch-1',
+): ReactElement {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ImportReviewModal projectId="p1" kind={kind} batchId="batch-1" onClose={vi.fn()} />
+      <ImportReviewModal projectId="p1" kind={kind} batchId={batchId} onClose={vi.fn()} />
     </QueryClientProvider>,
   ) as unknown as ReactElement;
 }
@@ -96,7 +103,14 @@ describe('ImportReviewModal', () => {
     state.dryRunSpy = vi.fn(async () => ({ dryRun: dryRun() }));
     state.reviewSpy = vi.fn(async () => ({ proposalId: 'prop-1', templateCount: 1 }));
     state.decideSpy = vi.fn(async () => ({}));
+    state.masterSpy = vi.fn(async () => ({
+      batch: { id: 'batch-9', status: 'parsed', kind: 'itp_template' },
+      sheets: [{ name: 'ITP-01', headers: ['Activity'], rowCount: 1 }],
+      suggestedProfile: null,
+      suggestedFieldMap: [],
+    }));
     state.detail = detailFor(dryRun());
+    state.masters = [];
   });
 
   it('shows the dry-run counts before anything is committed', () => {
@@ -335,6 +349,71 @@ describe('ImportReviewModal', () => {
 
     expect(screen.getByRole('button', { name: 'Affirm MRTS anyway' })).toBeInTheDocument();
     expect(screen.getByText(/This ITP declares MRTS/)).toBeInTheDocument();
+  });
+
+  // B3 §4.5: the project's copy is CONTROLLED. A re-imported master shows what
+  // it would change and writes nothing — never a silent overwrite.
+  it('spells out what a corporate master would change in the project copy', () => {
+    state.detail = detailFor(
+      dryRun({
+        counts: {
+          willCreate: 0,
+          willUpdate: 0,
+          willSkip: 0,
+          needsReview: 1,
+          ambiguous: 0,
+          blocked: 0,
+        },
+        canApply: false,
+        rows: [
+          {
+            key: 'ITP-01::ITP-01',
+            unit: 'template',
+            rowRef: { sheet: 'ITP-01', rowIndex: 2 },
+            label: 'ITP-01 Subgrade',
+            outcome: 'needs_review',
+            reason: 'duplicate',
+            duplicateOf: { model: 'ITPTemplate', id: 't1', matchedOn: 'name + activity' },
+            diff: {
+              added: 1,
+              changed: 1,
+              removed: 0,
+              items: [
+                { change: 'added', description: 'Record the moisture content' },
+                { change: 'changed', description: 'Proof roll the prepared subgrade' },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    renderModal();
+
+    expect(screen.getByText(/its copy differs — 1 new, 1 changed/)).toBeInTheDocument();
+    expect(screen.getByText(/Record the moisture content/)).toBeInTheDocument();
+    // A duplicate creates nothing, so it is not counted as an import.
+    expect(screen.getByRole('button', { name: /^Import 0 ITPs$/ })).toBeDisabled();
+  });
+
+  it('offers corporate masters on the upload step and opens the one picked', async () => {
+    state.masters = [
+      {
+        id: 'master-1',
+        projectId: 'p0',
+        projectName: 'Northern Interchange',
+        sourceFileName: 'company-itps.xlsx',
+        sourceFormat: 'excel',
+        appliedAt: '',
+        templateCount: 12,
+      },
+    ];
+    renderModal('itp_template', null);
+
+    expect(screen.getByText('Bring in a corporate master')).toBeInTheDocument();
+    expect(screen.getByText(/Northern Interchange · 12 ITPs/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use this master' }));
+    await vi.waitFor(() => expect(state.masterSpy).toHaveBeenCalledWith('master-1'));
   });
 
   it('sends the batch to review and then accepts it, in that order', async () => {

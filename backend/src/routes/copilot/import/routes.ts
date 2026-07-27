@@ -29,7 +29,7 @@ import {
   sanitizeUploadFilename,
   getSafeStoredDocumentMimeType,
 } from '../../documents/fileHelpers.js';
-import { TEMPLATE_MANAGER_ROLES } from '../../itp/templateAccess.js';
+import { getReadableProjects, TEMPLATE_MANAGER_ROLES } from '../../itp/templateAccess.js';
 import { createProposal } from '../proposalService.js';
 import { assertBatchTransition, isTerminalImportBatchStatus } from './batchState.js';
 import type { DryRunResult } from './dryRunTypes.js';
@@ -42,8 +42,10 @@ import {
   importUpload,
   storeImportSource,
   IMPORT_SOURCE_DOCUMENT_TYPE,
+  UNSUPPORTED_SOURCE_MESSAGE,
 } from './importSourceStorage.js';
 import { extractPdfGrid } from './pdfExtraction.js';
+import { parseWordDocument } from './wordParser.js';
 import {
   assertAllowedFieldMap,
   BUILT_IN_PROFILES,
@@ -80,6 +82,8 @@ const dryRunBodySchema = z.object({
 const proposalBodySchema = z.object({
   resolutions: z.record(resolutionSchema).optional(),
 });
+
+const fromMasterBodySchema = z.object({ masterBatchId: z.string().trim().min(1).max(200) });
 
 const importRouter = Router();
 
@@ -161,12 +165,16 @@ async function failBatch(batchId: string, status: string, reason: string): Promi
 // Upload → parse
 // ---------------------------------------------------------------------------
 
-/**
- * Gate an uploaded file and read it into the normalized grid.
- *
- * Excel is parsed; a PDF has no grid to parse, so the model reads one out of it
- * (spec §6-B2) — same shape, and everything after this point is identical.
- */
+/** One reader per accepted format, all emitting the SAME normalized grid. */
+const READERS: Record<string, (file: Express.Multer.File, kind: string) => Promise<ParsedGrid>> = {
+  excel: (file, kind) => parseExcelWorkbook(file.buffer, kind),
+  // A PDF has no grid to parse, so the model reads one out of it (§6-B2).
+  pdf: (file, kind) => extractPdfGrid(file, kind),
+  // A Word ITP is a table, so the tables are parsed — in a worker (§6-B3, §8.4).
+  word: (file, kind) => parseWordDocument(file.buffer, kind),
+};
+
+/** Gate an uploaded file and read it into the normalized grid. */
 async function readSourceFile(
   file: Express.Multer.File,
   kind: string,
@@ -177,15 +185,17 @@ async function readSourceFile(
   // Re-derived rather than carried from the filter, so the reader that runs and
   // the format recorded on the batch can never disagree.
   const sourceFormat = importSourceFormat(file.originalname);
-  if (!sourceFormat) {
-    throw AppError.badRequest('Only .xlsx spreadsheets and .pdf documents can be imported.');
+  const read = sourceFormat ? READERS[sourceFormat] : undefined;
+  if (!sourceFormat || !read) {
+    throw AppError.badRequest(UNSUPPORTED_SOURCE_MESSAGE);
   }
 
-  const grid =
-    sourceFormat === 'pdf'
-      ? await extractPdfGrid(file, kind)
-      : await parseExcelWorkbook(file.buffer, kind);
+  const grid = await read(file, kind);
+  assertGridWithinParseResultCap(grid);
+  return { grid, sourceFormat };
+}
 
+function assertGridWithinParseResultCap(grid: ParsedGrid): void {
   const serialized = JSON.stringify(grid);
   if (Buffer.byteLength(serialized, 'utf8') > MAX_PARSE_RESULT_BYTES) {
     const rowCount = grid.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
@@ -194,8 +204,6 @@ async function readSourceFile(
       { code: 'IMPORT_PARSE_RESULT_TOO_LARGE' },
     );
   }
-
-  return { grid, sourceFormat };
 }
 
 importRouter.post(
@@ -268,6 +276,175 @@ importRouter.post(
       // target its own fieldMap leaves unresolved against these headers (e.g.
       // the CivilPro CSV spells pointType as "Check Type", which the grid
       // profile does not carry but the alias table resolves).
+      suggestedFieldMap: suggested
+        ? mergeFieldMapWithAliases(suggested.fieldMap, headers, config.kind)
+        : deriveFieldMapFromHeaders(headers, config.kind),
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Corporate master -> project-controlled copy (§4.5)
+//
+// A corporate master is simply an ITP import that has been APPLIED somewhere.
+// Rolling it out to another project re-runs that batch's parsed grid against the
+// target, so the copy arrives through the same dry run, the same review, the
+// same one proposal and the same rollback as any other import — and the dry run
+// answers "what would this change here" by diffing every template that already
+// exists against the project's controlled copy (§4.5, `diffChecklistItems`).
+//
+// ponytail: no `isCorporateMaster` flag and no schema change. A flag would add a
+// migration and a toggle without adding a capability — every applied ITP import
+// IS a set the contractor decided was right, which is what "master" means.
+// ---------------------------------------------------------------------------
+
+function requireCorporateMasterKind(config: ImportKindConfig): void {
+  if (!config.corporateMaster) {
+    throw AppError.badRequest('Only ITP imports can be used as a corporate master.', {
+      code: 'IMPORT_MASTER_KIND_UNSUPPORTED',
+    });
+  }
+}
+
+importRouter.get(
+  '/:projectId/copilot/import-masters',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    const config = requireImportKind(req.query.kind);
+    requireCorporateMasterKind(config);
+    await requireImportAccess(projectId, req.user, config);
+
+    // Only projects this user can already read — a master never widens access.
+    const readable = await getReadableProjects(req.user!);
+    const otherProjectIds = readable
+      .filter((project) => project.id !== projectId)
+      .map((project) => project.id);
+    if (otherProjectIds.length === 0) {
+      res.json({ masters: [] });
+      return;
+    }
+
+    const batches = await prisma.importBatch.findMany({
+      where: { projectId: { in: otherProjectIds }, kind: config.kind, status: 'applied' },
+      orderBy: { updatedAt: 'desc' },
+      take: BATCH_LIST_LIMIT,
+      select: {
+        id: true,
+        sourceFormat: true,
+        updatedAt: true,
+        project: { select: { id: true, name: true } },
+        sourceDocument: { select: { filename: true } },
+        proposal: { select: { payload: true } },
+      },
+    });
+
+    res.json({
+      masters: batches.map((batch) => ({
+        id: batch.id,
+        projectId: batch.project.id,
+        projectName: batch.project.name,
+        sourceFileName: batch.sourceDocument?.filename ?? null,
+        sourceFormat: batch.sourceFormat,
+        appliedAt: batch.updatedAt.toISOString(),
+        templateCount: config.storedPayloadKeys(batch.proposal?.payload ?? null).length,
+      })),
+    });
+  }),
+);
+
+importRouter.post(
+  '/:projectId/copilot/imports/from-master',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    const body = fromMasterBodySchema.safeParse(req.body ?? {});
+    if (!body.success) {
+      throw AppError.fromZodError(body.error);
+    }
+
+    const config = requireImportKind(req.query.kind);
+    requireCorporateMasterKind(config);
+    await requireImportAccess(projectId, req.user, config);
+
+    const master = await prisma.importBatch.findUnique({
+      where: { id: body.data.masterBatchId },
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        projectId: true,
+        sourceFormat: true,
+        parseResult: true,
+        sourceDocument: {
+          select: { filename: true, fileUrl: true, fileSize: true, mimeType: true },
+        },
+      },
+    });
+    if (!master || master.kind !== config.kind || master.status !== 'applied') {
+      throw AppError.notFound('Corporate master');
+    }
+    if (master.projectId === projectId) {
+      throw AppError.badRequest('That import already belongs to this project.');
+    }
+    // The SOURCE project's own guard, not merely the target's: rolling a master
+    // out must never be a way to read a project the user cannot open. It answers
+    // 404, not 403 — otherwise the two replies tell an outsider which batch ids
+    // exist, the same existence-leak rule the decide route follows (§4.9).
+    try {
+      await requireImportAccess(master.projectId, req.user, config);
+    } catch {
+      throw AppError.notFound('Corporate master');
+    }
+
+    const grid = asGrid(master.parseResult);
+
+    const batch = await prisma.$transaction(async (tx) => {
+      const created = await tx.importBatch.create({
+        data: {
+          projectId,
+          kind: config.kind,
+          sourceFormat: master.sourceFormat,
+          status: 'parsed',
+          createdById: req.user!.id,
+          parseResult: grid as unknown as object,
+        },
+        select: { id: true },
+      });
+
+      // The source file travels with the master as this project's OWN provenance
+      // row, pointing at the same stored object. A cross-project Document id on
+      // the batch would be a tenant-isolation hole; a project-scoped copy is not,
+      // and `import_source` keeps it out of the client-visible register (§4.11).
+      if (master.sourceDocument) {
+        const document = await tx.document.create({
+          data: {
+            projectId,
+            documentType: IMPORT_SOURCE_DOCUMENT_TYPE,
+            filename: master.sourceDocument.filename,
+            fileUrl: master.sourceDocument.fileUrl,
+            fileSize: master.sourceDocument.fileSize,
+            mimeType: master.sourceDocument.mimeType,
+            uploadedById: req.user!.id,
+          },
+          select: { id: true },
+        });
+        await tx.importBatch.update({
+          where: { id: created.id },
+          data: { sourceDocumentId: document.id },
+        });
+      }
+      return created;
+    });
+
+    const headers = grid.sheets[0]?.headers ?? [];
+    const suggested = suggestBuiltInProfile(headers, config.kind);
+    res.status(201).json({
+      batch: { id: batch.id, status: 'parsed', kind: config.kind },
+      sheets: grid.sheets.map((sheet) => ({
+        name: sheet.name,
+        headers: sheet.headers,
+        rowCount: sheet.rows.length,
+      })),
+      suggestedProfile: suggested ? { key: suggested.key, name: suggested.name } : null,
       suggestedFieldMap: suggested
         ? mergeFieldMapWithAliases(suggested.fieldMap, headers, config.kind)
         : deriveFieldMapFromHeaders(headers, config.kind),

@@ -46,6 +46,12 @@ export interface ImportKindConfig {
   reconciliationTitle: string;
   /** The `AppliedRecordGroup.model` whose ids the reconciliation reports. */
   appliedModel: string;
+  /**
+   * B3 §4.5: whether an applied batch of this kind can be rolled out to another
+   * project as a corporate master. ITP sets are company standards; a lot
+   * register describes one project's ground and never travels.
+   */
+  corporateMaster: boolean;
   /** Ledger keys read back out of the STORED payload, in the order the apply
    *  handler created records, so reconciliation can pair keys with new ids. */
   storedPayloadKeys(payload: unknown): string[];
@@ -65,6 +71,7 @@ const ITP_TEMPLATE_KIND: ImportKindConfig = {
   sourceNote: 'Imported from an ITP document',
   reconciliationTitle: 'ITP import reconciliation',
   appliedModel: 'ITPTemplate',
+  corporateMaster: true,
   storedPayloadKeys(payload) {
     const templates = (payload as { templates?: { key?: string }[] } | null)?.templates ?? [];
     return templates.map((template) => template.key ?? '');
@@ -74,7 +81,16 @@ const ITP_TEMPLATE_KIND: ImportKindConfig = {
       prisma.project.findUnique({ where: { id: projectId }, select: { specificationSet: true } }),
       prisma.iTPTemplate.findMany({
         where: { projectId },
-        select: { id: true, name: true, activityType: true },
+        select: {
+          id: true,
+          name: true,
+          activityType: true,
+          // The project's controlled copy, for the corporate-master diff (§4.5).
+          checklistItems: {
+            orderBy: { sequenceNumber: 'asc' },
+            select: { description: true, acceptanceCriteria: true, pointType: true },
+          },
+        },
       }),
     ]);
 
@@ -104,6 +120,7 @@ const LOT_REGISTER_KIND: ImportKindConfig = {
   sourceNote: 'Imported from lot register',
   reconciliationTitle: 'Lot register import reconciliation',
   appliedModel: 'Lot',
+  corporateMaster: false,
   storedPayloadKeys(payload) {
     const lots = (payload as { lots?: { key?: string }[] } | null)?.lots ?? [];
     return lots.map((lot) => lot.key ?? '');

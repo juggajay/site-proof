@@ -518,7 +518,7 @@ describe('Wave B — Excel ITP import', () => {
     it('refuses a macro-enabled workbook by extension', async () => {
       const res = await upload(pmToken, workbook, 'macros.xlsm', XLSX_MIME);
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toMatch(/Macro-enabled workbooks/);
+      expect(res.body.error.message).toMatch(/Macro-enabled Office files/);
     });
 
     it('refuses a macro MIME type even under an .xlsx name', async () => {
