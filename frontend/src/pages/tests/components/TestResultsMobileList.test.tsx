@@ -43,9 +43,11 @@ function makeTest(overrides: Partial<TestResult> = {}): TestResult {
 function renderList({
   tests = [makeTest()],
   onLinkItpItem = vi.fn(),
+  onUpdateStatus = vi.fn(),
 }: {
   tests?: TestResult[];
   onLinkItpItem?: (test: TestResult) => void;
+  onUpdateStatus?: (testId: string, newStatus: string) => void;
 } = {}) {
   render(
     <MemoryRouter>
@@ -54,7 +56,7 @@ function renderList({
         filteredTestResults={tests}
         hasActiveFilters={false}
         updatingStatusId={null}
-        onUpdateStatus={vi.fn()}
+        onUpdateStatus={onUpdateStatus}
         onOpenEnterResults={vi.fn()}
         onRejectTest={vi.fn()}
         onAttachCertificate={vi.fn().mockResolvedValue(undefined)}
@@ -64,7 +66,7 @@ function renderList({
       />
     </MemoryRouter>,
   );
-  return { onLinkItpItem };
+  return { onLinkItpItem, onUpdateStatus };
 }
 
 describe('TestResultsMobileList ITP link action', () => {
@@ -97,5 +99,29 @@ describe('TestResultsMobileList ITP link action', () => {
     await user.click(actions[1]);
 
     expect(onLinkItpItem).toHaveBeenCalledWith(secondTest);
+  });
+});
+
+// AT-79 (Wave C2 Phase 2): 'at_lab' is reachable from the mobile card.
+describe('TestResultsMobileList send-to-lab action', () => {
+  it('sends a requested test to the lab', async () => {
+    const user = userEvent.setup();
+    const { onUpdateStatus } = renderList({
+      tests: [makeTest({ id: 'test-9', status: 'requested', passFail: 'pending' })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Send to lab' }));
+
+    expect(onUpdateStatus).toHaveBeenCalledWith('test-9', 'at_lab');
+  });
+
+  it('hides the action once the test has left "requested"', () => {
+    renderList({
+      tests: ['at_lab', 'results_received', 'entered', 'verified'].map((status) =>
+        makeTest({ id: `test-${status}`, status }),
+      ),
+    });
+
+    expect(screen.queryAllByRole('button', { name: 'Send to lab' })).toHaveLength(0);
   });
 });

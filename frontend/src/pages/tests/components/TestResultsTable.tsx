@@ -9,6 +9,9 @@ import {
   nextStatusMap,
   nextStatusButtonLabels,
   canAdvanceTestStatus,
+  canSendToLab,
+  AT_LAB_STATUS,
+  SEND_TO_LAB_LABEL,
   isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
@@ -267,6 +270,17 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                                 : nextStatusButtonLabels[test.status]}
                             </button>
                           ))}
+                        {/* Wave C2 Phase 2: record that the sample went to the
+                                lab. Secondary, never the primary advance. */}
+                        {canSendToLab(test) && (
+                          <button
+                            onClick={() => onUpdateStatus(test.id, AT_LAB_STATUS)}
+                            disabled={updatingStatusId === test.id}
+                            className="px-3 py-1 text-xs rounded border hover:bg-muted/50 transition-colors disabled:opacity-50"
+                          >
+                            {updatingStatusId === test.id ? 'Updating...' : SEND_TO_LAB_LABEL}
+                          </button>
+                        )}
                         {/* Feature B2: attach/replace a certificate so a
                                 manual test can reach 'verified'. */}
                         {test.status !== 'verified' && (

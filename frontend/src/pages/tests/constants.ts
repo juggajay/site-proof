@@ -62,6 +62,22 @@ export const canAdvanceTestStatus = (test: Pick<TestResult, 'status' | 'certific
   return nextStatus !== 'verified' || Boolean(test.certificateDocId);
 };
 
+// Wave C2 Phase 2 [C2R-B1]: 'at_lab' is a legal backend transition from
+// 'requested' (statusWorkflow.ts VALID_STATUS_TRANSITIONS) that no UI could ever
+// set, so "what am I waiting on from the lab" was unanswerable. This is the
+// missing wire.
+//
+// It is deliberately NOT a `nextStatusMap` entry [C2L-h]: that map drives the
+// single primary advance button and means "the mandatory next step". Sending a
+// sample to a lab is optional (plenty of tests never go), so it renders as a
+// secondary action instead of pushing an optional detour in front of every
+// planned test.
+export const AT_LAB_STATUS = 'at_lab';
+export const SEND_TO_LAB_LABEL = 'Send to lab';
+
+export const canSendToLab = (test: Pick<TestResult, 'status'>): boolean =>
+  test.status === 'requested';
+
 // Ticket T2: client-side mirror of the backend RESULT_REQUIRED gate so the Enter
 // Results form blocks submit (and the toast matches) before the request is sent.
 export const hasRecordedResult = (test: {
