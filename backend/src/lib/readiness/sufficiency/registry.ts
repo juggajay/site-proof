@@ -187,6 +187,36 @@ function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems
     checkPerQuantity(rule.reduced.perQuantity, 'reduced.perQuantity');
   }
 
+  // [C1C-6] The eligibility-only trigger: a streak the engine COMPUTES and
+  // REPORTS but may never apply. Legal on a draft ruleset (unlike `reduced`)
+  // precisely because it changes no count.
+  const eligibility = rule.reducedFrequencyEligibility;
+  if (eligibility) {
+    if (rule.reduced) {
+      problems.push(
+        `${where}: declare either 'reduced' (figures) or 'reducedFrequencyEligibility' (trigger only), not both`,
+      );
+    }
+    if (!(ESCALATION_SHAPES as readonly string[]).includes(eligibility.escalationShape)) {
+      problems.push(
+        `${where}: unsupported reducedFrequencyEligibility.escalationShape '${eligibility.escalationShape}'`,
+      );
+    }
+    if (
+      !Number.isInteger(eligibility.consecutiveConformingLots) ||
+      eligibility.consecutiveConformingLots < 1
+    ) {
+      problems.push(
+        `${where}: reducedFrequencyEligibility.consecutiveConformingLots must be an integer >= 1`,
+      );
+    }
+    if (!eligibility.clause.trim()) {
+      problems.push(
+        `${where}: reducedFrequencyEligibility.clause is empty — the regime is a DIFFERENT clause from the count (§3.2)`,
+      );
+    }
+  }
+
   validateProvenance(`${where} provenance`, rule.provenance, ruleset, now, problems);
 }
 

@@ -10,6 +10,8 @@ import {
   DEFAULT_FORM_DATA,
   SPECIFICATION_SET_HELPER_TEXT,
   SPECIFICATION_SET_OPTIONS,
+  TEST_SUFFICIENCY_MODE_HELPER_TEXT,
+  TEST_SUFFICIENCY_MODE_OPTIONS,
 } from '../types';
 import {
   parseOptionalNonNegativeDecimalInput,
@@ -61,6 +63,7 @@ export function GeneralSettingsTab({
         workingHoursStart: project.workingHoursStart || '06:00',
         workingHoursEnd: project.workingHoursEnd || '18:00',
         specificationSet: project.specificationSet || DEFAULT_FORM_DATA.specificationSet,
+        testSufficiencyMode: project.testSufficiencyMode || DEFAULT_FORM_DATA.testSufficiencyMode,
       });
     }
   }, [project]);
@@ -166,6 +169,7 @@ export function GeneralSettingsTab({
             chainageEnd,
             workingHoursStart: nextFormData.workingHoursStart,
             workingHoursEnd: nextFormData.workingHoursEnd,
+            testSufficiencyMode: nextFormData.testSufficiencyMode,
             ...(nextFormData.specificationSet
               ? { specificationSet: nextFormData.specificationSet }
               : {}),
@@ -276,6 +280,30 @@ export function GeneralSettingsTab({
               ))}
             </select>
             <p className="mt-1 text-xs text-muted-foreground">{SPECIFICATION_SET_HELPER_TEXT}</p>
+          </div>
+          {/* Wave C1 (spec §5.1.2, §9.4). Changing gate strength is a project
+              governance decision, so it lives here and is audited like every
+              other field on this form. */}
+          <div className="mt-4">
+            <Label htmlFor="project-settings-test-sufficiency-mode" className="mb-1">
+              Test Frequency Checking
+            </Label>
+            <select
+              id="project-settings-test-sufficiency-mode"
+              name="testSufficiencyMode"
+              value={formData.testSufficiencyMode}
+              onChange={handleInputChange}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+            >
+              {TEST_SUFFICIENCY_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {TEST_SUFFICIENCY_MODE_HELPER_TEXT[formData.testSufficiencyMode]}
+            </p>
           </div>
           {(project?.startDate || project?.targetCompletion) && (
             <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">

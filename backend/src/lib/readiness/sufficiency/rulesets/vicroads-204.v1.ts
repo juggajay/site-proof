@@ -1,68 +1,97 @@
-// Seed pack — VicRoads Section 204 (Earthworks), version 1. Spec §8.2.
+// Seed pack — VicRoads/DTP Section 204 (Earthworks), version 1. Spec §8.2.
 //
-// STATUS: `draft`. The §8.3 step-1 confirmation pass — a human opening the
-// CURRENT PUBLISHED VicRoads/DTP document and verifying every number against its
-// cited clause/table — HAS NOT RUN. So the four confirmation-provenance fields
-// (`edition`, `sourceUrl`, `pdfPage`, `checkedOn`, `revalidateBy`) are recorded
-// as EMPTY/ABSENT rather than guessed, and `validateRuleset` enforces that a
-// `confirmed` ruleset cannot have them empty. A draft ruleset is EVALUATED
-// NORMALLY (numbers shown, `citation.confirmed: false`) and can NEVER block, by
-// construction (§4.2 [C1R-B5], §5.1.2).
+// STATUS: `confirmed`. The §8.3 step-1 confirmation pass RAN on 2026-07-27
+// against the CURRENT PUBLISHED primary document — not a council republication,
+// not a secondary page — and returned grade A (primary) evidence. Report:
+// docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md; folded into the
+// spec as [C1C-1] … [C1C-6].
 //
-// Promotion to `confirmed` is a Jay/human task (§16.0 D13). Note §8.3 step 3:
-// once instances exist, confirmation emits a NEW version (`vicroads-204.v2.ts`)
-// with `effectiveTo` set here — never an in-place edit. No instances exist yet
-// (C1.0 has no call sites), so a pre-C1.1 promotion in place is still safe.
+// CONFIRMED VERBATIM:
+//   * clause 204.13(a) — six tests per lot for Scale A/B compaction, three for
+//     Scale C. UNCHANGED across v5.0 (Oct 2013) through v8.0 (Nov 2025). NOT
+//     Table 204.142 (which carries lot SIZE and the reduced lot-sampling
+//     interval) and NOT RC 500.05 (which carries no per-scale counts at all).
+//   * `defaultScale: 'A'` — "Where the compaction scale has not been specified,
+//     Compaction Scale A shall apply."
+//   * clause 204.14(c) — the reduced-frequency trigger, three consecutive lots.
 //
-// FIGURES, and where they come from: the research appendix's VicRoads claim
-// "6 tests/lot (Scale A/B compaction), 3 (Scale C)" and "Type A lot = one day's
-// production or 5,000 m², whichever is the lesser". Grade 'A' — but grade is the
-// grade of the SOURCE, not a substitute for reading the document, which is why
-// this ships draft.
+// NOT encoded, deliberately — each one is a "confident wrong number" avoided:
 //
-// The 500 m² "under paved areas" cap is DELIBERATELY ABSENT: it is a Wyndham
-// City Council amendment misattributed to VicRoads, and appears in no version of
-// the VicRoads/DTP document (confirmed against v8.0 Nov 2025 primary and the
-// legacy text). See docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md.
-// The 5,000 m² cap is Type A material ONLY per that same confirmation pass, and
-// FrequencyRule has no material-type discriminator yet — so it is over-broad as
-// encoded. Left as-is for a follow-up correction slice; DO NOT promote this pack
-// to `confirmed` until that lands.
+//   * NO `maxLotSize`, NEITHER limb.
+//     - The 500 m² "under paved areas" cap is a WYNDHAM CITY COUNCIL amendment
+//       ("a maximum of 500m² under paved areas"), absent from every version of
+//       the VicRoads/DTP document [C1C-2]. Shipping it would have asserted an
+//       authority requirement the authority never wrote, into immutable decision
+//       snapshots.
+//     - The 5,000 m² cap is TYPE A MATERIAL ONLY (Type B is 10,000 m² or a day's
+//       production; Type C has NO area cap). `appliesTo` has no material-type
+//       discriminator, so a bare cap would fire falsely on a 5,000–10,000 m²
+//       Type B lot and invent a cap for Type C [C1C-3]. The discriminator is a
+//       named scope item (§16 D14), not a C1 deliverable.
 //
-// NOT encoded, deliberately:
-//   * NO `reduced` limb [C1R-B8]. The appendix supplies the 204.14(c) TRIGGER
-//     ("test every lot until 3 consecutive conform → reduced frequency; any
-//     failure reverts to full testing") and NO reduced count. A guessed reduced
-//     count would emit a confident wrong required count — the exact defect the
-//     regime machinery exists to prevent. `validateRuleset` also refuses a
-//     `reduced` limb on any draft ruleset.
-//   * NO `perQuantity` limb (§3.2.1 [C1R-1]) — no cited authority supplies a
-//     per-area frequency figure.
-//   * NO production-day limb (§3.3) — CIVOS records no production day; that is
-//     C2's [C1R-4]. Only the AREA limb of the lot-size cap is evaluable, and it
-//     is advisory only.
-//   * NO `defaultScale`. No cited authority supplies a defensible default Scale
-//     for VicRoads, and §16 D6 says a ruleset with no defensible default
-//     declares none — its lots read `scale_not_selected` until a scale is
-//     entered. This is a launch-friction call worth Jay's eyes (see PR body).
+//   * NO `reduced` limb — right call, and the reason matters [C1C-5]. Section 204
+//     v8.0 DOES publish reduced figures: Table 204.142's third column, every
+//     2nd / 2nd / 2nd / 3rd / 6th lot of like material and work. Those are a
+//     LOT-SAMPLING INTERVAL ("which lots get tested at all"), not a per-lot count
+//     ("how many tests in this lot") — clause 204.13(a)'s six is unconditional
+//     and has no reduced variant, so a lot that IS tested under the reduced
+//     regime still requires six.
+//     WARNING TO A FUTURE AGENT: do NOT "fix" this by encoding {A:2, B:2, C:6}
+//     into `minCountByScale`. That reads as "2 tests per lot" and is
+//     catastrophically wrong. Encoding the interval needs a NEW limb
+//     (e.g. `lotSamplingInterval: { everyNthLot: 2 }`), gated on a recorded
+//     Superintendent approval.
+//
+//   * NO `perQuantity` limb — confirmed: Section 204 v8.0 publishes no per-area
+//     frequency figure (its only area figures are Table 204.142's lot-size caps).
+//     Note this is NOT true of every authority — TfNSW Q6 Table Q6/L.1 is a
+//     per-area frequency table throughout [C1C-7].
+//
+//   * NO production-day limb (§3.3) — CIVOS records no production day; C2 owns it.
+//
+// KNOWN CEILINGS carried in the rule's own label/citation rather than hidden:
+//   * Section 173 SMALL LOTS. Clause 204.13(a)'s six is qualified "unless the lot
+//     is to be treated as a small lot in accordance with Section 173". CIVOS has
+//     no small-lot concept, so an unqualified "requires 6" OVER-states the
+//     requirement for one — the §3.4 failure direction, inverted [C1C-1].
+//   * Clause 204.14 restricts MATERIAL PROPERTY testing to Scale A or B only, and
+//     `scaleKeys` is declared at Ruleset level. Not a C1 problem — this pack ships
+//     one compaction rule — but a CBR/PI/grading rule added here could not express
+//     its narrower ['A','B'] key set.
 
 import type { FrequencyRule, RulesetProvenance, Ruleset } from '../types.js';
 
 const RULESET_ID = 'vicroads-204.v1';
 
+// The document is issued by the Department of Transport and Planning on behalf
+// of Head, Transport for Victoria; 'VicRoads' remains the trading brand the
+// specification is known by in the field, so the string names both [C1C-1].
+const AUTHORITY = 'DTP (VicRoads)';
+const DOCUMENT = 'Section 204 – Earthworks';
+const EDITION = 'v8.0, November 2025';
+// It is a .docx, so `pdfPage` records the document's own footer page.
+const SOURCE_URL = 'https://content.vic.gov.au/Section-204-Earthworks-v8.docx';
+const CHECKED_ON = '2026-07-27';
+// v7.0 (Feb 2023) → v8.0 (Nov 2025) was ~33 months, so 12 is comfortably
+// conservative. CI fails a `confirmed` ruleset past this date (§8.3 step 4).
+const REVALIDATE_BY = '2027-07-27';
+
 const PROVENANCE: RulesetProvenance = {
-  authority: 'VicRoads',
-  document: 'Section 204 — Earthworks',
-  clause: 'Table 204.142',
-  edition: '',
-  sourceUrl: '',
+  authority: AUTHORITY,
+  document: DOCUMENT,
+  // The ruleset-level clause is the testing clause the pack is built from; each
+  // RULE cites the clause carrying its own number (§3.2 "one rule, one clause").
+  clause: '204.13(a)',
+  edition: EDITION,
+  pdfPage: 13,
+  sourceUrl: SOURCE_URL,
   evidenceGrade: 'A',
-  checkedOn: '',
-  revalidateBy: '',
+  checkedOn: CHECKED_ON,
+  revalidateBy: REVALIDATE_BY,
 };
 
 /**
- * Minimum counts are scoped to COMPACTION [C1R-7]: the appendix's claim is a
+ * Minimum counts are scoped to COMPACTION [C1R-7]: clause 204.13(a) is a
  * compaction-density figure, not a blanket per-lot count for every test type.
  *
  * `activitySlugs`: the two earthworks Level-2 slugs whose material is compacted.
@@ -71,13 +100,23 @@ const PROVENANCE: RulesetProvenance = {
  */
 const COMPACTION_DENSITY: FrequencyRule = {
   id: `${RULESET_ID}/compaction-density`,
-  label: 'Minimum compaction density tests per lot',
+  // The Section 173 escape is in the label so the user can see it (§4.4 [C1C-1]).
+  label: 'Compaction density tests per lot (unless a Sec 173 small lot)',
   testType: 'compaction',
   appliesTo: {
     activitySlugs: ['earthworks_general', 'earthworks_subgrade_prep'],
   },
   minCountByScale: { A: 6, B: 6, C: 3 },
-  maxLotSize: [{ unit: 'm2', value: 5000 }],
+  // [C1C-6] Eligibility ONLY — never a reduction. 204.14(c) requires the
+  // Superintendent's agreement plus an established compaction procedure, counts
+  // only lots conforming IN THE FIRST TEST, and excludes Section 173 small areas
+  // from the streak. CIVOS has no approval input and no small-area concept, so
+  // the computed streak is an upper bound reported as "eligible to REQUEST".
+  reducedFrequencyEligibility: {
+    consecutiveConformingLots: 3,
+    escalationShape: 'reset_on_any_failure',
+    clause: '204.14(c)',
+  },
   provenance: PROVENANCE,
 };
 
@@ -86,8 +125,14 @@ export const VICROADS_204_V1: Ruleset = {
   state: 'vic',
   specSet: 'vicroads',
   scaleKeys: ['A', 'B', 'C'],
-  effectiveFrom: '2015-01-01',
-  status: 'draft',
+  // Confirmed verbatim: "Where the compaction scale has not been specified,
+  // Compaction Scale A shall apply." (§16 D6 — a ruleset with a defensible
+  // default declares one; without it every VIC lot would read `unknown` forever.)
+  defaultScale: 'A',
+  // The 6/6/3 counts are unchanged from v5.0 (October 2013) onward, so the pack
+  // is effective from that edition rather than from the edition read.
+  effectiveFrom: '2013-10-01',
+  status: 'confirmed',
   rules: [COMPACTION_DENSITY],
   provenance: PROVENANCE,
 };

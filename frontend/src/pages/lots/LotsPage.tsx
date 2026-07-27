@@ -31,7 +31,16 @@ import { LotMobileList } from './components/LotMobileList';
 import { CreateLotModal } from './components/CreateLotModal';
 import { LotContextMenu } from './components/LotContextMenu';
 import { DeleteLotModal } from './components/DeleteLotModal';
-import { BulkDeleteModal, BulkStatusModal, BulkAssignModal } from './components/BulkActionModals';
+import {
+  BulkDeleteModal,
+  BulkStatusModal,
+  BulkAssignModal,
+  BulkTestAttributesModal,
+} from './components/BulkActionModals';
+import { resolveProjectRuleset, useSufficiencyRulesets } from '@/lib/testSufficiency';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 
 // Extracted hooks
 import { useLotsData } from './hooks/useLotsData';
@@ -52,6 +61,24 @@ export function LotsPage() {
   const { canViewBudgets, commercialAccessReason } = useCommercialAccess();
   const { isSubcontractor } = useSubcontractorAccess();
   const isMobile = useIsMobile();
+  // Wave C1 (§9.4): the bulk affordance only appears where a shipped frequency
+  // ruleset governs the project. `queryKeys.project` caches the UNWRAPPED
+  // project — every consumer must resolve the same shape or they poison each
+  // other's cache.
+  const { data: projectAuthority } = useQuery({
+    queryKey: queryKeys.project(projectId ?? 'none'),
+    queryFn: () =>
+      apiFetch<{ project?: { state?: string; specificationSet?: string } }>(
+        `/api/projects/${projectId}`,
+      ).then((response) => response.project ?? null),
+    enabled: !!projectId,
+  });
+  const rulesetsQuery = useSufficiencyRulesets();
+  const governingRuleset = resolveProjectRuleset(
+    rulesetsQuery.data?.rulesets,
+    projectAuthority?.state,
+    projectAuthority?.specificationSet,
+  );
 
   // URL-based filter state
   const statusFilterParam = searchParams.get('status') || '';
@@ -200,6 +227,16 @@ export function LotsPage() {
               {!isSubcontractor && (
                 <Button variant="outline" onClick={actions.handleOpenBulkAssignModal}>
                   Assign Subcontractor ({actions.selectedLots.size})
+                </Button>
+              )}
+              {/* Wave C1: only where a shipped ruleset governs the project —
+                  elsewhere the attributes have no consumer. */}
+              {!isSubcontractor && governingRuleset && (
+                <Button
+                  variant="outline"
+                  onClick={() => actions.setBulkTestAttributesModalOpen(true)}
+                >
+                  Set Testing Attributes ({actions.selectedLots.size})
                 </Button>
               )}
             </>
@@ -473,6 +510,17 @@ export function LotsPage() {
         onClose={() => actions.setBulkStatusModalOpen(false)}
         onConfirm={actions.handleBulkStatusUpdate}
       />
+
+      {/* Bulk Set Testing Attributes Modal — Wave C1 */}
+      {governingRuleset && (
+        <BulkTestAttributesModal
+          isOpen={actions.bulkTestAttributesModalOpen}
+          selectedCount={actions.selectedLots.size}
+          ruleset={governingRuleset}
+          onClose={() => actions.setBulkTestAttributesModalOpen(false)}
+          onConfirm={actions.handleBulkSetTestAttributes}
+        />
+      )}
 
       {/* Bulk Assign Modal */}
       <BulkAssignModal

@@ -38,6 +38,7 @@ export function useLotsActions({
   const [printLabelsModalOpen, setPrintLabelsModalOpen] = useState(false);
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
+  const [bulkTestAttributesModalOpen, setBulkTestAttributesModalOpen] = useState(false);
   const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
   const [cloningLotId, setCloningLotId] = useState<string | null>(null);
   const cloningLotIdRef = useRef<string | null>(null);
@@ -240,6 +241,26 @@ export function useLotsActions({
     [selectedLots, setLots],
   );
 
+  // Wave C1 (spec §9.1 [C1R-B10]): the bulk path that keeps the frequency engine
+  // fed. Without it a PM on a 500-lot project would open 500 forms.
+  const handleBulkSetTestAttributes = useCallback(
+    async (values: { testScale?: string; quantityValue?: number; quantityUnit?: string }) => {
+      if (selectedLots.size === 0) return;
+      try {
+        const data = await apiFetch<{ message: string }>('/api/lots/bulk-set-test-attributes', {
+          method: 'POST',
+          body: JSON.stringify({ lotIds: Array.from(selectedLots), ...values }),
+        });
+        setSelectedLots(new Set());
+        setBulkTestAttributesModalOpen(false);
+        toast({ title: 'Testing Attributes Set', description: data.message, variant: 'success' });
+      } catch (err) {
+        handleApiError(err, 'Failed to set testing attributes');
+      }
+    },
+    [selectedLots],
+  );
+
   const handleOpenBulkAssignModal = useCallback(async () => {
     await fetchSubcontractors();
     setBulkAssignModalOpen(true);
@@ -299,6 +320,7 @@ export function useLotsActions({
         if (bulkWizardOpen) setBulkWizardOpen(false);
         if (bulkDeleteModalOpen) setBulkDeleteModalOpen(false);
         if (bulkStatusModalOpen) setBulkStatusModalOpen(false);
+        if (bulkTestAttributesModalOpen) setBulkTestAttributesModalOpen(false);
         if (bulkAssignModalOpen) setBulkAssignModalOpen(false);
         if (printLabelsModalOpen) setPrintLabelsModalOpen(false);
       }
@@ -311,6 +333,7 @@ export function useLotsActions({
     bulkWizardOpen,
     bulkDeleteModalOpen,
     bulkStatusModalOpen,
+    bulkTestAttributesModalOpen,
     bulkAssignModalOpen,
     printLabelsModalOpen,
   ]);
@@ -335,6 +358,8 @@ export function useLotsActions({
     setBulkDeleteModalOpen,
     bulkStatusModalOpen,
     setBulkStatusModalOpen,
+    bulkTestAttributesModalOpen,
+    setBulkTestAttributesModalOpen,
     bulkAssignModalOpen,
     setBulkAssignModalOpen,
     cloningLotId,
@@ -357,6 +382,7 @@ export function useLotsActions({
     handleCreateSuccess,
     handleBulkDelete,
     handleBulkStatusUpdate,
+    handleBulkSetTestAttributes,
     handleOpenBulkAssignModal,
     handleBulkAssignSubcontractor,
   };

@@ -5,7 +5,10 @@ import type {
   ManagementPrepCounts,
 } from './evidenceReadiness/core.js';
 import { bucketState, item, splitItems, summarize } from './evidenceReadiness/core.js';
-import { buildConformanceBlockerItems } from './evidenceReadiness/conformanceItems.js';
+import {
+  buildConformanceBlockerItems,
+  buildSufficiencyAdvisoryItems,
+} from './evidenceReadiness/conformanceItems.js';
 import { getClaimBlockingReasonsForConformedLot } from './conformancePrerequisites.js';
 
 export type {
@@ -26,9 +29,17 @@ export type {
 export { buildClaimEvidenceReviewFromInputs } from './evidenceReadiness/claimReview.js';
 
 function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[] {
-  const { lot, conformStatus } = input;
+  const { lot, conformStatus, sufficiency } = input;
   const { prerequisites } = conformStatus;
 
+  // Wave C1 (§5.1.3 [C1R-B2], §16 D11). BOTH short circuits carry advisory
+  // sufficiency items. That retroactive visibility IS the wave's payoff: a
+  // shortfall that only becomes visible after conformance — because a past test
+  // was corrected, or because the frequency regime re-derived — is exactly what
+  // must be seen before handover. Every item the builder returns has
+  // `blocksAction: false` by construction, and sufficiency never enters
+  // `getClaimBlockingReasonsForConformedLot` (§5.3's hard prohibition), so this
+  // cannot un-claim a previously claimable lot.
   if (lot.status === 'claimed') {
     return [
       item({
@@ -39,6 +50,7 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
         detail: 'This lot passed conformance before being included in a progress claim.',
         blocksAction: false,
       }),
+      ...buildSufficiencyAdvisoryItems(sufficiency),
     ];
   }
 
@@ -58,11 +70,15 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
           'This lot is conformed and can be considered for claiming if commercial rules are met.',
         blocksAction: false,
       }),
+      ...buildSufficiencyAdvisoryItems(sufficiency),
     ];
   }
 
-  const items = buildConformanceBlockerItems(prerequisites);
+  const items = buildConformanceBlockerItems(prerequisites, sufficiency);
 
+  // Decided on the BLOCKERS alone, before the advisory items are appended — an
+  // advisory sufficiency note must not delete the "prerequisites met" support
+  // item from a lot that is genuinely ready to conform.
   if (conformStatus.canConform && items.length === 0) {
     items.push(
       item({
@@ -75,6 +91,14 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
       }),
     );
   }
+
+  // The shortfall is stated ONCE: as a blocker when the gate blocks on it, as a
+  // warning otherwise.
+  items.push(
+    ...buildSufficiencyAdvisoryItems(sufficiency, {
+      includeShortfall: !(prerequisites.sufficiencyBlocks ?? false),
+    }),
+  );
 
   return items;
 }

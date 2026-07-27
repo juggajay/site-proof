@@ -338,6 +338,16 @@ export interface ConformablePrerequisites {
   hasPassingTest: boolean;
   noOpenNcrs: boolean;
   noNaHoldPointBypass?: boolean;
+  /**
+   * Wave C1 (spec §5.1.1, §5.1.2). ALREADY mode- and status-folded by the
+   * sufficiency evaluator: true only at `Project.testSufficiencyMode === 'block'`
+   * on a CONFIRMED ruleset with a real shortfall. The predicate stays a pure
+   * function of prerequisites — it never reads the mode itself.
+   *
+   * OPTIONAL with a `false` default precisely so every pre-C1 caller and every
+   * permutation in `predicates.parity.test.ts` behaves identically.
+   */
+  sufficiencyBlocks?: boolean;
 }
 
 /**
@@ -356,7 +366,8 @@ export function lotConformable(prerequisites: ConformablePrerequisites): boolean
     prerequisites.itpCompleted &&
     (!prerequisites.testRequired || prerequisites.hasPassingTest) &&
     prerequisites.noOpenNcrs &&
-    (prerequisites.noNaHoldPointBypass ?? true)
+    (prerequisites.noNaHoldPointBypass ?? true) &&
+    !(prerequisites.sufficiencyBlocks ?? false)
   );
 }
 

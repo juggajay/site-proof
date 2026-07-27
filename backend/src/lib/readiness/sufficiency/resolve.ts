@@ -6,11 +6,18 @@
 // stays sync and DB-free, so the M39 byte-identity guarantee between the single
 // conform path and the batched claim path survives.
 //
-// C1.0 ships this with NO call site (spec §11 C1.0), and the lot input is a plain
-// structural shape rather than a Prisma payload type because the migration that
-// adds `Lot.activitySlug` / `testScale` / `quantityValue` / `quantityUnit` and
-// `Project.testSufficiencyMode` is C1.1. C1.1 adds the exact `select`/`include`
-// extensions of §4.1.1 and binds them here.
+// The lot input stays a plain structural shape rather than a Prisma payload
+// type, so both call paths (§4.1.1 Path A conformance, Path B readiness) and the
+// unit tests feed it the same way.
+//
+// C1.1 binds the regime reader to Prisma via {@link prismaRegimeStreamFetcher}.
+// Passing `null` instead is a first-class choice, not a stub: every rule then
+// falls back to `full` (over-testing, the safe direction) and NO history read is
+// issued. The conform DECISION path takes that option deliberately — it is how
+// C1.1 satisfies §3.4.3's "outside the serializable transaction" requirement
+// vacuously, and it is behaviour-neutral because no shipped pack carries reduced
+// FIGURES, so the operative regime is 'full' either way (§3.4.1a [C1C-6]). The
+// grouped per-stream batch read is C1.2 (spec §11).
 
 import { resolveRuleset, rulesForLot, layerBucketFor } from './registry.js';
 import { resolveRegimeForRule, type RegimeStreamFetcher } from './regime.js';
@@ -88,6 +95,44 @@ export async function resolveSufficiency(
   fetchStream: RegimeStreamFetcher | null = null,
   now: Date = new Date(),
 ): Promise<ResolvedSufficiency> {
+  const resolved = resolveSufficiencySync(lot, now);
+  if (!fetchStream || !resolved.ruleset || !lot.activitySlug) return resolved;
+
+  const regimeByRuleId = new Map<string, ResolvedRegime>();
+  for (const rule of resolved.rules) {
+    if (!rule.reduced && !rule.reducedFrequencyEligibility) continue;
+    const layerBucket = layerBucketFor(rule, lot.layer);
+    if (layerBucket === null) continue; // not a member of this rule's stream
+    const regime = await resolveRegimeForRule(
+      fetchStream,
+      rule,
+      {
+        projectId: lot.projectId,
+        rulesetId: resolved.ruleset.id,
+        ruleId: rule.id,
+        activitySlug: lot.activitySlug,
+        layerBucket,
+      },
+      { id: lot.id, conformedAt: lot.conformedAt ?? null },
+    );
+    if (regime) regimeByRuleId.set(rule.id, regime);
+  }
+  return { ...resolved, regimeByRuleId };
+}
+
+/**
+ * Everything except the frequency-stream read — registry lookup, scale and
+ * quantity. Fully SYNCHRONOUS and DB-free.
+ *
+ * Split out because the batched claim path resolves 5,000 lots in one request
+ * and takes no fetcher (§11 C1.2 owns the grouped read). Routing that through
+ * the async wrapper cost 5,000 needless microtask turns inside the F0.5 Target 1
+ * budget; calling this directly costs none.
+ */
+export function resolveSufficiencySync(
+  lot: SufficiencyLotInput,
+  now: Date = new Date(),
+): ResolvedSufficiency {
   const mode = toSufficiencyMode(lot.project.testSufficiencyMode);
   const ruleset = resolveRuleset({
     state: lot.project.state,
@@ -129,28 +174,6 @@ export async function resolveSufficiency(
         ? { value: geometryArea, unit: 'm2' as QuantityUnit, source: 'geometry' as const }
         : { value: null, unit: null, source: 'none' as const };
 
-  const regimeByRuleId = new Map<string, ResolvedRegime>();
-  if (ruleset && fetchStream && lot.activitySlug) {
-    for (const rule of rules) {
-      if (!rule.reduced) continue;
-      const layerBucket = layerBucketFor(rule, lot.layer);
-      if (layerBucket === null) continue; // not a member of this rule's stream
-      const resolved = await resolveRegimeForRule(
-        fetchStream,
-        rule,
-        {
-          projectId: lot.projectId,
-          rulesetId: ruleset.id,
-          ruleId: rule.id,
-          activitySlug: lot.activitySlug,
-          layerBucket,
-        },
-        { id: lot.id, conformedAt: lot.conformedAt ?? null },
-      );
-      if (resolved) regimeByRuleId.set(rule.id, resolved);
-    }
-  }
-
   return {
     mode,
     ruleset,
@@ -158,7 +181,9 @@ export async function resolveSufficiency(
     scale,
     quantity,
     areaZone: lot.areaZone,
-    regimeByRuleId,
+    // Empty until a caller supplies a fetcher; every rule then reads `full`,
+    // the over-testing (safe) direction.
+    regimeByRuleId: new Map<string, ResolvedRegime>(),
     activityCanonical: lot.activitySlug !== null && lot.activitySlug.trim() !== '',
   };
 }

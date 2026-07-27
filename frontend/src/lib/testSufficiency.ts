@@ -1,0 +1,78 @@
+// Wave C1 — the shipped test-frequency registry, as the UI sees it (spec §9.2,
+// §9.4).
+//
+// The scale control is POPULATED from the registry rather than typed, so a user
+// can only ever pick a scale the governing specification actually uses — the
+// backend rejects anything else at the route, and this keeps the two in step
+// without duplicating the key list in the frontend.
+
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from './api';
+
+export interface SufficiencyRulesetRule {
+  id: string;
+  label: string;
+  testType: string;
+  clause: string;
+}
+
+export interface SufficiencyRuleset {
+  id: string;
+  state: string;
+  specSet: string;
+  scaleKeys: string[];
+  defaultScale: string | null;
+  status: 'draft' | 'confirmed';
+  authority: string;
+  document: string;
+  edition: string;
+  rules: SufficiencyRulesetRule[];
+}
+
+/** Mirrors the backend `QUANTITY_UNITS` vocabulary. */
+export const QUANTITY_UNIT_OPTIONS = [
+  { value: 'm2', label: 'm²' },
+  { value: 'm3', label: 'm³' },
+  { value: 't', label: 'tonnes' },
+  { value: 'm', label: 'metres' },
+  { value: 'each', label: 'each' },
+] as const;
+
+/**
+ * Shipped product data with no tenant content, so it is cached hard: the payload
+ * only changes when a pack is added or corrected in a deploy.
+ *
+ * TanStack Query v4 — `cacheTime`, not v5's `gcTime`.
+ */
+export function useSufficiencyRulesets() {
+  return useQuery({
+    queryKey: ['test-sufficiency', 'rulesets'] as const,
+    queryFn: () => apiFetch<{ rulesets: SufficiencyRuleset[] }>('/api/test-sufficiency/rulesets'),
+    staleTime: 60 * 60 * 1000,
+    cacheTime: 60 * 60 * 1000,
+  });
+}
+
+/**
+ * The ruleset governing a project, resolved the same way the backend registry
+ * does: case-insensitive state match plus the `rms` → `tfnsw` spec-set fold.
+ * Returns null for every project whose authority has no shipped pack — which is
+ * most of them, and is why the Testing fields are hidden rather than shown empty.
+ */
+export function resolveProjectRuleset(
+  rulesets: SufficiencyRuleset[] | undefined,
+  state: string | null | undefined,
+  specificationSet: string | null | undefined,
+): SufficiencyRuleset | null {
+  const normalizedState = (state || '').trim().toLowerCase();
+  const rawSpecSet = (specificationSet || '').trim().toLowerCase();
+  const normalizedSpecSet = rawSpecSet === 'rms' ? 'tfnsw' : rawSpecSet;
+  if (!normalizedState || !normalizedSpecSet) return null;
+  return (
+    (rulesets ?? []).find(
+      (ruleset) =>
+        ruleset.state.toLowerCase() === normalizedState &&
+        ruleset.specSet.toLowerCase() === normalizedSpecSet,
+    ) ?? null
+  );
+}

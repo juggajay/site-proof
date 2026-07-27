@@ -66,10 +66,12 @@ describe('resolveSufficiency', () => {
       value: 'B',
       source: 'lot',
     });
-    // vicroads-204.v1 declares no defaultScale (§16 D6 — no defensible default).
+    // vicroads-204.v1 now declares defaultScale 'A' — confirmed verbatim from
+    // clause 204.13 ("Where the compaction scale has not been specified,
+    // Compaction Scale A shall apply"), so VIC lots evaluate with no data entry.
     expect((await resolveSufficiency(lotInput(), null, NOW)).scale).toEqual({
-      value: null,
-      source: 'none',
+      value: 'A',
+      source: 'ruleset_default',
     });
     // tfnsw-r44.v1 DOES declare one, so its lots evaluate with no data entry.
     const nsw = await resolveSufficiency(
@@ -123,14 +125,51 @@ describe('resolveSufficiency', () => {
     }
   });
 
-  it('issues ZERO regime queries today — no shipped rule declares a reduced limb (§12)', async () => {
+  it('issues AT MOST ONE regime query per regime-bearing rule, and ZERO otherwise (§12)', async () => {
     let calls = 0;
     const counting: RegimeStreamFetcher = async () => {
       calls += 1;
       return [];
     };
-    const resolved = await resolveSufficiency(lotInput(), counting, NOW);
+
+    // vicroads-204's compaction rule declares `reducedFrequencyEligibility`
+    // [C1C-6], so it IS regime-bearing: one query, one stream.
+    const vic = await resolveSufficiency(lotInput(), counting, NOW);
+    expect(calls).toBe(1);
+    expect(vic.regimeByRuleId.size).toBe(1);
+    // An empty stream is BELOW the length guard, so the streak is not met and
+    // nothing is claimed — `full`, not eligible.
+    expect(vic.regimeByRuleId.get('vicroads-204.v1/compaction-density')).toMatchObject({
+      regime: 'full',
+      eligible: false,
+    });
+
+    // tfnsw-r44 declares neither limb, so no history read is issued at all.
+    calls = 0;
+    const nsw = await resolveSufficiency(
+      lotInput({ project: { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' } }),
+      counting,
+      NOW,
+    );
     expect(calls).toBe(0);
+    expect(nsw.regimeByRuleId.size).toBe(0);
+
+    // §12's "0 ADDITIONAL queries when no ruleset resolves".
+    calls = 0;
+    await resolveSufficiency(
+      lotInput({
+        project: { state: 'QLD', specificationSet: 'austroads', testSufficiencyMode: 'warn' },
+      }),
+      counting,
+      NOW,
+    );
+    expect(calls).toBe(0);
+  });
+
+  it('passing NO fetcher issues no history read and leaves every regime at `full` (§3.4.3)', async () => {
+    // The option the conform DECISION path takes, so the frequency-stream read
+    // can never land inside the serializable transaction [C1R-B7].
+    const resolved = await resolveSufficiency(lotInput(), null, NOW);
     expect(resolved.regimeByRuleId.size).toBe(0);
   });
 });

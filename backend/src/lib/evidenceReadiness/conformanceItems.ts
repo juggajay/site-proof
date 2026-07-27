@@ -13,6 +13,8 @@
 
 import type { EvidenceReadinessItem, LotReadinessInput } from './core.js';
 import { item } from './core.js';
+import type { SufficiencyEvaluation } from '../readiness/sufficiency/evaluate.js';
+import type { RuleSufficiency, UnknownCause } from '../readiness/sufficiency/types.js';
 
 type ConformancePrerequisites = LotReadinessInput['conformStatus']['prerequisites'];
 
@@ -67,6 +69,7 @@ function buildOutstandingTestDetail(
  */
 export function buildConformanceBlockerItems(
   prerequisites: ConformancePrerequisites,
+  sufficiency?: SufficiencyEvaluation | null,
 ): EvidenceReadinessItem[] {
   const items: EvidenceReadinessItem[] = [];
 
@@ -152,6 +155,196 @@ export function buildConformanceBlockerItems(
         blocksAction: true,
         actionLabel: 'Review hold points',
         count: naHpBlockerCount,
+      }),
+    );
+  }
+
+  // Wave C1 (§5.1.2, §5.1.4). `sufficiencyBlocks` IS a `lotConformable`
+  // condition once §5.1.1 lands, so the one blocking sufficiency case belongs
+  // here and this function's "five conditions and nothing else" contract holds.
+  // It is already mode- and status-folded: it can only be true at
+  // `mode: 'block'` on a CONFIRMED ruleset. Everything advisory rides
+  // `buildSufficiencyAdvisoryItems` instead.
+  if (prerequisites.sufficiencyBlocks ?? false) {
+    const short = shortfallRules(sufficiency);
+    items.push(
+      item({
+        code: 'insufficient_test_count',
+        severity: 'blocker',
+        area: 'test',
+        title: 'Not enough tests for this lot',
+        detail: short.length > 0 ? short.map(shortfallSentence).join(' ') : SUFFICIENCY_NO_DETAIL,
+        blocksAction: true,
+        actionLabel: 'Review tests',
+        count: short.length,
+      }),
+    );
+  }
+
+  return items;
+}
+
+// The blocking item is emitted from `prerequisites.sufficiencyBlocks` alone, so
+// a caller that has the boolean but not the evaluation (the decision snapshot
+// path re-derives items from prerequisites) still gets an honest item rather
+// than a fabricated count.
+const SUFFICIENCY_NO_DETAIL =
+  'The governing specification requires more tests for this lot than are recorded.';
+
+function shortfallRules(sufficiency: SufficiencyEvaluation | null | undefined): RuleSufficiency[] {
+  return (sufficiency?.rules ?? []).filter(
+    (rule) => rule.state === 'insufficient' && rule.requiredCount !== null,
+  );
+}
+
+/**
+ * Facts only — counts and the clause that carries them, never a quotation of
+ * specification prose (§8.4, §4.4). The unconfirmed tag fires whenever
+ * `citation.confirmed === false`, which is how a `draft` pack stays honest while
+ * still showing real numbers (§4.2 [C1R-B5]).
+ */
+function shortfallSentence(rule: RuleSufficiency): string {
+  const need = rule.requiredCount ?? 0;
+  const parts = [`${rule.passingCount} verified conforming`];
+  if (rule.pendingCount > 0) parts.push(`${rule.pendingCount} pending`);
+  const unconfirmed = rule.citation.confirmed ? '' : ', unconfirmed edition';
+  return (
+    `Requires ${need} ${rule.testType} test${need === 1 ? '' : 's'} ` +
+    `(${rule.citation.authority} ${rule.citation.document}, clause ${rule.citation.clause}, ` +
+    `${rule.citation.edition || 'edition unrecorded'}${unconfirmed}). ` +
+    `${parts.join(', ')}.`
+  );
+}
+
+const UNKNOWN_CAUSE_PROMPT: Record<UnknownCause, string> = {
+  no_ruleset_for_project: '',
+  no_rule_for_activity: '',
+  activity_not_canonical: "Classify this lot's activity to check its test frequency.",
+  scale_not_selected: 'Select this lot’s testing scale to check its test frequency.',
+  scale_not_recognised: 'This lot’s testing scale is not one the governing specification uses.',
+  quantity_missing: 'Record this lot’s quantity (or draw its geometry) to check test frequency.',
+};
+
+/**
+ * Sufficiency items. Split from {@link buildConformanceBlockerItems} because that
+ * function is contractually the `lotConformable` conditions and nothing else. The
+ * ONE blocking case is emitted there via `prerequisites.sufficiencyBlocks`; every
+ * item here is advisory BY CONSTRUCTION — `blocksAction` is a hard-coded `false`,
+ * never a computed value (§5.1.3, §5.1.4).
+ */
+export function buildSufficiencyAdvisoryItems(
+  sufficiency: SufficiencyEvaluation | null | undefined,
+  options?: { includeShortfall?: boolean },
+): EvidenceReadinessItem[] {
+  if (!sufficiency) return [];
+  const items: EvidenceReadinessItem[] = [];
+
+  // §7.1 rows 1-2 are SILENT: most projects resolve no ruleset, and a warning per
+  // lot in that state would teach every user to ignore the section.
+  const lotCauses = sufficiency.unknownCauses.filter(
+    (cause) => UNKNOWN_CAUSE_PROMPT[cause].length > 0,
+  );
+  const ruleCauses = sufficiency.rules.flatMap((rule) => rule.unknownCauses);
+  const prompts = [...new Set([...lotCauses, ...ruleCauses].map((c) => UNKNOWN_CAUSE_PROMPT[c]))]
+    .filter((prompt) => prompt.length > 0)
+    .join(' ');
+  if (prompts) {
+    items.push(
+      item({
+        code: 'test_sufficiency_unknown',
+        severity: 'warning',
+        area: 'test',
+        title: 'Test frequency cannot be checked',
+        detail: prompts,
+        blocksAction: false,
+      }),
+    );
+  }
+
+  // The shortfall as a WARNING. Suppressed on the blocking path, where the
+  // blocker builder already said it (`includeShortfall: false`).
+  const short = shortfallRules(sufficiency);
+  if (short.length > 0 && (options?.includeShortfall ?? true)) {
+    items.push(
+      item({
+        code: 'insufficient_test_count',
+        severity: 'warning',
+        area: 'test',
+        title: 'Fewer tests than the specification requires',
+        detail: short.map(shortfallSentence).join(' '),
+        blocksAction: false,
+        actionLabel: 'Review tests',
+        count: short.length,
+      }),
+    );
+  }
+
+  const satisfied = sufficiency.rules.filter((rule) => rule.state === 'satisfied');
+  if (satisfied.length > 0 && short.length === 0) {
+    items.push(
+      item({
+        code: 'test_sufficiency_met',
+        severity: 'support',
+        area: 'test',
+        title: 'Test frequency met',
+        detail: satisfied
+          .map(
+            (rule) =>
+              `${rule.passingCount} of ${rule.requiredCount} required ${rule.testType} tests verified ` +
+              `(${rule.citation.authority} ${rule.citation.document}, clause ${rule.citation.clause}).`,
+          )
+          .join(' '),
+        blocksAction: false,
+        count: satisfied.length,
+      }),
+    );
+  }
+
+  // [C1C-6] Eligibility is presentation only and says so: clause 204.14(c) grants
+  // the right to ASK for a reduced frequency, never the reduction itself.
+  const eligible = sufficiency.rules.filter((rule) => rule.reducedFrequencyEligible === true);
+  if (eligible.length > 0) {
+    items.push(
+      item({
+        code: 'test_sufficiency_met',
+        severity: 'support',
+        area: 'test',
+        title: 'Eligible to request reduced test frequency',
+        detail:
+          `${eligible[0].regimeBasis?.lotIds.length ?? 0} consecutive conforming lots recorded, so you may ` +
+          'ask the Superintendent to agree a reduced frequency. Until that agreement is recorded, the full ' +
+          'count still applies.',
+        blocksAction: false,
+      }),
+    );
+  }
+
+  if (sufficiency.unlinkedPassingTestIds.length > 0) {
+    const n = sufficiency.unlinkedPassingTestIds.length;
+    items.push(
+      item({
+        code: 'tests_unlinked_to_itp_item',
+        severity: 'warning',
+        area: 'test',
+        title: 'Verified tests not counted',
+        detail: `${n} verified test${n === 1 ? ' is' : 's are'} not linked to a checklist item, so ${n === 1 ? 'it was' : 'they were'} not counted toward the required frequency.`,
+        blocksAction: false,
+        actionLabel: 'Review tests',
+        count: n,
+        relatedIds: sufficiency.unlinkedPassingTestIds,
+      }),
+    );
+  }
+
+  for (const exceedance of sufficiency.maxLotSizeExceedances) {
+    items.push(
+      item({
+        code: 'lot_exceeds_max_lot_size',
+        severity: 'warning',
+        area: 'conformance',
+        title: 'Lot is larger than the specification allows',
+        detail: `This lot is ${exceedance.actual} ${exceedance.unit}; the governing specification caps it at ${exceedance.limit} ${exceedance.unit}. Consider splitting the lot.`,
+        blocksAction: false,
       }),
     );
   }

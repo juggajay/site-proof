@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeConformanceResult } from '../conformancePrerequisites.js';
 import { lotConformable } from './predicates.js';
+import type { FrequencyRule, ResolvedSufficiency, SufficiencyMode } from './sufficiency/types.js';
 
 // Parity proof (execution spec §5, F0.1 acceptance): feed synthetic lots
 // through the LIVE authoritative gate `computeConformanceResult` and assert
@@ -197,5 +198,105 @@ describe('lotConformable parity with computeConformanceResult.canConform', () =>
     const result = computeConformanceResult(lot, new Set(released ?? []));
     expect(result.prerequisites).toBeDefined();
     expect(lotConformable(result.prerequisites!)).toBe(result.canConform);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave C1 (§14 AT-14). The permutation space above is EXTENDED, not rewritten:
+// every scenario is re-run against the full sufficiency mode × ruleset status ×
+// state cross-product, so parity is proven with the new limb in play too.
+// ---------------------------------------------------------------------------
+
+const SUFFICIENCY_RULE: FrequencyRule = {
+  id: 'parity/compaction',
+  label: 'Parity fixture compaction rule',
+  testType: 'compaction',
+  appliesTo: { activitySlugs: ['earthworks_general'] },
+  minCountByScale: { A: 6 },
+  provenance: {
+    authority: 'Fixture',
+    document: 'Parity',
+    clause: '1',
+    edition: 'v1',
+    pdfPage: 1,
+    sourceUrl: 'https://example.test',
+    evidenceGrade: 'A',
+    checkedOn: '2026-07-27',
+    revalidateBy: '2099-01-01',
+  },
+};
+
+function resolved(
+  mode: SufficiencyMode,
+  status: 'draft' | 'confirmed',
+  rules: FrequencyRule[],
+): ResolvedSufficiency {
+  return {
+    mode,
+    ruleset: {
+      id: 'parity.v1',
+      state: 'vic',
+      specSet: 'vicroads',
+      scaleKeys: ['A'],
+      defaultScale: 'A',
+      effectiveFrom: '2020-01-01',
+      status,
+      rules,
+      provenance: SUFFICIENCY_RULE.provenance,
+    },
+    rules,
+    scale: { value: 'A', source: 'ruleset_default' },
+    quantity: { value: null, unit: null, source: 'none' },
+    areaZone: null,
+    regimeByRuleId: new Map(),
+    activityCanonical: true,
+  };
+}
+
+const sufficiencyPermutations: { name: string; sufficiency: ResolvedSufficiency }[] = [];
+for (const mode of ['off', 'warn', 'block'] as const) {
+  for (const status of ['draft', 'confirmed'] as const) {
+    // A rule that resolves and is SHORT (0 of 6), and the unresolved case where
+    // no rule matches the activity at all.
+    sufficiencyPermutations.push({
+      name: `${mode}/${status}/insufficient`,
+      sufficiency: resolved(mode, status, [SUFFICIENCY_RULE]),
+    });
+    sufficiencyPermutations.push({
+      name: `${mode}/${status}/no-rule`,
+      sufficiency: resolved(mode, status, []),
+    });
+  }
+}
+
+describe('AT-14 parity holds across every sufficiency permutation', () => {
+  for (const permutation of sufficiencyPermutations) {
+    it.each(scenarios)(`${permutation.name} — $name`, ({ lot, released }) => {
+      const result = computeConformanceResult(
+        lot,
+        new Set(released ?? []),
+        permutation.sufficiency,
+      );
+      expect(result.prerequisites).toBeDefined();
+      expect(lotConformable(result.prerequisites!)).toBe(result.canConform);
+    });
+  }
+
+  // §5.1.2's structural guarantee, restated at the parity boundary: only ONE of
+  // the twelve permutations can move the gate, and it is the specced one.
+  it('only mode=block on a CONFIRMED ruleset with a shortfall changes canConform', () => {
+    for (const scenario of scenarios) {
+      const released = new Set(scenario.released ?? []);
+      const baseline = computeConformanceResult(scenario.lot, released).canConform;
+      for (const permutation of sufficiencyPermutations) {
+        const where = `${permutation.name} — ${scenario.name}`;
+        const result = computeConformanceResult(scenario.lot, released, permutation.sufficiency);
+        const shouldBlock = permutation.name === 'block/confirmed/insufficient';
+        expect(result.prerequisites!.sufficiencyBlocks, where).toBe(shouldBlock);
+        // Sufficiency can only ever REMOVE conformability, and only in the one
+        // specced cell. Eleven of the twelve leave the decision byte-identical.
+        expect(result.canConform, where).toBe(baseline && !shouldBlock);
+      }
+    }
   });
 });

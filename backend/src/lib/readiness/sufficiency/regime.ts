@@ -196,33 +196,55 @@ export function deriveRegime(
   key: RegimeStreamKey,
   tail: readonly RegimeStreamEntry[],
 ): ResolvedRegime {
-  const reduced = rule.reduced;
+  const trigger = regimeTrigger(rule);
   const streamKey = serializeStreamKey(key);
-  const full = (basisLotIds: string[] = []): ResolvedRegime => ({
+  const notMet = (): ResolvedRegime => ({
     regime: 'full' as FrequencyRegime,
-    basisLotIds,
+    eligible: false,
+    basisLotIds: [],
     streamKey,
   });
-  if (!reduced) return full();
-  if (reduced.escalationShape !== 'reset_on_any_failure') {
+  if (!trigger) return notMet();
+  if (trigger.escalationShape !== 'reset_on_any_failure') {
     throw new Error(
-      `Unsupported sufficiency escalationShape '${String(reduced.escalationShape)}' on rule ${rule.id}`,
+      `Unsupported sufficiency escalationShape '${String(trigger.escalationShape)}' on rule ${rule.id}`,
     );
   }
-  const required = reduced.consecutiveConformingLots;
+  const required = trigger.consecutiveConformingLots;
   // Incomplete window: an unclassified lot conformed inside it (§16 D7).
-  if (tail.some((entry) => entry.activitySlug === null)) return full();
+  if (tail.some((entry) => entry.activitySlug === null)) return notMet();
   // THE LENGTH GUARD. Fewer than N entries can never have earned a reduction.
-  if (required < 1 || tail.length < required) return full();
+  if (required < 1 || tail.length < required) return notMet();
   const window = tail.slice(-required);
-  if (!window.every((entry) => streamEntryConforming(entry, rule.testType))) return full();
-  return { regime: 'reduced', basisLotIds: window.map((entry) => entry.id), streamKey };
+  if (!window.every((entry) => streamEntryConforming(entry, rule.testType))) return notMet();
+  // The streak is met. [C1C-6] Whether that CHANGES the count is a separate
+  // question: only a rule carrying reduced FIGURES can go operative. An
+  // eligibility-only rule reports `eligible` at `regime: 'full'` — the authority
+  // grants the right to ASK, not the reduction (§3.4.1a).
+  return {
+    regime: rule.reduced ? 'reduced' : 'full',
+    eligible: true,
+    basisLotIds: window.map((entry) => entry.id),
+    streamKey,
+  };
+}
+
+/**
+ * The declaration that makes a rule regime-bearing: reduced FIGURES when the
+ * authority publishes per-lot reduced counts, otherwise the eligibility-only
+ * trigger `[C1C-6]`. A rule with neither has no regime concept and issues no
+ * query at all.
+ */
+function regimeTrigger(
+  rule: FrequencyRule,
+): { consecutiveConformingLots: number; escalationShape: string } | null {
+  return rule.reduced ?? rule.reducedFrequencyEligibility ?? null;
 }
 
 /**
  * Resolve the regime for one rule: build the two-mode query, fetch, fold.
- * Returns null when the rule has no `reduced` limb — there is no regime concept
- * for it and no query is issued.
+ * Returns null when the rule declares neither `reduced` nor
+ * `reducedFrequencyEligibility` — no regime concept, and no query is issued.
  */
 export async function resolveRegimeForRule(
   fetchStream: RegimeStreamFetcher,
@@ -230,11 +252,12 @@ export async function resolveRegimeForRule(
   key: RegimeStreamKey,
   subject: RegimeSubject,
 ): Promise<ResolvedRegime | null> {
-  if (!rule.reduced) return null;
+  const trigger = regimeTrigger(rule);
+  if (!trigger) return null;
   const query = buildRegimeStreamQuery(
     key,
     subject,
-    rule.reduced.consecutiveConformingLots,
+    trigger.consecutiveConformingLots,
     rule.appliesTo.layerAliases,
   );
   const rowsDesc = await fetchStream(query);

@@ -17,6 +17,7 @@ import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
+import { activitySlugForWrite } from '../../lib/activityTaxonomy.js';
 import { generateChainageOffsetPolygon } from '../../lib/spatial/lotGeometry.js';
 import type { ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
 import { buildTemplateSnapshot } from '../itp/helpers/templateSnapshot.js';
@@ -32,6 +33,13 @@ export interface BulkLotInput {
   chainageEnd?: number | null;
   layer?: string | null;
   itpTemplateId?: string | null;
+  // Wave C1 [C1R-B10]. Without these here every lot created after C1 would be
+  // born with NULL scale and quantity, and a PM on a 500-lot project would open
+  // 500 forms. This core is the chainage generator AND the AI lot breakdown —
+  // the two ways lots are really created.
+  testScale?: string | null;
+  quantityValue?: number | null;
+  quantityUnit?: string | null;
 }
 
 export interface BulkGeometryInput {
@@ -180,10 +188,16 @@ export async function createBulkLots(
       lotNumber: lot.lotNumber,
       description: lot.description || null,
       activityType: lot.activityType || 'Earthworks',
+      // Wave C1 (§6): folded in the same statement as the free text (see
+      // `activitySlugForWrite`), so the stored slug can never drift from it.
+      activitySlug: activitySlugForWrite(lot.activityType || 'Earthworks'),
       lotType: lot.lotType || 'chainage',
       chainageStart: lot.chainageStart ?? null,
       chainageEnd: lot.chainageEnd ?? null,
       layer: lot.layer || null,
+      testScale: lot.testScale ?? null,
+      quantityValue: lot.quantityValue ?? null,
+      quantityUnit: lot.quantityUnit ?? null,
       itpTemplateId: itpPlan.templateIdByLotNumber.get(lot.lotNumber) ?? null,
     })),
     select: {

@@ -108,11 +108,13 @@ function evaluateRule(
   }
 
   // --- regime ------------------------------------------------------------
-  // No `reduced` limb => no regime concept for this rule. A rule WITH the limb
-  // whose regime could not be resolved falls back to `full`: `reduced` must be
-  // EARNED, and over-testing is the safe direction (§3.4.1).
+  // Neither `reduced` figures nor an eligibility trigger => no regime concept
+  // for this rule. A regime-bearing rule whose regime could not be resolved
+  // falls back to `full`: `reduced` must be EARNED, and over-testing is the safe
+  // direction (§3.4.1).
+  const regimeBearing = Boolean(rule.reduced || rule.reducedFrequencyEligibility);
   const resolvedRegime = resolved.regimeByRuleId.get(rule.id) ?? null;
-  const regime = rule.reduced ? (resolvedRegime?.regime ?? 'full') : null;
+  const regime = regimeBearing ? (resolvedRegime?.regime ?? 'full') : null;
   const figures = regime === 'reduced' && rule.reduced ? rule.reduced : rule;
 
   // --- quantity ----------------------------------------------------------
@@ -158,6 +160,7 @@ function evaluateRule(
     pendingCount,
     failedCount,
     regime,
+    ...(regimeBearing ? { reducedFrequencyEligible: resolvedRegime?.eligible ?? false } : {}),
     ...(resolvedRegime && regime
       ? {
           regimeBasis: {

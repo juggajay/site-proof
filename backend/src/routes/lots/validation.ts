@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { SubcontractorPortalAccessKey } from '../../lib/projectAccess.js';
+import { QUANTITY_UNITS } from '../../lib/readiness/sufficiency/types.js';
 
 // ============================================================================
 // Zod Validation Schemas
@@ -59,6 +60,34 @@ const optionalNullableTextSchema = (field: string, maxLength: number) =>
 
 const finiteNumberSchema = (field: string) =>
   z.number({ invalid_type_error: `${field} must be a number` }).finite(`${field} must be finite`);
+
+// Wave C1 test-sufficiency lot attributes (spec §9.1, §10.1 "input validation at
+// a trust boundary"). `quantityValue` is bounded on BOTH ends: a zero or
+// negative quantity is not "unknown", it is nonsense, and an unbounded one is a
+// denial vector through the per-quantity arithmetic. NULL stays first-class and
+// means "not recorded" (§7).
+const MAX_QUANTITY_VALUE = 1e9;
+const quantityValueSchema = finiteNumberSchema('quantityValue')
+  .positive('quantityValue must be greater than zero')
+  .max(MAX_QUANTITY_VALUE, `quantityValue must be ${MAX_QUANTITY_VALUE} or less`)
+  .optional()
+  .nullable();
+const quantityUnitSchema = z
+  .enum(QUANTITY_UNITS, {
+    errorMap: () => ({ message: `quantityUnit must be one of: ${QUANTITY_UNITS.join(', ')}` }),
+  })
+  .optional()
+  .nullable();
+// The scale is checked against the RESOLVED ruleset's `scaleKeys` at the route
+// (never silently coerced); the schema only bounds its shape.
+const testScaleSchema = optionalNullableTextSchema('testScale', MAX_SHORT_TEXT_LENGTH);
+
+/** Shared by create, bulk-create, PATCH and the bulk-set route, so the four cannot drift. */
+const testSufficiencyLotFields = {
+  testScale: testScaleSchema,
+  quantityValue: quantityValueSchema,
+  quantityUnit: quantityUnitSchema,
+} as const;
 
 function validateChainageRange(
   chainageStart: number | null | undefined,
@@ -126,6 +155,7 @@ const createLotSchema = z
       .nonnegative('budgetAmount cannot be negative')
       .optional()
       .nullable(),
+    ...testSufficiencyLotFields,
   })
   .superRefine((data, ctx) => {
     validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {
@@ -177,6 +207,11 @@ const bulkCreateLotsShape = {
           chainageEnd: finiteNumberSchema('chainageEnd').optional().nullable(),
           layer: optionalNullableTextSchema('layer', MAX_SHORT_TEXT_LENGTH),
           itpTemplateId: requiredIdSchema('itpTemplateId').optional().nullable(),
+          // [C1R-B10] Without these on the bulk path every lot created after C1
+          // would be born with NULL scale and quantity — a dead launch. This is
+          // the shared core behind POST /api/lots/bulk AND the copilot
+          // lot_breakdown apply handler.
+          ...testSufficiencyLotFields,
         })
         .superRefine((data, ctx) => {
           validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {
@@ -267,6 +302,7 @@ const updateLotSchema = z
       .nullable(),
     assignedSubcontractorId: requiredIdSchema('assignedSubcontractorId').optional().nullable(),
     expectedUpdatedAt: z.string().optional(), // For optimistic locking
+    ...testSufficiencyLotFields,
   })
   .superRefine((data, ctx) => {
     validateChainageRange(data.chainageStart, data.chainageEnd, (message, path) => {
@@ -286,6 +322,39 @@ const bulkUpdateStatusSchema = z.object({
     errorMap: () => ({ message: `status must be one of: ${validStatuses.join(', ')}` }),
   }),
 });
+
+// Schema for bulk-setting the test-sufficiency attributes (spec §9.1 [C1R-B10]).
+// At least one attribute must be present, so an empty call cannot silently NULL
+// a selection. `null` is meaningful and clears the field.
+const bulkSetTestAttributesSchema = z
+  .object({
+    lotIds: lotIdArraySchema,
+    ...testSufficiencyLotFields,
+  })
+  .superRefine((data, ctx) => {
+    const provided = (['testScale', 'quantityValue', 'quantityUnit'] as const).filter(
+      (field) => data[field] !== undefined,
+    );
+    if (provided.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide at least one of testScale, quantityValue or quantityUnit',
+        path: ['testScale'],
+      });
+    }
+    // A quantity is a number AND a unit or it is not a quantity. Setting one
+    // half would record an uninterpretable value the evaluator must then reject
+    // as `quantity_missing` — better to refuse it at the boundary.
+    const settingValue = data.quantityValue !== undefined && data.quantityValue !== null;
+    const settingUnit = data.quantityUnit !== undefined && data.quantityUnit !== null;
+    if (settingValue !== settingUnit) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'quantityValue and quantityUnit must be set together',
+        path: ['quantityUnit'],
+      });
+    }
+  });
 
 // Schema for bulk assign subcontractor
 const bulkAssignSubcontractorSchema = z.object({
@@ -354,6 +423,7 @@ export {
   updateLotSchema,
   bulkDeleteSchema,
   bulkUpdateStatusSchema,
+  bulkSetTestAttributesSchema,
   bulkAssignSubcontractorSchema,
   assignSubcontractorSchema,
   conformLotSchema,

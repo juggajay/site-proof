@@ -22,6 +22,8 @@ export interface Project {
   workingDays?: string[] | null;
   state?: string | null;
   specificationSet?: string | null;
+  /** Wave C1 gate strength: 'off' | 'warn' | 'block' (spec §5.1.2). */
+  testSufficiencyMode?: string | null;
   settings?: string | Record<string, unknown> | null;
   currentUserRole?: string | null;
 }
@@ -59,6 +61,7 @@ export interface GeneralFormData {
   workingHoursStart: string;
   workingHoursEnd: string;
   specificationSet: string;
+  testSufficiencyMode: string;
 }
 
 export interface ITPTemplate {
@@ -145,6 +148,8 @@ export const DEFAULT_FORM_DATA: GeneralFormData = {
   workingHoursStart: '06:00',
   workingHoursEnd: '18:00',
   specificationSet: 'TfNSW',
+  // Default 'warn' NEVER changes conformance outcomes (§16 D1).
+  testSufficiencyMode: 'warn',
 };
 
 export const DEFAULT_ENABLED_MODULES: EnabledModules = {
@@ -167,4 +172,22 @@ export const DEFAULT_WITNESS_POINT_NOTIFICATIONS: WitnessPointNotificationSettin
   trigger: 'previous_item',
   clientEmail: '',
   clientName: '',
+};
+
+/**
+ * Wave C1 gate strength (spec §5.1.2). Plain-English copy per mode, because the
+ * difference between them is the difference between a note and a refused
+ * conformance.
+ */
+export const TEST_SUFFICIENCY_MODE_OPTIONS = [
+  { value: 'off', label: 'Off - do not check test frequency' },
+  { value: 'warn', label: 'Warn - show a note when a lot is short on tests' },
+  { value: 'block', label: 'Block - do not let a short lot be conformed' },
+] as const;
+
+export const TEST_SUFFICIENCY_MODE_HELPER_TEXT: Record<string, string> = {
+  off: 'Test counts are still shown on the lot readiness panel, but they never affect conformance.',
+  warn: 'A lot short of the specification’s required test count shows a warning. Nothing is blocked.',
+  block:
+    'A lot short of the required count cannot be conformed. Only applies where the governing specification pack has been confirmed against its published edition; an owner or admin can still force-conform, and the shortfall is recorded.',
 };

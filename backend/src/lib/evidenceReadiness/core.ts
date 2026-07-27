@@ -1,3 +1,6 @@
+// Type-only: no runtime edge from the readiness shapes to the sufficiency engine.
+import type { SufficiencyEvaluation } from '../readiness/sufficiency/evaluate.js';
+
 export type EvidenceReadinessSeverity = 'blocker' | 'warning' | 'support';
 
 export type EvidenceReadinessArea =
@@ -133,6 +136,9 @@ export interface ConformancePrerequisiteSnapshot {
   // been regenerated yet). Defaults to no bypass blockers when absent.
   naHoldPointBlockerCount?: number;
   noNaHoldPointBypass?: boolean;
+  // Wave C1 (spec §5.1.1). Optional for the same back-compat reason as the two
+  // fields above; absent reads as false, so no existing caller changes outcome.
+  sufficiencyBlocks?: boolean;
 }
 
 export interface LotReadinessInput {
@@ -153,6 +159,14 @@ export interface LotReadinessInput {
   };
   canViewCommercial: boolean;
   conformStatus: LotConformStatusReadiness;
+  /**
+   * Wave C1 (spec §5.1.4). The advisory half of the sufficiency verdict, as
+   * produced by `checkConformancePrerequisites`. Absent/null on every project
+   * that resolves no authority ruleset — which today is every project without a
+   * shipped pack — and then no sufficiency item is emitted at all (§7.1: a
+   * resolved-nothing state produces nothing, not a warning on every panel).
+   */
+  sufficiency?: SufficiencyEvaluation | null;
   evidenceCounts: {
     unreleasedHoldPoints: number;
     releasedHoldPoints: number;

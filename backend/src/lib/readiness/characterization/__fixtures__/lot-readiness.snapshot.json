@@ -22,7 +22,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -38,7 +39,18 @@
             "actionLabel": "Assign ITP"
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -75,7 +87,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 0,
         "actionBlockerCount": 2
       }
@@ -115,7 +127,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -136,7 +149,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -187,7 +211,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -222,7 +246,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -242,7 +267,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -293,7 +329,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -320,13 +356,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -385,7 +433,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -421,7 +469,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -445,7 +494,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -495,7 +555,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -539,7 +599,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -563,7 +624,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming, 1 pending.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -624,7 +696,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -668,7 +740,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -692,7 +765,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming, 1 pending.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -753,7 +837,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -797,7 +881,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -821,7 +906,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming, 1 pending.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -882,7 +978,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -917,13 +1013,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 1 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -982,7 +1090,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -1018,7 +1126,8 @@
             }
           ],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -1038,7 +1147,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1088,7 +1208,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -1124,7 +1244,8 @@
             }
           ],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -1144,7 +1265,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1194,7 +1326,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -1221,13 +1353,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -1325,7 +1469,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 2,
+        "warningCount": 3,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -1352,13 +1496,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -1442,7 +1598,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 3,
         "actionBlockerCount": 1
       }
@@ -1469,13 +1625,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
-        "state": "ready",
+        "state": "warning",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "conformance_prerequisites_met",
@@ -1559,7 +1727,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 1,
+        "warningCount": 2,
         "supportCount": 2,
         "actionBlockerCount": 1
       }
@@ -1588,7 +1756,8 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 1,
-          "noNaHoldPointBypass": false
+          "noNaHoldPointBypass": false,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -1605,7 +1774,18 @@
             "count": 1
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1694,7 +1874,7 @@
       },
       "summary": {
         "blockerCount": 3,
-        "warningCount": 2,
+        "warningCount": 3,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -1729,13 +1909,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
         "state": "already_conformed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 1 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "lot_already_conformed",
@@ -1785,7 +1977,7 @@
       },
       "summary": {
         "blockerCount": 0,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 0
       }
@@ -1820,13 +2012,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
         "state": "already_conformed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "lot_already_conformed",
@@ -1886,7 +2090,7 @@
       },
       "summary": {
         "blockerCount": 0,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 3,
         "actionBlockerCount": 0
       }
@@ -1922,7 +2126,8 @@
             }
           ],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
@@ -1942,7 +2147,18 @@
             ]
           }
         ],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": []
       },
       "claim": {
@@ -1993,7 +2209,7 @@
       },
       "summary": {
         "blockerCount": 2,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 2
       }
@@ -2022,13 +2238,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
         "state": "already_claimed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "lot_already_claimed",
@@ -2074,7 +2302,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 1,
         "actionBlockerCount": 1
       }
@@ -2101,13 +2329,25 @@
           "noOpenNcrs": true,
           "openNcrs": [],
           "naHoldPointBlockerCount": 0,
-          "noNaHoldPointBypass": true
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
         }
       },
       "conformance": {
         "state": "already_conformed",
         "blockers": [],
-        "warnings": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (TfNSW R44 — Earthworks, clause R44 cl. 1.2.5 (frequency deferred to TfNSW Q), edition unrecorded, unconfirmed edition). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          }
+        ],
         "support": [
           {
             "code": "lot_already_conformed",
@@ -2167,7 +2407,7 @@
       },
       "summary": {
         "blockerCount": 1,
-        "warningCount": 0,
+        "warningCount": 1,
         "supportCount": 2,
         "actionBlockerCount": 1
       }

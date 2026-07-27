@@ -244,6 +244,10 @@ async function computeClaimReadinessItems(lots: ClaimReadinessLotRow[]) {
         blockingReasons: conformStatus.blockingReasons ?? [],
         prerequisites: conformStatus.prerequisites,
       },
+      // Wave C1 (§5.3): sufficiency joins the claim-readiness view as an
+      // ADVISORY. It never blocks a claim, and it never enters
+      // `getClaimBlockingReasonsForConformedLot` — enforced by §14 AT-11.
+      sufficiency: conformStatus.sufficiency ?? null,
       evidenceCounts: {
         unreleasedHoldPoints: lot.holdPoints.filter((holdPoint) => !holdPointReleased(holdPoint))
           .length,

@@ -267,7 +267,12 @@ describe('AT-4 the perQuantity limb — SYNTHETIC ONLY (no shipped rule carries 
         regimeByRuleId: new Map([
           [
             reducedRule.id,
-            { regime: 'reduced' as const, basisLotIds: ['a', 'b', 'c'], streamKey: 'k' },
+            {
+              regime: 'reduced' as const,
+              eligible: true,
+              basisLotIds: ['a', 'b', 'c'],
+              streamKey: 'k',
+            },
           ],
         ]),
       },
