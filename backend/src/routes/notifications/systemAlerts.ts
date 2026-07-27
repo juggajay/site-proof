@@ -96,7 +96,7 @@ notificationSystemAlertsRouter.get(
         },
         orderBy: { createdAt: 'desc' },
       })
-    ).map(toAlert);
+    ).flatMap((alertRecord) => toAlert(alertRecord) ?? []);
 
     res.json(buildSystemAlertsSummaryResponse(activeAlerts));
   }),

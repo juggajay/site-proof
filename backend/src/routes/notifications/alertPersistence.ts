@@ -59,7 +59,9 @@ async function createAlertRecordUnchecked(alert: Alert): Promise<Alert> {
     },
   });
 
-  return toAlert(record);
+  // `alert.type` was already parsed by the route, so the row we just wrote can
+  // only map back successfully; the fallback is defensive, not reachable.
+  return toAlert(record) ?? alert;
 }
 
 /**
