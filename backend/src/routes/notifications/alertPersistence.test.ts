@@ -67,7 +67,9 @@ function makeRecord(overrides: Partial<NotificationAlertRecord> = {}): Notificat
 describe('ESCALATION_CONFIG', () => {
   it('matches the exact escalation timing and roles for every escalatable alert type', () => {
     // 'pending_approval' is intentionally absent: the missing-diary alert (its
-    // only creator) is retired, so it has no escalation config.
+    // only creator) is retired, so it has no escalation config. 'overdue_test'
+    // was removed entirely (Wave C1 spec §16 D10), which narrows the escalation
+    // scan's IN-list (ESCALATABLE_TYPES = Object.keys(ALERT_ESCALATION_CONFIG)).
     expect(ESCALATION_CONFIG).toEqual({
       overdue_ncr: {
         firstEscalationAfterHours: 24,
@@ -85,11 +87,6 @@ describe('ESCALATION_CONFIG', () => {
           'superintendent',
           'admin',
         ],
-      },
-      overdue_test: {
-        firstEscalationAfterHours: 48,
-        secondEscalationAfterHours: 96,
-        escalationRoles: ['quality_manager', 'project_manager'],
       },
     });
   });

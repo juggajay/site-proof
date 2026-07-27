@@ -5,7 +5,7 @@
 
 import type { NotificationTypeWithTiming } from './notificationAutomation/preferences.js';
 
-export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
+export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval';
 
 export type AlertEscalationConfig = {
   firstEscalationAfterHours: number;
@@ -29,7 +29,7 @@ export const STALE_HOLD_POINT_ESCALATION_ROLES = [...STALE_HOLD_POINT_ALERT_ROLE
 // (the only creator of that type) is retired, so leaving it out of the config
 // excludes the draining backlog from the escalation scan
 // (ESCALATABLE_TYPES = Object.keys(this)) — no zombie escalation races the sweep
-// that resolves those rows. 'overdue_test' is kept though unused (F0 spec).
+// that resolves those rows.
 export const ALERT_ESCALATION_CONFIG: Partial<Record<AlertType, AlertEscalationConfig>> = {
   overdue_ncr: {
     firstEscalationAfterHours: 24,
@@ -40,11 +40,6 @@ export const ALERT_ESCALATION_CONFIG: Partial<Record<AlertType, AlertEscalationC
     firstEscalationAfterHours: 4,
     secondEscalationAfterHours: 8,
     escalationRoles: STALE_HOLD_POINT_ESCALATION_ROLES,
-  },
-  overdue_test: {
-    firstEscalationAfterHours: 48,
-    secondEscalationAfterHours: 96,
-    escalationRoles: ['quality_manager', 'project_manager'],
   },
 };
 

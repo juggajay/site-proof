@@ -1660,21 +1660,22 @@ describe('Notifications API', () => {
         expect(res.body.count).toBeGreaterThan(0);
       });
 
-      // AT-21 (Wave C1 spec §14, D10 step 1): a legacy row whose stored type is
-      // no longer a known AlertType must NOT 400 the alerts list. toAlert used
-      // to throw via parseAlertType, and the list maps every row, so one stale
-      // row turned GET /alerts into a 400 for the whole project.
-      it('skips a legacy unknown-type alert row instead of 400-ing the whole list', async () => {
+      // AT-21 (Wave C1 spec §14, D10): with a legacy 'overdue_test' row present
+      // — that type was removed in D10 but rows written before it can still sit
+      // in the DB — GET /alerts must NOT 400. toAlert used to throw via
+      // parseAlertType, and the list maps every row, so one stale row turned the
+      // endpoint into a 400 for the whole project.
+      it('skips a legacy overdue_test alert row instead of 400-ing the whole list', async () => {
         const legacyId = `alert-legacy-type-${Date.now()}`;
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         await prisma.notificationAlert.create({
           data: {
             id: legacyId,
-            type: 'retired_alert_type',
+            type: 'overdue_test',
             severity: 'high',
-            title: 'Legacy alert with a retired type',
-            message: 'Written before the type was removed',
+            title: 'Legacy overdue_test alert',
+            message: 'Written before overdue_test was removed',
             entityId: `legacy-entity-${Date.now()}`,
             entityType: 'ncr',
             projectId,

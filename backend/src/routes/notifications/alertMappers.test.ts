@@ -50,13 +50,16 @@ function makeRecord(overrides: Partial<NotificationAlertRecord> = {}): Notificat
 
 describe('parseAlertType', () => {
   it('returns each allowed alert type unchanged', () => {
-    for (const type of ['overdue_ncr', 'stale_hold_point', 'pending_approval', 'overdue_test']) {
+    for (const type of ['overdue_ncr', 'stale_hold_point', 'pending_approval']) {
       expect(parseAlertType(type)).toBe(type);
     }
   });
 
   it('throws Invalid alert type for unknown strings and non-strings', () => {
     expectBadRequest(() => parseAlertType('bogus'), 'Invalid alert type');
+    // 'overdue_test' was removed (Wave C1 spec §16 D10) — the write path is
+    // closed by this rejection, not by a deletion at the POST /alerts call site.
+    expectBadRequest(() => parseAlertType('overdue_test'), 'Invalid alert type');
     expectBadRequest(() => parseAlertType(''), 'Invalid alert type');
     expectBadRequest(() => parseAlertType(123), 'Invalid alert type');
     expectBadRequest(() => parseAlertType(null), 'Invalid alert type');
@@ -191,7 +194,7 @@ describe('toAlert', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      expect(toAlert(makeRecord({ id: 'alert-legacy', type: 'retired_alert_type' }))).toBeNull();
+      expect(toAlert(makeRecord({ id: 'alert-legacy', type: 'overdue_test' }))).toBeNull();
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]?.[0])).toContain('unknown type');
     } finally {

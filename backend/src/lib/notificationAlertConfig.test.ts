@@ -24,6 +24,13 @@ describe('getAlertEmailNotificationType', () => {
     expect(getAlertEmailNotificationType({ type: 'pending_approval', entityType: 'docket' })).toBe(
       'holdPointReminder',
     );
+    // getAlertEmailNotificationType takes a plain string, so it still has to
+    // answer for stored types outside the current AlertType union (e.g. the
+    // removed 'overdue_test'): no test-specific preference exists, so these
+    // fall through to the field-reminder bucket.
+    expect(
+      getAlertEmailNotificationType({ type: 'pending_approval', entityType: 'test-result' }),
+    ).toBe('holdPointReminder');
     expect(getAlertEmailNotificationType({ type: 'overdue_test', entityType: 'test-result' })).toBe(
       'holdPointReminder',
     );

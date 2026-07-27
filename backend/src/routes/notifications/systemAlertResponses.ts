@@ -53,7 +53,6 @@ export function buildSystemAlertsSummaryResponse(activeAlerts: ActiveSystemAlert
     overdue_ncr: activeAlerts.filter((alert) => alert.type === 'overdue_ncr').length,
     stale_hold_point: activeAlerts.filter((alert) => alert.type === 'stale_hold_point').length,
     pending_approval: activeAlerts.filter((alert) => alert.type === 'pending_approval').length,
-    overdue_test: activeAlerts.filter((alert) => alert.type === 'overdue_test').length,
   };
 
   const escalated = activeAlerts.filter((alert) => alert.escalationLevel > 0).length;

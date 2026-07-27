@@ -61,7 +61,7 @@ describe('system alert response helpers', () => {
       },
       {
         id: 'low-1',
-        type: 'overdue_test',
+        type: 'pending_approval',
         severity: 'low',
         title: 'Low',
         createdAt: new Date('2026-06-12T00:00:00.000Z'),
@@ -72,7 +72,9 @@ describe('system alert response helpers', () => {
     expect(buildSystemAlertsSummaryResponse(alerts)).toEqual({
       totalActive: 9,
       bySeverity: { critical: 6, high: 1, medium: 1, low: 1 },
-      byType: { overdue_ncr: 6, stale_hold_point: 1, pending_approval: 1, overdue_test: 1 },
+      // Public response-shape change (Wave C1 spec §16 D10 step 3): the
+      // `overdue_test` key is gone from byType.
+      byType: { overdue_ncr: 6, stale_hold_point: 1, pending_approval: 2 },
       escalated: 2,
       criticalItems: criticalAlerts.slice(0, 5).map((alert) => ({
         id: alert.id,

@@ -20,7 +20,7 @@ import { MAX_NOTIFICATION_FILTER_LENGTH, parseOptionalString } from './validatio
  */
 
 // Alert types that can be escalated
-export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
+export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval';
 
 // Alert severity levels
 export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -43,12 +43,7 @@ export interface Alert {
   escalatedTo?: string[]; // User IDs of escalation recipients
 }
 
-const ALERT_TYPES: AlertType[] = [
-  'overdue_ncr',
-  'stale_hold_point',
-  'pending_approval',
-  'overdue_test',
-];
+const ALERT_TYPES: AlertType[] = ['overdue_ncr', 'stale_hold_point', 'pending_approval'];
 const ALERT_SEVERITIES: AlertSeverity[] = ['low', 'medium', 'high', 'critical'];
 const ALERT_STATUS_FILTERS = ['active', 'resolved', 'escalated'] as const;
 type AlertStatusFilter = (typeof ALERT_STATUS_FILTERS)[number];
