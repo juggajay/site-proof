@@ -7,29 +7,28 @@
 // `evaluate.ts` would make predicates ↔ evaluate cyclic. Same intent, same
 // contract: `contracts.test.ts:59-64` cites a real predicate-library export.
 
+import type { TestCategory } from './testCategories.js';
 import type { QuantityUnit } from './types.js';
 
-/** Normalized test-type key — mirrors `predicates.ts`'s private normalizer. */
-export function normalizeTestTypeKey(value: string | null | undefined): string {
-  return (value || '').trim().toLowerCase();
-}
-
 /**
- * Does a test attribute to a rule? (§4.1) A test counts toward rule R iff its
- * own `testType` normalizes to `R.testType`, OR it links a checklist item whose
- * `testType` does. Reuses the shipped matcher's semantics — no second match rule.
+ * Does a test attribute to a rule? (F1 §4.4)
  *
- * `candidateTestTypes` is the test's own type plus the linked item's type; the
- * caller resolves the link (the two paths carry it differently: an items array
- * on the lot path, a nested `itpChecklistItem` select on the regime path).
+ * Both sides are RESOLVED CATEGORIES, never raw strings `[C1C-15]` `[C1C-16]`.
+ * Raw-string equality was not an attribution rule; it was a coincidence that
+ * held only for synthetic fixtures, and it is why a VIC lot with six verified
+ * `Density Ratio` tests read 0 of 6 (F1 §3).
+ *
+ * The candidate list comes from `testCategories.candidateCategories` — the ONE
+ * place attribution candidates are decided `[C1C-20]`. Do not build one here or
+ * at a call site: `evaluate.ts` and `regime.ts` are both callers, and a second
+ * construction is how the lab-reference exclusion gets bypassed `[F1C-B2]`.
  */
 export function testAttributesToRule(
-  ruleTestType: string,
-  candidateTestTypes: readonly (string | null | undefined)[],
+  ruleCategory: TestCategory | null,
+  candidates: readonly TestCategory[],
 ): boolean {
-  const required = normalizeTestTypeKey(ruleTestType);
-  if (!required) return false;
-  return candidateTestTypes.some((candidate) => normalizeTestTypeKey(candidate) === required);
+  if (!ruleCategory) return false;
+  return candidates.includes(ruleCategory);
 }
 
 /**

@@ -4,7 +4,9 @@
 // inputs in (§4.1), a three-valued verdict out (§4.2). It never queries — the
 // M39 guarantee that the single conform path and the batched claim path produce
 // byte-identical results depends on `computeConformanceResult` staying DB-free
-// (`conformancePrerequisites.ts:374-382`), and C1 keeps it that way by resolving
+// (`conformancePrerequisites.ts:461-473` — F1.2 corrects this citation; `:372-423`
+// is the `CONFORMANCE_LOT_SELECT` column list, and the wrong line range was
+// inherited from here into two specs `[F1C-C1]`), and C1 keeps it that way by resolving
 // per path and passing the bundle IN, exactly as `releasedHoldPointItemIds`
 // already does [C1R-B1] [C1R-C5].
 //
@@ -13,6 +15,13 @@
 import { testFailing, testPassing, testPendingByStatus } from '../predicates.js';
 import type { TestSufficiencyVerdict, TestReasonCode } from '../contracts/futureConsumers.js';
 import { requiredTestCount, testAttributesToRule, testCountSufficient } from './counts.js';
+import {
+  candidateCategories,
+  createCategoryResolver,
+  ruleCategoryOf,
+  type CategoryResolver,
+  type Resolution,
+} from './testCategories.js';
 import type {
   FrequencyRule,
   MaxLotSizeExceedance,
@@ -33,6 +42,15 @@ export interface SufficiencyEvaluationInput {
   tests: readonly SufficiencyTestRow[];
   /** The ITP checklist items, to resolve `itpChecklistItemId` → item test type. */
   checklistItems: readonly SufficiencyChecklistItem[];
+  /**
+   * F1 §4.6 `[F1C-B4]`. The BATCH-SCOPED category resolver. Supplied by the
+   * batched claim path so 5,000 lots share one cache over the few dozen distinct
+   * strings they actually carry; absent everywhere else (the single-lot path,
+   * every unit test), where a fresh per-call resolver is created instead.
+   * Behaviour is identical either way — memoizing a pure function is
+   * transparent — only the cache lifetime differs.
+   */
+  resolveCategory?: CategoryResolver;
 }
 
 export interface SufficiencyEvaluation {
@@ -64,17 +82,35 @@ export interface SufficiencyEvaluation {
   verdict: TestSufficiencyVerdict;
 }
 
-/** Test types a checklist item link contributes, keyed by item id. */
-function itemTestTypeIndex(items: readonly SufficiencyChecklistItem[]): Map<string, string | null> {
-  return new Map(items.map((item) => [item.id, item.testType ?? null]));
+/**
+ * The lot's resolved categories, computed ONCE per lot before `rules.map(...)`
+ * so a multi-rule pack does not re-resolve the same strings per rule (F1 §4.4).
+ */
+interface LotCategories {
+  tests: Map<string, Resolution>;
+  items: Map<string, Resolution>;
 }
 
-function candidateTestTypes(
-  test: SufficiencyTestRow,
-  itemTestTypes: Map<string, string | null>,
-): (string | null | undefined)[] {
-  const linked = test.itpChecklistItemId ? itemTestTypes.get(test.itpChecklistItemId) : null;
-  return [test.testType, linked];
+function resolveLotCategories(
+  input: SufficiencyEvaluationInput,
+  resolve: CategoryResolver,
+): LotCategories {
+  return {
+    tests: new Map(input.tests.map((test) => [test.id, resolve(test.testType)])),
+    items: new Map(input.checklistItems.map((item) => [item.id, resolve(item.testType)])),
+  };
+}
+
+/**
+ * The test's candidate categories, through the ONE shared helper `[C1C-20]`.
+ * `regime.ts` `streamEntryConforming` calls the same helper — this is not a
+ * per-call-site rule.
+ */
+function candidatesFor(test: SufficiencyTestRow, categories: LotCategories): readonly string[] {
+  return candidateCategories(
+    categories.tests.get(test.id) ?? null,
+    test.itpChecklistItemId ? (categories.items.get(test.itpChecklistItemId) ?? null) : null,
+  );
 }
 
 /**
@@ -103,7 +139,8 @@ function matchingCap(
 function evaluateRule(
   rule: FrequencyRule,
   input: SufficiencyEvaluationInput,
-  itemTestTypes: Map<string, string | null>,
+  categories: LotCategories,
+  resolveRuleCategory: (testType: string) => string | null,
   attributedTestIds: Set<string>,
 ): RuleSufficiency {
   const { resolved } = input;
@@ -141,8 +178,12 @@ function evaluateRule(
   }
 
   // --- counts ------------------------------------------------------------
+  // The rule's own testType goes through the SAME resolver, so a pack could in
+  // principle declare an alias as its key and still work — AT-22 requires it to
+  // be a canonical key, so in practice this is an identity lookup.
+  const ruleCategory = resolveRuleCategory(rule.testType);
   const attributed = input.tests.filter((test) =>
-    testAttributesToRule(rule.testType, candidateTestTypes(test, itemTestTypes)),
+    testAttributesToRule(ruleCategory, candidatesFor(test, categories)),
   );
   for (const test of attributed) attributedTestIds.add(test.id);
   const passingCount = attributed.filter(testPassing).length;
@@ -200,10 +241,19 @@ function lotLevelCauses(resolved: ResolvedSufficiency): UnknownCause[] {
 
 export function evaluateSufficiency(input: SufficiencyEvaluationInput): SufficiencyEvaluation {
   const { resolved } = input;
-  const itemTestTypes = itemTestTypeIndex(input.checklistItems);
+  // F1 §4.6: the batch path supplies a shared resolver; everyone else gets a
+  // fresh per-call one. Same values either way.
+  const resolve = input.resolveCategory ?? createCategoryResolver();
+  const categories = resolveLotCategories(input, resolve);
   const attributedTestIds = new Set<string>();
   const rules = resolved.rules.map((rule) =>
-    evaluateRule(rule, input, itemTestTypes, attributedTestIds),
+    evaluateRule(
+      rule,
+      input,
+      categories,
+      (testType) => ruleCategoryOf(resolve, testType),
+      attributedTestIds,
+    ),
   );
 
   const unknownCauses = rules.length === 0 ? lotLevelCauses(resolved) : [];

@@ -73,6 +73,15 @@ interface LotSpec {
   failStatus?: 'verified' | 'entered';
   activitySlug?: string | null;
   inProject?: string;
+  /**
+   * F1.2 AT-56b [F1C-B1]. The failing test's `testType` as actually stored.
+   * Defaults to the literal `'compaction'` — the synthetic vocabulary the C1
+   * fixtures invented, and the reason the regime seam's breakage would have
+   * shipped green.
+   */
+  failTestType?: string;
+  /** F1.2 AT-56b. Link the failing test to an ITP item carrying this type instead. */
+  failItemTestType?: string;
 }
 
 // Conform times are spaced so the total order (conformedAt, createdAt, id) is
@@ -106,7 +115,8 @@ async function seedLot(spec: LotSpec): Promise<{ id: string; conformedAt: Date }
       data: {
         projectId: spec.inProject ?? projectId,
         lotId: lot.id,
-        testType: 'compaction',
+        itpChecklistItemId: await seedItpItem(spec, lot.lotNumber),
+        testType: spec.failTestType ?? 'compaction',
         passFail: 'fail',
         status: spec.failStatus ?? 'verified',
         testDate: conformedAt,
@@ -115,6 +125,30 @@ async function seedLot(spec: LotSpec): Promise<{ id: string; conformedAt: Date }
     });
   }
   return { id: lot.id, conformedAt };
+}
+
+/** F1.2 AT-56b: the ITP item the failing test links to, when the fixture asks for one. */
+async function seedItpItem(spec: LotSpec, lotNumber: string): Promise<string | null> {
+  if (!spec.failItemTestType) return null;
+  const template = await prisma.iTPTemplate.create({
+    data: {
+      projectId: spec.inProject ?? projectId,
+      name: `Tpl ${lotNumber}`,
+      activityType: 'Earthworks',
+    },
+  });
+  const item = await prisma.iTPChecklistItem.create({
+    data: {
+      templateId: template.id,
+      sequenceNumber: 1,
+      description: 'Compaction test point',
+      pointType: 'standard',
+      responsibleParty: 'contractor',
+      evidenceRequired: 'test',
+      testType: spec.failItemTestType,
+    },
+  });
+  return item.id;
 }
 
 async function resolve(
@@ -163,6 +197,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.testResult.deleteMany({ where: { projectId: { in: [projectId, otherProjectId] } } });
   await prisma.lot.deleteMany({ where: { projectId: { in: [projectId, otherProjectId] } } });
+  await prisma.iTPTemplate.deleteMany({
+    where: { projectId: { in: [projectId, otherProjectId] } },
+  });
   await prisma.project.deleteMany({ where: { id: { in: [projectId, otherProjectId] } } });
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.company.deleteMany({ where: { id: companyId } });
@@ -304,6 +341,81 @@ describe('AT-8b the regime never lowers a count without a recorded approval [C1C
     const key = streamKey({ ruleId: REDUCED_FIGURES_RULE.id, activitySlug: 'earthworks_batters' });
     const resolved = await resolve(REDUCED_FIGURES_RULE, { id: 'x', conformedAt: null }, key);
     expect(resolved).toMatchObject({ regime: 'reduced', eligible: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AT-56b — THE REGIME STREAK ON REAL VOCABULARY [F1C-B1].
+//
+// `streamEntryConforming` is the SECOND production caller of the attribution
+// rule, and it is a NEGATIVE predicate: an entry conforms iff no failing test
+// attributes to the rule. Every C1 fixture types its failing test the literal
+// `'compaction'`, which is the identity case — so if F1.2 had switched
+// `testAttributesToRule` to categories and left this caller passing raw strings,
+// it would have COMPILED (`string` satisfies `readonly (string | null)[]`),
+// attribution would have become permanently false, no failing test could ever
+// break a streak, and every conformed non-overridden lot would read conforming.
+// A three-lot streak in which every lot failed six density tests would report
+// `reducedFrequencyEligible: true` — user-visible, and D14 builds on it.
+// IT WOULD SHIP GREEN. This is the test that catches it.
+//
+// The strings below are shipped strings: `vic-earthworks.js:206` for the item
+// type, `CreateTestModal.tsx:261,263,265` for the test types.
+// ---------------------------------------------------------------------------
+describe('AT-56b the regime streak is evaluated on the same vocabulary as the count', () => {
+  const VIC_ITEM_TYPE = 'AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00';
+
+  it.each([
+    ['Density Ratio', undefined],
+    ['density_ratio', undefined],
+    ['Certificate Review Required', VIC_ITEM_TYPE],
+    ['Field Density Nuclear', undefined],
+  ])(
+    'a failing `%s` test (linked item: %s) in the window breaks the streak',
+    async (failTestType, failItemTestType) => {
+      const slug = `ew_at56b_${failTestType.replace(/\W+/g, '_').toLowerCase()}`;
+      const key = streamKey({ activitySlug: slug });
+      await seedLot({ conforming: true, activitySlug: slug });
+      await seedLot({ conforming: false, activitySlug: slug, failTestType, failItemTestType });
+      await seedLot({ conforming: true, activitySlug: slug });
+
+      const resolved = await resolve(ELIGIBILITY_RULE, { id: 'x', conformedAt: null }, key);
+      expect(resolved?.eligible).toBe(false);
+      expect(resolved?.regime).toBe('full');
+    },
+  );
+
+  it('a failing LABORATORY MDD test does NOT break the streak — the exclusion holds here too', async () => {
+    // [F1C-B2]. `MDD Standard` resolves LAB_REFERENCE, so it attributes to
+    // nothing even though it is linked to a compaction item. Three clean lots.
+    const slug = 'ew_at56b_mdd';
+    const key = streamKey({ activitySlug: slug });
+    await seedLot({ conforming: true, activitySlug: slug });
+    await seedLot({
+      conforming: false,
+      activitySlug: slug,
+      failTestType: 'MDD Standard',
+      failItemTestType: VIC_ITEM_TYPE,
+    });
+    await seedLot({ conforming: true, activitySlug: slug });
+
+    const resolved = await resolve(ELIGIBILITY_RULE, { id: 'x', conformedAt: null }, key);
+    expect(resolved?.eligible).toBe(true);
+  });
+
+  it('a failing test of an UNRELATED category still does not break the streak', async () => {
+    const slug = 'ew_at56b_unrelated';
+    const key = streamKey({ activitySlug: slug });
+    await seedLot({ conforming: true, activitySlug: slug });
+    await seedLot({
+      conforming: false,
+      activitySlug: slug,
+      failTestType: 'AS 1012.9 (Compressive Strength)',
+    });
+    await seedLot({ conforming: true, activitySlug: slug });
+
+    const resolved = await resolve(ELIGIBILITY_RULE, { id: 'x', conformedAt: null }, key);
+    expect(resolved?.eligible).toBe(true);
   });
 });
 

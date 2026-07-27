@@ -19,6 +19,13 @@
 
 import { testFailing } from '../predicates.js';
 import { testAttributesToRule } from './counts.js';
+import {
+  candidateCategories,
+  createCategoryResolver,
+  ruleCategoryOf,
+  type CategoryResolver,
+  type TestCategory,
+} from './testCategories.js';
 import type { FrequencyRule, FrequencyRegime, ResolvedRegime } from './types.js';
 
 /**
@@ -161,14 +168,36 @@ export function buildRegimeStreamQuery(
   return query;
 }
 
-/** §3.4.2 entry conformity — status-qualified on BOTH sides [C1R-B8]. */
-export function streamEntryConforming(entry: RegimeStreamEntry, ruleTestType: string): boolean {
+/**
+ * §3.4.2 entry conformity — status-qualified on BOTH sides [C1R-B8].
+ *
+ * **THE SECOND PRODUCTION CALLER of the attribution rule** [F1C-B1] [C1C-20].
+ * This is a NEGATIVE predicate: an entry conforms iff NO failing test attributes
+ * to the rule. If attribution here were left comparing a raw string like
+ * `AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00` against the category `compaction`
+ * it would still COMPILE, and it would be permanently false — so no failing test
+ * could ever break a streak, so every conformed non-overridden lot would read
+ * conforming, so a three-lot streak in which every lot failed six density tests
+ * would report `reducedFrequencyEligible: true`. That value is user-visible and
+ * D14 builds on it. It would ship green. AT-56b is the test that catches it.
+ */
+export function streamEntryConforming(
+  entry: RegimeStreamEntry,
+  ruleCategory: TestCategory | null,
+  resolve: CategoryResolver,
+): boolean {
   if (entry.conformedAt === null) return false;
   if (entry.conformanceOverriddenAt !== null) return false;
   return !entry.testResults.some(
     (test) =>
       testFailing(test) &&
-      testAttributesToRule(ruleTestType, [test.testType, test.itpChecklistItem?.testType]),
+      testAttributesToRule(
+        ruleCategory,
+        candidateCategories(
+          resolve(test.testType),
+          resolve(test.itpChecklistItem?.testType ?? null),
+        ),
+      ),
   );
 }
 
@@ -190,11 +219,14 @@ export function streamEntryConforming(entry: RegimeStreamEntry, ruleTestType: st
  * `validateRuleset` rejects one in CI before it can ever reach here.
  *
  * @param tail the window in ASCENDING stream order (oldest first).
+ * @param resolve the batch-scoped category resolver (F1 §4.6). Absent =>
+ *   a fresh per-call one, which is behaviourally identical.
  */
 export function deriveRegime(
   rule: FrequencyRule,
   key: RegimeStreamKey,
   tail: readonly RegimeStreamEntry[],
+  resolve: CategoryResolver = createCategoryResolver(),
 ): ResolvedRegime {
   const trigger = regimeTrigger(rule);
   const streamKey = serializeStreamKey(key);
@@ -216,7 +248,10 @@ export function deriveRegime(
   // THE LENGTH GUARD. Fewer than N entries can never have earned a reduction.
   if (required < 1 || tail.length < required) return notMet();
   const window = tail.slice(-required);
-  if (!window.every((entry) => streamEntryConforming(entry, rule.testType))) return notMet();
+  const ruleCategory = ruleCategoryOf(resolve, rule.testType);
+  if (!window.every((entry) => streamEntryConforming(entry, ruleCategory, resolve))) {
+    return notMet();
+  }
   // The streak is met. [C1C-6] Whether that CHANGES the count is a separate
   // question: only a rule carrying reduced FIGURES can go operative. An
   // eligibility-only rule reports `eligible` at `regime: 'full'` — the authority
@@ -263,6 +298,7 @@ export async function resolveRegimeForRule(
   rule: FrequencyRule,
   key: RegimeStreamKey,
   subject: RegimeSubject,
+  resolve: CategoryResolver = createCategoryResolver(),
 ): Promise<ResolvedRegime | null> {
   const trigger = regimeTrigger(rule);
   if (!trigger) return null;
@@ -273,5 +309,5 @@ export async function resolveRegimeForRule(
     rule.appliesTo.layerAliases,
   );
   const rowsDesc = await fetchStream(query);
-  return deriveRegime(rule, key, [...rowsDesc].reverse());
+  return deriveRegime(rule, key, [...rowsDesc].reverse(), resolve);
 }

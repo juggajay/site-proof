@@ -12,6 +12,10 @@ import {
 } from './readiness/sufficiency/evaluate.js';
 import { resolveSufficiency, resolveSufficiencyBatch } from './readiness/sufficiency/resolve.js';
 import type { RegimeStreamFetcher } from './readiness/sufficiency/regime.js';
+import {
+  createCategoryResolver,
+  type CategoryResolver,
+} from './readiness/sufficiency/testCategories.js';
 import type { ResolvedSufficiency } from './readiness/sufficiency/types.js';
 
 export type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot' | 'iTPChecklistItem'>;
@@ -475,6 +479,13 @@ export function computeConformanceResult(
   lot: LotForConformance,
   releasedHoldPointItemIds: ReadonlySet<string>,
   sufficiency: ResolvedSufficiency | null = null,
+  // F1 §4.6 [F1C-B4]. A FOURTH optional parameter, mirroring the third exactly:
+  // the batched claim path creates ONE category resolver and passes it to every
+  // member, so 5,000 lots share one cache over the few dozen distinct test-type
+  // strings they actually carry. Absent (the single-lot path, every unit test)
+  // the evaluator makes its own — memoizing a pure function is transparent, so
+  // only the cache lifetime differs and M39 byte-identity is unaffected (AT-32).
+  resolveCategory?: CategoryResolver,
 ): ConformanceCheckResult {
   const prerequisites: ConformancePrerequisites = {
     itpAssigned: false,
@@ -557,6 +568,7 @@ export function computeConformanceResult(
         resolved: sufficiency,
         tests: lot.testResults,
         checklistItems,
+        resolveCategory,
       })
     : null;
   prerequisites.sufficiencyBlocks = sufficiencyEvaluation?.sufficiencyBlocks ?? false;
@@ -836,10 +848,17 @@ export async function checkConformancePrerequisitesBatch(
   const withProject = lots.filter(
     (lot): lot is typeof lot & { project: NonNullable<typeof lot.project> } => lot.project != null,
   );
+  // F1 §4.6 [F1C-B4]. ONE resolver for the whole batch — the regime fold and
+  // every member's evaluation share it. 5,000 lots × ~35 template item strings
+  // is ~250,000 resolutions collapsing to a few dozen cache entries; unmemoized
+  // that measured +436 ms against 36 ms of headroom on the #1581 claim budget.
+  // Garbage-collected when this function returns; nothing is process-lifetime.
+  const resolveCategory = createCategoryResolver();
   const sufficiencyByLotId = await resolveSufficiencyBatch(
     withProject.map((lot) => sufficiencyInput(lot, lot.project)),
     options?.regimeFetcher ?? null,
     now,
+    resolveCategory,
   );
   for (const lot of lots) {
     results.set(
@@ -848,6 +867,7 @@ export async function checkConformancePrerequisitesBatch(
         lot,
         releasedByLot.get(lot.id) ?? new Set(),
         sufficiencyByLotId.get(lot.id) ?? null,
+        resolveCategory,
       ),
     );
   }

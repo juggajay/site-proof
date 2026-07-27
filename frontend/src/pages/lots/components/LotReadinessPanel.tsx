@@ -11,11 +11,20 @@ type OutstandingTest = NonNullable<EvidenceReadinessItem['outstandingTests']>[nu
 
 // Short muted suffix describing a test's state. no_result is the default
 // "nothing recorded yet" case and needs no suffix.
+//
+// F1 §8.4 [F1C-B5], Jay's J3 condition: `unmatched_result_exists` reads as an
+// INSTRUCTION, not an observation. After F1.2 the sufficiency count resolves
+// test categories while the conform gate still matches raw strings
+// (`predicates.ts` `testMatchesItem`, deliberately unchanged — see §19), so a
+// VIC lot can show "6 of 6 — met" and "ITP requires a matching passing verified
+// test result" at once. Read as two claims that is a contradiction; read as one
+// statement plus one action it is coherent — the tests count, link them and the
+// lot conforms. §19 reverts this string when it converges the two matchers.
 const OUTSTANDING_TEST_STATE_SUFFIX: Record<OutstandingTest['state'], string> = {
   no_result: '',
   awaiting_verification: 'awaiting verification',
   failing: 'failing',
-  unmatched_result_exists: 'result not linked',
+  unmatched_result_exists: 'link this test to its checklist item',
 };
 
 const OUTSTANDING_TEST_PREVIEW_COUNT = 3;

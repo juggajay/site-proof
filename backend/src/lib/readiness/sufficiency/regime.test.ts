@@ -18,7 +18,16 @@ import {
   type RegimeStreamKey,
   type RegimeStreamQuery,
 } from './regime.js';
+import { createCategoryResolver, ruleCategoryOf } from './testCategories.js';
 import type { FrequencyRule, RulesetProvenance } from './types.js';
+
+// F1.2: `streamEntryConforming` takes a RESOLVED CATEGORY and a resolver, not a
+// raw rule test type [F1C-B1]. This helper keeps the existing assertions reading
+// the same way while routing through the real seam.
+const conforming = (entry: RegimeStreamEntry, ruleTestType: string): boolean => {
+  const resolve = createCategoryResolver();
+  return streamEntryConforming(entry, ruleCategoryOf(resolve, ruleTestType), resolve);
+};
 
 const PROVENANCE: RulesetProvenance = {
   authority: 'SyntheticAuthority',
@@ -334,8 +343,8 @@ describe('AT-8 regime asymmetries (§3.4.2)', () => {
         { testType: 'compaction', passFail: 'fail', status: 'rejected' },
       ],
     });
-    expect(streamEntryConforming(unverified, rule.testType)).toBe(true);
-    expect(streamEntryConforming(failedLot(1), rule.testType)).toBe(false);
+    expect(conforming(unverified, rule.testType)).toBe(true);
+    expect(conforming(failedLot(1), rule.testType)).toBe(false);
   });
 
   it('only failures ATTRIBUTABLE to the rule reset it — via own type or linked item', () => {
@@ -343,7 +352,7 @@ describe('AT-8 regime asymmetries (§3.4.2)', () => {
     const otherTestType = lot(1, {
       testResults: [{ testType: 'cbr', passFail: 'fail', status: 'verified' }],
     });
-    expect(streamEntryConforming(otherTestType, rule.testType)).toBe(true);
+    expect(conforming(otherTestType, rule.testType)).toBe(true);
 
     const linkedItem = lot(1, {
       testResults: [
@@ -355,7 +364,7 @@ describe('AT-8 regime asymmetries (§3.4.2)', () => {
         },
       ],
     });
-    expect(streamEntryConforming(linkedItem, rule.testType)).toBe(false);
+    expect(conforming(linkedItem, rule.testType)).toBe(false);
   });
 
   it('an unsupported escalationShape THROWS rather than being mis-evaluated', () => {

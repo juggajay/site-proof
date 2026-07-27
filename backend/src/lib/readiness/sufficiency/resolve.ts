@@ -30,6 +30,7 @@ import {
   type RegimeStreamFetcher,
   type RegimeStreamKey,
 } from './regime.js';
+import { createCategoryResolver, type CategoryResolver } from './testCategories.js';
 import type { FrequencyRule } from './types.js';
 import {
   QUANTITY_UNITS,
@@ -104,6 +105,7 @@ export async function resolveSufficiency(
   lot: SufficiencyLotInput,
   fetchStream: RegimeStreamFetcher | null = null,
   now: Date = new Date(),
+  resolveCategory: CategoryResolver = createCategoryResolver(),
 ): Promise<ResolvedSufficiency> {
   const resolved = resolveSufficiencySync(lot, now);
   if (!fetchStream || !resolved.ruleset || !lot.activitySlug) return resolved;
@@ -124,6 +126,7 @@ export async function resolveSufficiency(
         layerBucket,
       },
       { id: lot.id, conformedAt: lot.conformedAt ?? null },
+      resolveCategory,
     );
     if (regime) regimeByRuleId.set(rule.id, regime);
   }
@@ -211,6 +214,8 @@ export async function resolveSufficiencyBatch(
   lots: readonly SufficiencyLotInput[],
   fetchStream: RegimeStreamFetcher | null = null,
   now: Date = new Date(),
+  /** F1 §4.6 — the batch-scoped category resolver, shared with `evaluateSufficiency`. */
+  resolveCategory: CategoryResolver = createCategoryResolver(),
 ): Promise<Map<string, ResolvedSufficiency>> {
   const resolved = new Map<string, ResolvedSufficiency>();
   const regimes = new Map<string, Map<string, ResolvedRegime>>();
@@ -239,7 +244,10 @@ export async function resolveSufficiencyBatch(
       if (windowDesc === null) continue; // out of window => `full`, the safe direction
       regimes
         .get(subject.id)!
-        .set(group.rule.id, deriveRegime(group.rule, group.key, [...windowDesc].reverse()));
+        .set(
+          group.rule.id,
+          deriveRegime(group.rule, group.key, [...windowDesc].reverse(), resolveCategory),
+        );
     }
   }
 

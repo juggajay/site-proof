@@ -29,8 +29,17 @@ const OUTSTANDING_TEST_STATE_COUNT_PHRASE: Record<OutstandingTestState, (n: numb
   no_result: (n) => `${n} without ${n === 1 ? 'result' : 'results'}`,
   awaiting_verification: (n) => `${n} awaiting verification`,
   failing: (n) => `${n} failing`,
-  unmatched_result_exists: (n) =>
-    `${n} with ${n === 1 ? 'an unlinked result' : 'unlinked results'}`,
+  // F1 §8.4 [F1C-B5], Jay's J3 copy requirement. After F1.2 the sufficiency
+  // COUNT resolves categories while this gate still matches raw strings
+  // (`predicates.ts` `testMatchesItem`, unchanged by design — §19), so a VIC lot
+  // with six unlinked verified `Density Ratio` tests shows "6 of 6 — met" and
+  // "ITP requires a matching passing verified test result" in one payload. Read
+  // as two claims about the world that is a contradiction; read as one statement
+  // plus one INSTRUCTION it is coherent — the tests count, link them and the lot
+  // conforms. The copy is what decides which one the user sees, so it is a
+  // requirement of F1.2 rather than a follow-up. AT-62 asserts the exact string,
+  // so §19 removing the divergence shows up as a test diff, not a leftover.
+  unmatched_result_exists: (n) => `${n} needing a result linked to the item`,
 };
 
 const OUTSTANDING_TEST_STATE_ORDER: OutstandingTestState[] = [
@@ -327,7 +336,13 @@ export function buildSufficiencyAdvisoryItems(
         severity: 'warning',
         area: 'test',
         title: 'Verified tests not counted',
-        detail: `${n} verified test${n === 1 ? ' is' : 's are'} not linked to a checklist item, so ${n === 1 ? 'it was' : 'they were'} not counted toward the required frequency.`,
+        // F1 §8.2 [F1C-R7]. The old copy ("not linked to a checklist item")
+        // stopped being true at F1.2: a test now lands in this set whenever its
+        // CATEGORY is unresolved — including when it is perfectly well linked to
+        // an item whose type nobody has aliased, and when it resolves to a
+        // category no rule references. Naming the real cause is also the prompt
+        // that gets an alias added (§7's classifier is the other half).
+        detail: `${n} verified test${n === 1 ? ' is' : 's are'} not counted toward the required frequency — ${n === 1 ? 'its test type is' : 'their test types are'} not recognised as one this ITP requires.`,
         blocksAction: false,
         actionLabel: 'Review tests',
         count: n,

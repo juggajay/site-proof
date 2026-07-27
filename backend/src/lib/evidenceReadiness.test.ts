@@ -212,7 +212,11 @@ describe('evidence readiness helpers', () => {
     expect(testBlocker?.detail).toBe('5 required tests outstanding (5 without results).');
   });
 
-  it('phrases a single unmatched_result_exists item as an unlinked result count', () => {
+  // F1 §8.4 [F1C-B5] / AT-62: the `unmatched_result_exists` phrase became an
+  // INSTRUCTION rather than an observation, because after F1.2 the sufficiency
+  // count and this gate deliberately disagree in one payload (§19 converges
+  // them). When §19 lands, this assertion changes back — which is why it exists.
+  it('phrases a single unmatched_result_exists item as an instruction to link the result', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({
         conformStatus: {
@@ -245,7 +249,9 @@ describe('evidence readiness helpers', () => {
     const testBlocker = readiness.conformance.blockers.find(
       (readinessItem) => readinessItem.code === 'no_passing_verified_test',
     );
-    expect(testBlocker?.detail).toBe('1 required test outstanding (1 with an unlinked result).');
+    expect(testBlocker?.detail).toBe(
+      '1 required test outstanding (1 needing a result linked to the item).',
+    );
   });
 
   it('does not raise the test blocker for a no-test-point lot and reports prerequisites met', () => {
