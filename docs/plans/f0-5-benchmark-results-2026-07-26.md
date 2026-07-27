@@ -436,11 +436,17 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05pe
     src/routes/lots/lotConformanceDecision.db.test.ts \
     src/lib/readiness/recordDecision.db.test.ts
 
-# Everything around the touched code — 1,317 tests. `--no-file-parallelism` is
-# required: these DB suites share one database, and running them concurrently
-# produces spurious 409 DECISION_CONFLICTs from the serializable retry loop.
+# Everything around the touched code — 1,317 tests.
+#
+# SUPERSEDED 2026-07-27: this block used to require `--no-file-parallelism`,
+# because the DB suites shared one database and PostgreSQL predicate-lock
+# escalation made them trip each other's serializable retry loop (spurious 409
+# DECISION_CONFLICTs). Each vitest worker now gets its own database — see
+# `backend/src/test/workerDatabase.ts` — so file parallelism is safe again and
+# the flag is no longer needed. The workaround stayed local-only and the flake
+# eventually bit CI (run 30241538767).
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05perf" \
-  npx vitest run --no-file-parallelism src/routes/claims src/routes/lots \
+  npx vitest run src/routes/claims src/routes/lots \
     src/routes/holdpoints src/routes/ncrs src/lib/readiness src/routes/itp \
     src/lib/conformancePrerequisites.test.ts
 ```

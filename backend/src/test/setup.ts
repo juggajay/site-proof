@@ -1,8 +1,27 @@
 import { beforeAll, afterAll, beforeEach } from 'vitest';
 import dotenv from 'dotenv';
 import { assertSafeTestDatabaseUrl } from './databaseSafety.js';
+import { WORKER_DATABASES_OFF, workerDatabaseUrl } from './workerDatabase.js';
 
 dotenv.config();
+
+// Point this worker at its own clone of the test database BEFORE the Prisma
+// singleton is constructed (it reads DATABASE_URL at module load). See
+// `workerDatabase.ts` — sharing one database between parallel workers produced
+// spurious 409 DECISION_CONFLICTs from PostgreSQL predicate-lock escalation.
+// `vitest.globalSetup.ts` provisions the clones and sets
+// SITEPROOF_TEST_WORKER_DATABASES=off if it could not (or was told not to), in
+// which case every worker stays on the shared database.
+if (
+  process.env.DATABASE_URL &&
+  process.env.SITEPROOF_TEST_WORKER_DATABASES !== WORKER_DATABASES_OFF
+) {
+  process.env.DATABASE_URL = workerDatabaseUrl(
+    process.env.DATABASE_URL,
+    process.env.VITEST_POOL_ID,
+  );
+}
+
 assertSafeTestDatabaseUrl();
 
 const { prisma } = await import('../lib/prisma.js');

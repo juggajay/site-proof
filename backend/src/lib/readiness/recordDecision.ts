@@ -147,8 +147,53 @@ export interface DecisionOutcome<TMutation> {
   mutation?: TMutation;
 }
 
-/** Spec §3 `[R3-2]`: 3 attempts total, fresh evaluation each attempt. */
-export const MAX_DECISION_ATTEMPTS = 3;
+/**
+ * Spec §3 `[R3-2]`: bounded attempts, fresh evaluation each attempt.
+ *
+ * Raised 3 → 5 together with {@link serializationBackoffMs}. Three IMMEDIATE
+ * attempts is not a retry policy — see that function for why.
+ */
+export const MAX_DECISION_ATTEMPTS = 5;
+
+/** Base of the full-jitter backoff. Small: a decision is an interactive request. */
+export const DECISION_RETRY_BASE_DELAY_MS = 25;
+
+/** Cap, so five attempts can never add more than ~0.8 s to a request. */
+export const DECISION_RETRY_MAX_DELAY_MS = 400;
+
+/**
+ * Delay before re-running a serialization-failed decision, as FULL JITTER:
+ * uniform in `[0, min(base * 2^(attempt-1), cap))`.
+ *
+ * Retrying a 40001 with ZERO delay is the defect this replaces. Two decisions
+ * that conflict re-enter their transactions in lockstep, take the same predicate
+ * locks in the same order at the same instant, and conflict again — so all three
+ * attempts burn inside a few milliseconds and a perfectly serializable pair of
+ * decisions ends as a spurious 409 `DECISION_CONFLICT`. Observed directly: a
+ * `[FLAKE-PROBE]` on this catch printed two `claim` decisions failing attempts
+ * 1, 2 and 3 in exact lockstep.
+ *
+ * The randomness is the whole point — equal fixed delays would keep them in
+ * lockstep. Full jitter is the AWS "Exponential Backoff and Jitter" default and
+ * the one that de-correlates competing retriers best.
+ *
+ * Why this is not just a test fix: PostgreSQL SSI conflicts are PHYSICAL, not
+ * logical. Predicate locks escalate tuple → page → relation
+ * (`max_pred_locks_per_page` defaults to 2), so two decisions touching disjoint
+ * rows of a small table still conflict. Small tables are the CI test database;
+ * they are also a young project's `progress_claims`, `hold_points` and
+ * `requirement_evaluations`. The zero-delay retry loop under-served both.
+ *
+ * ponytail: `Math.random`, not a seeded generator — this is jitter, not crypto,
+ * and nothing asserts on the delay.
+ */
+export function serializationBackoffMs(attempt: number): number {
+  const ceiling = Math.min(
+    DECISION_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+    DECISION_RETRY_MAX_DELAY_MS,
+  );
+  return Math.floor(Math.random() * ceiling);
+}
 
 /**
  * Spec §3 `[R3-3]`: member rows carry a COMPACT VERDICT, never an evidence
@@ -200,6 +245,9 @@ function isSerializationFailure(error: unknown): boolean {
   const message = typeof candidate?.message === 'string' ? candidate.message : '';
   return message.includes('40001') || message.includes('could not serialize access');
 }
+
+const sleep = (ms: number): Promise<void> =>
+  ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms));
 
 function snapshotWriteFailed(error: unknown): AppError {
   return new AppError(
@@ -499,7 +547,10 @@ export async function recordDecision<TEvaluation, TMutation>(
       );
     } catch (error) {
       if (!isSerializationFailure(error)) throw error;
-      if (attempt < MAX_DECISION_ATTEMPTS) continue;
+      if (attempt < MAX_DECISION_ATTEMPTS) {
+        await sleep(serializationBackoffMs(attempt));
+        continue;
+      }
       throw new AppError(
         409,
         'This decision conflicted with a concurrent change. Refresh and try again.',

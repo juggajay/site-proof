@@ -1,9 +1,17 @@
 import { defineConfig } from 'vitest/config';
 
+import { TEST_WORKER_COUNT } from './src/test/workerDatabase.js';
+
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // One database per worker, so DB-backed suites stay parallel-safe
+    // (`src/test/workerDatabase.ts`). Pinned rather than left to vitest's
+    // cpus-1 default so the number of workers and the number of provisioned
+    // databases cannot disagree.
+    globalSetup: ['./vitest.globalSetup.ts'],
+    maxWorkers: TEST_WORKER_COUNT,
     // Force local-filesystem storage in tests. Routes branch on
     // isSupabaseConfigured() at module load; unsetting SUPABASE_URL ensures
     // upload tests never accidentally hit production Supabase Storage.
