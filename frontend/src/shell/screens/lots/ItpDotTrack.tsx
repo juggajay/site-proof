@@ -50,6 +50,7 @@ import {
   isNumberVisible,
   snapFrac,
   trackAriaValueText,
+  trackBottomPadFor,
   trackShiftPx,
   type ItpDotState,
   type TrackLayout,
@@ -329,7 +330,7 @@ export function ItpDotTrack({
         )}
 
         {/* The wrapper clips horizontally in the scroll regime; the magnified-
-            dot headroom + the ≥44px thumb hit zone live as padding ON the track
+            dot headroom + the ≥48px thumb hit zone live as padding ON the track
             element itself, INSIDE this clip box, so a dot scaled to 2.2× and
             lifted never clips at the top (the bug behind "the dots slide behind
             the header") and the pointer surface is a real thumb target. */}
@@ -371,10 +372,11 @@ export function ItpDotTrack({
               gap: layout.fits ? undefined : layout.gap,
               paddingLeft: layout.padding,
               paddingRight: layout.padding,
-              // Headroom for the 2.2× magnified + lifted dot, and a ≥44px-tall
-              // pointer surface (TOP_PAD + dot + BOTTOM_PAD).
+              // Headroom for the 2.2× magnified + lifted dot, and a ≥48px-tall
+              // pointer surface (TOP_PAD + dot + bottom pad), which
+              // trackBottomPadFor keeps true even when the dot shrinks.
               paddingTop: TRACK_PHYSICS.TRACK_TOP_PAD_PX,
-              paddingBottom: TRACK_PHYSICS.TRACK_BOTTOM_PAD_PX,
+              paddingBottom: trackBottomPadFor(layout.dotSize),
               width: layout.fits ? '100%' : layout.contentWidth,
             }}
           >

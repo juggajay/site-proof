@@ -238,7 +238,7 @@ export function IssueDetailScreen() {
           onChange={(e) => setRootCauseDescription(e.target.value)}
           rows={3}
           placeholder="Describe the root cause…"
-          className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] text-foreground"
+          className="min-h-[48px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] text-foreground"
         />
 
         <label className="mt-2 block text-[13px] font-semibold text-foreground" htmlFor="rc-fix">
@@ -250,7 +250,7 @@ export function IssueDetailScreen() {
           onChange={(e) => setProposedCorrectiveAction(e.target.value)}
           rows={3}
           placeholder="Describe the corrective action…"
-          className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] text-foreground"
+          className="min-h-[48px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] text-foreground"
         />
       </ShellScreen>
     );
@@ -312,7 +312,7 @@ export function IssueDetailScreen() {
             type="button"
             onClick={handleAddPhotoClick}
             disabled={addPhotoDisabled}
-            className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground underline underline-offset-2 touch-manipulation disabled:opacity-50"
+            className="shell-tap48 flex items-center gap-1.5 text-[13px] font-semibold text-foreground underline underline-offset-2 touch-manipulation disabled:opacity-50"
           >
             {uploading ? (
               <Loader2 size={15} className="animate-spin" aria-hidden="true" />
@@ -378,7 +378,7 @@ export function IssueDetailScreen() {
                     <button
                       type="button"
                       onClick={() => handleOpenEvidence(item)}
-                      className="flex w-full items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-left text-[13px] font-semibold text-foreground touch-manipulation"
+                      className="flex min-h-[48px] w-full items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-left text-[13px] font-semibold text-foreground touch-manipulation"
                     >
                       <FileText size={16} className="flex-shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{evidenceFilename(item)}</span>

@@ -291,7 +291,7 @@ export function PhotoDetailScreen() {
             type="button"
             onClick={() => void handleRetryUpload()}
             disabled={isSyncing}
-            className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-destructive px-3 text-[13px] font-semibold text-white touch-manipulation disabled:opacity-70"
+            className="inline-flex min-h-[48px] items-center justify-center gap-1.5 rounded-lg bg-destructive px-3 text-[13px] font-semibold text-white touch-manipulation disabled:opacity-70"
           >
             {isSyncing ? (
               <>

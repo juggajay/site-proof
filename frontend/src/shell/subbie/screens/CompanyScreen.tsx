@@ -95,7 +95,7 @@ function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.Re
 }
 
 const fieldClass =
-  'w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
+  'min-h-[48px] w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
 
 // ── Roster rows ───────────────────────────────────────────────────────────────
 
@@ -140,7 +140,7 @@ function EmployeeRow({
           onClick={onDelete}
           disabled={saving}
           className={cn(
-            '-mr-1 rounded-lg p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50',
+            'shell-tap48 -mr-1 rounded-lg p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50',
             armed && 'text-[12px] font-semibold',
           )}
           aria-label={`Remove ${employee.name}`}
@@ -202,7 +202,7 @@ function PlantRow({
           onClick={onDelete}
           disabled={saving}
           className={cn(
-            '-mr-1 rounded-lg p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50',
+            'shell-tap48 -mr-1 rounded-lg p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50',
             armed && 'text-[12px] font-semibold',
           )}
           aria-label={`Remove ${plant.description || plant.type}`}
@@ -219,7 +219,7 @@ function AddLineButton({ label, onClick }: { label: string; onClick: () => void 
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-[14px] font-semibold text-muted-foreground hover:bg-secondary/40"
+      className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-[14px] font-semibold text-muted-foreground hover:bg-secondary/40"
     >
       <Plus size={18} aria-hidden="true" />
       {label}

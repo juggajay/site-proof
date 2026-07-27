@@ -124,7 +124,7 @@ function ProjectSwitcher({ value, options }: { value: string; options: PortalCom
             })}`,
           );
         }}
-        className="w-full rounded-lg border border-input bg-card px-3 py-2 text-[13px] text-foreground"
+        className="min-h-[48px] w-full rounded-lg border border-input bg-card px-3 py-2 text-[13px] text-foreground"
       >
         {options.map((o) => (
           <option

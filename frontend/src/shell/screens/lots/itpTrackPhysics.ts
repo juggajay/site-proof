@@ -110,10 +110,24 @@ export const TRACK_PHYSICS = {
   /** Reserved headroom (px) INSIDE the track's clip box so a dot magnified to
    *  MAX_SCALE, lifted, never clips at the top (the mock's 22px wrap padding). */
   TRACK_TOP_PAD_PX: 22,
-  /** Bottom padding (px) inside the track — with the top pad this gives the
-   *  pointer surface a ≥44px thumb target (22 + 13 + 10). */
+  /** Floor for the track's bottom padding (px). The real value comes from
+   *  `trackBottomPadFor(dotSize)`, which tops this up until the pointer surface
+   *  clears MIN_TRACK_TAP_PX for gloved hands. */
   TRACK_BOTTOM_PAD_PX: 10,
+  /** Minimum height (px) of the track's pointer surface — the gloved-hand
+   *  target from the 2026-07-24 external review (was 44px). */
+  MIN_TRACK_TAP_PX: 48,
 } as const;
+
+/**
+ * Bottom padding for the track so `TRACK_TOP_PAD_PX + dotSize + pad` is at least
+ * MIN_TRACK_TAP_PX. The dot shrinks to MIN_DOT_PX on crowded tracks, so a fixed
+ * bottom pad would silently drop the thumb target below 48px there.
+ */
+export function trackBottomPadFor(dotSize: number): number {
+  const deficit = TRACK_PHYSICS.MIN_TRACK_TAP_PX - TRACK_PHYSICS.TRACK_TOP_PAD_PX - dotSize;
+  return Math.max(TRACK_PHYSICS.TRACK_BOTTOM_PAD_PX, deficit);
+}
 
 // ── Magnification falloff ────────────────────────────────────────────────────
 

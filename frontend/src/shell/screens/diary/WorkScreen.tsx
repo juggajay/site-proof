@@ -230,7 +230,7 @@ function WorkEntry({ entry, isSubmitted, onEdit, onDelete }: WorkEntryProps) {
           onClick={handleDeleteTap}
           aria-label={armed ? `Confirm delete ${typeLabel}` : `Delete ${typeLabel}`}
           className={cn(
-            'flex min-h-[44px] shrink-0 items-center justify-center rounded-lg active:bg-secondary',
+            'flex min-h-[48px] shrink-0 items-center justify-center rounded-lg active:bg-secondary',
             armed
               ? 'px-2 text-[12px] font-semibold text-destructive'
               : 'w-11 text-muted-foreground',

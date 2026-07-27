@@ -158,7 +158,7 @@ export function DocketDetailScreen() {
               <button
                 type="button"
                 onClick={() => void detailQuery.refetch()}
-                className="mt-2 font-semibold underline underline-offset-2"
+                className="shell-tap48 mt-2 font-semibold underline underline-offset-2"
               >
                 Retry entries
               </button>
@@ -257,7 +257,7 @@ export function DocketDetailScreen() {
           <button
             type="button"
             onClick={() => navigate(withProject(`/m/dockets/${docket.id}/adjust`))}
-            className="font-semibold text-foreground underline underline-offset-2 touch-manipulation"
+            className="shell-tap48 font-semibold text-foreground underline underline-offset-2 touch-manipulation"
           >
             Adjust hours
           </button>{' '}
@@ -265,7 +265,7 @@ export function DocketDetailScreen() {
           <button
             type="button"
             onClick={() => navigate(withProject(`/m/dockets/${docket.id}/query`))}
-            className="font-semibold text-foreground underline underline-offset-2 touch-manipulation"
+            className="shell-tap48 font-semibold text-foreground underline underline-offset-2 touch-manipulation"
           >
             Query
           </button>{' '}
@@ -273,7 +273,7 @@ export function DocketDetailScreen() {
           <button
             type="button"
             onClick={() => navigate(withProject(`/m/dockets/${docket.id}/reject`))}
-            className="font-semibold text-foreground underline underline-offset-2 touch-manipulation"
+            className="shell-tap48 font-semibold text-foreground underline underline-offset-2 touch-manipulation"
           >
             Reject
           </button>

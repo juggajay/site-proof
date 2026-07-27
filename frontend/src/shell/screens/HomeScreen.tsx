@@ -280,7 +280,7 @@ export function HomeScreen() {
           <button
             type="button"
             onClick={() => navigate('/projects')}
-            className="inline-flex min-h-[44px] touch-manipulation items-center gap-1 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+            className="inline-flex min-h-[48px] touch-manipulation items-center gap-1 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
           >
             View Projects
             <ChevronRight className="h-4 w-4" aria-hidden="true" />

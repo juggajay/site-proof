@@ -112,7 +112,7 @@ function ThemeToggle() {
       type="button"
       onClick={() => theme.setTheme(next)}
       aria-label={`Switch to ${next} mode`}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-transform active:scale-95"
+      className="shell-tap48 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-transform active:scale-95"
     >
       {theme.resolvedTheme === 'dark' ? (
         <Sun size={18} aria-hidden="true" />
@@ -220,13 +220,14 @@ function InnerHeader({
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background px-5 pb-[14px] pt-3">
       <div className="flex min-h-[40px] items-center gap-1.5">
-        {/* Back button — ≥44 px touch target, navigates to declared parent */}
+        {/* Back button — 40px circle, 48px hit area via .shell-tap48 (gloved
+            hands); navigates to the declared parent. */}
         <button
           type="button"
           aria-label="Go back"
           onClick={() => navigate(parent)}
           className={[
-            '-ml-2.5 flex h-10 w-10 items-center justify-center',
+            'shell-tap48 -ml-2.5 flex h-10 w-10 items-center justify-center',
             'rounded-[10px] border-none bg-transparent text-foreground',
             'transition-[transform,background] duration-150',
             'active:translate-x-[-3px] active:bg-secondary',
