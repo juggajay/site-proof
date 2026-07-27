@@ -15,14 +15,15 @@ export interface HelpTopic {
 // One topic per documentationSection. `slug` === the section id, `title` ===
 // the section title, `body` === the section's summary, steps, and tips verbatim.
 //
-// EXCEPTION, Wave C1: the test-frequency sentences in `readiness`,
-// `itp-holdpoints-tests`, and `admin` lead the frontend docs — the sufficiency
-// engine shipped without doc copy and Clancy answered "why does this lot need 6
-// tests?" with nothing. The slug/title pin is untouched, so the mirror still
-// holds where it is enforced; the frontend sections want the same prose in a
-// follow-up. Every claim is grounded in the shipped engine
+// Wave C1: the test-frequency sentences in `readiness`, `itp-holdpoints-tests`,
+// and `admin` landed here first (the sufficiency engine shipped without doc copy
+// and Clancy answered "why does this lot need 6 tests?" with nothing) and the
+// frontend sections now carry the same prose — the mirror is whole again. Every
+// claim is grounded in the shipped engine
 // (backend/src/lib/readiness/sufficiency/) and pinned below in
-// productKnowledge.test.ts — do not soften one without rechecking the code.
+// productKnowledge.test.ts, and again in the frontend's
+// documentationContent.test.ts — do not soften one without rechecking the code
+// and changing both sides together.
 export const HELP_TOPICS: readonly HelpTopic[] = [
   {
     slug: 'projects-lots',
