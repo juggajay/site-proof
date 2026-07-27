@@ -27,7 +27,9 @@ function lotInput(overrides: Partial<SufficiencyLotInput> = {}): SufficiencyLotI
   };
 }
 
-const NOW = new Date('2026-07-26T00:00:00.000Z');
+// Moved past `vicroads-204.v2`'s `effectiveFrom` (D14.2 §6.5) so the pinned
+// clock resolves the LIVE pack rather than the superseded v1.
+const NOW = new Date('2026-07-27T12:00:00.000Z');
 
 describe('mode narrowing', () => {
   it('accepts the three modes and falls back to `warn`, NEVER `block`, on anything else', () => {
@@ -43,8 +45,8 @@ describe('mode narrowing', () => {
 describe('resolveSufficiency', () => {
   it('resolves the VIC pack and its matching rule', async () => {
     const resolved = await resolveSufficiency(lotInput(), null, NOW);
-    expect(resolved.ruleset?.id).toBe('vicroads-204.v1');
-    expect(resolved.rules.map((rule) => rule.id)).toEqual(['vicroads-204.v1/compaction-density']);
+    expect(resolved.ruleset?.id).toBe('vicroads-204.v2');
+    expect(resolved.rules.map((rule) => rule.id)).toEqual(['vicroads-204.v2/compaction-density']);
     expect(resolved.activityCanonical).toBe(true);
   });
 
@@ -71,7 +73,7 @@ describe('resolveSufficiency', () => {
       value: 'B',
       source: 'lot',
     });
-    // vicroads-204.v1 now declares defaultScale 'A' — confirmed verbatim from
+    // vicroads-204.v2 now declares defaultScale 'A' — confirmed verbatim from
     // clause 204.13 ("Where the compaction scale has not been specified,
     // Compaction Scale A shall apply"), so VIC lots evaluate with no data entry.
     expect((await resolveSufficiency(lotInput(), null, NOW)).scale).toEqual({
@@ -139,7 +141,7 @@ describe('resolveSufficiency', () => {
     expect(vic.regimeByRuleId.size).toBe(1);
     // An empty stream is BELOW the length guard, so the streak is not met and
     // nothing is claimed — `full`, not eligible.
-    expect(vic.regimeByRuleId.get('vicroads-204.v1/compaction-density')).toMatchObject({
+    expect(vic.regimeByRuleId.get('vicroads-204.v2/compaction-density')).toMatchObject({
       regime: 'full',
       eligible: false,
     });
@@ -169,7 +171,7 @@ describe('resolveSufficiency', () => {
 // Wave C1.2 — the grouped batch (spec §11 C1.2, §12).
 // ---------------------------------------------------------------------------
 
-const RULE_ID = 'vicroads-204.v1/compaction-density';
+const RULE_ID = 'vicroads-204.v2/compaction-density';
 
 /** A conformed stream entry with no failing test — a CONFORMING entry. */
 function streamEntry(id: string, conformedAt: string): RegimeStreamEntry {
@@ -332,7 +334,7 @@ describe('resolveSufficiencyBatch', () => {
     const resolved = await resolveSufficiencyBatch([lotInput(), lotInput({ id: 'lot-2' })], null);
     expect(resolved.size).toBe(2);
     for (const entry of resolved.values()) {
-      expect(entry.ruleset?.id).toBe('vicroads-204.v1');
+      expect(entry.ruleset?.id).toBe('vicroads-204.v2');
       expect(entry.regimeByRuleId.size).toBe(0);
     }
   });

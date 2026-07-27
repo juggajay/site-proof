@@ -15,15 +15,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../prisma.js';
 import { prismaRegimeStreamFetcher } from './prismaStream.js';
 import { resolveRegimeForRule, type RegimeStreamKey } from './regime.js';
-import { VICROADS_204_V1 } from './rulesets/vicroads-204.v1.js';
+import { VICROADS_204_V2 } from './rulesets/vicroads-204.v2.js';
 import type { FrequencyRule } from './types.js';
 
 const tag = `regime-db-${Date.now()}`;
 const ACTIVITY_SLUG = 'earthworks_general';
 
-// The shipped VicRoads compaction rule: eligibility-only, three consecutive
-// conforming lots (clause 204.14(c)).
-const ELIGIBILITY_RULE = VICROADS_204_V1.rules[0];
+// The LIVE VicRoads compaction rule: eligibility-only, three consecutive
+// conforming lots (clause 204.14(c)). v2 since D14.2 (§6.5) — v1 is frozen.
+const ELIGIBILITY_RULE = VICROADS_204_V2.rules[0];
 
 // A synthetic CONFIRMED rule that carries reduced FIGURES, so the operative
 // `reduced` regime is exercised too. Nothing shipped declares one — 204.14(c)
@@ -57,7 +57,7 @@ let sequence = 0;
 function streamKey(overrides: Partial<RegimeStreamKey> = {}): RegimeStreamKey {
   return {
     projectId,
-    rulesetId: VICROADS_204_V1.id,
+    rulesetId: VICROADS_204_V2.id,
     ruleId: ELIGIBILITY_RULE.id,
     activitySlug: ACTIVITY_SLUG,
     layerBucket: '*',

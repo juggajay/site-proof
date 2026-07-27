@@ -56,7 +56,9 @@ function ruleset(overrides: Partial<Ruleset> = {}): Ruleset {
   };
 }
 
-const NOW = new Date('2026-07-26T00:00:00.000Z');
+// Moved past `vicroads-204.v2`'s `effectiveFrom` (D14.2 §6.5) so the pinned
+// clock resolves the LIVE pack rather than the superseded v1.
+const NOW = new Date('2026-07-27T12:00:00.000Z');
 
 describe('the shipped packs are registrable and honestly graded', () => {
   it('every shipped ruleset validates clean', () => {
@@ -65,12 +67,44 @@ describe('the shipped packs are registrable and honestly graded', () => {
     }
   });
 
-  it('ships ONE pack — and no TMR / DIT SA / MRWA numbers (§8.2, [C1C-9])', () => {
-    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v1']);
+  it('ships ONE authority — and no TMR / DIT SA / MRWA numbers (§8.2, [C1C-9])', () => {
+    // Two ids, one authority, one LIVE pack: D14.2 §6.5 minted `.v2` rather than
+    // editing `.v1` in place, because C1.2 (#1594) writes `ruleId` into immutable
+    // decision evidence. The windows abut, so this is not the shadowing the spec
+    // warns about — `resolveRuleset` returns exactly one pack at any instant.
+    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual([
+      'vicroads-204.v1',
+      'vicroads-204.v2',
+    ]);
+    expect(resolveRuleset({ state: 'VIC', specSet: 'VicRoads', at: NOW })?.id).toBe(
+      'vicroads-204.v2',
+    );
   });
 
-  it('vicroads-204.v1 is CONFIRMED on primary-source provenance (§8.1.1 [C1C-1])', () => {
-    const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
+  it('vicroads-204.v1 is FROZEN and closed — its content is decision evidence (§6.5)', () => {
+    const superseded = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
+    // The window closes exactly where v2's opens: no gap (a VIC project would
+    // resolve no pack at all) and no overlap (two live packs, id tie-break).
+    expect(superseded?.effectiveTo).toBe('2026-07-27');
+    expect(superseded?.effectiveTo).toBe(
+      SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')?.effectiveFrom,
+    );
+    // Frozen means frozen: the upgrade landed in v2, not here.
+    expect(superseded?.materialTypes).toBeUndefined();
+    expect(superseded?.rules[0]?.maxLotSize).toBeUndefined();
+    expect(superseded?.rules[0]?.smallLot).toBeUndefined();
+    // A lookup dated inside v1's window still resolves it, which is what keeps a
+    // past decision's `ruleId` meaning what it meant.
+    expect(
+      resolveRuleset({ state: 'VIC', specSet: 'VicRoads', at: new Date('2026-01-01') })?.id,
+    ).toBe('vicroads-204.v1');
+  });
+
+  it('vicroads-204.v2 is CONFIRMED on primary-source provenance (§8.1.1 [C1C-1])', () => {
+    const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2');
+    // The pack revision is CIVOS's, not the authority's — the edition below is
+    // unchanged from v1, and so are the counts.
+    expect(vicroads?.materialTypes).toEqual(['Type A', 'Type B', 'Type C']);
     expect(vicroads?.status).toBe('confirmed');
     expect(vicroads?.state).toBe('vic');
     expect(vicroads?.scaleKeys).toEqual(['A', 'B', 'C']);
@@ -82,31 +116,57 @@ describe('the shipped packs are registrable and honestly graded', () => {
     expect(vicroads?.provenance.checkedOn).toBe('2026-07-27');
   });
 
-  it('vicroads-204.v1: 6/6/3 counts cite clause 204.13(a), NOT Table 204.142 [C1C-1] [C1C-4]', () => {
-    const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
+  it('vicroads-204.v2: 6/6/3 counts cite clause 204.13(a), NOT Table 204.142 [C1C-1] [C1C-4]', () => {
+    const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2');
     const compaction = vicroads?.rules[0];
     expect(compaction?.testType).toBe('compaction');
     expect(compaction?.minCountByScale).toEqual({ A: 6, B: 6, C: 3 });
     // Table 204.142 carries lot SIZE and the reduced sampling interval; it
     // contains no test counts at all. The count comes from clause 204.13(a).
     expect(compaction?.provenance.clause).toBe('204.13(a)');
-    // The Section 173 small-lot escape is visible to the user, not hidden (§4.4).
+    // The label RECORDS the Section 173 escape; it does NOT disclose it
+    // `[D14X-3]` — `shortfallSentence` never reads `rule.label`. The user-facing
+    // half is AT-46a in `rulesets/vicroads-204.v2.test.ts`, asserted against the
+    // rendered item text.
     expect(compaction?.label).toContain('Sec 173');
   });
 
-  it('vicroads-204.v1 encodes NEITHER maxLotSize limb [C1C-2] [C1C-3]', () => {
-    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1')?.rules[0];
+  it('vicroads-204.v2 caps lot size for TYPE A ONLY [C1C-2] [C1C-3]', () => {
+    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')?.rules[0];
+    // Table 204.142's Type A row: "One day's production or 5,000 m², whichever
+    // is the lesser". Material-scoped because Type B's three sub-rows are
+    // 10,000 m² / 10,000 m² / no area cap and Type C has none at all — a BARE
+    // cap would fire falsely on a Type B lot and invent one for Type C.
+    expect(compaction?.maxLotSize).toEqual([
+      { unit: 'm2', value: 5000, materialAliases: ['type a', 'type a material'] },
+    ]);
     // The 500 m² "under paved areas" cap is a Wyndham City Council amendment
     // that appears in NO version of the VicRoads/DTP document — shipping it
     // would assert an authority requirement the authority never wrote.
-    // The 5,000 m² cap is TYPE A MATERIAL ONLY, and `appliesTo` has no
-    // material-type discriminator, so a bare cap would fire falsely on a Type B
-    // lot and invent a cap for Type C (which has none).
-    expect(compaction?.maxLotSize).toBeUndefined();
+    expect(compaction?.maxLotSize?.some((cap) => cap.value === 500)).toBe(false);
   });
 
-  it('vicroads-204.v1: the regime is ELIGIBILITY-ONLY, never a reduction [C1C-6]', () => {
-    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1')?.rules[0];
+  it('vicroads-204.v2 encodes Section 173 on its OWN grade-A provenance (§6.2)', () => {
+    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')?.rules[0];
+    expect(compaction?.smallLot).toMatchObject({
+      maxArea: { unit: 'm2', value: 500 },
+      // Scale C is ABSENT DELIBERATELY: cl. 204.13(a) scopes the escape to Scale
+      // A/B, and Scale C is already three-tests-on-the-mean. Adding `C: 3` "for
+      // completeness" would imply a reduction that does not exist.
+      minCountByScale: { A: 3, B: 3 },
+      acceptanceShiftPct: 2.0,
+    });
+    expect(compaction?.smallLot?.minCountByScale).not.toHaveProperty('C');
+    // A DIFFERENT document from the rule's Section 204, so it carries its own
+    // provenance and clears the same §8.3 currency bar — which the
+    // validate-clean test above now runs over it.
+    expect(compaction?.smallLot?.provenance.clause).toBe('173.04(d)');
+    expect(compaction?.smallLot?.provenance.evidenceGrade).toBe('A');
+    expect(compaction?.smallLot?.provenance.document).toContain('Section 173');
+  });
+
+  it('vicroads-204.v2: the regime is ELIGIBILITY-ONLY, never a reduction [C1C-6]', () => {
+    const compaction = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')?.rules[0];
     // No `reduced` FIGURES. Table 204.142's third column publishes a lot-SAMPLING
     // INTERVAL (every 2nd/3rd/6th lot), not a per-lot count — clause 204.13(a)'s
     // six is unconditional. Encoding {A:2,B:2,C:6} as counts would be
@@ -332,6 +392,59 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
     ).toContainEqual(expect.stringContaining('every must be > 0'));
   });
 
+  // D14 §4.4 — the small-area limb. `minCountByScale` here is deliberately NOT
+  // required to cover every `scaleKeys` entry (Scale C has no reduction to
+  // grant), so the checks are the per-key ones plus the limb's OWN provenance,
+  // which is a different document and must clear the same §8.3 bar.
+  it.each([
+    [{ maxArea: { unit: 'furlong', value: 500 } }, 'is not a QuantityUnit'],
+    [{ maxArea: { unit: 'm2', value: 0 } }, 'maxArea.value must be > 0'],
+    [{ minCountByScale: {} }, 'smallLot.minCountByScale is empty'],
+    [{ minCountByScale: { Z: 3 } }, "scale 'Z' outside ruleset.scaleKeys"],
+    [{ minCountByScale: { A: 0 } }, 'must be an integer >= 1'],
+    [{ acceptanceShiftPct: Number.NaN }, 'acceptanceShiftPct must be a finite number'],
+  ])('a malformed smallLot limb (%o)', (overrides, expected) => {
+    const smallLot = {
+      maxArea: { unit: 'm2' as const, value: 500 },
+      minCountByScale: { A: 3 },
+      acceptanceShiftPct: 2.0,
+      provenance: CONFIRMABLE_PROVENANCE,
+      ...overrides,
+    } as FrequencyRule['smallLot'];
+    expect(validateRuleset(ruleset({ rules: [rule({ smallLot })] }), NOW)).toContainEqual(
+      expect.stringContaining(expected),
+    );
+  });
+
+  it('a smallLot limb whose OWN provenance is expired or under-graded (AT-42)', () => {
+    const stale = {
+      ...CONFIRMABLE_PROVENANCE,
+      revalidateBy: '2020-01-01',
+      evidenceGrade: 'C' as const,
+    };
+    const problems = validateRuleset(
+      ruleset({
+        rules: [
+          rule({
+            smallLot: {
+              maxArea: { unit: 'm2', value: 500 },
+              minCountByScale: { A: 3 },
+              acceptanceShiftPct: 2.0,
+              provenance: stale,
+            },
+          }),
+        ],
+      }),
+      NOW,
+    );
+    expect(problems).toContainEqual(
+      expect.stringContaining('smallLot provenance: confirmed ruleset expired'),
+    );
+    expect(problems).toContainEqual(
+      expect.stringContaining("smallLot provenance: confirmed ruleset requires evidenceGrade 'A'"),
+    );
+  });
+
   it('a defaultScale outside scaleKeys, and an un-normalized specSet', () => {
     expect(validateRuleset(ruleset({ defaultScale: 'Z' }), NOW)).toContainEqual(
       expect.stringContaining("defaultScale 'Z' is not in scaleKeys"),
@@ -370,7 +483,7 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
 describe('resolveRuleset (§7.1 rows 1-2)', () => {
   it('resolves VIC / VicRoads, case-insensitively', () => {
     expect(resolveRuleset({ state: 'VIC', specSet: 'VicRoads', at: NOW })?.id).toBe(
-      'vicroads-204.v1',
+      'vicroads-204.v2',
     );
   });
 
@@ -399,7 +512,9 @@ describe('resolveRuleset (§7.1 rows 1-2)', () => {
 });
 
 describe('rulesForLot + layerBucketFor (§3.2 appliesTo, §3.4.2 layerBucket)', () => {
-  const vicroads = SUFFICIENCY_RULESETS[0];
+  // The LIVE pack, by resolution rather than array position — `SUFFICIENCY_RULESETS[0]`
+  // became the superseded v1 when D14.2 minted v2 (§6.5).
+  const vicroads = resolveRuleset({ state: 'vic', specSet: 'vicroads', at: NOW })!;
 
   it('matches on the FOLDED slug and never on a NULL slug', () => {
     expect(

@@ -30,7 +30,7 @@ const VIC_MDD_ITEM_TYPE = 'AS 1289.5.4.1, RC 316.00, RC 316.10';
 
 let companyId: string;
 let userId: string;
-/** VIC / VicRoads: the CONFIRMED `vicroads-204.v1` pack resolves, Scale A => 6. */
+/** VIC / VicRoads: the CONFIRMED `vicroads-204.v2` pack resolves, Scale A => 6. */
 let projectId: string;
 /** No state / no spec set: NO ruleset resolves. AT-31's control. */
 let packlessProjectId: string;
