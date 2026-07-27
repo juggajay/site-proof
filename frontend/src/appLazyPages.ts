@@ -28,6 +28,9 @@ export const LandingPage = lazy(() =>
 export const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 );
+export const NeedsAttentionPage = lazy(() =>
+  import('@/pages/dashboard/NeedsAttentionPage').then((m) => ({ default: m.NeedsAttentionPage })),
+);
 export const ProjectsPage = lazy(() =>
   import('@/pages/projects/ProjectsPage').then((m) => ({ default: m.ProjectsPage })),
 );

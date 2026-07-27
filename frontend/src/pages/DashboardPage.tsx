@@ -7,12 +7,12 @@ import { apiFetch } from '@/lib/api';
 import type { PDFCompanyBranding } from '@/lib/pdf/types';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
+import { type DateRangePreset } from '@/lib/dashboardDateRanges';
 import {
-  DATE_RANGE_PRESETS,
-  type DateRangePreset,
-  formatDateForApi,
-} from '@/lib/dashboardDateRanges';
-import { EMPTY_LOT_STATUS_COUNTS, type LotStatusCounts } from '@/lib/lotStatusOverview';
+  DEFAULT_DASHBOARD_STATS,
+  getDashboardDateRange,
+  useDashboardStats,
+} from '@/hooks/useDashboardStats';
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
 import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
@@ -25,14 +25,8 @@ import {
   NcrSummaryWidget,
 } from '@/components/dashboard/DashboardIssueSummaryWidgets';
 import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
-import {
-  RecentActivityWidget,
-  type DashboardRecentActivity,
-} from '@/components/dashboard/RecentActivityWidget';
-import {
-  ItemsRequiringAttentionWidget,
-  type DashboardAttentionItems,
-} from '@/components/dashboard/ItemsRequiringAttentionWidget';
+import { RecentActivityWidget } from '@/components/dashboard/RecentActivityWidget';
+import { ItemsRequiringAttentionWidget } from '@/components/dashboard/ItemsRequiringAttentionWidget';
 import { DashboardQuickLinks } from '@/components/dashboard/DashboardQuickLinks';
 import {
   DashboardMemberSetupNotice,
@@ -59,32 +53,6 @@ import {
   AlertCircle,
   AlertTriangle,
 } from 'lucide-react';
-
-interface DashboardSetupProgress {
-  controlLines: number;
-  planSheets: number;
-  lotsWithItp: number;
-  teamMembers: number;
-}
-
-const EMPTY_SETUP_PROGRESS: DashboardSetupProgress = {
-  controlLines: 0,
-  planSheets: 0,
-  lotsWithItp: 0,
-  teamMembers: 0,
-};
-
-interface DashboardStats {
-  totalProjects: number;
-  activeProjects: number;
-  totalLots: number;
-  lotStatusCounts?: Partial<LotStatusCounts>;
-  openHoldPoints: number;
-  openNCRs: number;
-  attentionItems: DashboardAttentionItems;
-  recentActivities: DashboardRecentActivity[];
-  setupProgress: DashboardSetupProgress;
-}
 
 interface DashboardProject {
   id: string;
@@ -158,43 +126,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     : '/projects';
 
   // Get current date range based on preset
-  const currentDateRange = useMemo(() => {
-    const preset = DATE_RANGE_PRESETS.find((p) => p.value === dateRangePreset);
-    if (preset) {
-      const range = preset.getRange();
-      return {
-        preset: dateRangePreset,
-        startDate: formatDateForApi(range.start),
-        endDate: formatDateForApi(range.end),
-        label: preset.label,
-      };
-    }
-    // Default to last 30 days
-    const defaultPreset = DATE_RANGE_PRESETS.find((p) => p.value === 'last30days')!;
-    const range = defaultPreset.getRange();
-    return {
-      preset: 'last30days' as DateRangePreset,
-      startDate: formatDateForApi(range.start),
-      endDate: formatDateForApi(range.end),
-      label: defaultPreset.label,
-    };
-  }, [dateRangePreset]);
-
-  const defaultStats: DashboardStats = {
-    totalProjects: 0,
-    activeProjects: 0,
-    totalLots: 0,
-    lotStatusCounts: EMPTY_LOT_STATUS_COUNTS,
-    openHoldPoints: 0,
-    openNCRs: 0,
-    attentionItems: {
-      overdueNCRs: [],
-      staleHoldPoints: [],
-      total: 0,
-    },
-    recentActivities: [],
-    setupProgress: EMPTY_SETUP_PROGRESS,
-  };
+  const currentDateRange = useMemo(() => getDashboardDateRange(dateRangePreset), [dateRangePreset]);
 
   const { visibleWidgets, isWidgetVisible, toggleWidget } = useDashboardWidgets();
 
@@ -204,39 +136,16 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
-  // Primary dashboard stats query
+  // Primary dashboard stats query — shared with the Needs-Attention destination
+  // so one query key has exactly one fetcher (`hooks/useDashboardStats.ts`).
   const {
     data: statsData,
     isLoading: statsLoading,
     error: statsError,
     refetch: refetchStats,
-  } = useQuery({
-    queryKey: queryKeys.dashboardStats(currentDateRange.startDate, currentDateRange.endDate),
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        startDate: currentDateRange.startDate,
-        endDate: currentDateRange.endDate,
-      });
-      const result = await apiFetch<DashboardStats>(`/api/dashboard/stats?${params}`);
-      return {
-        totalProjects: result.totalProjects || 0,
-        activeProjects: result.activeProjects || 0,
-        totalLots: result.totalLots || 0,
-        lotStatusCounts: result.lotStatusCounts || EMPTY_LOT_STATUS_COUNTS,
-        openHoldPoints: result.openHoldPoints || 0,
-        openNCRs: result.openNCRs || 0,
-        attentionItems: result.attentionItems || {
-          overdueNCRs: [],
-          staleHoldPoints: [],
-          total: 0,
-        },
-        recentActivities: result.recentActivities || [],
-        setupProgress: result.setupProgress || EMPTY_SETUP_PROGRESS,
-      } as DashboardStats;
-    },
-  });
+  } = useDashboardStats(currentDateRange.startDate, currentDateRange.endDate);
 
-  const stats = statsData ?? defaultStats;
+  const stats = statsData ?? DEFAULT_DASHBOARD_STATS;
   const loading = statsLoading;
   const hasStatsData = Boolean(statsData);
 
