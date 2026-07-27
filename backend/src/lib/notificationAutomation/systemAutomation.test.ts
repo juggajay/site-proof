@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
+import { daysOverdue } from '../readiness/predicates.js';
 import { processSystemAlerts, type SystemAutomationDependencies } from './systemAutomation.js';
 
 function buildDeps(
@@ -57,6 +58,18 @@ function buildDeps(
   };
 }
 
+/** Overwrite mocked prisma model methods on a deps object built by buildDeps. */
+function withPrisma(
+  deps: SystemAutomationDependencies,
+  overrides: Record<string, Record<string, ReturnType<typeof vi.fn>>>,
+): SystemAutomationDependencies {
+  const prisma = deps.prisma as unknown as Record<string, Record<string, unknown>>;
+  for (const [model, methods] of Object.entries(overrides)) {
+    Object.assign(prisma[model]!, methods);
+  }
+  return deps;
+}
+
 describe('processSystemAlerts stale hold-point routing', () => {
   it('looks up canonical site roles plus legacy superintendent recipients', async () => {
     const findProjectUsersByRoles = vi.fn().mockResolvedValue([]);
@@ -77,16 +90,10 @@ describe('processSystemAlerts race handling (partial unique index on active aler
       .mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
     const notificationCreate = vi.fn();
     const notificationCreateMany = vi.fn();
-    const deps = buildDeps();
-    (
-      deps.prisma as unknown as { notificationAlert: { create: ReturnType<typeof vi.fn> } }
-    ).notificationAlert.create = alertCreate;
-    (
-      deps.prisma as unknown as { notification: { create: ReturnType<typeof vi.fn> } }
-    ).notification.create = notificationCreate;
-    (
-      deps.prisma as unknown as { notification: { createMany: ReturnType<typeof vi.fn> } }
-    ).notification.createMany = notificationCreateMany;
+    const deps = withPrisma(buildDeps(), {
+      notificationAlert: { create: alertCreate },
+      notification: { create: notificationCreate, createMany: notificationCreateMany },
+    });
 
     const result = await processSystemAlerts(
       { now: new Date('2026-06-20T12:00:00.000Z'), projectIds: ['project-1'] },
@@ -121,22 +128,87 @@ describe('processSystemAlerts race handling (partial unique index on active aler
   });
 });
 
+/**
+ * The alert engine used to `Math.ceil` the NCR overdue age while every dashboard
+ * surface floors it via the shared `daysOverdue` helper (#1625), so one NCR's
+ * alert body and the widget disagreed by a day. These pin the alert path to the
+ * SAME helper, and pin the escalation boundaries the number drives.
+ */
+describe('overdue-NCR alert age matches the dashboard', () => {
+  const NOW = new Date('2026-06-20T12:00:00.000Z');
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  async function runWithOverdueNcr(dueDate: Date) {
+    const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-ncr' });
+    const ncr = {
+      id: 'ncr-1',
+      ncrNumber: 'NCR-001',
+      description: 'Kerb out of tolerance',
+      dueDate,
+      responsibleUserId: 'user-1',
+    };
+    const deps = withPrisma(buildDeps(), {
+      nCR: { findMany: vi.fn().mockResolvedValue([ncr]) },
+      holdPoint: { findMany: vi.fn().mockResolvedValue([]) },
+      notificationAlert: { create: alertCreate },
+    });
+
+    const result = await processSystemAlerts({ now: NOW, projectIds: ['project-1'] }, deps);
+    return { result, created: alertCreate.mock.calls[0]![0].data as Record<string, string> };
+  }
+
+  it('quotes the same number the dashboard shows for the same NCR', async () => {
+    // 41 days and 30 minutes: the "42 vs 41" fixture from the dashboard test.
+    const dueDate = new Date(NOW.getTime() - 41 * DAY_MS - 30 * 60 * 1000);
+    const { result, created } = await runWithOverdueNcr(dueDate);
+
+    expect(result.overdueNcrAlerts).toBe(1);
+    expect(created.message).toContain(`is ${daysOverdue(dueDate, NOW)} day(s) overdue`);
+    // Full days elapsed, not rounded up — ceil said 42 here.
+    expect(created.message).toContain('is 41 day(s) overdue');
+  });
+
+  it('does not escalate to high until a full 4th day has elapsed', async () => {
+    // Exactly 3x24h: floor = 3, and 3 > 3 is false.
+    expect((await runWithOverdueNcr(new Date(NOW.getTime() - 3 * DAY_MS))).created.severity).toBe(
+      'medium',
+    );
+    // The behaviour change: a minute past 3 days ceil'd to 4 => 'high'. Floor
+    // keeps it 'medium' until the 4th day is actually complete.
+    expect(
+      (await runWithOverdueNcr(new Date(NOW.getTime() - 3 * DAY_MS - 60 * 1000))).created.severity,
+    ).toBe('medium');
+    expect((await runWithOverdueNcr(new Date(NOW.getTime() - 4 * DAY_MS))).created.severity).toBe(
+      'high',
+    );
+  });
+
+  it('does not escalate to critical until a full 8th day has elapsed', async () => {
+    expect(
+      (await runWithOverdueNcr(new Date(NOW.getTime() - 7 * DAY_MS - 60 * 1000))).created.severity,
+    ).toBe('high');
+    expect((await runWithOverdueNcr(new Date(NOW.getTime() - 8 * DAY_MS))).created.severity).toBe(
+      'critical',
+    );
+  });
+});
+
 describe('processSystemAlerts missing-diary alert is retired', () => {
   it('never creates a pending_approval/diary alert, even with no hold points or NCRs', async () => {
     const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-x' });
-    const deps = buildDeps({
-      findProjectUsersByRoles: vi
-        .fn()
-        .mockResolvedValue([{ id: 'pm-1', email: 'pm@x.com', fullName: 'PM' }]),
-    });
     // No hold points and no NCRs => the only thing the old scan would have
     // created here is a missing-diary alert. It must not be created.
-    (
-      deps.prisma as unknown as { holdPoint: { findMany: ReturnType<typeof vi.fn> } }
-    ).holdPoint.findMany = vi.fn().mockResolvedValue([]);
-    (
-      deps.prisma as unknown as { notificationAlert: { create: ReturnType<typeof vi.fn> } }
-    ).notificationAlert.create = alertCreate;
+    const deps = withPrisma(
+      buildDeps({
+        findProjectUsersByRoles: vi
+          .fn()
+          .mockResolvedValue([{ id: 'pm-1', email: 'pm@x.com', fullName: 'PM' }]),
+      }),
+      {
+        holdPoint: { findMany: vi.fn().mockResolvedValue([]) },
+        notificationAlert: { create: alertCreate },
+      },
+    );
 
     const result = await processSystemAlerts(
       { now: new Date('2026-06-23T12:00:00.000Z'), projectIds: ['project-1'] },
