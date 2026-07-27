@@ -24,7 +24,7 @@ const createTestSchema = z.object({
   testRequestNumber: z.string().trim(),
   laboratoryName: z.string().trim(),
   laboratoryReportNumber: z.string().trim(),
-  nataSiteNumber: z.string().trim(),
+  expectedResultDate: z.string().trim(),
   sampleLocation: z.string().trim(),
   sampleDepth: z.string().trim(),
   materialType: z.string().trim(),
@@ -403,13 +403,17 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                         placeholder="e.g., ABC Testing Labs"
                       />
                     </div>
+                    {/* Wave C2 Phase 3 (J5): the chase-up date, user-entered.
+                        CIVOS never defaults it — blank shows elapsed days only
+                        and is never flagged late. Replaces the NATA Site Number
+                        input, which had no column and no route and silently
+                        discarded whatever a QM typed (J3). */}
                     <div>
-                      <Label htmlFor="nata-site-number">NATA Site Number</Label>
+                      <Label htmlFor="expected-result-date">Expected Result Date</Label>
                       <Input
-                        id="nata-site-number"
-                        type="text"
-                        {...register('nataSiteNumber')}
-                        placeholder="e.g., 12345"
+                        id="expected-result-date"
+                        type="date"
+                        {...register('expectedResultDate')}
                       />
                     </div>
                   </div>

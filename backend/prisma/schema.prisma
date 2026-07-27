@@ -879,6 +879,13 @@ model TestResult {
   enteredAt              DateTime? @map("entered_at")
   verifiedById           String?   @map("verified_by")
   verifiedAt             DateTime? @map("verified_at")
+  /// Wave C2 Phase 3: system-stamped when the row transitions to 'at_lab'.
+  /// Never user-editable, and deliberately NOT cleared by reject [C2R-A3] —
+  /// rejecting a result does not un-send the sample.
+  sentToLabAt            DateTime? @map("sent_to_lab_at")
+  /// Wave C2 Phase 3: user-supplied, optional. CIVOS never defaults it (J5) —
+  /// blank is the normal case, and blank shows elapsed days only.
+  expectedResultDate     DateTime? @map("expected_result_date")
   rejectedById           String?   @map("rejected_by")
   rejectedAt             DateTime? @map("rejected_at")
   rejectionReason        String?   @map("rejection_reason")

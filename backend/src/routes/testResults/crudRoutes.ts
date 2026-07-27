@@ -109,6 +109,7 @@ crudRoutes.post(
       specificationMin,
       specificationMax,
       passFail,
+      expectedResultDate,
     } = req.body;
 
     const projectIdValue = normalizeRequiredString(projectId, 'projectId', MAX_TEST_ID_LENGTH);
@@ -143,6 +144,8 @@ crudRoutes.post(
     const resultUnitValue = toNullableString(resultUnit, 'resultUnit', MAX_RESULT_UNIT_LENGTH);
     const specificationMinValue = toNullableFloat(specificationMin, 'specificationMin');
     const specificationMaxValue = toNullableFloat(specificationMax, 'specificationMax');
+    // Wave C2 Phase 3 (J5): user-supplied only. CIVOS never invents a turnaround.
+    const expectedResultDateValue = toNullableDate(expectedResultDate, 'expectedResultDate');
     const passFailValue = normalizePassFail(passFail, 'pending');
     // H13 backstop: the client pass/fail cannot contradict the value + spec.
     const effectivePassFail = resolveEffectivePassFail(
@@ -187,6 +190,7 @@ crudRoutes.post(
         resultUnit: resultUnitValue,
         specificationMin: specificationMinValue,
         specificationMax: specificationMaxValue,
+        expectedResultDate: expectedResultDateValue,
         passFail: effectivePassFail,
         status: 'requested', // Feature #196: Start in 'requested' status
       },
@@ -267,6 +271,7 @@ crudRoutes.patch(
       specificationMax,
       testMethod,
       passFail,
+      expectedResultDate,
     } = req.body;
 
     const lotIdValue = normalizeOptionalString(lotId, 'lotId', MAX_TEST_ID_LENGTH);
@@ -325,6 +330,13 @@ crudRoutes.patch(
       passFail,
     });
 
+    // Wave C2 Phase 3: the chase-up date. Handled here rather than in the shared
+    // corrections mapper so it stays off the confirm-extraction payload — a
+    // certificate has nothing to say about when a result was expected.
+    if (expectedResultDate !== undefined) {
+      updateData.expectedResultDate = toNullableDate(expectedResultDate, 'expectedResultDate');
+    }
+
     // H13 backstop on the manual edit path (mirrors the confirm flow): when the
     // edit touches the value, spec, or pass/fail, recompute the outcome from the
     // effective value + spec so a stored/edited pass cannot contradict the data.
@@ -337,11 +349,25 @@ crudRoutes.patch(
       applyConfirmedPassFailBackstop(updateData, testResult);
     }
 
-    // Linking an existing (possibly verified) test to its ITP item is metadata,
-    // not a result change — it must not reset verification, or the "Link to ITP
-    // item" migration path would un-verify passing tests. Only substantive
-    // field edits reopen a verified row.
-    const hasSubstantiveEdit = Object.keys(updateData).some((key) => key !== 'itpChecklistItemId');
+    // Fields that are ABOUT a test but say nothing about its result. Editing one
+    // must not reopen a verified row — unlike every field that describes what the
+    // test measured, which must.
+    //
+    // This list is a TRUST BOUNDARY. Un-verifying drops `passingCount` and can
+    // flip a sufficiency verdict, so anything added here is asserting "this
+    // field is not evidence". Add to it only with that sentence in mind.
+    //
+    // - itpChecklistItemId: linking a (possibly verified) test to its ITP item is
+    //   metadata; without the exemption the "Link to ITP item" migration path
+    //   would un-verify passing tests.
+    // - expectedResultDate [C2R-B5]: a test's expected return date is a chase-up
+    //   aid, not evidence. It says nothing about the result that was verified.
+    //   (`sentToLabAt` needs no entry — it is system-stamped and never appears in
+    //   a PATCH body.)
+    const NON_SUBSTANTIVE_EDIT_FIELDS = ['itpChecklistItemId', 'expectedResultDate'];
+    const hasSubstantiveEdit = Object.keys(updateData).some(
+      (key) => !NON_SUBSTANTIVE_EDIT_FIELDS.includes(key),
+    );
     if (testResult.status === 'verified' && hasSubstantiveEdit) {
       updateData.status = 'entered';
       updateData.enteredById = user.id;
@@ -366,6 +392,10 @@ crudRoutes.patch(
         },
         passFail: true,
         status: true,
+        // Wave C2 Phase 3 [C2R-A9]: the fields have to be added where the row is
+        // SELECTED — the response builders only shape what was already fetched.
+        sentToLabAt: true,
+        expectedResultDate: true,
         updatedAt: true,
       },
     });

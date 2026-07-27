@@ -94,6 +94,15 @@ describe('product knowledge — test sufficiency facts', () => {
     expect(itp).toContain('never count toward the field test number');
   });
 
+  it('states the lab wait honestly — no invented turnaround (Wave C2 Phase 3, J5)', () => {
+    // constants.ts getLabWait: overdue requires a USER-supplied expectedResultDate.
+    // A blank date must never read as late in Clancy's copy either.
+    const itp = body('itp-holdpoints-tests');
+    expect(itp).toContain('Send to lab records that a sample went to a laboratory');
+    expect(itp).toContain('CIVOS never assumes a turnaround');
+    expect(itp).toContain('a blank date shows elapsed days only and is never flagged late');
+  });
+
   it('explains "Verified tests not counted" as an unrecognised type, not a missing link', () => {
     // conformanceItems.ts `tests_unlinked_to_itp_item` detail — the "not linked
     // to a checklist item" copy was retired at F1.2.

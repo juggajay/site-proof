@@ -4552,4 +4552,229 @@ describe('Test Results API', () => {
       }
     });
   });
+
+  // ==========================================================================
+  // Wave C2 Phase 3 — the lab timestamps
+  // (spec docs/plans/wave-c2-test-lifecycle-spec-2026-07-28.md §3.3)
+  // ==========================================================================
+  describe('Wave C2 Phase 3 - lab lifecycle stamps', () => {
+    async function createCertificateDocument() {
+      const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      return prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: `c2p3-${stamp}.pdf`,
+          fileUrl: `/uploads/certificates/c2p3-${stamp}.pdf`,
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+    }
+
+    // AT-67: `requested -> at_lab` stamps sentToLabAt.
+    it('AT-67: stamps sentToLabAt when the row is sent to the lab', async () => {
+      const test = await prisma.testResult.create({
+        data: { projectId, lotId, testType: 'C2P3 Send', status: 'requested' },
+      });
+
+      try {
+        const before = new Date();
+        const res = await request(app)
+          .post(`/api/test-results/${test.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'at_lab' });
+
+        expect(res.status).toBe(200);
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: test.id },
+          select: { status: true, sentToLabAt: true },
+        });
+        expect(stored.status).toBe('at_lab');
+        expect(stored.sentToLabAt).not.toBeNull();
+        expect(stored.sentToLabAt!.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: test.id } });
+      }
+    });
+
+    // AT-67: the legal one-hop `requested -> entered` never touches the stamp,
+    // and the row still reaches verified [C2L-B6] — plenty of tests never go to
+    // a lab, and none of them may be made to look like they did.
+    it('AT-67: requested -> entered leaves sentToLabAt NULL and still verifies', async () => {
+      const certificate = await createCertificateDocument();
+      const test = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'C2P3 No Lab',
+          status: 'requested',
+          resultValue: 98.5,
+          passFail: 'pass',
+          certificateDocId: certificate.id,
+        },
+      });
+
+      try {
+        const enterRes = await request(app)
+          .post(`/api/test-results/${test.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'entered' });
+        expect(enterRes.status).toBe(200);
+
+        const verifyRes = await request(app)
+          .post(`/api/test-results/${test.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'verified' });
+        expect(verifyRes.status).toBe(200);
+
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: test.id },
+          select: { status: true, sentToLabAt: true },
+        });
+        expect(stored.status).toBe('verified');
+        expect(stored.sentToLabAt).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: test.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
+    // [C2R-A3]: reject un-does entering and verifying. The sample still went to
+    // the laboratory — clearing the stamp would erase a true fact and restart an
+    // elapsed clock that never stopped.
+    it('C2R-A3: reject does not clear sentToLabAt', async () => {
+      const sentAt = new Date('2026-07-01T00:00:00.000Z');
+      const test = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'C2P3 Reject',
+          status: 'entered',
+          resultValue: 98.5,
+          passFail: 'pass',
+          enteredById: userId,
+          enteredAt: new Date(),
+          sentToLabAt: sentAt,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${test.id}/reject`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: 'Values do not match the uploaded certificate.' });
+        expect(res.status).toBe(200);
+
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: test.id },
+          select: { status: true, sentToLabAt: true, enteredAt: true, verifiedAt: true },
+        });
+        expect(stored.status).toBe('results_received');
+        expect(stored.enteredAt).toBeNull();
+        expect(stored.verifiedAt).toBeNull();
+        expect(stored.sentToLabAt?.toISOString()).toBe(sentAt.toISOString());
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: test.id } });
+      }
+    });
+
+    // AT-80 [C2R-B5]: the substantive-edit exemption, proved in BOTH directions.
+    // Un-verifying drops passingCount and can flip a sufficiency verdict, so the
+    // exemption is a trust boundary — and the second half is the proof-of-catch:
+    // widen the exemption to swallow result fields and this test fails.
+    it('AT-80: editing expectedResultDate does not un-verify; editing resultValue still does', async () => {
+      const certificate = await createCertificateDocument();
+      const verifiedAt = new Date('2026-07-10T00:00:00.000Z');
+      const seed = {
+        projectId,
+        lotId,
+        testType: 'C2P3 Verified',
+        status: 'verified',
+        resultValue: 98,
+        passFail: 'pass',
+        certificateDocId: certificate.id,
+        verifiedById: userId,
+        verifiedAt,
+      };
+
+      const exempt = await prisma.testResult.create({ data: seed });
+      const substantive = await prisma.testResult.create({ data: seed });
+
+      try {
+        const exemptRes = await request(app)
+          .patch(`/api/test-results/${exempt.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ expectedResultDate: '2026-08-05' });
+        expect(exemptRes.status).toBe(200);
+
+        const exemptStored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: exempt.id },
+          select: {
+            status: true,
+            verifiedById: true,
+            verifiedAt: true,
+            expectedResultDate: true,
+          },
+        });
+        expect(exemptStored.status).toBe('verified');
+        expect(exemptStored.verifiedById).toBe(userId);
+        expect(exemptStored.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+        expect(exemptStored.expectedResultDate?.toISOString().slice(0, 10)).toBe('2026-08-05');
+
+        const substantiveRes = await request(app)
+          .patch(`/api/test-results/${substantive.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ resultValue: '97.5' });
+        expect(substantiveRes.status).toBe(200);
+
+        const substantiveStored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: substantive.id },
+          select: { status: true, verifiedById: true, verifiedAt: true },
+        });
+        expect(substantiveStored.status).toBe('entered');
+        expect(substantiveStored.verifiedById).toBeNull();
+        expect(substantiveStored.verifiedAt).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: { in: [exempt.id, substantive.id] } } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
+    // J5: the create path accepts the user-entered date, and CIVOS defaults
+    // nothing when it is absent. Blank is the normal case and blank is honest.
+    it('J5: expectedResultDate is user-supplied on create and never defaulted', async () => {
+      const withDate = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, testType: 'C2P3 Create Dated', expectedResultDate: '2026-08-01' });
+      const without = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, testType: 'C2P3 Create Blank' });
+
+      expect(withDate.status).toBe(201);
+      expect(without.status).toBe(201);
+
+      const ids = [withDate.body.testResult.id, without.body.testResult.id];
+      try {
+        const dated = await prisma.testResult.findUniqueOrThrow({
+          where: { id: ids[0] },
+          select: { expectedResultDate: true, sentToLabAt: true },
+        });
+        const blank = await prisma.testResult.findUniqueOrThrow({
+          where: { id: ids[1] },
+          select: { expectedResultDate: true, sentToLabAt: true },
+        });
+        expect(dated.expectedResultDate?.toISOString().slice(0, 10)).toBe('2026-08-01');
+        expect(dated.sentToLabAt).toBeNull();
+        expect(blank.expectedResultDate).toBeNull();
+        expect(blank.sentToLabAt).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: { in: ids } } });
+      }
+    });
+  });
 });

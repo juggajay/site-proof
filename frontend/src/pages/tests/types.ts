@@ -24,6 +24,10 @@ export interface TestResult {
   status: string;
   verifiedBy?: { id: string; fullName: string | null; email: string } | null;
   verifiedAt?: string | null;
+  // Wave C2 Phase 3: system-stamped when the sample was sent to the lab.
+  sentToLabAt?: string | null;
+  // Wave C2 Phase 3: user-supplied, optional. Blank is the normal case (J5).
+  expectedResultDate?: string | null;
   lotId: string | null;
   lot: Lot | null;
   aiExtracted?: boolean;
@@ -72,7 +76,7 @@ export interface CreateTestFormData {
   testRequestNumber: string;
   laboratoryName: string;
   laboratoryReportNumber: string;
-  nataSiteNumber: string;
+  expectedResultDate: string;
   sampleLocation: string;
   sampleDepth: string;
   materialType: string;

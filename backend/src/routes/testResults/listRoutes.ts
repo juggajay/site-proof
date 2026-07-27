@@ -227,6 +227,9 @@ listRoutes.get(
           testMethod: true,
           passFail: true,
           status: true,
+          // Wave C2 Phase 3 [C2R-A9]: the register's at-lab chip reads these.
+          sentToLabAt: true,
+          expectedResultDate: true,
           verifiedAt: true,
           verifiedBy: {
             select: {
