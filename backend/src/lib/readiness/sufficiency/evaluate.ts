@@ -24,9 +24,11 @@ import {
 } from './testCategories.js';
 import type {
   AreaBandedCounts,
+  FrequencyRegime,
   FrequencyRule,
   MaxLotSizeExceedance,
   QuantityUnit,
+  ResolvedRegime,
   ResolvedSufficiency,
   RuleSufficiency,
   RulesetStatus,
@@ -208,6 +210,195 @@ function bandedCount(
   );
 }
 
+/** One provenance block rendered as a citation. Shared by the rule and §4.4's Section 173 limb. */
+function citationFrom(
+  provenance: FrequencyRule['provenance'],
+  ruleset: ResolvedSufficiency['ruleset'],
+): RuleSufficiency['citation'] {
+  return {
+    authority: provenance.authority,
+    document: provenance.document,
+    clause: provenance.clause,
+    edition: provenance.edition,
+    confirmed: ruleset?.status === 'confirmed',
+  };
+}
+
+/** The count figures a rule evaluates at: its own, or its `reduced` limb's. */
+type RuleFigures = Pick<FrequencyRule, 'minCountByScale' | 'perQuantity'>;
+
+interface RuleRegime {
+  /** The rule carries a regime concept at all — `reduced` figures or an eligibility trigger. */
+  bearing: boolean;
+  resolved: ResolvedRegime | null;
+  regime: FrequencyRegime | null;
+  figures: RuleFigures;
+}
+
+/**
+ * §3.4.1 — neither `reduced` figures nor an eligibility trigger => no regime
+ * concept for this rule. A regime-bearing rule whose regime could not be resolved
+ * falls back to `full`: `reduced` must be EARNED, and over-testing is the safe
+ * direction.
+ */
+function resolveRuleRegime(rule: FrequencyRule, resolved: ResolvedSufficiency): RuleRegime {
+  const bearing = Boolean(rule.reduced || rule.reducedFrequencyEligibility);
+  const resolvedRegime = resolved.regimeByRuleId.get(rule.id) ?? null;
+  const regime = bearing ? (resolvedRegime?.regime ?? 'full') : null;
+  return {
+    bearing,
+    resolved: resolvedRegime,
+    regime,
+    figures: regime === 'reduced' && rule.reduced ? rule.reduced : rule,
+  };
+}
+
+/** The two optional regime keys, in the shipped key order. */
+function regimeFields(
+  regime: RuleRegime,
+): Partial<Pick<RuleSufficiency, 'reducedFrequencyEligible' | 'regimeBasis'>> {
+  return {
+    ...(regime.bearing ? { reducedFrequencyEligible: regime.resolved?.eligible ?? false } : {}),
+    ...(regime.resolved && regime.regime
+      ? {
+          regimeBasis: {
+            streamKey: regime.resolved.streamKey,
+            lotIds: regime.resolved.basisLotIds,
+          },
+        }
+      : {}),
+  };
+}
+
+/**
+ * §7.1 rows 4-5 — the scale limb's causes.
+ *
+ * D14.5 §4.3.2(a) — a rule declaring `bands` is SCALE-INDEPENDENT: the governing
+ * specification fixes the row (every TfNSW pavement compaction spec pins relative
+ * compaction at 100 %/102 %), so no answer the user could give changes the
+ * number. Say nothing rather than asking the question: `tfnsw-q6.v1` declares no
+ * `defaultScale`, so a scale cause here would read `unknown` FOREVER on every
+ * pavement lot, because any surviving cause turns the count null.
+ */
+function scaleCauses(
+  resolved: ResolvedSufficiency,
+  banded: AreaBandedCounts | undefined,
+): UnknownCause[] {
+  if (banded?.bands) return [];
+  const scaleValue = resolved.scale.value;
+  const ruleset = resolved.ruleset;
+  if (scaleValue === null) return ['scale_not_selected'];
+  if (ruleset && !ruleset.scaleKeys.includes(scaleValue)) return ['scale_not_recognised'];
+  return [];
+}
+
+/**
+ * §4.3 — the lot tests this rule can attribute.
+ *
+ * The rule's own testType goes through the SAME resolver, so a pack could in
+ * principle declare an alias as its key and still work — AT-22 requires it to be
+ * a canonical key, so in practice this is an identity lookup.
+ */
+function attributedTestsFor(
+  rule: FrequencyRule,
+  input: SufficiencyEvaluationInput,
+  categories: LotCategories,
+  resolveRuleCategory: (testType: string) => string | null,
+): SufficiencyTestRow[] {
+  const ruleCategory = resolveRuleCategory(rule.testType);
+  return input.tests.filter((test) =>
+    testAttributesToRule(ruleCategory, candidatesFor(test, categories)),
+  );
+}
+
+/** Attributed tests split by outcome, in the shipped key order. */
+function outcomeCounts(
+  attributed: readonly SufficiencyTestRow[],
+): Pick<RuleSufficiency, 'passingCount' | 'pendingCount' | 'failedCount'> {
+  return {
+    passingCount: attributed.filter(testPassing).length,
+    pendingCount: attributed.filter(testPendingByStatus).length,
+    failedCount: attributed.filter(testFailing).length,
+  };
+}
+
+/**
+ * D14 §4.6 / §4.3 — the per-limb count resolution.
+ *
+ * Each count limb resolves the quantity IT needs — per the RULE's unit, with the
+ * m² geometry fallback, not per the lot — and raises `quantity_missing` when it
+ * cannot. Still no unit conversion: a quantity in the wrong unit with no usable
+ * geometry is "missing" for this rule, never silently converted. A banded rule
+ * REQUIRES its area; an unresolvable one is `quantity_missing`, never a floor
+ * (the floors are per-band and several are inert placeholders).
+ *
+ * The `causes.length > 0` guard is load-bearing on BOTH branches `[D14R-B2]`:
+ * `scale_not_recognised` is API-reachable on rows written before the §9.2
+ * whitelist shipped, and indexing `byScale` with such a value then scanning the
+ * result would THROW inside `computeConformanceResult` — 500ing the lot readiness
+ * route and, at the 5,000-member ceiling, claim create.
+ */
+function resolveRequiredCount(
+  figures: RuleFigures,
+  banded: AreaBandedCounts | undefined,
+  resolved: ResolvedSufficiency,
+  causes: UnknownCause[],
+): number | null {
+  const perQuantity = figures.perQuantity;
+  const perQuantityValue = perQuantity ? quantityFor(resolved, perQuantity.unit) : null;
+  if (perQuantity && perQuantityValue === null) {
+    causes.push('quantity_missing');
+  }
+
+  const bandedQuantity = banded ? quantityFor(resolved, banded.unit) : null;
+  if (banded && bandedQuantity === null) {
+    causes.push('quantity_missing');
+  }
+
+  if (causes.length > 0) return null;
+  const scaleValue = resolved.scale.value;
+  if (banded) return bandedCount(banded, scaleValue, bandedQuantity as number);
+
+  // D14 §4.3.1a: `minCountByScale` is now OPTIONAL, so this reader is conditional.
+  // Indexing an absent limb would read `undefined` at runtime on every banded pack.
+  const minCount =
+    scaleValue === null || figures.minCountByScale === undefined
+      ? null
+      : (figures.minCountByScale[scaleValue] ?? null);
+  return minCount === null ? null : requiredTestCount(minCount, perQuantity, perQuantityValue);
+}
+
+/**
+ * D14 §4.4 — the Section 173 small-area disclosure, in the shipped key order.
+ *
+ * Eligibility only: `applied` is structurally false until `Lot.smallAreaElected`
+ * lands (D14.4, deferred by J3), so NO count changes here. A missing area
+ * suppresses the disclosure SILENTLY and must never push `quantity_missing` —
+ * VicRoads' count carries no `perQuantity` limb, so demanding an area for the
+ * ADVISORY would flip a perfectly evaluable Scale A lot to `unknown` and delete a
+ * working number from the panel (§3.4).
+ */
+function smallAreaAdvisory(
+  rule: FrequencyRule,
+  resolved: ResolvedSufficiency,
+): Partial<Pick<RuleSufficiency, 'smallAreaEligible' | 'smallAreaBasis'>> {
+  const smallLot = rule.smallLot;
+  if (!smallLot) return {};
+  const scaleValue = resolved.scale.value;
+  const area = quantityFor(resolved, smallLot.maxArea.unit);
+  const requiredCount = scaleValue === null ? undefined : smallLot.minCountByScale[scaleValue];
+  if (area === null || !(area < smallLot.maxArea.value) || requiredCount === undefined) return {};
+  return {
+    smallAreaEligible: true,
+    smallAreaBasis: {
+      maxArea: smallLot.maxArea,
+      requiredCount,
+      acceptanceShiftPct: smallLot.acceptanceShiftPct,
+      citation: citationFrom(smallLot.provenance, resolved.ruleset),
+    },
+  };
+}
+
 function evaluateRule(
   rule: FrequencyRule,
   input: SufficiencyEvaluationInput,
@@ -216,116 +407,22 @@ function evaluateRule(
   attributedTestIds: Set<string>,
 ): RuleSufficiency {
   const { resolved } = input;
-  const ruleset = resolved.ruleset;
-  const causes: UnknownCause[] = [];
-
-  // --- scale -------------------------------------------------------------
-  const scaleValue = resolved.scale.value;
-  if (scaleValue === null) {
-    causes.push('scale_not_selected');
-  } else if (ruleset && !ruleset.scaleKeys.includes(scaleValue)) {
-    causes.push('scale_not_recognised');
-  }
-
-  // --- regime ------------------------------------------------------------
-  // Neither `reduced` figures nor an eligibility trigger => no regime concept
-  // for this rule. A regime-bearing rule whose regime could not be resolved
-  // falls back to `full`: `reduced` must be EARNED, and over-testing is the safe
-  // direction (§3.4.1).
-  const regimeBearing = Boolean(rule.reduced || rule.reducedFrequencyEligibility);
-  const resolvedRegime = resolved.regimeByRuleId.get(rule.id) ?? null;
-  const regime = regimeBearing ? (resolvedRegime?.regime ?? 'full') : null;
-  const figures = regime === 'reduced' && rule.reduced ? rule.reduced : rule;
-
-  // --- quantity ----------------------------------------------------------
-  const perQuantity = figures.perQuantity;
-  // D14 §4.6: resolved per the RULE's unit, with the m² geometry fallback, not
-  // per the lot. Still no unit conversion — a quantity in the wrong unit with no
-  // usable geometry is "missing" for this rule, never silently converted.
-  const perQuantityValue = perQuantity ? quantityFor(resolved, perQuantity.unit) : null;
-  if (perQuantity && perQuantityValue === null) {
-    causes.push('quantity_missing');
-  }
-
+  const regime = resolveRuleRegime(rule, resolved);
   // D14 §4.3 — the 2-D (scale × lot-area band) table. `countByAreaBand` is
   // forbidden on a `reduced` limb (§4.3.1) and `ReducedFrequency` has no such
   // field, so a rule evaluating at the reduced regime has no banded table.
-  // A banded rule REQUIRES its area: an unresolvable one is `quantity_missing`,
-  // never a floor (the floors are per-band and several are inert placeholders).
-  const banded = regime === 'reduced' ? undefined : rule.countByAreaBand;
-  // D14.5 §4.3.2(a) — a rule declaring `bands` is SCALE-INDEPENDENT: the
-  // governing specification fixes the row (every TfNSW pavement compaction spec
-  // pins relative compaction at 100 %/102 %), so no answer the user could give
-  // changes the number. Drop the scale causes rather than asking the question:
-  // `tfnsw-q6.v1` declares no `defaultScale`, so leaving them would read
-  // `unknown` FOREVER on every pavement lot. Before the guard below, which turns
-  // any surviving cause into a null count.
-  if (banded?.bands) {
-    for (const cause of ['scale_not_selected', 'scale_not_recognised'] as const) {
-      const at = causes.indexOf(cause);
-      if (at !== -1) causes.splice(at, 1);
-    }
-  }
-  const bandedQuantity = banded ? quantityFor(resolved, banded.unit) : null;
-  if (banded && bandedQuantity === null) {
-    causes.push('quantity_missing');
-  }
+  const banded = regime.regime === 'reduced' ? undefined : rule.countByAreaBand;
 
-  // --- counts ------------------------------------------------------------
-  // The rule's own testType goes through the SAME resolver, so a pack could in
-  // principle declare an alias as its key and still work — AT-22 requires it to
-  // be a canonical key, so in practice this is an identity lookup.
-  const ruleCategory = resolveRuleCategory(rule.testType);
-  const attributed = input.tests.filter((test) =>
-    testAttributesToRule(ruleCategory, candidatesFor(test, categories)),
-  );
+  const causes = scaleCauses(resolved, banded);
+  const attributed = attributedTestsFor(rule, input, categories, resolveRuleCategory);
   for (const test of attributed) attributedTestIds.add(test.id);
-  const passingCount = attributed.filter(testPassing).length;
-  const pendingCount = attributed.filter(testPendingByStatus).length;
-  const failedCount = attributed.filter(testFailing).length;
-
-  // --- small area (§4.4) -------------------------------------------------
-  // Eligibility only: `applied` is structurally false until `Lot.smallAreaElected`
-  // lands (D14.4, deferred by J3), so NO count changes here. A missing area
-  // suppresses the disclosure SILENTLY and must never push `quantity_missing` —
-  // VicRoads' count carries no `perQuantity` limb, so demanding an area for the
-  // ADVISORY would flip a perfectly evaluable Scale A lot to `unknown` and delete
-  // a working number from the panel (§3.4).
-  const smallLot = rule.smallLot;
-  const smallArea = smallLot ? quantityFor(resolved, smallLot.maxArea.unit) : null;
-  const smallAreaCount =
-    smallLot && scaleValue !== null ? smallLot.minCountByScale[scaleValue] : undefined;
-  const smallAreaEligible =
-    smallLot !== undefined &&
-    smallArea !== null &&
-    smallArea < smallLot.maxArea.value &&
-    smallAreaCount !== undefined;
-
-  // D14 §4.3.1a: `minCountByScale` is now OPTIONAL, so this reader is conditional.
-  // Indexing an absent limb would read `undefined` at runtime on every banded pack.
-  const minCount =
-    scaleValue === null || figures.minCountByScale === undefined
-      ? null
-      : (figures.minCountByScale[scaleValue] ?? null);
-
-  // The `causes.length > 0` guard is load-bearing on BOTH branches `[D14R-B2]`:
-  // `scale_not_recognised` is API-reachable on rows written before the §9.2
-  // whitelist shipped, and indexing `byScale` with such a value then scanning the
-  // result would THROW inside `computeConformanceResult` — 500ing the lot
-  // readiness route and, at the 5,000-member ceiling, claim create.
-  const requiredCount =
-    causes.length > 0
-      ? null
-      : banded
-        ? bandedCount(banded, scaleValue, bandedQuantity as number)
-        : minCount === null
-          ? null
-          : requiredTestCount(minCount, perQuantity, perQuantityValue);
+  const counts = outcomeCounts(attributed);
+  const requiredCount = resolveRequiredCount(regime.figures, banded, resolved, causes);
 
   const state: SufficiencyState =
     requiredCount === null
       ? 'unknown'
-      : testCountSufficient({ requiredCount, passingCount })
+      : testCountSufficient({ requiredCount, passingCount: counts.passingCount })
         ? 'satisfied'
         : 'insufficient';
 
@@ -334,44 +431,12 @@ function evaluateRule(
     testType: rule.testType,
     state,
     requiredCount,
-    passingCount,
-    pendingCount,
-    failedCount,
-    regime,
-    ...(regimeBearing ? { reducedFrequencyEligible: resolvedRegime?.eligible ?? false } : {}),
-    ...(resolvedRegime && regime
-      ? {
-          regimeBasis: {
-            streamKey: resolvedRegime.streamKey,
-            lotIds: resolvedRegime.basisLotIds,
-          },
-        }
-      : {}),
-    ...(smallLot && smallAreaEligible && smallAreaCount !== undefined
-      ? {
-          smallAreaEligible: true,
-          smallAreaBasis: {
-            maxArea: smallLot.maxArea,
-            requiredCount: smallAreaCount,
-            acceptanceShiftPct: smallLot.acceptanceShiftPct,
-            citation: {
-              authority: smallLot.provenance.authority,
-              document: smallLot.provenance.document,
-              clause: smallLot.provenance.clause,
-              edition: smallLot.provenance.edition,
-              confirmed: ruleset?.status === 'confirmed',
-            },
-          },
-        }
-      : {}),
+    ...counts,
+    regime: regime.regime,
+    ...regimeFields(regime),
+    ...smallAreaAdvisory(rule, resolved),
     unknownCauses: causes,
-    citation: {
-      authority: rule.provenance.authority,
-      document: rule.provenance.document,
-      clause: rule.provenance.clause,
-      edition: rule.provenance.edition,
-      confirmed: ruleset?.status === 'confirmed',
-    },
+    citation: citationFrom(rule.provenance, resolved.ruleset),
   };
 }
 

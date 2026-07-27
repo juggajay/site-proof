@@ -141,6 +141,41 @@ export function layerBucketFor(rule: FrequencyRule, layer: string | null): strin
 }
 
 /**
+ * Ordering is what makes the evaluator's first-match scan reproduce the published
+ * `> x, <= y` columns; an unsorted or multi-open list silently returns the wrong
+ * cell rather than failing.
+ */
+function checkBandList(bands: readonly AreaBand[], at: string, problems: string[]): void {
+  if (bands.length === 0) {
+    problems.push(`${at} is empty`);
+    return;
+  }
+  let previous = -Infinity;
+  bands.forEach((band, index) => {
+    const atBand = `${at}[${index}]`;
+    if (band.upToInclusive === undefined) {
+      if (index !== bands.length - 1) {
+        problems.push(`${atBand} omits upToInclusive but is not the last band`);
+      }
+    } else {
+      if (index === bands.length - 1) {
+        problems.push(`${atBand} is the last band and must be open — omit upToInclusive`);
+      }
+      if (!(band.upToInclusive > previous)) {
+        problems.push(`${atBand}: upToInclusive ${band.upToInclusive} is not strictly ascending`);
+      }
+      previous = band.upToInclusive;
+    }
+    if (!Number.isInteger(band.minCount) || band.minCount < 1) {
+      problems.push(`${atBand}: minCount must be an integer >= 1, got ${band.minCount}`);
+    }
+    if (band.every !== undefined && !(band.every > 0)) {
+      problems.push(`${atBand}: every must be > 0, got ${band.every}`);
+    }
+  });
+}
+
+/**
  * D14 §4.3.1 — the `countByAreaBand` limb: exactly-one-of, the three mutual
  * exclusions, and the band-list shape the evaluator's first-match scan depends on.
  */
@@ -192,40 +227,7 @@ function validateAreaBands(
     );
   }
 
-  // Ordering is what makes the evaluator's first-match scan reproduce the
-  // published `> x, <= y` columns; an unsorted or multi-open list silently
-  // returns the wrong cell rather than failing.
-  const checkBandList = (bands: readonly AreaBand[], at: string): void => {
-    if (bands.length === 0) {
-      problems.push(`${at} is empty`);
-      return;
-    }
-    let previous = -Infinity;
-    bands.forEach((band, index) => {
-      const atBand = `${at}[${index}]`;
-      if (band.upToInclusive === undefined) {
-        if (index !== bands.length - 1) {
-          problems.push(`${atBand} omits upToInclusive but is not the last band`);
-        }
-      } else {
-        if (index === bands.length - 1) {
-          problems.push(`${atBand} is the last band and must be open — omit upToInclusive`);
-        }
-        if (!(band.upToInclusive > previous)) {
-          problems.push(`${atBand}: upToInclusive ${band.upToInclusive} is not strictly ascending`);
-        }
-        previous = band.upToInclusive;
-      }
-      if (!Number.isInteger(band.minCount) || band.minCount < 1) {
-        problems.push(`${atBand}: minCount must be an integer >= 1, got ${band.minCount}`);
-      }
-      if (band.every !== undefined && !(band.every > 0)) {
-        problems.push(`${atBand}: every must be > 0, got ${band.every}`);
-      }
-    });
-  };
-
-  if (banded.bands) checkBandList(banded.bands, `${where}: countByAreaBand.bands`);
+  if (banded.bands) checkBandList(banded.bands, `${where}: countByAreaBand.bands`, problems);
   if (!banded.byScale) return;
 
   for (const scaleKey of ruleset.scaleKeys) {
@@ -240,12 +242,17 @@ function validateAreaBands(
       );
       continue;
     }
-    checkBandList(bands, `${where}: countByAreaBand['${scaleKey}']`);
+    checkBandList(bands, `${where}: countByAreaBand['${scaleKey}']`, problems);
   }
 }
 
-function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems: string[]): void {
-  const where = `${ruleset.id} rule ${rule.id}`;
+/** §3.2 — the rule's identity, label cap (§8.4) and activity scoping. */
+function validateRuleIdentity(
+  ruleset: Ruleset,
+  rule: FrequencyRule,
+  where: string,
+  problems: string[],
+): void {
   if (!rule.id.startsWith(`${ruleset.id}/`)) {
     problems.push(
       `${where}: rule id must be prefixed '${ruleset.id}/' so snapshots stay resolvable`,
@@ -266,43 +273,48 @@ function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems
       problems.push(`${where}: '${slug}' is not a canonical Level-2 activity slug`);
     }
   }
+}
 
-  const checkCounts = (counts: Readonly<Record<string, number>>, label: string): void => {
-    for (const scaleKey of ruleset.scaleKeys) {
-      const count = counts[scaleKey];
-      if (count === undefined) {
-        problems.push(`${where}: ${label} declares no count for scale '${scaleKey}'`);
-      } else if (!Number.isInteger(count) || count < 1) {
-        problems.push(`${where}: ${label}['${scaleKey}'] must be an integer >= 1, got ${count}`);
-      }
+/** A per-scale count table covers EVERY `scaleKeys` entry and no key outside it. */
+function checkCounts(
+  ruleset: Ruleset,
+  counts: Readonly<Record<string, number>>,
+  where: string,
+  label: string,
+  problems: string[],
+): void {
+  for (const scaleKey of ruleset.scaleKeys) {
+    const count = counts[scaleKey];
+    if (count === undefined) {
+      problems.push(`${where}: ${label} declares no count for scale '${scaleKey}'`);
+    } else if (!Number.isInteger(count) || count < 1) {
+      problems.push(`${where}: ${label}['${scaleKey}'] must be an integer >= 1, got ${count}`);
     }
-    for (const scaleKey of Object.keys(counts)) {
-      if (!ruleset.scaleKeys.includes(scaleKey)) {
-        problems.push(`${where}: ${label} declares scale '${scaleKey}' outside ruleset.scaleKeys`);
-      }
+  }
+  for (const scaleKey of Object.keys(counts)) {
+    if (!ruleset.scaleKeys.includes(scaleKey)) {
+      problems.push(`${where}: ${label} declares scale '${scaleKey}' outside ruleset.scaleKeys`);
     }
-  };
-  // D14 §4.3.1a — CONDITIONAL. `checkCounts` demands a count for every
-  // `scaleKeys` entry, so an unconditional call rejects every banded pack with
-  // five "declares no count for scale …" problems and it never registers. The
-  // exactly-one-of check below is what stops "optional" meaning "absent".
-  if (rule.minCountByScale) checkCounts(rule.minCountByScale, 'minCountByScale');
-  validateAreaBands(ruleset, rule, where, problems);
+  }
+}
 
-  const checkPerQuantity = (
-    perQuantity: { unit: string; every: number } | undefined,
-    label: string,
-  ): void => {
-    if (!perQuantity) return;
-    if (!(QUANTITY_UNITS as readonly string[]).includes(perQuantity.unit)) {
-      problems.push(`${where}: ${label}.unit '${perQuantity.unit}' is not a QuantityUnit`);
-    }
-    if (!(perQuantity.every > 0)) {
-      problems.push(`${where}: ${label}.every must be > 0, got ${perQuantity.every}`);
-    }
-  };
-  checkPerQuantity(rule.perQuantity, 'perQuantity');
+function checkPerQuantity(
+  perQuantity: { unit: string; every: number } | undefined,
+  where: string,
+  label: string,
+  problems: string[],
+): void {
+  if (!perQuantity) return;
+  if (!(QUANTITY_UNITS as readonly string[]).includes(perQuantity.unit)) {
+    problems.push(`${where}: ${label}.unit '${perQuantity.unit}' is not a QuantityUnit`);
+  }
+  if (!(perQuantity.every > 0)) {
+    problems.push(`${where}: ${label}.every must be > 0, got ${perQuantity.every}`);
+  }
+}
 
+/** §3.3 — the advisory lot-size caps. */
+function validateMaxLotSize(rule: FrequencyRule, where: string, problems: string[]): void {
   for (const cap of rule.maxLotSize ?? []) {
     if (!(QUANTITY_UNITS as readonly string[]).includes(cap.unit)) {
       problems.push(`${where}: maxLotSize.unit '${cap.unit}' is not a QuantityUnit`);
@@ -320,98 +332,136 @@ function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems
       if (!alias.trim()) problems.push(`${where}: maxLotSize.materialAliases contains a blank`);
     }
   }
+}
 
-  if (rule.reduced) {
-    // [C1R-B8] — the vacuum this closes: a guessed reduced count on an
-    // unconfirmed edition emits a confident wrong required count.
-    if (ruleset.status === 'draft') {
-      problems.push(
-        `${where}: a draft ruleset must not declare a 'reduced' limb — reduced counts require a CONFIRMED edition (§8.3)`,
-      );
-    }
-    if (!(ESCALATION_SHAPES as readonly string[]).includes(rule.reduced.escalationShape)) {
-      problems.push(
-        `${where}: unsupported escalationShape '${rule.reduced.escalationShape}' — the registry rejects an unknown shape rather than mis-evaluating it (§3.4.1)`,
-      );
-    }
-    if (
-      !Number.isInteger(rule.reduced.consecutiveConformingLots) ||
-      rule.reduced.consecutiveConformingLots < 1
-    ) {
-      problems.push(`${where}: reduced.consecutiveConformingLots must be an integer >= 1`);
-    }
-    checkCounts(rule.reduced.minCountByScale, 'reduced.minCountByScale');
-    checkPerQuantity(rule.reduced.perQuantity, 'reduced.perQuantity');
+/** §3.4.1 — the de-escalated regime's FIGURES. */
+function validateReducedLimb(
+  ruleset: Ruleset,
+  rule: FrequencyRule,
+  where: string,
+  problems: string[],
+): void {
+  const reduced = rule.reduced;
+  if (!reduced) return;
+  // [C1R-B8] — the vacuum this closes: a guessed reduced count on an
+  // unconfirmed edition emits a confident wrong required count.
+  if (ruleset.status === 'draft') {
+    problems.push(
+      `${where}: a draft ruleset must not declare a 'reduced' limb — reduced counts require a CONFIRMED edition (§8.3)`,
+    );
   }
+  if (!(ESCALATION_SHAPES as readonly string[]).includes(reduced.escalationShape)) {
+    problems.push(
+      `${where}: unsupported escalationShape '${reduced.escalationShape}' — the registry rejects an unknown shape rather than mis-evaluating it (§3.4.1)`,
+    );
+  }
+  if (
+    !Number.isInteger(reduced.consecutiveConformingLots) ||
+    reduced.consecutiveConformingLots < 1
+  ) {
+    problems.push(`${where}: reduced.consecutiveConformingLots must be an integer >= 1`);
+  }
+  checkCounts(ruleset, reduced.minCountByScale, where, 'reduced.minCountByScale', problems);
+  checkPerQuantity(reduced.perQuantity, where, 'reduced.perQuantity', problems);
+}
 
-  // [C1C-6] The eligibility-only trigger: a streak the engine COMPUTES and
-  // REPORTS but may never apply. Legal on a draft ruleset (unlike `reduced`)
-  // precisely because it changes no count.
+/**
+ * [C1C-6] The eligibility-only trigger: a streak the engine COMPUTES and REPORTS
+ * but may never apply. Legal on a draft ruleset (unlike `reduced`) precisely
+ * because it changes no count.
+ */
+function validateEligibilityLimb(rule: FrequencyRule, where: string, problems: string[]): void {
   const eligibility = rule.reducedFrequencyEligibility;
-  if (eligibility) {
-    if (rule.reduced) {
-      problems.push(
-        `${where}: declare either 'reduced' (figures) or 'reducedFrequencyEligibility' (trigger only), not both`,
-      );
-    }
-    if (!(ESCALATION_SHAPES as readonly string[]).includes(eligibility.escalationShape)) {
-      problems.push(
-        `${where}: unsupported reducedFrequencyEligibility.escalationShape '${eligibility.escalationShape}'`,
-      );
-    }
-    if (
-      !Number.isInteger(eligibility.consecutiveConformingLots) ||
-      eligibility.consecutiveConformingLots < 1
-    ) {
-      problems.push(
-        `${where}: reducedFrequencyEligibility.consecutiveConformingLots must be an integer >= 1`,
-      );
-    }
-    if (!eligibility.clause.trim()) {
-      problems.push(
-        `${where}: reducedFrequencyEligibility.clause is empty — the regime is a DIFFERENT clause from the count (§3.2)`,
-      );
-    }
+  if (!eligibility) return;
+  if (rule.reduced) {
+    problems.push(
+      `${where}: declare either 'reduced' (figures) or 'reducedFrequencyEligibility' (trigger only), not both`,
+    );
   }
+  if (!(ESCALATION_SHAPES as readonly string[]).includes(eligibility.escalationShape)) {
+    problems.push(
+      `${where}: unsupported reducedFrequencyEligibility.escalationShape '${eligibility.escalationShape}'`,
+    );
+  }
+  if (
+    !Number.isInteger(eligibility.consecutiveConformingLots) ||
+    eligibility.consecutiveConformingLots < 1
+  ) {
+    problems.push(
+      `${where}: reducedFrequencyEligibility.consecutiveConformingLots must be an integer >= 1`,
+    );
+  }
+  if (!eligibility.clause.trim()) {
+    problems.push(
+      `${where}: reducedFrequencyEligibility.clause is empty — the regime is a DIFFERENT clause from the count (§3.2)`,
+    );
+  }
+}
 
-  // D14 §4.4 — the Section 173 small-area limb. Its `minCountByScale` is
-  // deliberately NOT run through `checkCounts`: covering every `scaleKeys` entry
-  // is exactly what it must not do (Scale C has no reduction to grant), so the
-  // checks here are the per-key ones only.
+/**
+ * D14 §4.4 — the Section 173 small-area limb. Its `minCountByScale` is
+ * deliberately NOT run through `checkCounts`: covering every `scaleKeys` entry is
+ * exactly what it must not do (Scale C has no reduction to grant), so the checks
+ * here are the per-key ones only.
+ */
+function validateSmallLot(
+  ruleset: Ruleset,
+  rule: FrequencyRule,
+  where: string,
+  now: Date,
+  problems: string[],
+): void {
   const smallLot = rule.smallLot;
-  if (smallLot) {
-    if (!(QUANTITY_UNITS as readonly string[]).includes(smallLot.maxArea.unit)) {
+  if (!smallLot) return;
+  if (!(QUANTITY_UNITS as readonly string[]).includes(smallLot.maxArea.unit)) {
+    problems.push(
+      `${where}: smallLot.maxArea.unit '${smallLot.maxArea.unit}' is not a QuantityUnit`,
+    );
+  }
+  if (!(smallLot.maxArea.value > 0)) {
+    problems.push(`${where}: smallLot.maxArea.value must be > 0`);
+  }
+  const smallCounts = Object.entries(smallLot.minCountByScale);
+  if (smallCounts.length === 0) {
+    problems.push(`${where}: smallLot.minCountByScale is empty — the limb can never apply`);
+  }
+  for (const [scaleKey, count] of smallCounts) {
+    if (!ruleset.scaleKeys.includes(scaleKey)) {
       problems.push(
-        `${where}: smallLot.maxArea.unit '${smallLot.maxArea.unit}' is not a QuantityUnit`,
+        `${where}: smallLot.minCountByScale declares scale '${scaleKey}' outside ruleset.scaleKeys`,
       );
     }
-    if (!(smallLot.maxArea.value > 0)) {
-      problems.push(`${where}: smallLot.maxArea.value must be > 0`);
+    if (!Number.isInteger(count) || count < 1) {
+      problems.push(
+        `${where}: smallLot.minCountByScale['${scaleKey}'] must be an integer >= 1, got ${count}`,
+      );
     }
-    const smallCounts = Object.entries(smallLot.minCountByScale);
-    if (smallCounts.length === 0) {
-      problems.push(`${where}: smallLot.minCountByScale is empty — the limb can never apply`);
-    }
-    for (const [scaleKey, count] of smallCounts) {
-      if (!ruleset.scaleKeys.includes(scaleKey)) {
-        problems.push(
-          `${where}: smallLot.minCountByScale declares scale '${scaleKey}' outside ruleset.scaleKeys`,
-        );
-      }
-      if (!Number.isInteger(count) || count < 1) {
-        problems.push(
-          `${where}: smallLot.minCountByScale['${scaleKey}'] must be an integer >= 1, got ${count}`,
-        );
-      }
-    }
-    if (!Number.isFinite(smallLot.acceptanceShiftPct) || smallLot.acceptanceShiftPct < 0) {
-      problems.push(`${where}: smallLot.acceptanceShiftPct must be a finite number >= 0`);
-    }
-    // Section 173 is a DIFFERENT document from the rule's Section 204, so it
-    // carries its own provenance and must clear the same §8.3 currency bar.
-    validateProvenance(`${where} smallLot provenance`, smallLot.provenance, ruleset, now, problems);
   }
+  if (!Number.isFinite(smallLot.acceptanceShiftPct) || smallLot.acceptanceShiftPct < 0) {
+    problems.push(`${where}: smallLot.acceptanceShiftPct must be a finite number >= 0`);
+  }
+  // Section 173 is a DIFFERENT document from the rule's Section 204, so it
+  // carries its own provenance and must clear the same §8.3 currency bar.
+  validateProvenance(`${where} smallLot provenance`, smallLot.provenance, ruleset, now, problems);
+}
 
+function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems: string[]): void {
+  const where = `${ruleset.id} rule ${rule.id}`;
+  validateRuleIdentity(ruleset, rule, where, problems);
+  // D14 §4.3.1a — CONDITIONAL. `checkCounts` demands a count for every
+  // `scaleKeys` entry, so an unconditional call rejects every banded pack with
+  // five "declares no count for scale …" problems and it never registers. The
+  // exactly-one-of check inside `validateAreaBands` is what stops "optional"
+  // meaning "absent".
+  if (rule.minCountByScale) {
+    checkCounts(ruleset, rule.minCountByScale, where, 'minCountByScale', problems);
+  }
+  validateAreaBands(ruleset, rule, where, problems);
+  checkPerQuantity(rule.perQuantity, where, 'perQuantity', problems);
+  validateMaxLotSize(rule, where, problems);
+  validateReducedLimb(ruleset, rule, where, problems);
+  validateEligibilityLimb(rule, where, problems);
+  validateSmallLot(ruleset, rule, where, now, problems);
   validateProvenance(`${where} provenance`, rule.provenance, ruleset, now, problems);
 }
 
