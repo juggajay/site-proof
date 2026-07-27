@@ -485,7 +485,10 @@ test.describe('Project settings seeded admin contract', () => {
       await tryAgainButton.click();
     }
 
-    await expect(page.getByText('E2E Admin')).toBeVisible();
+    // Scoped to the team panel: the shell user-menu also renders 'E2E Admin',
+    // so the bare getByText is a strict-mode violation once the team list loads
+    // (failed master run 30245611756).
+    await expect(page.getByRole('tabpanel').getByText('E2E Admin')).toBeVisible();
     await expect.poll(() => api.getTeamLoadCount()).toBeGreaterThan(2);
   });
 

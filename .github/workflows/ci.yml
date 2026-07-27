@@ -8,7 +8,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Push runs get a per-SHA group: observed twice on 2026-07-27 (and Jul 15-24)
+  # that a shared group cancels an in-progress master push run when the next
+  # merge lands, despite cancel-in-progress evaluating false. A unique group
+  # makes cancellation structurally impossible for pushes.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   # Cancel superseded runs only for PRs. Push runs (master) must never be
   # cancelled: back-to-back merges were cancelling the full E2E job, which hid
   # a red master suite for nine days (Jul 15-24).
