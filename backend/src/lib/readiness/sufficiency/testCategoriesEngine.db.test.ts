@@ -14,7 +14,7 @@
 //
 // DB-backed, local disposable database only (`src/test/databaseSafety.ts`).
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '../../prisma.js';
 import {
@@ -22,6 +22,29 @@ import {
   checkConformancePrerequisitesBatch,
 } from '../../conformancePrerequisites.js';
 import { createCategoryResolver, type Resolution } from './testCategories.js';
+
+/**
+ * Every cache handed to {@link createCategoryResolver} while the mock below is
+ * in force, in creation order. AT-60's observation seam: the batch entry point
+ * creates its resolver internally (`conformancePrerequisites.ts:878`), so the
+ * only way to see how MANY it creates, and what ONE of them accumulated, is to
+ * watch the factory.
+ */
+const createdCaches = vi.hoisted(() => [] as Map<string, unknown>[]);
+
+// TRANSPARENT: it records the cache and delegates to the real factory, so every
+// other test in this file — including the byte-identity and budget cases below
+// — runs against the shipped behaviour unchanged.
+vi.mock('./testCategories.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./testCategories.js')>();
+  return {
+    ...actual,
+    createCategoryResolver: (cache: Map<string, Resolution> = new Map()) => {
+      createdCaches.push(cache);
+      return actual.createCategoryResolver(cache);
+    },
+  };
+});
 
 const tag = `f1-engine-${Date.now()}`;
 
@@ -342,6 +365,54 @@ describe('AT-32 / AT-60 the batch resolver is transparent and bounded', () => {
       const single = await checkConformancePrerequisites(lotId);
       expect(JSON.stringify(batch.get(lotId))).toBe(JSON.stringify(single));
     }
+  });
+
+  // AT-60, THE PRODUCTION LIMB. The case below asserts the cache's arithmetic
+  // over a resolver the TEST builds; this one asserts the thing the arithmetic
+  // is worth anything for — that `checkConformancePrerequisitesBatch` builds
+  // exactly ONE resolver and threads it through the regime fold and every
+  // member's evaluation (`conformancePrerequisites.ts:878-893`). Deleting that
+  // threading, or moving `createCategoryResolver()` inside the per-lot loop,
+  // leaves every other test in this file green: the verdicts are identical
+  // either way (AT-32), only the cache lifetime changes.
+  it('the BATCH path builds ONE resolver for every member (§4.6, AT-60)', async () => {
+    const lotIds = [
+      // Three lots that SHARE strings: two share the VIC item type, and the
+      // rule key `compaction` is resolved once per rule per lot. 18 test/item
+      // resolutions plus 3 rule resolutions collapse to the distinct-key count.
+      await seedLot({
+        itemTestType: VIC_ITEM_TYPE,
+        tests: Array(6).fill('Density Ratio'),
+        linked: false,
+      }),
+      await seedLot({
+        itemTestType: VIC_ITEM_TYPE,
+        tests: Array(6).fill('density_ratio'),
+        linked: true,
+      }),
+      await seedLot({
+        itemTestType: VIC_MDD_ITEM_TYPE,
+        tests: Array(6).fill('MDD Standard'),
+        linked: true,
+      }),
+    ];
+
+    createdCaches.length = 0;
+    const batch = await checkConformancePrerequisitesBatch(lotIds);
+    expect(batch.size).toBe(3);
+
+    // ONE cache for the whole batch — not one per lot, not one per rule.
+    expect(createdCaches).toHaveLength(1);
+    expect([...createdCaches[0].keys()].sort()).toEqual(
+      [
+        VIC_ITEM_TYPE,
+        VIC_MDD_ITEM_TYPE,
+        'Density Ratio',
+        'density_ratio',
+        'MDD Standard',
+        'compaction', // the rule's own testType, through the same resolver
+      ].sort(),
+    );
   });
 
   it('the cache is keyed on DISTINCT strings, not on row count (§4.6, AT-60)', async () => {
