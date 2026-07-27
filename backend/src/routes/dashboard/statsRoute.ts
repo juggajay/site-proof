@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import {
+  daysOverdue,
   OVERDUE_HOLD_POINT_STATUSES,
   STAGNANT_HOLD_POINT_STATUSES,
 } from '../../lib/readiness/predicates.js';
@@ -239,9 +240,7 @@ dashboardStatsRouter.get(
       status: ncr.status,
       category: ncr.category,
       dueDate: ncr.dueDate?.toISOString(),
-      daysOverdue: ncr.dueDate
-        ? Math.ceil((today.getTime() - new Date(ncr.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-        : 0,
+      daysOverdue: daysOverdue(ncr.dueDate, today),
       project: {
         id: ncr.project.id,
         name: ncr.project.name,

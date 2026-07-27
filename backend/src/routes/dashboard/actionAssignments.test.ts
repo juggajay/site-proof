@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type { ActionAssignment } from '../../lib/readiness/contracts/actionAssignment.js';
+import { daysOverdue } from '../../lib/readiness/predicates.js';
 import {
   groupByBallInCourt,
   toHoldPointAssignment,
@@ -146,5 +147,64 @@ describe('A4 §4.1 grouping invariant', () => {
     expect(
       groups.needsYou.length + groups.needsAnotherRole.length + groups.waitingOnOthers.length,
     ).toBe(open.length);
+  });
+});
+
+/**
+ * The "42 vs 41" regression: the SAME overdue NCR read "42 days overdue" on the
+ * dashboard attention widget and "41 days overdue" on /dashboard/needs-attention,
+ * because the widget ceil'd and the screen floor'd the same `dueDate`.
+ *
+ * The two surfaces reach the user by different routes — the widget renders a
+ * backend-computed `daysOverdue`, the screen derives its chip from the adapter's
+ * `dueAt` client-side — so this feeds ONE fixture through BOTH and asserts the
+ * ages agree. `needsAttentionAge` is character-for-character the frontend's
+ * expression (`NeedsAttentionPage.tsx` `timeChip`); if either side drifts, this
+ * fails.
+ */
+describe('overdue age is one number across both surfaces', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /** Verbatim `NeedsAttentionPage.tsx` `timeChip`: the Needs Attention path. */
+  const needsAttentionAge = (dueAt: string, now: Date) =>
+    Math.floor((now.getTime() - Date.parse(dueAt)) / DAY_MS);
+
+  it('gives the widget and Needs Attention the same age for one NCR', () => {
+    const ncr = overdueNcr({ dueDate: new Date(NOW.getTime() - 41 * DAY_MS - 30 * 60 * 1000) });
+
+    // Path 1 — the attention widget's `daysOverdue` (statsRoute).
+    const widgetAge = daysOverdue(ncr.dueDate, NOW);
+    // Path 2 — the adapter's `dueAt`, aged the way the screen ages it.
+    const { dueAt } = toNcrAssignment(ncr, viewerWithRole('quality_manager'), NOW);
+    const screenAge = needsAttentionAge(dueAt!, NOW);
+
+    expect(widgetAge).toBe(screenAge);
+    // Full days elapsed, not rounded up: 41d30m is 41 days overdue, not 42.
+    expect(widgetAge).toBe(41);
+  });
+
+  it('counts full days elapsed at the 24h boundary', () => {
+    const exactly = new Date(NOW.getTime() - 3 * DAY_MS);
+    const justPast = new Date(NOW.getTime() - 3 * DAY_MS - 60 * 1000);
+
+    expect(daysOverdue(exactly, NOW)).toBe(3);
+    // The ceil bug's signature: a minute past three days is still three days,
+    // not four.
+    expect(daysOverdue(justPast, NOW)).toBe(3);
+
+    for (const dueDate of [exactly, justPast]) {
+      const { dueAt } = toNcrAssignment(overdueNcr({ dueDate }), viewerWithRole('admin'), NOW);
+      expect(needsAttentionAge(dueAt!, NOW)).toBe(daysOverdue(dueDate, NOW));
+    }
+  });
+
+  it('reports 0 rather than 1 for an NCR that just went overdue', () => {
+    // Due dates are midnight-anchored and the feed query is `dueDate < now`, so
+    // an NCR due TODAY is already listed. `ceil` called that "1 day overdue"
+    // before it was a day late; `floor` says 0 and the UI renders "Overdue".
+    expect(daysOverdue(new Date(NOW.getTime() - 60 * 1000), NOW)).toBe(0);
+    expect(daysOverdue(null, NOW)).toBe(0);
+    // Never negative for a row that is not yet due.
+    expect(daysOverdue(new Date(NOW.getTime() + 5 * DAY_MS), NOW)).toBe(0);
   });
 });
