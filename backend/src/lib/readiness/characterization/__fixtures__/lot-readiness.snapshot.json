@@ -2192,5 +2192,838 @@
         "actionBlockerCount": 1
       }
     }
+  },
+  "V01-vic-density-ratio-unlinked": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "V01-vic-density-ratio-unlinked",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP requires a matching passing verified test result"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": false,
+          "outstandingTestItems": [
+            {
+              "itemId": "<id:1>",
+              "description": "Item t",
+              "testType": "AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00",
+              "state": "unmatched_result_exists"
+            }
+          ],
+          "testResults": [
+            {
+              "id": "<id:2>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:3>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:4>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:5>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:6>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:7>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_passing_verified_test",
+            "severity": "blocker",
+            "area": "test",
+            "title": "Required tests outstanding",
+            "detail": "1 required test outstanding (1 with an unlinked result).",
+            "blocksAction": true,
+            "actionLabel": "Review tests",
+            "outstandingTests": [
+              {
+                "itemId": "<id:1>",
+                "description": "Item t",
+                "testType": "AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00",
+                "state": "unmatched_result_exists"
+              }
+            ]
+          }
+        ],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (DTP (VicRoads) Section 204 – Earthworks, clause 204.13(a), v8.0, November 2025). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          },
+          {
+            "code": "tests_unlinked_to_itp_item",
+            "severity": "warning",
+            "area": "test",
+            "title": "Verified tests not counted",
+            "detail": "6 verified tests are not linked to a checklist item, so they were not counted toward the required frequency.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 6,
+            "relatedIds": [
+              "<id:2>",
+              "<id:3>",
+              "<id:4>",
+              "<id:5>",
+              "<id:6>",
+              "<id:7>"
+            ]
+          }
+        ],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 2,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "V02-vic-density-ratio-linked": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "V02-vic-density-ratio-linked",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": true,
+          "outstandingTestItems": [],
+          "testResults": [
+            {
+              "id": "<id:1>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "density_ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:3>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "density_ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:4>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "density_ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:5>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "density_ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:6>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "density_ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:7>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "density_ratio",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
+        }
+      },
+      "conformance": {
+        "state": "warning",
+        "blockers": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (DTP (VicRoads) Section 204 – Earthworks, clause 204.13(a), v8.0, November 2025). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          },
+          {
+            "code": "tests_unlinked_to_itp_item",
+            "severity": "warning",
+            "area": "test",
+            "title": "Verified tests not counted",
+            "detail": "6 verified tests are not linked to a checklist item, so they were not counted toward the required frequency.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 6,
+            "relatedIds": [
+              "<id:1>",
+              "<id:3>",
+              "<id:4>",
+              "<id:5>",
+              "<id:6>",
+              "<id:7>"
+            ]
+          }
+        ],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 2,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "V03-vic-mdd-standard-linked": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "V03-vic-mdd-standard-linked",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": true,
+          "outstandingTestItems": [],
+          "testResults": [
+            {
+              "id": "<id:1>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "MDD Standard",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:3>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "MDD Standard",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:4>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "MDD Standard",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:5>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "MDD Standard",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:6>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "MDD Standard",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:7>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "MDD Standard",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
+        }
+      },
+      "conformance": {
+        "state": "warning",
+        "blockers": [],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (DTP (VicRoads) Section 204 – Earthworks, clause 204.13(a), v8.0, November 2025). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          },
+          {
+            "code": "tests_unlinked_to_itp_item",
+            "severity": "warning",
+            "area": "test",
+            "title": "Verified tests not counted",
+            "detail": "6 verified tests are not linked to a checklist item, so they were not counted toward the required frequency.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 6,
+            "relatedIds": [
+              "<id:1>",
+              "<id:3>",
+              "<id:4>",
+              "<id:5>",
+              "<id:6>",
+              "<id:7>"
+            ]
+          }
+        ],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 2,
+        "supportCount": 2,
+        "actionBlockerCount": 1
+      }
+    }
+  },
+  "V04-vic-density-ratio-five": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "V04-vic-density-ratio-five",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": false,
+        "blockingReasons": [
+          "ITP requires a matching passing verified test result"
+        ],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": false,
+          "outstandingTestItems": [
+            {
+              "itemId": "<id:1>",
+              "description": "Item t",
+              "testType": "AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00",
+              "state": "unmatched_result_exists"
+            }
+          ],
+          "testResults": [
+            {
+              "id": "<id:2>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:3>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:4>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:5>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:6>",
+              "itpChecklistItemId": null,
+              "testType": "Density Ratio",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
+        }
+      },
+      "conformance": {
+        "state": "blocked",
+        "blockers": [
+          {
+            "code": "no_passing_verified_test",
+            "severity": "blocker",
+            "area": "test",
+            "title": "Required tests outstanding",
+            "detail": "1 required test outstanding (1 with an unlinked result).",
+            "blocksAction": true,
+            "actionLabel": "Review tests",
+            "outstandingTests": [
+              {
+                "itemId": "<id:1>",
+                "description": "Item t",
+                "testType": "AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00",
+                "state": "unmatched_result_exists"
+              }
+            ]
+          }
+        ],
+        "warnings": [
+          {
+            "code": "insufficient_test_count",
+            "severity": "warning",
+            "area": "test",
+            "title": "Fewer tests than the specification requires",
+            "detail": "Requires 6 compaction tests (DTP (VicRoads) Section 204 – Earthworks, clause 204.13(a), v8.0, November 2025). 0 verified conforming.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 1
+          },
+          {
+            "code": "tests_unlinked_to_itp_item",
+            "severity": "warning",
+            "area": "test",
+            "title": "Verified tests not counted",
+            "detail": "5 verified tests are not linked to a checklist item, so they were not counted toward the required frequency.",
+            "blocksAction": false,
+            "actionLabel": "Review tests",
+            "count": 5,
+            "relatedIds": [
+              "<id:2>",
+              "<id:3>",
+              "<id:4>",
+              "<id:5>",
+              "<id:6>"
+            ]
+          }
+        ],
+        "support": []
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:1>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 2,
+        "warningCount": 2,
+        "supportCount": 1,
+        "actionBlockerCount": 2
+      }
+    }
+  },
+  "V05-vic-legacy-compaction": {
+    "readiness": {
+      "lotId": "<id:0>",
+      "lotNumber": "V05-vic-legacy-compaction",
+      "status": "completed",
+      "conformStatus": {
+        "canConform": true,
+        "blockingReasons": [],
+        "prerequisites": {
+          "itpAssigned": true,
+          "itpCompleted": true,
+          "itpCompletedCount": 1,
+          "itpTotalCount": 1,
+          "itpIncompleteItems": [],
+          "testRequired": true,
+          "hasPassingTest": true,
+          "outstandingTestItems": [],
+          "testResults": [
+            {
+              "id": "<id:1>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:3>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:4>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:5>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:6>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            },
+            {
+              "id": "<id:7>",
+              "itpChecklistItemId": "<id:2>",
+              "testType": "compaction",
+              "passFail": "pass",
+              "status": "verified"
+            }
+          ],
+          "noOpenNcrs": true,
+          "openNcrs": [],
+          "naHoldPointBlockerCount": 0,
+          "noNaHoldPointBypass": true,
+          "sufficiencyBlocks": false
+        }
+      },
+      "conformance": {
+        "state": "ready",
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "conformance_prerequisites_met",
+            "severity": "support",
+            "area": "conformance",
+            "title": "Conformance prerequisites met",
+            "detail": "ITP, test, and NCR checks are ready for conformance.",
+            "blocksAction": false
+          },
+          {
+            "code": "test_sufficiency_met",
+            "severity": "support",
+            "area": "test",
+            "title": "Test frequency met",
+            "detail": "6 of 6 required compaction tests verified (DTP (VicRoads) Section 204 – Earthworks, clause 204.13(a)).",
+            "blocksAction": false,
+            "count": 1
+          }
+        ]
+      },
+      "claim": {
+        "state": "not_conformed",
+        "blockers": [
+          {
+            "code": "not_conformed",
+            "severity": "blocker",
+            "area": "claim",
+            "title": "Not conformed",
+            "detail": "Only conformed lots can be selected for a progress claim.",
+            "blocksAction": true
+          }
+        ],
+        "warnings": [],
+        "support": [],
+        "budgetAmount": null,
+        "claimedInId": null,
+        "claimedPercentage": 0,
+        "remainingPercentage": 100
+      },
+      "managementPrep": {
+        "state": "ready",
+        "counts": {
+          "releaseGatedHoldPoints": 0,
+          "missingRequestEvidence": 0,
+          "missingRecipients": 0,
+          "fieldActionableItems": 1,
+          "managementOnlyItems": 0
+        },
+        "blockers": [],
+        "warnings": [],
+        "support": [
+          {
+            "code": "field_actionable_items",
+            "severity": "support",
+            "area": "itp",
+            "title": "Field-actionable ITP items",
+            "detail": "1 checklist item can be worked by field teams.",
+            "blocksAction": false,
+            "count": 1,
+            "relatedIds": [
+              "<id:2>"
+            ]
+          }
+        ]
+      },
+      "summary": {
+        "blockerCount": 1,
+        "warningCount": 0,
+        "supportCount": 3,
+        "actionBlockerCount": 1
+      }
+    }
   }
 }

@@ -53,11 +53,11 @@ interface LotSpec {
 }
 
 const std = (key: string): ItemSpec => ({ key, pointType: 'standard' });
-const testPoint = (key: string): ItemSpec => ({
+const testPoint = (key: string, testType = 'compaction'): ItemSpec => ({
   key,
   pointType: 'standard',
   evidenceRequired: 'test',
-  testType: 'compaction',
+  testType,
 });
 const hpPoint = (key: string): ItemSpec => ({ key, pointType: 'hold_point' });
 
@@ -182,6 +182,93 @@ export const CORPUS: LotSpec[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Wave F1.1 — the REAL-VOCABULARY corpus [F1C-B7].
+//
+// Every lot in CORPUS above writes the literal `'compaction'` — the IDENTITY
+// case for the F1 alias registry. A corpus made entirely of identity cases
+// regenerates byte-identically when F1.2 switches the engine to categories, so
+// the characterization diff would prove nothing. These lots carry the strings
+// the product ACTUALLY writes (§5.1): the Create Test modal's `Density Ratio`,
+// the sample project's `density_ratio`, and the shipped VicRoads earthworks ITP
+// item type. Under F1.1 they all count ZERO — the corpus records today's wrong
+// numbers deliberately, so F1.2's diff IS the behaviour change.
+//
+// They live on a SEPARATE VIC/`vicroads` project, because only a project whose
+// pack resolves can exercise a rule at all. The main corpus project is
+// NSW/TfNSW and resolves NO ruleset (see the note in `seedLot`), and changing
+// that is out of scope.
+//
+// Shipped strings, cited:
+//   `AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00` — seed-itp-templates-vic-earthworks.js:206
+//   `AS 1289.5.4.1, RC 316.00, RC 316.10`       — seed-itp-templates-vic-earthworks.js:242
+//   `Density Ratio` / `MDD Standard`            — CreateTestModal.tsx:261 / :265
+//   `density_ratio`                             — prod (18 rows), sampleProjectData.ts:80,217,229
+const VIC_ITEM_TYPE = 'AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00';
+const VIC_MDD_ITEM_TYPE = 'AS 1289.5.4.1, RC 316.00, RC 316.10';
+
+const verifiedTests = (n: number, testType: string, itemKey?: string): TestSpec[] =>
+  Array.from({ length: n }, () => ({ itemKey, testType, passFail: 'pass', status: 'verified' }));
+
+export const VIC_CORPUS: LotSpec[] = [
+  {
+    // Six modal-vocabulary tests, UNLINKED, against the shipped VIC item type.
+    // F1.1: 0 of 6, `insufficient`, six ids in `unlinkedPassingTestIds`.
+    // F1.2: 6 of 6, `satisfied` — the review's acceptance-gate item 2.
+    lotNumber: 'V01-vic-density-ratio-unlinked',
+    status: 'completed',
+    itp: {
+      items: [testPoint('t', VIC_ITEM_TYPE)],
+      completions: [{ itemKey: 't', status: 'completed' }],
+    },
+    tests: verifiedTests(6, 'Density Ratio'),
+  },
+  {
+    // The same six, LINKED to the item, in the snake_case vocabulary the sample
+    // project and 18 production rows use.
+    lotNumber: 'V02-vic-density-ratio-linked',
+    status: 'completed',
+    itp: {
+      items: [testPoint('t', VIC_ITEM_TYPE)],
+      completions: [{ itemKey: 't', status: 'completed' }],
+    },
+    tests: verifiedTests(6, 'density_ratio', 't'),
+  },
+  {
+    // §5.3 / AT-57. Six LABORATORY MDD tests, each LINKED to a shipped
+    // compaction item. This lot must read 0 of 6 BEFORE AND AFTER F1.2 — it is
+    // the lot whose absence of movement proves the lab-reference exclusion is
+    // enforced on the item limb and not merely absent from the alias table.
+    lotNumber: 'V03-vic-mdd-standard-linked',
+    status: 'completed',
+    itp: {
+      items: [testPoint('t', VIC_MDD_ITEM_TYPE)],
+      completions: [{ itemKey: 't', status: 'completed' }],
+    },
+    tests: verifiedTests(6, 'MDD Standard', 't'),
+  },
+  {
+    // Five of six: the shortfall arithmetic on real vocabulary. F1.1: 0 of 6.
+    // F1.2: 5 of 6, still `insufficient`.
+    lotNumber: 'V04-vic-density-ratio-five',
+    status: 'completed',
+    itp: {
+      items: [testPoint('t', VIC_ITEM_TYPE)],
+      completions: [{ itemKey: 't', status: 'completed' }],
+    },
+    tests: verifiedTests(5, 'Density Ratio'),
+  },
+  {
+    // The IDENTITY control: legacy `compaction` on both sides (25 production
+    // rows are in this vocabulary). It reads 6 of 6 today and must read 6 of 6
+    // after — any movement here is a bug, not an expected change.
+    lotNumber: 'V05-vic-legacy-compaction',
+    status: 'completed',
+    itp: { items: [testPoint('t')], completions: [{ itemKey: 't', status: 'completed' }] },
+    tests: verifiedTests(6, 'compaction', 't'),
+  },
+];
+
 export interface SeededCorpus {
   projectId: string;
   companyId: string;
@@ -297,9 +384,14 @@ async function seedLot(
       activityType: 'Earthworks',
       // Wave C1: the fixture writes the folded slug exactly as every production
       // write path does (`activitySlugForWrite`), so the corpus pins the
-      // ruleset-RESOLVING branch rather than a lot that looks unclassified.
-      // The corpus project is NSW/TfNSW, so these lots resolve `tfnsw-r44.v1` —
-      // draft, therefore advisory-only and structurally non-blocking (§5.1.2).
+      // CLASSIFIED-lot branch rather than a lot that looks unclassified.
+      //
+      // F1.1 correction: the note here used to say the main corpus project
+      // (NSW/TfNSW) resolves `tfnsw-r44.v1` as a draft ruleset. It does not —
+      // that pack was DEREGISTERED (`rulesets/index.ts:34` lists only
+      // `VICROADS_204_V1`), so those lots resolve NO ruleset at all and read
+      // `unknown` / `no_ruleset_for_project`. Lots that must exercise a resolved
+      // pack live on the separate VIC/`vicroads` project instead (VIC_CORPUS).
       activitySlug: activitySlugForWrite('Earthworks'),
       budgetAmount: spec.budgetAmount ?? null,
       conformedAt: spec.conformedAt ?? null,
@@ -320,10 +412,15 @@ export async function seedCorpus(options: {
   projectId: string;
   companyId: string;
   userId: string;
+  /** VIC/`vicroads` project for {@link VIC_CORPUS} — the lots that resolve a pack (F1.1). */
+  vicProjectId: string;
 }): Promise<SeededCorpus['lots']> {
   const seeded: SeededCorpus['lots'] = [];
   for (const spec of CORPUS) {
     seeded.push(await seedLot(options.projectId, options.userId, spec));
+  }
+  for (const spec of VIC_CORPUS) {
+    seeded.push(await seedLot(options.vicProjectId, options.userId, spec));
   }
   return seeded;
 }
