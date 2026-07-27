@@ -408,6 +408,10 @@ describe('D14.5 pavement lots ride Table Q6/L.1 row "> 100.0" with no band selec
     expect(pavementRequired('pavement_bound', 500.1)).toBe(4); // published 4
     expect(pavementRequired('pavement_bound', 1000)).toBe(4); // published 4
     expect(pavementRequired('pavement_bound', 1000.1)).toBe(5); // max(5, ceil(1000.1/500)=3)
+    // 4,500 m² is the mutation probe for the 5,000 edge: the two cells COINCIDE
+    // at 10 for every area in (4,500, 5,000], so moving the edge inside that
+    // interval is unobservable — but below it the cells diverge and this fails.
+    expect(pavementRequired('pavement_bound', 4500)).toBe(9); // max(5, ceil(4500/500)=9)
     expect(pavementRequired('pavement_bound', 5000)).toBe(10); // max(5, ceil(5000/500)=10)
     expect(pavementRequired('pavement_bound', 5000.1)).toBe(10); // floor 10 beats ceil(5000.1/1000)=6
     expect(pavementRequired('pavement_bound', 12000)).toBe(12); // rate above the floor of 10

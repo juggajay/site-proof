@@ -477,54 +477,6 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
       ).toEqual([]);
     });
 
-    it.each([
-      [
-        'BOTH byScale and bands — the suppression would depend on read order',
-        bandedRule({
-          countByAreaBand: {
-            unit: 'm2',
-            byScale: { A: [{ minCount: 1 }] },
-            bands: [{ minCount: 1 }],
-          },
-        }),
-        "countByAreaBand declares exactly one of 'byScale' or 'bands' — both are declared",
-      ],
-      [
-        'NEITHER byScale nor bands',
-        bandedRule({ countByAreaBand: { unit: 'm2' } }),
-        "countByAreaBand declares exactly one of 'byScale' or 'bands' — neither is declared",
-      ],
-      ['an EMPTY bands list', scaleIndependentRule([]), 'countByAreaBand.bands is empty'],
-      [
-        'a bands list whose open band is not last',
-        scaleIndependentRule([{ minCount: 1 }, { upToInclusive: 500, minCount: 2 }]),
-        'omits upToInclusive but is not the last band',
-      ],
-      [
-        'a bands list with non-ascending bounds',
-        scaleIndependentRule([
-          { upToInclusive: 500, minCount: 1 },
-          { upToInclusive: 100, minCount: 2 },
-          { minCount: 3 },
-        ]),
-        'is not strictly ascending',
-      ],
-      [
-        'a bands list with a floor below 1',
-        scaleIndependentRule([{ minCount: 0 }]),
-        'minCount must be an integer >= 1',
-      ],
-      [
-        'a bands list with a zero rate',
-        scaleIndependentRule([{ minCount: 1, every: 0 }]),
-        'every must be > 0',
-      ],
-    ])('rejects %s', (_name, badRule, expected) => {
-      expect(validateRuleset(ruleset({ rules: [badRule] }), NOW)).toContainEqual(
-        expect.stringContaining(expected),
-      );
-    });
-
     it('registers a banded pack cleanly — the direction that fails if the readers stay unconditional', () => {
       // `checkCounts` demands a count for EVERY scaleKeys entry, so an
       // unconditional call at `registry.ts` would reject this with "declares no
@@ -639,6 +591,49 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
         'a floor below 1',
         bandedRule({ countByAreaBand: { unit: 'm2', byScale: { A: [{ minCount: 0 }] } } }),
         'minCount must be an integer >= 1',
+      ],
+      // D14.5 §4.3.1 — `bands` replaces `byScale`, never joins it, and the shape
+      // checks are the same list applied to the one list.
+      [
+        'BOTH byScale and bands — the scale-cause suppression would depend on read order',
+        bandedRule({
+          countByAreaBand: {
+            unit: 'm2',
+            byScale: { A: [{ minCount: 1 }] },
+            bands: [{ minCount: 1 }],
+          },
+        }),
+        "countByAreaBand declares exactly one of 'byScale' or 'bands' — both are declared",
+      ],
+      [
+        'NEITHER byScale nor bands',
+        bandedRule({ countByAreaBand: { unit: 'm2' } }),
+        "countByAreaBand declares exactly one of 'byScale' or 'bands' — neither is declared",
+      ],
+      ['an EMPTY bands list', scaleIndependentRule([]), 'countByAreaBand.bands is empty'],
+      [
+        'a bands list whose open band is not last',
+        scaleIndependentRule([{ minCount: 1 }, { upToInclusive: 500, minCount: 2 }]),
+        'omits upToInclusive but is not the last band',
+      ],
+      [
+        'a bands list with non-ascending bounds',
+        scaleIndependentRule([
+          { upToInclusive: 500, minCount: 1 },
+          { upToInclusive: 100, minCount: 2 },
+          { minCount: 3 },
+        ]),
+        'is not strictly ascending',
+      ],
+      [
+        'a bands list with a floor below 1',
+        scaleIndependentRule([{ minCount: 0 }]),
+        'minCount must be an integer >= 1',
+      ],
+      [
+        'a bands list with a zero rate',
+        scaleIndependentRule([{ minCount: 1, every: 0 }]),
+        'every must be > 0',
       ],
     ])('rejects %s', (_name, badRule, expected) => {
       expect(validateRuleset(ruleset({ rules: [badRule] }), NOW)).toContainEqual(
