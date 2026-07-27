@@ -29,6 +29,35 @@ export type ItpImportTarget = (typeof ITP_IMPORT_TARGETS)[number];
 
 const ITP_IMPORT_TARGET_SET = new Set<string>(ITP_IMPORT_TARGETS);
 
+/**
+ * Every field a lot-register import is allowed to write. Deliberately a subset
+ * of what a lot HAS: status, budget, subcontractor and geometry are not things a
+ * migrated register gets to set — a lot is born fresh and those are decided in
+ * SiteProof.
+ */
+export const LOT_IMPORT_TARGETS = [
+  'lotNumber',
+  'description',
+  'activityType',
+  'chainageStart',
+  'chainageEnd',
+  'layer',
+  'testScale',
+  'materialType',
+  'quantityValue',
+  'quantityUnit',
+  /** Names an ITP already in this project; matched by name, never created. */
+  'itpTemplateName',
+] as const;
+export type LotImportTarget = (typeof LOT_IMPORT_TARGETS)[number];
+
+const LOT_IMPORT_TARGET_SET = new Set<string>(LOT_IMPORT_TARGETS);
+
+const TARGETS_BY_KIND: Record<string, ReadonlySet<string>> = {
+  itp_template: ITP_IMPORT_TARGET_SET,
+  lot_register: LOT_IMPORT_TARGET_SET,
+};
+
 /** Every value transform a profile may name. */
 export const IMPORT_TRANSFORMS = [
   'none',
@@ -56,7 +85,8 @@ export type FieldMapEntry = z.infer<typeof fieldMapEntrySchema>;
  * winning column arbitrary). Called on save AND immediately before every write.
  */
 export function assertAllowedFieldMap(value: unknown, kind: string): FieldMapEntry[] {
-  if (kind !== 'itp_template') {
+  const allowed = TARGETS_BY_KIND[kind];
+  if (!allowed) {
     throw AppError.badRequest(`Imports of kind "${kind}" are not supported yet.`, {
       code: 'IMPORT_KIND_UNSUPPORTED',
     });
@@ -69,7 +99,7 @@ export function assertAllowedFieldMap(value: unknown, kind: string): FieldMapEnt
 
   const seen = new Set<string>();
   for (const entry of parsed.data) {
-    if (!ITP_IMPORT_TARGET_SET.has(entry.target)) {
+    if (!allowed.has(entry.target)) {
       throw AppError.badRequest(`"${entry.target}" is not a field this import can write.`, {
         code: 'IMPORT_TARGET_NOT_ALLOWED',
       });
@@ -99,9 +129,8 @@ export function normalizeHeader(header: string): string {
   return header.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-// Header aliases per target, most-specific first. The lot-register equivalent of
-// this table already exists in the shipped CSV importer
-// (frontend/src/components/lots/importLotsCsv.ts) and is harvested in B2.
+// Header aliases per target, most-specific first. The lot-register equivalent is
+// LOT_HEADER_ALIASES below.
 const ITP_HEADER_ALIASES: Record<ItpImportTarget, string[]> = {
   templateName: ['itp', 'itpname', 'itptitle', 'templatename', 'inspectiontestplan', 'planname'],
   templateDescription: ['itpdescription', 'templatedescription', 'scope'],
@@ -174,26 +203,77 @@ const ITP_HEADER_ALIASES: Record<ItpImportTarget, string[]> = {
   ],
 };
 
+// The lot-register alias table, harvested from the `getFieldValue` alias list in
+// the client-side CSV importer this stage retires — that list is the one part of
+// it worth keeping (spec §2.5, §4.3). The
+// rest of its behaviour is deliberately NOT kept: it defaulted an unmappable
+// activity to `earthworks_general` behind a non-blocking warning, and B2 blocks
+// it instead (§4.10d).
+const LOT_HEADER_ALIASES: Record<LotImportTarget, string[]> = {
+  lotNumber: ['lotnumber', 'lotno', 'lotid', 'lotref', 'lot'],
+  description: ['description', 'desc', 'lotdescription', 'scope', 'location'],
+  activityType: ['activitytype', 'activity', 'worktype', 'lottype', 'type'],
+  chainageStart: ['chainagestart', 'startchainage', 'chstart', 'fromchainage', 'from', 'start'],
+  chainageEnd: ['chainageend', 'endchainage', 'chend', 'tochainage', 'to', 'end'],
+  layer: ['layer', 'lift', 'course', 'level'],
+  testScale: ['testscale', 'scale', 'testingscale', 'lotsize'],
+  materialType: ['materialtype', 'material'],
+  quantityValue: ['quantity', 'qty', 'quantityvalue', 'amount'],
+  quantityUnit: ['quantityunit', 'unit', 'uom', 'units'],
+  itpTemplateName: ['itp', 'itpname', 'itpref', 'inspectiontestplan', 'template'],
+};
+
+interface KindMapping {
+  targets: readonly string[];
+  aliases: Record<string, string[]>;
+  transforms: Record<string, ImportTransform>;
+}
+
+const KIND_MAPPINGS: Record<string, KindMapping> = {
+  itp_template: {
+    targets: ITP_IMPORT_TARGETS,
+    aliases: ITP_HEADER_ALIASES,
+    transforms: {
+      pointType: 'whs_to_point_type',
+      responsibleParty: 'responsible_party',
+      evidenceRequired: 'evidence_required',
+    },
+  },
+  // Lot values are parsed by the lot dry run itself (numbers, vocabularies), so
+  // no profile-level transform is needed and none is offered.
+  lot_register: { targets: LOT_IMPORT_TARGETS, aliases: LOT_HEADER_ALIASES, transforms: {} },
+};
+
+function kindMapping(kind: string): KindMapping {
+  const mapping = KIND_MAPPINGS[kind];
+  if (!mapping) {
+    throw AppError.badRequest(`Imports of kind "${kind}" are not supported yet.`, {
+      code: 'IMPORT_KIND_UNSUPPORTED',
+    });
+  }
+  return mapping;
+}
+
 /**
  * Best-effort field map from a sheet's headers alone — the "unknown layout"
  * starting point the reviewer then corrects in the mapping UI.
  */
-export function deriveFieldMapFromHeaders(headers: string[]): FieldMapEntry[] {
+export function deriveFieldMapFromHeaders(headers: string[], kind: string): FieldMapEntry[] {
+  const { targets, aliases, transforms } = kindMapping(kind);
   const normalized = headers.map(normalizeHeader);
   const used = new Set<number>();
   const entries: FieldMapEntry[] = [];
 
-  for (const target of ITP_IMPORT_TARGETS) {
-    for (const alias of ITP_HEADER_ALIASES[target]) {
+  for (const target of targets) {
+    for (const alias of aliases[target] ?? []) {
       const index = normalized.findIndex((value, i) => value === alias && !used.has(i));
       if (index >= 0) {
         used.add(index);
+        const transform = transforms[target];
         entries.push({
           target,
           source: { header: headers[index] },
-          ...(target === 'pointType' ? { transform: 'whs_to_point_type' as const } : {}),
-          ...(target === 'responsibleParty' ? { transform: 'responsible_party' as const } : {}),
-          ...(target === 'evidenceRequired' ? { transform: 'evidence_required' as const } : {}),
+          ...(transform ? { transform } : {}),
         });
         break;
       }
@@ -212,12 +292,13 @@ export function deriveFieldMapFromHeaders(headers: string[]): FieldMapEntry[] {
 export function mergeFieldMapWithAliases(
   fieldMap: FieldMapEntry[],
   headers: string[],
+  kind: string,
 ): FieldMapEntry[] {
   const present = new Set(headers.map(normalizeHeader));
   const kept = fieldMap.filter((entry) => present.has(normalizeHeader(entry.source.header)));
   const coveredTargets = new Set(kept.map((entry) => entry.target));
   const claimedHeaders = new Set(kept.map((entry) => normalizeHeader(entry.source.header)));
-  const fills = deriveFieldMapFromHeaders(headers).filter(
+  const fills = deriveFieldMapFromHeaders(headers, kind).filter(
     (entry) =>
       !coveredTargets.has(entry.target) &&
       !claimedHeaders.has(normalizeHeader(entry.source.header)),
@@ -234,15 +315,15 @@ export function scoreFieldMapAgainstHeaders(fieldMap: FieldMapEntry[], headers: 
 }
 
 /** target -> column index for a given sheet; unresolved targets are absent. */
-export function resolveColumnIndexes(
+export function resolveColumnIndexes<T extends string = ItpImportTarget>(
   fieldMap: FieldMapEntry[],
   headers: string[],
-): Map<ItpImportTarget, number> {
+): Map<T, number> {
   const normalized = headers.map(normalizeHeader);
-  const indexes = new Map<ItpImportTarget, number>();
+  const indexes = new Map<T, number>();
   for (const entry of fieldMap) {
     const index = normalized.indexOf(normalizeHeader(entry.source.header));
-    if (index >= 0) indexes.set(entry.target as ItpImportTarget, index);
+    if (index >= 0) indexes.set(entry.target as T, index);
   }
   return indexes;
 }
@@ -392,12 +473,34 @@ export const BUILT_IN_PROFILES: BuiltInProfile[] = [
       { target: 'specificationReference', source: { header: 'Clause' } },
     ],
   },
+  // The lot register B2 replaces the client-side CSV importer with. Column names
+  // are the spellings that importer's alias table already proved against real
+  // registers; every one is correctable in the mapping step, and the alias fills
+  // above cover the common variants without a profile edit.
+  {
+    key: 'generic_au_lot_register_excel',
+    name: 'Generic lot register',
+    kind: 'lot_register',
+    sourceFormat: 'excel',
+    fieldMap: [
+      { target: 'lotNumber', source: { header: 'Lot Number' } },
+      { target: 'description', source: { header: 'Description' } },
+      { target: 'activityType', source: { header: 'Activity' } },
+      { target: 'chainageStart', source: { header: 'Chainage Start' } },
+      { target: 'chainageEnd', source: { header: 'Chainage End' } },
+      { target: 'layer', source: { header: 'Layer' } },
+      // Registers routinely name the ITP per lot; matched against this project's
+      // own templates by name, never created and never matched across projects.
+      { target: 'itpTemplateName', source: { header: 'ITP' } },
+    ],
+  },
 ];
 
 /** The built-in whose columns best fit these headers, if any fits well enough. */
-export function suggestBuiltInProfile(headers: string[]): BuiltInProfile | null {
+export function suggestBuiltInProfile(headers: string[], kind: string): BuiltInProfile | null {
   let best: { profile: BuiltInProfile; score: number } | null = null;
   for (const profile of BUILT_IN_PROFILES) {
+    if (profile.kind !== kind) continue;
     const score = scoreFieldMapAgainstHeaders(profile.fieldMap, headers);
     if (!best || score > best.score) best = { profile, score };
   }

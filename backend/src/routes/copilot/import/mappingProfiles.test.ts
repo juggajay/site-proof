@@ -81,7 +81,7 @@ describe('assertAllowedFieldMap — the apply-time gate', () => {
 
 describe('header aliasing', () => {
   it('derives the AU ITP columns from their headers', () => {
-    const map = deriveFieldMapFromHeaders(HEADERS);
+    const map = deriveFieldMapFromHeaders(HEADERS, 'itp_template');
     const targets = map.map((entry) => entry.target);
     expect(targets).toContain('activityType');
     expect(targets).toContain('description');
@@ -92,11 +92,11 @@ describe('header aliasing', () => {
   });
 
   it('auto-suggests the generic AU profile for an AU ITP sheet', () => {
-    expect(suggestBuiltInProfile(HEADERS)?.key).toBe('generic_au_itp_excel');
+    expect(suggestBuiltInProfile(HEADERS, 'itp_template')?.key).toBe('generic_au_itp_excel');
   });
 
   it('suggests nothing for an unrecognisable layout', () => {
-    expect(suggestBuiltInProfile(['Foo', 'Bar', 'Baz'])).toBeNull();
+    expect(suggestBuiltInProfile(['Foo', 'Bar', 'Baz'], 'itp_template')).toBeNull();
   });
 
   it('resolves target -> column index, ignoring punctuation and case', () => {
@@ -153,7 +153,9 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
     expect(scoreFieldMapAgainstHeaders(CIVILPRO_PROFILE.fieldMap, [...CIVILPRO_GRID_HEADERS])).toBe(
       1,
     );
-    expect(suggestBuiltInProfile([...CIVILPRO_GRID_HEADERS])?.key).toBe('civilpro_itp_excel');
+    expect(suggestBuiltInProfile([...CIVILPRO_GRID_HEADERS], 'itp_template')?.key).toBe(
+      'civilpro_itp_excel',
+    );
   });
 
   it('binds description to Description, never to CivilPro’s short Reference Text', () => {
@@ -184,7 +186,7 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
   });
 
   it('maps the real grid rows through parse → map → dry run', async () => {
-    const grid = await parseExcelWorkbook(await buildCivilProWorkbook());
+    const grid = await parseExcelWorkbook(await buildCivilProWorkbook(), 'itp_template');
     const sheet = grid.sheets[0];
     expect(sheet.headers).toEqual([...CIVILPRO_GRID_HEADERS]);
     expect(sheet.rows).toHaveLength(3);
@@ -238,6 +240,7 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
   it('routes Milestone rows to the reviewer instead of folding them (decision 2026-07-26)', async () => {
     const grid = await parseExcelWorkbook(
       await buildCivilProWorkbook({ extraRows: [CIVILPRO_MILESTONE_ROW] }),
+      'itp_template',
     );
     const unresolved = computeItpImportDryRun({
       grid,
@@ -271,7 +274,7 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
   });
 
   it('blocks on the missing activity column rather than defaulting a slug', async () => {
-    const grid = await parseExcelWorkbook(await buildCivilProWorkbook());
+    const grid = await parseExcelWorkbook(await buildCivilProWorkbook(), 'itp_template');
     const result = computeItpImportDryRun({
       grid,
       fieldMap: CIVILPRO_PROFILE.fieldMap,
@@ -284,11 +287,13 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
   });
 
   it('suggests the profile for the register CSV column names too', () => {
-    expect(suggestBuiltInProfile([...CIVILPRO_CSV_HEADERS])?.key).toBe('civilpro_itp_excel');
+    expect(suggestBuiltInProfile([...CIVILPRO_CSV_HEADERS], 'itp_template')?.key).toBe(
+      'civilpro_itp_excel',
+    );
 
     // The CSV spells two columns differently, so the alias table (not the
     // profile's exact headers) is what resolves them in the mapping step.
-    const derived = deriveFieldMapFromHeaders([...CIVILPRO_CSV_HEADERS]);
+    const derived = deriveFieldMapFromHeaders([...CIVILPRO_CSV_HEADERS], 'itp_template');
     const source = (target: string) =>
       derived.find((entry) => entry.target === target)?.source.header;
     expect(source('pointType')).toBe('Check Type');
@@ -299,7 +304,11 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
   });
 
   it('merges a suggested profile with alias fills so the CSV resolves pointType', () => {
-    const merged = mergeFieldMapWithAliases(CIVILPRO_PROFILE.fieldMap, [...CIVILPRO_CSV_HEADERS]);
+    const merged = mergeFieldMapWithAliases(
+      CIVILPRO_PROFILE.fieldMap,
+      [...CIVILPRO_CSV_HEADERS],
+      'itp_template',
+    );
     const source = (target: string) =>
       merged.find((entry) => entry.target === target)?.source.header;
 
@@ -320,12 +329,12 @@ describe('CivilPro profile — calibrated against the vendor-published layout', 
 
   it('merge is a no-op when the profile already resolves every header (grid layout)', () => {
     const gridHeaders = CIVILPRO_PROFILE.fieldMap.map((entry) => entry.source.header);
-    const merged = mergeFieldMapWithAliases(CIVILPRO_PROFILE.fieldMap, gridHeaders);
+    const merged = mergeFieldMapWithAliases(CIVILPRO_PROFILE.fieldMap, gridHeaders, 'itp_template');
     expect(merged).toEqual(CIVILPRO_PROFILE.fieldMap);
   });
 
   it('derives the grid layout from its headers alone, with no profile chosen', () => {
-    const derived = deriveFieldMapFromHeaders([...CIVILPRO_GRID_HEADERS]);
+    const derived = deriveFieldMapFromHeaders([...CIVILPRO_GRID_HEADERS], 'itp_template');
     expect(derived.map((entry) => entry.target).sort()).toEqual(
       CIVILPRO_PROFILE.fieldMap.map((entry) => entry.target).sort(),
     );

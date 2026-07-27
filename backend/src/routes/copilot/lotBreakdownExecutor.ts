@@ -39,7 +39,9 @@ applyHandlers[LOT_BREAKDOWN_STAGE] = async (
 
 // Refuse rollback if any created lot has accumulated real work — deleting it
 // would take inspection/test/docket/NCR evidence with it. Names the count.
-async function assertCreatedLotsHaveNoProgress(
+// Exported for the Wave-B lot-register import executor, which rolls back the
+// same records and must refuse for the same reasons.
+export async function assertCreatedLotsHaveNoProgress(
   tx: Prisma.TransactionClient,
   lotIds: string[],
 ): Promise<void> {

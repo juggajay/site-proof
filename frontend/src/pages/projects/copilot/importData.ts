@@ -4,6 +4,9 @@ import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import type { CopilotProposal } from './copilotData';
 
+/** What is being migrated. Server-owned; see backend `importKinds.ts`. */
+export type ImportKind = 'itp_template' | 'lot_register';
+
 /** Where an import batch is in its lifecycle (server-owned; see batchState.ts). */
 export type ImportBatchStatus =
   | 'uploaded'
@@ -31,11 +34,13 @@ export type DryRunOutcome = 'create' | 'update' | 'skip' | 'needs_review' | 'blo
 
 export interface DryRunRow {
   key: string;
-  unit: 'template' | 'checklist_row';
+  unit: 'template' | 'checklist_row' | 'lot';
   rowRef: { sheet: string; rowIndex: number };
   label: string;
   outcome: DryRunOutcome;
   reason?: string;
+  /** Free text the reason code cannot carry — the server's own wording. */
+  detail?: string;
   duplicateOf?: { model: string; id: string; matchedOn: string };
   collidesWith?: { sheet: string; rowIndex: number }[];
   overLength?: { field: string; length: number; max: number };
@@ -82,15 +87,16 @@ export interface UploadImportResult {
   suggestedFieldMap: unknown[];
 }
 
-/** What the reviewer decided about one proposed template. */
-export interface TemplateResolution {
+/** What the reviewer decided about one proposed record. */
+export interface ImportResolution {
   activitySlug?: string;
   affirmSpec?: boolean;
   skip?: boolean;
   skipRows?: number[];
+  milestoneAs?: 'hold_point' | 'witness' | 'standard';
 }
 
-export type Resolutions = Record<string, TemplateResolution>;
+export type Resolutions = Record<string, ImportResolution>;
 
 const IMPORT_STALE_TIME_MS = 15_000;
 
@@ -100,7 +106,7 @@ function importPath(projectId: string): string {
 
 /**
  * A single proposal WITH its payload. The list route deliberately returns a
- * payload-free projection (an import proposal carries every proposed template),
+ * payload-free projection (an import proposal carries every proposed record),
  * so a review surface reads the full record from here.
  */
 export function useCopilotProposalDetail(
@@ -120,11 +126,13 @@ export function useCopilotProposalDetail(
   });
 }
 
-export function useImportBatches(projectId: string | undefined) {
+export function useImportBatches(projectId: string | undefined, kind: ImportKind) {
   return useQuery({
-    queryKey: queryKeys.importBatches(projectId ?? 'none'),
+    queryKey: queryKeys.importBatches(projectId ?? 'none', kind),
     queryFn: async () => {
-      const data = await apiFetch<{ batches: ImportBatchSummary[] }>(importPath(projectId!));
+      const data = await apiFetch<{ batches: ImportBatchSummary[] }>(
+        `${importPath(projectId!)}?kind=${kind}`,
+      );
       return data.batches ?? [];
     },
     enabled: Boolean(projectId),
@@ -142,14 +150,14 @@ export function useImportBatch(projectId: string | undefined, batchId: string | 
   });
 }
 
-export function useImportProfiles(projectId: string | undefined) {
+export function useImportProfiles(projectId: string | undefined, kind: ImportKind) {
   return useQuery({
-    queryKey: queryKeys.importProfiles(projectId ?? 'none'),
+    queryKey: queryKeys.importProfiles(projectId ?? 'none', kind),
     queryFn: () =>
       apiFetch<{
         builtIn: { key: string; name: string; fieldMap: unknown[] }[];
         saved: { id: string; name: string; fieldMap: unknown[]; isBuiltIn: boolean }[];
-      }>(`/api/projects/${encodeURIComponent(projectId!)}/copilot/imports-profiles`),
+      }>(`/api/projects/${encodeURIComponent(projectId!)}/copilot/imports-profiles?kind=${kind}`),
     enabled: Boolean(projectId),
     staleTime: IMPORT_STALE_TIME_MS,
   });
@@ -157,27 +165,30 @@ export function useImportProfiles(projectId: string | undefined) {
 
 /**
  * Upload a spreadsheet. authFetch (not apiFetch) so the browser sets the
- * multipart boundary itself. Writes no ITPs — it parses the file and opens a
+ * multipart boundary itself. Writes nothing — it parses the file and opens a
  * batch for review.
  */
-export function useUploadImport(projectId: string | undefined) {
+export function useUploadImport(projectId: string | undefined, kind: ImportKind) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File): Promise<UploadImportResult> => {
       const form = new FormData();
       form.append('file', file, file.name);
-      const response = await authFetch(importPath(projectId!), { method: 'POST', body: form });
+      const response = await authFetch(`${importPath(projectId!)}?kind=${kind}`, {
+        method: 'POST',
+        body: form,
+      });
       if (!response.ok) {
         throw new ApiError(response.status, await response.text());
       }
       return (await response.json()) as UploadImportResult;
     },
-    onSuccess: () => invalidateImports(queryClient, projectId),
+    onSuccess: () => invalidateImports(queryClient, projectId, kind),
   });
 }
 
 /** Map the columns and compute the dry run. Re-callable — that IS the re-map loop. */
-export function useImportDryRun(projectId: string | undefined) {
+export function useImportDryRun(projectId: string | undefined, kind: ImportKind) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -200,24 +211,24 @@ export function useImportDryRun(projectId: string | undefined) {
           body: JSON.stringify({ profileId, resolutions, saveProfileName, saveProfileScope }),
         },
       ),
-    onSuccess: () => invalidateImports(queryClient, projectId),
+    onSuccess: () => invalidateImports(queryClient, projectId, kind),
   });
 }
 
 /** Create the batch's ONE proposal — the record a human then decides on. */
-export function useSendImportToReview(projectId: string | undefined) {
+export function useSendImportToReview(projectId: string | undefined, kind: ImportKind) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ batchId, resolutions }: { batchId: string; resolutions?: Resolutions }) =>
-      apiFetch<{ proposalId: string; dryRun: DryRunResult; templateCount: number }>(
+      apiFetch<{ proposalId: string; dryRun: DryRunResult; itemCount: number }>(
         `${importPath(projectId!)}/${encodeURIComponent(batchId)}/proposal`,
         { method: 'POST', body: JSON.stringify({ resolutions }) },
       ),
-    onSuccess: () => invalidateImports(queryClient, projectId),
+    onSuccess: () => invalidateImports(queryClient, projectId, kind),
   });
 }
 
-export function useCancelImport(projectId: string | undefined) {
+export function useCancelImport(projectId: string | undefined, kind: ImportKind) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (batchId: string) =>
@@ -225,7 +236,7 @@ export function useCancelImport(projectId: string | undefined) {
         `${importPath(projectId!)}/${encodeURIComponent(batchId)}/cancel`,
         { method: 'POST' },
       ),
-    onSuccess: () => invalidateImports(queryClient, projectId),
+    onSuccess: () => invalidateImports(queryClient, projectId, kind),
   });
 }
 
@@ -236,9 +247,10 @@ export function reconciliationCsvPath(projectId: string, batchId: string): strin
 function invalidateImports(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string | undefined,
+  kind: ImportKind,
 ): void {
   if (!projectId) return;
-  void queryClient.invalidateQueries({ queryKey: queryKeys.importBatches(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.importBatches(projectId, kind) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.copilotProposals(projectId) });
 }
 

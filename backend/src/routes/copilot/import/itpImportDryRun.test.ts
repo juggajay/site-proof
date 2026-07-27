@@ -18,7 +18,7 @@ const HEADERS = [
   'Responsible',
   'Test Type',
 ];
-const FIELD_MAP = deriveFieldMapFromHeaders(HEADERS);
+const FIELD_MAP = deriveFieldMapFromHeaders(HEADERS, 'itp_template');
 
 function grid(sheets: { name: string; rows: string[][]; headers?: string[] }[]): ParsedGrid {
   return {
@@ -204,7 +204,7 @@ describe('[WBR2-10](c) over-length cells are blocked, never truncated', () => {
 
 describe('[WBR2-5](a) state/spec contradiction', () => {
   const specHeaders = [...HEADERS, 'Spec Set'];
-  const specFieldMap = deriveFieldMapFromHeaders(specHeaders);
+  const specFieldMap = deriveFieldMapFromHeaders(specHeaders, 'itp_template');
 
   function specRun(resolutions?: DryRunInput['resolutions']) {
     return computeItpImportDryRun({
@@ -387,7 +387,7 @@ describe('mapping and cap failures', () => {
           },
         ],
       },
-      fieldMap: deriveFieldMapFromHeaders(headers),
+      fieldMap: deriveFieldMapFromHeaders(headers, 'itp_template'),
       projectSpecificationSet: 'TfNSW',
       existingTemplates: [],
     });

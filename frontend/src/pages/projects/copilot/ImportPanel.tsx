@@ -5,10 +5,15 @@ import type { ImportBatchSummary, ImportBatchStatus } from './importData';
 
 interface ImportPanelProps {
   batches: ImportBatchSummary[];
-  onStartImport: () => void;
+  /** Omitted where the panel is shown INSIDE an import flow — there is nothing
+   *  to start from there, only earlier batches to resume or roll back. */
+  onStartImport?: () => void;
   onResume: (batchId: string) => void;
   onRollback: (proposalId: string) => void;
   rollbackBusy: boolean;
+  title?: string;
+  description?: string;
+  ctaLabel?: string;
 }
 
 const STATUS_LABEL: Record<ImportBatchStatus, string> = {
@@ -48,21 +53,23 @@ export function ImportPanel({
   onResume,
   onRollback,
   rollbackBusy,
+  title = 'Bring your ITPs across',
+  description = 'Import an existing ITP spreadsheet. You see every ITP beside its source sheet, and the counts, before anything is written.',
+  ctaLabel = 'Import a spreadsheet',
 }: ImportPanelProps) {
   return (
-    <section aria-label="Migrate existing ITPs" className="mt-6 rounded-lg border bg-card">
+    <section aria-label={title} className="mt-6 rounded-lg border bg-card">
       <div className="flex items-center gap-2 border-b p-4">
         <FileSpreadsheet className="h-4 w-4 text-primary" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold">Bring your ITPs across</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Import an existing ITP spreadsheet. You see every ITP beside its source sheet, and the
-            counts, before anything is written.
-          </p>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
         </div>
-        <Button type="button" size="sm" onClick={onStartImport}>
-          Import a spreadsheet
-        </Button>
+        {onStartImport && (
+          <Button type="button" size="sm" onClick={onStartImport}>
+            {ctaLabel}
+          </Button>
+        )}
       </div>
 
       {batches.length > 0 && (

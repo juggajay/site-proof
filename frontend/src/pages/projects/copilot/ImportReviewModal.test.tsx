@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 
-import { ItpImportReviewModal } from './ItpImportReviewModal';
+import { ImportReviewModal } from './ImportReviewModal';
 import type { DryRunResult, ImportBatchDetail } from './importData';
 
 const state = vi.hoisted(() => ({
@@ -82,16 +82,16 @@ function detailFor(result: DryRunResult): ImportBatchDetail {
   };
 }
 
-function renderModal(): ReactElement {
+function renderModal(kind: 'itp_template' | 'lot_register' = 'itp_template'): ReactElement {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ItpImportReviewModal projectId="p1" batchId="batch-1" onClose={vi.fn()} />
+      <ImportReviewModal projectId="p1" kind={kind} batchId="batch-1" onClose={vi.fn()} />
     </QueryClientProvider>,
   ) as unknown as ReactElement;
 }
 
-describe('ItpImportReviewModal', () => {
+describe('ImportReviewModal', () => {
   beforeEach(() => {
     state.dryRunSpy = vi.fn(async () => ({ dryRun: dryRun() }));
     state.reviewSpy = vi.fn(async () => ({ proposalId: 'prop-1', templateCount: 1 }));
@@ -117,6 +117,59 @@ describe('ItpImportReviewModal', () => {
   it('enables the apply CTA on a clean dry run', () => {
     renderModal();
     expect(screen.getByRole('button', { name: /^Import 1 ITP$/ })).toBeEnabled();
+  });
+
+  // B2: the same surface migrates lot registers. Only the copy differs, and a
+  // lot row carries its resolution controls exactly as a template row does.
+  it('speaks about lots when it is importing a lot register', () => {
+    state.detail = detailFor(
+      dryRun({
+        rows: [
+          {
+            key: 'lot:Lot Register#2',
+            unit: 'lot',
+            rowRef: { sheet: 'Lot Register', rowIndex: 2 },
+            label: 'L-001',
+            outcome: 'create',
+          },
+        ],
+      }),
+    );
+    renderModal('lot_register');
+
+    expect(screen.getByText('Import lots from a register')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Import 1 lot$/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Leave this one out/ })).toBeInTheDocument();
+  });
+
+  it('shows the server wording for a value the project specification rejects', () => {
+    state.detail = detailFor(
+      dryRun({
+        counts: {
+          willCreate: 0,
+          willUpdate: 0,
+          willSkip: 0,
+          needsReview: 0,
+          ambiguous: 0,
+          blocked: 1,
+        },
+        canApply: false,
+        rows: [
+          {
+            key: 'lot:Lot Register#2',
+            unit: 'lot',
+            rowRef: { sheet: 'Lot Register', rowIndex: 2 },
+            label: 'L-001',
+            outcome: 'blocked',
+            reason: 'unsupported_attribute',
+            detail: '"Z" is not a testing scale VicRoads 173 uses. Valid scales: A, B, C.',
+          },
+        ],
+      }),
+    );
+    renderModal('lot_register');
+
+    expect(screen.getByText(/Valid scales: A, B, C/)).toBeInTheDocument();
   });
 
   it('disables apply and names the count while a row is blocked', () => {

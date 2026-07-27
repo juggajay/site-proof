@@ -76,8 +76,8 @@ vi.mock('./PlanSheetRegistrationReviewModal', () => ({
 vi.mock('./LotBreakdownReviewModal', () => ({
   LotBreakdownReviewModal: stageModalStub('lot_breakdown'),
 }));
-vi.mock('./ItpImportReviewModal', () => ({
-  ItpImportReviewModal: (props: Record<string, unknown>) => (
+vi.mock('./ImportReviewModal', () => ({
+  ImportReviewModal: (props: Record<string, unknown>) => (
     <div data-testid="modal-itp-import">{String(props.batchId ?? 'new')}</div>
   ),
 }));
