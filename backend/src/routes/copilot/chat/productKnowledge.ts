@@ -88,6 +88,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       '- Assigned the wrong ITP? It can be unassigned from the lot until work is recorded against it.',
       '- Test results count toward conformance once linked to their ITP checklist item and verified.',
       '- Where a governing specification sets a test frequency, only verified passing tests whose type is recognised for that rule count toward it. Density Ratio, AS 1289.5.4.1, and RC 316.00 all count as compaction; laboratory reference tests such as MDD never count toward the field test number. A "Verified tests not counted" warning means the test type is not recognised, not that the test is unlinked.',
+      '- Send to lab records that a sample went to a laboratory, and the register then shows how long it has been waiting. Setting an expected result date is optional and marks the row overdue once that date passes; CIVOS never assumes a turnaround, so a blank date shows elapsed days only and is never flagged late.',
       '- Verified ITP and test records are protected from unsafe edits.',
       '- Failing an ITP checklist item online requires a photo of the issue first, and still raises an NCR automatically.',
       '- Hold point release and request events are written to the audit log.',

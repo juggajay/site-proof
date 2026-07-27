@@ -67,7 +67,7 @@ vi.mock('./components/CreateTestModal', () => ({
               testRequestNumber: '',
               laboratoryName: '',
               laboratoryReportNumber: '',
-              nataSiteNumber: '',
+              expectedResultDate: '',
               sampleLocation: '',
               sampleDepth: '',
               materialType: '',

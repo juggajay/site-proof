@@ -15,6 +15,8 @@ import {
   isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
+  getLabWait,
+  formatLabWait,
   isAiExtractionReviewDraft,
 } from '../constants';
 import {
@@ -153,6 +155,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                 const test = filteredTestResults[virtualRow.index];
                 if (!test) return null;
                 const overdue = isTestOverdue(test);
+                const labWait = getLabWait(test);
                 const daysSince = getDaysSince(test.sampleDate, test.createdAt);
                 const aiExtractionReviewDraft = isAiExtractionReviewDraft(test);
                 const statusLabel = aiExtractionReviewDraft
@@ -236,6 +239,16 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                       <span className={`px-2 py-1 rounded text-xs font-medium ${statusClass}`}>
                         {statusLabel}
                       </span>
+                      {/* Wave C2 Phase 3: the lab wait. Elapsed is a fact and is
+                          always shown once the sample was sent; "overdue" only
+                          appears where a human supplied an expected date. */}
+                      {labWait && (
+                        <div
+                          className={`text-xs mt-0.5 ${labWait.overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
+                        >
+                          {formatLabWait(labWait)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2 items-center">

@@ -106,6 +106,11 @@ workflowRoutes.post(
         // Clear entered fields so engineer can re-enter
         enteredById: null,
         enteredAt: null,
+        // `sentToLabAt` is deliberately ABSENT [C2R-A3]. This route un-does two
+        // acts — entering and verifying a result. The sample still went to the
+        // laboratory; rejecting the result does not un-send it, and clearing the
+        // stamp would erase a true fact and restart an elapsed clock that never
+        // stopped.
       },
       select: {
         id: true,
@@ -356,6 +361,15 @@ workflowRoutes.post(
     if (status === 'verified') {
       updateData.verifiedById = user.id;
       updateData.verifiedAt = new Date();
+    }
+
+    // Wave C2 Phase 3: stamp when the sample went to the laboratory, so
+    // "what am I waiting on" is a duration rather than a boolean.
+    // Idempotent by the `sentToLabAt == null` guard: VALID_STATUS_TRANSITIONS
+    // already forbids at_lab -> at_lab, but the guard is written rather than
+    // assumed so a future transition-map change cannot restart the clock.
+    if (status === 'at_lab' && testResult.sentToLabAt === null) {
+      updateData.sentToLabAt = new Date();
     }
 
     const updatedTestResult = await prisma.testResult.update({

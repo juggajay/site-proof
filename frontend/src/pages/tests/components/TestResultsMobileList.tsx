@@ -16,6 +16,8 @@ import {
   isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
+  getLabWait,
+  formatLabWait,
   isAiExtractionReviewDraft,
 } from '../constants';
 import {
@@ -161,6 +163,7 @@ function TestResultMobileCard({
   }, [isHighlighted]);
 
   const overdue = isTestOverdue(test);
+  const labWait = getLabWait(test);
   const daysSince = getDaysSince(test.sampleDate, test.createdAt);
   const draft = isAiExtractionReviewDraft(test);
   const statusLabel = draft ? 'Draft review' : testStatusLabels[test.status] || test.status;
@@ -247,6 +250,21 @@ function TestResultMobileCard({
             value: test.laboratoryName || '—',
             priority: 'secondary',
           },
+          // Wave C2 Phase 3: same lab-wait chip the desktop register shows. The
+          // field is omitted entirely when the sample was never sent.
+          ...(labWait
+            ? ([
+                {
+                  label: 'Lab wait',
+                  value: labWait.overdue ? (
+                    <span className="text-destructive font-medium">{formatLabWait(labWait)}</span>
+                  ) : (
+                    formatLabWait(labWait)
+                  ),
+                  priority: 'secondary' as const,
+                },
+              ] as const)
+            : []),
         ]}
         actions={
           <div className="flex w-full flex-col gap-2">

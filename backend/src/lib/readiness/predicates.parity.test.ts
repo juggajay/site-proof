@@ -22,6 +22,11 @@ type TestResult = {
   testType: string;
   passFail: string;
   status: string;
+  // Wave C2 Phase 3 [C2L-B1]: the two lab-lifecycle columns. Present here so the
+  // parity permutations run with them POPULATED — a lifecycle state is not a
+  // count, and neither the gate nor the predicate may start reading them.
+  sentToLabAt?: Date | null;
+  expectedResultDate?: Date | null;
 };
 
 function makeLot(opts: {
@@ -147,6 +152,46 @@ const scenarios: Array<{ name: string; lot: ReturnType<typeof makeLot>; released
           testType: 'compaction',
           passFail: 'pass',
           status: 'verified',
+        },
+      ],
+    }),
+  },
+  {
+    // AT-63: the same conformable lot, with a long-overdue lab wait stamped on
+    // the verified row. `sentToLabAt`/`expectedResultDate` must move nothing.
+    name: 'test required, passing-verified WITH lab lifecycle stamps → conformable',
+    lot: makeLot({
+      checklistItems: [testItem],
+      completions: [{ checklistItemId: 'i2', status: 'completed' }],
+      testResults: [
+        {
+          id: 't1',
+          itpChecklistItemId: 'i2',
+          testType: 'compaction',
+          passFail: 'pass',
+          status: 'verified',
+          sentToLabAt: new Date('2026-01-01T00:00:00.000Z'),
+          expectedResultDate: new Date('2026-01-05T00:00:00.000Z'),
+        },
+      ],
+    }),
+  },
+  {
+    // AT-63: a row still sitting at the lab, overdue against a user-supplied
+    // date, is exactly as pending as it was before the columns existed.
+    name: 'test required, row still at_lab and overdue → not conformable',
+    lot: makeLot({
+      checklistItems: [testItem],
+      completions: [{ checklistItemId: 'i2', status: 'completed' }],
+      testResults: [
+        {
+          id: 't1',
+          itpChecklistItemId: 'i2',
+          testType: 'compaction',
+          passFail: 'pending',
+          status: 'at_lab',
+          sentToLabAt: new Date('2026-01-01T00:00:00.000Z'),
+          expectedResultDate: new Date('2026-01-05T00:00:00.000Z'),
         },
       ],
     }),

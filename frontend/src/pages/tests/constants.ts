@@ -1,5 +1,5 @@
 import type { TestResult } from './types';
-import { getCalendarDaysSince } from '@/lib/localDate';
+import { formatDateInputValue, getCalendarDaysSince } from '@/lib/localDate';
 
 export const TEST_REJECTION_REASON_MAX_LENGTH = 3000;
 
@@ -77,6 +77,41 @@ export const SEND_TO_LAB_LABEL = 'Send to lab';
 
 export const canSendToLab = (test: Pick<TestResult, 'status'>): boolean =>
   test.status === 'requested';
+
+// Wave C2 Phase 3: the lab wait, made visible. Two derived values, computed at
+// read time and stored nowhere.
+//
+//  - elapsed  = now - sentToLabAt. A FACT. Shown whenever the stamp is set.
+//  - overdue  = at_lab AND a user supplied a date AND that date has passed. A
+//               JUDGEMENT, so it is shown only where a human supplied the date.
+//
+// CIVOS NEVER DEFAULTS A TURNAROUND (J5). The only evidence available is two lab
+// marketing pages that caveat themselves; a CIVOS-computed "overdue" built on
+// that would be a compliance-flavoured judgement resting on advertising. Blank
+// expected date => elapsed days only, never late.
+export type LabWait = { elapsedDays: number; overdue: boolean };
+
+export const getLabWait = (
+  test: Pick<TestResult, 'status' | 'sentToLabAt' | 'expectedResultDate'>,
+  now: Date | string = new Date(),
+): LabWait | null => {
+  if (!test.sentToLabAt) return null;
+  const expectedKey = test.expectedResultDate
+    ? formatDateInputValue(test.expectedResultDate)
+    : null;
+  const todayKey = formatDateInputValue(now);
+  return {
+    elapsedDays: getCalendarDaysSince(test.sentToLabAt, now),
+    overdue:
+      test.status === AT_LAB_STATUS &&
+      expectedKey !== null &&
+      todayKey !== null &&
+      expectedKey < todayKey,
+  };
+};
+
+export const formatLabWait = (wait: LabWait): string =>
+  `at lab ${wait.elapsedDays} ${wait.elapsedDays === 1 ? 'day' : 'days'}${wait.overdue ? ' · overdue' : ''}`;
 
 // Ticket T2: client-side mirror of the backend RESULT_REQUIRED gate so the Enter
 // Results form blocks submit (and the toast matches) before the request is sent.
@@ -233,7 +268,7 @@ export const INITIAL_FORM_DATA = {
   testRequestNumber: '',
   laboratoryName: '',
   laboratoryReportNumber: '',
-  nataSiteNumber: '',
+  expectedResultDate: '',
   sampleLocation: '',
   sampleDepth: '',
   materialType: '',
