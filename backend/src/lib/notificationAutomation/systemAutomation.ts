@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
+import { daysOverdue } from '../readiness/predicates.js';
 import { buildProjectEntityLink } from './helpers.js';
 import { resolveClearedSystemAlerts } from './systemAlertResolution.js';
 
@@ -225,13 +226,15 @@ export async function processSystemAlerts(
         continue;
       }
 
-      const daysOverdue = ncr.dueDate
-        ? Math.ceil((now.getTime() - ncr.dueDate.getTime()) / deps.dayMs)
-        : 0;
+      // Same helper the dashboard widget and Needs Attention use, so the alert
+      // body quotes the number every other surface shows for this NCR. It floors
+      // where this used to ceil: severity now crosses >3/>7 a day later, which is
+      // the correction — ceil called a minute-old overdue "1 day overdue" (#1625).
+      const overdueDays = daysOverdue(ncr.dueDate, now);
       const severity: SystemAlertSeverity =
-        daysOverdue > 7 ? 'critical' : daysOverdue > 3 ? 'high' : 'medium';
+        overdueDays > 7 ? 'critical' : overdueDays > 3 ? 'high' : 'medium';
       const title = `NCR ${ncr.ncrNumber} is overdue`;
-      const message = `NCR ${ncr.ncrNumber} is ${daysOverdue} day(s) overdue. ${ncr.description?.substring(0, 100) || 'No description'}`;
+      const message = `NCR ${ncr.ncrNumber} is ${overdueDays} day(s) overdue. ${ncr.description?.substring(0, 100) || 'No description'}`;
       const alertId = await createAlertRecord(deps.prisma, {
         type: 'overdue_ncr',
         severity,
