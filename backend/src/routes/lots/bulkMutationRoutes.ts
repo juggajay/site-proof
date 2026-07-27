@@ -16,7 +16,7 @@ import {
   buildLotsBulkSubcontractorAssignedResponse,
   buildLotsBulkTestAttributesSetResponse,
 } from './bulkMutationResponses.js';
-import { resolveRuleset } from '../../lib/readiness/sufficiency/registry.js';
+import { assertLotSufficiencyAttributes } from '../../lib/readiness/sufficiency/lotAttributeValidation.js';
 import { buildLegacyLotAssignmentMutationResponse } from './remainingResponses.js';
 import {
   parseLotRouteParam,
@@ -37,34 +37,26 @@ import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
 export const lotBulkMutationRouter = Router();
 
 /**
- * Wave C1 (§10.1). A testing scale is checked against the RESOLVED ruleset's
- * `scaleKeys` and rejected at the boundary, NEVER silently coerced. Rejecting
- * the WHOLE batch on any invalid row matches the three bulk routes around this
- * one — a partially-applied bulk edit is worse than a refused one.
+ * Wave C1 (§10.1), D14 §9.2. The pack-scoped attributes are checked against the
+ * RESOLVED ruleset and rejected at the boundary, NEVER silently coerced.
+ *
+ * The comparison itself now lives in `assertLotSufficiencyAttributes` so the
+ * other four write paths get the same control instead of none `[D14R-B5]`. What
+ * stays HERE is the per-batch loop: rejecting the WHOLE batch on any invalid row
+ * matches the three bulk routes around this one — a partially-applied bulk edit
+ * is worse than a refused one — and it is why the lot number is threaded into the
+ * message.
  */
-function assertTestScaleValidForLots(
-  testScale: string | null | undefined,
+function assertTestAttributesValidForLots(
+  values: { testScale?: string | null; materialType?: string | null },
   lots: readonly {
     lotNumber: string;
     project: { state: string; specificationSet: string };
   }[],
 ): void {
-  if (!testScale) return;
+  if (!values.testScale && !values.materialType) return;
   for (const lot of lots) {
-    const ruleset = resolveRuleset({
-      state: lot.project.state,
-      specSet: lot.project.specificationSet,
-    });
-    if (!ruleset) {
-      throw AppError.badRequest(
-        `Lot ${lot.lotNumber} is on a project with no governing test-frequency specification, so a testing scale cannot be set on it.`,
-      );
-    }
-    if (!ruleset.scaleKeys.includes(testScale)) {
-      throw AppError.badRequest(
-        `"${testScale}" is not a testing scale ${ruleset.provenance.document} uses on lot ${lot.lotNumber}. Valid scales: ${ruleset.scaleKeys.join(', ')}.`,
-      );
-    }
+    assertLotSufficiencyAttributes(lot.project, values, lot.lotNumber);
   }
 }
 
@@ -182,7 +174,7 @@ lotBulkMutationRouter.post(
     if (!validation.success) {
       throw AppError.fromZodError(validation.error);
     }
-    const { lotIds, testScale, quantityValue, quantityUnit } = validation.data;
+    const { lotIds, testScale, materialType, quantityValue, quantityUnit } = validation.data;
     const uniqueLotIds = getUniqueLotIds(lotIds);
 
     const lotsToUpdate = await prisma.lot.findMany({
@@ -210,10 +202,11 @@ lotBulkMutationRouter.post(
 
     assertLotsBulkMutable(lotsToUpdate);
 
-    assertTestScaleValidForLots(testScale, lotsToUpdate);
+    assertTestAttributesValidForLots({ testScale, materialType }, lotsToUpdate);
 
     const data: Prisma.LotUpdateManyMutationInput = { updatedAt: new Date() };
     if (testScale !== undefined) data.testScale = testScale;
+    if (materialType !== undefined) data.materialType = materialType;
     if (quantityValue !== undefined) data.quantityValue = quantityValue;
     if (quantityUnit !== undefined) data.quantityUnit = quantityUnit;
 
@@ -237,6 +230,7 @@ lotBulkMutationRouter.post(
         changes: {
           lotNumber: lot.lotNumber,
           ...(testScale !== undefined ? { testScale } : {}),
+          ...(materialType !== undefined ? { materialType } : {}),
           ...(quantityValue !== undefined ? { quantityValue } : {}),
           ...(quantityUnit !== undefined ? { quantityUnit } : {}),
           bulk: true,

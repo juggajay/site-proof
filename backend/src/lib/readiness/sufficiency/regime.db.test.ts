@@ -82,6 +82,11 @@ interface LotSpec {
   failTestType?: string;
   /** F1.2 AT-56b. Link the failing test to an ITP item carrying this type instead. */
   failItemTestType?: string;
+  /**
+   * D14 AT-49a: conformed, but with NO test at all — the state that used to count
+   * as conformance. Only the AT-49a case sets it.
+   */
+  untested?: boolean;
 }
 
 // Conform times are spaced so the total order (conformedAt, createdAt, id) is
@@ -110,6 +115,27 @@ async function seedLot(spec: LotSpec): Promise<{ id: string; conformedAt: Date }
         : {}),
     },
   });
+  // D14 §6.4.1 `[D14X-4]`, AT-49a. EVERY seeded lot is now TESTED, because that
+  // is what a real conformed lot is. Before D14.1 a "conforming" entry carried no
+  // test results at all and `!some(failing)` over an empty list was vacuously
+  // true, so three untested conformed lots earned reduced-frequency eligibility —
+  // the defect this fixture PINNED AS CORRECT. Seeding the pass on the failing
+  // lots too keeps the AT-56b assertions saying what they mean: a NON-attributable
+  // failure does not break a streak, which can only be observed on a lot that was
+  // otherwise properly tested.
+  if (!spec.untested) {
+    await prisma.testResult.create({
+      data: {
+        projectId: spec.inProject ?? projectId,
+        lotId: lot.id,
+        testType: 'compaction',
+        passFail: 'pass',
+        status: 'verified',
+        testDate: conformedAt,
+        enteredById: userId,
+      },
+    });
+  }
   if (!spec.conforming) {
     await prisma.testResult.create({
       data: {
@@ -259,6 +285,19 @@ describe('AT-5 / AT-6 the two-mode query contract against real rows', () => {
           conformedById: userId,
         },
       });
+      // D14 §6.4.1: a conforming entry is a TESTED one. This block builds its
+      // rows inline (it needs one shared `conformedAt`), so it seeds its own pass.
+      await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: lot.id,
+          testType: 'compaction',
+          passFail: 'pass',
+          status: 'verified',
+          testDate: shared,
+          enteredById: userId,
+        },
+      });
       ids.push(lot.id);
     }
     // Four rows, one conformedAt. A plain `lt` on conformedAt would return
@@ -335,6 +374,22 @@ describe('AT-8b the regime never lowers a count without a recorded approval [C1C
     // change ever turns eligibility into a reduction, this assertion fails.
     expect(resolved?.regime).toBe('full');
     expect(ELIGIBILITY_RULE.reduced).toBeUndefined();
+  });
+
+  // D14 §6.4.1 `[D14X-4]`, AT-49a end to end, on the SHIPPED vicroads-204 rule
+  // and real rows: the same three-lot streak that earns eligibility above earns
+  // NOTHING when the lots were never tested. Before D14.1 both cases returned
+  // `eligible: true` and the user was told they could ask for less testing on
+  // the strength of no testing at all.
+  it('AT-49a: three conformed but UNTESTED lots earn no eligibility', async () => {
+    const key = streamKey({ activitySlug: 'earthworks_subgrade' });
+    await seedLot({ conforming: true, untested: true, activitySlug: 'earthworks_subgrade' });
+    await seedLot({ conforming: true, untested: true, activitySlug: 'earthworks_subgrade' });
+    await seedLot({ conforming: true, untested: true, activitySlug: 'earthworks_subgrade' });
+
+    const resolved = await resolve(ELIGIBILITY_RULE, { id: 'x', conformedAt: null }, key);
+    expect(resolved).toMatchObject({ regime: 'full', eligible: false });
+    expect(resolved?.basisLotIds).toEqual([]);
   });
 
   it('only a rule carrying reduced FIGURES ever goes operative', async () => {

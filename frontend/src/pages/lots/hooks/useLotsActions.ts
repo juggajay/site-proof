@@ -244,7 +244,12 @@ export function useLotsActions({
   // Wave C1 (spec §9.1 [C1R-B10]): the bulk path that keeps the frequency engine
   // fed. Without it a PM on a 500-lot project would open 500 forms.
   const handleBulkSetTestAttributes = useCallback(
-    async (values: { testScale?: string; quantityValue?: number; quantityUnit?: string }) => {
+    async (values: {
+      testScale?: string;
+      materialType?: string;
+      quantityValue?: number;
+      quantityUnit?: string;
+    }) => {
       if (selectedLots.size === 0) return;
       try {
         const data = await apiFetch<{ message: string }>('/api/lots/bulk-set-test-attributes', {

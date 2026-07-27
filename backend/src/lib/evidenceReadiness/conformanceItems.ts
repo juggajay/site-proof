@@ -14,7 +14,11 @@
 import type { EvidenceReadinessItem, LotReadinessInput } from './core.js';
 import { item } from './core.js';
 import type { SufficiencyEvaluation } from '../readiness/sufficiency/evaluate.js';
-import type { RuleSufficiency, UnknownCause } from '../readiness/sufficiency/types.js';
+import type {
+  QuantityUnit,
+  RuleSufficiency,
+  UnknownCause,
+} from '../readiness/sufficiency/types.js';
 
 type ConformancePrerequisites = LotReadinessInput['conformStatus']['prerequisites'];
 
@@ -225,14 +229,55 @@ function shortfallSentence(rule: RuleSufficiency): string {
   );
 }
 
-const UNKNOWN_CAUSE_PROMPT: Record<UnknownCause, string> = {
-  no_ruleset_for_project: '',
-  no_rule_for_activity: '',
-  activity_not_canonical: "Classify this lot's activity to check its test frequency.",
-  scale_not_selected: 'Select this lot’s testing scale to check its test frequency.',
-  scale_not_recognised: 'This lot’s testing scale is not one the governing specification uses.',
-  quantity_missing: 'Record this lot’s quantity (or draw its geometry) to check test frequency.',
-};
+export interface UnknownCausePromptContext {
+  /** `Ruleset.scaleLabel`, lower-cased for mid-sentence use. Defaults below. */
+  scaleLabel: string;
+  /**
+   * The unit the unsatisfied rule needed, or null when unknown. D14.1 always
+   * passes null — no shipped pack declares a per-quantity limb, so
+   * `quantity_missing` cannot fire yet — and D14.3's banded Q6 rules supply it.
+   */
+  requiredUnit: QuantityUnit | null;
+}
+
+/**
+ * D14 §4.7 `[D14R-B6]` — a function, not the static `Record` this used to be.
+ *
+ * Two of these strings name a concept the PACK owns. VicRoads regiments by
+ * "Compaction Scale A/B/C"; TfNSW Q6 regiments by specified relative compaction
+ * band. A static string means an NSW lot's panel says *"Select this lot's testing
+ * scale"* beside a form control labelled *"Specified relative compaction"*
+ * offering `>95.0-98.0%` — the exit criterion "readable by a quality manager
+ * without training" fails on the first NSW lot the pack ever touches.
+ *
+ * `no_ruleset_for_project` and `no_rule_for_activity` stay EMPTY: those states are
+ * deliberately silent (§7.1), because most projects resolve no ruleset and a
+ * warning per lot would teach every user to ignore the section.
+ *
+ * `ponytail:` a function of two arguments, not a per-ruleset prompt registry.
+ */
+export function unknownCausePrompt(cause: UnknownCause, ctx: UnknownCausePromptContext): string {
+  switch (cause) {
+    case 'no_ruleset_for_project':
+    case 'no_rule_for_activity':
+      return '';
+    case 'activity_not_canonical':
+      return "Classify this lot's activity to check its test frequency.";
+    case 'scale_not_selected':
+      return `Select this lot’s ${ctx.scaleLabel} to check its test frequency.`;
+    case 'scale_not_recognised':
+      return `This lot’s ${ctx.scaleLabel} is not one the governing specification uses.`;
+    case 'quantity_missing':
+      // Drawing a polygon supplies an AREA and nothing else, so offering it for a
+      // rule counting against tonnes or chainage metres sends the user somewhere
+      // that cannot help (§4.6).
+      return ctx.requiredUnit === null || ctx.requiredUnit === 'm2'
+        ? 'Record this lot’s quantity (or draw its geometry) to check test frequency.'
+        : `Record this lot’s quantity in ${ctx.requiredUnit} to check test frequency.`;
+  }
+}
+
+export const DEFAULT_SCALE_LABEL = 'testing scale';
 
 /**
  * Sufficiency items. Split from {@link buildConformanceBlockerItems} because that
@@ -250,11 +295,16 @@ export function buildSufficiencyAdvisoryItems(
 
   // §7.1 rows 1-2 are SILENT: most projects resolve no ruleset, and a warning per
   // lot in that state would teach every user to ignore the section.
-  const lotCauses = sufficiency.unknownCauses.filter(
-    (cause) => UNKNOWN_CAUSE_PROMPT[cause].length > 0,
-  );
-  const ruleCauses = sufficiency.rules.flatMap((rule) => rule.unknownCauses);
-  const prompts = [...new Set([...lotCauses, ...ruleCauses].map((c) => UNKNOWN_CAUSE_PROMPT[c]))]
+  // D14 §4.7: the pack's own word for what `Lot.testScale` carries.
+  const promptContext: UnknownCausePromptContext = {
+    scaleLabel: sufficiency.ruleset?.scaleLabel?.trim().toLowerCase() || DEFAULT_SCALE_LABEL,
+    requiredUnit: null,
+  };
+  const causes = [
+    ...sufficiency.unknownCauses,
+    ...sufficiency.rules.flatMap((rule) => rule.unknownCauses),
+  ];
+  const prompts = [...new Set(causes.map((cause) => unknownCausePrompt(cause, promptContext)))]
     .filter((prompt) => prompt.length > 0)
     .join(' ');
   if (prompts) {

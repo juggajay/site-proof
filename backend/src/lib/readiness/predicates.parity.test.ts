@@ -245,6 +245,8 @@ function resolved(
       provenance: SUFFICIENCY_RULE.provenance,
     },
     rules,
+    materialType: null,
+    geometryAreaM2: null,
     scale: { value: 'A', source: 'ruleset_default' },
     quantity: { value: null, unit: null, source: 'none' },
     areaZone: null,

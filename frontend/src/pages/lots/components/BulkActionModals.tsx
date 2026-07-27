@@ -272,6 +272,7 @@ interface BulkTestAttributesModalProps {
   onClose: () => void;
   onConfirm: (values: {
     testScale?: string;
+    materialType?: string;
     quantityValue?: number;
     quantityUnit?: string;
   }) => Promise<void>;
@@ -286,6 +287,7 @@ export function BulkTestAttributesModal({
 }: BulkTestAttributesModalProps) {
   const [saving, setSaving] = useState(false);
   const [testScale, setTestScale] = useState('');
+  const [materialType, setMaterialType] = useState('');
   const [quantityValue, setQuantityValue] = useState('');
   const [quantityUnit, setQuantityUnit] = useState('');
 
@@ -296,6 +298,7 @@ export function BulkTestAttributesModal({
   useEffect(() => {
     if (!isOpen) return;
     setTestScale('');
+    setMaterialType('');
     setQuantityValue('');
     setQuantityUnit('');
   }, [isOpen]);
@@ -306,7 +309,8 @@ export function BulkTestAttributesModal({
   // a 400.
   const quantityComplete =
     quantityValue.trim() === '' ? !quantityUnit : Boolean(parsedQuantity && quantityUnit);
-  const canSave = Boolean(testScale || (parsedQuantity && quantityUnit)) && quantityComplete;
+  const canSave =
+    Boolean(testScale || materialType || (parsedQuantity && quantityUnit)) && quantityComplete;
 
   const handleSave = async () => {
     if (saving || !canSave) return;
@@ -314,6 +318,7 @@ export function BulkTestAttributesModal({
     try {
       await onConfirm({
         ...(testScale ? { testScale } : {}),
+        ...(materialType ? { materialType } : {}),
         ...(parsedQuantity && quantityUnit ? { quantityValue: parsedQuantity, quantityUnit } : {}),
       });
     } finally {
@@ -334,7 +339,9 @@ export function BulkTestAttributesModal({
         </p>
         <div className="mt-4 space-y-4">
           <div>
-            <Label htmlFor="bulk-test-scale">Testing Scale</Label>
+            {/* D14 §9.3: the pack's own word. A QM bulk-setting Q6 bands would
+                otherwise see the VicRoads word for a TfNSW concept. */}
+            <Label htmlFor="bulk-test-scale">{ruleset.scaleLabel ?? 'Testing Scale'}</Label>
             <NativeSelect
               id="bulk-test-scale"
               value={testScale}
@@ -349,6 +356,25 @@ export function BulkTestAttributesModal({
               ))}
             </NativeSelect>
           </div>
+          {/* D14 §9.3: rendered only when the authority classifies by material. */}
+          {ruleset.materialTypes && ruleset.materialTypes.length > 0 && (
+            <div>
+              <Label htmlFor="bulk-material-type">Material Type</Label>
+              <NativeSelect
+                id="bulk-material-type"
+                value={materialType}
+                onChange={(e) => setMaterialType(e.target.value)}
+                className="mt-1"
+              >
+                <option value="">Leave unchanged</option>
+                {ruleset.materialTypes.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="bulk-quantity-value">Quantity</Label>

@@ -84,6 +84,21 @@ interface FakeLot extends RegimeStreamEntry {
   layer: string | null;
 }
 
+/**
+ * D14 §6.4.1 `[D14X-4]`. This default was `testResults: []` — an entry that
+ * conformed with NO attributable test at all — and it was used at the threshold
+ * assertions below to prove a streak. That PINNED THE DEFECT AS CORRECT: three
+ * untested lots earned "Eligible to request reduced test frequency", against
+ * `[C1C-6]`'s own first-test-conformance ruling. The fixture is CORRECTED here
+ * rather than supplemented — a conforming entry is one that was tested and
+ * passed.
+ */
+const PASSED: RegimeStreamEntry['testResults'][number] = {
+  testType: 'compaction',
+  passFail: 'pass',
+  status: 'verified',
+};
+
 function lot(index: number, overrides: Partial<FakeLot> = {}): FakeLot {
   const at = new Date(Date.UTC(2026, 0, index + 1));
   return {
@@ -94,7 +109,7 @@ function lot(index: number, overrides: Partial<FakeLot> = {}): FakeLot {
     conformedAt: at,
     createdAt: at,
     conformanceOverriddenAt: null,
-    testResults: [],
+    testResults: [PASSED],
     ...overrides,
   };
 }
@@ -337,8 +352,11 @@ describe('AT-8 regime asymmetries (§3.4.2)', () => {
 
   it('an UNVERIFIED failing test does NOT reset the stream; a VERIFIED one does [C1R-B8]', () => {
     const rule = reducibleRule();
+    // The entry passed a real test AND carries unverified failures beside it —
+    // the asymmetry under test is that the unverified failures do not reset it.
     const unverified: RegimeStreamEntry = lot(1, {
       testResults: [
+        PASSED,
         { testType: 'compaction', passFail: 'fail', status: 'entered' },
         { testType: 'compaction', passFail: 'fail', status: 'rejected' },
       ],
@@ -350,12 +368,13 @@ describe('AT-8 regime asymmetries (§3.4.2)', () => {
   it('only failures ATTRIBUTABLE to the rule reset it — via own type or linked item', () => {
     const rule = reducibleRule();
     const otherTestType = lot(1, {
-      testResults: [{ testType: 'cbr', passFail: 'fail', status: 'verified' }],
+      testResults: [PASSED, { testType: 'cbr', passFail: 'fail', status: 'verified' }],
     });
     expect(conforming(otherTestType, rule.testType)).toBe(true);
 
     const linkedItem = lot(1, {
       testResults: [
+        PASSED,
         {
           testType: 'unlabelled',
           passFail: 'fail',
@@ -378,6 +397,52 @@ describe('AT-8 regime asymmetries (§3.4.2)', () => {
     expect(() => deriveRegime(bad, KEY, [lot(0), lot(1), lot(2)])).toThrow(
       /Unsupported sufficiency escalationShape/,
     );
+  });
+});
+
+// D14 §6.4.1 `[D14X-4]`, AT-49a. The regime is the ONE place C1 lets evidence
+// reduce a future requirement, and until D14.1 an entry conformed as long as
+// nothing attributable had FAILED — vacuously true for a lot with no tests at
+// all. Three untested conformed lots earned "Eligible to request reduced test
+// frequency". The failure direction is UNDER-TESTING.
+describe('AT-49a zero tests is not conformance (§6.4.1)', () => {
+  const rule = reducibleRule();
+  const untested = (index: number) => lot(index, { testResults: [] });
+
+  it('three conformed lots with NO attributable test earn nothing', async () => {
+    const resolvedRegime = await regimeForNewLot([untested(0), untested(1), untested(2)], rule);
+    expect(resolvedRegime?.regime).toBe('full');
+    expect(resolvedRegime?.eligible).toBe(false);
+    expect(resolvedRegime?.basisLotIds).toEqual([]);
+  });
+
+  it('three lots each with one attributable VERIFIED PASSING result do earn it', async () => {
+    const resolvedRegime = await regimeForNewLot([lot(0), lot(1), lot(2)], rule);
+    expect(resolvedRegime?.eligible).toBe(true);
+  });
+
+  it('an UNVERIFIED pass is not evidence — verification is the terminal state', () => {
+    const entry = lot(1, {
+      testResults: [{ testType: 'compaction', passFail: 'pass', status: 'entered' }],
+    });
+    expect(conforming(entry, rule.testType)).toBe(false);
+  });
+
+  it('a passing result attributing to a DIFFERENT rule does not conform this one', () => {
+    const entry = lot(1, {
+      testResults: [{ testType: 'cbr', passFail: 'pass', status: 'verified' }],
+    });
+    expect(conforming(entry, rule.testType)).toBe(false);
+  });
+
+  it('failed first, passed on retest: NOT conformance on first testing', () => {
+    const entry = lot(1, {
+      testResults: [
+        { testType: 'compaction', passFail: 'fail', status: 'verified' },
+        { testType: 'compaction', passFail: 'pass', status: 'verified' },
+      ],
+    });
+    expect(conforming(entry, rule.testType)).toBe(false);
   });
 });
 

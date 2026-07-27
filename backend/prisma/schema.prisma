@@ -573,6 +573,15 @@ model Lot {
   // against the resolved ruleset's `scaleKeys`; NULL falls back to
   // `ruleset.defaultScale` when the ruleset declares one (§16 D6), else unknown.
   testScale               String?   @map("test_scale")
+  // D14 §3.1: the authority's material classification for this lot — VicRoads
+  // Type A / Type B / Type C, and whatever a future authority calls its classes.
+  // FREE TEXT like `layer` and `areaZone`, NOT an enum: 'Type A' is VicRoads
+  // vocabulary and a TfNSW or TMR pack would classify differently. The PACK
+  // declares which strings it recognises (`Ruleset.materialTypes`) and the route
+  // validates against them, so the column generalises while the values stay
+  // authority-scoped. NULL = not recorded, and a material-scoped cap then simply
+  // does not match (§3.4).
+  materialType            String?   @map("material_type")
   status                  String    @default("not_started")
   itpTemplateId           String?   @map("itp_template_id")
   assignedSubcontractorId String?   @map("assigned_subcontractor_id")

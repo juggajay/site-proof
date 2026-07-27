@@ -373,7 +373,12 @@ function buildOutstandingTestItems(
 // back with the first pack that declares either limb — `resolveSufficiency`
 // already accepts the geometries and falls back to `quantity.source: 'none'`
 // without them.
-const CONFORMANCE_LOT_SELECT = {
+/**
+ * Exported alongside {@link resolveSufficiencyForLot} so D14 AT-50 can fetch a
+ * real row with the REAL select and run it through the REAL mapper. Asserting
+ * through a stub select would pass with §8.1 edit 1 or edit 3 missing.
+ */
+export const CONFORMANCE_LOT_SELECT = {
   id: true,
   lotNumber: true,
   status: true,
@@ -382,6 +387,8 @@ const CONFORMANCE_LOT_SELECT = {
   activitySlug: true,
   layer: true,
   areaZone: true,
+  // D14 §8.1 edit 1. Miss this and Prisma never fetches the column.
+  materialType: true,
   testScale: true,
   quantityValue: true,
   quantityUnit: true,
@@ -445,6 +452,8 @@ interface LotForConformance {
   activitySlug?: string | null;
   layer?: string | null;
   areaZone?: string | null;
+  /** D14 §8.1 edit 2 — without it the mapper below is a type error. */
+  materialType?: string | null;
   testScale?: string | null;
   quantityValue?: { toString(): string } | null;
   quantityUnit?: string | null;
@@ -737,6 +746,12 @@ function sufficiencyInput(
     activitySlug: lot.activitySlug ?? null,
     layer: lot.layer ?? null,
     areaZone: lot.areaZone ?? null,
+    // D14 §8.1 edit 3 — THE SILENT ONE. `sufficiencyInput()` is the only place
+    // lot columns become a `SufficiencyLotInput`, and it is invisible from the
+    // field's own name. Miss it and `materialType` is persisted, returned by the
+    // API and visible in the form while being NEVER SEEN BY THE EVALUATOR: the
+    // Type-A cap never fires, and every test that stubs the resolver still passes.
+    materialType: lot.materialType ?? null,
     testScale: lot.testScale ?? null,
     quantityValue: lot.quantityValue ?? null,
     quantityUnit: lot.quantityUnit ?? null,
@@ -746,7 +761,14 @@ function sufficiencyInput(
   };
 }
 
-async function resolveSufficiencyForLot(
+/**
+ * Exported so D14 AT-50 can pin the `sufficiencyInput()` mapper against a REAL
+ * lot row rather than a stub. That mapper is the only place lot columns become a
+ * `SufficiencyLotInput`, and a missing field there is invisible from the field's
+ * own name: the value is persisted, returned by the API and visible in the form
+ * while never reaching the evaluator (§8.1 edit 3).
+ */
+export async function resolveSufficiencyForLot(
   lot: LotForConformance,
   options: ConformanceSufficiencyOptions | undefined,
 ): Promise<ResolvedSufficiency | null> {

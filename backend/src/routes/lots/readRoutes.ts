@@ -271,9 +271,13 @@ lotReadRouter.get(
         offsetCustom: true,
         layer: true,
         areaZone: true,
-        // Wave C1 test attributes. The edit form manages all three and PATCHes
+        // Wave C1 test attributes. The edit form manages all FOUR and PATCHes
         // them on every save, so omitting them here NULLs them (D14 review B1).
+        // `materialType` joins them in the SAME PR that adds it to the edit
+        // payload — PR #1590 fixed this pairing for the first three; do not break
+        // it again on the fourth.
         testScale: true,
+        materialType: true,
         quantityValue: true,
         quantityUnit: true,
         projectId: true,
