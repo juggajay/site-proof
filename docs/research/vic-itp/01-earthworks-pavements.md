@@ -8,6 +8,62 @@
 
 ---
 
+## CORRECTION NOTE — 2026-07-27 (Section 204 claims only)
+
+A primary-source confirmation pass read the **current published** DTP document —
+**Section 204 – Earthworks, v8.0, November 2025**,
+<https://content.vic.gov.au/Section-204-Earthworks-v8.docx>, located via DTP's own
+Engineering Standards Catalogue (March 2026) — plus **RC 500.05 v10 (June 2017)** in
+full. Report:
+`docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md`.
+Three Section 204 claims in this file were wrong and are corrected inline above.
+**Only Section 204 content was checked; every other section of this file is
+untouched and still carries its original 2026-02-10 confidence.**
+
+**1. "Max 500 m2 under paved areas" — DELETED. It is not a VicRoads requirement.**
+Clause 204.13(a) of v8.0 reads, in full: *"A test lot shall be as defined in Section
+173. The lot size for Type A, Type B and Type C material shall be as specified in
+Table 204.142."* There is **no paved-area qualifier anywhere in the document**. The
+500 m2 figure comes from the **Wyndham City Council republication** of Section 204
+(Wyndham Specification MAR 2024), whose amended clause reads *"…a maximum of 500m2
+under paved areas or as specified in Table 204.142 in all other areas."* That is a
+**council amendment layered over the VicRoads text**, and this file's own source list
+names Wyndham as an input — that is how it got in. Do not cite it as VicRoads.
+Table 204.142's actual lot-size limits: **Type A** one day's production or **5,000 m2**
+(lesser); **Type B** one day's production or **10,000 m2** (lesser), except Type B
+placed >400 mm below top of Type B = **one day's production only**; **Type C** one
+day's production only (**no area cap**).
+
+**2. The 6 / 3 test counts come from clause 204.13(a)** — not Table 204.142 and not
+RC 500.05. Verbatim: *"For work to be tested for compliance with Scale A or Scale B
+compaction requirements, the number of tests per lot shall be six, unless the lot is
+to be treated as a small lot in accordance with Section 173. For work to be tested for
+compliance with Scale C compaction requirements, the number of tests per lot shall be
+three."* Note it is **six for Scale A *or* Scale B** (this file previously implied six
+was Scale A only), and note the **Section 173 small-lot exception**. RC 500.05 v10 was
+read cover to cover and **defines no per-scale test counts at all** — it covers lot
+bounds, test-site selection, test depth, density measurement and characteristic-value
+calculation.
+
+**3. Table 204.131 is keyed by MATERIAL TYPE x COMPACTION SCALE, not by depth zone.**
+This file's ">= 95.0% lower zone / >= 98.0% upper zone / >= 100.0% subgrade" framing
+(items 18-20) is not what the table says. The actual table, transcribed from v8.0:
+
+| Material type and location | Scale A (min. characteristic DR %) | Scale B (min. characteristic DR %) | Scale C (min. **mean** DR %) |
+|---|---|---|---|
+| All Type A Material | 99.0 | 98.0 | 100.0 |
+| Type B (within 400 mm of top / ripped & re-compacted below Cut Floor Level / >400 mm below top / top 150 mm of fill areas) | 97.0 | 95.0 | 95.0 |
+| Type C Material | 95.0 | 93.0 | 92.0 |
+
+Two things beyond the numbers: **Scale C is assessed on the MEAN density ratio, while
+Scale A and Scale B are assessed on the characteristic value** — a different acceptance
+statistic, not just a different threshold. And **caveat from the confirmation pass**:
+Table 204.131's Type B block has merged/blank cells in the .docx, so the row-to-value
+mapping for the Type B sub-rows was reconstructed from cell order and is the one item
+worth a human eye on the rendered document before it is seeded into a template.
+
+---
+
 ## Important Notes on VicRoads Specification Numbering
 
 VicRoads uses a dual numbering system for specifications:
@@ -32,7 +88,7 @@ Hold points are identified in VicRoads specifications by the letters **HP** in t
 Template Name: Earthworks
 Activity Type: earthworks
 Specification Reference: VicRoads Section 204 (Earthworks), Section 173 (Clearing and Grubbing)
-Edition/Revision Date: December 2015 (Section 204, Version 7) [VERIFY current edition]
+Edition/Revision Date: Section 204 v8.0, November 2025 [confirmed 2026-07-27 - see correction note above. The former "December 2015, Version 7" was never a real edition pairing: the document's own history table puts v7.0 at February 2023 and December 2015 at v6.0.]
 ```
 
 ### Pre-Work Submissions
@@ -41,7 +97,7 @@ Edition/Revision Date: December 2015 (Section 204, Version 7) [VERIFY current ed
 |--------|-------------|-------------------|------------|-------------------|-------------------|-----------|-------|
 | 1 | Submit Earthworks Quality Plan including compaction procedures, equipment, testing regime, and material source details | Plan reviewed and accepted by Superintendent; compliant with Clause 204.02 requirements | hold_point | contractor | document | null | Section 204.02. HP - Work shall not commence until Quality Plan is accepted. |
 | 2 | Submit fill material source details including laboratory test results for classification as Type A, Type B, or Type C | Material classification confirmed; test results demonstrate compliance with Table 204.051 requirements | hold_point | contractor | document | AS 1289.3.1.1 (LL), AS 1289.3.3.1 (PL), AS 1289.3.6.1 (PI) | Section 204.05. HP - Material source must be approved before use. |
-| 3 | Submit compaction testing regime and lot layout plan | Lot sizes comply with Table 204.142; max 500 m2 under paved areas; testing scale and frequency defined per RC 500.05 | standard | contractor | document | null | Section 204.14, RC 500.05. Lot size max 500 m2 under paved areas or per Table 204.142. |
+| 3 | Submit compaction testing regime and lot layout plan | Lot sizes comply with Table 204.142 (Type A: one day's production or 5,000 m2, whichever is lesser; Type B: one day's production or 10,000 m2; Type C: one day's production); testing scale and frequency defined per RC 500.05 | standard | contractor | document | null | Section 204.13(a), Table 204.142, RC 500.05. **Corrected 2026-07-27** — the previous "max 500 m2 under paved areas" is a **Wyndham City Council amendment**, not a VicRoads/DTP requirement (see the correction note at the top of this file). |
 | 4 | Submit proof rolling procedure including equipment details (roller type, mass, speed, number of passes) | Procedure compliant with Clause 204.12 and Section 173 requirements; nominated roller meets mass requirements | hold_point | contractor | document | null | Section 204.12. HP - Proof rolling procedure must be approved before commencement. |
 | 5 | Confirm survey control points and design levels are established | Survey control verified; bench marks and reference points established and documented | standard | contractor | document | null | Section 204.03. |
 
@@ -71,11 +127,11 @@ Edition/Revision Date: December 2015 (Section 204, Version 7) [VERIFY current ed
 | 15 | Verify fill material classification and compliance before placement | Material classified as Type A, B, or C per Table 204.051; laboratory test results current and compliant | standard | contractor | test_result | AS 1289.3.6.1 (PI), AS 1289.6.1.1 (CBR) | Section 204.05, Table 204.051. |
 | 16 | Place fill in layers not exceeding specified loose thickness | Loose layer thickness does not exceed 300 mm for material compacted by heavy rollers; 150 mm for hand-guided compactors [VERIFY exact values per project] | standard | contractor | inspection | null | Section 204.07. Layer thickness depends on compaction equipment. |
 | 17 | Conduct moisture conditioning of fill material before compaction | Material moisture content within specified range; typically 85-115% of optimum moisture content [VERIFY per Table 204.131] | standard | contractor | test_result | AS 1289.2.1.1 | Section 204.08, Table 204.131. |
-| 18 | Compact fill layers - Lower Zone (>500 mm below subgrade) | Characteristic density ratio >= 95.0% Standard Dry Density Ratio (SDDR) per RC 500.05 assessment; 6 tests per lot (Scale A) or 3 tests per lot (Scale C) | standard | contractor | test_result | AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00 | Section 204.13, Table 204.131, RC 500.05. Characteristic value = mean - 0.92 x SD (6 tests). |
-| 19 | Compact fill layers - Upper Zone (within 500 mm of subgrade) | Characteristic density ratio >= 98.0% SDDR per RC 500.05 assessment | standard | contractor | test_result | AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00 | Section 204.13, Table 204.131, RC 500.05. Higher compaction standard for upper zone. |
-| 20 | Compact fill layers - Subgrade (top 150 mm of formation) | Characteristic density ratio >= 100.0% SDDR per RC 500.05 assessment | witness | contractor | test_result | AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00 | Section 204.13, Table 204.131, RC 500.05. W - Notify Superintendent before testing. |
+| 18 | Compact fill layers - Lower Zone (>500 mm below subgrade) | **[VALUE WRONG - see correction note]** Density ratio per Table 204.131 for the **material type and compaction scale** (Type A / Type B / Type C x Scale A / B / C), not per depth zone; 6 tests per lot (Scale A **or Scale B**) or 3 tests per lot (Scale C) | standard | contractor | test_result | AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00 | **Clause 204.13(a)** for the counts; Table 204.131 for the density ratio; RC 500.05 for the assessment. Characteristic value = mean - 0.92 x SD (6 tests) for Scale A/B; **Scale C is assessed on the MEAN, not the characteristic value**. **Corrected 2026-07-27** - the previous ">= 95.0% SDDR for the lower zone" is not what Table 204.131 says. |
+| 19 | Compact fill layers - Upper Zone (within 500 mm of subgrade) | **[VALUE WRONG - see correction note]** Density ratio per Table 204.131 for the material type and compaction scale; Table 204.131 is not keyed by depth zone | standard | contractor | test_result | AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00 | Section 204.13, Table 204.131, RC 500.05. **Corrected 2026-07-27** - the previous ">= 98.0% SDDR for the upper zone" is not what Table 204.131 says. |
+| 20 | Compact fill layers - Subgrade (top 150 mm of formation) | **[VALUE WRONG - see correction note]** Density ratio per Table 204.131 for the material type and compaction scale (the "top 150 mm of fill areas" case sits in the Type B block) | witness | contractor | test_result | AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00 | Section 204.13, Table 204.131, RC 500.05. W - Notify Superintendent before testing. **Corrected 2026-07-27** - the previous ">= 100.0% SDDR for the subgrade zone" is not what Table 204.131 says. |
 | 21 | Verify no oversize material in fill layers | Maximum particle size not exceeding 2/3 of compacted layer thickness; no rocks >75 mm within 150 mm of subgrade level | standard | contractor | inspection | null | Section 204.07. |
-| 22 | Test each compaction lot for density compliance | Lot area not exceeding 500 m2 under paved areas (Table 204.142); minimum 6 test locations per lot for Scale A; 3 for Scale C | standard | contractor | test_result | AS 1289.5.4.1, RC 316.00, RC 316.10 | Section 204.14, Table 204.142, RC 500.05. RC 316.10 for test site selection. |
+| 22 | Test each compaction lot for density compliance | Lot area within the Table 204.142 limit for the material type (Type A: 5,000 m2 or one day's production, whichever is lesser); minimum 6 test locations per lot for Scale A **or Scale B**, 3 for Scale C, unless the lot is treated as a small lot under Section 173 | standard | contractor | test_result | AS 1289.5.4.1, RC 316.00, RC 316.10 | **Clause 204.13(a)** for the test counts (NOT Table 204.142, NOT RC 500.05); Table 204.142 for lot size; RC 316.10 for test site selection. **Corrected 2026-07-27** — see the correction note at the top of this file. |
 | 23 | Record and assess compaction lot results using characteristic value method | Characteristic value (mean - 0.92S for 6 tests) meets or exceeds specified minimum density ratio; no individual result more than 3% below specified minimum | standard | contractor | test_result | RC 316.00 | Section 204.14, RC 500.05. Statistical acceptance per RC 500.05. |
 
 ### Subgrade Treatment
@@ -579,13 +635,34 @@ Edition/Revision Date: April 2021 [VERIFY current edition]
 - Work **may proceed** if the Superintendent does not attend after the notification period, provided the Contractor maintains adequate records.
 - Witness Point attendance records must be maintained.
 
-### Compaction Acceptance per RC 500.05
-- **Scale A:** 6 tests per lot; characteristic value = mean - 0.92 x standard deviation
-- **Scale B:** [VERIFY - typically reduced testing with history]
-- **Scale C:** 3 tests per lot; used for smaller areas or simpler works
-- **Small lots (< 500 m2):** 3 test sites; mean + 2% criteria per Section 173.04(d)
-- **Maximum lot area:** 4000 m2 [VERIFY]
-- No individual test result shall be more than 3% below the specified minimum density ratio [VERIFY]
+### Compaction Acceptance (test counts per Section 204 cl. 204.13(a); assessment per RC 500.05)
+
+**Corrected 2026-07-27** - the test counts below are **clause 204.13(a)** of Section 204,
+not RC 500.05. RC 500.05 v10 (June 2017) was read in full and defines **no per-scale
+test counts**; it covers lot bounds, test-site selection, test depth, density
+measurement and characteristic-value calculation.
+
+- **Scale A and Scale B:** **6** tests per lot (cl. 204.13(a)) - six applies to *both*
+  scales, unless the lot is treated as a small lot under Section 173; characteristic
+  value = mean - 0.92 x standard deviation
+- **Scale C:** **3** tests per lot (cl. 204.13(a)); assessed on the **mean** density
+  ratio, not the characteristic value (Table 204.131)
+- **Small lots:** per **Section 173** - Section 173 was not obtained in the 2026-07-27
+  pass, so the "< 500 m2 / 3 test sites / mean + 2% per Section 173.04(d)" detail
+  remains **[VERIFY against Section 173]** and must not be cited as Section 204
+- **Maximum lot area:** per **Table 204.142**, and it is **material-type-scoped**:
+  Type A 5,000 m2 or one day's production (lesser); Type B 10,000 m2 or one day's
+  production (lesser), except Type B >400 mm below top = one day's production only;
+  Type C one day's production only, **no area cap**. The former "4000 m2" figure was
+  unsourced and is withdrawn.
+- **Reduced testing frequency** (Table 204.142, third column): every 2nd lot (Type A,
+  Type B ripped/re-compacted, Type B within 400 mm of top), every 3rd lot (Type B
+  >400 mm below top), every 6th lot (Type C) - and per cl. 204.14(c) it is available
+  only after **three consecutive lots conform in the FIRST test** *and* the
+  **Superintendent agrees**, with Section 173 small areas excluded from that streak.
+  Three conforming lots is a precondition to **ask**, not an entitlement.
+- No individual test result shall be more than 3% below the specified minimum density
+  ratio [VERIFY - not re-checked in the 2026-07-27 pass]
 
 ### Key VicRoads RC 500 Series Codes of Practice Referenced
 | Code | Title |
@@ -640,7 +717,7 @@ Edition/Revision Date: April 2021 [VERIFY current edition]
 
 The following items require verification against the current VicRoads specification documents. These are based on industry standard knowledge and cross-references from council specifications that adopt VicRoads standards, but exact values should be confirmed:
 
-1. **Section 204 Table 204.131** - Exact density ratio requirements per zone (95%, 98%, 100% values are based on standard VicRoads practice but require confirmation against current table)
+1. ~~**Section 204 Table 204.131** - Exact density ratio requirements per zone (95%, 98%, 100% values are based on standard VicRoads practice but require confirmation against current table)~~ **RESOLVED 2026-07-27: the values were WRONG and the framing was wrong.** Table 204.131 is keyed by material type x compaction scale, not by depth zone. Corrected table in the correction note at the top of this file.
 2. **Section 204** - Loose layer thickness limits (300 mm heavy rollers, 150 mm hand-guided)
 3. **Section 204** - Surface level tolerance (+10/-20 mm)
 4. **Section 304** - Surface level tolerances (+/-5 mm major roads, +/-15 mm minor roads - confirmed in search results)
@@ -654,14 +731,27 @@ The following items require verification against the current VicRoads specificat
 12. **Section 407** - Surface level tolerance (10 mm confirmed in search)
 13. **Section 407** - Layer thickness tolerance (-5 mm for wearing course)
 14. **Section 407** - Exact lot size definitions for production and placement testing
-15. **RC 500.05** - Scale B testing requirements (reduced testing regime)
-16. **RC 500.05** - Maximum lot area (4000 m2)
+15. ~~**RC 500.05** - Scale B testing requirements (reduced testing regime)~~ **RESOLVED 2026-07-27:** Scale B takes **6** tests per lot, same as Scale A (cl. 204.13(a)); the reduced regime is Table 204.142's third column plus cl. 204.14(c)'s conditions - see the correction note at the top of this file. RC 500.05 defines neither.
+16. ~~**RC 500.05** - Maximum lot area (4000 m2)~~ **RESOLVED 2026-07-27: WRONG on both counts** - the caps are in **Table 204.142** (not RC 500.05) and are material-type-scoped (Type A 5,000 m2; Type B 10,000 m2; Type C none). The 4000 m2 figure is withdrawn.
 17. **Section numbering** - Confirm whether Section 401/402/404 are alternative numbering used in some contracts vs. the current 304/306/307 numbering
 
 ## Source Documents for Verification
 
-These documents should be obtained from VicRoads/DTP for final verification:
-- [VicRoads Section 204 Earthworks](https://webapps.vicroads.vic.gov.au/VRNE/csdspeci.nsf/webscdocs/9C4882FDC5886201CA257BF900198C3E)
+These documents should be obtained from VicRoads/DTP for final verification.
+
+> **Dead-link warning, 2026-07-27.** Every `webapps.vicroads.vic.gov.au` link below is
+> **dead — that host no longer resolves in DNS**, and the
+> `www.vicroads.vic.gov.au/~/media/files/technical-documents-new/...` paths now **404**.
+> The current route is DTP's **Engineering Standards Catalogue**
+> (<https://www.vic.gov.au/search-dtp-technical-publications>), which points at
+> `content.vic.gov.au` documents. Confirmed current: **Section 204 – Earthworks v8.0
+> (November 2025)** at <https://content.vic.gov.au/Section-204-Earthworks-v8.docx>, and
+> **RC 500.05 v10 (1 June 2017)** at
+> <https://content.vic.gov.au/sites/default/files/2024-05/Code-of-Practice-RC-500.05-Acceptance-of-Field-Compaction.pdf>.
+> The Wyndham link is a **council republication** with council amendments layered over
+> the VicRoads text — use it to locate the primary, never to source a number.
+
+- [VicRoads Section 204 Earthworks](https://webapps.vicroads.vic.gov.au/VRNE/csdspeci.nsf/webscdocs/9C4882FDC5886201CA257BF900198C3E) — **dead host; use <https://content.vic.gov.au/Section-204-Earthworks-v8.docx>**
 - [VicRoads Section 304 Unbound Flexible Pavement](https://webapps.vicroads.vic.gov.au/VRNE/csdspeci.nsf/webscdocs/EDBF6F4958F3BD76CA257BC6000A8304)
 - [VicRoads Section 306 Cementitious Treated Subbase](https://webapps.vicroads.vic.gov.au/VRNE/csdspeci.nsf/webscdocs/E46F71E9CABD6187CA257877001E67FF)
 - [VicRoads Section 307 In-Situ Stabilisation](https://webapps.vicroads.vic.gov.au/VRNE/csdspeci.nsf/webscdocs/B0C6F29DAE8F54BDCA25751B0016070B)

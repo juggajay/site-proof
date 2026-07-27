@@ -1,6 +1,6 @@
 # Wave C1 Execution Specification — Test Sufficiency Rules Engine + Gates
 
-**Date:** 26 July 2026 · **Rev 1:** authored 26 Jul (`da847c55`) · **Rev 2:** 26 Jul, incorporating the Opus 5 adversarial review of Rev 1 (verdict **6/10**; 12 blockers `[C1R-B1]`…`[C1R-B12]`, 15 recommendations `[C1R-1]`…`[C1R-15]`, 12 cleared items, D1–D10 verdicts) · **Status:** implementation-ready pending no further review objections and the Jay decisions in §16.0.
+**Date:** 26 July 2026 · **Rev 1:** authored 26 Jul (`da847c55`) · **Rev 2:** 26 Jul, incorporating the Opus 5 adversarial review of Rev 1 (verdict **6/10**; 12 blockers `[C1R-B1]`…`[C1R-B12]`, 15 recommendations `[C1R-1]`…`[C1R-15]`, 12 cleared items, D1–D10 verdicts) · **Rev 2.1:** 27 Jul, folding the two **primary-source pack confirmation passes** (§0.1, amendments `[C1C-1]`…`[C1C-8]`) · **Status:** implementation-ready pending no further review objections and the Jay decisions in §16.0.
 **Program contract:** `C:\Users\jayso\Documents\CIVOS-Validated-Buildout-Plan-2026-07-24.md` §3 Wave C (line 75), governed by §9 (delivery control), §6 (completion standards), §7 (security), §8 (scale targets).
 **Research register:** `C:\Users\jayso\Documents\CIVOS-Research-Appendix-2026-07-24.md` §A. Claims are cited **by claim text, not row ordinal** in this revision `[C1R-6]`.
 **Foundation:** `docs/plans/f0-execution-spec-2026-07-24.md` (Rev 3.1). F0 is complete and live on prod. C1 extends it; no parallel engine.
@@ -44,6 +44,39 @@
 
 Cleared items `[C1R-C1]`…`[C1R-C12]` are not re-argued; two carry positive obligations and are promoted: `[C1R-C5]` into §5.1.1, `[C1R-C11]` into §17.1.
 
+### 0.1 Rev 2.1 changelog — the two primary-source confirmation passes
+
+**D13 was resolved by Jay on 2026-07-27 as "research agents confirm."** Two agents
+ran the §8.3 step-1 confirmation pass against the **current published primary
+documents** — not council republications, not secondary pages — and both returned
+**grade A (primary)** evidence for the facts they checked. Their reports are in
+the repo and are the authority for every amendment below:
+
+| Pass                          | Report                                                                | Verdict                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `vicroads-204.v1`             | `docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md`        | **CONFIRM WITH CORRECTIONS** — the 6/6/3 counts verified verbatim; provenance replaced wholesale; one limb must be **deleted as fabricated authority** |
+| `tfnsw-r44.v1`                | `docs/research/c1-pack-confirmation-tfnsw-r44-2026-07-27.md`           | **KEEP DRAFT and re-author** — the pack is **misattributed**; the numbers belong to **TfNSW Q6**, not R44                                             |
+
+| Tag        | Amendment                                                                                                                                                                | Landed in                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `[C1C-1]`  | VicRoads provenance corrected to **Section 204 v8.0, November 2025**; new `sourceUrl`; `evidenceGrade: 'A'` now genuinely **earned**; `checkedOn` / `revalidateBy` set. The **6/6/3 counts are CONFIRMED**, citing **clause 204.13(a)** — not Table 204.142, not RC 500.05. Section 173 small-lot exception recorded. | §3.2, §4.4, §8.1, §8.2, §8.3, §11 C1.0/C1.1, §15.1, §17.1                       |
+| `[C1C-2]`  | **The 500 m² "under paved areas" `maxLotSize` limb is DELETED everywhere.** It is a **Wyndham City Council amendment**, not a VicRoads/DTP requirement — shipping it would put a **fabricated authority requirement** in front of users and into immutable decision snapshots. | §3.2, §3.3, §8.2, §17.1                                                         |
+| `[C1C-3]`  | The 5,000 m² `maxLotSize` is **Type A material only** (Type B is 10,000 m² or a day's production; Type C has **no area cap**). The rule vocabulary has **no material-type discriminator**, so the cap is **not encoded** until one exists. | §3.2, §3.3, §8.2                                                                |
+| `[C1C-4]`  | §4.4's specimen sentence mis-cited **Table 204.142** for a test count. Corrected to **clause 204.13(a)**, with the confirmed edition.                                       | §4.4                                                                            |
+| `[C1C-5]`  | §8.2's justification for omitting `reduced` was **factually wrong**: the source **does** publish reduced figures (Table 204.142, third column). They are a **lot-sampling interval**, inexpressible in `minCountByScale`/`perQuantity`. Omitting `reduced` stays correct; a future agent is warned **not** to encode `{A:2,B:2,C:6}` as counts. | §3.2, §8.2                                                                      |
+| `[C1C-6]`  | §3.4 regime semantics corrected against clause 204.14(c): conformance must be **in the first test**, reduction requires the **Superintendent's agreement plus an established compaction procedure** (three conforming lots is a precondition to **ask**, not an entitlement; re-entry after a failure needs a **fresh** approval), and **Section 173 small areas are excluded from the streak**. The computed regime is presented as **"eligible to request reduced frequency"** advisory — never an automatic reduction of `requiredCount`. | §3.4.1, §3.4.2, §4.2, §8.2, §14 AT-8b                                           |
+| `[C1C-7]`  | **`tfnsw-r44.v1` as specified is MISATTRIBUTED.** R44 Ed 6 publishes **no** test frequencies (its annexure's "Minimum Frequency" cell is the literal character `Q`). The `n = 6` figure is **one cell** of **Q6 Ed 2/Rev 0 Table Q6/L.1**, a two-dimensional table (compaction band × lot area band) with floors 1–10 and per-area rates. **KEEP DRAFT**, do not confirm as authored; re-author as a **Q6** pack pairing **R44 Table R44.7** acceptance thresholds with **Q6** frequencies. §3.2.1's claim that "no cited authority supplies a per-area frequency figure" is **false for Q6** and is corrected. The honest blocker: lots have **no specified-relative-compaction field** — a new lot attribute is a **named scope item**. Table Q6/L.1 transcribed in §8.2.1. | §1, §3.2.1, §7.2, §8.1, §8.2, §8.2.1, §11 C1.1, §15.1, §16 D8, §16 D14, §17.1   |
+| `[C1C-8]`  | This changelog: D13 resolved by Jay 2026-07-27 as "research agents confirm"; both passes were **primary-source, grade A** evidence.                                        | §0.1, §8.3, §16.0, §16.1 D13                                                    |
+
+**Sequencing note (C1.0 in flight).** A C1.0 PR — the pure sufficiency layer,
+including both packs at `status: 'draft'` — is in flight from another agent and
+is **not** touched by this revision (docs only, zero `backend/` changes). That is
+safe: a `draft` ruleset is advisory-only and **structurally cannot block**
+(§5.1.2), so landing C1.0 before the pack **code** corrections lands changes
+nothing a user can be gated by. The pack code corrections — `[C1C-1]` through
+`[C1C-3]`, `[C1C-5]`, `[C1C-7]` — are a **later slice built from this amended
+spec**, and no pack may reach `status: 'confirmed'` before it.
+
 ---
 
 ## 1. Outcome, scope and non-goals
@@ -70,7 +103,7 @@ Cleared items `[C1R-C1]`…`[C1R-C12]` are not re-argued; two carry positive obl
 - **C3 spatial + LIMS** — tested/under-tested map overlay, TfNSW LIMS tabulated ingestion, and user-authored/overridable rulesets (program line 77). C1 rulesets are shipped code, not tenant data.
 - **C4 evidence integrity** — duplicate certificate/sample detection, preliminary-vs-final, anomaly flags. C1 counts distinct `TestResult` rows and does **not** detect that two rows describe the same sample (§7.2).
 - **C5 survey/material traceability.**
-- **Statistical acceptance computation.** TfNSW R44's Characteristic Density Ratio with k-values is a statistic over result _values_, not a count of them. C1 encodes only the **n = 6 minimum sample count** and computes no CDR (§16 D8).
+- **Statistical acceptance computation.** A characteristic value of relative compaction (`Q_L = x̄ − ks`, TfNSW **Q6** Table Q6/L.3) is a statistic over result _values_, not a count of them. C1 computes no such statistic (§16 D8). `[C1C-7]`: "Characteristic Density Ratio" is **not** TfNSW terminology (0 hits in R44 Ed 6 and Q6 Ed 2), and the `n = 6` Rev 2 named is **one row of ten** in Q6's k-value table, not a basis — see §8.2 and the TfNSW confirmation report.
 - **Test-register import** — deferred past Wave C per program §9.
 - **New alert types.** Sufficiency surfaces in readiness, not as a new alert stream into the 3,669-row backlog A2 is burning down (program line 64).
 - **Automatic compliance declarations.** Every output is decision support with a clause citation attached.
@@ -198,16 +231,28 @@ backend/src/lib/readiness/sufficiency/
 ```ts
 /** Authority provenance. Every field required — an unprovenanced rule cannot be registered. */
 export interface RulesetProvenance {
-  authority: string; // 'VicRoads' | 'TfNSW'
-  document: string; // 'Section 204 — Earthworks'
-  edition: string; // 'December 2015, Version 7'
-  clause: string; // '204.14(c)' — clause/table, never prose
-  pdfPage?: number; // recorded at the confirmation pass (§8.3)
+  authority: string; // 'VicRoads' (the document is issued by DTP — see §8.1) | 'TfNSW'
+  document: string; // 'Section 204 – Earthworks'
+  edition: string; // 'v8.0, November 2025'  [C1C-1] — NOT 'December 2015, Version 7'
+  /**
+   * Clause/table, never prose. ONE rule = ONE clause: '204.13(a)' for the
+   * per-lot COUNT, 'Table 204.142' for lot size, '204.14(c)' for the regime.
+   * They are three different rules and must not share a `clause` value [C1C-1].
+   */
+  clause: string;
+  /**
+   * Recorded at the confirmation pass (§8.3). NOTE the field name is a misnomer
+   * for Section 204, which DTP publishes as a **.docx** — record the document's
+   * own footer page ("page 13 of 19") [C1C-1].
+   */
+  pdfPage?: number;
   sourceUrl: string;
   /**
-   * From the research appendix. A SPLIT grade (e.g. R44's "A (portal) / C (aetg)")
+   * From the research appendix, or from a primary-source confirmation pass where
+   * one has run (§8.3, §0.1). A SPLIT grade (e.g. R44's "A (portal) / C (aetg)")
    * is encoded at its WEAKEST limb — the grade of the source the NUMBERS came
-   * from, never the strongest limb available [C1R-B11].
+   * from, never the strongest limb available [C1R-B11]. Grade A on the FACTS
+   * does not make a MISATTRIBUTED pack confirmable [C1C-7].
    */
   evidenceGrade: "A" | "B" | "C" | "D";
   checkedOn: string; // ISO date a human last read the source
@@ -226,29 +271,56 @@ export interface FrequencyRule {
   appliesTo: {
     activitySlugs: readonly string[]; // Level-2 slugs (activityTaxonomy.ts:61)
     layerAliases?: readonly string[]; // case-insensitive match against Lot.layer
-    /** [C1R-3] Material/zone discrimination, e.g. 'under paved areas'. */
+    /**
+     * [C1R-3] Material/zone discrimination. Rev 2's example ('under paved
+     * areas') is DELETED — no such zone rule exists in Section 204; it was a
+     * Wyndham City Council amendment [C1C-2]. The limb stays because a
+     * confirmed edition may genuinely discriminate by zone; it ships with no
+     * consumer in either pack.
+     */
     areaZoneAliases?: readonly string[];
   };
   /** Statistical-validity floor, per scale. Scale key set is ruleset-defined. */
   minCountByScale: Readonly<Record<string, number>>;
   /**
    * Coverage limb: one test per `every` units. OPTIONAL and, for everything C1
-   * ships, ABSENT — no cited authority in the appendix supplies a per-area
-   * frequency figure [C1R-1]. The limb exists because the program names it
-   * (line 75) and because a confirmed edition may supply one; it ships
-   * unexercised, covered by a synthetic rule only (§14 AT-4).
+   * ships, ABSENT — VicRoads Section 204 v8.0 supplies no per-area frequency
+   * figure (confirmed: the only area figures are Table 204.142's lot-size caps)
+   * [C1R-1]. Rev 2's broader claim that NO cited authority supplies one is
+   * FALSE [C1C-7]: TfNSW Q6 Table Q6/L.1 is a per-area frequency table
+   * throughout (1 per 250 / 500 / 1,000 / 2,000 / 3,000 m²). The limb ships
+   * unexercised only because the Q6 pack is blocked on a new lot attribute
+   * (§8.2, §16 D14), not because the figures do not exist. Covered by a
+   * synthetic rule (§14 AT-4) until the Q6 pack lands.
    */
   perQuantity?: { unit: QuantityUnit; every: number };
-  /** Advisory only: the ruleset's maximum lot size. Never blocks (§3.3). */
+  /**
+   * Advisory only: the ruleset's maximum lot size. Never blocks (§3.3).
+   * [C1C-3] A cap is almost always MATERIAL-TYPE-SCOPED (Section 204's is: Type
+   * A 5,000 m², Type B 10,000 m² or a day's production, Type C no area cap) and
+   * `appliesTo` has NO material-type discriminator. Do not encode a bare cap:
+   * see §3.3.
+   */
   maxLotSize?: { unit: QuantityUnit; value: number };
   /**
-   * The de-escalated regime. STRUCTURALLY ABSENT unless a CONFIRMED edition
-   * supplies reduced figures [C1R-B8] — the appendix supplies the 204.14(c)
-   * TRIGGER ("test every lot until 3 consecutive conform → reduced frequency;
-   * any failure reverts to full testing") and NO reduced count. A guessed
-   * reduced count would emit a confident wrong required count, the exact defect
-   * §3.4 exists to prevent. CI asserts `reduced` cannot exist on a `draft`
-   * ruleset (§8.3).
+   * The de-escalated regime. STRUCTURALLY ABSENT for `vicroads-204` [C1R-B8],
+   * but NOT for the reason Rev 2 gave [C1C-5]. Section 204 v8.0 DOES publish
+   * reduced figures — Table 204.142's third column: every 2nd / 2nd / 2nd / 3rd
+   * / 6th lot of like material and work. They are a LOT-SAMPLING INTERVAL
+   * ("which lots get tested at all"), not a per-lot count ("how many tests in
+   * this lot"), and clause 204.13(a)'s six/three is unconditional with no
+   * reduced variant. So the interval is INEXPRESSIBLE in `minCountByScale` /
+   * `perQuantity` and omitting `reduced` is correct.
+   *
+   * WARNING TO A FUTURE AGENT: do NOT "fix" this by encoding {A:2, B:2, C:6}
+   * into `minCountByScale` — that reads as "2 tests per lot" and would be
+   * catastrophically wrong. Encoding the interval needs a NEW limb
+   * (e.g. `lotSamplingInterval: { everyNthLot: 2 }`), gated on a recorded
+   * Superintendent approval per §3.4.1.
+   *
+   * A guessed reduced count would emit a confident wrong required count, the
+   * exact defect §3.4 exists to prevent. CI asserts `reduced` cannot exist on a
+   * `draft` ruleset (§8.3).
    */
   reduced?: {
     minCountByScale: Readonly<Record<string, number>>;
@@ -287,17 +359,51 @@ requiredCount = max( minCountByScale[scale],
                      perQuantity ? ceil(quantity / perQuantity.every) : 0 )
 ```
 
-The `max` is the right reading of a statistical-validity floor (§17.2 records the exact sourcing). **But it is a no-op for everything C1 ships**: no rule in either seed pack carries a `perQuantity` limb, because no cited authority in the appendix supplies a per-area frequency figure. The arithmetic is specified so a confirmed edition can supply one without a redesign, and it is tested against a synthetic rule only (§14 AT-4). Rev 1's illustrative "1-test-per-500 m²" was invented and is withdrawn.
+The `max` is the right reading of a statistical-validity floor (§17.2 records the exact sourcing). **It is a no-op for everything C1 ships as of Rev 2.1**: no rule in either seed pack carries a `perQuantity` limb. Rev 1's illustrative "1-test-per-500 m²" was invented and is withdrawn.
+
+**But Rev 2's stated reason was wrong and is corrected `[C1C-7]`.** Rev 2 said "no cited authority supplies a per-area frequency figure". That is true of VicRoads Section 204 v8.0 (confirmed — the only area figures in it are Table 204.142's lot-size caps) and **false** of **TfNSW Q6 Ed 2/Rev 0, Annexure Q6/L cl. L1, Table Q6/L.1**, which is a per-area frequency table throughout: 1 per 250 m², 1 per 500 m², 1 per 1,000 m², 1 per 2,000 m², 1 per 3,000 m², each paired with a floor (§8.2.1). **For Q6 the `max(perQuantity, minCount)` arithmetic stops being a no-op and becomes exactly the right shape** — e.g. `> 95.0–100.0 %` compaction on a `> 5,000 m²` lot is `perQuantity: 1 per 2,000 m²` with `minCount: 6`; `> 100.0 %` is `1 per 1,000 m²` with `minCount: 10`. The limb ships unexercised in C1 only because the Q6 pack is blocked on a lot attribute CIVOS does not have (§8.2, §16 D14).
 
 Consequence, stated plainly: **`Lot.quantityValue` / `quantityUnit` are dead weight for C1 counting** — they serve only the lot-size advisory of §3.3. They ship because §3.3 needs the area, because bulk entry (§9.1) is cheapest to build once, and because the C2/C3 limbs will need them — not because a C1 count depends on them. `[C1R-1]`, §16 D5.
 
 ### 3.3 "Whichever is the lesser" is a lot-SIZING rule, not a count rule
 
-The appendix's claim is _"Type A lot = one day's production or 5,000 m², whichever is the lesser"_ — that constrains lot size, not test count. CIVOS has no production-day record (§2.5; per-day limbs are C2 per `[C1R-4]`), so the day limb is unevaluable and C1 says so. Only the area limb is evaluated, as `maxLotSize`, and only as a **warning**:
+The appendix's claim is _"Type A lot = one day's production or 5,000 m², whichever is the lesser"_ — that constrains lot size, not test count. **Confirmed verbatim** against Section 204 v8.0, Table 204.142 "Minimum Frequency of Testing for Compaction and Moisture Content", reached from clause 204.13(a) ("The lot size for Type A, Type B and Type C material shall be as specified in Table 204.142"). CIVOS has no production-day record (§2.5; per-day limbs are C2 per `[C1R-4]`), so the day limb is unevaluable and C1 says so. Only an area limb could ever be evaluated, as `maxLotSize`, and only as a **warning** — it never blocks, because the lot already exists and blocking punishes a decision already taken.
 
-> `lot_exceeds_max_lot_size` — "This lot is 7,400 m². VicRoads Sec 204 Table 204.142 caps a Type A lot at 5,000 m² (or one day's production, whichever is lesser — CIVOS cannot check the production-day limb). Consider splitting the lot."
+#### 3.3.1 `[C1C-2]` The "≤ 500 m² under paved areas" limb is DELETED — it is a fabricated authority requirement
 
-It never blocks: the lot already exists, and blocking punishes a decision already taken. The "≤ 500 m² under paved areas" limb is a second `maxLotSize` on the rule whose `appliesTo.areaZoneAliases` matches paved-area zones `[C1R-3]`.
+**Rev 2's second `maxLotSize` limb (500 m² under paved areas, keyed by `appliesTo.areaZoneAliases`) does not exist in VicRoads/DTP Section 204, in any version.** Stated plainly because it matters: had it shipped, CIVOS would have asserted an authority requirement the authority never wrote, on a surface that can eventually gate a progress claim, and recorded that assertion in immutable decision snapshots.
+
+- Section 204 **v8.0, clause 204.13(a)**, verbatim: _"A test lot shall be as defined in Section 173. The lot size for Type A, Type B and Type C material shall be as specified in Table 204.142."_ — full stop. **No paved-area qualifier.**
+- A search of the whole v8.0 document for `500 m` / `500m` / `paved area` returns **zero hits in any lot-sizing context**. The legacy v5/v6-era text is identical on this point.
+- **Where it actually came from:** the **Wyndham City Council** republication (_Technical Specification Section 204 – Earthworks (170424).pdf_, Wyndham City Council Specification MAR 2024), whose amended clause 204.13(a) reads _"The lot size for Type A, Type B and Type C material shall be a maximum of **500m² under paved areas** or as specified in Table 204.142 in all other areas."_ That is a **council amendment layered over the VicRoads text** — the same document also substitutes "Council" for "Superintendent". It is exactly the "council republication" §8.3 step 1 forbids relying on.
+
+So: **no 500 m² limb, no paved-area `areaZoneAliases` consumer, in this or any pack** — and the contaminated repo research file that carried the same claim (`docs/research/vic-itp/01-earthworks-pavements.md`) is corrected in the same change. Full evidence: `docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md` §3 R3.
+
+#### 3.3.2 `[C1C-3]` The 5,000 m² cap is Type A material ONLY — so it is NOT encoded either
+
+Table 204.142's "Acceptable Lot Size in a Single Layer of Work" column, transcribed from v8.0:
+
+| Material                                                     | Acceptable lot size in a single layer of work         | Minimum testing frequency (the reduced regime, §8.2)  |
+| ------------------------------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------- |
+| Type A Material                                              | One day's production or **5,000 m²**, whichever is the lesser | Every **second** lot of like material and work |
+| Type B — ripped and re-compacted below Cut Floor Level       | One day's production or **10,000 m²**, whichever is the lesser | Every **second** lot                           |
+| Type B — placed within 400 mm of top of Type B Material      | One day's production or **10,000 m²**, whichever is the lesser | Every **second** lot                           |
+| Type B — placed more than 400 mm below top of Type B material | **One day's production** (no area cap)                | Every **third** lot                                   |
+| Type C Material                                              | **One day's production** (no area cap)                | Every **sixth** lot                                   |
+
+(Section 204 v8.0, November 2025, Table 204.142, ~page 17 of 19.)
+
+The 5,000 m² figure is **Type A only**. Consequences:
+
+- `FrequencyRule.appliesTo` offers `activitySlugs`, `layerAliases`, `areaZoneAliases` and **no material-type discriminator**. As specified, the pack **cannot express "Type A"**.
+- Encoding a bare 5,000 m² cap would fire a false `lot_exceeds_max_lot_size` warning on any 5,000–10,000 m² **Type B** lot and invent a cap for **Type C**, which has none.
+- For Type B >400 mm below top and for Type C, the **day's-production limb is the only limb** — those materials get **no evaluable lot-size rule at all**, and the warning must not fire for them.
+
+**Decision: do not encode the cap until a material-type discriminator exists** (`Lot.materialType`, or a `materialAliases` limb on `appliesTo`) — **or** scope the rule explicitly to a Type-A-identified alias and say so in the rule's `label`, so the warning text cannot imply a general VicRoads cap. A bare 5,000 m² cap is prohibited. Which of the two is built is a scope call recorded as §16 D14; neither is required for C1 to exit, because the cap is advisory-only.
+
+For reference, the warning copy **if** a Type-A-scoped cap is ever encoded:
+
+> `lot_exceeds_max_lot_size` — "This lot is 7,400 m². VicRoads Sec 204 Table 204.142 caps a **Type A** lot at 5,000 m² (or one day's production, whichever is lesser — CIVOS cannot check the production-day limb). Type B and Type C lots have different limits. Consider splitting the lot."
 
 ### 3.4 The frequency-regime state machine — COMPUTED, never stored
 
@@ -318,6 +424,30 @@ The **length guard is part of the rule, not a footnote** `[C1R-B7]`: without it,
 
 `ponytail:` bounded N-row lookback, valid for `reset_on_any_failure` only. A ruleset declaring a different `escalationShape` gets its own evaluator; the registry **rejects an unknown shape** rather than silently mis-evaluating it.
 
+#### 3.4.1a `[C1C-6]` What clause 204.14(c) actually requires — the computed regime is ADVISORY, never an automatic reduction
+
+Rev 2 modelled 204.14(c) as "test every lot until 3 consecutive conform → reduced; any failure reverts". The clause number and the streak length are **confirmed correct** against Section 204 **v8.0, clause 204.14(c)**, and `escalationShape: 'reset_on_any_failure'` is correct in direction. But the confirmation pass found **three qualifiers Rev 2's model drops**, and they change what the engine is allowed to output. Verbatim from v8.0 (~pages 16–17 of 19):
+
+> Every lot shall be tested initially to demonstrate compliance with the requirements for compaction and moisture content. Testing of every lot shall continue until three consecutive lots of like material and work have achieved the specified requirements **in the first test**. After satisfying this requirement **and establishing a compaction procedure to the satisfaction of the Superintendent**, the Contractor **may seek the Superintendent's agreement** to reduce the frequency of testing of subsequent lots to the minimum requirements specified in Table 204.142.
+>
+> If the Contractor has obtained the Superintendent's agreement … and any lot fails to achieve the specified requirements, testing of all subsequent lots shall be undertaken until three consecutive lots of like material and work have achieved the specified requirements in the first test. After satisfying this requirement, the Contractor **may submit changes to the compaction procedure for the Superintendent's review and may again seek approval** to reduce the frequency of testing to the minimum requirements.
+>
+> For the purposes of this subclause, **small areas as defined in Section 173 shall not be included** in the initial consecutive lots tested for compliance, nor any subsequent set of consecutive lots.
+
+**(i) "in the first test."** A lot that failed and then passed on retest does **not** count toward the streak. §3.4.1's fold over a lot's _current_ conformance status **over-credits**, flipping to `reduced` where the specification would not. The regime evaluator needs **first-test** conformance, not final conformance. (RC 500.05 v10 §8 reinforces it: _"Repeat testing should not be undertaken merely because, on the basis of the results of the first testing, the lot was deemed to have failed."_) Until first-test conformance is derivable from `TestResult` history, the streak must be treated as **not established**, not as established-by-approximation.
+
+**(ii) Reduction is not automatic.** It requires the **Superintendent's agreement** _and_ a compaction procedure established to the Superintendent's satisfaction. **Three conforming lots is a precondition to ASK, not an entitlement.** Re-entry after a failure needs a **fresh** approval, not merely three more passes.
+
+**(iii) Section 173 small areas are excluded from the streak** — in the initial set and in every subsequent set. CIVOS has no small-area concept, so any streak it computes may include lots the specification excludes.
+
+**Therefore, binding on the implementation:**
+
+- The computed regime is surfaced as an **advisory**: _"eligible to **request** reduced frequency from the Superintendent (VicRoads Sec 204 cl. 204.14(c)) — 3 consecutive conforming lots recorded."_
+- It **never** reduces `requiredCount`, and never sets `regime: 'reduced'` as an operative value, **unless a recorded Superintendent approval exists as an input** to the evaluator. No such input exists in C1, so in C1 the operative regime is always `full` for `vicroads-204` and the advisory is presentation only.
+- A purely computed `reduced` would assert a lower required count **the contract does not grant** — under-testing on our say-so, the failure direction §3.4 exists to prevent, just inverted.
+- This **strengthens** §3.4.1's computed-not-stored argument rather than weakening it: an eligibility signal must re-derive when evidence is superseded, exactly as a verdict must.
+- The regime machinery, the lookback, the cursor modes and the property test are all still built and tested against a synthetic confirmed ruleset (§14 AT-5…AT-8) — they are ready the day an approval input or a confirmed edition with per-lot reduced counts exists.
+
 #### 3.4.2 Stream membership and entry conformity
 
 - **Stream key:** `(projectId, rulesetId, ruleId, activitySlug, layerBucket)`. "Work of the same type in the same project" is the defensible reading; subcontractor and material source are not in the key (§16 D7).
@@ -336,6 +466,8 @@ export function testFailing(t: TestResultRow): boolean {
 Rev 1 said "no `passFail === 'fail'` test result" with **no status filter**, which was asymmetric: a rejected or never-verified failure would permanently reset a stream while a pass must clear verification to count. `TestResult` carries `rejectedById` / `rejectedAt` / `rejectionReason` and `status` defaults to `'requested'` (`schema.prisma:846-853`), so unverified failures are a real population. Symmetry restored.
 
 - **A force-conformed lot** (`Lot.conformanceOverriddenAt`, `schema.prisma:568`) is **non-conforming for regime purposes**. An override is a programme decision, not evidence the material passed. Deliberate, and recorded in the snapshot.
+- **`[C1C-6]` Entry conformity is FIRST-TEST conformity where the authority says so.** Clause 204.14(c) counts only lots that met the requirements **in the first test**; a fail-then-retest-pass lot is not a streak member. Current conformance status is a **weaker** proxy that over-credits, so a stream whose first-test history cannot be reconstructed yields an **unresolvable** regime (absent entry in `regimeByRuleId`, §4.1), never an optimistic `reduced`.
+- **`[C1C-6]` Section 173 small areas are excluded from the streak** — CIVOS has no small-area concept, so any computed streak is an upper bound on the specification's streak. Another reason the output is advisory (§3.4.1a).
 
 #### 3.4.3 The query contract — two modes, resolved OUTSIDE the transaction `[C1R-B7]`
 
@@ -431,7 +563,15 @@ export interface RuleSufficiency {
   passingCount: number;
   pendingCount: number;
   failedCount: number;
+  /**
+   * The OPERATIVE regime — what `requiredCount` was actually computed at.
+   * [C1C-6] For `vicroads-204` this is ALWAYS 'full' in C1: 204.14(c) makes a
+   * reduction conditional on the Superintendent's agreement, and no approval
+   * input exists. Eligibility is reported separately and never lowers the count.
+   */
   regime: "full" | "reduced" | null;
+  /** [C1C-6] Advisory only: "eligible to REQUEST reduced frequency" (§3.4.1a). */
+  reducedFrequencyEligible?: boolean;
   regimeBasis?: { streamKey: string; lotIds: string[] };
   unknownCauses: readonly UnknownCause[];
   citation: {
@@ -501,7 +641,14 @@ No test is weakened and no provenance entry is dishonestly tagged `'engine'`.
 
 Facts only. Counts and clause references; no quotation of specification prose (§8.4); the unconfirmed tag whenever `citation.confirmed === false`; the regime sentence only when the rule has a `reduced` limb, always naming its basis:
 
-> **Not ready to conform.** Requires **6** density tests (VicRoads Sec 204, Table 204.142, Scale B — 2015 edition, **unconfirmed**). **4** verified conforming, **1** pending at lab, **1** without a result.
+> **Not ready to conform.** Requires **6** density tests (VicRoads Sec 204, **clause 204.13(a)**, Scale B — **v8.0, November 2025**). **4** verified conforming, **1** pending at lab, **1** without a result.
+
+**`[C1C-4]` Two corrections to Rev 2's specimen, both load-bearing.** This sentence appears on every user-facing sufficiency message and in every immutable decision snapshot, so its citation must be the clause that actually carries the number:
+
+1. Rev 2 cited **Table 204.142** for the count. **Table 204.142 contains no test counts** — it contains acceptable lot size and the reduced lot-sampling frequency (§3.3.2). The count comes from **clause 204.13(a)**: _"…the number of tests per lot shall be six… For work to be tested for compliance with Scale C compaction requirements, the number of tests per lot shall be three."_ Cite `204.13(a)`.
+2. Rev 2's "2015 edition, **unconfirmed**" is superseded: the pack's confirmed edition is **v8.0, November 2025** `[C1C-1]`, so the unconfirmed tag does **not** apply to `vicroads-204` once it lands at `status: 'confirmed'`. The tag mechanism itself is unchanged and still fires for any `draft` pack.
+
+**Small-lot caveat in the citation text `[C1C-1]`.** Clause 204.13(a)'s six is qualified: _"…unless the lot is to be treated as a small lot in accordance with **Section 173**."_ CIVOS has no small-lot concept, so an unqualified "requires 6" **over-states** the requirement for a small lot — the §3.4 failure direction, inverted. Until a small-lot limb exists, the rule's `label`/citation text carries the exception explicitly (e.g. "6 tests per lot for Scale A/B compaction, unless the lot is a Section 173 small lot"), so the user can see the escape the specification gives them.
 
 The chainage clause Rev 1 showed ("no sample for CH 1,240–1,310") is **removed** — it needs per-test location data C1 does not have (§7.2). It returns with C3.
 
@@ -742,7 +889,10 @@ Four nullable columns, one defaulted column, one index. **No ruleset tables** (�
 - **Duplicate/re-test inflation.** C1 counts distinct `TestResult` rows; two rows describing the same sample count twice. Detection is C4. The snapshot records which test ids were counted, so an auditor can see a double count. `ponytail:` count distinct rows; C4's duplicate detection tightens it.
 - **No spatial coverage check.** "No sample for CH 1,240–1,310" needs per-test location; `TestResult.sampleLocation` (`schema.prisma:836`) is free text. C1 reports **counts**, not spatial gaps, and §4.4's sentence omits the chainage clause accordingly. C3 (program line 77) restores it.
 - **No production-day limb** (§3.3), owned by C2 `[C1R-4]`.
-- **The `perQuantity` limb ships unexercised** (§3.2.1) — no cited authority supplies a per-area frequency figure.
+- **The `perQuantity` limb ships unexercised** (§3.2.1) — **not** because no authority publishes a per-area figure (TfNSW Q6 does, §8.2.1) but because the pack that would use it is blocked on a lot attribute CIVOS does not have `[C1C-7]`.
+- **No material-type discrimination**, so Section 204's Type A / Type B / Type C lot-size caps cannot be expressed and **none** is encoded `[C1C-3]` (§3.3.2).
+- **No small-lot / small-area concept** (Section 173) `[C1C-1]` `[C1C-6]`: the count rule over-states the requirement for a small lot, and the 204.14(c) streak may include lots the specification excludes. Both are stated in the citation text rather than silently approximated.
+- **No Superintendent-approval input**, so a reduced frequency is only ever reported as **eligibility**, never applied (§3.4.1a) `[C1C-6]`.
 
 ---
 
@@ -755,13 +905,65 @@ Rev 1 said "the research appendix grades the VicRoads 204 and TfNSW R44 frequenc
 `RulesetProvenance.evidenceGrade` is a single scalar, so §3.2 fixes the encoding rule: **a split grade is encoded at its weakest limb — the grade of the source the numbers came from.** Therefore:
 
 - `vicroads-204.v1` → `evidenceGrade: 'A'`.
-- `tfnsw-r44.v1` → `evidenceGrade: 'C'`. Under §8.3's CI rule (`evidenceGrade === 'A'` required for `confirmed`), R44 is **permanently unconfirmable and permanently non-blocking** until appendix §H item 5 resolves the portal record to the real specification document and someone reads it. That is the correct outcome and the spec claims it rather than obscuring it.
+- `tfnsw-r44.v1` → `evidenceGrade: 'C'`. Under §8.3's CI rule (`evidenceGrade === 'A'` required for `confirmed`), R44 is **permanently unconfirmable and permanently non-blocking** until appendix §H item 5 resolves the portal record to the real specification document and someone reads it. That is the correct outcome and the spec claims it rather than obscuring it. **→ Superseded in part by §8.1.1: §H item 5 was resolved on 2026-07-27, the portal record turned out to be Q6 rather than R44, and the pack is misattributed rather than merely under-evidenced `[C1C-7]`.**
+
+#### 8.1.1 `[C1C-1]` `[C1C-7]` Rev 2.1: both grades resolved by primary-source passes — and one pack turned out to be misattributed
+
+Appendix §H item 5 is now **done**, and it did not resolve the way §8.1 expected.
+
+**VicRoads — grade `'A'` is now genuinely EARNED, and was not before.** Rev 2's `'A'` rested on figures that had reached the repo through a **council republication**. The 2026-07-27 pass read the **current published primary document** and confirmed the numbers verbatim. Corrected provenance, replacing Rev 2's wholesale `[C1C-1]`:
+
+| Field           | Rev 2 (wrong)                                                        | Rev 2.1 (confirmed)                                                                                                                       |
+| --------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `authority`     | `'VicRoads'`                                                         | `'VicRoads'` is defensible as the trading brand; the document is issued by the **Department of Transport and Planning (DTP)** on behalf of Head, Transport for Victoria. `'DTP (VicRoads)'` is the more accurate string. |
+| `document`      | `'Section 204 — Earthworks'`                                         | `'Section 204 – Earthworks'` ✓                                                                                                            |
+| `edition`       | `'December 2015, Version 7'`                                         | **`'v8.0, November 2025'`** — the document's own history table puts v7.0 at **February 2023** and December 2015 at **v6.0**, so Rev 2's version/date pairing was never a real edition |
+| `clause`        | `'204.14(c)'` (and §4.4's `'Table 204.142'`)                         | **`'204.13(a)'`** for the counts; `'Table 204.142'` for lot size; `'204.14(c)'` for the regime — three rules, three values                 |
+| `pdfPage`       | —                                                                    | It is a **.docx**: clause 204.13(a) = page 13 of 19; 204.14(c) + Table 204.142 = pages 16–17 of 19                                        |
+| `sourceUrl`     | legacy `webapps.vicroads.vic.gov.au` (**DNS dead**) / `www.vicroads.vic.gov.au/~/media/...` (**404**) | **`https://content.vic.gov.au/Section-204-Earthworks-v8.docx`**                                                    |
+| `evidenceGrade` | `'A'` (unearned)                                                     | **`'A'`, earned** — every quoted clause read verbatim from the current published document, located via DTP's own **Engineering Standards Catalogue, March 2026** |
+| `checkedOn`     | —                                                                    | **`2026-07-27`**                                                                                                                          |
+| `revalidateBy`  | 12 months                                                            | **`2027-07-27`** (v7.0 → v8.0 was ~33 months, so 12 is comfortably conservative)                                                          |
+
+The **6 / 6 / 3 counts are CONFIRMED** and are **unchanged across v5.0 (Oct 2013) through v8.0 (Nov 2025)** — citing **clause 204.13(a)**, *not* Table 204.142 and *not* RC 500.05 (RC 500.05 v10, all six pages read, defines lot bounds, test-site selection, test depth, density measurement and characteristic-value calculation — **no per-scale test counts at all**).
+
+**TfNSW — the pack is MISATTRIBUTED, and the grade question is moot until it is re-authored `[C1C-7]`.** The pass resolved the appendix's portal record and found it **is not R44**: it serves **Q6 — Quality Management (Major Works), Ed 2/Rev 0, February 2024**. **R44 Ed 6/Rev 0 (June 2023) publishes no test frequencies at all** — cl. 1.2.5 defers ("Frequency of testing must also conform to the requirements of TfNSW Q") and Annexure R44/L Table R44/L.1's "Minimum Frequency" cell is the **literal character `Q`** for every relative-compaction and moisture-content row. The evidence grade **for the facts** is now `'A'` (primary PDFs from the TfNSW standards portal, read in full), but **grade A evidence that the encoded rule is WRONG is still a reason to keep the pack `draft`**. See §8.2 and §8.2.1.
 
 ### 8.2 What the packs contain
 
-- **`vicroads-204.v1`** — VIC / VicRoads, earthworks family. Minimum counts **scoped to compaction** `[C1R-7]`: the appendix's claim is _"6 tests/lot (Scale A/B compaction), 3 (Scale C)"_ — a compaction-density rule, not a blanket per-lot count for every test type. `maxLotSize` 5,000 m² (Type A) and 500 m² under paved areas (`areaZoneAliases`). **No `reduced` limb** `[C1R-B8]`: the appendix supplies the 204.14(c) trigger and no reduced figure, and CI asserts `reduced` cannot exist on a `draft` ruleset (§8.3). The regime machinery is still built and tested — against a synthetic confirmed ruleset (§14 AT-5..AT-8) — so it is ready the moment a confirmed edition supplies figures.
-- **`tfnsw-r44.v1`** — NSW / TfNSW, `specSet` normalizing `rms` → `tfnsw` (`itpMatcher.ts:74-76`). Encodes the **n = 6 minimum sample count** only; no CDR statistic (§16 D8). Grade `'C'`, therefore `draft`-forever until §H item 5 resolves.
+- **`vicroads-204.v1`** — VIC / VicRoads, earthworks family. Minimum counts **scoped to compaction** `[C1R-7]` and **CONFIRMED** `[C1C-1]`: `minCountByScale: { A: 6, B: 6, C: 3 }`, citing **clause 204.13(a)** of **Section 204 v8.0, November 2025** — a compaction-density rule, not a blanket per-lot count for every test type. `scaleKeys: ['A','B','C']` and `defaultScale: 'A'` are confirmed verbatim ("Where the compaction scale has not been specified, Compaction Scale A shall apply"). `perQuantity` absent — confirmed correct, Section 204 publishes no per-area frequency. The citation text carries the **Section 173 small-lot exception** (§4.4).
+  - **No `maxLotSize` — neither limb `[C1C-2]` `[C1C-3]`.** The 500 m² "under paved areas" limb is **deleted as a Wyndham City Council amendment** (§3.3.1); the 5,000 m² limb is **Type A material only** and the vocabulary has no material-type discriminator, so it is not encoded either (§3.3.2).
+  - **No `reduced` limb** `[C1R-B8]` — **right call, wrong stated reason in Rev 2** `[C1C-5]`. Rev 2 said "the appendix supplies the 204.14(c) trigger and no reduced figure". **The source DOES supply reduced figures**: Table 204.142's third column — every **2nd / 2nd / 2nd / 3rd / 6th** lot of like material and work (§3.3.2). They are a **lot-sampling interval** ("which lots get tested"), while `minCountByScale` is a per-lot count ("how many tests in this lot"); a lot that **is** tested under the reduced regime still requires **six**, because clause 204.13(a) is unconditional and has no reduced variant. The interval is **inexpressible in C1's vocabulary**, so omitting `reduced` is operationally correct — but the reason must be stated this way, or a future agent will find Table 204.142 and encode **`{A: 2, B: 2, C: 6}`** into `minCountByScale`, which reads as "2 tests per lot" and is catastrophically wrong. **Do not do that.** Encoding the interval needs a new limb (`lotSamplingInterval`), gated on a recorded Superintendent approval (§3.4.1a).
+  - **Regime output is advisory** `[C1C-6]`: 204.14(c) requires the Superintendent's agreement plus an established compaction procedure, counts only lots conforming **in the first test**, and excludes Section 173 small areas from the streak (§3.4.1a). The regime machinery is still built and tested against a synthetic confirmed ruleset (§14 AT-5..AT-8).
+  - **Per-rule-family scale caveat.** Clause 204.14 restricts *material property* testing to **Scale A or Scale B only**, and Table 204.161 carries a separate "Scale of Material Property Testing (A or B)" column. `scaleKeys` is declared at `Ruleset` level, so if a CBR/PI/grading rule is ever added to this pack its scale-key set (`['A','B']`) cannot be expressed. Recorded now; not a C1 problem, because C1 ships one compaction rule.
+- **`tfnsw-r44.v1`** — **MISATTRIBUTED. KEEP DRAFT; do NOT confirm as authored; re-author as a Q6 pack** `[C1C-7]`.
+  - **What is wrong.** R44 Ed 6/Rev 0 (June 2023, `TS 02158.1`) contains **no test frequencies**: cl. 1.2.5 says "Frequency of testing must also conform to the requirements of TfNSW Q", and Annexure R44/L Table R44/L.1's "Minimum Frequency" cell is the literal character **`Q`** for every relative-compaction and moisture-content row. The `n = 6` Rev 2 encodes is **one cell** of **Q6 Ed 2/Rev 0 (February 2024, `TS 01572.1`), Annexure Q6/L cl. L1, Table Q6/L.1** — a **two-dimensional** table (specified relative compaction band × lot area band) whose minimums run **1 to 10** with per-area rates. A flat `minCount: 6` is wrong in **both** directions: **over-strict** for a typical 3,000 m² Selected Material Zone lot (which legally needs **5**) and **under-strict** for a >5,000 m² lot specified at 102.0 % (which needs **1 per 1,000 m², minimum 10**).
+  - **How to re-author.** Identity `tfnsw-q6.v1` (or keep `specSet: 'tfnsw'` with `spec: 'Q6'`), pairing **R44 Table R44.7** _Minimum Characteristic Values of Relative Compaction_ (90.0 / 95.0 / 98.0 / 100.0 / 102.0 % by location — the **acceptance thresholds** that select which Q6 row applies) with **Q6 Table Q6/L.1** _frequencies_. The two are a pair; a correct pack needs both, with R44 Ed 6/Rev 0 recorded as the companion acceptance-criteria source. The rule shape is `(compaction band) × (lot area band) → minCount and/or per-area rate`, which **`perQuantity` + `minCountByScale` already express** (§3.2.1).
+  - **The honest blocker, named as a scope item.** CIVOS has **no "specified relative compaction" field on a lot**, so no Q6 row can be selected. That is a **new lot attribute** (or an ITP-derived one) — **§16 D14** — and it, not the research, is why this pack cannot ship correct in C1.1. A defensible interim is to record (never evaluate) the two Q6 lot-size rules that need no new field: lot ≤ one shift's output (unevaluable per §2.5) and lots **< 2 m wide** ≤ 150 m long (Q6 cl. 5.4.2 — Rev 2's appendix claim "narrow lots ≤ 150 m" is missing that width qualifier).
+  - **Terminology correction.** "Characteristic Density Ratio" is **not TfNSW terminology** (0 hits in R44 Ed 6 and Q6 Ed 2). The real statistic is the *characteristic value of relative compaction*, `Q_L = x̄ − ks`, with `k` from **Table Q6/L.3** for sample sizes 3 → ≥ 20 (n = 6 ⇒ k = 0.72). Nothing statistical is encoded (§16 D8) — the correction exists so a future agent does not encode "k-values based on n = 6" as if 6 were a basis.
+  - **Evidence grade:** `'A'` for the **facts** (primary PDFs, read in full), which does **not** make the pack as authored confirmable. It ships `draft`, therefore non-blocking by construction (§5.1.2). `revalidateBy: 2027-07-27`; the volatile part is the portal's opaque annotation GUIDs, which are what needs re-checking.
 - **No TMR / DIT SA / MRWA pack, and no numbers from them.** They are on the appendix's standing never-assert list.
+
+#### 8.2.1 `[C1C-7]` Table Q6/L.1, transcribed — the authority for any future NSW pack
+
+**Minimum number of samples per Lot (n)** — TfNSW Q6 Ed 2/Rev 0 (February 2024), **Annexure Q6/L, cl. L1, Table Q6/L.1**, PDF pp. 42–44 (doc p. 31):
+
+| Specified relative compaction (%) | ≤ 50 m² | > 50, ≤ 500 m² | > 500, ≤ 1,000 m² | > 1,000, ≤ 5,000 m² | > 5,000 m²                  |
+| --------------------------------- | ------- | -------------- | ----------------- | ------------------- | --------------------------- |
+| ≤ 90.0                            | 1       | 1              | 1                 | 1 per 2,000 m² (min 2) | 1 per 3,000 m²           |
+| > 90.0, ≤ 95.0                    | 1       | 2              | 1 per 250 m² (min 3) | 1 per 1,000 m² (min 3) | 1 per 2,000 m²        |
+| > 95.0, ≤ 98.0                    | 1       | 3              | 4                 | 5                   | 1 per 2,000 m² **(min 6)**  |
+| > 98.0, ≤ 100.0                   | 1       | 3              | 4                 | 5                   | 1 per 2,000 m² **(min 6)**  |
+| > 100.0                           | 1       | 3              | 4                 | 1 per 500 m² (min 5) | 1 per 1,000 m² **(min 10)** |
+
+Table note (1): _"Where the Lot comprises more than one layer (refer to Clause 5.4.3 (b)), the minimum number of samples must also conform to Clause 5.4.3 (b). Where there is a conflict between the two values, the greater of the two will apply."_ Cl. 5.4.3(b) multi-layer minimums (compaction < 98.0 % only): total layer area ≤ 100 m² → max 5 layers, **min 1**; > 100–500 m² → max 3 layers, **min 2**; > 500–1,000 m² → max 2 layers, **min 3**; total lot thickness ≤ 600 mm.
+
+Two traps recorded with the table:
+
+- The bolded **6** is the cell Rev 2 encoded as a flat minimum. It is the floor for **one** band pair only (> 95.0–100.0 % compaction on a > 5,000 m² lot). Four of the five compaction bands say something else.
+- Q6's sampling-**location** method (cl. L2) says "Establish **six** equally spaced grid lines within the Lot", with a figure note "based on the number of samples per Lot (n) = 6". That is six **grid lines** in an illustrative figure — a plausible origin for the secondary source's flat "n = 6", and **not** a minimum count.
+
+Full evidence, including the R44 Ed 6 / Q6 Ed 2 currency proof (the portal burns a `SUPERSEDED` watermark into retired editions' text layer; neither cited document carries one): `docs/research/c1-pack-confirmation-tfnsw-r44-2026-07-27.md`.
 
 ### 8.3 The confirmation step — BEFORE encoding `[C1R-B11]` `[C1R-9]`
 
@@ -769,8 +971,9 @@ Rev 1 encoded at C1.3 and confirmed afterwards, and allowed exiting with both pa
 
 **The sequence, corrected:**
 
-1. **C1.0 (before any pack is authored): the confirmation pass.** A human opens the **current published** VicRoads/DTP document — not the council republication — verifies every number against its cited clause/table, and records `edition`, `clause`, `pdfPage`, `sourceUrl`, `checkedOn`, `revalidateBy`. Numbers that cannot be confirmed are **not encoded**. This is a Jay-visible sequencing change because it front-loads a human verification task (§16.0).
-2. **C1.1: the pack is authored from confirmed figures**, landing directly at `status: 'confirmed'` where step 1 succeeded, or `draft` where it did not (R44, necessarily).
+1. **C1.0 (before any pack is authored): the confirmation pass.** The **current published** authority document is opened — not a council republication, not a secondary page — every number is verified against its cited clause/table, and `edition`, `clause`, `pdfPage`, `sourceUrl`, `checkedOn`, `revalidateBy` are recorded. Numbers that cannot be confirmed are **not encoded**.
+   **`[C1C-8]` DONE — 2026-07-27.** Jay resolved D13 as "research agents confirm", and two primary-source passes ran (§0.1). Reports: `docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md` (**CONFIRM WITH CORRECTIONS**) and `docs/research/c1-pack-confirmation-tfnsw-r44-2026-07-27.md` (**KEEP DRAFT, re-author as Q6**). Both are grade **A (primary)**: the actual specification text was retrieved from the issuing department's own catalogue / standards portal and read, not summarised from secondary sources. The passes justified themselves immediately — one caught a **fabricated authority requirement** (§3.3.1) and the other caught a **misattributed specification** (§8.2). The step-1 requirement stands for every future pack.
+2. **C1.1: the pack is authored from confirmed figures**, landing directly at `status: 'confirmed'` where step 1 succeeded, or `draft` where it did not. Post-2026-07-27 that means: `vicroads-204` → `confirmed`, with the §8.2 corrections applied (no `maxLotSize`, corrected clause citations, corrected provenance); `tfnsw-r44` → **`draft`**, pending re-authoring as a Q6 pack (§16 D14).
 3. **Confirmation of an already-shipped draft emits a NEW version** `[C1R-9]`: `vicroads-204.v2.ts`, with `effectiveTo` set on v1. F0 forbids editing a definition in place once instances exist (program §2: "definitions are never edited in place once instances exist"), and snapshots reference `ruleId` strings that must keep resolving. Never an in-place edit of a `.v1`.
 4. **CI enforces currency** — a runnable check that survives sessions:
    - every `confirmed` ruleset has non-empty `edition`, `clause`, `sourceUrl`, `pdfPage`, `checkedOn`, `revalidateBy`;
@@ -862,7 +1065,8 @@ Order is strict. The confirmation pass moved into C1.0/C1.1 `[C1R-B11]`, so the 
 
 ### C1.0 — Confirmation pass + vocabulary + evaluator + reason codes (M) · no migration, no call sites
 
-- **The §8.3 step-1 confirmation pass runs FIRST**, before any pack is authored. Output: verified numbers with `edition` / `clause` / `pdfPage` / `sourceUrl` / `checkedOn` / `revalidateBy`, or a recorded failure to confirm. Jay-visible (§16.0).
+- **The §8.3 step-1 confirmation pass runs FIRST**, before any pack is authored. Output: verified numbers with `edition` / `clause` / `pdfPage` / `sourceUrl` / `checkedOn` / `revalidateBy`, or a recorded failure to confirm. **`[C1C-8]` COMPLETE as of 2026-07-27** — both reports are in `docs/research/` and their corrections are folded into this spec as `[C1C-1]`…`[C1C-7]`.
+- **Sequencing with the in-flight C1.0 PR `[C1C-8]`.** A C1.0 PR carrying the pure layer **and both packs at `status: 'draft'`** is in flight from another agent. It may land before the pack corrections: a `draft` ruleset is advisory-only and **structurally cannot block** (§5.1.2), so nothing a user can be gated by depends on the uncorrected numbers. The pack corrections (`[C1C-1]`, `[C1C-2]`, `[C1C-3]`, `[C1C-5]`, `[C1C-7]`) are a **later slice built from this amended spec**, and **no pack may reach `status: 'confirmed'` before it lands**.
 - `sufficiency/types.ts`, `registry.ts`, `regime.ts`, `resolve.ts`, `evaluate.ts`, `rulesets/index.ts` — **no pack content yet**; a synthetic fixture ruleset in tests only.
 - Five new codes + provenance in `contracts/reasonCodes.ts`; `testFailing` added and `testCountSufficient` re-exported in `predicates.ts` (§4.3).
 - `TestReasonCode` widened and `TestSufficiencyVerdict` extended with **optional** `state`/`rules` (§4.2.1) so `contracts.test.ts:140-150` keeps compiling.
@@ -873,7 +1077,7 @@ Order is strict. The confirmation pass moved into C1.0/C1.1 `[C1R-B11]`, so the 
 ### C1.1 — Migration + packs + resolution + entry + WARN-only surfacing (L)
 
 - The §6 migration (four nullable columns, one defaulted column, one index) plus the `activitySlug` backfill script. **Orchestrator applies to prod.**
-- **The packs, authored from C1.0's confirmed figures** — `vicroads-204.v1` at its verified status, `tfnsw-r44.v1` at grade `'C'`/`draft`. CI currency assertions land with them.
+- **The packs, authored from C1.0's confirmed figures `[C1C-1]` `[C1C-7]`** — `vicroads-204.v1` at **`confirmed`**, edition **v8.0 / November 2025**, counts citing **clause 204.13(a)**, **no `maxLotSize` at all** (§3.3.1, §3.3.2), no `reduced` limb (§8.2), regime advisory-only (§3.4.1a); `tfnsw-r44.v1` **`draft`**, misattributed and awaiting re-authoring as a Q6 pack (§8.2, §8.2.1, §16 D14) — it is **not** re-authored inside C1.1. CI currency assertions land with them.
 - `resolve.ts` wired: registry + scale + quantity + regime, per path, with the exact `select`/`include` extensions of §4.1.1.
 - `computeConformanceResult` third parameter; `ConformancePrerequisites.sufficiencyBlocks`; `lotConformable` limb (§5.1.1); `buildSufficiencyAdvisoryItems` (§5.1.4); conformed/claimed short circuits extended (§5.1.3).
 - **Data entry:** `bulkCreateCore` pass-through, `POST /api/lots/bulk-set-test-attributes`, `PATCH` fields, `LotEditFormFields`, bulk affordance, project-settings control (§9).
@@ -949,6 +1153,7 @@ Named artifact, per program §9. Every item is a real test file assertion, not a
 - **AT-6** Regime, **conformed subject**: strictly-before compound cursor; a stream where "most recent N" and "N preceding the subject" differ yields **different** regimes, and the conformed subject gets the latter. Plus the **length guard**: a stream with < N entries is `full`, never `reduced`.
 - **AT-7** Property test: bounded lookback ≡ fold over full history, over generated conform/fail sequences. **The reference fold implements the length guard independently** — stated in the test's own comment, because a reference that shares the bug proves nothing `[C1R-B7]`.
 - **AT-8** Regime asymmetries: a force-conformed lot is non-conforming; an **unverified** failing test does **not** reset the regime while a **verified** one does (`testFailing`, §3.4.2) `[C1R-B8]`.
+- **AT-8b** `[C1C-6]` **The regime never lowers a count without a recorded approval.** With a stream of N consecutive conforming lots and **no** Superintendent-approval input, the evaluator reports `reducedFrequencyEligible: true` **and** an unchanged `requiredCount` at `regime: 'full'` — asserted on the `vicroads-204` shape, so no future change can quietly turn eligibility into a reduction.
 - **AT-9** `sufficiencyBlocks` is false for every combination of `mode: 'off'|'warn'`, `status: 'draft'`, and `state: 'unknown'` — the structural non-blocking guarantee (§5.1.2) `[C1R-B5]`.
 - **AT-17** The CI currency check fails on: a `confirmed` ruleset with a past `revalidateBy`; a `confirmed` ruleset at grade ≠ `'A'`; a `draft` ruleset declaring `reduced`; a missing `pdfPage` on a `confirmed` pack.
 
@@ -972,11 +1177,11 @@ Named artifact, per program §9. Every item is a real test file assertion, not a
 
 ### 15.1 Exit gate
 
-1. **≥ 1 pack `confirmed`, with `block` proven end to end on it** `[C1R-B11]`. Promoted to item 1 because Rev 1's ordering let C1 exit having gated nothing on unconfirmed numbers. A lot short on tests is blocked with the numbers and clause cited; force-conform overrides it; the shortfall is verified in the snapshot by direct query (the established prod verification ritual). If **no** pack can be confirmed, C1 **does not exit** — it reports the confirmation failure and Jay decides (§16.0).
+1. **≥ 1 pack `confirmed`, with `block` proven end to end on it** `[C1R-B11]`. Promoted to item 1 because Rev 1's ordering let C1 exit having gated nothing on unconfirmed numbers. A lot short on tests is blocked with the numbers and clause cited; force-conform overrides it; the shortfall is verified in the snapshot by direct query (the established prod verification ritual). If **no** pack can be confirmed, C1 **does not exit** — it reports the confirmation failure and Jay decides (§16.0). **Rev 2.1:** this item is satisfiable — `vicroads-204` is confirmable at grade `'A'` on primary evidence (§8.1.1), with the §8.2 corrections applied `[C1C-1]`.
 2. **The third F0 consumer contract turns green.** `TestSufficiencyVerdict` (`futureConsumers.ts:27-37`) satisfied by the real implementation, not a stub — lot readiness (live), claim readiness (live), **test sufficiency (C1)**. Three of six. "One definition everywhere" still waits on My Work, hold-point packages and handover readiness.
 3. **CI currency assertions green** and demonstrably failing on the synthetic cases of AT-17.
 4. **No behaviour change at `mode: 'off'`/`warn'`**, proven by the three-part gate of §11 C1.1 (regenerated corpus with an accepted diff, extended parity test, conform-decision DB test) — not by a "byte-identical" claim the corpus cannot support `[C1R-12]`.
-5. **`tfnsw-r44.v1` ships `draft` at grade `'C'`** with its unconfirmability stated in the exit evidence and appendix §H item 5 named as the unblocker `[C1R-B11]`.
+5. **`tfnsw-r44.v1` ships `draft`** with its unconfirmability stated in the exit evidence `[C1R-B11]`. **Rev 2.1 `[C1C-7]`:** appendix §H item 5 is **done** and the unblocker is no longer research — the pack is **misattributed** (R44 publishes no frequencies; the numbers are Q6's), so exiting requires the exit evidence to state that the NSW pack is **advisory-only and awaiting re-authoring as `tfnsw-q6`**, blocked on a lot-level *specified relative compaction* attribute (§16 D14). A flat `minCount: 6` under the name R44 must **not** be shipped as confirmed by C1 or any later slice.
 6. **Regime correctness proven, including retroactivity and both query modes** (AT-5, AT-6, AT-7, AT-8).
 7. **Retroactivity observable** `[C1R-15]`: AT-15 asserts it three ways — a `RequirementEvaluation` row query showing the changed `requiredCount` in a later decision's snapshot, a unit test over the regime function, **and** the readiness response of an already-conformed lot. Rev 1's exit item 6 was unobservable through the panel; §5.1.3 made it observable and this item asserts all three.
 8. **All §12 benchmarks met** on the reference dataset, including the unbounded-rule-count member size (AT-13) and no serializable-retry increase.
@@ -1018,7 +1223,7 @@ Plus two C1-specific pilot questions: does the quality manager trust the number 
 ### 16.0 Jay decisions — the four that need a person, not a reviewer
 
 1. **D11 (surface for retroactive shortfalls).** The orchestrator has decided: extend the conformed/claimed short circuits to carry advisory items (§5.1.3), which is the wave's payoff. **Jay can flip to claim-bucket-only** — cheaper, no corpus regeneration, but retroactive shortfalls then surface only in the claim bucket and monitoring.
-2. **D13 (confirmation sequencing).** §8.3 moves the confirmation pass **before** encoding, per plan line 75 and the appendix. This **front-loads a human verification task on Jay or his dev** at the very start of C1.0 — reading the current published VicRoads/DTP Section 204 against every encoded number. The alternative is an explicit recorded deviation, which the plan permits only as a deviation.
+2. **D13 (confirmation sequencing) — RESOLVED by Jay, 2026-07-27: "research agents confirm."** `[C1C-8]` §8.3 moves the confirmation pass **before** encoding, per plan line 75 and the appendix. Rather than a human reading the documents, Jay directed **primary-source research agents** to run it. Two passes ran on 2026-07-27, both grade **A (primary)** — actual specification text retrieved from the issuing department's own catalogue / standards portal and read in full, not summarised. Outcome (§0.1, §8.1.1, §8.2): VicRoads **confirmed with corrections**, TfNSW **misattributed, keep draft**. The pass paid for itself twice over — it caught a **fabricated authority requirement** (§3.3.1) and a **wrong source specification** (§8.2) before either could reach a user. **No open question remains here; it stays listed as the record of the call.**
 3. **D1 (default gate mode).** `warn` recommended. It is also what allowed Rev 1 to exit gating nothing — which exit item 1 now closes independently.
 4. **D12 (permission matrix).** §10.2's rows are the spec's own design calls because the plan and appendix are silent. Worth thirty seconds of Jay's eyes, especially "nobody may waive a rule per lot; force-conform is the only escape hatch".
 
@@ -1041,7 +1246,7 @@ Plus two C1-specific pilot questions: does the quality manager trust the number 
 - **NULL layer** → **member of the layer-agnostic stream only** (`layerBucket = '*'`), never of a layer-discriminated rule's stream. Agrees with the orchestrator's default.
 - **A lot whose `activitySlug` is NULL** (fold `family`/`none`) → **not a stream member, and its presence in another lot's window makes that window INCOMPLETE, so `reduced` cannot be earned across it.** This **differs from the orchestrator's stated default** ("absence is skipped, not counted as non-conforming"), and the argument is the spec's own doctrine: §7.1 says unknown is never satisfied, and a `reduced` regime is a **relaxation** — earning it across a history entry CIVOS cannot read is precisely "treating unknown as satisfied". The orchestrator's skip can grant 3-instead-of-6 off an unreadable history, an **under-testing** error; this version's cost is that a mis-typed lot keeps its neighbours at **full** frequency until someone classifies it — an over-testing error plus a nudge toward the data hygiene C1 wants. Note it does **not** mark the stream non-conforming permanently: classify the lot and the stream heals on the next read. Jay/orchestrator can overrule; the flag is here because the two options differ in which direction they fail.
 
-**D8 — TfNSW pack scope.** → **Count only (n = 6); no CDR.** A statistic over result values needs C3's LIMS-grade data, and a half-implemented statistical acceptance test produces confident wrong compliance answers. Reviewer strongly agrees, and adds the sharper point now encoded in §8.1: even the count is C-graded, so R44 is `draft`-forever pending appendix §H item 5.
+**D8 — TfNSW pack scope.** → **No statistic; and as of Rev 2.1, no flat count either** `[C1C-7]`. The "no CDR" half stands and is strengthened: a statistic over result values needs C3's LIMS-grade data, a half-implemented statistical acceptance test produces confident wrong compliance answers, and the term "Characteristic Density Ratio" turns out not to be TfNSW terminology at all (the real statistic is `Q_L = x̄ − ks` with `k` from Q6 Table Q6/L.3). **The "count only (n = 6)" half is withdrawn.** The confirmation pass proved `n = 6` is not an R44 figure and not a flat figure: it is one cell of Q6 Table Q6/L.1, a compaction-band × area-band table with floors 1–10 (§8.2.1). Shipping it flat would be **over-strict** on the common Selected Material Zone lot (5 required) and **under-strict** at 102.0 % on a large lot (10 required). So the NSW pack ships `draft` and advisory-only, and the correct scope is a **re-authored Q6 pack** — D14.
 
 **D9 — New dependencies.** → **None.** Arithmetic over data already fetched plus one bounded query. Recorded as a decision, not an omission.
 
@@ -1058,7 +1263,16 @@ Plus two C1-specific pilot questions: does the quality manager trust the number 
 
 **D12 — Permission matrix (NEW).** → §10.2 as written; the spec's own design calls, Jay-visible. See §16.0.
 
-**D13 — Confirmation sequencing (NEW).** → **Confirm before encoding** (§8.3), per plan line 75. Front-loads a human task; the alternative is a recorded deviation. See §16.0.
+**D13 — Confirmation sequencing (NEW).** → **Confirm before encoding** (§8.3), per plan line 75. **RESOLVED by Jay 2026-07-27 as "research agents confirm"** — both passes ran, both primary-source, both reports in `docs/research/` `[C1C-8]`. See §16.0 and §0.1.
+
+**D14 — The two attributes the confirmed sources need, and CIVOS does not have (NEW, Rev 2.1).** → **Named as scope items, deferred out of C1; nothing is encoded that pretends they exist** `[C1C-3]` `[C1C-7]`. Both confirmation passes landed on the same class of gap: the authority discriminates on a lot property CIVOS does not record.
+
+| Missing attribute                                                            | What it unblocks                                                                                                                              | Consequence of not having it in C1                                                                                     |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Material type** (Type A / B / C) — `Lot.materialType` or `appliesTo.materialAliases` | Section 204's lot-size caps (Type A 5,000 m²; Type B 10,000 m² or a day's production; Type C none)                                     | **No `maxLotSize` encoded at all** (§3.3.2). Advisory-only feature, so C1 exits without it.                            |
+| **Specified relative compaction** (the % band) — a new lot attribute, or ITP-derived | Q6 Table Q6/L.1 row selection, i.e. **any** faithful NSW frequency pack (§8.2.1)                                                       | **The NSW pack cannot ship correct.** `tfnsw-r44.v1` stays `draft` and advisory; `tfnsw-q6.v1` is a later slice.       |
+
+Neither is built in C1: the first gates an advisory warning only, and the second is a data-model addition with its own entry surfaces (single, bulk, importer) that would swell C1.1's already-large scope. **The alternative — encoding the caps and the flat `n = 6` anyway — is exactly the "confident wrong number" failure this wave exists to prevent**, and in the VicRoads case it would have shipped a requirement the authority never wrote. Jay's call if the NSW market makes the compaction-band field urgent; the spec's own recommendation is to build it in C2 alongside the sample lifecycle, where the same field is wanted anyway.
 
 ---
 
@@ -1074,7 +1288,9 @@ Plus two C1-specific pilot questions: does the quality manager trust the number 
 
 **Plan tension — the chainage sentence.** The program's target explanation includes "no sample for CH 1,240–1,310", a **spatial coverage** claim needing per-test location. §4.4 drops the clause; C3 restores it.
 
-**Carried forward without independent verification:** the VicRoads 204 figures (2015 council republication) and R44's unpinned edition. §8.3 makes confirmation a C1.0 precondition rather than a promise. TMR / DIT SA / MRWA numerics excluded entirely.
+**Carried forward without independent verification — CLOSED at Rev 2.1** `[C1C-1]` `[C1C-7]`. Rev 2 carried the VicRoads 204 figures (2015 **council republication**) and R44's unpinned edition, with §8.3 making confirmation a C1.0 precondition rather than a promise. Both are now verified against primary documents (§0.1, §8.1.1), and the council-republication provenance turned out to matter exactly as feared: it was the source of the **500 m² "under paved areas"** cap that exists in Wyndham City Council's amendment and **nowhere in VicRoads Section 204** (§3.3.1). The R44 edition, once pinned, showed the pack was pointed at the **wrong specification** (§8.2). TMR / DIT SA / MRWA numerics remain excluded entirely.
+
+**Standing lesson for later packs.** Both defects were invisible from the secondary artefacts and obvious in the primary document within one read. A council or consultant republication of an authority specification is a **different document with the same section number**; it may only be used to locate the primary, never to source a number.
 
 ### 17.2 Reviewer claims REFUTED with evidence
 
@@ -1087,7 +1303,7 @@ Two of the fifteen recommendations do not survive checking. Both are recorded ra
 
 Every one of Rev 1's nine `conformancePrerequisites.ts` citations already used the correct un-prefixed path. Verified by `grep -n "evidenceReadiness" docs/plans/wave-c1-test-sufficiency-spec-2026-07-26.md` at Rev 1's `da847c55` content — two hits, both correct. Nothing changed.
 
-**`[C1R-1]` (sourcing limb only) — "The 'for statistical validity' quote is plan line 15's, not the appendix's." → PARTIALLY REFUTED.** The phrase appears in **both**. Plan line 15 has "separate minimum count for statistical validity"; the appendix's R44 row states, in its Decision-supported column, "**C1 statistical-validity constraint separate from area coverage**". So Rev 1's attribution to the appendix was defensible. **The substantive half of `[C1R-1]` is accepted in full and folded** (§3.2.1): no cited authority supplies a per-area frequency figure, so `max()` is a no-op for everything C1 ships, and Rev 1's illustrative "1-test-per-500 m²" was invented and is withdrawn. Only the sourcing accusation is corrected.
+**`[C1R-1]` (sourcing limb only) — "The 'for statistical validity' quote is plan line 15's, not the appendix's." → PARTIALLY REFUTED.** The phrase appears in **both**. Plan line 15 has "separate minimum count for statistical validity"; the appendix's R44 row states, in its Decision-supported column, "**C1 statistical-validity constraint separate from area coverage**". So Rev 1's attribution to the appendix was defensible. **The substantive half of `[C1R-1]` is accepted and folded** (§3.2.1): `max()` is a no-op for everything C1 ships, and Rev 1's illustrative "1-test-per-500 m²" was invented and is withdrawn. Only the sourcing accusation is corrected. **Rev 2.1 narrows the accepted half** `[C1C-7]`: the correct statement is "**VicRoads Section 204 supplies no per-area frequency figure**", not "no cited authority does" — **TfNSW Q6 Table Q6/L.1 does** (§8.2.1), and for a Q6 pack the `max()` arithmetic is exactly right.
 
 **Minor citation slips in the review, folded with corrections rather than as-written:**
 
