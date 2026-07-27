@@ -4,7 +4,7 @@ import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/lib/auth';
-import { canCreateLots, canDeleteLots, canManageProjectSettings } from '@/lib/roles';
+import { canCreateLots, canDeleteLots, canEditLots, canManageProjectSettings } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard';
 import { ImportLotsModal } from '@/components/lots/ImportLotsModal';
@@ -65,7 +65,7 @@ export function LotsPage() {
   // ruleset governs the project. `queryKeys.project` caches the UNWRAPPED
   // project — every consumer must resolve the same shape or they poison each
   // other's cache.
-  const { data: projectAuthority } = useQuery({
+  const projectAuthorityQuery = useQuery({
     queryKey: queryKeys.project(projectId ?? 'none'),
     queryFn: () =>
       apiFetch<{ project?: { state?: string; specificationSet?: string } }>(
@@ -73,12 +73,20 @@ export function LotsPage() {
       ).then((response) => response.project ?? null),
     enabled: !!projectId,
   });
+  const projectAuthority = projectAuthorityQuery.data;
   const rulesetsQuery = useSufficiencyRulesets();
   const governingRuleset = resolveProjectRuleset(
     rulesetsQuery.data?.rulesets,
     projectAuthority?.state,
     projectAuthority?.specificationSet,
   );
+  // C1 (F14): a failed fetch is not "this project has no pack". Silently
+  // dropping the affordance reads as an authoritative "not supported here".
+  const rulesetLoadFailed = rulesetsQuery.isError || projectAuthorityQuery.isError;
+  const retryRulesetLoad = () => {
+    void rulesetsQuery.refetch();
+    void projectAuthorityQuery.refetch();
+  };
 
   // URL-based filter state
   const statusFilterParam = searchParams.get('status') || '';
@@ -139,6 +147,7 @@ export function LotsPage() {
   // Access checks
   const projectScopedRole = getProjectScopedRole(user);
   const canCreate = canCreateLots(projectScopedRole);
+  const canEdit = canEditLots(projectScopedRole);
   const canDelete = canDeleteLots(projectScopedRole);
 
   // View mode state
@@ -229,18 +238,27 @@ export function LotsPage() {
                   Assign Subcontractor ({actions.selectedLots.size})
                 </Button>
               )}
-              {/* Wave C1: only where a shipped ruleset governs the project —
-                  elsewhere the attributes have no consumer. */}
-              {!isSubcontractor && governingRuleset && (
-                <Button
-                  variant="outline"
-                  onClick={() => actions.setBulkTestAttributesModalOpen(true)}
-                >
-                  Set Testing Attributes ({actions.selectedLots.size})
-                </Button>
-              )}
             </>
           )}
+          {/* Wave C1: only where a shipped ruleset governs the project —
+              elsewhere the attributes have no consumer. Gated on canEdit, NOT
+              canCreate: the backend bulk route enforces LOT_EDITORS (F8). */}
+          {canEdit && !isSubcontractor && actions.selectedLots.size > 0 && governingRuleset && (
+            <Button variant="outline" onClick={() => actions.setBulkTestAttributesModalOpen(true)}>
+              Set Testing Attributes ({actions.selectedLots.size})
+            </Button>
+          )}
+          {/* C1 (F14): the pack lookup failed — say so and offer a retry rather
+              than silently behaving like an unsupported project. */}
+          {canEdit &&
+            !isSubcontractor &&
+            actions.selectedLots.size > 0 &&
+            !governingRuleset &&
+            rulesetLoadFailed && (
+              <Button variant="outline" onClick={retryRulesetLoad}>
+                Testing attributes unavailable — Retry
+              </Button>
+            )}
           {canDelete && actions.selectedLots.size > 0 && (
             <Button
               variant="outline"

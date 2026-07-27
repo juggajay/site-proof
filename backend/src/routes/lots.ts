@@ -61,6 +61,14 @@ lotsRouter.patch(
         status: true,
         budgetAmount: true,
         updatedAt: true,
+        // C1 (F7): prior values of the compliance-driving testing inputs, so the
+        // audit trail records the direction of a requirement change, not just
+        // that a field was touched.
+        activityType: true,
+        activitySlug: true,
+        testScale: true,
+        quantityValue: true,
+        quantityUnit: true,
       },
     });
 
@@ -254,6 +262,26 @@ lotsRouter.patch(
     });
 
     const changedFields = Object.keys(updateData).sort();
+    // C1 (F7): scale, quantity and activity classification all move the required
+    // test count, so the audit record carries from/to — same shape as the
+    // existing status/budget pairs. Quantity is logged as a value+unit pair
+    // because either half alone is meaningless.
+    const quantityChanged = quantityValue !== undefined || quantityUnit !== undefined;
+    const quantityAudit = {
+      from: {
+        value: lot.quantityValue != null ? Number(lot.quantityValue) : null,
+        unit: lot.quantityUnit ?? null,
+      },
+      to: {
+        value:
+          quantityValue !== undefined
+            ? quantityValue
+            : lot.quantityValue != null
+              ? Number(lot.quantityValue)
+              : null,
+        unit: quantityUnit !== undefined ? quantityUnit : (lot.quantityUnit ?? null),
+      },
+    };
     if (changedFields.length > 0) {
       await createAuditLog({
         projectId: lot.projectId,
@@ -272,6 +300,21 @@ lotsRouter.patch(
                 budgetAmount: {
                   from: lot.budgetAmount != null ? Number(lot.budgetAmount) : null,
                   to: updatedLot.budgetAmount != null ? Number(updatedLot.budgetAmount) : null,
+                },
+              }
+            : {}),
+          ...(updateData.testScale !== undefined
+            ? { testScale: { from: lot.testScale ?? null, to: testScale ?? null } }
+            : {}),
+          ...(quantityChanged ? { quantity: quantityAudit } : {}),
+          ...(updateData.activityType !== undefined
+            ? {
+                activity: {
+                  from: { type: lot.activityType, slug: lot.activitySlug ?? null },
+                  to: {
+                    type: activityType,
+                    slug: (updateData.activitySlug as string | null | undefined) ?? null,
+                  },
                 },
               }
             : {}),

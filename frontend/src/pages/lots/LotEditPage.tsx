@@ -54,7 +54,7 @@ export function LotEditPage() {
   // actually has a shipped frequency ruleset. Both reads share caches that other
   // surfaces already populate — `queryKeys.project` is the UNWRAPPED project, so
   // this consumer must resolve the same shape or it poisons the shared cache.
-  const { data: projectAuthority } = useQuery({
+  const projectAuthorityQuery = useQuery({
     queryKey: queryKeys.project(projectId ?? 'none'),
     queryFn: () =>
       apiFetch<{ project?: { state?: string; specificationSet?: string } }>(
@@ -62,12 +62,20 @@ export function LotEditPage() {
       ).then((response) => response.project ?? null),
     enabled: !!projectId,
   });
+  const projectAuthority = projectAuthorityQuery.data;
   const rulesetsQuery = useSufficiencyRulesets();
   const governingRuleset = resolveProjectRuleset(
     rulesetsQuery.data?.rulesets,
     projectAuthority?.state,
     projectAuthority?.specificationSet,
   );
+  // C1 (F14): a failed fetch is not "this project has no pack" — keep the
+  // section visible with a retry instead of silently removing the controls.
+  const rulesetLoadFailed = rulesetsQuery.isError || projectAuthorityQuery.isError;
+  const retryRulesetLoad = () => {
+    void rulesetsQuery.refetch();
+    void projectAuthorityQuery.refetch();
+  };
   const [offlineSyncStatus, setOfflineSyncStatus] = useState<LotEditOfflineSyncStatus>('synced');
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
 
@@ -465,6 +473,8 @@ export function LotEditPage() {
           canViewBudgets={canViewBudgets}
           subcontractors={subcontractors}
           ruleset={governingRuleset}
+          rulesetLoadFailed={rulesetLoadFailed}
+          onRetryRulesetLoad={retryRulesetLoad}
         />
 
         <LotEditFormActions

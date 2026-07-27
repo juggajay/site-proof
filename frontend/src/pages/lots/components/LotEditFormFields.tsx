@@ -28,6 +28,9 @@ interface LotEditFormFieldsProps {
   subcontractors: Subcontractor[];
   /** Wave C1: the governing frequency ruleset, or null when the project has none. */
   ruleset?: SufficiencyRuleset | null;
+  /** C1 (F14): the pack lookup failed — distinct from "this project has none". */
+  rulesetLoadFailed?: boolean;
+  onRetryRulesetLoad?: () => void;
 }
 
 export function LotEditFormFields({
@@ -38,6 +41,8 @@ export function LotEditFormFields({
   canViewBudgets,
   subcontractors,
   ruleset,
+  rulesetLoadFailed = false,
+  onRetryRulesetLoad,
 }: LotEditFormFieldsProps) {
   return (
     <>
@@ -228,12 +233,34 @@ export function LotEditFormFields({
       {/* Testing — Wave C1 (spec §9.4). Only rendered when the project's
           authority actually has a shipped frequency ruleset: on every other
           project these fields would be three inputs nothing reads. */}
+      {!ruleset && rulesetLoadFailed && (
+        <div className="rounded-lg border p-6 space-y-3">
+          <h2 className="text-lg font-semibold">Testing</h2>
+          <p className="text-sm text-destructive">
+            Could not load the test-frequency specification for this project. The testing fields are
+            hidden until it loads — this does not mean the project has none.
+          </p>
+          {onRetryRulesetLoad && (
+            <button
+              type="button"
+              onClick={onRetryRulesetLoad}
+              className="rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
       {ruleset && (
         <div className="rounded-lg border p-6 space-y-4">
           <h2 className="text-lg font-semibold">Testing</h2>
           <p className="text-sm text-muted-foreground">
             Used to check this lot has enough tests under {ruleset.authority} {ruleset.document}.
-            Leave blank if you do not know — CIVOS will say it cannot check rather than assume.
+            {ruleset.defaultScale
+              ? ` Leaving the scale blank uses the specification default (Scale ${ruleset.defaultScale}).`
+              : ' Leaving the scale blank means CIVOS cannot check this lot.'}{' '}
+            Quantity is recorded for rules that use it; it does not change this check today.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

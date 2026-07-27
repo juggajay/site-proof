@@ -21,6 +21,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { parseAuditLogChanges } from '../../lib/auditLog.js';
 import { prisma } from '../../lib/prisma.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
@@ -273,6 +274,46 @@ describe('PATCH /api/lots/:id carries the three fields and re-folds the slug', (
     expect(after?.quantityUnit).toBe('m3');
     // The slug never drifts from the free text it folds (§6).
     expect(after?.activitySlug).toBe('landscaping');
+  });
+
+  // F7 (external review 2026-07-27): a field-name list cannot prove which way a
+  // requirement moved. Scale A -> C halves the required test count, so the audit
+  // record has to carry from/to or it is not a detection control.
+  it('records from/to for scale, quantity (as a pair) and activity classification', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-PATCH-AUDIT`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        activitySlug: 'earthworks_general',
+        status: 'in_progress',
+        testScale: 'A',
+        quantityValue: 900,
+        quantityUnit: 'm2',
+      },
+    });
+    const res = await request(app)
+      .patch(`/api/lots/${lot.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ testScale: 'C', quantityValue: 300, activityType: 'Landscaping' });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { entityType: 'lot', entityId: lot.id, action: 'lot_updated' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(audit).not.toBeNull();
+    expect(parseAuditLogChanges(audit!.changes)).toMatchObject({
+      testScale: { from: 'A', to: 'C' },
+      // The unit was not sent, so the pair reports the unchanged unit rather
+      // than a naked number with no dimension.
+      quantity: { from: { value: 900, unit: 'm2' }, to: { value: 300, unit: 'm2' } },
+      activity: {
+        from: { type: 'Earthworks', slug: 'earthworks_general' },
+        to: { type: 'Landscaping', slug: 'landscaping' },
+      },
+    });
   });
 
   it('rejects a non-positive quantity — NULL means unknown, zero is nonsense', async () => {

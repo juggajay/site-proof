@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LotEditFormFields } from './LotEditFormFields';
 import type { LotEditFormData, Subcontractor } from '../lotEditData';
+import type { SufficiencyRuleset } from '@/lib/testSufficiency';
 
 afterEach(() => {
   cleanup();
@@ -23,6 +24,19 @@ const baseFormData: LotEditFormData = {
   testScale: '',
   quantityValue: '',
   quantityUnit: '',
+};
+
+const ruleset: SufficiencyRuleset = {
+  id: 'vicroads-204.v1',
+  state: 'VIC',
+  specSet: 'VicRoads',
+  scaleKeys: ['A', 'B', 'C'],
+  defaultScale: 'A',
+  status: 'confirmed',
+  authority: 'VicRoads',
+  document: 'Section 204',
+  edition: 'v8.0',
+  rules: [],
 };
 
 const subcontractors: Subcontractor[] = [
@@ -121,5 +135,36 @@ describe('LotEditFormFields', () => {
     // The legacy clear-only control is still gated by detailsLocked.
     expect(screen.getByLabelText('Assigned Subcontractor')).toBeDisabled();
     expect(screen.getByLabelText('Budget Amount ($)')).toBeEnabled();
+  });
+
+  // F13/F14 (external review 2026-07-27).
+  describe('Testing section', () => {
+    it('says blank scale uses the specification default, not "cannot check" (F13)', () => {
+      renderFields({ ruleset });
+
+      expect(screen.getByText(/uses the specification default \(Scale A\)/i)).toBeInTheDocument();
+      // The old copy promised an unknown verdict the backend never produces.
+      expect(screen.queryByText(/cannot check/i)).not.toBeInTheDocument();
+      // Quantity is stored, not consumed by the live VicRoads rule.
+      expect(screen.getByText(/does not change this check today/i)).toBeInTheDocument();
+    });
+
+    it('is simply absent when the project has no governing pack', () => {
+      renderFields({ ruleset: null, rulesetLoadFailed: false });
+      expect(screen.queryByText('Testing')).not.toBeInTheDocument();
+    });
+
+    it('stays visible with an error and a retry when the pack lookup fails (F14)', () => {
+      const onRetryRulesetLoad = vi.fn();
+      renderFields({ ruleset: null, rulesetLoadFailed: true, onRetryRulesetLoad });
+
+      expect(screen.getByText('Testing')).toBeInTheDocument();
+      expect(
+        screen.getByText(/could not load the test-frequency specification/i),
+      ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(onRetryRulesetLoad).toHaveBeenCalledTimes(1);
+    });
   });
 });
