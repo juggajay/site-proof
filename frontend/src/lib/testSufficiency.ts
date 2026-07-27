@@ -16,6 +16,14 @@ export interface SufficiencyRulesetRule {
   clause: string;
   /** D14.3 §9.3: the Level-2 activity slugs this rule applies to. */
   activitySlugs: string[];
+  /**
+   * D14.5: this rule's counts come from one lot-area band list used whatever the
+   * lot's scale, so no answer the user could give changes the number. Optional
+   * because a payload cached from before the field shipped simply omits it —
+   * absent reads as "not known to be scale-independent", which keeps today's
+   * behaviour rather than hiding a control that is needed.
+   */
+  scaleIndependent?: boolean;
 }
 
 /**
@@ -36,6 +44,27 @@ export function rulesetAppliesToActivity(
 ): boolean {
   if (!activitySlug) return true;
   return ruleset.rules.some((rule) => rule.activitySlugs.includes(activitySlug));
+}
+
+/**
+ * D14.5 — is the scale worth ASKING for on this lot?
+ *
+ * A pavement lot on `tfnsw-q6.v1` matches only rules keyed on lot area alone, so
+ * the control's sentence ("Leaving the scale blank means CIVOS cannot check this
+ * lot") is false and a band picked is inert. One rule that still reads the scale
+ * is enough to keep the control — the same pack keys its earthworks rule by band.
+ *
+ * A lot with no canonical slug keeps the control, for the same reason
+ * {@link rulesetAppliesToActivity} keeps the card: nothing has been ruled out.
+ */
+export function scaleAppliesToActivity(
+  ruleset: SufficiencyRuleset,
+  activitySlug: string | null,
+): boolean {
+  if (!activitySlug) return true;
+  return ruleset.rules.some(
+    (rule) => rule.activitySlugs.includes(activitySlug) && !rule.scaleIndependent,
+  );
 }
 
 export interface SufficiencyRuleset {

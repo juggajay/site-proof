@@ -5,7 +5,11 @@
 import { ActivityTypeOptions } from '@/components/ActivityTypeOptions';
 import { foldActivityValue } from '@/lib/activityTaxonomy';
 import type { SufficiencyRuleset } from '@/lib/testSufficiency';
-import { QUANTITY_UNIT_OPTIONS, rulesetAppliesToActivity } from '@/lib/testSufficiency';
+import {
+  QUANTITY_UNIT_OPTIONS,
+  rulesetAppliesToActivity,
+  scaleAppliesToActivity,
+} from '@/lib/testSufficiency';
 import type { LotEditFormData, Subcontractor } from '../lotEditData';
 
 const OFFSET_OPTIONS = ['left', 'right', 'full', 'custom'];
@@ -49,12 +53,11 @@ export function LotEditFormFields({
   // pack actually applies to this lot's activity. A 'family' or 'none' fold
   // yields no slug and keeps the card — see `rulesetAppliesToActivity`.
   const activityFold = foldActivityValue(formData.activityType);
-  const showTestingCard =
-    !!ruleset &&
-    rulesetAppliesToActivity(
-      ruleset,
-      activityFold.confidence === 'exact' ? activityFold.slug : null,
-    );
+  const activitySlug = activityFold.confidence === 'exact' ? activityFold.slug : null;
+  const showTestingCard = !!ruleset && rulesetAppliesToActivity(ruleset, activitySlug);
+  // D14.5: every rule this lot matches counts off lot area alone, so there is
+  // nothing to ask — see `scaleAppliesToActivity`.
+  const showScaleControl = !!ruleset && scaleAppliesToActivity(ruleset, activitySlug);
   return (
     <>
       {/* Basic Info */}
@@ -268,39 +271,42 @@ export function LotEditFormFields({
           <h2 className="text-lg font-semibold">Testing</h2>
           <p className="text-sm text-muted-foreground">
             Used to check this lot has enough tests under {ruleset.authority} {ruleset.document}.
-            {ruleset.defaultScale
-              ? ` Leaving the scale blank uses the specification default (Scale ${ruleset.defaultScale}).`
-              : ' Leaving the scale blank means CIVOS cannot check this lot.'}{' '}
+            {showScaleControl &&
+              (ruleset.defaultScale
+                ? ` Leaving the scale blank uses the specification default (Scale ${ruleset.defaultScale}).`
+                : ' Leaving the scale blank means CIVOS cannot check this lot.')}{' '}
             Quantity is recorded for rules that use it; it does not change this check today.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              {/* D14 §9.3: the pack's own word for what this slot carries. On
+            {showScaleControl && (
+              <div>
+                {/* D14 §9.3: the pack's own word for what this slot carries. On
                   NSW the concept is specified relative compaction, not a scale. */}
-              <label htmlFor="testScale" className="block text-sm font-medium mb-1">
-                {ruleset.scaleLabel ?? 'Testing Scale'}
-              </label>
-              <select
-                id="testScale"
-                name="testScale"
-                value={formData.testScale}
-                onChange={onInputChange}
-                disabled={detailsLocked}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
-              >
-                <option value="">
-                  {ruleset.defaultScale
-                    ? `Use specification default (${ruleset.defaultScale})`
-                    : 'Not selected'}
-                </option>
-                {ruleset.scaleKeys.map((scale) => (
-                  <option key={scale} value={scale}>
-                    {scale}
+                <label htmlFor="testScale" className="block text-sm font-medium mb-1">
+                  {ruleset.scaleLabel ?? 'Testing Scale'}
+                </label>
+                <select
+                  id="testScale"
+                  name="testScale"
+                  value={formData.testScale}
+                  onChange={onInputChange}
+                  disabled={detailsLocked}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {ruleset.defaultScale
+                      ? `Use specification default (${ruleset.defaultScale})`
+                      : 'Not selected'}
                   </option>
-                ))}
-              </select>
-            </div>
+                  {ruleset.scaleKeys.map((scale) => (
+                    <option key={scale} value={scale}>
+                      {scale}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label htmlFor="quantityValue" className="block text-sm font-medium mb-1">
