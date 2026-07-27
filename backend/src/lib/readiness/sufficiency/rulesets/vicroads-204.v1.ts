@@ -16,9 +16,18 @@
 //
 // FIGURES, and where they come from: the research appendix's VicRoads claim
 // "6 tests/lot (Scale A/B compaction), 3 (Scale C)" and "Type A lot = one day's
-// production or 5,000 m², whichever is the lesser", plus the ≤ 500 m²
-// under-paved-areas limb. Grade 'A' — but grade is the grade of the SOURCE, not
-// a substitute for reading the document, which is why this ships draft.
+// production or 5,000 m², whichever is the lesser". Grade 'A' — but grade is the
+// grade of the SOURCE, not a substitute for reading the document, which is why
+// this ships draft.
+//
+// The 500 m² "under paved areas" cap is DELIBERATELY ABSENT: it is a Wyndham
+// City Council amendment misattributed to VicRoads, and appears in no version of
+// the VicRoads/DTP document (confirmed against v8.0 Nov 2025 primary and the
+// legacy text). See docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md.
+// The 5,000 m² cap is Type A material ONLY per that same confirmation pass, and
+// FrequencyRule has no material-type discriminator yet — so it is over-broad as
+// encoded. Left as-is for a follow-up correction slice; DO NOT promote this pack
+// to `confirmed` until that lands.
 //
 // NOT encoded, deliberately:
 //   * NO `reduced` limb [C1R-B8]. The appendix supplies the 204.14(c) TRIGGER
@@ -68,10 +77,7 @@ const COMPACTION_DENSITY: FrequencyRule = {
     activitySlugs: ['earthworks_general', 'earthworks_subgrade_prep'],
   },
   minCountByScale: { A: 6, B: 6, C: 3 },
-  maxLotSize: [
-    { unit: 'm2', value: 5000 },
-    { unit: 'm2', value: 500, areaZoneAliases: ['paved', 'under paved areas', 'under pavement'] },
-  ],
+  maxLotSize: [{ unit: 'm2', value: 5000 }],
   provenance: PROVENANCE,
 };
 

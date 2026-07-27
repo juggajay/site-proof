@@ -67,14 +67,14 @@ describe('the shipped packs are registrable and honestly graded', () => {
     expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v1', 'tfnsw-r44.v1']);
   });
 
-  it('vicroads-204.v1: compaction-scoped counts 6/6/3, the 5,000 m² and paved caps, NO reduced limb', () => {
+  it('vicroads-204.v1: compaction-scoped counts 6/6/3, the 5,000 m² cap, NO reduced limb', () => {
     const vicroads = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
     expect(vicroads?.state).toBe('vic');
     expect(vicroads?.scaleKeys).toEqual(['A', 'B', 'C']);
     const compaction = vicroads?.rules[0];
     expect(compaction?.testType).toBe('compaction');
     expect(compaction?.minCountByScale).toEqual({ A: 6, B: 6, C: 3 });
-    expect(compaction?.maxLotSize?.map((cap) => cap.value)).toEqual([5000, 500]);
+    expect(compaction?.maxLotSize?.map((cap) => cap.value)).toEqual([5000]);
     // [C1R-B8]: the appendix supplies the 204.14(c) TRIGGER and no reduced count.
     expect(compaction?.reduced).toBeUndefined();
     // [C1R-1]: no cited authority supplies a per-area frequency figure.

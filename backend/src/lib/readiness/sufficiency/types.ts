@@ -89,13 +89,15 @@ export interface FrequencyRule {
   /**
    * Advisory only: the ruleset's maximum lot size. Never blocks (§3.3).
    *
-   * A LIST, not the single object §3.2's proposed type shows, because §3.3 needs
-   * TWO caps on the SAME rule ("5,000 m² generally, and 500 m² under paved
-   * areas — a second `maxLotSize` on the rule whose `appliesTo.areaZoneAliases`
-   * matches paved-area zones"). Encoding the paved limb as a separate rule
-   * instead would duplicate the compaction COUNT requirement for paved lots —
-   * two identical shortfall warnings and a double-counted
-   * `insufficientRules` aggregate (§5.4.3). See the PR body.
+   * A LIST, not the single object §3.2's proposed type shows, so one rule can
+   * carry several zone-qualified caps without being split — a second rule would
+   * duplicate the COUNT requirement and yield two identical shortfall warnings
+   * plus a double-counted `insufficientRules` aggregate (§5.4.3).
+   *
+   * §3.3's motivating example (a 500 m² "under paved areas" cap beside the
+   * 5,000 m² one) is WITHDRAWN — the confirmation pass proved it a Wyndham City
+   * Council amendment misattributed to VicRoads, and it ships nowhere. The list
+   * shape stays for the packs that legitimately need multiple caps.
    */
   maxLotSize?: readonly LotSizeCap[];
   /**
