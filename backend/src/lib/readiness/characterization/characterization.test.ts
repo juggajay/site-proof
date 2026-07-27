@@ -26,6 +26,10 @@ app.use(errorHandler);
 
 let token: string;
 let projectId: string;
+// F1.1: a second, VIC/`vicroads` project so the real-vocabulary lots of
+// VIC_CORPUS resolve the shipped `vicroads-204.v1` pack. The main corpus project
+// stays NSW/TfNSW and resolves no ruleset — deliberately unchanged.
+let vicProjectId: string;
 let companyId: string;
 let userId: string;
 let lots: Array<{ lotNumber: string; id: string }>;
@@ -59,19 +63,35 @@ beforeAll(async () => {
     data: { projectId, userId, role: 'project_manager', status: 'active' },
   });
 
-  lots = await seedCorpus({ projectId, companyId, userId });
+  const vicProject = await prisma.project.create({
+    data: {
+      name: `Char VIC Project ${stamp}`,
+      projectNumber: `CHARVIC-${stamp}`,
+      companyId,
+      status: 'active',
+      state: 'VIC',
+      specificationSet: 'VicRoads',
+    },
+  });
+  vicProjectId = vicProject.id;
+  await prisma.projectUser.create({
+    data: { projectId: vicProjectId, userId, role: 'project_manager', status: 'active' },
+  });
+
+  lots = await seedCorpus({ projectId, companyId, userId, vicProjectId });
 }, 60_000);
 
 afterAll(async () => {
   const lotIds = lots?.map((lot) => lot.id) ?? [];
-  await prisma.testResult.deleteMany({ where: { projectId } });
+  const projectIds = [projectId, vicProjectId].filter(Boolean);
+  await prisma.testResult.deleteMany({ where: { projectId: { in: projectIds } } });
   await prisma.nCRLot.deleteMany({ where: { lotId: { in: lotIds } } });
-  await prisma.nCR.deleteMany({ where: { projectId } });
+  await prisma.nCR.deleteMany({ where: { projectId: { in: projectIds } } });
   await prisma.holdPoint.deleteMany({ where: { lotId: { in: lotIds } } });
-  await prisma.lot.deleteMany({ where: { projectId } });
-  await prisma.iTPTemplate.deleteMany({ where: { projectId } });
-  await prisma.projectUser.deleteMany({ where: { projectId } });
-  await prisma.project.deleteMany({ where: { id: projectId } });
+  await prisma.lot.deleteMany({ where: { projectId: { in: projectIds } } });
+  await prisma.iTPTemplate.deleteMany({ where: { projectId: { in: projectIds } } });
+  await prisma.projectUser.deleteMany({ where: { projectId: { in: projectIds } } });
+  await prisma.project.deleteMany({ where: { id: { in: projectIds } } });
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.company.deleteMany({ where: { id: companyId } });
 });
