@@ -288,6 +288,34 @@ export function ncrOverdue(ncr: Pick<NcrRow, 'status' | 'dueDate'>, now: Date): 
 }
 
 /**
+ * How many FULL days have elapsed since a due date — the quantitative limb of
+ * {@link ncrOverdue}, and the single source for every "N days overdue" string.
+ *
+ * Deliberately a UNIFICATION, not a naming (contra the F0.1 header rule): the
+ * dashboard widget and the A4 Needs Attention screen were rendering the same
+ * NCR as "42 days overdue" and "41 days overdue" on the same page load, because
+ * the backend widget used `Math.ceil` (`statsRoute.ts`, `projectOverviewRoute.ts`)
+ * while the screen used `Math.floor` (`NeedsAttentionPage.tsx` `timeChip`).
+ * One fact cannot have two numbers, so the divergence collapses here.
+ *
+ * FLOOR wins, and the legacy `ceil` is demonstrably wrong rather than merely
+ * different. NCR due dates are midnight-anchored, and the overdue query is
+ * `dueDate < now`, so an NCR due TODAY is already in the feed a second after
+ * midnight — where `ceil` reports "1 day overdue" for something not yet a day
+ * late, and overstates the calendar-day difference by one for every row except
+ * the exact-midnight instant. `floor` reports the full days actually elapsed,
+ * which equals the calendar-day difference for midnight-anchored dates.
+ *
+ * Returns 0 for an absent due date and never returns a negative — a row that is
+ * not yet due is 0 days overdue, not -3.
+ */
+export function daysOverdue(dueDate: Date | string | null | undefined, now: Date): number {
+  const due = toDate(dueDate);
+  if (!due) return 0;
+  return Math.max(0, Math.floor((now.getTime() - due.getTime()) / DAY_MS));
+}
+
+/**
  * The canonical severity value that marks an NCR as "serious" (execution spec
  * §2). Exported so DB-level `where` filters that cannot consume a row predicate
  * can bind to the SAME value {@link ncrSerious} tests, keeping the query and the

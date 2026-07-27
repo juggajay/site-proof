@@ -3,6 +3,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { daysOverdue } from '../../lib/readiness/predicates.js';
 import { buildProjectOverviewResponse } from './overviewResponses.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
@@ -281,9 +282,7 @@ export function createProjectOverviewRouter({
           title: `NCR ${ncr.ncrNumber} overdue`,
           description: ncr.description?.substring(0, 80) || 'No description',
           urgency: (ncr.category === 'major' ? 'critical' : 'warning') as 'critical' | 'warning',
-          daysOverdue: ncr.dueDate
-            ? Math.ceil((today.getTime() - new Date(ncr.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-            : 0,
+          daysOverdue: daysOverdue(ncr.dueDate, today),
           link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
         })),
         ...staleHoldPoints.map((hp) => ({

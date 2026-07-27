@@ -91,7 +91,12 @@ export function ItemsRequiringAttentionWidget({
                           {item.title}
                         </span>
                         <span className="font-mono text-xs font-medium tabular-nums text-destructive">
-                          {item.daysOverdue} day{item.daysOverdue !== 1 ? 's' : ''} overdue
+                          {/* `daysOverdue` counts FULL days elapsed, so a row due earlier
+                              today is 0 — say "Overdue" rather than "0 days overdue",
+                              matching NeedsAttentionPage's `timeChip`. */}
+                          {item.daysOverdue
+                            ? `${item.daysOverdue} day${item.daysOverdue !== 1 ? 's' : ''} overdue`
+                            : 'Overdue'}
                         </span>
                       </div>
                       <p className="mt-1 truncate text-xs text-muted-foreground">

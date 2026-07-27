@@ -131,6 +131,11 @@ function pluralDays(count: number): string {
  */
 function timeChip(assignment: ActionAssignment, now: number): { label: string; className: string } {
   if (assignment.isOverdue) {
+    // FULL days elapsed — the mirror of the backend's `daysOverdue`
+    // (`lib/readiness/predicates.ts`), which feeds the dashboard attention
+    // widget's `daysOverdue` from the same `dueDate`. Both surfaces show one
+    // NCR one number, so this floor and that floor must stay identical; the
+    // parity is pinned in `actionAssignments.test.ts`. Do not "fix" this to ceil.
     const days = assignment.dueAt
       ? Math.floor((now - Date.parse(assignment.dueAt)) / DAY_MS)
       : null;
