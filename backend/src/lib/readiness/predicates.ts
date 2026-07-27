@@ -21,6 +21,19 @@
 
 import { isPendingTestResultStatus } from '../testResultStatus.js';
 
+/**
+ * The Wave C1 sufficiency evaluator's boolean limb, re-exported so
+ * `REASON_CODE_PROVENANCE` can cite a real predicate-library export for
+ * `insufficient_test_count` / `test_sufficiency_met` (`contracts.test.ts:59-64`)
+ * instead of dishonestly tagging them `'engine'` (C1 spec §4.3).
+ *
+ * Re-exported from `sufficiency/counts.ts`, not `sufficiency/evaluate.ts` as the
+ * spec §4.3 snippet writes it: `evaluate.ts` imports `testPassing`/`testFailing`
+ * from THIS file, so re-exporting out of it would make predicates ↔ evaluate a
+ * circular import. `counts.ts` is the leaf that holds the same function.
+ */
+export { testCountSufficient } from './sufficiency/counts.js';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Coerce a Date | ISO string | null into a Date, or null when absent/invalid. */
@@ -148,6 +161,22 @@ export interface TestMatchItem {
  */
 export function testPassing(test: TestResultRow): boolean {
   return test.passFail === 'pass' && test.status === 'verified';
+}
+
+/**
+ * A test result is FAILING evidence only when it has FAILED and reached the
+ * terminal 'verified' status — the exact status-qualified mirror of
+ * {@link testPassing} (Wave C1 spec §3.4.2 `[C1R-B8]`).
+ *
+ * Symmetry is load-bearing for the frequency-regime state machine: an
+ * unqualified `passFail === 'fail'` would let a REJECTED or never-verified
+ * failure permanently reset a frequency stream while a pass must clear
+ * verification to count. `TestResult.status` defaults to 'requested' and the
+ * table carries `rejectedById`/`rejectedAt`/`rejectionReason`
+ * (`schema.prisma:846-853`), so unverified failures are a real population.
+ */
+export function testFailing(test: TestResultRow): boolean {
+  return test.passFail === 'fail' && test.status === 'verified';
 }
 
 /**

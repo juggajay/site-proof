@@ -1,0 +1,242 @@
+// Wave C1 — the frequency-regime state machine (spec §3.4). COMPUTED, never
+// stored: a stored regime goes stale the moment a past test is corrected to a
+// verified fail, and every downstream lot would keep reporting the reduced
+// required count until handover — the precise defect Wave C exists to prevent.
+//
+// Two things here, deliberately split:
+//   * `buildRegimeStreamQuery` — PURE. The two-mode query contract of §3.4.3.
+//   * `deriveRegime`           — PURE. The bounded fold + the length guard.
+// The Prisma binding is a `RegimeStreamFetcher` the caller supplies. C1.0 ships
+// no call site (spec §11) and no migration, so the columns this query names
+// (`Lot.activitySlug`) do not exist in the Prisma client yet; C1.1 supplies the
+// adapter when the migration lands.
+//
+// The read runs OUTSIDE the serializable decision transaction [C1R-B7]: it is a
+// predicate read over exactly the range concurrent conforms write, so inside the
+// transaction it would guarantee 40001/P2034 retries. F0's own precedent puts
+// history-shaped reads outside (`qualityRoutes.ts:414-416`). The honest cost is
+// one commit of staleness, bounded and self-healing on the next read.
+
+import { testFailing } from '../predicates.js';
+import { testAttributesToRule } from './counts.js';
+import type { FrequencyRule, FrequencyRegime, ResolvedRegime } from './types.js';
+
+/**
+ * Stream identity (§3.4.2): "work of the same type in the same project".
+ * Subcontractor and material source are deliberately NOT in the key — the
+ * authority regiments work type, not crew (§16 D7).
+ */
+export interface RegimeStreamKey {
+  projectId: string;
+  rulesetId: string;
+  ruleId: string;
+  /** Never null: a lot with no resolved slug is not a stream member at all. */
+  activitySlug: string;
+  /** The matched layer alias, or '*' for a layer-agnostic rule (§3.4.2). */
+  layerBucket: string;
+}
+
+export function serializeStreamKey(key: RegimeStreamKey): string {
+  return [key.projectId, key.rulesetId, key.ruleId, key.activitySlug, key.layerBucket].join('|');
+}
+
+export interface RegimeStreamTest {
+  testType: string;
+  passFail: string;
+  status: string;
+  /** Nested select on the regime path, so attribution needs no extra query. */
+  itpChecklistItem?: { testType: string | null } | null;
+}
+
+/** One conformed lot in the stream. */
+export interface RegimeStreamEntry {
+  id: string;
+  /**
+   * NULL means the lot is not a stream member but IS inside this window, which
+   * makes the window INCOMPLETE (§16 D7): `reduced` cannot be earned across a
+   * history entry CIVOS cannot read, because that is exactly "treating unknown
+   * as satisfied". Classify the lot and the stream heals on the next read.
+   */
+  activitySlug: string | null;
+  conformedAt: Date | string | null;
+  /** A force-conformed lot is NON-CONFORMING for regime purposes (§3.4.2). */
+  conformanceOverriddenAt: Date | string | null;
+  testResults: readonly RegimeStreamTest[];
+}
+
+interface LayerFilter {
+  layer: { equals: string; mode: 'insensitive' };
+}
+
+interface StreamMemberFilter {
+  activitySlug: string;
+  OR?: LayerFilter[];
+}
+
+/**
+ * Shaped for `prisma.lot.findMany`. Kept explicit (rather than
+ * `Prisma.LotFindManyArgs`) because C1.0 lands before the migration that adds
+ * `activitySlug`, so the generated client has no such field yet.
+ */
+export interface RegimeStreamQuery {
+  where: {
+    projectId: string;
+    conformedAt: { not: null };
+    OR: (StreamMemberFilter | { activitySlug: null })[];
+  };
+  orderBy: readonly ({ conformedAt: 'desc' } | { createdAt: 'desc' } | { id: 'desc' })[];
+  take: number;
+  cursor?: { id: string };
+  skip?: number;
+}
+
+export type RegimeStreamFetcher = (
+  query: RegimeStreamQuery,
+) => Promise<readonly RegimeStreamEntry[]>;
+
+/**
+ * Stream order is `conformedAt ASC, createdAt ASC, id ASC` — a total order, so
+ * the strictly-before cursor is well-defined. The query reads it DESCENDING and
+ * the fold reverses, because "the N most recent" is what both modes want.
+ */
+const STREAM_ORDER_DESC = [
+  { conformedAt: 'desc' },
+  { createdAt: 'desc' },
+  { id: 'desc' },
+] as const satisfies RegimeStreamQuery['orderBy'];
+
+export interface RegimeSubject {
+  id: string;
+  /** null => being conformed now (or not yet conformed): mode 1. */
+  conformedAt: Date | string | null;
+}
+
+/**
+ * The two-mode query contract (§3.4.3) [C1R-B7].
+ *
+ * | subject                     | query                                                  |
+ * |-----------------------------|--------------------------------------------------------|
+ * | `conformedAt IS NULL`       | no cursor, `take: N` — the most recent N               |
+ * | `conformedAt IS NOT NULL`   | strictly-before compound cursor over the total order   |
+ *
+ * Rev 1 used "most recent N" for both, which is silently wrong for every
+ * already-conformed lot (the commercial path): it returns today's last N lots,
+ * not the N preceding that lot. A simple `lt` on `conformedAt` is also wrong —
+ * it drops or duplicates entries whenever two lots share a `conformedAt` — hence
+ * the compound cursor + `skip: 1` over the FULL total order.
+ *
+ * A NULL-`activitySlug` conformed lot is included in the window (never as a
+ * member) so `deriveRegime` can see that the window is incomplete (§16 D7). One
+ * query per stream, no second contamination probe.
+ *
+ * `ponytail:` a NULL-`layer` lot is silently excluded from a layer-discriminated
+ * stream rather than treated as a contaminant — §16 D7 decides NULL layer as
+ * "member of the layer-agnostic stream only" and says nothing about windows.
+ */
+export function buildRegimeStreamQuery(
+  key: RegimeStreamKey,
+  subject: RegimeSubject,
+  take: number,
+  layerAliases?: readonly string[],
+): RegimeStreamQuery {
+  const member: StreamMemberFilter = { activitySlug: key.activitySlug };
+  if (layerAliases && layerAliases.length > 0) {
+    member.OR = layerAliases.map((alias) => ({
+      layer: { equals: alias, mode: 'insensitive' as const },
+    }));
+  }
+  const query: RegimeStreamQuery = {
+    where: {
+      projectId: key.projectId,
+      conformedAt: { not: null },
+      OR: [member, { activitySlug: null }],
+    },
+    orderBy: STREAM_ORDER_DESC,
+    take,
+  };
+  if (subject.conformedAt !== null) {
+    query.cursor = { id: subject.id };
+    query.skip = 1;
+  }
+  return query;
+}
+
+/** §3.4.2 entry conformity — status-qualified on BOTH sides [C1R-B8]. */
+export function streamEntryConforming(entry: RegimeStreamEntry, ruleTestType: string): boolean {
+  if (entry.conformedAt === null) return false;
+  if (entry.conformanceOverriddenAt !== null) return false;
+  return !entry.testResults.some(
+    (test) =>
+      testFailing(test) &&
+      testAttributesToRule(ruleTestType, [test.testType, test.itpChecklistItem?.testType]),
+  );
+}
+
+/**
+ * The bounded fold (§3.4.1).
+ *
+ *   Claim: regime is `reduced` iff the stream has AT LEAST N entries in the
+ *   lookback window AND the last N are all conforming.
+ *   Proof sketch: full → reduced requires N consecutive conforming entries. Any
+ *   failure resets to full and discards accumulated credit, so re-entry requires
+ *   N fresh consecutive conforming entries. ∎
+ *
+ * The LENGTH GUARD is part of the rule, not a footnote [C1R-B7]: without it
+ * `[].every(...)` is vacuously true and the first lot of every project reads
+ * `reduced`.
+ *
+ * `ponytail:` bounded N-row lookback, valid for `reset_on_any_failure` only. An
+ * unknown `escalationShape` throws rather than being silently mis-evaluated —
+ * `validateRuleset` rejects one in CI before it can ever reach here.
+ *
+ * @param tail the window in ASCENDING stream order (oldest first).
+ */
+export function deriveRegime(
+  rule: FrequencyRule,
+  key: RegimeStreamKey,
+  tail: readonly RegimeStreamEntry[],
+): ResolvedRegime {
+  const reduced = rule.reduced;
+  const streamKey = serializeStreamKey(key);
+  const full = (basisLotIds: string[] = []): ResolvedRegime => ({
+    regime: 'full' as FrequencyRegime,
+    basisLotIds,
+    streamKey,
+  });
+  if (!reduced) return full();
+  if (reduced.escalationShape !== 'reset_on_any_failure') {
+    throw new Error(
+      `Unsupported sufficiency escalationShape '${String(reduced.escalationShape)}' on rule ${rule.id}`,
+    );
+  }
+  const required = reduced.consecutiveConformingLots;
+  // Incomplete window: an unclassified lot conformed inside it (§16 D7).
+  if (tail.some((entry) => entry.activitySlug === null)) return full();
+  // THE LENGTH GUARD. Fewer than N entries can never have earned a reduction.
+  if (required < 1 || tail.length < required) return full();
+  const window = tail.slice(-required);
+  if (!window.every((entry) => streamEntryConforming(entry, rule.testType))) return full();
+  return { regime: 'reduced', basisLotIds: window.map((entry) => entry.id), streamKey };
+}
+
+/**
+ * Resolve the regime for one rule: build the two-mode query, fetch, fold.
+ * Returns null when the rule has no `reduced` limb — there is no regime concept
+ * for it and no query is issued.
+ */
+export async function resolveRegimeForRule(
+  fetchStream: RegimeStreamFetcher,
+  rule: FrequencyRule,
+  key: RegimeStreamKey,
+  subject: RegimeSubject,
+): Promise<ResolvedRegime | null> {
+  if (!rule.reduced) return null;
+  const query = buildRegimeStreamQuery(
+    key,
+    subject,
+    rule.reduced.consecutiveConformingLots,
+    rule.appliesTo.layerAliases,
+  );
+  const rowsDesc = await fetchStream(query);
+  return deriveRegime(rule, key, [...rowsDesc].reverse());
+}
