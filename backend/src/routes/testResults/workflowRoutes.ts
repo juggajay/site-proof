@@ -22,6 +22,7 @@ import {
 } from './statusWorkflow.js';
 import {
   buildTestResultAlreadyVerifiedResponse,
+  buildTestResultRejectedNotificationRow,
   buildTestResultRejectedResponse,
   buildTestResultRejectionNotification,
   buildTestResultVerifiedResponse,
@@ -128,7 +129,45 @@ workflowRoutes.post(
       },
     });
 
-    const engineerNotified = buildTestResultRejectionNotification(testResult, reason);
+    // The response used to report `notification.sent: true` off nothing but this
+    // payload builder — no Notification row, no email. Actually deliver it, and
+    // only claim "sent" once the in-app record exists. `testResult` (pre-update)
+    // still carries enteredBy; the update above cleared enteredById.
+    const rejectionRecipient = buildTestResultRejectionNotification(testResult, reason);
+    let engineerNotified: typeof rejectionRecipient = null;
+
+    if (rejectionRecipient) {
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id: testResult.projectId },
+          select: { name: true, settings: true },
+        });
+
+        // Same project-level "Test Results" category gate the results_received
+        // notifications below respect. Off means nobody is notified — and the
+        // response says so instead of pretending.
+        if (isProjectNotificationEnabled(project?.settings, 'testResults')) {
+          const notification = buildTestResultRejectedNotificationRow(rejectionRecipient, {
+            projectId: testResult.projectId,
+            testResultId: id,
+          });
+
+          await prisma.notification.create({ data: notification });
+          engineerNotified = rejectionRecipient;
+
+          // Email is best effort and honours the recipient's own preferences;
+          // the in-app record above is what `sent` reports.
+          await sendNotificationIfEnabled(rejectionRecipient.userId, 'enabled', {
+            title: notification.title,
+            message: notification.message,
+            linkUrl: notification.linkUrl,
+            projectName: project?.name,
+          });
+        }
+      } catch {
+        // Never fail the rejection itself because notification delivery failed.
+      }
+    }
 
     // Audit log for test result rejection
     await createAuditLog({
