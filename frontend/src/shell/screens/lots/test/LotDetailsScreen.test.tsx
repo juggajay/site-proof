@@ -6,7 +6,7 @@
  * MOCKS @/lib/useOfflineStatus for CI coverage parity (ShellScreen → SyncChip).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { Lot } from '@/pages/lots/lotsPageTypes';
 import type { ITPInstance } from '@/pages/lots/types';
@@ -209,8 +209,11 @@ describe('LotDetailsScreen', () => {
 
   it('has NO edit affordances (read-only)', () => {
     renderScreen();
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByRole('button', { name: /edit|save|conform|change status/i })).toBeNull();
+    // Scoped to the screen body: the shell header carries the sync chip, whose
+    // "All changes saved" label is not an edit affordance.
+    const body = within(screen.getByRole('main'));
+    expect(body.queryByRole('textbox')).toBeNull();
+    expect(body.queryByRole('button', { name: /edit|save|conform|change status/i })).toBeNull();
     // The "conformance is the office's call" copy is present.
     expect(screen.getByText(/conformance is set by the office/i)).toBeInTheDocument();
   });

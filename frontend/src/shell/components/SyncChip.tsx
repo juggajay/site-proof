@@ -1,34 +1,29 @@
 /**
- * SyncChip — exactly three states wired to real offline data.
+ * SyncChip — the shell header's sync state, and the way into the Sync Centre.
  *
  * States (per foreman profile §Design consequences):
  *   "All saved"    green  — online + no pending items
- *   "N waiting"    amber  — pending items in the offline queue (status-only)
+ *   "N waiting"    amber  — pending items in the offline queue
  *   "Syncing…"     amber  — a flush is actively in progress
+ *   "N failed"     red    — dead-lettered items
+ *   "Offline"      muted  — offline with an empty queue
  *
  * Uses useOfflineStatus (lib/useOfflineStatus.ts) for live counts.
  * Render position is controlled by the parent; always placed in the header.
  *
- * State logic lives in syncChipState.ts (separate file, react-refresh rule).
+ * State logic and labels live in syncChipState.ts (separate file, react-refresh
+ * rule) so the panel below shows exactly the same words.
  */
 
+import { Suspense, lazy, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
-import { deriveSyncState, type SyncState } from './syncChipState';
+import { deriveSyncState, syncChipLabel, type SyncState } from './syncChipState';
 
-function syncChipLabel(state: SyncState, pendingSyncCount: number, failedSyncCount: number) {
-  switch (state) {
-    case 'saved':
-      return 'All saved';
-    case 'syncing':
-      return 'Syncing…';
-    case 'failed':
-      return `${failedSyncCount} failed`;
-    case 'offline':
-      return 'Offline';
-    case 'waiting':
-      return `${pendingSyncCount} waiting`;
-  }
-}
+// Lazy so BottomSheet → framer-motion never enters the chunk both shell headers
+// load on first paint. /m carries no framer-motion today; a static import here
+// would change that for every foreman screen.
+const SyncPanel = lazy(() => import('./SyncPanel').then((m) => ({ default: m.SyncPanel })));
 
 function syncChipAriaLabel(state: SyncState, pendingSyncCount: number, failedSyncCount: number) {
   switch (state) {
@@ -53,8 +48,9 @@ function syncChipToneClass(state: SyncState) {
 }
 
 export function SyncChip() {
-  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing, retryFailedSyncs } =
-    useOfflineStatus();
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const status = useOfflineStatus();
+  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing } = status;
   const state = deriveSyncState(isOnline, pendingSyncCount, isSyncing, failedSyncCount);
   const label = syncChipLabel(state, pendingSyncCount, failedSyncCount);
   const ariaLabel = syncChipAriaLabel(state, pendingSyncCount, failedSyncCount);
@@ -77,28 +73,33 @@ export function SyncChip() {
     />
   );
 
-  // Only the failed state is actionable: tapping revives dead-lettered items (the
-  // app-root offline worker then flushes them), mirroring the floating pill's
-  // Retry button. Other states stay a plain status indicator — no false button
-  // affordance for "all saved" / "waiting" / "offline".
-  if (state === 'failed') {
-    return (
+  // The chip is a button in EVERY state now: there is always something behind
+  // it — the Sync Centre, which carries the counts by kind, the last successful
+  // sync and (when there are dead-lettered items) Retry. role="status" moves
+  // into the panel, which is where a state change is worth announcing.
+  return (
+    <>
       <button
         type="button"
-        onClick={() => void retryFailedSyncs()}
+        onClick={() => setIsPanelOpen(true)}
         aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={isPanelOpen}
         className={`${baseClass} shell-tap48 cursor-pointer`}
       >
         {dot}
         {label}
       </button>
-    );
-  }
-
-  return (
-    <span role="status" aria-label={ariaLabel} className={baseClass}>
-      {dot}
-      {label}
-    </span>
+      {isPanelOpen &&
+        // Portalled to <body> because the shell header is `sticky z-10`, i.e. its
+        // own stacking context: a sheet rendered inside it is capped at z-10 and
+        // the camera bar paints over its footer — burying the Retry button.
+        createPortal(
+          <Suspense fallback={null}>
+            <SyncPanel isOpen onClose={() => setIsPanelOpen(false)} state={state} status={status} />
+          </Suspense>,
+          document.body,
+        )}
+    </>
   );
 }

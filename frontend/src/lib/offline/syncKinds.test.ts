@@ -6,6 +6,7 @@ import {
   MAX_SYNC_ATTEMPTS,
   SYNC_KINDS,
   emptySyncKindCounts,
+  formatLastSynced,
   summariseSyncQueueItems,
   syncKindForType,
   type SyncKind,
@@ -171,5 +172,40 @@ describe('summariseSyncQueueItems', () => {
     expect(summary.live).toBe(1);
     expect(summary.failed).toBe(1);
     expect(summary.oldestPendingAgeMs).toBe(240 * 60_000);
+  });
+});
+
+// TZ-stable: both fixtures are built from NOW's LOCAL calendar day, so the
+// same-day / earlier-day branch is exercised in any timezone, and the expected
+// strings come from the same Intl formatters the helper uses.
+describe('formatLastSynced', () => {
+  function localTimeOn(dayOffset: number): Date {
+    const at = new Date(NOW);
+    at.setDate(at.getDate() + dayOffset);
+    at.setHours(10, 42, 0, 0);
+    return at;
+  }
+
+  it('shows time only for a sync earlier the same day', () => {
+    const at = localTimeOn(0);
+    expect(formatLastSynced(at.toISOString(), NOW)).toBe(
+      `Last synced ${at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`,
+    );
+  });
+
+  it('includes the date for a sync on an earlier day', () => {
+    const at = localTimeOn(-2);
+    const formatted = formatLastSynced(at.toISOString(), NOW);
+    expect(formatted).toContain(
+      at.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+    );
+    expect(formatted).toContain(
+      at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+    );
+  });
+
+  it('never synthesises a time when nothing has been recorded', () => {
+    expect(formatLastSynced(null, NOW)).toBe('Not synced on this device yet');
+    expect(formatLastSynced('not-a-date', NOW)).toBe('Not synced on this device yet');
   });
 });

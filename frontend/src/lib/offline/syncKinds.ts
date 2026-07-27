@@ -58,6 +58,30 @@ export function emptySyncKindCounts(): Record<SyncKind, number> {
   return { photos: 0, diary: 0, dockets: 0, itp: 0, defects: 0, lots: 0 };
 }
 
+// "Last synced 10:42" for today, "Last synced Sat 26 Jul, 16:08" for any
+// earlier day. A bare time for a sync that happened two days ago is the exact
+// kind of lie this panel cannot afford. Pure and `now`-injected so it is
+// testable without mocking the clock; native Intl, no date library.
+export function formatLastSynced(iso: string | null, now: number): string {
+  const synced = iso ? new Date(iso) : null;
+  if (!synced || Number.isNaN(synced.getTime())) return 'Not synced on this device yet';
+
+  const time = synced.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const today = new Date(now);
+  const sameDay =
+    synced.getFullYear() === today.getFullYear() &&
+    synced.getMonth() === today.getMonth() &&
+    synced.getDate() === today.getDate();
+  if (sameDay) return `Last synced ${time}`;
+
+  const date = synced.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  return `Last synced ${date}, ${time}`;
+}
+
 export interface SyncQueueSummary {
   live: number; // attempts < MAX_SYNC_ATTEMPTS
   failed: number; // attempts >= MAX_SYNC_ATTEMPTS (dead-lettered)

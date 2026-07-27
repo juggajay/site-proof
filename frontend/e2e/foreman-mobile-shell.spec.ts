@@ -822,6 +822,26 @@ test.describe('Foreman mobile shell', () => {
     expect(pageErrors).toEqual([]);
   });
 
+  test('the header sync chip opens the Sync Centre sheet', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await mockForemanShellApi(page);
+    await page.goto(`/m?projectId=${encodeURIComponent(PROJECT_ID)}`);
+
+    // The chip is a button in every state now; its label depends on the queue,
+    // so match the control by the affordance it advertises instead.
+    const chip = page.locator('header button[aria-haspopup="dialog"]');
+    await expect(chip).toBeVisible();
+    await chip.click();
+
+    // The lazy SyncPanel chunk mounts inside the shared BottomSheet.
+    const sheet = page.getByRole('dialog', { name: 'Sync' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('heading', { name: 'Sync' })).toBeVisible();
+    // Nothing queued in a fresh browser context, and no synthesised timestamp.
+    await expect(sheet.getByText('Not synced on this device yet')).toBeVisible();
+  });
+
   test('approves adjusted docket hours from the mobile shell', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
 
