@@ -115,7 +115,7 @@ function PhotoTile({
             onClick={onRetry}
             disabled={retrying}
             aria-label="Retry upload"
-            className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-1 text-[10px] font-semibold text-white shadow-sm touch-manipulation disabled:opacity-70"
+            className="shell-tap48 absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-1 text-[10px] font-semibold text-white shadow-sm touch-manipulation disabled:opacity-70"
           >
             {retrying ? (
               <>
@@ -206,7 +206,7 @@ export function PhotosListScreen() {
                 onClick={() => setFilter(f.key)}
                 aria-pressed={active}
                 className={cn(
-                  'min-h-[40px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
+                  'min-h-[48px] min-w-[48px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
                   active
                     ? 'bg-foreground text-[hsl(40_33%_98%)]'
                     : 'bg-secondary text-muted-foreground',
@@ -226,7 +226,7 @@ export function PhotosListScreen() {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="shrink-0 underline underline-offset-2"
+            className="shell-tap48 shrink-0 underline underline-offset-2"
           >
             Retry
           </button>

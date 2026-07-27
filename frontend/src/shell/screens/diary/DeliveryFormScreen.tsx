@@ -187,7 +187,7 @@ export function DeliveryFormScreen() {
       <button
         type="button"
         onClick={() => setShowMore(!showMore)}
-        className="flex items-center gap-1 text-sm text-muted-foreground touch-manipulation"
+        className="shell-tap48 flex items-center gap-1 text-sm text-muted-foreground touch-manipulation"
       >
         {showMore ? (
           <ChevronUp size={16} aria-hidden="true" />

@@ -585,7 +585,7 @@ export function DocketScreen() {
                 onClick={() => deleteLabourEntry(entry.id)}
                 aria-label={`Remove ${entry.employee.name}`}
                 className={cn(
-                  '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
+                  'shell-tap48 -mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
                   armedDelete === `labour-${entry.id}`
                     ? 'px-2 text-[12px] font-semibold text-destructive'
                     : 'w-9 text-muted-foreground',
@@ -652,7 +652,7 @@ export function DocketScreen() {
                 onClick={() => deletePlantEntry(entry.id)}
                 aria-label={`Remove ${entry.plant.type}`}
                 className={cn(
-                  '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
+                  'shell-tap48 -mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
                   armedDelete === `plant-${entry.id}`
                     ? 'px-2 text-[12px] font-semibold text-destructive'
                     : 'w-9 text-muted-foreground',

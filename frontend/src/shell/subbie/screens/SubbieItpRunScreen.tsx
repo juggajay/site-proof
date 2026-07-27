@@ -248,7 +248,7 @@ export function SubbieItpRunScreen() {
           <div className="mt-2 flex gap-2">
             <button
               type="button"
-              className="flex-1 rounded-xl border border-border py-3 text-[14px] font-semibold"
+              className="min-h-[48px] flex-1 rounded-xl border border-border py-3 text-[14px] font-semibold"
               disabled={submitting}
               onClick={resetReason}
             >
@@ -258,8 +258,8 @@ export function SubbieItpRunScreen() {
               type="button"
               className={
                 reasonMode === 'fail'
-                  ? 'flex-1 rounded-xl bg-destructive py-3 text-[14px] font-semibold text-destructive-foreground disabled:opacity-60'
-                  : 'flex-1 rounded-xl bg-foreground py-3 text-[14px] font-semibold text-background disabled:opacity-60'
+                  ? 'min-h-[48px] flex-1 rounded-xl bg-destructive py-3 text-[14px] font-semibold text-destructive-foreground disabled:opacity-60'
+                  : 'min-h-[48px] flex-1 rounded-xl bg-foreground py-3 text-[14px] font-semibold text-background disabled:opacity-60'
               }
               disabled={submitting}
               onClick={handleSubmitReason}
@@ -384,7 +384,7 @@ export function SubbieItpRunScreen() {
         </button>
         <button
           type="button"
-          className="w-full rounded-xl border border-border py-3 text-[14px] font-semibold disabled:opacity-60"
+          className="min-h-[48px] w-full rounded-xl border border-border py-3 text-[14px] font-semibold disabled:opacity-60"
           disabled={busy}
           onClick={() => void doPass()}
         >

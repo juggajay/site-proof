@@ -180,7 +180,7 @@ export function WeatherScreen() {
                 setConditions(c);
               }}
               className={cn(
-                'min-h-[44px] rounded-full px-3 py-2 text-sm font-medium touch-manipulation',
+                'min-h-[48px] rounded-full px-3 py-2 text-sm font-medium touch-manipulation',
                 conditions === c
                   ? 'bg-foreground text-[hsl(40_33%_98%)]'
                   : 'bg-secondary text-muted-foreground',

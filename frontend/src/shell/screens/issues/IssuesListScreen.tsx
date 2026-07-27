@@ -166,7 +166,7 @@ export function IssuesListScreen() {
                 onClick={() => setFilter(f.key)}
                 aria-pressed={active}
                 className={cn(
-                  'min-h-[40px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
+                  'min-h-[48px] min-w-[48px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
                   active
                     ? 'bg-foreground text-[hsl(40_33%_98%)]'
                     : 'bg-secondary text-muted-foreground',

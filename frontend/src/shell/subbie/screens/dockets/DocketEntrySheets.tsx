@@ -222,7 +222,7 @@ export function LabourSheet({
         {onAddAnother && (
           <button
             type="button"
-            className="-mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-input text-[14px] font-medium text-foreground active:bg-secondary disabled:opacity-50"
+            className="-mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border border-input text-[14px] font-medium text-foreground active:bg-secondary disabled:opacity-50"
             disabled={!canAdd}
             onClick={onAddAnother}
             aria-label="Save and add another"
@@ -430,7 +430,7 @@ export function PlantSheet({
         {onAddAnother && (
           <button
             type="button"
-            className="-mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-input text-[14px] font-medium text-foreground active:bg-secondary disabled:opacity-50"
+            className="-mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border border-input text-[14px] font-medium text-foreground active:bg-secondary disabled:opacity-50"
             disabled={!canAdd}
             onClick={onAddAnother}
             aria-label="Save and add another"

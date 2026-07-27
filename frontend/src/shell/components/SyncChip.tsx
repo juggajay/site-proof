@@ -87,7 +87,7 @@ export function SyncChip() {
         type="button"
         onClick={() => void retryFailedSyncs()}
         aria-label={ariaLabel}
-        className={`${baseClass} cursor-pointer`}
+        className={`${baseClass} shell-tap48 cursor-pointer`}
       >
         {dot}
         {label}

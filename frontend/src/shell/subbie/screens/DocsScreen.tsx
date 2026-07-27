@@ -164,7 +164,7 @@ export function DocsScreen() {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="shrink-0 underline underline-offset-2"
+            className="shell-tap48 shrink-0 underline underline-offset-2"
           >
             Retry
           </button>

@@ -209,7 +209,7 @@ function NcrCard({
                 <button
                   type="button"
                   onClick={() => onRespond(ncr)}
-                  className="min-h-[40px] rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-primary-foreground"
+                  className="min-h-[48px] rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-primary-foreground"
                 >
                   Respond
                 </button>
@@ -218,7 +218,7 @@ function NcrCard({
                 <button
                   type="button"
                   onClick={() => onRectify(ncr)}
-                  className="min-h-[40px] rounded-lg border border-border px-3 py-2 text-[13px] font-semibold text-foreground"
+                  className="min-h-[48px] rounded-lg border border-border px-3 py-2 text-[13px] font-semibold text-foreground"
                 >
                   Submit Rectification
                 </button>
@@ -352,7 +352,7 @@ export function NcrsScreen() {
             Showing{' '}
             <span className="font-semibold text-foreground">{scopedLotNumber ?? 'this lot'}</span>
           </span>
-          <Link to={viewAllPath} className="font-semibold text-foreground underline">
+          <Link to={viewAllPath} className="shell-tap48 font-semibold text-foreground underline">
             View all
           </Link>
         </div>

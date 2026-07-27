@@ -35,7 +35,7 @@ export function ShellAccessDenied({
       </div>
       <Link
         to={parentPath}
-        className="shell-card mt-1 inline-flex w-auto items-center justify-center px-5 py-3 text-[15px] font-semibold text-foreground"
+        className="shell-card mt-1 inline-flex min-h-[48px] w-auto items-center justify-center px-5 py-3 text-[15px] font-semibold text-foreground"
       >
         Back to home
       </Link>

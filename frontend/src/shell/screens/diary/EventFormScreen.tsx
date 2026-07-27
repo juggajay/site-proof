@@ -150,7 +150,7 @@ export function EventFormScreen() {
               type="button"
               onClick={() => setEventType(t)}
               className={cn(
-                'min-h-[44px] rounded-full px-3 py-2 text-sm font-medium touch-manipulation',
+                'min-h-[48px] rounded-full px-3 py-2 text-sm font-medium touch-manipulation',
                 eventType === t
                   ? 'bg-foreground text-[hsl(40_33%_98%)]'
                   : 'bg-secondary text-muted-foreground',
@@ -188,7 +188,7 @@ export function EventFormScreen() {
       <button
         type="button"
         onClick={() => setShowMore(!showMore)}
-        className="flex items-center gap-1 text-sm text-muted-foreground touch-manipulation"
+        className="shell-tap48 flex items-center gap-1 text-sm text-muted-foreground touch-manipulation"
       >
         {showMore ? (
           <ChevronUp size={16} aria-hidden="true" />

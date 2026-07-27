@@ -27,6 +27,7 @@ import {
   smoothVelocity,
   snapFrac,
   trackAriaValueText,
+  trackBottomPadFor,
   trackShiftPx,
   type ItpDotState,
 } from '../itpTrackPhysics';
@@ -767,6 +768,24 @@ describe('trackAriaValueText — accessible value text', () => {
 
   it('clamps the position into range', () => {
     expect(trackAriaValueText(99, 5, 'X', 'open')).toContain('Check 5 of 5');
+  });
+});
+
+// ── Gloved-hand pointer surface (external review item 2) ─────────────────────
+
+describe('trackBottomPadFor', () => {
+  const top = TRACK_PHYSICS.TRACK_TOP_PAD_PX;
+
+  it('keeps the pointer surface ≥48px at every dot size the layout can pick', () => {
+    for (let dot = TRACK_PHYSICS.MIN_DOT_PX; dot <= TRACK_PHYSICS.BASE_DOT_PX; dot++) {
+      expect(top + dot + trackBottomPadFor(dot)).toBeGreaterThanOrEqual(
+        TRACK_PHYSICS.MIN_TRACK_TAP_PX,
+      );
+    }
+  });
+
+  it('never drops below the mock bottom padding on very large dots', () => {
+    expect(trackBottomPadFor(99)).toBe(TRACK_PHYSICS.TRACK_BOTTOM_PAD_PX);
   });
 });
 
