@@ -65,6 +65,14 @@ describe('reasonCode vocabulary (spec §2/§4)', () => {
     }
   });
 
+  it('the overdue codes cite the scheduled-date / due-date predicates, not the aging ones (A4 D2)', () => {
+    // `hold_point_overdue` comes from the alert typed `stale_hold_point`, whose
+    // query is the OVERDUE definition. Pinning the predicate name stops a later
+    // change quietly re-pointing it at holdPointStagnant (createdAt, 7d).
+    expect(REASON_CODE_PROVENANCE.hold_point_overdue.predicate).toBe('holdPointOverdue');
+    expect(REASON_CODE_PROVENANCE.ncr_overdue.predicate).toBe('ncrOverdue');
+  });
+
   it('isReadinessReasonCode accepts vocabulary members and rejects invented codes', () => {
     expect(isReadinessReasonCode('itp_incomplete')).toBe(true);
     expect(isReadinessReasonCode('totally_made_up')).toBe(false);
