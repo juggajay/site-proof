@@ -32,8 +32,13 @@ import {
   type Resolutions,
 } from './importData';
 
-const ACCEPT = '.xlsx';
+const ACCEPT = '.xlsx,.pdf';
 const MAX_FILE_MB = 25;
+
+/** Not a real profile: the columns read straight off the uploaded file. It is
+ *  the ONLY mapping a PDF can have (its columns are read, not printed), and the
+ *  right starting point for a spreadsheet whose layout matches no profile. */
+const DERIVED_PROFILE = '__derived__';
 
 /** The only copy that differs between one migration and another. */
 const KIND_COPY: Record<
@@ -41,15 +46,15 @@ const KIND_COPY: Record<
   { title: string; blurb: string; defaultProfile: string; noun: string; nounPlural: string }
 > = {
   itp_template: {
-    title: 'Import ITPs from a spreadsheet',
-    blurb: 'Every ITP is shown beside the sheet it came from',
+    title: 'Import ITPs from a file',
+    blurb: 'Every ITP is shown beside what it was read from',
     defaultProfile: 'generic_au_itp_excel',
     noun: 'ITP',
     nounPlural: 'ITPs',
   },
   lot_register: {
     title: 'Import lots from a register',
-    blurb: 'Every lot is shown beside the register it came from',
+    blurb: 'Every lot is shown beside what it was read from',
     defaultProfile: 'generic_au_lot_register_excel',
     noun: 'lot',
     nounPlural: 'lots',
@@ -105,7 +110,7 @@ function rowDetail(row: DryRunRow): string {
   // The server's own wording, where a reason code alone cannot say enough.
   if (row.detail) return row.detail;
   if (row.overLength) {
-    return `${row.overLength.field} is ${row.overLength.length} characters (max ${row.overLength.max}). Shorten it in the spreadsheet, or skip the row.`;
+    return `${row.overLength.field} is ${row.overLength.length} characters (max ${row.overLength.max}). Shorten it at the source, or skip the row.`;
   }
   if (row.collidesWith?.length) {
     return `Also at ${row.collidesWith.map((ref) => `${ref.sheet} row ${ref.rowIndex}`).join(', ')}.`;
@@ -135,7 +140,7 @@ function CountsBar({ counts }: { counts: DryRunResult['counts'] }) {
   );
 }
 
-/** Left pane: the source spreadsheet, rendered as its parsed grid. */
+/** Left pane: the source, rendered as the grid it was read into. */
 function SourcePane({
   sheets,
   activeSheet,
@@ -276,7 +281,7 @@ function ProposalRow({
 }
 
 /**
- * The Wave-B import review surface: the source spreadsheet beside the proposed
+ * The Wave-B import review surface: the source grid beside the proposed
  * records, dry-run counts before any commit, exceptions resolved in place, then
  * one reviewed batch applied through the existing proposal decision endpoint.
  *
@@ -295,7 +300,12 @@ export function ImportReviewModal({
   const copy = KIND_COPY[kind];
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [batchId, setBatchId] = useState<string | null>(initialBatchId ?? null);
-  const [profileId, setProfileId] = useState(copy.defaultProfile);
+  // A resumed batch already has a mapping stored with its dry run, so it starts
+  // on that rather than on a profile the reviewer never picked.
+  const [profileId, setProfileId] = useState(
+    initialBatchId ? DERIVED_PROFILE : copy.defaultProfile,
+  );
+  const [uploadFieldMap, setUploadFieldMap] = useState<unknown[] | null>(null);
   const [resolutions, setResolutions] = useState<Resolutions>({});
   const [activeSheet, setActiveSheet] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
@@ -318,19 +328,26 @@ export function ImportReviewModal({
   const sheets = batchQuery.data?.grid?.sheets ?? [];
   const effectiveDryRun = dryRun ?? batchQuery.data?.dryRun ?? null;
   const blockedCount = effectiveDryRun?.counts.blocked ?? 0;
+  const derivedFieldMap = uploadFieldMap ?? effectiveDryRun?.fieldMap ?? null;
+
+  /** What the next dry run maps with: an explicit map, or a named profile. */
+  const mappingArgs = () =>
+    profileId === DERIVED_PROFILE && derivedFieldMap
+      ? { fieldMap: derivedFieldMap }
+      : { profileId: profileId === DERIVED_PROFILE ? copy.defaultProfile : profileId };
 
   const runDryRun = async (id: string, next: Resolutions) => {
     try {
       const result = await dryRunMutation.mutateAsync({
         batchId: id,
-        profileId,
+        ...mappingArgs(),
         resolutions: next,
       });
       setDryRun(result.dryRun);
     } catch (error) {
       logError('Import dry run failed:', error);
       toast({
-        title: 'Could not check that spreadsheet',
+        title: 'Could not check that file',
         description: extractErrorMessage(error, 'Try a different column mapping.'),
         variant: 'error',
       });
@@ -342,17 +359,23 @@ export function ImportReviewModal({
       const result = await uploadMutation.mutateAsync(file);
       setBatchId(result.batch.id);
       setActiveSheet(result.sheets[0]?.name ?? null);
-      const suggested = result.suggestedProfile?.key ?? copy.defaultProfile;
+      // No profile fits (always the case for a PDF, and for an unrecognised
+      // sheet layout): map with the columns read off the file rather than
+      // falling back to a profile whose columns are not in it.
+      const suggested = result.suggestedProfile?.key ?? DERIVED_PROFILE;
       setProfileId(suggested);
+      setUploadFieldMap(result.suggestedFieldMap ?? null);
       const dry = await dryRunMutation.mutateAsync({
         batchId: result.batch.id,
-        profileId: suggested,
+        ...(suggested === DERIVED_PROFILE
+          ? { fieldMap: result.suggestedFieldMap }
+          : { profileId: suggested }),
       });
       setDryRun(dry.dryRun);
     } catch (error) {
       logError('Import upload failed:', error);
       toast({
-        title: 'Could not read that spreadsheet',
+        title: 'Could not read that file',
         description: extractErrorMessage(error, 'Check the file and try again.'),
         variant: 'error',
       });
@@ -399,6 +422,7 @@ export function ImportReviewModal({
   };
 
   const profileOptions = [
+    ...(derivedFieldMap ? [{ value: DERIVED_PROFILE, label: 'Columns read from the file' }] : []),
     ...(profilesQuery.data?.builtIn ?? []).map((profile) => ({
       value: profile.key,
       label: profile.name,
@@ -418,7 +442,7 @@ export function ImportReviewModal({
     >
       <ModalHeader>{copy.title}</ModalHeader>
       <ModalDescription>
-        {copy.blurb}, with the counts before anything is written. Excel files up to {MAX_FILE_MB}{' '}
+        {copy.blurb}, with the counts before anything is written. Excel or PDF, up to {MAX_FILE_MB}{' '}
         MB.
       </ModalDescription>
       <ModalBody>
@@ -426,7 +450,10 @@ export function ImportReviewModal({
           {!batchId && batches !== undefined && batches.length > 0 && (
             <ImportPanel
               batches={batches}
-              onResume={(id) => setBatchId(id)}
+              onResume={(id) => {
+                setBatchId(id);
+                setProfileId(DERIVED_PROFILE);
+              }}
               onRollback={(id) => onRollback?.(id)}
               rollbackBusy={busy}
               title="Earlier imports"
@@ -445,7 +472,9 @@ export function ImportReviewModal({
               className="rounded-lg border border-dashed p-6 text-center"
             >
               <FileUp className="mx-auto h-8 w-8 text-muted-foreground/60" />
-              <p className="mt-2 text-sm text-muted-foreground">Drag an .xlsx file here, or</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Drag an .xlsx or .pdf file here, or
+              </p>
               <Button
                 type="button"
                 variant="outline"
@@ -473,7 +502,7 @@ export function ImportReviewModal({
           {busy && (
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Reading the spreadsheet…
+              Reading the file…
             </div>
           )}
 

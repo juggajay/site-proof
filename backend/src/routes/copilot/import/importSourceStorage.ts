@@ -41,6 +41,20 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 // and re-serving live malware carriers to a contractor's own Windows machines.
 const MACRO_EXTENSIONS = new Set(['.xlsm', '.xlsb', '.xltm']);
 
+/**
+ * The accepted source formats, keyed by extension. The extension is
+ * client-controlled and only decides which reader runs; the authoritative check
+ * that the bytes really are that format is `assertImportUploadContent`.
+ */
+const SOURCE_FORMAT_BY_EXTENSION = new Map<string, string>([
+  ['.xlsx', 'excel'],
+  ['.pdf', 'pdf'],
+]);
+
+export function importSourceFormat(filename: string): string | null {
+  return SOURCE_FORMAT_BY_EXTENSION.get(path.extname(filename).toLowerCase()) ?? null;
+}
+
 function rejectUpload(message: string): AppError {
   return new AppError(400, message, ErrorCodes.INVALID_FILE_TYPE);
 }
@@ -58,8 +72,8 @@ export const importUpload = multer({
       );
       return;
     }
-    if (extension !== '.xlsx') {
-      cb(rejectUpload('Only .xlsx spreadsheets can be imported at this stage.'));
+    if (!SOURCE_FORMAT_BY_EXTENSION.has(extension)) {
+      cb(rejectUpload('Only .xlsx spreadsheets and .pdf documents can be imported.'));
       return;
     }
     cb(null, true);
@@ -74,8 +88,9 @@ export function assertImportUploadContent(file: Express.Multer.File): void {
   if (!file.buffer || file.buffer.length === 0) {
     throw AppError.badRequest('That file is empty.');
   }
-  // Both .xlsx and its MIME type resolve to the 'zip' signature kind, so the
-  // existing "MIME and extension disagree" guard keeps working unchanged.
+  // .xlsx and its MIME type resolve to the 'zip' signature kind, .pdf to 'pdf',
+  // so the existing "MIME and extension disagree" guard keeps working unchanged
+  // and a renamed .zip/.exe fails on its magic bytes either way.
   assertUploadedFileMatchesDeclaredType(file);
 }
 

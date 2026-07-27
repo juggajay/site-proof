@@ -43,7 +43,7 @@ const STATUS_CHIP: Record<ImportBatchStatus, string> = {
 const OPEN_STATUSES: ImportBatchStatus[] = ['parsed', 'mapped', 'dry_run', 'review'];
 
 /**
- * The migration rail: bring an existing ITP library across from a spreadsheet.
+ * The migration rail: bring an existing ITP library across from a file.
  * Same quiet-card grammar as the setup copilot above it — status chip, one
  * action, roll-back offered only once a batch has actually been applied.
  */
@@ -54,8 +54,8 @@ export function ImportPanel({
   onRollback,
   rollbackBusy,
   title = 'Bring your ITPs across',
-  description = 'Import an existing ITP spreadsheet. You see every ITP beside its source sheet, and the counts, before anything is written.',
-  ctaLabel = 'Import a spreadsheet',
+  description = 'Import an existing ITP spreadsheet or PDF. You see every ITP beside what it was read from, and the counts, before anything is written.',
+  ctaLabel = 'Import a file',
 }: ImportPanelProps) {
   return (
     <section aria-label={title} className="mt-6 rounded-lg border bg-card">
@@ -79,7 +79,7 @@ export function ImportPanel({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="min-w-0 truncate text-sm font-medium">
-                    {batch.sourceFileName ?? 'Spreadsheet'}
+                    {batch.sourceFileName ?? 'Source file'}
                   </span>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_CHIP[batch.status]}`}
