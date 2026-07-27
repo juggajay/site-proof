@@ -282,6 +282,20 @@ export function createCategoryResolver(
 }
 
 /**
+ * A rule's `testType` as a CATEGORY, or null. `LAB_REFERENCE` is not a category
+ * (AT-22 forbids a pack declaring one), so it is folded to null here rather than
+ * leaking through `typeof x === 'string'` at each call site — `LAB_REFERENCE` is
+ * a string, and that is exactly the trap [C1C-19].
+ */
+export function ruleCategoryOf(
+  resolve: CategoryResolver,
+  ruleTestType: string | null | undefined,
+): TestCategory | null {
+  const resolution = resolve(ruleTestType);
+  return resolution === null || resolution === LAB_REFERENCE ? null : resolution;
+}
+
+/**
  * §4.4 — **THE attribution rule** [F1C-B1] [C1C-20]. Both production callers use
  * this; there is no second place where a test's candidate categories are decided.
  * `evaluate.ts` (the per-lot count) and `regime.ts` `streamEntryConforming` (the

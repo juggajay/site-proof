@@ -224,9 +224,26 @@ function normalizeTestType(value: string | null | undefined): string {
  * A direct `itpChecklistItemId` link is strongest; a case-insensitive
  * `testType` match is the legacy/manual fallback.
  *
- * Mirrors `conformancePrerequisites.ts:261-270` `testResultMatchesItem`
- * (not exported there — F0.1 must not modify that file, so the logic is
- * re-stated here; F0.2 unifies to a single source).
+ * F1.2 correction `[F1C-C2]`: this docstring used to say it "mirrors
+ * `conformancePrerequisites.ts:261-270` `testResultMatchesItem` … F0.2 unifies
+ * to a single source". Both claims were false. There is no
+ * `testResultMatchesItem` anywhere in that file (`:259-270` is
+ * `getNaHoldPointSignoffItemIds`), and the unification ALREADY HAPPENED —
+ * `conformancePrerequisites.ts:3` imports THIS function and calls it at `:290`,
+ * `:313` and `:320`. Nothing is re-stated anywhere.
+ *
+ * WARNING: this matcher and the sufficiency attribution rule
+ * (`sufficiency/testCategories.ts` `candidateCategories`) are DELIBERATELY
+ * different as of F1. This one gates conformance for every tenant in every
+ * state, including projects with no sufficiency pack; that one only counts
+ * within a resolved pack. Do NOT "unify" them because they look alike —
+ * unifying LOOSENS a shipped gate: lots that cannot be conformed today would
+ * become conformable, on every project, with no direction in which it makes a
+ * gate stricter. See docs/plans/
+ * test-type-canonicalization-spec-2026-07-27.md §19, which specifies that
+ * change as its own slice with its own characterization corpus, its own
+ * enumerated moved-lot list and Jay's separate sign-off. Deleting this comment
+ * is the marker that the two matchers converged deliberately (§19.4).
  */
 export function testMatchesItem(item: TestMatchItem, test: TestMatchTarget): boolean {
   if (test.itpChecklistItemId === item.id) {
