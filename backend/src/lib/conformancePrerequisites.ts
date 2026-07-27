@@ -18,7 +18,10 @@ import {
 } from './readiness/sufficiency/testCategories.js';
 import type { ResolvedSufficiency } from './readiness/sufficiency/types.js';
 
-export type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot' | 'iTPChecklistItem'>;
+export type ConformancePrismaClient = Pick<
+  typeof prisma,
+  'holdPoint' | 'lot' | 'iTPChecklistItem' | 'iTPCompletion'
+>;
 
 // A checklist item counts as finished for conformance when its completion
 // status is 'completed' OR 'not_applicable'. Owner decision (2026-06-11):
@@ -244,14 +247,32 @@ interface ItpInstanceForConformance {
   completions: ChecklistCompletenessCompletion[];
 }
 
+// Memoized on the fetched instance OBJECT. The batch path derives the same items
+// twice per lot — once to build the N/A hold-point union, once inside
+// `computeConformanceResult` — and each derivation re-parses a ~2 KB
+// `templateSnapshot` JSON and rebuilds 12 objects. At the 5,000-lot claim ceiling
+// that second pass measured ~45ms of pure duplicate work.
+//
+// A `WeakMap` keyed by the instance object, not a cache keyed by the snapshot
+// string: entries die with the request's Prisma payload, so nothing is retained
+// across requests and two lots that happen to share a snapshot never share an
+// items array. Correct because these objects are read-only once fetched —
+// `hydrateFetchedLots` builds a NEW instance object when it attaches the legacy
+// fallback rather than mutating in place, so a mutated instance is a new key.
+const normalizedChecklistItemsByInstance = new WeakMap<object, NormalizedChecklistItem[]>();
+
 function getNormalizedChecklistItems(
   itpInstance: ItpInstanceForConformance,
 ): NormalizedChecklistItem[] {
-  return getChecklistItemsForInstance(itpInstance).map((item) => ({
+  const cached = normalizedChecklistItemsByInstance.get(itpInstance);
+  if (cached) return cached;
+  const items = getChecklistItemsForInstance(itpInstance).map((item) => ({
     ...item,
     description: item.description ?? 'ITP item',
     pointType: item.pointType ?? 'standard',
   }));
+  normalizedChecklistItemsByInstance.set(itpInstance, items);
+  return items;
 }
 
 // The N/A'd hold-point sign-off items whose HoldPoint must be RELEASED for the
@@ -347,6 +368,17 @@ function buildOutstandingTestItems(
 // 2 and 4). `ITPCompletion` alone has 17 columns — two Decimals, five nullable
 // text fields, three timestamps — of which the gate reads three.
 //
+// `itpInstance.completions` is deliberately absent, and `id` is present so
+// `hydrateFetchedLots` can fetch them FLAT — one `iTPCompletion.findMany` over
+// the instance ids, grouped into a Map in JS — instead of letting Prisma nest
+// them. Same three columns, same rows, same query count; only the joiner moves.
+// Prisma's client-side nesting of 60,000 completion rows into 5,000 arrays
+// measured 980ms against 734ms for the flat read plus the JS grouping
+// (docs/plans/f0-5-benchmark-results-2026-07-26.md §"2026-07-28"). Completion ORDER is not
+// observable: both readers (`buildItpChecklistCompleteness`,
+// `getNaHoldPointSignoffItemIds`) fold completions into a Set of item ids and
+// emit in `checklistItems` order.
+//
 // `template.checklistItems` is deliberately absent: `getChecklistItemsForInstance`
 // returns the parsed `templateSnapshot` and only falls back to live template items
 // when an instance has no readable snapshot. Every instance assigned through
@@ -396,13 +428,9 @@ export const CONFORMANCE_LOT_SELECT = {
   project: { select: { state: true, specificationSet: true, testSufficiencyMode: true } },
   itpInstance: {
     select: {
+      id: true,
       templateId: true,
       templateSnapshot: true,
-      // The three columns buildItpChecklistCompleteness and
-      // getNaHoldPointSignoffItemIds read.
-      completions: {
-        select: { checklistItemId: true, status: true, verificationStatus: true },
-      },
     },
   },
   testResults: {
@@ -643,24 +671,58 @@ function describeSufficiencyShortfalls(evaluation: SufficiencyEvaluation): strin
 }
 
 // The shape CONFORMANCE_LOT_SELECT returns: a LotForConformance whose instance
-// carries `templateId` (to resolve a legacy fallback) but no live template items
-// yet.
+// carries `id` and `templateId` (to fetch completions and to resolve a legacy
+// fallback) but neither completions nor live template items yet.
 type FetchedLotForConformance = Omit<LotForConformance, 'itpInstance'> & {
-  itpInstance: (ItpInstanceForConformance & { templateId: string }) | null;
+  itpInstance: {
+    id: string;
+    templateId: string;
+    templateSnapshot?: string | null;
+  } | null;
 };
 
-// Restores the live-template fallback that CONFORMANCE_LOT_SELECT no longer
-// hydrates inline. An instance whose snapshot does not PARSE — absent or
-// unreadable — is exactly the condition `getChecklistItemsForInstance` falls back
-// on, so detection calls the same parser rather than sniffing for null.
+// Completions for every fetched instance, in ONE flat query grouped in JS.
+//
+// Identical rows to the nested `completions` relation the select used to carry —
+// same three gate columns, same one extra query Prisma fired anyway — but Prisma
+// no longer builds 5,000 nested arrays out of 60,000 rows, which is where the
+// time went (§"Levers", 980ms nested vs 734ms flat at the 5,000-lot ceiling).
+async function fetchCompletionsByInstanceId(
+  instanceIds: string[],
+  client: ConformancePrismaClient,
+): Promise<Map<string, ChecklistCompletenessCompletion[]>> {
+  const byInstanceId = new Map<string, ChecklistCompletenessCompletion[]>();
+  if (instanceIds.length === 0) return byInstanceId;
+
+  const completions = await client.iTPCompletion.findMany({
+    where: { itpInstanceId: { in: instanceIds } },
+    select: {
+      itpInstanceId: true,
+      checklistItemId: true,
+      status: true,
+      verificationStatus: true,
+    },
+  });
+  for (const completion of completions) {
+    const list = byInstanceId.get(completion.itpInstanceId);
+    if (list) list.push(completion);
+    else byInstanceId.set(completion.itpInstanceId, [completion]);
+  }
+  return byInstanceId;
+}
+
+// Live template items for the instances whose snapshot does not PARSE — absent or
+// unreadable — which is exactly the condition `getChecklistItemsForInstance` falls
+// back on, so detection calls the same parser rather than sniffing for null.
 //
 // One query for the DISTINCT templates that actually need it, so 5,000 lots
 // sharing one legacy template cost 12 rows, not 60,000. Modern (snapshot-bearing)
 // instances fire no query at all.
-async function attachLegacyChecklistItems(
+async function fetchLegacyChecklistItemsByTemplateId(
   lots: FetchedLotForConformance[],
   client: ConformancePrismaClient,
-): Promise<LotForConformance[]> {
+): Promise<Map<string, ChecklistItem[]>> {
+  const itemsByTemplateId = new Map<string, ChecklistItem[]>();
   const legacyTemplateIds = [
     ...new Set(
       lots.flatMap((lot) =>
@@ -670,22 +732,48 @@ async function attachLegacyChecklistItems(
       ),
     ),
   ];
-  if (legacyTemplateIds.length === 0) return lots;
+  if (legacyTemplateIds.length === 0) return itemsByTemplateId;
 
   const items = await client.iTPChecklistItem.findMany({
     where: { templateId: { in: legacyTemplateIds } },
   });
-  const itemsByTemplateId = new Map<string, ChecklistItem[]>();
   for (const item of items) {
     const list = itemsByTemplateId.get(item.templateId);
     if (list) list.push(item);
     else itemsByTemplateId.set(item.templateId, [item]);
   }
+  return itemsByTemplateId;
+}
+
+// Turns the raw CONFORMANCE_LOT_SELECT payload into the shape the pure
+// computation consumes: completions attached flat, plus the live-template
+// fallback for legacy instances. Both the single and the batch path go through
+// here, so they still fetch an identical shape (M39).
+async function hydrateFetchedLots(
+  lots: FetchedLotForConformance[],
+  client: ConformancePrismaClient,
+): Promise<LotForConformance[]> {
+  // Sequential, not `Promise.all`: these run on a `tx` client inside the claim
+  // decision's serializable transaction, where concurrent queries on one
+  // connection are a Prisma footgun and buy nothing — the legacy query is
+  // skipped outright for snapshot-bearing instances, which is every modern one.
+  const completionsByInstanceId = await fetchCompletionsByInstanceId(
+    lots.flatMap((lot) => (lot.itpInstance ? [lot.itpInstance.id] : [])),
+    client,
+  );
+  const legacyItemsByTemplateId = await fetchLegacyChecklistItemsByTemplateId(lots, client);
 
   return lots.map((lot) => {
-    const checklistItems = lot.itpInstance && itemsByTemplateId.get(lot.itpInstance.templateId);
-    if (!lot.itpInstance || !checklistItems) return lot;
-    return { ...lot, itpInstance: { ...lot.itpInstance, template: { checklistItems } } };
+    if (!lot.itpInstance) return { ...lot, itpInstance: null };
+    const legacyItems = legacyItemsByTemplateId.get(lot.itpInstance.templateId);
+    return {
+      ...lot,
+      itpInstance: {
+        ...lot.itpInstance,
+        completions: completionsByInstanceId.get(lot.itpInstance.id) ?? [],
+        ...(legacyItems ? { template: { checklistItems: legacyItems } } : {}),
+      },
+    };
   });
 }
 
@@ -736,8 +824,18 @@ export interface ConformanceSufficiencyOptions {
   now?: Date;
 }
 
+/**
+ * The lot columns sufficiency resolution reads — every scalar limb plus
+ * `project` and `geometries`, and NONE of the relations the conformance gate
+ * reads. Narrower than {@link LotForConformance} on purpose: it is exactly what
+ * a raw `CONFORMANCE_LOT_SELECT` payload carries BEFORE
+ * {@link hydrateFetchedLots} attaches completions, so D14 AT-50 can keep pinning
+ * `sufficiencyInput()` against a real row straight out of the real select.
+ */
+type SufficiencyLotSource = Omit<LotForConformance, 'itpInstance' | 'testResults' | 'ncrLots'>;
+
 function sufficiencyInput(
-  lot: LotForConformance,
+  lot: SufficiencyLotSource,
   project: NonNullable<LotForConformance['project']>,
 ) {
   return {
@@ -769,7 +867,7 @@ function sufficiencyInput(
  * while never reaching the evaluator (§8.1 edit 3).
  */
 export async function resolveSufficiencyForLot(
-  lot: LotForConformance,
+  lot: SufficiencyLotSource,
   options: ConformanceSufficiencyOptions | undefined,
 ): Promise<ResolvedSufficiency | null> {
   const project = lot.project;
@@ -795,7 +893,7 @@ export async function checkConformancePrerequisites(
     return { error: 'Lot not found', lot: null };
   }
 
-  const [lot] = await attachLegacyChecklistItems([fetched], client);
+  const [lot] = await hydrateFetchedLots([fetched], client);
   const releasedHoldPointItemIds = await fetchReleasedHoldPointItemIdsForLot(lot, client);
   const sufficiency = await resolveSufficiencyForLot(lot, options);
   return computeConformanceResult(lot, releasedHoldPointItemIds, sufficiency);
@@ -803,9 +901,11 @@ export async function checkConformancePrerequisites(
 
 // Batched conformance for many lots — collapses the per-lot ~2N+1 queries the
 // create-claim readiness loop used to fire (one lot.findUnique + one
-// holdPoint.findMany PER lot) into a constant number: one lot.findMany, at most
-// one holdPoint.findMany and at most one legacy-checklist-item findMany for ALL
-// lots (see attachLegacyChecklistItems). Returns a map keyed by lot id; a
+// holdPoint.findMany PER lot) into a constant number: one lot.findMany, one
+// iTPCompletion.findMany, at most one holdPoint.findMany and at most one
+// legacy-checklist-item findMany for ALL lots (see hydrateFetchedLots). The
+// completions query is not a new round trip — Prisma fired exactly the same one
+// under the hood when they were a nested relation. Returns a map keyed by lot id; a
 // requested lot id missing from the map means the lot was not found (callers
 // that require every lot should treat a missing key as not-found). (M39)
 export async function checkConformancePrerequisitesBatch(
@@ -816,7 +916,7 @@ export async function checkConformancePrerequisitesBatch(
   const results = new Map<string, ConformanceCheckResult>();
   if (lotIds.length === 0) return results;
 
-  const lots = await attachLegacyChecklistItems(
+  const lots = await hydrateFetchedLots(
     await client.lot.findMany({
       where: { id: { in: lotIds } },
       select: CONFORMANCE_LOT_SELECT,

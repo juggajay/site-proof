@@ -153,10 +153,22 @@ export async function evaluateClaimInclusion(
   // Progress claims are cumulative, so a partially-claimed lot stays
   // `conformed` (claimedInId null) and remains selectable until its cumulative
   // claimed percentage reaches 100%. Only fully-claimed lots are flipped.
-  const lots =
+  // `select`, not the all-columns default: `ClaimableLot` above is the whole
+  // contract — these rows are read for the four fields it declares and then ride
+  // into `ClaimInclusionLotMember.lot`, whose type is `ClaimableLot`, so nothing
+  // downstream can read a fifth. At the 5,000-member ceiling the full row
+  // measured 199ms against 51ms for these four
+  // (docs/plans/f0-5-benchmark-results-2026-07-26.md §"2026-07-28").
+  const lots: ClaimableLot[] =
     uniqueLotIds.length > 0
       ? await tx.lot.findMany({
           where: { id: { in: uniqueLotIds }, projectId, status: 'conformed', claimedInId: null },
+          select: {
+            id: true,
+            lotNumber: true,
+            budgetAmount: true,
+            conformanceOverriddenAt: true,
+          },
         })
       : [];
 
