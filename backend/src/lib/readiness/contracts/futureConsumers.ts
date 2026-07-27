@@ -12,25 +12,53 @@
 // rather than invented here.
 
 import type { ReadinessReasonCode } from './reasonCodes.js';
+// Type-only (erased at build): no runtime edge from the contracts to the engine.
+import type { RuleSufficiency, SufficiencyState } from '../sufficiency/types.js';
 
 // ---------------------------------------------------------------------------
 // Test sufficiency (foundation map §3b, §5 A3). Predicates: testPassing,
 // testPendingByStatus, testPendingNotFailNotVerified, testMatchesItem.
 // ---------------------------------------------------------------------------
 
-/** The reasonCodes the test-sufficiency consumer may emit — subset of the vocabulary. */
+/**
+ * The reasonCodes the test-sufficiency consumer may emit — subset of the
+ * vocabulary. WIDENED by Wave C1 with the five quantitative codes [C1R-2]: this
+ * is an `Extract<>`, so before the widening it could not carry
+ * `insufficient_test_count` at all (the union would resolve to `never`).
+ */
 export type TestReasonCode = Extract<
   ReadinessReasonCode,
-  'no_passing_verified_test' | 'no_tests' | 'failed_tests' | 'pending_tests' | 'passing_tests'
+  | 'no_passing_verified_test'
+  | 'no_tests'
+  | 'failed_tests'
+  | 'pending_tests'
+  | 'passing_tests'
+  // Wave C1 (spec §4.2.1)
+  | 'insufficient_test_count'
+  | 'test_sufficiency_unknown'
+  | 'lot_exceeds_max_lot_size'
+  | 'tests_unlinked_to_itp_item'
+  | 'test_sufficiency_met'
 >;
 
 export interface TestSufficiencyVerdict {
   /** 'lot' (lot-wide) or 'itp_item' (a single checklist item's test requirement). */
   subjectType: 'lot' | 'itp_item';
   subjectId: string;
-  /** All required tests passing+verified (testPassing) — the sufficiency gate. */
+  /**
+   * All required tests passing+verified (testPassing) — the sufficiency gate.
+   * Wave C1 quantifies it: true iff EVERY resolved rule is 'satisfied'. An
+   * `unknown` verdict is `false` — unknown never reads as satisfied (§4.2.1).
+   */
   sufficient: boolean;
   reasonCodes: TestReasonCode[];
+  /**
+   * Wave C1 additions (spec §4.2.1). OPTIONAL, not required, so the shipped
+   * four-key fixture in `contracts.test.ts` keeps compiling; the real evaluator
+   * ALWAYS populates both, asserted by §14 AT-2.
+   */
+  state?: SufficiencyState;
+  rules?: RuleSufficiency[];
   // spec §13-open: outstanding-test detail (the engine item's `outstandingTests[]`
   // shape) is not pinned here — the A? consumer that renders per-test rows extends
   // this when built. Minimum contract = sufficient + reasonCodes.

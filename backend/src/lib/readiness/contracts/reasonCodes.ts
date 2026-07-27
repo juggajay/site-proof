@@ -69,6 +69,13 @@ export const READINESS_REASON_CODES = [
   'no_photos',
   'low_photo_evidence',
   'photo_evidence',
+  // test-sufficiency items (Wave C1 — lib/readiness/sufficiency/evaluate.ts).
+  // Added WITH their provenance in the same change, as L26-27 requires.
+  'insufficient_test_count',
+  'test_sufficiency_unknown',
+  'lot_exceeds_max_lot_size',
+  'tests_unlinked_to_itp_item',
+  'test_sufficiency_met',
 ] as const;
 
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
@@ -173,6 +180,26 @@ export const REASON_CODE_PROVENANCE: Record<
   no_photos: { predicate: 'engine', source: 'claimReview (photo heuristic)' },
   low_photo_evidence: { predicate: 'engine', source: 'claimReview (photo heuristic)' },
   photo_evidence: { predicate: 'engine', source: 'claimReview (positive)' },
+  insufficient_test_count: {
+    predicate: 'testCountSufficient',
+    source: 'sufficiency/evaluate (rule state insufficient; blocks only per §5.1.2)',
+  },
+  test_sufficiency_met: {
+    predicate: 'testCountSufficient',
+    source: 'sufficiency/evaluate (positive)',
+  },
+  tests_unlinked_to_itp_item: {
+    predicate: 'testMatchesItem',
+    source: 'sufficiency/evaluate (passing tests no rule could attribute)',
+  },
+  test_sufficiency_unknown: {
+    predicate: 'engine',
+    source: 'sufficiency/evaluate (UnknownCause — a MISSING INPUT, not a predicate signal)',
+  },
+  lot_exceeds_max_lot_size: {
+    predicate: 'engine',
+    source: 'sufficiency/evaluate (lot-size advisory, §3.3 — arithmetic, no predicate)',
+  },
 };
 
 /** Type guard: is `value` a member of the closed reasonCode vocabulary? */
