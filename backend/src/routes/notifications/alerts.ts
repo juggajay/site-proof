@@ -267,7 +267,9 @@ notificationAlertsRouter.get(
     );
 
     let alerts = alertRecords
-      .map(toAlert)
+      // Rows with a retired/unknown type map to null and are dropped, so one
+      // legacy row cannot 400 the whole list.
+      .flatMap((alertRecord) => toAlert(alertRecord) ?? [])
       .filter(
         (alert) =>
           alert.assignedTo === userId ||
@@ -301,25 +303,26 @@ notificationAlertsRouter.put(
 
     const id = parseNotificationRouteId(req.params.id);
     const alertRecord = await prisma.notificationAlert.findUnique({ where: { id } });
+    // A row with a retired/unknown type is not representable as an Alert, so it
+    // reads as missing rather than 400-ing.
+    const alert = alertRecord && toAlert(alertRecord);
 
-    if (!alertRecord) {
+    if (!alert) {
       throw AppError.notFound('Alert');
     }
 
-    const alert = toAlert(alertRecord);
     if (alert.resolvedAt) {
       throw AppError.badRequest('Alert is already resolved');
     }
     await requireAlertResolveAccess(user, alert);
 
-    const updatedAlert = toAlert(
-      await prisma.notificationAlert.update({
-        where: { id },
-        data: { resolvedAt: new Date() },
-      }),
-    );
+    const updatedRecord = await prisma.notificationAlert.update({
+      where: { id },
+      data: { resolvedAt: new Date() },
+    });
 
-    res.json(buildAlertResolvedResponse(updatedAlert));
+    // Same row, same (already validated) type — the fallback is unreachable.
+    res.json(buildAlertResolvedResponse(toAlert(updatedRecord) ?? alert));
   }),
 );
 
@@ -347,6 +350,7 @@ notificationAlertsRouter.post(
 
     for (const alertRecord of alertRecords) {
       const alert = toAlert(alertRecord);
+      if (!alert) continue;
       if (alert.projectId && !accessibleProjectIds.has(alert.projectId)) continue;
 
       const config = ESCALATION_CONFIG[alert.type];
@@ -480,11 +484,12 @@ notificationAlertsRouter.post(
     const id = parseNotificationRouteId(req.params.id);
     const alertRecord = await prisma.notificationAlert.findUnique({ where: { id } });
 
-    if (!alertRecord) {
+    const alert = alertRecord && toAlert(alertRecord);
+
+    if (!alert) {
       throw AppError.notFound('Alert');
     }
 
-    const alert = toAlert(alertRecord);
     if (alert.resolvedAt) {
       throw AppError.badRequest('Alert is already resolved');
     }

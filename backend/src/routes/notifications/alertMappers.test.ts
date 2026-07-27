@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { NotificationAlert as NotificationAlertRecord } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
@@ -175,12 +175,28 @@ describe('toAlert', () => {
       makeRecord({ projectId: null, resolvedAt: null, escalatedAt: null, escalatedTo: null }),
     );
 
-    expect(alert.projectId).toBeUndefined();
-    expect(alert.resolvedAt).toBeUndefined();
-    expect(alert.escalatedAt).toBeUndefined();
-    expect(alert.escalatedTo).toBeUndefined();
+    expect(alert).not.toBeNull();
+    expect(alert?.projectId).toBeUndefined();
+    expect(alert?.resolvedAt).toBeUndefined();
+    expect(alert?.escalatedAt).toBeUndefined();
+    expect(alert?.escalatedTo).toBeUndefined();
     // assignedTo is mapped from the record's assignedToId column.
-    expect(alert.assignedTo).toBe('user-1');
+    expect(alert?.assignedTo).toBe('user-1');
+  });
+
+  // AT-21 (unit half): a stored row whose type is no longer a known AlertType is
+  // skipped-and-logged instead of throwing. toAlert is mapped over whole alert
+  // lists, so throwing here turned one stale row into a 400 for the entire list.
+  it('returns null and logs instead of throwing for an unknown stored alert type', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      expect(toAlert(makeRecord({ id: 'alert-legacy', type: 'retired_alert_type' }))).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('unknown type');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import type { NotificationAlert as NotificationAlertRecord, Prisma } from '@prisma/client';
 import { AppError } from '../../lib/AppError.js';
+import { logWarn } from '../../lib/serverLogger.js';
 import { MAX_NOTIFICATION_FILTER_LENGTH, parseOptionalString } from './validation.js';
 
 /**
@@ -52,9 +53,13 @@ const ALERT_SEVERITIES: AlertSeverity[] = ['low', 'medium', 'high', 'critical'];
 const ALERT_STATUS_FILTERS = ['active', 'resolved', 'escalated'] as const;
 type AlertStatusFilter = (typeof ALERT_STATUS_FILTERS)[number];
 
+function isAlertType(value: unknown): value is AlertType {
+  return typeof value === 'string' && ALERT_TYPES.includes(value as AlertType);
+}
+
 export function parseAlertType(value: unknown): AlertType {
-  if (typeof value === 'string' && ALERT_TYPES.includes(value as AlertType)) {
-    return value as AlertType;
+  if (isAlertType(value)) {
+    return value;
   }
   throw AppError.badRequest('Invalid alert type');
 }
@@ -100,10 +105,27 @@ export function parseEscalatedTo(value: Prisma.JsonValue | null): string[] | und
   return userIds.length > 0 ? userIds : undefined;
 }
 
-export function toAlert(record: NotificationAlertRecord): Alert {
+/**
+ * Maps a stored alert row to an Alert, or returns `null` when the row's `type`
+ * is no longer a known AlertType (a retired/legacy type left behind in the DB).
+ *
+ * Skip-and-log, not throw: toAlert is mapped over whole alert lists, so a
+ * throwing mapper turns one stale row into a 400 for the entire list. Callers
+ * in list context drop the row; single-record callers treat it as not found.
+ * `severity` stays strict — no severity value has ever been retired.
+ */
+export function toAlert(record: NotificationAlertRecord): Alert | null {
+  if (!isAlertType(record.type)) {
+    logWarn('Skipping notification alert with unknown type', {
+      alertId: record.id,
+      type: record.type,
+    });
+    return null;
+  }
+
   return {
     id: record.id,
-    type: parseAlertType(record.type),
+    type: record.type,
     severity: parseAlertSeverity(record.severity),
     title: record.title,
     message: record.message,
