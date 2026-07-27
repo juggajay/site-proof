@@ -25,6 +25,14 @@ function isIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}(T|$)/.test(value) && !Number.isNaN(Date.parse(value));
 }
 
+/**
+ * A date-only `checkedOn` parses at UTC midnight, so an author in AEST who
+ * records "today" is up to ~14 hours ahead of a UTC CI clock. One day of grace
+ * catches a genuinely future date (the thing worth rejecting) without failing a
+ * pack confirmed this morning on the other side of the dateline.
+ */
+const CHECKED_ON_FUTURE_GRACE_MS = 24 * 60 * 60 * 1000;
+
 export interface RulesetLookup {
   /** `Project.state`, matched case-insensitively. */
   state: string | null;
@@ -233,7 +241,7 @@ function validateProvenance(
   if (ruleset.status !== 'confirmed') return;
 
   // §8.3 step 4 — a CONFIRMED ruleset carries a complete, current, A-graded source.
-  for (const field of ['edition', 'sourceUrl', 'checkedOn', 'revalidateBy'] as const) {
+  for (const field of ['edition', 'sourceUrl'] as const) {
     if (!provenance[field].trim()) {
       problems.push(`${where}: confirmed ruleset requires a non-empty ${field} (§8.3)`);
     }
@@ -246,10 +254,42 @@ function validateProvenance(
       `${where}: confirmed ruleset requires evidenceGrade 'A', got '${provenance.evidenceGrade}' — a split grade is encoded at its WEAKEST limb [C1R-B11]`,
     );
   }
-  if (isIsoDate(provenance.revalidateBy) && Date.parse(provenance.revalidateBy) <= now.getTime()) {
+
+  // The dates are STRICT ISO, and the expiry check is unconditional once they
+  // parse (external review F12). Requiring only "non-empty" and then gating the
+  // expiry check on `isIsoDate` meant a malformed value — `revalidateBy:
+  // '2027-7-27'`, `checkedOn: 'yesterday'` — validated forever: non-empty, so
+  // no complaint, and never ISO, so never expired. A confirmed pack that can
+  // never expire is precisely what §8.3 step 4 exists to prevent, and it is the
+  // pattern the ruleset-level `effectiveFrom`/`effectiveTo` checks already use.
+  const checkedOn = isIsoDate(provenance.checkedOn) ? Date.parse(provenance.checkedOn) : null;
+  const revalidateBy = isIsoDate(provenance.revalidateBy)
+    ? Date.parse(provenance.revalidateBy)
+    : null;
+  if (checkedOn === null) {
     problems.push(
-      `${where}: confirmed ruleset expired — revalidateBy ${provenance.revalidateBy} is in the past (§8.3 step 4)`,
+      `${where}: confirmed ruleset requires an ISO checkedOn date, got '${provenance.checkedOn}' (§8.3)`,
     );
+  } else if (checkedOn > now.getTime() + CHECKED_ON_FUTURE_GRACE_MS) {
+    problems.push(
+      `${where}: checkedOn ${provenance.checkedOn} is in the future — a human cannot have read the source yet (§8.3)`,
+    );
+  }
+  if (revalidateBy === null) {
+    problems.push(
+      `${where}: confirmed ruleset requires an ISO revalidateBy date, got '${provenance.revalidateBy}' (§8.3)`,
+    );
+  } else {
+    if (checkedOn !== null && revalidateBy <= checkedOn) {
+      problems.push(
+        `${where}: revalidateBy ${provenance.revalidateBy} must be after checkedOn ${provenance.checkedOn}`,
+      );
+    }
+    if (revalidateBy <= now.getTime()) {
+      problems.push(
+        `${where}: confirmed ruleset expired — revalidateBy ${provenance.revalidateBy} is in the past (§8.3 step 4)`,
+      );
+    }
   }
 }
 

@@ -204,8 +204,8 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
     ).toContainEqual(expect.stringContaining('requires pdfPage'));
   });
 
-  it('a confirmed pack missing edition / sourceUrl / checkedOn / revalidateBy', () => {
-    for (const field of ['edition', 'sourceUrl', 'checkedOn', 'revalidateBy'] as const) {
+  it('a confirmed pack missing edition / sourceUrl', () => {
+    for (const field of ['edition', 'sourceUrl'] as const) {
       const blanked = { ...CONFIRMABLE_PROVENANCE, [field]: '' };
       expect(
         validateRuleset(
@@ -214,6 +214,77 @@ describe('AT-17 the CI currency check fails on each unsafe shipping state', () =
         ),
       ).toContainEqual(expect.stringContaining(`requires a non-empty ${field}`));
     }
+  });
+
+  it('a confirmed pack missing checkedOn / revalidateBy — now an ISO complaint', () => {
+    // F12 folded the empty case into the ISO check: '' is not an ISO date, so
+    // one rule covers both blank and malformed rather than two that disagree.
+    for (const field of ['checkedOn', 'revalidateBy'] as const) {
+      const blanked = { ...CONFIRMABLE_PROVENANCE, [field]: '' };
+      expect(
+        validateRuleset(
+          ruleset({ provenance: blanked, rules: [rule({ provenance: blanked })] }),
+          NOW,
+        ),
+      ).toContainEqual(expect.stringContaining(`confirmed ruleset requires an ISO ${field} date`));
+    }
+  });
+
+  // External review F12: "non-empty" was not enough. A malformed date is
+  // non-empty (so nothing complained) and never ISO (so the expiry check was
+  // skipped), which made a confirmed pack that can NEVER expire.
+  it.each([
+    ['checkedOn', 'yesterday'],
+    ['checkedOn', '2026-7-1'],
+    ['revalidateBy', '2027-7-27'],
+    ['revalidateBy', 'next year'],
+  ])('a confirmed pack whose %s is not a strict ISO date (%s)', (field, value) => {
+    const malformed = { ...CONFIRMABLE_PROVENANCE, [field]: value };
+    const problems = validateRuleset(
+      ruleset({ provenance: malformed, rules: [rule({ provenance: malformed })] }),
+      NOW,
+    );
+    expect(problems).toContainEqual(
+      expect.stringContaining(`confirmed ruleset requires an ISO ${field} date`),
+    );
+  });
+
+  it('a confirmed pack whose checkedOn is in the FUTURE', () => {
+    // Nobody read the source tomorrow.
+    const future = { ...CONFIRMABLE_PROVENANCE, checkedOn: '2027-01-01' };
+    expect(
+      validateRuleset(ruleset({ provenance: future, rules: [rule({ provenance: future })] }), NOW),
+    ).toContainEqual(expect.stringContaining('is in the future'));
+  });
+
+  it('a confirmed pack whose revalidateBy is not AFTER checkedOn', () => {
+    const inverted = {
+      ...CONFIRMABLE_PROVENANCE,
+      checkedOn: '2026-07-01',
+      revalidateBy: '2026-07-01',
+    };
+    expect(
+      validateRuleset(
+        ruleset({ provenance: inverted, rules: [rule({ provenance: inverted })] }),
+        NOW,
+      ),
+    ).toContainEqual(expect.stringContaining('must be after checkedOn'));
+  });
+
+  it('the expiry check now fires UNCONDITIONALLY once the date parses', () => {
+    // The regression guard for F12: an expired date must be reported whether or
+    // not any other date field is well formed.
+    const expired = { ...CONFIRMABLE_PROVENANCE, revalidateBy: '2020-01-01' };
+    const problems = validateRuleset(
+      ruleset({ provenance: expired, rules: [rule({ provenance: expired })] }),
+      NOW,
+    );
+    expect(problems).toContainEqual(expect.stringContaining('confirmed ruleset expired'));
+    // And no malformed-date value can reach this branch and skip it silently.
+    const junk = { ...CONFIRMABLE_PROVENANCE, revalidateBy: '2020-1-1' };
+    expect(
+      validateRuleset(ruleset({ provenance: junk, rules: [rule({ provenance: junk })] }), NOW),
+    ).toContainEqual(expect.stringContaining('requires an ISO revalidateBy date'));
   });
 
   it('an unsupported escalationShape — the registry rejects it (§3.4.1)', () => {

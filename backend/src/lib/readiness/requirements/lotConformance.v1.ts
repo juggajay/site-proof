@@ -22,6 +22,30 @@ export const LOT_CONFORMANCE_RESULT_SCHEMA_VERSION = 1;
  * The codes `buildConformanceItems` emits (`evidenceReadiness.ts`), minus the
  * positive/short-circuit ones — a snapshot records what BLOCKED, and "nothing"
  * is the empty array.
+ *
+ * ADDED IN C1.2: `insufficient_test_count` (external review F5). The
+ * `lotConformable` limb `sufficiencyBlocks` makes the blocker builder emit that
+ * code (`evidenceReadiness/conformanceItems.ts`), but this allowlist omitted it
+ * and `blockingReasonCodes` drops anything outside the allowlist — so a
+ * SUFFICIENCY-ONLY force-conform in `block` mode recorded `conformable: false,
+ * overridden: true, blockingReasonCodes: []`. The immutable record could not
+ * say what had been overridden, which is the one thing a force-conform snapshot
+ * exists to say.
+ *
+ * V1 EXPANSION, NOT V2 — the same discipline as §5.4.2 `[C1R-B3]`, applied to
+ * the enum instead of the payload:
+ *
+ *  - It is ADDITIVE. A pre-C1.2 row simply never contains the code, and decodes
+ *    unchanged: "no sufficiency blocker recorded". Nothing is REINTERPRETED,
+ *    because the code could not previously appear from any other cause.
+ *  - `decodeAtVersion1` dispatches on the version integer and does not validate
+ *    the code set, and there is no read surface for snapshot payloads at all
+ *    (`[C1R-C3]`), so no reader can throw on the new value.
+ *  - ROLLBACK is symmetric: reverted code stops emitting the code; rows that
+ *    already carry it keep decoding, because the version never moved. A bump to
+ *    v2 would instead have split `lot_conformance.v1` from `.v2` in the
+ *    `requirement_set` column of a live immutable table and made rolled-back
+ *    code hard-throw on every v2 row (`shared.ts` `decodeAtVersion1`).
  */
 export const LOT_CONFORMANCE_REASON_CODES = [
   'no_itp_assigned',
@@ -29,6 +53,7 @@ export const LOT_CONFORMANCE_REASON_CODES = [
   'no_passing_verified_test',
   'open_ncrs',
   'na_hold_point_not_released',
+  'insufficient_test_count',
 ] as const satisfies readonly ReadinessReasonCode[];
 
 export type LotConformanceReasonCode = (typeof LOT_CONFORMANCE_REASON_CODES)[number];

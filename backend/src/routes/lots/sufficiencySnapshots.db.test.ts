@@ -232,6 +232,24 @@ describe('AT-10 `block` end to end on a CONFIRMED pack, inert at off and warn', 
 });
 
 describe('AT-16 a force-conform past a block records the shortfall', () => {
+  it('records insufficient_test_count when sufficiency is the ONLY blocker (review F5)', async () => {
+    // Every legacy prerequisite passes — ITP complete, a passing verified test,
+    // no open NCRs — so `insufficient_test_count` is the only thing that made
+    // this lot unconformable. Before F5 the reason-code allowlist omitted it and
+    // the immutable record read `conformable: false, blockingReasonCodes: []`:
+    // the one thing a force-conform snapshot exists to say, silently dropped.
+    const lot = await createLot('f5-only-blocker', 1);
+    await setMode('block');
+
+    const res = await conform(lot.id, { force: true, reason: 'Client accepted the shortfall' });
+
+    expect(res.status).toBe(200);
+    const snapshot = await lotConformanceSnapshot(lot.id);
+    expect(snapshot.conformable).toBe(false);
+    expect(snapshot.overridden).toBe(true);
+    expect(snapshot.blockingReasonCodes).toEqual(['insufficient_test_count']);
+  });
+
   it('writes the required/have numbers and the clause into the snapshot', async () => {
     const lot = await createLot('forced', 2);
     await setMode('block');
@@ -242,6 +260,7 @@ describe('AT-16 a force-conform past a block records the shortfall', () => {
     const snapshot = await lotConformanceSnapshot(lot.id);
     expect(snapshot.overridden).toBe(true);
     expect(snapshot.conformable).toBe(false);
+    expect(snapshot.blockingReasonCodes).toEqual(['insufficient_test_count']);
     expect(snapshot.sufficiency).toMatchObject({
       state: 'insufficient',
       insufficientRules: 1,
