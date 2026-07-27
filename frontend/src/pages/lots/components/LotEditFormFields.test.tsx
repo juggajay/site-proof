@@ -22,6 +22,7 @@ const baseFormData: LotEditFormData = {
   budgetAmount: '48000',
   assignedSubcontractorId: '',
   testScale: '',
+  materialType: '',
   quantityValue: '',
   quantityUnit: '',
 };
@@ -32,6 +33,8 @@ const ruleset: SufficiencyRuleset = {
   specSet: 'VicRoads',
   scaleKeys: ['A', 'B', 'C'],
   defaultScale: 'A',
+  materialTypes: null,
+  scaleLabel: null,
   status: 'confirmed',
   authority: 'VicRoads',
   document: 'Section 204',

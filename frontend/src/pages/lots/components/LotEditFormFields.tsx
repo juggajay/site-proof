@@ -265,8 +265,10 @@ export function LotEditFormFields({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
+              {/* D14 §9.3: the pack's own word for what this slot carries. On
+                  NSW the concept is specified relative compaction, not a scale. */}
               <label htmlFor="testScale" className="block text-sm font-medium mb-1">
-                Testing Scale
+                {ruleset.scaleLabel ?? 'Testing Scale'}
               </label>
               <select
                 id="testScale"
@@ -327,6 +329,34 @@ export function LotEditFormFields({
               </select>
             </div>
           </div>
+
+          {/* D14 §9.3: rendered only when the authority classifies lots by
+              material — most do not, and an empty control would be a question
+              with no answers. */}
+          {ruleset.materialTypes && ruleset.materialTypes.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="materialType" className="block text-sm font-medium mb-1">
+                  Material Type
+                </label>
+                <select
+                  id="materialType"
+                  name="materialType"
+                  value={formData.materialType}
+                  onChange={onInputChange}
+                  disabled={detailsLocked}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+                >
+                  <option value="">Not set</option>
+                  {ruleset.materialTypes.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

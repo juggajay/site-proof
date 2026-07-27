@@ -10,6 +10,8 @@ const ruleset: SufficiencyRuleset = {
   specSet: 'VicRoads',
   scaleKeys: ['A', 'B', 'C'],
   defaultScale: 'A',
+  materialTypes: null,
+  scaleLabel: null,
   status: 'confirmed',
   authority: 'VicRoads',
   document: 'Section 204',

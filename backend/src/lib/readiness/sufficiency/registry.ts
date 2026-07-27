@@ -170,6 +170,17 @@ function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems
       problems.push(`${where}: maxLotSize.unit '${cap.unit}' is not a QuantityUnit`);
     }
     if (!(cap.value > 0)) problems.push(`${where}: maxLotSize.value must be > 0`);
+    // D14 §4.1: an EMPTY alias list reads as "unqualified on this dimension", so
+    // declaring one by mistake silently widens the cap to every lot — the wrong
+    // direction for a control whose whole point is to be material-scoped.
+    if (cap.materialAliases && cap.materialAliases.length === 0) {
+      problems.push(
+        `${where}: maxLotSize.materialAliases is empty — omit the limb to leave the cap unqualified`,
+      );
+    }
+    for (const alias of cap.materialAliases ?? []) {
+      if (!alias.trim()) problems.push(`${where}: maxLotSize.materialAliases contains a blank`);
+    }
   }
 
   if (rule.reduced) {
@@ -312,6 +323,22 @@ export function validateRuleset(ruleset: Ruleset, now: Date = new Date()): strin
   if (ruleset.scaleKeys.length === 0) problems.push(`${ruleset.id}: scaleKeys is empty`);
   if (ruleset.defaultScale !== undefined && !ruleset.scaleKeys.includes(ruleset.defaultScale)) {
     problems.push(`${ruleset.id}: defaultScale '${ruleset.defaultScale}' is not in scaleKeys`);
+  }
+  // D14 §4.2. `materialTypes` is the route-level whitelist as well as the form's
+  // option list, so an empty or blank-bearing declaration would either reject
+  // every value or admit a blank one.
+  if (ruleset.materialTypes !== undefined) {
+    if (ruleset.materialTypes.length === 0) {
+      problems.push(
+        `${ruleset.id}: materialTypes is empty — omit it when the authority has no material classification`,
+      );
+    }
+    for (const materialType of ruleset.materialTypes) {
+      if (!materialType.trim()) problems.push(`${ruleset.id}: materialTypes contains a blank`);
+    }
+  }
+  if (ruleset.scaleLabel !== undefined && !ruleset.scaleLabel.trim()) {
+    problems.push(`${ruleset.id}: scaleLabel is blank — omit it to use the default wording`);
   }
   if (!isIsoDate(ruleset.effectiveFrom)) {
     problems.push(`${ruleset.id}: effectiveFrom '${ruleset.effectiveFrom}' is not an ISO date`);

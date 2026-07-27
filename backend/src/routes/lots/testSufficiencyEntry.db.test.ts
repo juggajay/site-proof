@@ -22,6 +22,11 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { parseAuditLogChanges } from '../../lib/auditLog.js';
+import {
+  CONFORMANCE_LOT_SELECT,
+  checkConformancePrerequisites,
+  resolveSufficiencyForLot,
+} from '../../lib/conformancePrerequisites.js';
 import { prisma } from '../../lib/prisma.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
@@ -42,6 +47,8 @@ let adminToken: string;
 let adminUserId: string;
 let foremanToken: string;
 let foremanUserId: string;
+let qualityManagerToken: string;
+let qualityManagerUserId: string;
 let companyId: string;
 let projectId: string;
 
@@ -72,6 +79,18 @@ beforeAll(async () => {
   foremanToken = foreman.token;
   foremanUserId = foreman.userId;
 
+  // AT-50b: a quality_manager may edit and conform but may NOT force-conform,
+  // which is what makes the missing whitelist a privilege bypass rather than a
+  // tidiness problem.
+  const qualityManager = await registerTestUser(app, {
+    emailPrefix: `${tag}-qm`,
+    fullName: 'Suff Quality Manager',
+    companyId,
+    roleInCompany: 'member',
+  });
+  qualityManagerToken = qualityManager.token;
+  qualityManagerUserId = qualityManager.userId;
+
   // VIC / VicRoads, so the CONFIRMED `vicroads-204.v1` pack resolves and its
   // scaleKeys ['A','B','C'] are what the route validates against.
   const project = await prisma.project.create({
@@ -91,6 +110,7 @@ beforeAll(async () => {
       { projectId, userId: adminUserId, role: 'admin', status: 'active' },
       // Foreman is deliberately NOT a lot setup manager (§10.2).
       { projectId, userId: foremanUserId, role: 'foreman', status: 'active' },
+      { projectId, userId: qualityManagerUserId, role: 'quality_manager', status: 'active' },
     ],
   });
 
@@ -107,12 +127,14 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  await prisma.testResult.deleteMany({ where: { projectId } });
   await prisma.iTPInstance.deleteMany({ where: { lot: { projectId } } });
   await prisma.lot.deleteMany({ where: { projectId } });
+  await prisma.iTPTemplate.deleteMany({ where: { projectId } });
   await prisma.projectUser.deleteMany({ where: { projectId } });
   await prisma.project.deleteMany({ where: { id: projectId } });
   await prisma.user.deleteMany({
-    where: { id: { in: [adminUserId, foremanUserId, otherUserId] } },
+    where: { id: { in: [adminUserId, foremanUserId, qualityManagerUserId, otherUserId] } },
   });
   await prisma.company.deleteMany({ where: { id: { in: [companyId, otherCompanyId] } } });
 });
@@ -415,6 +437,277 @@ describe('§5.1.3 the conformed and claimed short circuits carry advisory items'
       for (const item of items) expect(item.blocksAction).toBe(false);
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// D14 §9.2 `[D14R-B5]` `[D14X-2]` — AT-50a and AT-50b.
+//
+// `assertTestScaleValidForLots` shipped module-private with ONE call site, so
+// four of the five write paths accepted any string at all. Two reviews found the
+// hole independently; the external one named its cost — it is a PRIVILEGE
+// BYPASS, because `unknown` does not block and a `quality_manager` may conform
+// but may not force-conform, so the gate is defeated with no override record.
+// ---------------------------------------------------------------------------
+describe('AT-50a the pack whitelist reaches every write path, not one of five', () => {
+  it('single create rejects a scale outside scaleKeys, naming the valid list', async () => {
+    const res = await post('/api/lots', adminToken).send({
+      projectId,
+      lotNumber: `${tag}-W-CREATE-BAD`,
+      activityType: 'Earthworks',
+      testScale: 'Z',
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
+    expect(res.body.error.message).toContain('Valid scales: A, B, C');
+    expect(
+      await prisma.lot.findFirst({ where: { projectId, lotNumber: `${tag}-W-CREATE-BAD` } }),
+    ).toBeNull();
+  });
+
+  // The copilot lot-breakdown executor re-validates and then calls straight into
+  // `createBulkLots`, so this placement covers the fifth path too.
+  it('bulk create rejects the WHOLE batch on one bad row, writing nothing', async () => {
+    const res = await post('/api/lots/bulk', adminToken).send({
+      projectId,
+      lots: [
+        { lotNumber: `${tag}-W-BULK-OK`, activityType: 'Earthworks', testScale: 'A' },
+        { lotNumber: `${tag}-W-BULK-BAD`, activityType: 'Earthworks', testScale: 'Z' },
+      ],
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
+    expect(res.body.error.message).toContain(`on lot ${tag}-W-BULK-BAD`);
+    // Whole-batch: the GOOD row is not written either.
+    expect(
+      await prisma.lot.count({
+        where: { projectId, lotNumber: { in: [`${tag}-W-BULK-OK`, `${tag}-W-BULK-BAD`] } },
+      }),
+    ).toBe(0);
+  });
+
+  it('PATCH rejects it, and the stored value is untouched', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-W-PATCH`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        activitySlug: 'earthworks_general',
+        status: 'in_progress',
+        testScale: 'A',
+      },
+    });
+    const res = await request(app)
+      .patch(`/api/lots/${lot.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ testScale: 'Z' });
+    expect(res.status).toBe(400);
+    expect((await prisma.lot.findUnique({ where: { id: lot.id } }))?.testScale).toBe('A');
+  });
+
+  it('a materialType is refused everywhere while the pack declares no vocabulary', async () => {
+    // `vicroads-204.v1` gains `materialTypes` in D14.2. Storing "Type A" now
+    // would put a string in the column that no rule can read and no user can
+    // see validated — the honest answer until the pack declares its classes.
+    const created = await post('/api/lots', adminToken).send({
+      projectId,
+      lotNumber: `${tag}-W-MAT`,
+      activityType: 'Earthworks',
+      materialType: 'Type A',
+    });
+    expect(created.status).toBe(400);
+    expect(created.body.error.message).toContain('does not classify lots by material type');
+
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-W-MAT-PATCH`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        status: 'in_progress',
+      },
+    });
+    const patched = await request(app)
+      .patch(`/api/lots/${lot.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ materialType: 'Type A' });
+    expect(patched.status).toBe(400);
+
+    const bulkSet = await post('/api/lots/bulk-set-test-attributes', adminToken).send({
+      lotIds: [lot.id],
+      materialType: 'Type A',
+    });
+    expect(bulkSet.status).toBe(400);
+  });
+
+  it('null is accepted on every path — clearing a field is not a vocabulary question', async () => {
+    const created = await post('/api/lots', adminToken).send({
+      projectId,
+      lotNumber: `${tag}-W-NULL`,
+      activityType: 'Earthworks',
+      testScale: null,
+      materialType: null,
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+
+    const patched = await request(app)
+      .patch(`/api/lots/${created.body.lot.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ testScale: null, materialType: null });
+    expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+  });
+});
+
+// AT-50b — the block-mode bypass, end to end, with a REAL role. Written at route
+// level deliberately: the evaluator behaves correctly in both worlds and would
+// pass either way, so an evaluator-level test proves nothing about the hole.
+describe('AT-50b an invalid scale cannot be used to escape block mode', () => {
+  let blockLotId: string;
+
+  beforeAll(async () => {
+    const template = await prisma.iTPTemplate.create({
+      data: { projectId, name: `Tpl ${tag}-BLOCK`, activityType: 'Earthworks' },
+    });
+    const checklistItem = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId: template.id,
+        description: 'Compaction test point',
+        sequenceNumber: 1,
+        pointType: 'standard',
+        responsibleParty: 'contractor',
+        evidenceRequired: 'test',
+        testType: 'compaction',
+      },
+    });
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-BLOCK`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        activitySlug: 'earthworks_general',
+        status: 'in_progress',
+      },
+    });
+    blockLotId = lot.id;
+    await prisma.iTPInstance.create({
+      data: {
+        lotId: blockLotId,
+        templateId: template.id,
+        completions: { create: [{ checklistItemId: checklistItem.id, status: 'completed' }] },
+      },
+    });
+    // 1 of the 6 clause 204.13(a) requires at the Scale A default.
+    await prisma.testResult.create({
+      data: {
+        projectId,
+        lotId: blockLotId,
+        itpChecklistItemId: checklistItem.id,
+        testType: 'compaction',
+        passFail: 'pass',
+        status: 'verified',
+        enteredById: adminUserId,
+      },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { testSufficiencyMode: 'block' },
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { testSufficiencyMode: 'warn' },
+    });
+  });
+
+  it('the lot is genuinely blocked to begin with — 1 of 6, canConform false', async () => {
+    const result = await checkConformancePrerequisites(blockLotId);
+    expect(result.sufficiency?.rules[0]).toMatchObject({
+      state: 'insufficient',
+      requiredCount: 6,
+      passingCount: 1,
+    });
+    expect(result.canConform).toBe(false);
+  });
+
+  it('THE FIX: a quality_manager cannot PATCH an unrecognised scale onto it', async () => {
+    // A quality_manager may edit and conform but may NOT force-conform, so
+    // before D14.1 this PATCH converted an insufficient verdict into a
+    // non-blocking `unknown` with no override record of any kind.
+    const res = await request(app)
+      .patch(`/api/lots/${blockLotId}`)
+      .set('Authorization', `Bearer ${qualityManagerToken}`)
+      .send({ testScale: 'Z' });
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
+
+    const after = await checkConformancePrerequisites(blockLotId);
+    expect(after.canConform).toBe(false);
+  });
+
+  it('a row written BEFORE the whitelist still degrades HONESTLY, not silently', async () => {
+    // The validator cannot retroactively clean rows, and `scale_not_recognised`
+    // stays a live state by design. What matters is that the transition is
+    // VISIBLE as unrecognised data rather than looking like a satisfied lot —
+    // and that it does not 500 the claim path (`[D14R-B2]`).
+    await prisma.lot.update({ where: { id: blockLotId }, data: { testScale: 'Z' } });
+    const result = await checkConformancePrerequisites(blockLotId);
+    expect(result.sufficiency?.rules[0]).toMatchObject({
+      state: 'unknown',
+      requiredCount: null,
+      unknownCauses: ['scale_not_recognised'],
+    });
+    // `unknown` does not block — the honest consequence of unrecognised data,
+    // which is exactly why the value must be unreachable through the API.
+    expect(result.canConform).toBe(true);
+    await prisma.lot.update({ where: { id: blockLotId }, data: { testScale: null } });
+  });
+});
+
+// AT-50 — the persistence half, through the REAL `sufficiencyInput()` mapper
+// (`conformancePrerequisites.ts` §8.1 edit 3), never a stub. A stub passes with
+// that edit missing, which is exactly the silent failure it exists to prevent:
+// `materialType` persisted, returned by the API and visible in the form while
+// being never seen by the evaluator.
+describe('AT-50 materialType reaches the evaluator, not just the database', () => {
+  it('the conformance mapper carries materialType into the resolved inputs', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-MAT-MAPPER`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        activitySlug: 'earthworks_general',
+        status: 'in_progress',
+        materialType: 'Type A',
+      },
+    });
+    const resolved = await resolveSufficiencyForLot(
+      await prisma.lot.findUniqueOrThrow({
+        where: { id: lot.id },
+        select: CONFORMANCE_LOT_SELECT,
+      }),
+      undefined,
+    );
+    expect(resolved?.materialType).toBe('Type A');
+  });
+
+  it('GET /api/lots/:id returns it, so the edit form cannot NULL it on the next save', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-MAT-READ`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        status: 'in_progress',
+        materialType: 'Type B',
+      },
+    });
+    const res = await request(app)
+      .get(`/api/lots/${lot.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.lot.materialType).toBe('Type B');
+  });
 });
 
 describe('AT-19 GET /api/test-sufficiency/rulesets', () => {

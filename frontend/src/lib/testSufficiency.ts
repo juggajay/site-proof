@@ -22,6 +22,14 @@ export interface SufficiencyRuleset {
   specSet: string;
   scaleKeys: string[];
   defaultScale: string | null;
+  /** D14: the material classes this authority recognises. Null = it has none. */
+  materialTypes: string[] | null;
+  /**
+   * D14: what the authority CALLS the thing `Lot.testScale` carries. Null = use
+   * the default wording; VicRoads regiments by Compaction Scale A/B/C, TfNSW Q6
+   * by specified relative compaction band.
+   */
+  scaleLabel: string | null;
   status: 'draft' | 'confirmed';
   authority: string;
   document: string;

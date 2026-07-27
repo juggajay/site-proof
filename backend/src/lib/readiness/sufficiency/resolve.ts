@@ -83,6 +83,8 @@ export interface SufficiencyLotInput {
   activitySlug: string | null;
   layer: string | null;
   areaZone: string | null;
+  /** D14 §3.1 — free text, matched case-insensitively against pack aliases. */
+  materialType?: string | null;
   testScale: string | null;
   quantityValue: DecimalLike;
   quantityUnit: string | null;
@@ -318,6 +320,10 @@ export function resolveSufficiencySync(
     scale,
     quantity,
     areaZone: lot.areaZone,
+    materialType: lot.materialType ?? null,
+    // D14 §4.6: returned rather than discarded. Already computed above for the
+    // existing `quantity` fallback, so this costs no query and no extra work.
+    geometryAreaM2: geometryArea,
     // Empty until a caller supplies a fetcher; every rule then reads `full`,
     // the over-testing (safe) direction.
     regimeByRuleId: new Map<string, ResolvedRegime>(),

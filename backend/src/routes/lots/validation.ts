@@ -81,10 +81,21 @@ const quantityUnitSchema = z
 // The scale is checked against the RESOLVED ruleset's `scaleKeys` at the route
 // (never silently coerced); the schema only bounds its shape.
 const testScaleSchema = optionalNullableTextSchema('testScale', MAX_SHORT_TEXT_LENGTH);
+// D14 §9.1. Same treatment as the scale: the SHAPE is bounded here, the
+// VOCABULARY is whitelisted against the resolved pack's `materialTypes` by
+// `assertLotSufficiencyAttributes` at the route. `MAX_SHORT_TEXT_LENGTH` is this
+// file's module-private `= 100` — NOT the exported constant of the same name and
+// a different value (120) in `routes/itp/templateValidation.ts`. Grep by file.
+const materialTypeSchema = optionalNullableTextSchema('materialType', MAX_SHORT_TEXT_LENGTH);
 
-/** Shared by create, bulk-create, PATCH and the bulk-set route, so the four cannot drift. */
+/**
+ * Shared by create, bulk-create, PATCH, the bulk-set route AND the copilot
+ * lot-breakdown executor (which re-validates with `bulkCreateLotsCoreSchema` and
+ * calls `createBulkLots`), so the FIVE cannot drift `[D14R-R13]`.
+ */
 const testSufficiencyLotFields = {
   testScale: testScaleSchema,
+  materialType: materialTypeSchema,
   quantityValue: quantityValueSchema,
   quantityUnit: quantityUnitSchema,
 } as const;
@@ -332,13 +343,13 @@ const bulkSetTestAttributesSchema = z
     ...testSufficiencyLotFields,
   })
   .superRefine((data, ctx) => {
-    const provided = (['testScale', 'quantityValue', 'quantityUnit'] as const).filter(
-      (field) => data[field] !== undefined,
-    );
+    const provided = (
+      ['testScale', 'materialType', 'quantityValue', 'quantityUnit'] as const
+    ).filter((field) => data[field] !== undefined);
     if (provided.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Provide at least one of testScale, quantityValue or quantityUnit',
+        message: 'Provide at least one of testScale, materialType, quantityValue or quantityUnit',
         path: ['testScale'],
       });
     }

@@ -23,6 +23,7 @@ import type { ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
 import { buildTemplateSnapshot } from '../itp/helpers/templateSnapshot.js';
 import { planBulkItpTemplates, type BulkItpPlan } from './bulkItpPlan.js';
 import { requireItpTemplateForProject } from './assignmentHelpers.js';
+import { assertLotSufficiencyAttributes } from '../../lib/readiness/sufficiency/lotAttributeValidation.js';
 
 export interface BulkLotInput {
   lotNumber: string;
@@ -38,6 +39,8 @@ export interface BulkLotInput {
   // 500 forms. This core is the chainage generator AND the AI lot breakdown —
   // the two ways lots are really created.
   testScale?: string | null;
+  /** D14 §3.1 — whitelisted against the pack's `materialTypes` below. */
+  materialType?: string | null;
   quantityValue?: number | null;
   quantityUnit?: string | null;
 }
@@ -163,6 +166,26 @@ export async function createBulkLots(
   // Resolve which template each lot receives (its own, else the batch default)
   // and snapshot each distinct template once — the same frozen snapshot
   // semantics as single create.
+  // D14 §9.2 — placement 3 of 4, covering bulk create AND the copilot
+  // lot-breakdown executor, which re-validates and then calls straight into
+  // here. Whole-batch rejection, matching the bulk-set route: a partially
+  // applied bulk create is worse than a refused one. The project read is skipped
+  // entirely when no lot carries a pack-scoped attribute.
+  const scopedLots = lotsData.filter((lot) => lot.testScale || lot.materialType);
+  if (scopedLots.length > 0) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { state: true, specificationSet: true },
+    });
+    for (const lot of scopedLots) {
+      assertLotSufficiencyAttributes(
+        project ?? { state: null, specificationSet: null },
+        { testScale: lot.testScale, materialType: lot.materialType },
+        lot.lotNumber,
+      );
+    }
+  }
+
   const itpPlan = planBulkItpTemplates(lotsData, itpTemplateId);
   const snapshotByTemplateId = new Map<string, string>();
   for (const templateId of itpPlan.distinctTemplateIds) {
@@ -196,6 +219,7 @@ export async function createBulkLots(
       chainageEnd: lot.chainageEnd ?? null,
       layer: lot.layer || null,
       testScale: lot.testScale ?? null,
+      materialType: lot.materialType ?? null,
       quantityValue: lot.quantityValue ?? null,
       quantityUnit: lot.quantityUnit ?? null,
       itpTemplateId: itpPlan.templateIdByLotNumber.get(lot.lotNumber) ?? null,
