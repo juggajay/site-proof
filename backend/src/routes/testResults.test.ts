@@ -2977,6 +2977,246 @@ describe('Test Results API', () => {
         await prisma.company.delete({ where: { id: outsiderCompany.id } }).catch(() => {});
       }
     });
+
+    // ========================================================================
+    // Wave C2 Phase 1: the certificate lands on the row that was waiting.
+    // ========================================================================
+
+    // The row a QM plans before the sample goes out: 'requested', no result. It
+    // is the row that today gets orphaned when its certificate arrives.
+    async function createPlannedTestResult(testType = 'Field Density (Nuclear)') {
+      return prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType,
+          status: 'requested',
+          laboratoryName: 'Metro Materials Lab',
+          sampleLocation: 'CH 1234+50',
+          sampleDate: new Date('2026-04-10T00:00:00.000Z'),
+          specificationMin: 95,
+          specificationMax: 100,
+        },
+      });
+    }
+
+    function mockExtraction(fields: Record<string, { value: string; confidence: number }>) {
+      return vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(fields) }] }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      );
+    }
+
+    const FULL_EXTRACTION = {
+      testType: { value: 'Field Density (Nuclear)', confidence: 0.96 },
+      laboratoryName: { value: 'Metro Materials Lab', confidence: 0.94 },
+      laboratoryReportNumber: { value: 'LAB-2026-0042', confidence: 0.93 },
+      sampleDate: { value: '2026-04-10', confidence: 0.91 },
+      testDate: { value: '2026-04-12', confidence: 0.92 },
+      resultValue: { value: '98.5', confidence: 0.95 },
+      resultUnit: { value: '% MDD', confidence: 0.9 },
+      specificationMin: { value: '95', confidence: 0.88 },
+      specificationMax: { value: '100', confidence: 0.87 },
+      sampleLocation: { value: 'CH 1234+50', confidence: 0.9 },
+    };
+
+    // AT-76 [C2R-B6]: the extract route returns the extraction and writes NO
+    // extracted value. Only the human confirm writes. AT-77 [C2R-A4]: that
+    // confirm's status move is audited.
+    it('AT-76/AT-77: extract=true returns the extraction, writes nothing, and the confirm is audited', async () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      const testResult = await createPlannedTestResult();
+      const before = await prisma.testResult.findUniqueOrThrow({ where: { id: testResult.id } });
+
+      try {
+        const fetchMock = mockExtraction(FULL_EXTRACTION);
+
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate?extract=true`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'c2-extract-onto-row.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(200);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        // The extraction comes back for review, in the create path's shape.
+        expect(res.body.extraction.extractedFields.resultValue.value).toBe('98.5');
+        expect(res.body.extraction.needsReview).toBe(false);
+
+        // AT-76: the row differs from its pre-call state ONLY in certificateDocId
+        // (and updatedAt, which Prisma stamps on any write).
+        const afterAttach = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+        });
+        expect(afterAttach.certificateDocId).toBe(res.body.testResult.certificateDoc.id);
+        expect({ ...afterAttach, certificateDocId: null, updatedAt: before.updatedAt }).toEqual({
+          ...before,
+          certificateDocId: null,
+        });
+        expect(afterAttach.status).toBe('requested');
+        expect(afterAttach.resultValue).toBeNull();
+        expect(afterAttach.aiExtracted).toBe(false);
+        expect(afterAttach.aiConfidence).toBeNull();
+        expect(afterAttach.passFail).toBe('pending');
+
+        // The values reach the row only through the shipped human confirm.
+        const confirmRes = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            corrections: {
+              testType: 'Field Density (Nuclear)',
+              laboratoryReportNumber: 'LAB-2026-0042',
+              resultValue: '98.5',
+              resultUnit: '% MDD',
+              specificationMin: '95',
+              specificationMax: '100',
+              lotId,
+            },
+          });
+
+        expect(confirmRes.status).toBe(200);
+
+        const confirmed = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+        });
+        expect(confirmed.status).toBe('entered');
+        expect(Number(confirmed.resultValue)).toBe(98.5);
+        expect(confirmed.passFail).toBe('pass');
+        // The planned row completed: still ONE row, and its lot link survived.
+        expect(confirmed.lotId).toBe(lotId);
+        expect(
+          await prisma.testResult.count({
+            where: { projectId, testType: 'Field Density (Nuclear)' },
+          }),
+        ).toBe(1);
+
+        // AT-77: the confirm's status move is audited, in the same shape
+        // POST /:id/status writes.
+        const auditRows = await prisma.auditLog.findMany({
+          where: { entityId: testResult.id, action: AuditAction.TEST_RESULT_STATUS_CHANGED },
+        });
+        expect(auditRows).toHaveLength(1);
+        expect(JSON.parse(auditRows[0].changes || '{}')).toEqual({
+          previousStatus: 'requested',
+          newStatus: 'entered',
+        });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({
+          where: { projectId, filename: 'c2-extract-onto-row.pdf' },
+        });
+      }
+    });
+
+    // AT-75 [C2R-A1]: buildTestResultData's 'Certificate Review Required'
+    // fallback is the attribution-key hazard. It is never called on this path —
+    // asserted rather than assumed, because a refactor could reintroduce it.
+    it('AT-75: a degraded extraction leaves testType, and every other value, untouched', async () => {
+      delete process.env.ANTHROPIC_API_KEY; // forces createManualReviewExtraction
+      const testResult = await createPlannedTestResult('Field Density (Nuclear)');
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate?extract=true`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'c2-unreadable.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(200);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+        // The degraded extraction really does carry the placeholder…
+        expect(res.body.extraction.extractedFields.testType.value).toBe(
+          'Certificate Review Required',
+        );
+
+        // …and it does not reach the row.
+        const row = await prisma.testResult.findUniqueOrThrow({ where: { id: testResult.id } });
+        expect(row.testType).toBe('Field Density (Nuclear)');
+        expect(row.laboratoryName).toBe('Metro Materials Lab');
+        expect(row.sampleLocation).toBe('CH 1234+50');
+        expect(row.status).toBe('requested');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { projectId, filename: 'c2-unreadable.pdf' } });
+      }
+    });
+
+    // AT-69: tenancy on the new behaviour — the extract flag does not open a
+    // door the plain attach keeps shut, and no AI call is made for a refused row.
+    it('AT-69: refuses extract=true for a test result the caller cannot access', async () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      const outsiderCompany = await prisma.company.create({
+        data: { name: `C2 Extract Outsider Co ${Date.now()}` },
+      });
+      const outsider = await registerTestUser('C2 Extract Outsider', 'admin', outsiderCompany.id);
+      const testResult = await createPlannedTestResult();
+      const beforeFiles = new Set(fs.readdirSync(certificatesDir));
+      const bytes = Buffer.from(`%PDF-1.4\ncross-tenant extract ${Date.now()}\n%%EOF`);
+      const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate?extract=true`)
+          .set('Authorization', `Bearer ${outsider.token}`)
+          .attach('certificate', bytes, {
+            filename: 'c2-cross-tenant.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(403);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(findNewFilesWithContent(beforeFiles, bytes)).toHaveLength(0);
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { certificateDocId: true, status: true },
+        });
+        expect(unchanged.certificateDocId).toBeNull();
+        expect(unchanged.status).toBe('requested');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(outsider.userId);
+        await prisma.company.delete({ where: { id: outsiderCompany.id } }).catch(() => {});
+      }
+    });
+
+    // The default is unchanged: no flag, no AI call, no extraction in the body.
+    it('does not extract, or call the AI, without extract=true', async () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      const testResult = await createPlannedTestResult();
+      const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'c2-no-extract.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(200);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+        expect(res.body.extraction).toBeUndefined();
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { projectId, filename: 'c2-no-extract.pdf' } });
+      }
+    });
   });
 
   describe('POST /api/test-results/:id/status', () => {

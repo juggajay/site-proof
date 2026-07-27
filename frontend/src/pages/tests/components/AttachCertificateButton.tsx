@@ -6,8 +6,9 @@ interface AttachCertificateButtonProps {
   disabled?: boolean;
   // Uploads + links the certificate to the existing test. The parent owns the
   // network call (FormData + authFetch) and the list refresh; this component only
-  // owns the hidden file input + per-row uploading state.
-  onAttachCertificate: (testId: string, file: File) => Promise<void>;
+  // owns the hidden file input + per-row uploading state. `extract` asks the
+  // backend to read the certificate and open the review step (C2 Phase 1).
+  onAttachCertificate: (testId: string, file: File, extract?: boolean) => Promise<void>;
   // Optional render variant: the desktop table uses a compact bordered button,
   // the mobile card uses a full-width outline button.
   variant?: 'table' | 'mobile';
@@ -28,6 +29,9 @@ export function AttachCertificateButton({
   variant = 'table',
 }: AttachCertificateButtonProps) {
   const [uploading, setUploading] = useState(false);
+  // Which action opened the picker. Read in handleChange because one hidden
+  // input serves both buttons.
+  const extractRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
 
@@ -40,15 +44,17 @@ export function AttachCertificateButton({
     event.target.value = '';
     if (!file) return;
 
+    const extract = extractRef.current;
     setUploading(true);
     try {
-      await onAttachCertificate(testId, file);
+      await onAttachCertificate(testId, file, extract);
     } finally {
       setUploading(false);
     }
   };
 
-  const triggerPicker = () => {
+  const triggerPicker = (extract: boolean) => () => {
+    extractRef.current = extract;
     inputRef.current?.click();
   };
 
@@ -69,7 +75,7 @@ export function AttachCertificateButton({
       />
       <button
         type="button"
-        onClick={triggerPicker}
+        onClick={triggerPicker(false)}
         disabled={disabled || uploading}
         className={buttonClassName}
         title={
@@ -79,6 +85,17 @@ export function AttachCertificateButton({
         }
       >
         {uploading ? busyLabel : label}
+      </button>
+      {/* C2 Phase 1: the same upload, plus an AI read of the certificate whose
+          values are shown for review before anything is saved to this test. */}
+      <button
+        type="button"
+        onClick={triggerPicker(true)}
+        disabled={disabled || uploading}
+        className={buttonClassName}
+        title="Attach the certificate and read its values with AI, for you to review before saving"
+      >
+        Read with AI
       </button>
     </>
   );

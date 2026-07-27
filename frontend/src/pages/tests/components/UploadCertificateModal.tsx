@@ -14,6 +14,18 @@ import { recomputeReviewPassFail } from '../certificateReview';
 import type { FailedTestNcrInput } from '../failedTestNcr';
 import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
 
+// C2 Phase 1: a certificate that was attached to an EXISTING row and extracted
+// (`POST /:id/certificate?extract=true`). The row already exists and the file is
+// already stored, so the modal skips the upload step and opens straight into the
+// shipped review step. Nothing extracted has been written — this review IS the
+// write path.
+export interface AttachedCertificateReview {
+  testResultId: string;
+  extraction: ExtractionResult;
+  reviewFormData: Record<string, string>;
+  file: File;
+}
+
 interface UploadCertificateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -22,6 +34,7 @@ interface UploadCertificateModalProps {
   // M45: fired after a confirmed certificate whose reviewed result is a fail, so
   // the parent can offer to raise an NCR.
   onFailedResult?: (input: FailedTestNcrInput) => void;
+  attachedReview?: AttachedCertificateReview | null;
 }
 
 interface SuggestedLot {
@@ -43,6 +56,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
   projectId,
   onTestResultsUpdated,
   onFailedResult,
+  attachedReview = null,
 }: UploadCertificateModalProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -83,6 +97,20 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
       }
     };
   }, []);
+
+  // C2 Phase 1: open straight into the review step for a certificate already
+  // attached to an existing row. The parent owns the extraction + the seeding
+  // filter; this only puts them into the state the shipped review step reads.
+  useEffect(() => {
+    if (!attachedReview) return;
+
+    setUploadedFile(attachedReview.file);
+    setExtractionResult(attachedReview.extraction);
+    setExtractedTestId(attachedReview.testResultId);
+    setReviewFormData(attachedReview.reviewFormData);
+    setSuggestedLots([]);
+    updatePdfUrl(URL.createObjectURL(attachedReview.file));
+  }, [attachedReview, updatePdfUrl]);
 
   const handleClose = useCallback(() => {
     resetState();

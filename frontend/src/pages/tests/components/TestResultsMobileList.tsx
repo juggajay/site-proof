@@ -29,7 +29,7 @@ interface TestResultsMobileListProps {
   onUpdateStatus: (testId: string, newStatus: string) => void;
   onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
-  onAttachCertificate: (testId: string, file: File) => Promise<void>;
+  onAttachCertificate: (testId: string, file: File, extract?: boolean) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
   // Migration action: link an existing test to one of its lot's ITP items.
@@ -120,7 +120,7 @@ interface TestResultMobileCardProps {
   onUpdateStatus: (testId: string, newStatus: string) => void;
   onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
-  onAttachCertificate: (testId: string, file: File) => Promise<void>;
+  onAttachCertificate: (testId: string, file: File, extract?: boolean) => Promise<void>;
   onLinkItpItem?: (test: TestResult) => void;
   isHighlighted?: boolean;
 }
