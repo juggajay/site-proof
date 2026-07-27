@@ -253,7 +253,7 @@ noise; a new blocker is not.
 
 ### 5.2 `reasonCode` → `primaryAction` mapping
 
-The vocabulary is closed (`reasonCodes.ts:29-72`). Codes fall into three classes.
+The vocabulary is closed (`reasonCodes.ts:29-85`). Codes fall into three classes.
 
 **Class A — actionable (produce an assignment with a real verb):**
 
@@ -263,11 +263,13 @@ The vocabulary is closed (`reasonCodes.ts:29-72`). Codes fall into three classes
 | `itp_incomplete` | Open ITP checklist | + site_engineer, site_manager, foreman | lot |
 | `unreleased_hold_points`, `unreleased_itp_hold_points`, `na_hold_point_not_released`, `release_gated_hold_points` | Release hold point | owner, admin, project_manager, quality_manager | hold_point |
 | `missing_hold_point_recipients` | Add recipients | owner, admin, project_manager | hold_point |
+| `hold_point_overdue` | Review hold point | owner, admin, project_manager, quality_manager | hold_point |
 | `pending_tests` | Verify test result | owner, admin, quality_manager | test |
 | `no_passing_verified_test`, `no_tests` | Record test result | quality_manager, site_engineer | test |
 | `failed_tests` | Raise NCR | owner, admin, quality_manager | test |
 | `open_ncrs`, `open_minor_ncrs` | Open NCR | owner, admin, quality_manager | ncr |
 | `open_major_ncrs` | Verify rectification | owner, admin, quality_manager | ncr |
+| `ncr_overdue` | Review NCR | owner, admin, quality_manager | ncr |
 | `not_conformed` | Conform lot | owner, admin, project_manager, quality_manager | lot |
 | `conformance_no_longer_current` | Re-conform lot | owner, admin, project_manager, quality_manager | lot |
 | `conformance_overridden` | Review override | owner, admin, quality_manager | lot |
@@ -275,17 +277,40 @@ The vocabulary is closed (`reasonCodes.ts:29-72`). Codes fall into three classes
 | `partially_claimed` | Add to claim | owner, admin, project_manager | claim |
 | `missing_request_evidence` | Attach evidence | owner, admin, project_manager, quality_manager | lot |
 | `no_photos`, `low_photo_evidence` | Add photos | site_engineer, site_manager, foreman | lot |
+| `insufficient_test_count` | Review test coverage | owner, admin, quality_manager, site_engineer | lot |
+| `tests_unlinked_to_itp_item` | Link tests to ITP | owner, admin, quality_manager, site_engineer | lot |
+
+The two overdue codes are **the same subject as an existing row, later in its life** —
+`ncr_overdue` only ever co-occurs with `open_ncrs`/`open_major_ncrs`, and `hold_point_overdue`
+with an unreleased-hold-point code. They therefore set `isOverdue` on that one assignment;
+they never add a second row for the same NCR or hold point (§4.2, timing is a lens over the
+row, not a row of its own). Both sufficiency
+rows are lot-scoped, not test-scoped — the shortfall is "this lot × this rule", so the button
+lands on the lot's tests tab, not on any one test.
 
 **Class B — positive / terminal (produce `status: 'done'`, never rendered):**
 `conformance_prerequisites_met`, `lot_already_claimed`, `lot_already_conformed`,
 `already_claimed`, `released_hold_points`, `passing_tests`, `itp_complete`, `ncrs_closed`,
-`photo_evidence`.
+`photo_evidence`, `test_sufficiency_met`.
 
-**Class C — aggregate / count-only (produce NO assignment):**
+**Class C — aggregate / count-only / advisory (produce NO assignment):**
 `management_only_items`, `field_actionable_items`, `documents`, `photos` (roll-ups, not
 decisions), plus `approved_dockets` and `diary_entries`, which the engine hardcodes to 0 today
 (`reasonCodes.ts:143-150`) pending F0 execution-spec §13.4 ("wire in D1 or drop"). A4 must not
 render a decision from a hardcoded zero.
+
+Also class C, for a different reason — **no single verb exists**, so a row would violate §5.3:
+
+- `test_sufficiency_unknown` — a MISSING INPUT, not a shortfall. Its six causes
+  (`sufficiency/types.ts:238-245`) point at different owners: `no_ruleset_for_project` and
+  `no_rule_for_activity` are CIVOS content gaps, `activity_not_canonical` /
+  `scale_not_selected` / `scale_not_recognised` are lot setup, `quantity_missing` is lot data.
+  One button cannot address that set, and guessing the wrong one sends the user to a dead end.
+  If usage shows this dominating, split it per cause into class-A codes — do not give the
+  aggregate a verb.
+- `lot_exceeds_max_lot_size` — advisory arithmetic (`evaluate.ts:267-279`): the lot is larger
+  than the ruleset's cap. The remedy is splitting the lot, which is not an operation the app
+  offers, so it is information for the lot surface, not a routable decision.
 
 **Rule for future codes:** a new engine code must be classified A/B/C in the same change that
 adds it to `READINESS_REASON_CODES`, or My Work silently drops it.

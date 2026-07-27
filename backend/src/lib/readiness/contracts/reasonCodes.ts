@@ -76,6 +76,12 @@ export const READINESS_REASON_CODES = [
   'lot_exceeds_max_lot_size',
   'tests_unlinked_to_itp_item',
   'test_sufficiency_met',
+  // ball-in-court overdue signals (Wave A4 — alert engine, not a readiness
+  // builder: `lib/notificationAutomation/systemAutomation.ts`). Both are
+  // date-passed states, so a consumer can set `isOverdue` from a code rather
+  // than re-deriving the threshold. Added WITH provenance in the same change.
+  'ncr_overdue',
+  'hold_point_overdue',
 ] as const;
 
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
@@ -199,6 +205,21 @@ export const REASON_CODE_PROVENANCE: Record<
   lot_exceeds_max_lot_size: {
     predicate: 'engine',
     source: 'sufficiency/evaluate (lot-size advisory, §3.3 — arithmetic, no predicate)',
+  },
+  ncr_overdue: {
+    predicate: 'ncrOverdue',
+    source:
+      'systemAutomation overdue-NCR pass (systemAutomation.ts:194-197 — open ∧ dueDate < now)',
+  },
+  hold_point_overdue: {
+    // NAMING TRAP: the alert this comes from is typed `stale_hold_point`, but
+    // its query (systemAutomation.ts:278-279) is the OVERDUE definition —
+    // status in requested|scheduled ∧ scheduledDate past. That is
+    // `holdPointOverdue`, NOT `holdPointStagnant` (createdAt aging, 7d), which
+    // is what the dashboard widgets labelled "stale" use. A4 decision D2 takes
+    // the scheduled-date semantics.
+    predicate: 'holdPointOverdue',
+    source: 'systemAutomation stale_hold_point pass (systemAutomation.ts:277-279)',
   },
 };
 
