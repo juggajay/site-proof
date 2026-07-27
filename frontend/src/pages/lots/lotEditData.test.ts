@@ -140,6 +140,46 @@ describe('mapLotToFormData', () => {
       quantityUnit: '',
     });
   });
+
+  // D14 review B1: the lot read must hydrate the C1 test attributes, because
+  // buildLotUpdatePayload sends all three on every save. A blank hydration NULLs
+  // them on an unrelated edit and reverts the lot's sufficiency to "unknown".
+  it('hydrates testScale, quantityValue and quantityUnit from the lot', () => {
+    const form = mapLotToFormData({
+      ...baseLot,
+      testScale: 'B',
+      quantityValue: 3200.5,
+      quantityUnit: 'm2',
+    });
+    expect(form.testScale).toBe('B');
+    expect(form.quantityValue).toBe('3200.5');
+    expect(form.quantityUnit).toBe('m2');
+  });
+});
+
+describe('lot edit round-trip (D14 review B1)', () => {
+  it('preserves the test attributes when only the description changed', () => {
+    const lot: Lot = {
+      ...baseLot,
+      testScale: 'B',
+      quantityValue: 3200.5,
+      quantityUnit: 'm2',
+    };
+    const form = mapLotToFormData(lot);
+    const payload = buildLotUpdatePayload({
+      formData: { ...form, description: 'Edited description' },
+      parsedChainageStart: 10.5,
+      parsedChainageEnd: 20.75,
+      parsedBudgetAmount: 1250.25,
+      isConformedBudgetOnlyMode: false,
+      canViewBudgets: true,
+      serverUpdatedAt: null,
+    });
+    expect(payload.description).toBe('Edited description');
+    expect(payload.testScale).toBe('B');
+    expect(payload.quantityValue).toBe(3200.5);
+    expect(payload.quantityUnit).toBe('m2');
+  });
 });
 
 describe('mapOfflineLotToFormData', () => {

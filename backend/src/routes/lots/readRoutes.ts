@@ -271,6 +271,11 @@ lotReadRouter.get(
         offsetCustom: true,
         layer: true,
         areaZone: true,
+        // Wave C1 test attributes. The edit form manages all three and PATCHes
+        // them on every save, so omitting them here NULLs them (D14 review B1).
+        testScale: true,
+        quantityValue: true,
+        quantityUnit: true,
         projectId: true,
         assignedSubcontractorId: true,
         assignedSubcontractor: {
