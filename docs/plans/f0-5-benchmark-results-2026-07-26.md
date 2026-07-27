@@ -403,6 +403,17 @@ question.** Three honest options, in order of how much they cost:
 `DECISION_TRANSACTION_TIMEOUT_MS = 15_000` is now 5x the observed max (3,014ms),
 up from 3.3x.
 
+### Decision (2026-07-27): option 2 — budget revised to p95 < 3s
+
+Jay accepted the recommendation: **Target 1 budget is now p95 < 3,000ms at the
+5,000-member ceiling** (`bench-f05.ts` updated to match). Rationale: the
+remaining time is a measured floor (60k completion rows genuinely read +
+5,001 snapshot inserts under one serializable tx), option 3's architectural
+rework isn't worth one second at an artificial worst case, and lowering
+`CLAIM_LOTS_MAX` would cap real claims. Against the revised budget the
+post-#1580 result (p95 2,964ms) **PASSES at 99% of budget** — tight but honest;
+any regression on this path will flip the verdict back to FAIL.
+
 ### Re-running this comparison
 
 ```bash
