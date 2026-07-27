@@ -53,6 +53,23 @@ export interface LotSizeCap {
   unit: QuantityUnit;
   value: number;
   areaZoneAliases?: readonly string[];
+  /**
+   * D14 §4.1: the cap applies only when `Lot.materialType` matches one of these,
+   * case-insensitively. Section 204 Table 204.142 caps a Type A lot at 5,000 m²
+   * and Type C at nothing at all `[C1C-3]`, so a bare cap is prohibited there and
+   * a material-scoped one is the only encodable form.
+   *
+   * A cap declaring BOTH `materialAliases` and `areaZoneAliases` requires BOTH to
+   * match. An absent limb is "unqualified on that dimension", matching the
+   * shipped `areaZoneAliases` semantics exactly.
+   *
+   * `appliesTo.materialAliases` is deliberately NOT the counterpart of this: a
+   * material discriminator on a COUNT rule would make the rule disappear for an
+   * unmatched lot, and a rule that does not resolve is SILENT (§7.1) — the
+   * under-testing direction, arriving quietly. A cap's failure mode is a missing
+   * advisory warning, which is safe.
+   */
+  materialAliases?: readonly string[];
 }
 
 /** The de-escalated regime's figures (§3.2). */
@@ -158,6 +175,23 @@ export interface Ruleset {
    * 'confirmed' — a human verified every number against the cited edition (§8.3).
    */
   status: RulesetStatus;
+  /**
+   * D14 §4.2: the material classes this authority recognises — 'Type A' |
+   * 'Type B' | 'Type C' for Section 204. Drives the lot-form control and the
+   * route-level whitelist (`assertLotSufficiencyAttributes`), exactly as
+   * `scaleKeys` does for the scale. Absent = this authority has no material
+   * classification, the control is not rendered, and any non-null value is
+   * rejected at the boundary.
+   */
+  materialTypes?: readonly string[];
+  /**
+   * D14 §4.2: what the authority CALLS the thing `Lot.testScale` carries.
+   * Defaults to 'Testing scale' (Section 204's "Compaction Scale A/B/C"); TfNSW
+   * Q6 keys its table by 'Specified relative compaction' (§3.2). One string, so
+   * the hard-coded lot-form label and the readiness prompts stop lying on NSW
+   * projects (§4.7).
+   */
+  scaleLabel?: string;
   rules: readonly FrequencyRule[];
   provenance: RulesetProvenance;
 }
@@ -202,6 +236,18 @@ export interface ResolvedSufficiency {
   quantity: { value: number | null; unit: QuantityUnit | null; source: QuantitySource };
   /** `Lot.areaZone` — selects which §3.3 lot-size cap applies. */
   areaZone: string | null;
+  /** D14 §3.1 — `Lot.materialType`. NULL matches no material-scoped cap. */
+  materialType: string | null;
+  /**
+   * D14 §4.6: the summed `LotGeometry.areaM2`, kept SEPARATELY from `quantity`
+   * because the lot's own quantity legitimately wins for `quantity` (§6 D5) while
+   * still being the WRONG UNIT for a given rule. A rule needing m² can fall back
+   * here even when the lot itself is measured in m³ or chainage metres — which is
+   * how earthworks lots are ordinarily measured, so without this an m²-keyed pack
+   * reads `unknown` forever on real data. NULL when the lot has no geometry, or
+   * none carrying an area.
+   */
+  geometryAreaM2: number | null;
   /** Absent entry => regime unresolvable for that rule (or the rule has no `reduced` limb). */
   regimeByRuleId: ReadonlyMap<string, ResolvedRegime>;
   /** `activitySlug` NULL (fold 'family' | 'none') — drives `activity_not_canonical`. */

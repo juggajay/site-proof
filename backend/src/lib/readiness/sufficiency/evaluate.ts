@@ -25,6 +25,7 @@ import {
 import type {
   FrequencyRule,
   MaxLotSizeExceedance,
+  QuantityUnit,
   ResolvedSufficiency,
   RuleSufficiency,
   RulesetStatus,
@@ -63,8 +64,16 @@ export interface SufficiencyEvaluation {
    * (`ConformanceCheckResult` exposes the evaluation, not the resolution).
    */
   mode: SufficiencyMode;
-  /** Null when no ruleset resolved for the project/activity. */
-  ruleset: { id: string; status: RulesetStatus } | null;
+  /**
+   * Null when no ruleset resolved for the project/activity.
+   *
+   * D14 §4.7: `scaleLabel` rides here because the readiness item builder receives
+   * the EVALUATION, not the `ResolvedSufficiency`, and the prompts it writes name
+   * a concept the pack owns ("testing scale" on VIC, "specified relative
+   * compaction" on NSW). Null = the pack declares no label and the shipped
+   * default wording stands.
+   */
+  ruleset: { id: string; status: RulesetStatus; scaleLabel?: string | null } | null;
   /** ALWAYS populated, even though the verdict's field is optional (§14 AT-2). */
   rules: RuleSufficiency[];
   /** Lot-level causes, set only when NO rule resolved (§7.1 rows 1-3). */
@@ -119,21 +128,54 @@ function candidatesFor(test: SufficiencyTestRow, categories: LotCategories): rea
  * unrelated unit win and then be discarded, silently swallowing a real
  * exceedance in the unit the lot actually carries. C1 does no unit conversion.
  */
+function aliasHit(aliases: readonly string[] | undefined, value: string | null): boolean {
+  if (!aliases || aliases.length === 0) return true; // unqualified on this dimension
+  const needle = (value || '').trim().toLowerCase();
+  if (!needle) return false; // a NULL/blank lot value matches no qualified limb
+  return aliases.some((alias) => alias.trim().toLowerCase() === needle);
+}
+
 function matchingCap(
   rule: FrequencyRule,
   areaZone: string | null,
+  materialType: string | null,
   unit: MaxLotSizeExceedance['unit'] | null,
 ): { unit: MaxLotSizeExceedance['unit']; value: number } | null {
   if (unit === null) return null;
-  const zone = (areaZone || '').trim().toLowerCase();
-  const applicable = (rule.maxLotSize ?? []).filter((cap) => {
-    if (cap.unit !== unit) return false;
-    if (!cap.areaZoneAliases || cap.areaZoneAliases.length === 0) return true;
-    return cap.areaZoneAliases.some((alias) => alias.trim().toLowerCase() === zone) && zone !== '';
-  });
+  const applicable = (rule.maxLotSize ?? []).filter(
+    (cap) =>
+      cap.unit === unit &&
+      aliasHit(cap.areaZoneAliases, areaZone) &&
+      // D14 §4.1: a cap declaring BOTH limbs requires BOTH to match.
+      aliasHit(cap.materialAliases, materialType),
+  );
   if (applicable.length === 0) return null;
   // Most restrictive matching cap wins.
   return applicable.reduce((worst, cap) => (cap.value < worst.value ? cap : worst));
+}
+
+/**
+ * D14 §4.6 — the quantity a rule may count against, resolved PER THE UNIT THE
+ * RULE NEEDS rather than per the lot.
+ *
+ * The lot's own recorded quantity legitimately wins for `resolved.quantity`
+ * (§6 D5), but it is frequently in the wrong unit for a given rule: an
+ * earthworks lot is ordinarily measured in m³ or chainage metres, and an m²-keyed
+ * rule then reads `unknown` forever even though the lot carries a drawn polygon
+ * with a real area. This consults the geometry as a SECOND source for that one
+ * case, and rewrites nothing.
+ */
+export function quantityFor(resolved: ResolvedSufficiency, unit: QuantityUnit): number | null {
+  if (resolved.quantity.value !== null && resolved.quantity.unit === unit) {
+    return resolved.quantity.value;
+  }
+  // ponytail: the ONLY cross-source fallback, and it is not a conversion — the
+  // geometry is genuinely measured in m². Never convert m3 -> m2 or m -> m2:
+  // that needs a depth or a width CIVOS does not hold.
+  if (unit === 'm2' && resolved.geometryAreaM2 !== null && resolved.geometryAreaM2 > 0) {
+    return resolved.geometryAreaM2;
+  }
+  return null;
 }
 
 function evaluateRule(
@@ -167,13 +209,11 @@ function evaluateRule(
 
   // --- quantity ----------------------------------------------------------
   const perQuantity = figures.perQuantity;
-  const quantityUsable =
-    resolved.quantity.value !== null &&
-    perQuantity !== undefined &&
-    resolved.quantity.unit === perQuantity.unit;
-  if (perQuantity && !quantityUsable) {
-    // `ponytail:` no unit conversion in C1 — a quantity in the wrong unit is
-    // "missing" for this rule, never silently converted.
+  // D14 §4.6: resolved per the RULE's unit, with the m² geometry fallback, not
+  // per the lot. Still no unit conversion — a quantity in the wrong unit with no
+  // usable geometry is "missing" for this rule, never silently converted.
+  const perQuantityValue = perQuantity ? quantityFor(resolved, perQuantity.unit) : null;
+  if (perQuantity && perQuantityValue === null) {
     causes.push('quantity_missing');
   }
 
@@ -194,7 +234,7 @@ function evaluateRule(
   const requiredCount =
     causes.length > 0 || minCount === null
       ? null
-      : requiredTestCount(minCount, perQuantity, resolved.quantity.value);
+      : requiredTestCount(minCount, perQuantity, perQuantityValue);
 
   const state: SufficiencyState =
     requiredCount === null
@@ -266,7 +306,7 @@ export function evaluateSufficiency(input: SufficiencyEvaluationInput): Sufficie
 
   const maxLotSizeExceedances: MaxLotSizeExceedance[] = [];
   for (const rule of resolved.rules) {
-    const cap = matchingCap(rule, resolved.areaZone, resolved.quantity.unit);
+    const cap = matchingCap(rule, resolved.areaZone, resolved.materialType, resolved.quantity.unit);
     const actual = resolved.quantity.value;
     if (cap && actual !== null && actual > cap.value) {
       maxLotSizeExceedances.push({
@@ -305,7 +345,13 @@ export function evaluateSufficiency(input: SufficiencyEvaluationInput): Sufficie
   return {
     state,
     mode: resolved.mode,
-    ruleset: resolved.ruleset ? { id: resolved.ruleset.id, status: resolved.ruleset.status } : null,
+    ruleset: resolved.ruleset
+      ? {
+          id: resolved.ruleset.id,
+          status: resolved.ruleset.status,
+          scaleLabel: resolved.ruleset.scaleLabel ?? null,
+        }
+      : null,
     rules,
     unknownCauses,
     maxLotSizeExceedances,

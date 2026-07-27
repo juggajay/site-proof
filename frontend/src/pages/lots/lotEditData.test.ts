@@ -46,6 +46,7 @@ const baseForm: LotEditFormData = {
   budgetAmount: '1250.25',
   assignedSubcontractorId: 'sub-9',
   testScale: '',
+  materialType: '',
   quantityValue: '',
   quantityUnit: '',
 };
@@ -136,6 +137,7 @@ describe('mapLotToFormData', () => {
       budgetAmount: '',
       assignedSubcontractorId: '',
       testScale: '',
+      materialType: '',
       quantityValue: '',
       quantityUnit: '',
     });
@@ -144,14 +146,16 @@ describe('mapLotToFormData', () => {
   // D14 review B1: the lot read must hydrate the C1 test attributes, because
   // buildLotUpdatePayload sends all three on every save. A blank hydration NULLs
   // them on an unrelated edit and reverts the lot's sufficiency to "unknown".
-  it('hydrates testScale, quantityValue and quantityUnit from the lot', () => {
+  it('hydrates testScale, materialType, quantityValue and quantityUnit from the lot', () => {
     const form = mapLotToFormData({
       ...baseLot,
       testScale: 'B',
+      materialType: 'Type A',
       quantityValue: 3200.5,
       quantityUnit: 'm2',
     });
     expect(form.testScale).toBe('B');
+    expect(form.materialType).toBe('Type A');
     expect(form.quantityValue).toBe('3200.5');
     expect(form.quantityUnit).toBe('m2');
   });
@@ -162,6 +166,10 @@ describe('lot edit round-trip (D14 review B1)', () => {
     const lot: Lot = {
       ...baseLot,
       testScale: 'B',
+      // D14 AT-33, extended to the fourth field. The mapper is only half the
+      // pairing — `readRoutes.ts`'s GET /:id select is the other half, and adding
+      // one without the other reproduces the wipe on the new field.
+      materialType: 'Type A',
       quantityValue: 3200.5,
       quantityUnit: 'm2',
     };
@@ -177,6 +185,7 @@ describe('lot edit round-trip (D14 review B1)', () => {
     });
     expect(payload.description).toBe('Edited description');
     expect(payload.testScale).toBe('B');
+    expect(payload.materialType).toBe('Type A');
     expect(payload.quantityValue).toBe(3200.5);
     expect(payload.quantityUnit).toBe('m2');
   });
@@ -199,6 +208,7 @@ describe('mapOfflineLotToFormData', () => {
       assignedSubcontractorId: '',
       // The offline record predates C1 and carries none of these.
       testScale: '',
+      materialType: '',
       quantityValue: '',
       quantityUnit: '',
     });
@@ -372,6 +382,7 @@ describe('buildLotUpdatePayload', () => {
       assignedSubcontractorId: 'sub-9',
       // Wave C1: an empty quantity sends null ("not recorded"), never zero.
       testScale: null,
+      materialType: null,
       quantityValue: null,
       quantityUnit: null,
       expectedUpdatedAt: '2026-01-15T00:00:00.000Z',

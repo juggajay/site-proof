@@ -36,6 +36,7 @@ import {
   requireItpTemplateForProject,
   syncPrimaryLotSubcontractorAssignment,
 } from './assignmentHelpers.js';
+import { assertLotSufficiencyAttributes } from '../../lib/readiness/sufficiency/lotAttributeValidation.js';
 import { LOT_CREATORS } from './roles.js';
 import { LOT_BUDGET_EDITORS } from './updateFields.js';
 import { prepareClonedLot } from './cloneHelpers.js';
@@ -75,6 +76,7 @@ lotCreateRouter.post(
       structureElement,
       budgetAmount,
       testScale,
+      materialType,
       quantityValue,
       quantityUnit,
     } = validation.data;
@@ -101,6 +103,21 @@ lotCreateRouter.post(
       { requireWritable: true },
     );
     const canSetBudgetAmount = LOT_BUDGET_EDITORS.includes(userProjectRole);
+
+    // D14 §9.2 — placement 1 of 4. Before this, single create wrote `testScale`
+    // with NO `scaleKeys` check at all. The project read is skipped entirely
+    // unless a pack-scoped attribute is actually being set, so the ordinary
+    // create adds no query.
+    if (testScale || materialType) {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { state: true, specificationSet: true },
+      });
+      assertLotSufficiencyAttributes(project ?? { state: null, specificationSet: null }, {
+        testScale,
+        materialType,
+      });
+    }
 
     let templateSnapshot: TemplateSnapshot | null = null;
     if (itpTemplateId) {
@@ -139,6 +156,7 @@ lotCreateRouter.post(
           structureId: structureId || null, // Feature #854
           structureElement: structureElement || null, // Feature #854
           testScale: testScale ?? null,
+          materialType: materialType ?? null,
           quantityValue: quantityValue ?? null,
           quantityUnit: quantityUnit ?? null,
           ...(canSetBudgetAmount && budgetAmount !== undefined ? { budgetAmount } : {}),

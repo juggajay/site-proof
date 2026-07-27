@@ -5,6 +5,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { activitySlugForWrite } from '../lib/activityTaxonomy.js';
+import { assertLotSufficiencyAttributes } from '../lib/readiness/sufficiency/lotAttributeValidation.js';
 import { updateLotSchema } from './lots/validation.js';
 import { canViewLotBudget, requireProjectRole } from './lots/access.js';
 import { parseLotRouteParam } from './lots/requestParsing.js';
@@ -67,8 +68,11 @@ lotsRouter.patch(
         activityType: true,
         activitySlug: true,
         testScale: true,
+        materialType: true,
         quantityValue: true,
         quantityUnit: true,
+        // D14 §9.2 — joins an existing select, so the whitelist costs no query.
+        project: { select: { state: true, specificationSet: true } },
       },
     });
 
@@ -122,9 +126,16 @@ lotsRouter.patch(
       structureId: validatedStructureId,
       structureElement: validatedStructureElement,
       testScale,
+      materialType,
       quantityValue,
       quantityUnit,
     } = validation.data;
+
+    // D14 §9.2 — placement 2 of 4, and the one the external review's F2 named:
+    // a quality_manager may edit and conform but may NOT force-conform, so an
+    // unvalidated scale here converted an insufficient block-mode verdict into a
+    // non-blocking `unknown` with no override record of any kind.
+    assertLotSufficiencyAttributes(lot.project, { testScale, materialType });
     const providedUpdateFields = getProvidedUpdateFields(validation.data);
     const isConformedBudgetOnlyUpdate =
       lot.status === 'conformed' &&
@@ -214,6 +225,7 @@ lotsRouter.patch(
       updateData.activitySlug = activitySlugForWrite(activityType);
     }
     if (testScale !== undefined) updateData.testScale = testScale;
+    if (materialType !== undefined) updateData.materialType = materialType;
     if (quantityValue !== undefined) updateData.quantityValue = quantityValue;
     if (quantityUnit !== undefined) updateData.quantityUnit = quantityUnit;
     if (chainageStart !== undefined) updateData.chainageStart = chainageStart;
@@ -305,6 +317,9 @@ lotsRouter.patch(
             : {}),
           ...(updateData.testScale !== undefined
             ? { testScale: { from: lot.testScale ?? null, to: testScale ?? null } }
+            : {}),
+          ...(updateData.materialType !== undefined
+            ? { materialType: { from: lot.materialType ?? null, to: materialType ?? null } }
             : {}),
           ...(quantityChanged ? { quantity: quantityAudit } : {}),
           ...(updateData.activityType !== undefined

@@ -69,6 +69,7 @@ export function LotEditPage() {
     budgetAmount: '',
     assignedSubcontractorId: '',
     testScale: '',
+    materialType: '',
     quantityValue: '',
     quantityUnit: '',
   });

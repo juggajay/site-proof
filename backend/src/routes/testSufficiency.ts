@@ -28,6 +28,10 @@ testSufficiencyRouter.get(
         specSet: ruleset.specSet,
         scaleKeys: [...ruleset.scaleKeys],
         defaultScale: ruleset.defaultScale ?? null,
+        // D14 §4.2 — the lot-form material control and the pack-driven label for
+        // whatever `Lot.testScale` carries on this authority.
+        materialTypes: ruleset.materialTypes ? [...ruleset.materialTypes] : null,
+        scaleLabel: ruleset.scaleLabel ?? null,
         status: ruleset.status,
         authority: ruleset.provenance.authority,
         document: ruleset.provenance.document,

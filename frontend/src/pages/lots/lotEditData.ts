@@ -26,6 +26,8 @@ export interface Lot {
   // Wave C1 test-sufficiency attributes. Optional so an offline lot cached
   // before C1 still parses.
   testScale?: string | null;
+  /** D14 §9.3. Paired with `readRoutes.ts`'s GET /:id select in the same PR. */
+  materialType?: string | null;
   quantityValue?: number | null;
   quantityUnit?: string | null;
 }
@@ -59,6 +61,7 @@ export interface LotUpdatePayload {
   assignedSubcontractorId?: string | null;
   expectedUpdatedAt?: string;
   testScale?: string | null;
+  materialType?: string | null;
   quantityValue?: number | null;
   quantityUnit?: string | null;
 }
@@ -79,6 +82,7 @@ export interface LotEditFormData {
   budgetAmount: string;
   assignedSubcontractorId: string;
   testScale: string;
+  materialType: string;
   quantityValue: string;
   quantityUnit: string;
 }
@@ -128,6 +132,7 @@ export function mapLotToFormData(lot: Lot): LotEditFormData {
     budgetAmount: lot.budgetAmount?.toString() || '',
     assignedSubcontractorId: lot.assignedSubcontractorId || '',
     testScale: lot.testScale || '',
+    materialType: lot.materialType || '',
     quantityValue: lot.quantityValue?.toString() || '',
     quantityUnit: lot.quantityUnit || '',
   };
@@ -152,6 +157,7 @@ export function mapOfflineLotToFormData(offlineLot: OfflineLotEdit): LotEditForm
     // The offline record predates C1 and carries none of these; the fields stay
     // blank offline rather than being invented (§7's "unknown, never assumed").
     testScale: '',
+    materialType: '',
     quantityValue: '',
     quantityUnit: '',
   };
@@ -279,6 +285,7 @@ export function buildLotUpdatePayload(params: {
         // Wave C1 test-sufficiency attributes. An empty quantity sends null —
         // "not recorded" — rather than zero, which the backend refuses anyway.
         testScale: formData.testScale || null,
+        materialType: formData.materialType || null,
         quantityValue: parseOptionalNonNegativeDecimalInput(formData.quantityValue),
         quantityUnit: formData.quantityUnit || null,
       };

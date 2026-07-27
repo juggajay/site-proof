@@ -17,7 +17,7 @@
 // history-shaped reads outside (`qualityRoutes.ts:414-416`). The honest cost is
 // one commit of staleness, bounded and self-healing on the next read.
 
-import { testFailing } from '../predicates.js';
+import { testFailing, testPassing } from '../predicates.js';
 import { testAttributesToRule } from './counts.js';
 import {
   candidateCategories,
@@ -180,6 +180,25 @@ export function buildRegimeStreamQuery(
  * conforming, so a three-lot streak in which every lot failed six density tests
  * would report `reducedFrequencyEligible: true`. That value is user-visible and
  * D14 builds on it. It would ship green. AT-56b is the test that catches it.
+ *
+ * **D14 §6.4.1 `[D14X-4]` — ZERO TESTS IS NOT CONFORMANCE.** Until D14.1 this was
+ * a purely NEGATIVE predicate, and `!some(...)` over an EMPTY `testResults` is
+ * vacuously `true`: three conformed lots with no attributable test at all earned
+ * the user *"Eligible to request reduced test frequency"*. `[C1C-6]` and the
+ * VicRoads research both require the preceding lots to have achieved the
+ * compaction requirement **on first testing**, and "we never tested it" is not an
+ * achievement. The failure direction was under-testing. An entry now needs a
+ * POSITIVE limb too — at least one attributable, verified, PASSING result.
+ *
+ * This depends on `[D14X-1]` test-type canonicalisation being real: attribution
+ * runs through resolved categories, and if that seam matched nothing the positive
+ * limb would fail everywhere and the regime would silently never reduce —
+ * correct, but for the wrong reason. F1.2 landed that seam first, deliberately.
+ *
+ * "First testing" needs no separate ordering pass: condition 4 disqualifies an
+ * entry carrying ANY attributable verified failure, whenever it occurred, so a
+ * lot that failed and passed on retest is already non-conforming. `ponytail:` no
+ * test-date column is fetched for an ordering that cannot change an outcome.
  */
 export function streamEntryConforming(
   entry: RegimeStreamEntry,
@@ -188,17 +207,16 @@ export function streamEntryConforming(
 ): boolean {
   if (entry.conformedAt === null) return false;
   if (entry.conformanceOverriddenAt !== null) return false;
-  return !entry.testResults.some(
-    (test) =>
-      testFailing(test) &&
-      testAttributesToRule(
-        ruleCategory,
-        candidateCategories(
-          resolve(test.testType),
-          resolve(test.itpChecklistItem?.testType ?? null),
-        ),
-      ),
+  const attributable = entry.testResults.filter((test) =>
+    testAttributesToRule(
+      ruleCategory,
+      candidateCategories(resolve(test.testType), resolve(test.itpChecklistItem?.testType ?? null)),
+    ),
   );
+  // 3. at least one attributable VERIFIED PASSING result — the D14 addition.
+  if (!attributable.some(testPassing)) return false;
+  // 4. no attributable verified failure — shipped, and now non-vacuous.
+  return !attributable.some(testFailing);
 }
 
 /**

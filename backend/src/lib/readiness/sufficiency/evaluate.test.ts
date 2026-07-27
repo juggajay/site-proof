@@ -65,6 +65,8 @@ function resolved(overrides: Partial<ResolvedSufficiency> = {}): ResolvedSuffici
     scale: { value: 'A', source: 'lot' },
     quantity: { value: null, unit: null, source: 'none' },
     areaZone: null,
+    materialType: null,
+    geometryAreaM2: null,
     regimeByRuleId: new Map(),
     activityCanonical: true,
     ...overrides,
@@ -364,6 +366,113 @@ describe('§3.3 lot-size advisory — never blocks', () => {
       evaluate({ rules: [capped], quantity: { value: 9999, unit: 'm3', source: 'lot' } })
         .maxLotSizeExceedances,
     ).toEqual([]);
+  });
+});
+
+// D14 §4.1, AT-34. Section 204 Table 204.142 caps a Type A lot at 5,000 m² and
+// Type C at nothing at all, so a bare cap is not encodable there `[C1C-3]` and a
+// material-scoped one is the only honest form.
+describe('AT-34 material-scoped lot-size caps (§4.1)', () => {
+  const typeA = rule({
+    maxLotSize: [{ unit: 'm2', value: 5000, materialAliases: ['Type A'] }],
+  });
+  const big = { value: 7400, unit: 'm2' as const, source: 'lot' as const };
+
+  it('fires only on a case-insensitively matching materialType', () => {
+    expect(
+      evaluate({ rules: [typeA], materialType: 'type a', quantity: big }).maxLotSizeExceedances,
+    ).toEqual([{ ruleId: typeA.id, unit: 'm2', limit: 5000, actual: 7400 }]);
+    expect(
+      evaluate({ rules: [typeA], materialType: 'Type B', quantity: big }).maxLotSizeExceedances,
+    ).toEqual([]);
+  });
+
+  it('a NULL or blank materialType matches NOTHING — never recorded, never capped', () => {
+    expect(evaluate({ rules: [typeA], quantity: big }).maxLotSizeExceedances).toEqual([]);
+    expect(
+      evaluate({ rules: [typeA], materialType: '  ', quantity: big }).maxLotSizeExceedances,
+    ).toEqual([]);
+  });
+
+  it('a cap carrying BOTH limbs requires BOTH to match', () => {
+    const both = rule({
+      maxLotSize: [
+        { unit: 'm2', value: 5000, materialAliases: ['Type A'], areaZoneAliases: ['shoulder'] },
+      ],
+    });
+    const hit = evaluate({
+      rules: [both],
+      materialType: 'Type A',
+      areaZone: 'Shoulder',
+      quantity: big,
+    });
+    expect(hit.maxLotSizeExceedances).toHaveLength(1);
+    expect(
+      evaluate({ rules: [both], materialType: 'Type A', areaZone: 'verge', quantity: big })
+        .maxLotSizeExceedances,
+    ).toEqual([]);
+    expect(
+      evaluate({ rules: [both], materialType: 'Type C', areaZone: 'Shoulder', quantity: big })
+        .maxLotSizeExceedances,
+    ).toEqual([]);
+  });
+
+  it('an UNQUALIFIED cap still always applies — the shipped semantics are unchanged', () => {
+    const bare = rule({ maxLotSize: [{ unit: 'm2', value: 5000 }] });
+    expect(evaluate({ rules: [bare], quantity: big }).maxLotSizeExceedances).toHaveLength(1);
+  });
+});
+
+// D14 §4.6. An earthworks lot is ordinarily measured in m³ or chainage metres,
+// so an m²-keyed rule reading only `resolved.quantity` returns `unknown` forever
+// on real NSW data even when the lot carries a drawn polygon. The fix is a
+// per-unit resolution with a geometry fallback — never a conversion.
+describe('§4.6 per-unit quantity resolution with the m² geometry fallback', () => {
+  const rated = rule({ perQuantity: { unit: 'm2', every: 1000 } });
+
+  it('falls back to the geometry area when the lot`s own quantity is the wrong unit', () => {
+    const result = evaluate({
+      rules: [rated],
+      quantity: { value: 4500, unit: 'm3', source: 'lot' },
+      geometryAreaM2: 3000,
+    });
+    // max(6, ceil(3000/1000)) = 6, and crucially NOT `unknown`.
+    expect(result.rules[0].requiredCount).toBe(6);
+    expect(result.rules[0].unknownCauses).toEqual([]);
+  });
+
+  it('is still `quantity_missing` when NEITHER source supplies the rule`s unit', () => {
+    const result = evaluate({
+      rules: [rated],
+      quantity: { value: 4500, unit: 'm3', source: 'lot' },
+    });
+    expect(result.rules[0].requiredCount).toBeNull();
+    expect(result.rules[0].unknownCauses).toEqual(['quantity_missing']);
+  });
+
+  it('never converts a non-m² unit — a tonnage rule gets nothing from a polygon', () => {
+    const tonnes = rule({ perQuantity: { unit: 't', every: 500 } });
+    const result = evaluate({
+      rules: [tonnes],
+      quantity: { value: 4500, unit: 'm3', source: 'lot' },
+      geometryAreaM2: 3000,
+    });
+    expect(result.rules[0].unknownCauses).toEqual(['quantity_missing']);
+  });
+
+  it('leaves `resolved.quantity` alone — the resolution is rule-local', () => {
+    const resolvedInput = resolved({
+      rules: [rated],
+      quantity: { value: 4500, unit: 'm3', source: 'lot' },
+      geometryAreaM2: 3000,
+    });
+    evaluateSufficiency({
+      subjectId: 'lot-1',
+      resolved: resolvedInput,
+      tests: [],
+      checklistItems: [],
+    });
+    expect(resolvedInput.quantity).toEqual({ value: 4500, unit: 'm3', source: 'lot' });
   });
 });
 
