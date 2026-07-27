@@ -68,6 +68,7 @@ vi.mock('./appLazyPages', () => ({
   OAuthCallbackPage: () => <div>OAuth callback</div>,
   LandingPage: () => <div>Landing</div>,
   DashboardPage: () => <div>Dashboard</div>,
+  NeedsAttentionPage: () => <div>Needs attention</div>,
   ProjectsPage: () => <div>Projects</div>,
   ProjectSettingsPage: () => <div>Project settings</div>,
   ProjectUsersPage: () => <div>Project users</div>,

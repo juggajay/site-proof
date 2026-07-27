@@ -38,6 +38,7 @@ import {
   CostsPage,
   DailyDiaryPage,
   DashboardPage,
+  NeedsAttentionPage,
   DelayRegisterPage,
   DocketApprovalsPage,
   DocketEditPage,
@@ -277,6 +278,11 @@ function App() {
             <Route element={<RoleShellEntryRoute mode="any-active-shell" />}>
               <Route element={<ProtectedAppShell />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
+                {/* A4 P1.2 — the Needs-Attention destination. A flat sibling of
+                    /dashboard inside the same wrappers: no role gate of its own,
+                    because it renders the very stats payload the dashboard's
+                    attention widget is already fed from. */}
+                <Route path="/dashboard/needs-attention" element={<NeedsAttentionPage />} />
               </Route>
             </Route>
 
