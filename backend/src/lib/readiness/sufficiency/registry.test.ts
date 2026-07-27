@@ -13,6 +13,8 @@ import {
   rulesForLot,
   validateRuleset,
 } from './registry.js';
+import { normalizeSpecSet } from '../../itpMatcher.js';
+import { TFNSW_R44_V1 } from './rulesets/tfnsw-r44.v1.js';
 import type { FrequencyRule, Ruleset, RulesetProvenance } from './types.js';
 
 const CONFIRMABLE_PROVENANCE: RulesetProvenance = {
@@ -63,8 +65,8 @@ describe('the shipped packs are registrable and honestly graded', () => {
     }
   });
 
-  it('ships exactly the two specced packs and no TMR / DIT SA / MRWA numbers (§8.2)', () => {
-    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v1', 'tfnsw-r44.v1']);
+  it('ships ONE pack — and no TMR / DIT SA / MRWA numbers (§8.2, [C1C-9])', () => {
+    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v1']);
   });
 
   it('vicroads-204.v1 is CONFIRMED on primary-source provenance (§8.1.1 [C1C-1])', () => {
@@ -122,18 +124,25 @@ describe('the shipped packs are registrable and honestly graded', () => {
     expect(compaction?.perQuantity).toBeUndefined();
   });
 
-  it('tfnsw-r44.v1 stays MISATTRIBUTED and draft, so it can never block (§8.2 [C1C-7])', () => {
-    const tfnsw = SUFFICIENCY_RULESETS.find((set) => set.id === 'tfnsw-r44.v1');
-    // R44 Ed 6 publishes no frequencies at all; the n = 6 below is one cell of
-    // Q6 Table Q6/L.1. Grade A evidence that the encoded rule is WRONG is still
-    // a reason to keep the pack draft, so the grade stays at its weakest limb.
-    expect(tfnsw?.provenance.evidenceGrade).toBe('C');
-    expect(tfnsw?.status).toBe('draft');
-    // The user-visible citation says where the number does NOT come from.
-    expect(tfnsw?.provenance.clause).toContain('deferred to TfNSW Q');
-    expect(tfnsw?.rules[0]?.minCountByScale).toEqual({ standard: 6 });
+  it('tfnsw-r44.v1 is DEREGISTERED, not deleted [C1C-9]', () => {
+    // `draft` means plausible-but-unconfirmed. It does NOT mean confirmed-wrong,
+    // and we hold grade-A primary-source evidence that this pack is the latter:
+    // R44 Ed 6 publishes no frequencies at all, and the n = 6 is one cell of Q6
+    // Table Q6/L.1 — wrong in BOTH directions. Evaluating it even tagged
+    // "unconfirmed" is the confident-wrong-number defect [C1C-5] [C1C-7] exist
+    // to prevent, so it is out of the registry until the Q6 re-author (D14).
+    expect(SUFFICIENCY_RULESETS).not.toContain(TFNSW_R44_V1);
+    expect(resolveRuleset({ state: 'NSW', specSet: 'TfNSW', at: NOW })).toBeNull();
+    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })).toBeNull();
+
+    // The FILE stays: it pins the vocabulary and is the starting point for the
+    // `tfnsw-q6.v1` re-author, so its shape is still asserted here.
+    expect(TFNSW_R44_V1.status).toBe('draft');
+    expect(TFNSW_R44_V1.provenance.evidenceGrade).toBe('C');
+    expect(TFNSW_R44_V1.provenance.clause).toContain('deferred to TfNSW Q');
+    expect(TFNSW_R44_V1.rules[0]?.minCountByScale).toEqual({ standard: 6 });
     // Promoting it to `confirmed` at grade C is impossible — CI refuses it.
-    expect(validateRuleset({ ...(tfnsw as Ruleset), status: 'confirmed' }, NOW)).toContainEqual(
+    expect(validateRuleset({ ...TFNSW_R44_V1, status: 'confirmed' }, NOW)).toContainEqual(
       expect.stringContaining("requires evidenceGrade 'A'"),
     );
   });
@@ -294,9 +303,12 @@ describe('resolveRuleset (§7.1 rows 1-2)', () => {
     );
   });
 
-  it('folds the pre-2019 spec-set name `rms` to tfnsw rather than resolving nothing', () => {
-    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })?.id).toBe('tfnsw-r44.v1');
-    expect(resolveRuleset({ state: 'nsw', specSet: 'TfNSW', at: NOW })?.id).toBe('tfnsw-r44.v1');
+  it('still folds `rms` to tfnsw — the fold is intact, there is just no NSW pack', () => {
+    // The 9 live projects carrying the pre-2019 name must not resolve a
+    // DIFFERENT authority's pack once a Q6 pack lands (§8.2, [C1C-9]).
+    expect(normalizeSpecSet('rms')).toBe('tfnsw');
+    expect(resolveRuleset({ state: 'NSW', specSet: 'rms', at: NOW })).toBeNull();
+    expect(resolveRuleset({ state: 'nsw', specSet: 'TfNSW', at: NOW })).toBeNull();
   });
 
   it('returns null for national-baseline spec sets and unknown authorities — unknown, never insufficient', () => {

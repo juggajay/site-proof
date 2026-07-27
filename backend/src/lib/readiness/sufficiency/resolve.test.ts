@@ -73,24 +73,19 @@ describe('resolveSufficiency', () => {
       value: 'A',
       source: 'ruleset_default',
     });
-    // tfnsw-r44.v1 DOES declare one, so its lots evaluate with no data entry.
+    // An unrecognised explicit scale stays as given — the evaluator reports
+    // `scale_not_recognised` instead of silently substituting the default.
+    const unrecognised = await resolveSufficiency(lotInput({ testScale: 'Z' }), null, NOW);
+    expect(unrecognised.scale).toEqual({ value: 'Z', source: 'lot' });
+    // No pack, no default: an NSW project resolves nothing at all since
+    // tfnsw-r44 was deregistered [C1C-9].
     const nsw = await resolveSufficiency(
       lotInput({ project: { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' } }),
       null,
       NOW,
     );
-    expect(nsw.scale).toEqual({ value: 'standard', source: 'ruleset_default' });
-    // An unrecognised explicit scale stays as given — the evaluator reports
-    // `scale_not_recognised` instead of silently substituting the default.
-    const unrecognised = await resolveSufficiency(
-      lotInput({
-        testScale: 'Z',
-        project: { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' },
-      }),
-      null,
-      NOW,
-    );
-    expect(unrecognised.scale).toEqual({ value: 'Z', source: 'lot' });
+    expect(nsw.ruleset).toBeNull();
+    expect(nsw.scale).toEqual({ value: null, source: 'none' });
   });
 
   it('quantity: the lot value wins; geometry area is a READ-TIME m2 fallback, summed', async () => {
@@ -144,26 +139,17 @@ describe('resolveSufficiency', () => {
       eligible: false,
     });
 
-    // tfnsw-r44 declares neither limb, so no history read is issued at all.
-    calls = 0;
-    const nsw = await resolveSufficiency(
-      lotInput({ project: { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' } }),
-      counting,
-      NOW,
-    );
-    expect(calls).toBe(0);
-    expect(nsw.regimeByRuleId.size).toBe(0);
-
-    // §12's "0 ADDITIONAL queries when no ruleset resolves".
-    calls = 0;
-    await resolveSufficiency(
-      lotInput({
-        project: { state: 'QLD', specificationSet: 'austroads', testSufficiencyMode: 'warn' },
-      }),
-      counting,
-      NOW,
-    );
-    expect(calls).toBe(0);
+    // §12's "0 ADDITIONAL queries when no ruleset resolves" — true for every
+    // national-baseline spec set, and now for NSW too [C1C-9].
+    for (const project of [
+      { state: 'QLD', specificationSet: 'austroads', testSufficiencyMode: 'warn' },
+      { state: 'NSW', specificationSet: 'rms', testSufficiencyMode: 'warn' },
+    ]) {
+      calls = 0;
+      const resolved = await resolveSufficiency(lotInput({ project }), counting, NOW);
+      expect(calls, project.state).toBe(0);
+      expect(resolved.regimeByRuleId.size).toBe(0);
+    }
   });
 
   it('passing NO fetcher issues no history read and leaves every regime at `full` (§3.4.3)', async () => {

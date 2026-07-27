@@ -46,6 +46,14 @@ let projectId: string;
 let otherProjectId: string;
 let sequence = 0;
 
+/**
+ * Each test overrides `activitySlug` to get its OWN stream. The value is an
+ * isolation key, not a taxonomy assertion — these tests call
+ * `resolveRegimeForRule` with an explicit key, so rule/activity matching is
+ * bypassed and any distinct string works. Sharing a stream would let one test's
+ * fixtures land in another's 3-row window, and the total order's last tiebreaker
+ * is `id`, a random uuid, so that contamination would be non-deterministic.
+ */
 function streamKey(overrides: Partial<RegimeStreamKey> = {}): RegimeStreamKey {
   return {
     projectId,
@@ -193,6 +201,11 @@ describe('AT-5 / AT-6 the two-mode query contract against real rows', () => {
   });
 
   it('the cursor is compound: lots sharing a conformedAt are still ordered totally', async () => {
+    // Its OWN activitySlug, like the tests below. The default stream already
+    // holds the failing lots the two tests above seeded, and the total order's
+    // last tiebreaker is `id` — a random uuid — so sharing the stream would make
+    // WHICH rows land in the 3-row window depend on uuid sort order.
+    const key = streamKey({ activitySlug: 'earthworks_bulk_fill' });
     const shared = new Date(BASE_TIME + 900_000);
     const ids: string[] = [];
     for (let i = 0; i < 4; i += 1) {
@@ -203,7 +216,7 @@ describe('AT-5 / AT-6 the two-mode query contract against real rows', () => {
           lotNumber: `${tag}-TIE${i}`,
           lotType: 'chainage',
           activityType: 'Earthworks',
-          activitySlug: ACTIVITY_SLUG,
+          activitySlug: 'earthworks_bulk_fill',
           status: 'conformed',
           conformedAt: shared,
           conformedById: userId,
@@ -211,12 +224,13 @@ describe('AT-5 / AT-6 the two-mode query contract against real rows', () => {
       });
       ids.push(lot.id);
     }
-    // A plain `lt` on conformedAt would drop or duplicate every tied row. The
-    // subject must never appear in its own window.
-    const subject = { id: ids[3], conformedAt: shared };
-    const resolved = await resolve(ELIGIBILITY_RULE, subject);
+    // Four rows, one conformedAt. A plain `lt` on conformedAt would return
+    // nothing (no row is strictly earlier) or all four (including the subject);
+    // the compound cursor + skip:1 returns exactly the other three.
+    const resolved = await resolve(ELIGIBILITY_RULE, { id: ids[3], conformedAt: shared }, key);
     expect(resolved?.basisLotIds).not.toContain(ids[3]);
     expect(resolved?.basisLotIds).toHaveLength(3);
+    expect([...(resolved?.basisLotIds ?? [])].sort()).toEqual([...ids.slice(0, 3)].sort());
   });
 
   it('the LENGTH GUARD: a stream shorter than N is `full` and NOT eligible', async () => {
