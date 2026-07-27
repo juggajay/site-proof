@@ -1,3 +1,5 @@
+import type { ActionAssignment } from '../lib/readiness/contracts/actionAssignment.js';
+
 export function buildPortfolioCashFlowResponse(
   totalClaimed: number,
   totalCertified: number,
@@ -38,6 +40,22 @@ const EMPTY_SETUP_PROGRESS: DashboardSetupProgress = {
   teamMembers: 0,
 };
 
+/**
+ * A4 P1.1 (design spec §9) — the ADDITIVE "My Work" feed on the stats payload.
+ * `attentionItems` is untouched by its presence: same rows, same `total`, same
+ * key order, so the attention widget and the dashboard PDF do not move.
+ *
+ * `totalCount` is a real DB count, not `items.length` — the feeds stay capped in
+ * phase 1 (blocker A4R-B3), so the destination screen can say "10 of 47" instead
+ * of implying the cap is the truth.
+ */
+export interface DashboardActionAssignments {
+  items: ActionAssignment[];
+  totalCount: number;
+}
+
+const EMPTY_ACTION_ASSIGNMENTS: DashboardActionAssignments = { items: [], totalCount: 0 };
+
 export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecentActivity>({
   totalProjects,
   activeProjects,
@@ -49,6 +67,7 @@ export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecen
   staleHoldPoints,
   recentActivities,
   setupProgress = EMPTY_SETUP_PROGRESS,
+  actionAssignments = EMPTY_ACTION_ASSIGNMENTS,
 }: {
   totalProjects: number;
   activeProjects: number;
@@ -60,6 +79,7 @@ export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecen
   staleHoldPoints: TStaleHoldPoint[];
   recentActivities: TRecentActivity[];
   setupProgress?: DashboardSetupProgress;
+  actionAssignments?: DashboardActionAssignments;
 }) {
   return {
     totalProjects,
@@ -75,6 +95,7 @@ export function buildDashboardStatsResponse<TOverdueNcr, TStaleHoldPoint, TRecen
     },
     recentActivities,
     setupProgress,
+    actionAssignments,
   };
 }
 

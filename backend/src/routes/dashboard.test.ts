@@ -699,6 +699,109 @@ describe('Dashboard Stats API', () => {
       expect(staleHP).toBeDefined();
       expect(staleHP.daysStale).toBeGreaterThan(7);
     });
+
+    // A4R-B4 characterization: the hold-point fetch is widened with an additive
+    // overdue branch, but the widget/PDF set must not move. A hold point overdue
+    // by its scheduled date yet younger than 7 days is reachable ONLY through the
+    // new additive `actionAssignments` field.
+    describe('A4 P1.1 additive overdue branch', () => {
+      let youngOverdueHpId: string;
+      let youngChecklistItemId: string;
+      let legacyAttentionBefore: unknown;
+
+      beforeAll(async () => {
+        const res = await request(app)
+          .get('/api/dashboard/stats')
+          .set('Authorization', `Bearer ${authToken}`);
+        legacyAttentionBefore = res.body.attentionItems;
+
+        const checklistItem = await prisma.iTPChecklistItem.create({
+          data: {
+            templateId: itpTemplateId,
+            sequenceNumber: 2,
+            description: 'Young overdue hold point item',
+            pointType: 'hold_point',
+          },
+        });
+        youngChecklistItemId = checklistItem.id;
+
+        // Created 2 days ago (NOT stagnant), scheduled 3 days ago (overdue).
+        const createdAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+        const scheduledDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+        const hp = await prisma.holdPoint.create({
+          data: {
+            lotId,
+            itpChecklistItemId: youngChecklistItemId,
+            pointType: 'hold_point',
+            description: 'Young overdue hold point',
+            status: 'scheduled',
+            scheduledDate,
+            createdAt,
+          },
+        });
+        youngOverdueHpId = hp.id;
+      });
+
+      afterAll(async () => {
+        if (youngOverdueHpId) {
+          await prisma.holdPoint.delete({ where: { id: youngOverdueHpId } }).catch(() => {});
+        }
+        if (youngChecklistItemId) {
+          await prisma.iTPChecklistItem
+            .delete({ where: { id: youngChecklistItemId } })
+            .catch(() => {});
+        }
+      });
+
+      it('leaves attentionItems byte-identical while surfacing the row in actionAssignments', async () => {
+        const res = await request(app)
+          .get('/api/dashboard/stats')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        // Byte-identical: same rows, same order, same `total`, same key order.
+        expect(JSON.stringify(res.body.attentionItems)).toBe(JSON.stringify(legacyAttentionBefore));
+        expect(
+          res.body.attentionItems.staleHoldPoints.some((hp: any) => hp.id === youngOverdueHpId),
+        ).toBe(false);
+
+        const assignment = res.body.actionAssignments.items.find(
+          (item: any) => item.subjectId === youngOverdueHpId,
+        );
+        expect(assignment).toBeDefined();
+        expect(assignment.reasonCode).toBe('hold_point_overdue');
+        expect(assignment.isOverdue).toBe(true);
+        expect(assignment.needsAction).toBe(true);
+        expect(res.body.actionAssignments.totalCount).toBeGreaterThanOrEqual(
+          res.body.actionAssignments.items.length,
+        );
+      });
+
+      it('reproduces the pre-widening stagnant query exactly', async () => {
+        const res = await request(app)
+          .get('/api/dashboard/stats')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        // The query as it read before the additive OR branch (statsRoute.ts:137-141
+        // at e5766ca6), run directly: same filter, same order, same cap.
+        const staleHPThreshold = new Date();
+        staleHPThreshold.setDate(staleHPThreshold.getDate() - 7);
+        const legacyRows = await prisma.holdPoint.findMany({
+          where: {
+            lot: { projectId: { in: [projectId] } },
+            status: { in: ['pending', 'scheduled', 'requested'] },
+            createdAt: { lt: staleHPThreshold },
+          },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+          take: 10,
+        });
+
+        expect(res.body.attentionItems.staleHoldPoints.map((hp: any) => hp.id)).toEqual(
+          legacyRows.map((hp) => hp.id),
+        );
+      });
+    });
   });
 });
 
