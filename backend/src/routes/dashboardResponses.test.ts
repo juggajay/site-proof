@@ -72,6 +72,9 @@ describe('dashboardResponses', () => {
       },
       recentActivities: [{ id: 'activity-1' }],
       setupProgress: { controlLines: 1, planSheets: 2, lotsWithItp: 3, teamMembers: 4 },
+      // A4 P1.1: additive, and empty unless the caller supplies it — every key
+      // above is unchanged by its presence.
+      actionAssignments: { items: [], totalCount: 0 },
     });
   });
 
@@ -115,6 +118,7 @@ describe('dashboardResponses', () => {
         lotsWithItp: 0,
         teamMembers: 0,
       },
+      actionAssignments: { items: [], totalCount: 0 },
     });
   });
 
