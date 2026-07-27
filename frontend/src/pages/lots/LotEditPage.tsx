@@ -1,8 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/queryKeys';
-import { resolveProjectRuleset, useSufficiencyRulesets } from '@/lib/testSufficiency';
+import { useGoverningRuleset } from '@/hooks/useGoverningRuleset';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { getAuthToken, getCurrentUser } from '@/lib/auth';
 import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
@@ -51,31 +49,8 @@ export function LotEditPage() {
   const subcontractorsQuery = useProjectSubcontractorsQuery(projectId);
   const subcontractors = subcontractorsQuery.data ?? [];
   // Wave C1 (§9.4): the Testing fields only appear when the project's authority
-  // actually has a shipped frequency ruleset. Both reads share caches that other
-  // surfaces already populate — `queryKeys.project` is the UNWRAPPED project, so
-  // this consumer must resolve the same shape or it poisons the shared cache.
-  const projectAuthorityQuery = useQuery({
-    queryKey: queryKeys.project(projectId ?? 'none'),
-    queryFn: () =>
-      apiFetch<{ project?: { state?: string; specificationSet?: string } }>(
-        `/api/projects/${projectId}`,
-      ).then((response) => response.project ?? null),
-    enabled: !!projectId,
-  });
-  const projectAuthority = projectAuthorityQuery.data;
-  const rulesetsQuery = useSufficiencyRulesets();
-  const governingRuleset = resolveProjectRuleset(
-    rulesetsQuery.data?.rulesets,
-    projectAuthority?.state,
-    projectAuthority?.specificationSet,
-  );
-  // C1 (F14): a failed fetch is not "this project has no pack" — keep the
-  // section visible with a retry instead of silently removing the controls.
-  const rulesetLoadFailed = rulesetsQuery.isError || projectAuthorityQuery.isError;
-  const retryRulesetLoad = () => {
-    void rulesetsQuery.refetch();
-    void projectAuthorityQuery.refetch();
-  };
+  // actually has a shipped frequency ruleset.
+  const { governingRuleset, rulesetLoadFailed, retryRulesetLoad } = useGoverningRuleset(projectId);
   const [offlineSyncStatus, setOfflineSyncStatus] = useState<LotEditOfflineSyncStatus>('synced');
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
 
