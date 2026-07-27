@@ -166,7 +166,10 @@ export interface AreaBand {
 }
 
 /**
- * D14 §4.3 — a TWO-DIMENSIONAL count table, keyed by scale and then by lot area.
+ * D14 §4.3 — a count table keyed by lot area, and OPTIONALLY by scale first.
+ *
+ * Exactly one of {@link AreaBandedCounts.byScale} / {@link AreaBandedCounts.bands}
+ * is declared; `validateRule` rejects both or neither.
  */
 export interface AreaBandedCounts {
   /**
@@ -177,16 +180,25 @@ export interface AreaBandedCounts {
    */
   unit: QuantityUnit;
   /**
-   * Keyed by scale key. Must declare a non-empty band list for EVERY
-   * `Ruleset.scaleKeys` entry and no key outside it, mirroring `checkCounts`.
-   *
-   * D14.5 adds a sibling `bands?` limb — ONE list used whatever the lot's scale,
-   * for the case where the governing specification FIXES the row (TfNSW pavement
-   * compaction is pinned at 100 %/102 %, so it is always on Table Q6/L.1's
-   * `> 100.0` row). It is deliberately NOT here: it needs the §4.3.2 scale-cause
-   * suppression to be worth anything, and that ships with the pavement rules.
+   * The TWO-DIMENSIONAL form: (scale key) × (lot area band). Must declare a
+   * non-empty band list for EVERY `Ruleset.scaleKeys` entry and no key outside
+   * it, mirroring `checkCounts`. Mutually exclusive with `bands`.
    */
-  byScale: Readonly<Record<string, readonly AreaBand[]>>;
+  byScale?: Readonly<Record<string, readonly AreaBand[]>>;
+  /**
+   * D14.5 §4.3 — ONE band list, used whatever the lot's scale, for the case where
+   * the governing specification FIXES the row and the user has nothing to choose.
+   * Every TfNSW pavement compaction spec (R71 Table R71.1, R73 cl. 8.4.3, R75 cl.
+   * 7.4.3) pins specified relative compaction at 100 % or 102 %, so a pavement lot
+   * is always on Table Q6/L.1's `> 100.0` row.
+   *
+   * A rule carrying `bands` is SCALE-INDEPENDENT and `evaluateRule` suppresses its
+   * `scale_not_selected` / `scale_not_recognised` causes (§4.3.2): asking a
+   * question whose answer provably cannot change the number would leave every
+   * pavement lot reading `unknown` forever on a pack that deliberately declares no
+   * `defaultScale`. Mutually exclusive with `byScale`.
+   */
+  bands?: readonly AreaBand[];
 }
 
 export interface FrequencyRule {
