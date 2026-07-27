@@ -10,6 +10,9 @@ import {
   nextStatusMap,
   nextStatusButtonLabels,
   canAdvanceTestStatus,
+  canSendToLab,
+  AT_LAB_STATUS,
+  SEND_TO_LAB_LABEL,
   isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
@@ -266,6 +269,20 @@ function TestResultMobileCard({
                     : nextStatusButtonLabels[test.status]}
                 </Button>
               ))}
+
+            {/* Wave C2 Phase 2: record that the sample went to the lab.
+              Secondary action — the lab hop is optional. */}
+            {canSendToLab(test) && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                disabled={updatingStatusId === test.id}
+                onClick={() => onUpdateStatus(test.id, AT_LAB_STATUS)}
+              >
+                {updatingStatusId === test.id ? 'Updating...' : SEND_TO_LAB_LABEL}
+              </Button>
+            )}
 
             {/* Feature B2: attach/replace a certificate so a manual test can
               reach 'verified'. */}
