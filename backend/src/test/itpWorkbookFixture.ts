@@ -115,6 +115,41 @@ export function buildAuItpWorkbook(): Promise<Buffer> {
 }
 
 // ---------------------------------------------------------------------------
+// Lot register fixture (Wave B B2)
+// ---------------------------------------------------------------------------
+
+/** The column set a real AU lot register arrives with, in the spellings the
+ *  retiring CSV importer's alias table already proved. */
+export const LOT_REGISTER_HEADERS = [
+  'Lot Number',
+  'Description',
+  'Activity',
+  'Chainage Start',
+  'Chainage End',
+  'Layer',
+  'ITP',
+] as const;
+
+/**
+ * A register mixing the outcomes a real one mixes:
+ *  - a clean chainage lot that folds EXACT
+ *  - a lot whose activity folds FAMILY ("Drainage") — needs review, appliable
+ *  - a lot with NO activity — BLOCKED (the shipped CSV importer wrote
+ *    `earthworks_general` here behind a warning; B2 refuses)
+ *  - a trailing blank row, which is not an error
+ */
+export const LOT_REGISTER_ROWS: string[][] = [
+  ['L-001', 'Subgrade CH 0-100', 'Earthworks', '0', '100', 'Subgrade', 'ITP-01 Subgrade'],
+  ['L-002', 'Pipe run north', 'Drainage', '100', '250', '', ''],
+  ['L-003', 'Unknown work', '', '250', '300', '', ''],
+  ['', '', '', '', '', '', ''],
+];
+
+export function buildLotRegisterWorkbook(rows: string[][] = LOT_REGISTER_ROWS): Promise<Buffer> {
+  return buildWorkbook([{ name: 'Lot Register', headers: LOT_REGISTER_HEADERS, rows }]);
+}
+
+// ---------------------------------------------------------------------------
 // CivilPro calibration fixture
 // ---------------------------------------------------------------------------
 

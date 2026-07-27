@@ -1,5 +1,5 @@
 /**
- * Wave B B1 — the reconciliation report: what imported (with new ids), what was
+ * Wave B — the reconciliation report: what imported (with new ids), what was
  * skipped and why, what was blocked (spec §3.6).
  *
  * The CSV goes through `csvSafe.ts`, so a reconciliation row carrying a leading
@@ -12,7 +12,7 @@ import {
   type CsvBrandingContext,
   type CsvCell,
 } from '../../../lib/csvSafe.js';
-import type { DryRunResult, DryRunRow } from './itpImportDryRun.js';
+import type { DryRunResult, DryRunRow } from './dryRunTypes.js';
 
 export interface ReconciliationEntry extends DryRunRow {
   /** Id of the record this row created, when it created one. */
@@ -41,13 +41,13 @@ export interface ReconciliationInput {
   dryRun: DryRunResult | null;
   /** Ids the apply handler created, in the order the payload listed them. */
   createdRecordIds: string[];
-  /** Template keys in payload order, so ids line up with ledger entries. */
-  appliedTemplateKeys: string[];
+  /** Ledger keys in payload order, so ids line up with ledger entries. */
+  appliedItemKeys: string[];
 }
 
 export function buildReconciliationReport(input: ReconciliationInput): ReconciliationReport {
   const idByKey = new Map<string, string>();
-  input.appliedTemplateKeys.forEach((key, index) => {
+  input.appliedItemKeys.forEach((key, index) => {
     const id = input.createdRecordIds[index];
     if (id) idByKey.set(key, id);
   });
@@ -77,6 +77,9 @@ export function buildReconciliationReport(input: ReconciliationInput): Reconcili
 
 /** Human-readable detail for a ledger row: the "why" column. */
 function entryDetail(entry: ReconciliationEntry): string {
+  // A reason code the dry run could not say in a code alone — the sufficiency
+  // validator's own wording, a backwards chainage, an unknown unit.
+  if (entry.detail) return entry.detail;
   if (entry.overLength) {
     return `${entry.overLength.field} is ${entry.overLength.length} characters (max ${entry.overLength.max})`;
   }
@@ -102,10 +105,11 @@ function entryDetail(entry: ReconciliationEntry): string {
 
 export function buildReconciliationCsv(
   report: ReconciliationReport,
+  title: string,
   branding: CsvBrandingContext | null | undefined,
 ): string {
   const rows: CsvCell[][] = [
-    ...buildCsvBrandingRows('ITP import reconciliation', branding),
+    ...buildCsvBrandingRows(title, branding),
     [`# Source file: ${report.sourceFileName ?? 'source file no longer available'}`],
     ['Sheet', 'Row', 'Unit', 'Name', 'Outcome', 'Reason', 'Detail', 'Created ID'],
     ...report.entries.map((entry) => [

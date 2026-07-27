@@ -14,7 +14,7 @@ import { deriveFieldMapFromHeaders } from './mappingProfiles.js';
 
 describe('parseExcelWorkbook', () => {
   it('parses a realistic AU ITP workbook into a normalized grid', async () => {
-    const grid = await parseExcelWorkbook(await buildAuItpWorkbook());
+    const grid = await parseExcelWorkbook(await buildAuItpWorkbook(), 'itp_template');
 
     expect(grid.sheets.map((sheet) => sheet.name)).toEqual([
       'ITP-01 Subgrade',
@@ -31,6 +31,7 @@ describe('parseExcelWorkbook', () => {
   it('pads short rows to the header width so column indexing is safe', async () => {
     const grid = await parseExcelWorkbook(
       await buildWorkbook([{ name: 'S', rows: [['Earthworks', 'Only two cells']] }]),
+      'itp_template',
     );
     expect(grid.sheets[0].rows[0]).toHaveLength(AU_ITP_HEADERS.length);
     expect(grid.sheets[0].rows[0][5]).toBe('');
@@ -47,6 +48,7 @@ describe('parseExcelWorkbook', () => {
           ],
         },
       ]),
+      'itp_template',
     );
     expect(grid.sheets[0].rows).toHaveLength(1);
     expect(grid.sheets[0].rows[0][1]).toBe('Real row');
@@ -58,7 +60,10 @@ describe('parseExcelWorkbook', () => {
     sheet.addRow([...AU_ITP_HEADERS]);
     const row = sheet.addRow(['Earthworks', 'placeholder', '', 'H', '', '']);
     row.getCell(2).value = { formula: 'HYPERLINK("http://evil","=cmd|calc")', result: '=cmd|calc' };
-    const grid = await parseExcelWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()));
+    const grid = await parseExcelWorkbook(
+      Buffer.from(await workbook.xlsx.writeBuffer()),
+      'itp_template',
+    );
 
     const value = grid.sheets[0].rows[0][1];
     expect(value).toBe('=cmd|calc');
@@ -67,9 +72,9 @@ describe('parseExcelWorkbook', () => {
   });
 
   it('refuses a file that is not a zip at all', async () => {
-    await expect(parseExcelWorkbook(Buffer.from('just some text'))).rejects.toBeInstanceOf(
-      AppError,
-    );
+    await expect(
+      parseExcelWorkbook(Buffer.from('just some text'), 'itp_template'),
+    ).rejects.toBeInstanceOf(AppError);
   });
 
   it('fails fast on a sheet past the row cap instead of running out of memory', async () => {
@@ -81,9 +86,9 @@ describe('parseExcelWorkbook', () => {
       '',
       '',
     ]);
-    await expect(parseExcelWorkbook(await buildWorkbook([{ name: 'Big', rows }]))).rejects.toThrow(
-      /more than 5000 rows/,
-    );
+    await expect(
+      parseExcelWorkbook(await buildWorkbook([{ name: 'Big', rows }]), 'itp_template'),
+    ).rejects.toThrow(/more than 5000 rows/);
   }, 60_000);
 
   it('fails fast past the sheet cap', async () => {
@@ -91,7 +96,7 @@ describe('parseExcelWorkbook', () => {
       name: `S${i}`,
       rows: [['Earthworks', `Item ${i}`, '', 'S', '', '']],
     }));
-    await expect(parseExcelWorkbook(await buildWorkbook(sheets))).rejects.toThrow(
+    await expect(parseExcelWorkbook(await buildWorkbook(sheets), 'itp_template')).rejects.toThrow(
       /more than 50 sheets/,
     );
   }, 60_000);
@@ -108,7 +113,7 @@ describe('parseExcelWorkbook', () => {
       rows: [['Earthworks', `Inspection item ${i}`, 'Criteria', 'H', 'Contractor', 'Survey']],
     }));
 
-    const grid = await parseExcelWorkbook(await buildWorkbook(sheets));
+    const grid = await parseExcelWorkbook(await buildWorkbook(sheets), 'itp_template');
 
     expect(grid.sheets).toHaveLength(sheetCount);
     grid.sheets.forEach((sheet, i) => {
@@ -122,6 +127,7 @@ describe('parseExcelWorkbook', () => {
   it('looks past a merged title banner and takes the real header row', async () => {
     const grid = await parseExcelWorkbook(
       await buildCivilProWorkbook({ banner: 'ITP 04-01 - Clear and Grub - Revision 2' }),
+      'itp_template',
     );
 
     expect(grid.sheets[0].headers).toEqual([...CIVILPRO_GRID_HEADERS]);
@@ -131,7 +137,7 @@ describe('parseExcelWorkbook', () => {
   });
 
   it('keeps row 1 as headers when nothing below it scores better', async () => {
-    const grid = await parseExcelWorkbook(await buildAuItpWorkbook());
+    const grid = await parseExcelWorkbook(await buildAuItpWorkbook(), 'itp_template');
     expect(grid.sheets[0].headers).toEqual([...AU_ITP_HEADERS]);
     expect(grid.sheets[0].rows).toHaveLength(3);
   });
@@ -151,18 +157,19 @@ describe('parseExcelWorkbook', () => {
           ],
         },
       ]),
+      'itp_template',
     );
 
     expect(grid.sheets[0].headers).toEqual(['Some rambling note', 'and another', 'third']);
     expect(grid.sheets[0].rows).toHaveLength(2);
-    expect(deriveFieldMapFromHeaders(grid.sheets[0].headers)).toHaveLength(0);
+    expect(deriveFieldMapFromHeaders(grid.sheets[0].headers, 'itp_template')).toHaveLength(0);
   });
 
   it('refuses a workbook with no readable sheet', async () => {
     const workbook = new ExcelJS.Workbook();
     workbook.addWorksheet('Empty');
     await expect(
-      parseExcelWorkbook(Buffer.from(await workbook.xlsx.writeBuffer())),
+      parseExcelWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()), 'itp_template'),
     ).rejects.toThrow(/no readable sheets/);
   });
 });

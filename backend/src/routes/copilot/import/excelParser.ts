@@ -117,11 +117,11 @@ const HEADER_SCAN_ROWS = 5;
  * today's behaviour (the latter then fails loudly downstream as unmapped
  * columns, which is the correct outcome — never a silent partial import).
  */
-function pickHeaderRow(candidates: string[][]): number {
+function pickHeaderRow(candidates: string[][], kind: string): number {
   let bestIndex = 0;
-  let bestScore = deriveFieldMapFromHeaders(candidates[0]).length;
+  let bestScore = deriveFieldMapFromHeaders(candidates[0], kind).length;
   for (let index = 1; index < candidates.length; index += 1) {
-    const score = deriveFieldMapFromHeaders(candidates[index]).length;
+    const score = deriveFieldMapFromHeaders(candidates[index], kind).length;
     if (score > bestScore) {
       bestScore = score;
       bestIndex = index;
@@ -262,7 +262,7 @@ function readSheetNames(buffer: Buffer, entries: ZipEntrySummary[]): Map<string,
  * by column position without bounds checks. Anything above the header row is a
  * title banner and is dropped.
  */
-export async function parseExcelWorkbook(buffer: Buffer): Promise<ParsedGrid> {
+export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<ParsedGrid> {
   const entries = assertSafeOoxmlArchive(buffer);
   const sheetNames = readSheetNames(buffer, entries);
 
@@ -309,7 +309,7 @@ export async function parseExcelWorkbook(buffer: Buffer): Promise<ParsedGrid> {
 
     const pushRow = (cells: string[]) => rows.push(headers!.map((_, index) => cells[index] ?? ''));
     const chooseHeaders = () => {
-      const pick = pickHeaderRow(leading);
+      const pick = pickHeaderRow(leading, kind);
       headers = leading[pick].map((cell, index) => cell || `Column ${index + 1}`);
       for (const cells of leading.slice(pick + 1)) pushRow(cells);
       leading.length = 0;

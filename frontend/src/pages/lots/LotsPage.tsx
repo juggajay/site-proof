@@ -7,7 +7,12 @@ import { useAuth } from '@/lib/auth';
 import { canCreateLots, canDeleteLots, canEditLots, canManageProjectSettings } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard';
-import { ImportLotsModal } from '@/components/lots/ImportLotsModal';
+import { ImportReviewModal } from '@/pages/projects/copilot/ImportReviewModal';
+import { useImportBatches } from '@/pages/projects/copilot/importData';
+import { useRollbackProposal } from '@/pages/projects/copilot/copilotData';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { logError } from '@/lib/logger';
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal';
 import { LotQuickView } from '@/components/lots/LotQuickView';
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal';
@@ -117,6 +122,26 @@ export function LotsPage() {
     fetchSubcontractors,
     subcontractors,
   });
+
+  // Lot register imports (Wave B B2) — the batch list backs resume and roll back.
+  const importBatchesQuery = useImportBatches(projectId, 'lot_register');
+  const importRollbackMutation = useRollbackProposal(projectId);
+
+  const handleImportRollback = async (proposalId: string) => {
+    try {
+      await importRollbackMutation.mutateAsync(proposalId);
+      void importBatchesQuery.refetch();
+      fetchLots();
+      toast({ title: 'Import rolled back', description: 'Those lots have been removed.' });
+    } catch (error) {
+      logError('Failed to roll back lot import:', error);
+      toast({
+        title: 'Could not roll back',
+        description: extractErrorMessage(error, 'Please try again.'),
+        variant: 'error',
+      });
+    }
+  };
 
   // Access checks
   const projectScopedRole = getProjectScopedRole(user);
@@ -256,7 +281,7 @@ export function LotsPage() {
               {!isMobile && (
                 <>
                   <Button variant="outline" onClick={() => actions.setImportModalOpen(true)}>
-                    Import CSV
+                    Import Register
                   </Button>
                   <Button variant="outline" onClick={() => actions.setBulkWizardOpen(true)}>
                     Bulk Create Lots
@@ -548,15 +573,21 @@ export function LotsPage() {
         />
       )}
 
-      {/* Import Lots Modal */}
+      {/* Lot register import — Wave B B2. Replaces the client-side CSV importer:
+          the server parses the file, every lot is reviewed beside its register,
+          nothing is written until one proposal is accepted, and the whole batch
+          can be rolled back. */}
       {actions.importModalOpen && projectId && (
-        <ImportLotsModal
+        <ImportReviewModal
           projectId={projectId}
-          onClose={() => actions.setImportModalOpen(false)}
-          onSuccess={() => {
-            actions.setImportModalOpen(false);
+          kind="lot_register"
+          batches={importBatchesQuery.data ?? []}
+          onRollback={(proposalId) => void handleImportRollback(proposalId)}
+          onApplied={() => {
+            void importBatchesQuery.refetch();
             fetchLots();
           }}
+          onClose={() => actions.setImportModalOpen(false)}
         />
       )}
 

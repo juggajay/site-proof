@@ -234,9 +234,11 @@ export const queryKeys = {
     ['copilot-proposal', projectId, proposalId] as const,
   copilotLotPresence: (projectId: string) => ['copilot-lot-presence', projectId] as const,
 
-  // Wave B — migration imports
-  importBatches: (projectId: string) => ['import-batches', projectId] as const,
+  // Wave B — migration imports. Batch lists and profile lists are per KIND
+  // (ITP templates, lot registers), so the two never share a cache entry.
+  importBatches: (projectId: string, kind: string) => ['import-batches', projectId, kind] as const,
   importBatch: (projectId: string, batchId: string) =>
     ['import-batch', projectId, batchId] as const,
-  importProfiles: (projectId: string) => ['import-profiles', projectId] as const,
+  importProfiles: (projectId: string, kind: string) =>
+    ['import-profiles', projectId, kind] as const,
 } as const;

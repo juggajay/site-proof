@@ -20,6 +20,8 @@ import {
   MAX_TEMPLATE_DESCRIPTION_LENGTH,
   MAX_TEMPLATE_NAME_LENGTH,
 } from '../../itp/templateValidation.js';
+import { countDryRunRows } from './dryRunTypes.js';
+import type { DryRunCounts, DryRunResult, DryRunRow, DryRunRowRef } from './dryRunTypes.js';
 import type { ParsedGrid } from './excelParser.js';
 import {
   applyTransform,
@@ -34,51 +36,17 @@ import {
 export const MAX_IMPORT_TEMPLATES_PER_BATCH = 200;
 export const MAX_IMPORT_CHECKLIST_ITEMS_PER_BATCH = 5_000;
 
-export type DryRunOutcome = 'create' | 'update' | 'skip' | 'needs_review' | 'blocked';
-
-export type DryRunReason =
-  | 'duplicate'
-  | 'slug_collision'
-  | 'unmapped_column'
-  | 'ambiguous_activity'
-  | 'unresolvable_activity'
-  | 'over_length'
-  | 'state_spec_conflict'
-  | 'milestone_point_type'
-  | 'low_confidence'
-  | 'empty';
-
-export interface DryRunRowRef {
-  sheet: string;
-  rowIndex: number;
-}
-
-export interface DryRunRow {
-  /** Stable handle the reviewer's resolutions key off. */
-  key: string;
-  unit: 'template' | 'checklist_row';
-  rowRef: DryRunRowRef;
-  label: string;
-  outcome: DryRunOutcome;
-  reason?: DryRunReason;
-  duplicateOf?: { model: string; id: string; matchedOn: string };
-  collidesWith?: DryRunRowRef[];
-  overLength?: { field: string; length: number; max: number };
-  proposedActivitySlug?: string;
-  activityFold?: 'exact' | 'family' | 'none';
-  declaredStateSpec?: string | null;
-  specAffirmed?: boolean;
-  checklistItemCount?: number;
-}
-
-export interface DryRunCounts {
-  willCreate: number;
-  willUpdate: number;
-  willSkip: number;
-  needsReview: number;
-  ambiguous: number;
-  blocked: number;
-}
+// The ledger shape is shared with the lot-register dry run (B2) and re-exported
+// here so B1's importers are unchanged.
+export {
+  countDryRunRows,
+  type DryRunCounts,
+  type DryRunOutcome,
+  type DryRunReason,
+  type DryRunResult,
+  type DryRunRow,
+  type DryRunRowRef,
+} from './dryRunTypes.js';
 
 /** One template the batch would create, ready to become proposal payload. */
 export interface ProposedTemplate {
@@ -104,14 +72,6 @@ export interface ProposedTemplate {
     evidenceRequired?: string;
     testType?: string | null;
   }[];
-}
-
-export interface DryRunResult {
-  counts: DryRunCounts;
-  rows: DryRunRow[];
-  unmappedHeaders: { sheet: string; headers: string[] }[];
-  /** Apply is refused while this is false (blocked rows or unresolved twins). */
-  canApply: boolean;
 }
 
 /** What the reviewer decided about one proposed template. */
@@ -554,14 +514,7 @@ export function computeItpImportDryRun(input: DryRunInput): {
     });
   }
 
-  const counts: DryRunCounts = {
-    willCreate: rows.filter((row) => row.outcome === 'create').length,
-    willUpdate: rows.filter((row) => row.outcome === 'update').length,
-    willSkip: rows.filter((row) => row.outcome === 'skip').length,
-    needsReview: rows.filter((row) => row.outcome === 'needs_review').length,
-    ambiguous: rows.filter((row) => row.reason === 'ambiguous_activity').length,
-    blocked: rows.filter((row) => row.outcome === 'blocked').length,
-  };
+  const counts: DryRunCounts = countDryRunRows(rows);
 
   // A batch with unresolved intra-batch twins cannot be applied either —
   // silently importing one of two identically-named ITPs is the kind of error a

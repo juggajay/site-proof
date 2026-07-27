@@ -1,12 +1,18 @@
 /**
- * Wave B B1 — the Excel ITP import endpoints.
+ * Wave B — the Excel import endpoints.
  *
  *   upload → parse → map → dry-run → review (ONE proposal) → apply → reconcile
  *
+ * ONE router for every import kind: the pipeline is identical, and only the
+ * handful of decisions in `importKinds.ts` differ (who may run it, which stage
+ * its proposal registers under, how the dry run is computed). The kind is chosen
+ * once at upload (`?kind=`) and read off the batch from then on, so no later call
+ * can steer a batch into another kind's rules.
+ *
  * Apply and rollback are NOT here: they are the existing
  * `POST .../proposals/:id/decision` and `.../rollback` routes, running the
- * `import_itp_templates` handlers this module's import registers. One batch is
- * one proposal, so the whole decide/rollback/audit chain is inherited unchanged.
+ * stage handlers `importKinds.ts` registers. One batch is one proposal, so the
+ * whole decide/rollback/audit chain is inherited unchanged.
  */
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
@@ -26,14 +32,10 @@ import {
 import { TEMPLATE_MANAGER_ROLES } from '../../itp/templateAccess.js';
 import { createProposal } from '../proposalService.js';
 import { assertBatchTransition, isTerminalImportBatchStatus } from './batchState.js';
+import type { DryRunResult } from './dryRunTypes.js';
 import { parseExcelWorkbook, type ParsedGrid } from './excelParser.js';
-// Importing this module registers the import_itp_templates apply/rollback handlers.
-import { IMPORT_ITP_TEMPLATES_STAGE } from './itpTemplateImportExecutor.js';
-import {
-  computeItpImportDryRun,
-  type DryRunResult,
-  type TemplateResolution,
-} from './itpImportDryRun.js';
+// Importing this module registers every import stage's apply/rollback handlers.
+import { requireImportKind, type ImportKindConfig } from './importKinds.js';
 import {
   assertImportUploadContent,
   importUpload,
@@ -50,9 +52,6 @@ import {
 } from './mappingProfiles.js';
 import { buildReconciliationCsv, buildReconciliationReport } from './reconciliation.js';
 
-const IMPORT_DENIED_MESSAGE = 'You do not have permission to import ITP templates';
-const IMPORT_KIND = 'itp_template';
-const IMPORT_SOURCE_FORMAT = 'excel';
 const BATCH_LIST_LIMIT = 50;
 
 /** `[WBR2-9]` §3.7 — `parseResult` is capped at 2 MB SERIALIZED, checked on the
@@ -87,14 +86,41 @@ const importRouter = Router();
 // `req.user` is already set, so the parent's copy costs nothing.
 importRouter.use(requireAuth);
 
-async function requireImportAccess(projectId: string, user: Express.Request['user']) {
+async function requireImportAccess(
+  projectId: string,
+  user: Express.Request['user'],
+  config: ImportKindConfig,
+) {
+  await requireProjectRoleExcludingSubcontractors(
+    projectId,
+    user!,
+    config.roles,
+    config.deniedMessage,
+    { requireWritable: true },
+  );
+}
+
+/**
+ * Load a batch and apply ITS kind's role list.
+ *
+ * Ordering matters and is the same rule the decide/rollback routes follow: the
+ * kind is a property of the batch, so a project-membership gate runs FIRST —
+ * otherwise a non-member would learn a batch id exists by watching 404 flip to
+ * 403. `TEMPLATE_MANAGER_ROLES` is the union of every import kind's role list
+ * (`LOT_CREATORS` is a strict subset), so that gate can never admit someone the
+ * kind check would then reject on membership grounds.
+ */
+async function loadBatchForKind(projectId: string, batchId: string, user: Express.Request['user']) {
   await requireProjectRoleExcludingSubcontractors(
     projectId,
     user!,
     TEMPLATE_MANAGER_ROLES,
-    IMPORT_DENIED_MESSAGE,
+    'You do not have permission to import into this project',
     { requireWritable: true },
   );
+  const batch = await loadBatch(projectId, batchId);
+  await requireImportAccess(projectId, user, requireImportKind(batch.kind));
+  return batch;
 }
 
 async function loadBatch(projectId: string, batchId: string) {
@@ -138,7 +164,8 @@ importRouter.post(
   importUpload.single('file'),
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
-    await requireImportAccess(projectId, req.user);
+    const config = requireImportKind(req.query.kind);
+    await requireImportAccess(projectId, req.user, config);
 
     if (!req.file) {
       throw AppError.badRequest('A spreadsheet is required.');
@@ -149,7 +176,7 @@ importRouter.post(
 
     // Parse BEFORE persisting anything: a hostile or unreadable file leaves no
     // batch and no stored document behind.
-    const grid = await parseExcelWorkbook(req.file.buffer);
+    const grid = await parseExcelWorkbook(req.file.buffer, config.kind);
     const serialized = JSON.stringify(grid);
     if (Buffer.byteLength(serialized, 'utf8') > MAX_PARSE_RESULT_BYTES) {
       const rowCount = grid.sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0);
@@ -162,8 +189,8 @@ importRouter.post(
     const batch = await prisma.importBatch.create({
       data: {
         projectId,
-        kind: IMPORT_KIND,
-        sourceFormat: IMPORT_SOURCE_FORMAT,
+        kind: config.kind,
+        sourceFormat: config.sourceFormat,
         status: 'uploaded',
         createdById: req.user!.id,
       },
@@ -200,9 +227,9 @@ importRouter.post(
     }
 
     const headers = grid.sheets[0]?.headers ?? [];
-    const suggested = suggestBuiltInProfile(headers);
+    const suggested = suggestBuiltInProfile(headers, config.kind);
     res.status(201).json({
-      batch: { id: batch.id, status: 'parsed', kind: IMPORT_KIND },
+      batch: { id: batch.id, status: 'parsed', kind: config.kind },
       sheets: grid.sheets.map((sheet) => ({
         name: sheet.name,
         headers: sheet.headers,
@@ -215,8 +242,8 @@ importRouter.post(
       // the CivilPro CSV spells pointType as "Check Type", which the grid
       // profile does not carry but the alias table resolves).
       suggestedFieldMap: suggested
-        ? mergeFieldMapWithAliases(suggested.fieldMap, headers)
-        : deriveFieldMapFromHeaders(headers),
+        ? mergeFieldMapWithAliases(suggested.fieldMap, headers, config.kind)
+        : deriveFieldMapFromHeaders(headers, config.kind),
     });
   }),
 );
@@ -229,7 +256,8 @@ importRouter.get(
   '/:projectId/copilot/imports-profiles',
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
-    await requireImportAccess(projectId, req.user);
+    const config = requireImportKind(req.query.kind);
+    await requireImportAccess(projectId, req.user, config);
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -237,7 +265,7 @@ importRouter.get(
     });
     const saved = await prisma.importMappingProfile.findMany({
       where: {
-        kind: IMPORT_KIND,
+        kind: config.kind,
         OR: [{ projectId }, ...(project?.companyId ? [{ companyId: project.companyId }] : [])],
       },
       orderBy: { updatedAt: 'desc' },
@@ -246,7 +274,7 @@ importRouter.get(
     });
 
     res.json({
-      builtIn: BUILT_IN_PROFILES.filter((profile) => profile.kind === IMPORT_KIND).map(
+      builtIn: BUILT_IN_PROFILES.filter((profile) => profile.kind === config.kind).map(
         (profile) => ({
           key: profile.key,
           name: profile.name,
@@ -265,19 +293,22 @@ importRouter.get(
 
 async function resolveFieldMap(
   projectId: string,
+  config: ImportKindConfig,
   body: z.infer<typeof dryRunBodySchema>,
 ): Promise<{ fieldMap: FieldMapEntry[]; profileId: string | null }> {
   if (body.fieldMap !== undefined) {
-    return { fieldMap: assertAllowedFieldMap(body.fieldMap, IMPORT_KIND), profileId: null };
+    return { fieldMap: assertAllowedFieldMap(body.fieldMap, config.kind), profileId: null };
   }
   if (!body.profileId) {
     throw AppError.badRequest('Choose a mapping profile or map the columns.');
   }
 
-  const builtIn = BUILT_IN_PROFILES.find((profile) => profile.key === body.profileId);
+  const builtIn = BUILT_IN_PROFILES.find(
+    (profile) => profile.key === body.profileId && profile.kind === config.kind,
+  );
   if (builtIn) {
     // Re-validated even though we authored it — one gate, no exceptions.
-    return { fieldMap: assertAllowedFieldMap(builtIn.fieldMap, IMPORT_KIND), profileId: null };
+    return { fieldMap: assertAllowedFieldMap(builtIn.fieldMap, config.kind), profileId: null };
   }
 
   const project = await prisma.project.findUnique({
@@ -287,7 +318,7 @@ async function resolveFieldMap(
   const saved = await prisma.importMappingProfile.findUnique({ where: { id: body.profileId } });
   const visible =
     saved &&
-    saved.kind === IMPORT_KIND &&
+    saved.kind === config.kind &&
     (saved.projectId === projectId ||
       (saved.companyId !== null && saved.companyId === project?.companyId));
   if (!visible) {
@@ -295,30 +326,7 @@ async function resolveFieldMap(
   }
   // THE time-of-use check: a fieldMap saved under one version of the allow-list
   // must not be able to write a field a later version forbids.
-  return { fieldMap: assertAllowedFieldMap(saved.fieldMap, IMPORT_KIND), profileId: saved.id };
-}
-
-async function runDryRun(
-  projectId: string,
-  grid: ParsedGrid,
-  fieldMap: FieldMapEntry[],
-  resolutions: Record<string, TemplateResolution> | undefined,
-) {
-  const [project, existingTemplates] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { specificationSet: true } }),
-    prisma.iTPTemplate.findMany({
-      where: { projectId },
-      select: { id: true, name: true, activityType: true },
-    }),
-  ]);
-
-  return computeItpImportDryRun({
-    grid,
-    fieldMap,
-    projectSpecificationSet: project?.specificationSet ?? null,
-    existingTemplates,
-    resolutions,
-  });
+  return { fieldMap: assertAllowedFieldMap(saved.fieldMap, config.kind), profileId: saved.id };
 }
 
 importRouter.post(
@@ -326,17 +334,19 @@ importRouter.post(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const batchId = parseProjectRouteParam(req.params.batchId, 'batchId');
-    await requireImportAccess(projectId, req.user);
 
     const body = dryRunBodySchema.safeParse(req.body);
     if (!body.success) {
       throw AppError.fromZodError(body.error);
     }
 
-    const batch = await loadBatch(projectId, batchId);
+    // The kind is the BATCH's, never the caller's: no later call can steer a
+    // batch into another kind's rules or another kind's role list.
+    const batch = await loadBatchForKind(projectId, batchId, req.user);
+    const config = requireImportKind(batch.kind);
     assertBatchTransition(batch.status, 'mapped');
 
-    const { fieldMap, profileId } = await resolveFieldMap(projectId, body.data);
+    const { fieldMap, profileId } = await resolveFieldMap(projectId, config, body.data);
     const grid = asGrid(batch.parseResult);
 
     let savedProfileId = profileId;
@@ -348,8 +358,8 @@ importRouter.post(
       const created = await prisma.importMappingProfile.create({
         data: {
           name: body.data.saveProfileName,
-          kind: IMPORT_KIND,
-          sourceFormat: IMPORT_SOURCE_FORMAT,
+          kind: config.kind,
+          sourceFormat: config.sourceFormat,
           fieldMap: fieldMap as unknown as object,
           // Company scope is the point (§9-D9): a contractor with eight
           // projects maps their standard sheet once, not eight times.
@@ -369,7 +379,7 @@ importRouter.post(
 
     let result;
     try {
-      result = await runDryRun(projectId, grid, fieldMap, body.data.resolutions);
+      result = await config.runDryRun(projectId, grid, fieldMap, body.data.resolutions);
     } catch (error) {
       await failBatch(
         batch.id,
@@ -403,14 +413,14 @@ importRouter.post(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const batchId = parseProjectRouteParam(req.params.batchId, 'batchId');
-    await requireImportAccess(projectId, req.user);
 
     const body = proposalBodySchema.safeParse(req.body ?? {});
     if (!body.success) {
       throw AppError.fromZodError(body.error);
     }
 
-    const batch = await loadBatch(projectId, batchId);
+    const batch = await loadBatchForKind(projectId, batchId, req.user);
+    const config = requireImportKind(batch.kind);
     assertBatchTransition(batch.status, 'review');
     if (batch.proposal) {
       throw AppError.badRequest('This import already has a proposal awaiting review.', {
@@ -425,9 +435,9 @@ importRouter.post(
     const grid = asGrid(batch.parseResult);
     // Re-validated at the point of use, not just when it was saved: a stored
     // field map is DB JSON that outlives the validation that admitted it.
-    const fieldMap = assertAllowedFieldMap(storedDryRun.fieldMap, IMPORT_KIND);
+    const fieldMap = assertAllowedFieldMap(storedDryRun.fieldMap, config.kind);
 
-    const result = await runDryRun(projectId, grid, fieldMap, body.data.resolutions);
+    const result = await config.runDryRun(projectId, grid, fieldMap, body.data.resolutions);
     if (!result.dryRun.canApply) {
       throw AppError.badRequest(
         `${result.dryRun.counts.blocked} row(s) must be resolved or skipped before this import can be applied.`,
@@ -439,17 +449,17 @@ importRouter.post(
       const created = await createProposal(
         {
           projectId,
-          stage: IMPORT_ITP_TEMPLATES_STAGE,
+          stage: config.stage,
           requestedById: req.user!.id,
           model: 'deterministic',
           sourceRefs: [
             {
               documentId: batch.sourceDocumentId ?? undefined,
               fileName: batch.sourceDocument?.filename,
-              note: 'Imported from spreadsheet',
+              note: config.sourceNote,
             },
           ],
-          payload: { batchId: batch.id, templates: result.templates },
+          payload: { batchId: batch.id, ...result.payload },
         },
         tx,
       );
@@ -466,7 +476,7 @@ importRouter.post(
       proposalId: proposal.id,
       batch: { id: batch.id, status: 'review' },
       dryRun: result.dryRun,
-      templateCount: result.templates.length,
+      itemCount: result.itemCount,
     });
   }),
 );
@@ -479,10 +489,11 @@ importRouter.get(
   '/:projectId/copilot/imports',
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
-    await requireImportAccess(projectId, req.user);
+    const config = requireImportKind(req.query.kind);
+    await requireImportAccess(projectId, req.user, config);
 
     const batches = await prisma.importBatch.findMany({
-      where: { projectId, kind: IMPORT_KIND },
+      where: { projectId, kind: config.kind },
       orderBy: { createdAt: 'desc' },
       take: BATCH_LIST_LIMIT,
       select: {
@@ -516,9 +527,8 @@ importRouter.get(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const batchId = parseProjectRouteParam(req.params.batchId, 'batchId');
-    await requireImportAccess(projectId, req.user);
 
-    const batch = await loadBatch(projectId, batchId);
+    const batch = await loadBatchForKind(projectId, batchId, req.user);
     res.json({
       batch: {
         id: batch.id,
@@ -544,9 +554,8 @@ importRouter.post(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const batchId = parseProjectRouteParam(req.params.batchId, 'batchId');
-    await requireImportAccess(projectId, req.user);
 
-    const batch = await loadBatch(projectId, batchId);
+    const batch = await loadBatchForKind(projectId, batchId, req.user);
     assertBatchTransition(batch.status, 'cancelled');
     await prisma.importBatch.update({
       where: { id: batch.id },
@@ -566,10 +575,9 @@ importRouter.get(
   asyncHandler(async (req, res) => {
     const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
     const batchId = parseProjectRouteParam(req.params.batchId, 'batchId');
-    await requireImportAccess(projectId, req.user);
 
-    const batch = await loadBatch(projectId, batchId);
-    const payload = (batch.proposal?.payload ?? null) as { templates?: { key: string }[] } | null;
+    const batch = await loadBatchForKind(projectId, batchId, req.user);
+    const config = requireImportKind(batch.kind);
     const applied = (batch.proposal?.appliedRecordIds ?? []) as { model: string; ids: string[] }[];
 
     const report = buildReconciliationReport({
@@ -579,8 +587,8 @@ importRouter.get(
       sourceFileName: batch.sourceDocument?.filename ?? null,
       sourceDocumentId: batch.sourceDocumentId,
       dryRun: (batch.dryRun ?? null) as DryRunResult | null,
-      createdRecordIds: applied.find((group) => group.model === 'ITPTemplate')?.ids ?? [],
-      appliedTemplateKeys: (payload?.templates ?? []).map((template) => template.key),
+      createdRecordIds: applied.find((group) => group.model === config.appliedModel)?.ids ?? [],
+      appliedItemKeys: config.storedPayloadKeys(batch.proposal?.payload ?? null),
     });
 
     if (req.query.format === 'csv') {
@@ -588,7 +596,7 @@ importRouter.get(
         where: { id: projectId },
         select: { name: true, company: { select: { name: true, abn: true } } },
       });
-      const csv = buildReconciliationCsv(report, {
+      const csv = buildReconciliationCsv(report, config.reconciliationTitle, {
         companyName: project?.company?.name,
         abn: project?.company?.abn,
         projectName: project?.name,

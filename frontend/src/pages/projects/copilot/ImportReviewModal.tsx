@@ -15,6 +15,7 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { activitiesByFamily } from '@/lib/activityTaxonomy';
 import { useDecideProposal } from './copilotData';
+import { ImportPanel } from './ImportPanel';
 import {
   reconciliationCsvPath,
   useCancelImport,
@@ -25,18 +26,45 @@ import {
   useUploadImport,
   type DryRunResult,
   type DryRunRow,
+  type ImportBatchSummary,
+  type ImportKind,
   type ParsedSheet,
   type Resolutions,
 } from './importData';
 
 const ACCEPT = '.xlsx';
 const MAX_FILE_MB = 25;
-const DEFAULT_PROFILE = 'generic_au_itp_excel';
 
-interface ItpImportReviewModalProps {
+/** The only copy that differs between one migration and another. */
+const KIND_COPY: Record<
+  ImportKind,
+  { title: string; blurb: string; defaultProfile: string; noun: string; nounPlural: string }
+> = {
+  itp_template: {
+    title: 'Import ITPs from a spreadsheet',
+    blurb: 'Every ITP is shown beside the sheet it came from',
+    defaultProfile: 'generic_au_itp_excel',
+    noun: 'ITP',
+    nounPlural: 'ITPs',
+  },
+  lot_register: {
+    title: 'Import lots from a register',
+    blurb: 'Every lot is shown beside the register it came from',
+    defaultProfile: 'generic_au_lot_register_excel',
+    noun: 'lot',
+    nounPlural: 'lots',
+  },
+};
+
+interface ImportReviewModalProps {
   projectId: string;
+  kind: ImportKind;
   /** Resume an open batch instead of starting from the upload step. */
   batchId?: string | null;
+  /** Earlier batches of this kind, offered on the upload step so a contractor
+   *  can resume or roll one back. Omitted where a rail already lists them. */
+  batches?: ImportBatchSummary[];
+  onRollback?: (proposalId: string) => void;
   onApplied?: () => void;
   onClose: () => void;
 }
@@ -59,17 +87,23 @@ const OUTCOME_CHIP: Record<DryRunRow['outcome'], string> = {
 
 const REASON_TEXT: Record<string, string> = {
   duplicate: 'Already in this project',
-  slug_collision: 'Another row in this file has the same name and activity',
-  unmapped_column: 'No column is mapped to the checklist description',
+  slug_collision: 'Another row in this file has the same identity',
+  unmapped_column: 'A column this import needs is not mapped',
   ambiguous_activity: 'The activity is only recognised at family level',
   unresolvable_activity: 'The activity is not recognised — pick one or skip it',
   over_length: 'A cell is longer than this field allows',
   state_spec_conflict: 'Declares a different specification set to this project',
+  milestone_point_type: 'A milestone row needs a point type before it can import',
+  invalid_value: 'A cell cannot be read as the value it needs to be',
+  unsupported_attribute: 'A value is outside this project specification',
+  template_not_found: 'The named ITP is not in this project',
   low_confidence: 'Read with low confidence',
-  empty: 'No checklist rows',
+  empty: 'Nothing to import from this row',
 };
 
 function rowDetail(row: DryRunRow): string {
+  // The server's own wording, where a reason code alone cannot say enough.
+  if (row.detail) return row.detail;
   if (row.overLength) {
     return `${row.overLength.field} is ${row.overLength.length} characters (max ${row.overLength.max}). Shorten it in the spreadsheet, or skip the row.`;
   }
@@ -189,7 +223,7 @@ function ProposalRow({
         </p>
       )}
 
-      {row.unit === 'template' && (
+      {row.unit !== 'checklist_row' && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {row.reason === 'unresolvable_activity' && (
             <NativeSelect
@@ -243,29 +277,36 @@ function ProposalRow({
 
 /**
  * The Wave-B import review surface: the source spreadsheet beside the proposed
- * ITPs, dry-run counts before any commit, exceptions resolved in place, then one
- * reviewed batch applied through the existing proposal decision endpoint.
+ * records, dry-run counts before any commit, exceptions resolved in place, then
+ * one reviewed batch applied through the existing proposal decision endpoint.
+ *
+ * One surface for every import kind — the ledger shape is the same, and only the
+ * copy in `KIND_COPY` differs.
  */
-export function ItpImportReviewModal({
+export function ImportReviewModal({
   projectId,
+  kind,
   batchId: initialBatchId,
+  batches,
+  onRollback,
   onApplied,
   onClose,
-}: ItpImportReviewModalProps) {
+}: ImportReviewModalProps) {
+  const copy = KIND_COPY[kind];
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [batchId, setBatchId] = useState<string | null>(initialBatchId ?? null);
-  const [profileId, setProfileId] = useState(DEFAULT_PROFILE);
+  const [profileId, setProfileId] = useState(copy.defaultProfile);
   const [resolutions, setResolutions] = useState<Resolutions>({});
   const [activeSheet, setActiveSheet] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
   const [proposalId, setProposalId] = useState<string | null>(null);
 
   const batchQuery = useImportBatch(projectId, batchId ?? undefined);
-  const profilesQuery = useImportProfiles(projectId);
-  const uploadMutation = useUploadImport(projectId);
-  const dryRunMutation = useImportDryRun(projectId);
-  const reviewMutation = useSendImportToReview(projectId);
-  const cancelMutation = useCancelImport(projectId);
+  const profilesQuery = useImportProfiles(projectId, kind);
+  const uploadMutation = useUploadImport(projectId, kind);
+  const dryRunMutation = useImportDryRun(projectId, kind);
+  const reviewMutation = useSendImportToReview(projectId, kind);
+  const cancelMutation = useCancelImport(projectId, kind);
   const decideMutation = useDecideProposal(projectId);
 
   const busy =
@@ -301,7 +342,7 @@ export function ItpImportReviewModal({
       const result = await uploadMutation.mutateAsync(file);
       setBatchId(result.batch.id);
       setActiveSheet(result.sheets[0]?.name ?? null);
-      const suggested = result.suggestedProfile?.key ?? DEFAULT_PROFILE;
+      const suggested = result.suggestedProfile?.key ?? copy.defaultProfile;
       setProfileId(suggested);
       const dry = await dryRunMutation.mutateAsync({
         batchId: result.batch.id,
@@ -331,15 +372,15 @@ export function ItpImportReviewModal({
       setProposalId(review.proposalId);
       await decideMutation.mutateAsync({ proposalId: review.proposalId, action: 'accept' });
       toast({
-        title: 'ITPs imported',
-        description: `${review.templateCount} ITP${review.templateCount === 1 ? '' : 's'} added to this project.`,
+        title: `${copy.nounPlural[0].toUpperCase()}${copy.nounPlural.slice(1)} imported`,
+        description: `${review.itemCount} ${review.itemCount === 1 ? copy.noun : copy.nounPlural} added to this project.`,
       });
       onApplied?.();
       onClose();
     } catch (error) {
       logError('Import apply failed:', error);
       toast({
-        title: 'Could not import those ITPs',
+        title: `Could not import those ${copy.nounPlural}`,
         description: extractErrorMessage(error, 'Please try again.'),
         variant: 'error',
       });
@@ -375,13 +416,24 @@ export function ItpImportReviewModal({
         if (!busy) void handleDismiss();
       }}
     >
-      <ModalHeader>Import ITPs from a spreadsheet</ModalHeader>
+      <ModalHeader>{copy.title}</ModalHeader>
       <ModalDescription>
-        Every ITP is shown beside the sheet it came from, with the counts before anything is
-        written. Excel files up to {MAX_FILE_MB} MB.
+        {copy.blurb}, with the counts before anything is written. Excel files up to {MAX_FILE_MB}{' '}
+        MB.
       </ModalDescription>
       <ModalBody>
         <div className="space-y-4">
+          {!batchId && batches !== undefined && batches.length > 0 && (
+            <ImportPanel
+              batches={batches}
+              onResume={(id) => setBatchId(id)}
+              onRollback={(id) => onRollback?.(id)}
+              rollbackBusy={busy}
+              title="Earlier imports"
+              description="Pick up where you left off, or undo one you have already applied."
+            />
+          )}
+
           {!batchId && (
             <div
               onDragOver={(event) => event.preventDefault()}
@@ -528,10 +580,10 @@ export function ItpImportReviewModal({
           >
             {decideMutation.isLoading
               ? 'Importing…'
-              : `Import ${effectiveDryRun.counts.willCreate + effectiveDryRun.counts.needsReview} ITP${
+              : `Import ${effectiveDryRun.counts.willCreate + effectiveDryRun.counts.needsReview} ${
                   effectiveDryRun.counts.willCreate + effectiveDryRun.counts.needsReview === 1
-                    ? ''
-                    : 's'
+                    ? copy.noun
+                    : copy.nounPlural
                 }`}
           </Button>
         )}

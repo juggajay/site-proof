@@ -14,7 +14,7 @@ import { fetchProjectForAdminPage } from '../settings/projectPageAccess';
 import type { Project } from '../settings/types';
 import { CopilotPanel, type StageCard } from './CopilotPanel';
 import { ImportPanel } from './ImportPanel';
-import { ItpImportReviewModal } from './ItpImportReviewModal';
+import { ImportReviewModal } from './ImportReviewModal';
 import { useCopilotProposalDetail, useImportBatches } from './importData';
 import { ProjectFactsReviewModal, type ProjectFactsCurrent } from './ProjectFactsReviewModal';
 import { ControlLineReviewModal } from './ControlLineReviewModal';
@@ -105,7 +105,9 @@ export function CopilotPage() {
   const lotPresenceQuery = useProjectLotPresence(projectId);
   const { aiConfigured } = useAiStatus();
   const rollbackMutation = useRollbackProposal(projectId);
-  const importBatchesQuery = useImportBatches(projectId);
+  // This rail migrates ITP libraries. Lot registers ride the same machinery from
+  // the lots page, where a lot import belongs.
+  const importBatchesQuery = useImportBatches(projectId, 'itp_template');
 
   const project = projectQuery.data ?? null;
   const proposals = proposalsQuery.data;
@@ -292,8 +294,9 @@ export function CopilotPage() {
       )}
 
       {openImport !== null && projectId && (
-        <ItpImportReviewModal
+        <ImportReviewModal
           projectId={projectId}
+          kind="itp_template"
           batchId={openImport || null}
           onApplied={() => void importBatchesQuery.refetch()}
           onClose={() => setOpenImport(null)}
