@@ -12,7 +12,7 @@ import { Router } from 'express';
 
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
-import { SUFFICIENCY_RULESETS } from '../lib/readiness/sufficiency/registry.js';
+import { effectiveRulesets } from '../lib/readiness/sufficiency/registry.js';
 
 export const testSufficiencyRouter = Router();
 
@@ -22,7 +22,11 @@ testSufficiencyRouter.get(
   '/rulesets',
   asyncHandler(async (_req, res) => {
     res.json({
-      rulesets: SUFFICIENCY_RULESETS.map((ruleset) => ({
+      // D14.2 §6.5: LIVE packs only. The frontend's `resolveProjectRuleset`
+      // matches on state + spec set with no date window, so serving a superseded
+      // pack beside its replacement would let the form offer the OLD authority
+      // vocabulary while the route-level whitelist enforced the new one.
+      rulesets: effectiveRulesets().map((ruleset) => ({
         id: ruleset.id,
         state: ruleset.state,
         specSet: ruleset.specSet,

@@ -27,7 +27,7 @@ app.use(errorHandler);
 let token: string;
 let projectId: string;
 // F1.1: a second, VIC/`vicroads` project so the real-vocabulary lots of
-// VIC_CORPUS resolve the shipped `vicroads-204.v1` pack. The main corpus project
+// VIC_CORPUS resolve the shipped VicRoads pack (`.v2` since D14.2). The main corpus project
 // stays NSW/TfNSW and resolves no ruleset — deliberately unchanged.
 let vicProjectId: string;
 let companyId: string;

@@ -103,6 +103,46 @@ export interface ReducedFrequencyEligibility {
   clause: string;
 }
 
+/**
+ * D14 §4.4 — the Section 173 small-area exception, as one optional rule limb.
+ *
+ * PERMISSIVE by its own words ("any lot which has a surface area less than
+ * 500 m2 MAY be treated as a small area"), so area determines ELIGIBILITY and
+ * never application: an area-triggered automatic reduction would under-state the
+ * requirement for every small lot the project chose to test normally, which is
+ * the unsafe direction. Same ruling as `[C1C-6]` made for the reduced regime —
+ * compute eligibility, never auto-grant.
+ */
+export interface SmallLotException {
+  /**
+   * STRICTLY less than. cl. 173.04(d): "any lot which has a surface area less
+   * than 500 m2". A lot of exactly 500.0 m² is NOT eligible.
+   */
+  maxArea: { unit: QuantityUnit; value: number };
+  /**
+   * Replaces `minCountByScale` for the listed scales ONLY, and ONLY when the lot
+   * carries an explicit election (D14.4 — not shipped). Scale C is ABSENT
+   * DELIBERATELY: cl. 204.13(a) scopes the exception to Scale A/B, and cl.
+   * 173.04(d) engages only "where test requirements are based on CHARACTERISTIC
+   * values", while Table 204.131's Scale C column is headed "Minimum MEAN Value
+   * of Density Ratio". Scale C is already three-tests-on-the-mean; there is
+   * nothing to reduce. DO NOT add `C: 3` "for completeness" — it would imply a
+   * reduction that does not exist.
+   */
+  minCountByScale: Readonly<Record<string, number>>;
+  /**
+   * cl. 173.04(d) ALSO shifts acceptance: the MEAN of the 3 tests must exceed the
+   * scale's characteristic density-ratio requirement by >= this many percentage
+   * points, and the statistic changes from characteristic (x̄ − 0.92S) to plain
+   * mean. CIVOS evaluates no density-ratio VALUES, so this is CITATION TEXT and
+   * is NEVER computed (§6.3 — the gap that can mislead, and the reason the item
+   * text must state the shifted threshold beside the reduced count).
+   */
+  acceptanceShiftPct: number;
+  /** Section 173's own provenance — a DIFFERENT document from the rule's. */
+  provenance: RulesetProvenance;
+}
+
 export interface FrequencyRule {
   /** Stable, referenced by snapshots forever: 'vicroads-204.v1/compaction-density'. */
   id: string;
@@ -155,6 +195,13 @@ export interface FrequencyRule {
    * `validateRuleset` rejects declaring both.
    */
   reducedFrequencyEligibility?: ReducedFrequencyEligibility;
+  /**
+   * D14 §4.4 — the Section 173 small-area exception. Declaring it makes the
+   * engine compute and DISCLOSE eligibility; it can never lower `requiredCount`
+   * on its own, because application needs an election CIVOS does not yet record
+   * (`Lot.smallAreaElected`, phase D14.4, deferred by Jay's J3).
+   */
+  smallLot?: SmallLotException;
   provenance: RulesetProvenance;
 }
 
@@ -324,6 +371,27 @@ export interface RuleSufficiency {
   /** `[C1C-6]` Advisory only: "eligible to REQUEST reduced frequency" (§3.4.1a). */
   reducedFrequencyEligible?: boolean;
   regimeBasis?: { streamKey: string; lotIds: string[] };
+  /**
+   * D14 §4.4 — the lot's area is under the rule's `smallLot.maxArea` and its
+   * scale is one the exception covers. ADVISORY: `requiredCount` above is still
+   * the full count, because applying the exception needs an election (D14.4).
+   * Additive-optional, so it does NOT bump `resultSchemaVersion` (C1 §5.4.2).
+   */
+  smallAreaEligible?: boolean;
+  /**
+   * The figures the disclosure sentence is built from, present only when
+   * `smallAreaEligible`. Mirrors the shipped `reducedFrequencyEligible` /
+   * `regimeBasis` pairing: the boolean is the verdict a snapshot records, the
+   * object is what the item text needs and the item builder cannot otherwise
+   * reach (it receives the EVALUATION, never the `FrequencyRule`).
+   */
+  smallAreaBasis?: {
+    maxArea: { unit: QuantityUnit; value: number };
+    requiredCount: number;
+    acceptanceShiftPct: number;
+    /** Section 173 — a DIFFERENT document from the rule's own citation. */
+    citation: RuleCitation;
+  };
   unknownCauses: readonly UnknownCause[];
   citation: RuleCitation;
 }

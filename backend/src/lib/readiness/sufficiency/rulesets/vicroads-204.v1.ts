@@ -1,5 +1,19 @@
 // Seed pack — VicRoads/DTP Section 204 (Earthworks), version 1. Spec §8.2.
 //
+// SUPERSEDED BY `vicroads-204.v2` ON 2026-07-27, AND FROZEN. Do not edit this
+// file again: C1.2 (#1594) ships `buildSufficiencySnapshotV1`, which writes
+// `rules[].ruleId: 'vicroads-204.v1/compaction-density'` into the IMMUTABLE
+// `RequirementEvaluation` table at all three decision points. Those rows are
+// evidence. Editing this pack's content would silently change what a past
+// decision means, which is exactly what F0's "definitions are never edited in
+// place once instances exist" forbids.
+//
+// D14's §6.5 allowed ONE in-place edit while C1.2 had not shipped and the
+// instance count was zero. That exemption expired when C1.2 landed, and D14.2
+// took the other branch of §6.5's own conditional: mint `.v2`, close this pack
+// with `effectiveTo`, and leave the file in the tree so every historical
+// `ruleId` still resolves to the definition it was decided under.
+//
 // STATUS: `confirmed`. The §8.3 step-1 confirmation pass RAN on 2026-07-27
 // against the CURRENT PUBLISHED primary document — not a council republication,
 // not a secondary page — and returned grade A (primary) evidence. Report:
@@ -132,6 +146,11 @@ export const VICROADS_204_V1: Ruleset = {
   // The 6/6/3 counts are unchanged from v5.0 (October 2013) onward, so the pack
   // is effective from that edition rather than from the edition read.
   effectiveFrom: '2013-10-01',
+  // Closed the day `vicroads-204.v2` opened, so exactly one pack is live at any
+  // instant and no lot silently changes pack mid-window. A lookup dated before
+  // this still resolves v1 — which is how a past decision's `ruleId` keeps
+  // meaning what it meant.
+  effectiveTo: '2026-07-27',
   status: 'confirmed',
   rules: [COMPACTION_DENSITY],
   provenance: PROVENANCE,

@@ -29,7 +29,7 @@ import {
   getClaimBlockingReasonsForConformedLot,
 } from '../../lib/conformancePrerequisites.js';
 import { prisma } from '../../lib/prisma.js';
-import { VICROADS_204_V1 } from '../../lib/readiness/sufficiency/rulesets/vicroads-204.v1.js';
+import { VICROADS_204_V2 } from '../../lib/readiness/sufficiency/rulesets/vicroads-204.v2.js';
 
 const tag = `conform-suff-${Date.now()}`;
 
@@ -56,7 +56,8 @@ beforeAll(async () => {
   });
   userId = user.id;
 
-  // VIC / VicRoads, so the CONFIRMED `vicroads-204.v1` pack resolves.
+  // VIC / VicRoads, so the CONFIRMED `vicroads-204.v2` pack resolves (v1 is
+  // frozen and `effectiveTo`-closed since D14.2 §6.5).
   const project = await prisma.project.create({
     data: {
       name: `Project ${tag}`,
@@ -129,10 +130,10 @@ afterAll(async () => {
 });
 
 describe('the fixture really does resolve a confirmed pack with a real shortfall', () => {
-  it('resolves vicroads-204.v1 at Scale A and reports 1 of 6', async () => {
+  it('resolves vicroads-204.v2 at Scale A and reports 1 of 6', async () => {
     await setMode('warn');
     const result = await checkConformancePrerequisites(shortLotId);
-    expect(VICROADS_204_V1.status).toBe('confirmed');
+    expect(VICROADS_204_V2.status).toBe('confirmed');
     expect(result.sufficiency?.rules).toHaveLength(1);
     const rule = result.sufficiency!.rules[0];
     expect(rule.state).toBe('insufficient');

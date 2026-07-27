@@ -225,8 +225,50 @@ function shortfallSentence(rule: RuleSufficiency): string {
     `Requires ${need} ${rule.testType} test${need === 1 ? '' : 's'} ` +
     `(${rule.citation.authority} ${rule.citation.document}, clause ${rule.citation.clause}, ` +
     `${rule.citation.edition || 'edition unrecorded'}${unconfirmed}). ` +
-    `${parts.join(', ')}.`
+    `${parts.join(', ')}.${smallAreaCaveat(rule)}`
   );
+}
+
+/**
+ * D14 §6.2.5 `[D14X-3]` — the known ceiling rides the ITEM TEXT, not the label.
+ *
+ * The pack's rule label carries "unless a Sec 173 small lot", and this sentence
+ * builder has never read `rule.label` — so a 300 m² lot was told flatly
+ * "Requires 6", with nothing on screen about the cheaper route its own
+ * specification gives it. A rule label is a developer-facing record; the item
+ * text is the disclosure channel.
+ *
+ * The count is NOT downgraded to `unknown` on an eligible lot: the requirement
+ * genuinely IS the full count unless the contractor elects otherwise, and §3.4's
+ * doctrine is `unknown` for what CIVOS cannot determine, never for what it can.
+ * The wording problem is fixed by fixing the wording.
+ *
+ * `ponytail:` one conditional clause in one sentence builder, over the
+ * eligibility the evaluator already computed.
+ */
+function smallAreaCaveat(rule: RuleSufficiency): string {
+  const basis = rule.smallAreaBasis;
+  if (!basis) return '';
+  return (
+    ` This lot is under ${basis.maxArea.value} ${basis.maxArea.unit}: ` +
+    `${smallAreaCitation(basis)} allows ${basis.requiredCount} tests instead, accepted on the ` +
+    `mean, which must beat the scale requirement by ${shiftPct(basis)} %.`
+  );
+}
+
+type SmallAreaBasis = NonNullable<RuleSufficiency['smallAreaBasis']>;
+
+/** Same citation shape `shortfallSentence` already uses — a DIFFERENT document. */
+function smallAreaCitation(basis: SmallAreaBasis): string {
+  const unconfirmed = basis.citation.confirmed ? '' : ', unconfirmed edition';
+  return (
+    `${basis.citation.authority} ${basis.citation.document}, clause ${basis.citation.clause}` +
+    ` (${basis.citation.edition || 'edition unrecorded'}${unconfirmed})`
+  );
+}
+
+function shiftPct(basis: SmallAreaBasis): string {
+  return basis.acceptanceShiftPct.toFixed(1);
 }
 
 export interface UnknownCausePromptContext {
@@ -373,6 +415,37 @@ export function buildSufficiencyAdvisoryItems(
           `${eligible[0].regimeBasis?.lotIds.length ?? 0} consecutive conforming lots recorded, so you may ` +
           'ask the Superintendent to agree a reduced frequency. Until that agreement is recorded, the full ' +
           'count still applies.',
+        blocksAction: false,
+      }),
+    );
+  }
+
+  // D14 §6.2.1 — Section 173 small-area ELIGIBILITY, disclosed. Reuses the
+  // shipped `test_sufficiency_met` support code, following the reduced-frequency
+  // eligibility item above: an advisory sentence does not justify widening a
+  // closed, contract-tested reason-code vocabulary (§4.5).
+  //
+  // §6.3 is binding here: CIVOS counts tests and evaluates no density-ratio
+  // VALUES, so this sentence must state the SHIFTED acceptance threshold in the
+  // same breath as the reduced count. Without it a user reads "3 tests instead
+  // of 6" as a free reduction, when it is a trade for a 2.0-point harder target.
+  const smallArea = sufficiency.rules.filter((rule) => rule.smallAreaEligible === true);
+  for (const rule of smallArea) {
+    const basis = rule.smallAreaBasis;
+    if (!basis) continue;
+    items.push(
+      item({
+        code: 'test_sufficiency_met',
+        severity: 'support',
+        area: 'test',
+        title: 'A cheaper testing route is available',
+        detail:
+          `This lot is under ${basis.maxArea.value} ${basis.maxArea.unit}, so ` +
+          `${smallAreaCitation(basis)} lets it be tested as a small area: ${basis.requiredCount} ` +
+          `${rule.testType} tests instead of ${rule.requiredCount ?? 'the full count'}, accepted ` +
+          `on the mean of the ${basis.requiredCount}, which must beat the scale requirement by ` +
+          `${shiftPct(basis)} %. CIVOS counts tests only — it does not check that threshold. ` +
+          `The full count still applies unless you test this lot as a small area.`,
         blocksAction: false,
       }),
     );

@@ -12,7 +12,7 @@
 //   * AT-15, retroactivity: a shortfall that only appears because a PAST test
 //     was corrected shows up on an ALREADY-CONFORMED lot.
 //
-// VIC / VicRoads, so the CONFIRMED `vicroads-204.v1` pack resolves and the
+// VIC / VicRoads, so the CONFIRMED `vicroads-204.v2` pack resolves and the
 // assertions have teeth. (`tfnsw-r44.v1` is DEREGISTERED `[C1C-9]`, so an NSW
 // fixture would resolve nothing and every assertion here would be vacuous.)
 //
@@ -191,7 +191,7 @@ describe('AT-10 `block` end to end on a CONFIRMED pack, inert at off and warn', 
       worstShortfall: 5,
       mode,
       blocks: false,
-      ruleset: { id: 'vicroads-204.v1', status: 'confirmed' },
+      ruleset: { id: 'vicroads-204.v2', status: 'confirmed' },
     });
   });
 

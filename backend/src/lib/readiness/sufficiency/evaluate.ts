@@ -230,6 +230,23 @@ function evaluateRule(
   const pendingCount = attributed.filter(testPendingByStatus).length;
   const failedCount = attributed.filter(testFailing).length;
 
+  // --- small area (§4.4) -------------------------------------------------
+  // Eligibility only: `applied` is structurally false until `Lot.smallAreaElected`
+  // lands (D14.4, deferred by J3), so NO count changes here. A missing area
+  // suppresses the disclosure SILENTLY and must never push `quantity_missing` —
+  // VicRoads' count carries no `perQuantity` limb, so demanding an area for the
+  // ADVISORY would flip a perfectly evaluable Scale A lot to `unknown` and delete
+  // a working number from the panel (§3.4).
+  const smallLot = rule.smallLot;
+  const smallArea = smallLot ? quantityFor(resolved, smallLot.maxArea.unit) : null;
+  const smallAreaCount =
+    smallLot && scaleValue !== null ? smallLot.minCountByScale[scaleValue] : undefined;
+  const smallAreaEligible =
+    smallLot !== undefined &&
+    smallArea !== null &&
+    smallArea < smallLot.maxArea.value &&
+    smallAreaCount !== undefined;
+
   const minCount = scaleValue === null ? null : (figures.minCountByScale[scaleValue] ?? null);
   const requiredCount =
     causes.length > 0 || minCount === null
@@ -258,6 +275,23 @@ function evaluateRule(
           regimeBasis: {
             streamKey: resolvedRegime.streamKey,
             lotIds: resolvedRegime.basisLotIds,
+          },
+        }
+      : {}),
+    ...(smallLot && smallAreaEligible && smallAreaCount !== undefined
+      ? {
+          smallAreaEligible: true,
+          smallAreaBasis: {
+            maxArea: smallLot.maxArea,
+            requiredCount: smallAreaCount,
+            acceptanceShiftPct: smallLot.acceptanceShiftPct,
+            citation: {
+              authority: smallLot.provenance.authority,
+              document: smallLot.provenance.document,
+              clause: smallLot.provenance.clause,
+              edition: smallLot.provenance.edition,
+              confirmed: ruleset?.status === 'confirmed',
+            },
           },
         }
       : {}),

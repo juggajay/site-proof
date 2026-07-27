@@ -51,6 +51,30 @@ export interface RulesetLookup {
  * Spec-set folding REUSES `normalizeSpecSet` (rms → tfnsw) rather than
  * re-implementing it [C1R-C7].
  */
+function withinEffectiveWindow(ruleset: Ruleset, at: number): boolean {
+  return (
+    Date.parse(ruleset.effectiveFrom) <= at &&
+    (ruleset.effectiveTo === undefined || Date.parse(ruleset.effectiveTo) > at)
+  );
+}
+
+/**
+ * Every pack that is LIVE right now — one per authority, because a superseded
+ * pack carries `effectiveTo`.
+ *
+ * D14.2 §6.5 gave the registry a second entry for the same authority
+ * (`vicroads-204.v1` frozen beside `.v2`), and a superseded pack is decision
+ * EVIDENCE, not a form vocabulary: the registry read route must not offer it, or
+ * the lot form resolves the wrong `materialTypes`/`scaleKeys` and disagrees with
+ * the route-level whitelist. Sharing the window predicate with
+ * {@link resolveRuleset} is what keeps "what the form offers" and "what the
+ * evaluator uses" the same pack by construction.
+ */
+export function effectiveRulesets(at: Date = new Date()): Ruleset[] {
+  const millis = at.getTime();
+  return SUFFICIENCY_RULESETS.filter((ruleset) => withinEffectiveWindow(ruleset, millis));
+}
+
 export function resolveRuleset(lookup: RulesetLookup): Ruleset | null {
   const state = normalizeKey(lookup.state);
   const specSet = normalizeSpecSet(lookup.specSet ?? null);
@@ -60,8 +84,7 @@ export function resolveRuleset(lookup: RulesetLookup): Ruleset | null {
     (ruleset) =>
       normalizeKey(ruleset.state) === state &&
       normalizeKey(ruleset.specSet) === specSet &&
-      Date.parse(ruleset.effectiveFrom) <= at &&
-      (ruleset.effectiveTo === undefined || Date.parse(ruleset.effectiveTo) > at),
+      withinEffectiveWindow(ruleset, at),
   );
   if (candidates.length === 0) return null;
   // Newest effective edition wins; `id` breaks a same-day tie deterministically.
@@ -234,6 +257,44 @@ function validateRule(ruleset: Ruleset, rule: FrequencyRule, now: Date, problems
         `${where}: reducedFrequencyEligibility.clause is empty — the regime is a DIFFERENT clause from the count (§3.2)`,
       );
     }
+  }
+
+  // D14 §4.4 — the Section 173 small-area limb. Its `minCountByScale` is
+  // deliberately NOT run through `checkCounts`: covering every `scaleKeys` entry
+  // is exactly what it must not do (Scale C has no reduction to grant), so the
+  // checks here are the per-key ones only.
+  const smallLot = rule.smallLot;
+  if (smallLot) {
+    if (!(QUANTITY_UNITS as readonly string[]).includes(smallLot.maxArea.unit)) {
+      problems.push(
+        `${where}: smallLot.maxArea.unit '${smallLot.maxArea.unit}' is not a QuantityUnit`,
+      );
+    }
+    if (!(smallLot.maxArea.value > 0)) {
+      problems.push(`${where}: smallLot.maxArea.value must be > 0`);
+    }
+    const smallCounts = Object.entries(smallLot.minCountByScale);
+    if (smallCounts.length === 0) {
+      problems.push(`${where}: smallLot.minCountByScale is empty — the limb can never apply`);
+    }
+    for (const [scaleKey, count] of smallCounts) {
+      if (!ruleset.scaleKeys.includes(scaleKey)) {
+        problems.push(
+          `${where}: smallLot.minCountByScale declares scale '${scaleKey}' outside ruleset.scaleKeys`,
+        );
+      }
+      if (!Number.isInteger(count) || count < 1) {
+        problems.push(
+          `${where}: smallLot.minCountByScale['${scaleKey}'] must be an integer >= 1, got ${count}`,
+        );
+      }
+    }
+    if (!Number.isFinite(smallLot.acceptanceShiftPct) || smallLot.acceptanceShiftPct < 0) {
+      problems.push(`${where}: smallLot.acceptanceShiftPct must be a finite number >= 0`);
+    }
+    // Section 173 is a DIFFERENT document from the rule's Section 204, so it
+    // carries its own provenance and must clear the same §8.3 currency bar.
+    validateProvenance(`${where} smallLot provenance`, smallLot.provenance, ruleset, now, problems);
   }
 
   validateProvenance(`${where} provenance`, rule.provenance, ruleset, now, problems);

@@ -11,6 +11,7 @@
 
 import type { Ruleset } from '../types.js';
 import { VICROADS_204_V1 } from './vicroads-204.v1.js';
+import { VICROADS_204_V2 } from './vicroads-204.v2.js';
 
 /**
  * `[C1C-9]` **`tfnsw-r44.v1` is DEREGISTERED**, not deleted.
@@ -31,4 +32,19 @@ import { VICROADS_204_V1 } from './vicroads-204.v1.js';
  * starting point for the `tfnsw-q6.v1` re-author, which is blocked on a
  * lot-level *specified relative compaction* attribute (§16 D14).
  */
-export const SUFFICIENCY_RULESETS: readonly Ruleset[] = [VICROADS_204_V1];
+/**
+ * D14.2 §6.5 — `vicroads-204.v1` stays REGISTERED, not deleted, and is closed
+ * with `effectiveTo`.
+ *
+ * C1.2 (#1594) writes `rules[].ruleId` into the immutable `RequirementEvaluation`
+ * table, so `vicroads-204.v1/compaction-density` is referenced by decision
+ * evidence that must keep resolving to the definition it was decided under. The
+ * pack revision is therefore a NEW FILE, not an edit; `resolveRuleset` picks the
+ * newest effective one, so every live VIC project reads `.v2` from 2026-07-27
+ * and nothing reads `.v1` again. Both are still validated by CI.
+ *
+ * Two ids, ONE authority. This is not "two VIC packs" in the shadowing sense the
+ * spec warns about for NSW — the date windows abut, so exactly one is live at
+ * any instant.
+ */
+export const SUFFICIENCY_RULESETS: readonly Ruleset[] = [VICROADS_204_V1, VICROADS_204_V2];

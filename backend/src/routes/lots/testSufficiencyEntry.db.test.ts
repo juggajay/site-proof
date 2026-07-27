@@ -91,7 +91,7 @@ beforeAll(async () => {
   qualityManagerToken = qualityManager.token;
   qualityManagerUserId = qualityManager.userId;
 
-  // VIC / VicRoads, so the CONFIRMED `vicroads-204.v1` pack resolves and its
+  // VIC / VicRoads, so the CONFIRMED `vicroads-204.v2` pack resolves and its
   // scaleKeys ['A','B','C'] are what the route validates against.
   const project = await prisma.project.create({
     data: {
@@ -503,18 +503,17 @@ describe('AT-50a the pack whitelist reaches every write path, not one of five', 
     expect((await prisma.lot.findUnique({ where: { id: lot.id } }))?.testScale).toBe('A');
   });
 
-  it('a materialType is refused everywhere while the pack declares no vocabulary', async () => {
-    // `vicroads-204.v1` gains `materialTypes` in D14.2. Storing "Type A" now
-    // would put a string in the column that no rule can read and no user can
-    // see validated — the honest answer until the pack declares its classes.
+  it('a materialType outside the pack vocabulary is refused on every path (D14.2)', async () => {
+    // The pack declares Type A/B/C from D14.2 on, so "Type A" is now storable and
+    // "Type Z" is the out-of-vocabulary case the whitelist exists for.
     const created = await post('/api/lots', adminToken).send({
       projectId,
       lotNumber: `${tag}-W-MAT`,
       activityType: 'Earthworks',
-      materialType: 'Type A',
+      materialType: 'Type Z',
     });
     expect(created.status).toBe(400);
-    expect(created.body.error.message).toContain('does not classify lots by material type');
+    expect(created.body.error.message).toContain('Valid material types: Type A, Type B, Type C');
 
     const lot = await prisma.lot.create({
       data: {
@@ -528,14 +527,29 @@ describe('AT-50a the pack whitelist reaches every write path, not one of five', 
     const patched = await request(app)
       .patch(`/api/lots/${lot.id}`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ materialType: 'Type A' });
+      .send({ materialType: 'Type Z' });
     expect(patched.status).toBe(400);
 
     const bulkSet = await post('/api/lots/bulk-set-test-attributes', adminToken).send({
       lotIds: [lot.id],
-      materialType: 'Type A',
+      materialType: 'Type Z',
     });
     expect(bulkSet.status).toBe(400);
+
+    // And the declared value now round-trips rather than 400ing.
+    const accepted = await post('/api/lots', adminToken).send({
+      projectId,
+      lotNumber: `${tag}-W-MAT-OK`,
+      activityType: 'Earthworks',
+      materialType: 'Type A',
+    });
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(201);
+    // Asserted on the row, not the response: `POST /api/lots` returns a narrow
+    // projection that carries none of the sufficiency attributes (not `testScale`
+    // or the quantity either), and widening it is not this phase's business.
+    expect(
+      (await prisma.lot.findUniqueOrThrow({ where: { id: accepted.body.lot.id } })).materialType,
+    ).toBe('Type A');
   });
 
   it('null is accepted on every path — clearing a field is not a vocabulary question', async () => {
@@ -732,13 +746,32 @@ describe('AT-19 GET /api/test-sufficiency/rulesets', () => {
       .get('/api/test-sufficiency/rulesets')
       .set('Authorization', `Bearer ${adminToken}`);
     const vicroads = res.body.rulesets.find(
-      (ruleset: { id: string }) => ruleset.id === 'vicroads-204.v1',
+      (ruleset: { id: string }) => ruleset.id === 'vicroads-204.v2',
     );
     expect(vicroads.scaleKeys).toEqual(['A', 'B', 'C']);
     expect(vicroads.defaultScale).toBe('A');
     expect(vicroads.status).toBe('confirmed');
+    // D14.2 — the material control's option list rides the same payload.
+    expect(vicroads.materialTypes).toEqual(['Type A', 'Type B', 'Type C']);
     // A rule carries a label and a clause; there is no free-prose field on the
     // type at all, so no specification text can reach this payload (§8.4).
     expect(Object.keys(vicroads.rules[0]).sort()).toEqual(['clause', 'id', 'label', 'testType']);
+  });
+
+  // D14.2 §6.5 — the regression minting `.v2` would otherwise have shipped.
+  it('serves LIVE packs only — a superseded pack is evidence, not a form vocabulary', async () => {
+    // `frontend/src/lib/testSufficiency.ts` `resolveProjectRuleset` matches on
+    // state + spec set with `.find()` and NO date window, so a superseded pack in
+    // this payload would win by array order and the VIC lot form would offer
+    // `vicroads-204.v1`'s vocabulary — no material control at all — while the
+    // route-level whitelist enforced v2's. One authority, one entry.
+    const res = await request(app)
+      .get('/api/test-sufficiency/rulesets')
+      .set('Authorization', `Bearer ${adminToken}`);
+    const vic = res.body.rulesets.filter(
+      (ruleset: { state: string; specSet: string }) =>
+        ruleset.state === 'vic' && ruleset.specSet === 'vicroads',
+    );
+    expect(vic.map((ruleset: { id: string }) => ruleset.id)).toEqual(['vicroads-204.v2']);
   });
 });
