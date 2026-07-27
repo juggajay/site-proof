@@ -6,6 +6,7 @@ import type {
   ReadinessBucket,
 } from '@/types/evidenceReadiness';
 import type { LotTab } from '../types';
+import { actionTab, externalActionHref } from '../lib/readinessActions';
 
 type OutstandingTest = NonNullable<EvidenceReadinessItem['outstandingTests']>[number];
 
@@ -99,8 +100,6 @@ interface LotReadinessPanelProps {
   fieldView?: boolean;
 }
 
-const TAB_IDS: LotTab[] = ['itp', 'tests', 'ncrs', 'photos', 'documents', 'comments', 'history'];
-
 type ReadinessBucketKind = 'conformance' | 'claim' | 'managementPrep';
 
 function bucketTitle(kind: ReadinessBucketKind): string {
@@ -138,36 +137,6 @@ function bucketTone(bucket: ReadinessBucket): string {
   }
 
   return 'border-success/30 bg-success/10 text-foreground';
-}
-
-function tabFromHref(href?: string): LotTab | null {
-  if (!href) return null;
-  if (!href.startsWith('?')) return null;
-  const params = new URLSearchParams(href.startsWith('?') ? href.slice(1) : href);
-  const tab = params.get('tab');
-  return tab && TAB_IDS.includes(tab as LotTab) ? (tab as LotTab) : null;
-}
-
-function tabFromArea(area: EvidenceReadinessItem['area']): LotTab | null {
-  if (area === 'itp' || area === 'hold_point') return 'itp';
-  if (area === 'test') return 'tests';
-  if (area === 'ncr') return 'ncrs';
-  if (area === 'document') return 'documents';
-  return null;
-}
-
-function actionTab(item: EvidenceReadinessItem): LotTab | null {
-  const tab = tabFromHref(item.actionHref);
-  if (item.actionHref && !tab) return null;
-  return tab ?? tabFromArea(item.area);
-}
-
-function externalActionHref(item: EvidenceReadinessItem): string | null {
-  if (!item.actionHref || tabFromHref(item.actionHref)) return null;
-  if (item.actionHref.startsWith('/') || item.actionHref.startsWith('http')) {
-    return item.actionHref;
-  }
-  return null;
 }
 
 function itemIcon(item: EvidenceReadinessItem) {

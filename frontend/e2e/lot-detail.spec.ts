@@ -1119,6 +1119,9 @@ test.describe('Lot detail ITP workflow', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
 
+    // Override lives behind the header overflow now that the header carries a
+    // single primary action (A4 spec §7).
+    await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('button', { name: 'Override Workflow Status' }).click();
     const dialog = page.getByRole('dialog').filter({ hasText: 'Override Workflow Status' });
 
