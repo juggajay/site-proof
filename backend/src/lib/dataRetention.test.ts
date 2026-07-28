@@ -54,4 +54,18 @@ describe('applyRetentionPolicies (GAP-B/C)', () => {
     expect(result.revokedAuthTokens).toBe(5);
     expect(result.productEvents).toBe(6);
   });
+
+  it('never deletes an audit row, even when the client offers the table', async () => {
+    // Wave E.0 §9.3 side finding 2 asked whether `RETENTION_POLICIES.auditLogs`
+    // should be "wired". It must not be: `chaseCore.ts:391` resolves a hold
+    // point's original requester from an `HP_RELEASE_REQUESTED` row long after
+    // every capability token for it is purged, and `AuditLog` is the compliance
+    // record. The omission from `RetentionPrismaClient` is the design; this is
+    // the guard that makes it fail loudly instead of silently deleting.
+    const client = { ...makeClient(), auditLog: { deleteMany: vi.fn() } };
+
+    await applyRetentionPolicies(client as any);
+
+    expect(client.auditLog.deleteMany).not.toHaveBeenCalled();
+  });
 });

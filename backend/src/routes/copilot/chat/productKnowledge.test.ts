@@ -177,4 +177,98 @@ describe('product knowledge — test sufficiency facts', () => {
     );
     expect(body('readiness')).toContain('never reduces the count itself');
   });
+
+  // -------------------------------------------------------------------------
+  // Wave E exit item 13 — the automatic chase reaches the mirror. Before this,
+  // `grep -inE "chase|remind|digest|daily limit|awaiting"` returned ZERO hits in
+  // this file, so Clancy described the manual flow with total confidence and did
+  // not know an automatic one had shipped. Every sentence below is cited to the
+  // code that makes it true.
+  // -------------------------------------------------------------------------
+  it('names the ONE awaiting-release status, not a second list', () => {
+    // predicates.ts:143 AWAITING_RELEASE_HOLD_POINT_STATUSES = ['notified'].
+    // `[E-B1]`: one definition, imported by the scan and the chase alike.
+    expect(body('itp-holdpoints-tests')).toContain('sits at Notified until it is released');
+  });
+
+  it('states the canary gate — the automation is inert until a project is named', () => {
+    // holdPointChaseAutomation.ts:57 + :313 `if (scopedIds.length === 0) return`,
+    // and systemAutomation.ts:61 for the alert arm. Unset/blank/separator-only
+    // all parse to [] (AT-113). Promising the chase unconditionally would be
+    // false on every project today.
+    const itp = body('itp-holdpoints-tests');
+    expect(itp).toContain('only on projects that have been switched on for it by name');
+    expect(itp).toContain('nothing is sent automatically and you chase manually as before');
+  });
+
+  it('states the cadence and the per-request cap exactly', () => {
+    // REMINDER_DUE_LEAD_WORKING_DAYS = 1 (:60),
+    // REMINDER_OVERDUE_INTERVAL_WORKING_DAYS = 2 (:63),
+    // chaseCore.ts:44 MAX_CHASES_PER_REQUEST = 3, capped PER GENERATION —
+    // a new release request resets it (AT-114 case 3).
+    const itp = body('itp-holdpoints-tests');
+    expect(itp).toContain('one working day before the scheduled release date');
+    expect(itp).toContain('every two working days while it stays overdue');
+    expect(itp).toContain('up to three reminders per release request');
+    expect(itp).toContain('Requesting release again starts a fresh request with a fresh three');
+  });
+
+  it('states the digest and the daily limit as ONE email, not N', () => {
+    // MAX_REMINDER_EMAILS_PER_RECIPIENT_PER_PROJECT_PER_DAY = 1 (:66) enforced by
+    // isWithinDailyLimit (:277); the digest is one envelope with per-item tokens
+    // (holdPointChaseAutomationGroup.ts:140). AT-116 measured 7 -> 1.
+    const itp = body('itp-holdpoints-tests');
+    expect(itp).toContain('one email per recipient per project per day');
+    expect(itp).toContain('each with its own live release link');
+    expect(itp).toContain('They never get a second message that day');
+  });
+
+  it('names the four things that stop the reminders', () => {
+    // E.0 item 11's four termination events, one test each in
+    // holdPointChaseAutomation.db.test.ts: released, new generation, closed
+    // project, address removed from notificationSentTo.
+    expect(body('itp-holdpoints-tests')).toContain(
+      'Releasing the hold point, re-requesting it, closing the project, or removing that address from the notification list all stop the reminders',
+    );
+  });
+
+  it('states the post-E.0a disclosure limits on a public link', () => {
+    // publicReleasePayload.ts:137 no longer passes notificationSentTo (row 4a),
+    // which also starves the PDF's "Recipient of Record" row (4c), and
+    // publicBatchRoutes.ts:144 resolves requestedBy to `fullName || 'Site Team'`
+    // with the email no longer selected (4d). The single public payload carries
+    // no requester field at all.
+    const itp = body('itp-holdpoints-tests');
+    expect(itp).toContain('It does not show them the other addresses the request went to');
+    expect(itp).toContain('never shows the email address of the person who requested release');
+    expect(itp).toContain('name that person or say Site Team');
+  });
+
+  it('states where a reply goes, and names the fallback rather than faking it', () => {
+    // chaseCore.ts resolveHoldPointRequester (:401) — audit lookup, company
+    // support on a missing/inactive/deleted user, and `[E-B8b]` forbids
+    // attributing the request to someone who did not make it (AT-115).
+    expect(body('itp-holdpoints-tests')).toContain(
+      'Replies to a hold point email reach the person who requested the release',
+    );
+    expect(body('itp-holdpoints-tests')).toContain('company support, and the email says so');
+  });
+
+  it('states the internal stale alert and its severities', () => {
+    // systemAutomation.ts:307-310 — hoursStale from scheduledDate, >48 critical,
+    // >24 high. The scan threshold is one day (:252), so `medium` is unreachable
+    // on this path and the copy must not promise it.
+    expect(body('itp-holdpoints-tests')).toContain(
+      'raises an internal Hold Point stale alert to the project team, at high severity and critical once it is two days past',
+    );
+  });
+
+  it('says the recipient-scoped queue is NOT built — the anti-fabrication line', () => {
+    // E3 was specified, costed and deferred (`[E-g]`). No HoldPointReviewQueue
+    // model exists. Without this sentence Clancy invents a superintendent portal
+    // on request, which is the exact failure the mirror exists to prevent.
+    expect(body('itp-holdpoints-tests')).toContain(
+      'There is no CIVOS inbox or queue for them to sign into',
+    );
+  });
 });
