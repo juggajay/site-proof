@@ -11,6 +11,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { buildCsv, buildCsvBrandingRows } from '../../../lib/csvSafe.js';
 import { prisma } from '../../../lib/prisma.js';
 import { errorHandler } from '../../../middleware/errorHandler.js';
 import { registerTestUser } from '../../../test/routeTestHarness.js';
@@ -389,6 +390,64 @@ describe('Wave B — lot register import', () => {
       .get(`/api/projects/${projectId}/copilot/imports?kind=itp_template`)
       .set('Authorization', `Bearer ${pmToken}`);
     expect(itpList.body.batches).toHaveLength(0);
+  });
+
+  /**
+   * M10: SiteProof's own "Export Lots to CSV" is the ONLY export format the lot
+   * register has, and for a while the importer refused `.csv` outright — a PM
+   * who exported a register for a subcontractor could not re-import the marked-up
+   * file they got back. This drives the real round trip through the real upload
+   * route: branded export shape in, proposed lots out.
+   */
+  it('re-imports SiteProof’s own branded CSV register export', async () => {
+    const exported = buildCsv([
+      ...buildCsvBrandingRows('Lot Register', {
+        companyName: 'Acme Civil',
+        abn: '12 345 678 901',
+        projectName: 'Pacific Hwy Upgrade',
+      }),
+      // The export's own column labels, and its own cell values.
+      ['Lot Number', 'Description', 'Chainage Start', 'Chainage End', 'Activity Type', 'Status'],
+      ['L-101', 'Subgrade, north bound', '1020', '1250', 'Earthworks', 'pending'],
+      ['L-102', 'Pipe run', '1250', '1400', 'Earthworks', 'pending'],
+    ]);
+
+    const uploaded = await request(app)
+      .post(`/api/projects/${projectId}/copilot/imports?kind=lot_register`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .attach('file', Buffer.from(exported, 'utf8'), {
+        filename: 'lot-register-pacific-hwy-2026-07-29.csv',
+        contentType: 'text/csv',
+      });
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.sheets[0].headers).toContain('Lot Number');
+
+    const dry = await request(app)
+      .post(`/api/projects/${projectId}/copilot/imports/${uploaded.body.batch.id}/dry-run`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ fieldMap: uploaded.body.suggestedFieldMap });
+    expect(dry.status).toBe(200);
+    expect(dry.body.dryRun.canApply).toBe(true);
+    expect(dry.body.dryRun.counts).toMatchObject({ willCreate: 2, blocked: 0 });
+    // The provenance block is stripped, not read as a lot.
+    expect(dry.body.dryRun.rows.map((row: { label: string }) => row.label)).toEqual([
+      'L-101',
+      'L-102',
+    ]);
+  });
+
+  // A CSV has no magic bytes, so the content gate that catches a renamed .exe
+  // behind a .xlsx name passes it through. Text is the check that replaces it.
+  it('refuses a binary file wearing a .csv name', async () => {
+    const res = await request(app)
+      .post(`/api/projects/${projectId}/copilot/imports?kind=lot_register`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .attach('file', Buffer.from([0x4d, 0x5a, 0x00, 0x01, 0x02]), {
+        filename: 'register.csv',
+        contentType: 'text/csv',
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/not readable text/);
   });
 
   it('rejects a mapping profile that targets a field the lot import may not write', async () => {

@@ -30,8 +30,6 @@
  * the same dry run and Zod schemas the manual routes use before any write.
  * File contents are never logged.
  */
-import path from 'node:path';
-
 import { AppError } from '../../../lib/AppError.js';
 import { fetchWithTimeout } from '../../../lib/fetchWithTimeout.js';
 import { logWarn } from '../../../lib/serverLogger.js';
@@ -41,7 +39,11 @@ import {
   getCertificateContentBlock,
   isAnthropicConfigured,
 } from '../../testResults/certificateExtraction.js';
-import { MAX_IMPORT_CELL_LENGTH, MAX_IMPORT_ROWS_PER_SHEET } from './excelParser.js';
+import {
+  MAX_IMPORT_CELL_LENGTH,
+  MAX_IMPORT_ROWS_PER_SHEET,
+  sheetNameFromFilename,
+} from './excelParser.js';
 import type { ParsedGrid } from './excelParser.js';
 import { ITP_IMPORT_TARGETS, LOT_IMPORT_TARGETS } from './mappingProfiles.js';
 
@@ -101,13 +103,8 @@ function pdfHeaders(kind: string): readonly string[] {
   return headers;
 }
 
-/** The one sheet a PDF becomes. Named after the file so a row reference reads
- *  as something the reviewer recognises. */
-export function pdfSheetName(filename: string): string {
-  const base = path.basename(filename.replace(/\\/g, '/'));
-  const withoutExtension = base.replace(/\.[^.]+$/, '').trim();
-  return withoutExtension.slice(0, 80) || 'Document';
-}
+/** The one sheet a PDF becomes, named after the file. */
+export const pdfSheetName = sheetNameFromFilename;
 
 export function buildPdfExtractionPrompt(kind: string, fromPage: number, toPage: number): string {
   const headers = pdfHeaders(kind);
@@ -257,10 +254,12 @@ export async function extractPdfGrid(file: Express.Multer.File, kind: string): P
   const rows: string[][] = [];
   // Until the first window reports it, assume the document is one window long.
   let totalPages = PDF_PAGES_PER_CHUNK;
+  let pageCountConfirmed = false;
 
   for (let from = 1; from <= totalPages; from += PDF_PAGES_PER_CHUNK) {
     const chunk = await readPdfChunk(file, kind, from, from + PDF_PAGES_PER_CHUNK - 1);
     if (from === 1 && chunk.totalPages !== null) {
+      pageCountConfirmed = true;
       totalPages = chunk.totalPages;
       if (totalPages > MAX_PDF_PAGES) {
         throw AppError.badRequest(
@@ -285,5 +284,17 @@ export async function extractPdfGrid(file: Express.Multer.File, kind: string): P
     );
   }
 
-  return { sheets: [{ name: pdfSheetName(file.originalname), headers: [...headers], rows }] };
+  return {
+    sheets: [{ name: pdfSheetName(file.originalname), headers: [...headers], rows }],
+    // The page-window loop is bounded by the model's own `totalPages`. Without
+    // it the bound stays at one window, so a longer document is read only as far
+    // as page 20 — and this module's rule is that nothing is truncated
+    // SILENTLY. Reading on is not available (nothing says where to stop, and
+    // each further window is another billed call), so the reviewer is told.
+    ...(pageCountConfirmed
+      ? {}
+      : {
+          notice: `The PDF reader could not confirm how many pages that document has, so only the first ${PDF_PAGES_PER_CHUNK} pages were read. If it is longer, split it into ${PDF_PAGES_PER_CHUNK}-page files and import each one.`,
+        }),
+  };
 }

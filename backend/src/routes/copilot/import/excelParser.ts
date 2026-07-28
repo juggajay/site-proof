@@ -20,6 +20,7 @@
  */
 import ExcelJS from 'exceljs';
 import { XMLParser } from 'fast-xml-parser';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 
 import { AppError } from '../../../lib/AppError.js';
@@ -49,6 +50,23 @@ export interface ParsedSheet {
 
 export interface ParsedGrid {
   sheets: ParsedSheet[];
+  /**
+   * Something the reviewer must know about the READ itself, rather than about
+   * any one row — today only "how much of this PDF was actually read". Shown
+   * above the dry-run counts. Absent means the read is fully accounted for.
+   */
+  notice?: string;
+}
+
+/**
+ * The sheet name a single-sheet source gets: its own file name. A row reference
+ * then reads as something the reviewer recognises. Shared by the PDF and CSV
+ * readers, neither of which has sheets of its own.
+ */
+export function sheetNameFromFilename(filename: string): string {
+  const base = path.basename(filename.replace(/\\/g, '/'));
+  const withoutExtension = base.replace(/\.[^.]+$/, '').trim();
+  return withoutExtension.slice(0, 80) || 'Document';
 }
 
 function parseFailure(message: string): never {
@@ -256,6 +274,109 @@ function readSheetNames(buffer: Buffer, entries: ZipEntrySummary[]): Map<string,
   return names;
 }
 
+// ---------------------------------------------------------------------------
+// Vertically merged cells
+//
+// A real ITP writes an activity once and merges it down the checklist rows it
+// governs; the same happens to an "H" that holds several checks. In the FILE
+// only the master cell carries the value — every slave cell is genuinely empty
+// (`<c r="A3"/>`) — so reading the sheet data alone drops the marking on every
+// row but the first, and a hold point becomes a plain check item.
+//
+// The ranges live in `<mergeCells>`, which sits after `</sheetData>` and is
+// therefore never seen by a streaming row reader. It is read here from the
+// worksheet part directly, the same way the workbook metadata already is.
+// ---------------------------------------------------------------------------
+
+/** Inflate budget for one worksheet part, read only for its merge ranges. */
+export const MAX_WORKSHEET_MERGE_SCAN_BYTES = 16 * 1024 * 1024;
+
+/** `<mergeCell ref="A2:A4"/>`, without parsing the whole worksheet as XML. */
+const MERGE_REF = /<mergeCell[^>]*\bref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g;
+
+interface VerticalMerge {
+  /** Zero-based column, matching the cell arrays this module emits. */
+  column: number;
+  top: number;
+  bottom: number;
+}
+
+/** Spreadsheet column letters to a zero-based index: A -> 0, AA -> 26. */
+function columnIndex(letters: string): number {
+  let index = 0;
+  for (const letter of letters) index = index * 26 + (letter.charCodeAt(0) - 64);
+  return index - 1;
+}
+
+/**
+ * The VERTICAL merge ranges in a worksheet, keyed by the row they start on.
+ *
+ * ponytail: vertical only. A horizontally merged cell is a title banner far more
+ * often than it is data, and the grid is padded to the header width anyway, so
+ * nothing shifts — unlike the Word path, where a merge really does move columns.
+ */
+export function readVerticalMerges(worksheetXml: string): Map<number, VerticalMerge[]> {
+  const byTop = new Map<number, VerticalMerge[]>();
+  for (const match of worksheetXml.matchAll(MERGE_REF)) {
+    const [, startColumn, startRow, , endRow] = match;
+    const top = Number(startRow);
+    const bottom = Number(endRow);
+    if (bottom <= top) continue;
+    const merge = { column: columnIndex(startColumn), top, bottom };
+    if (merge.column < 0 || merge.column >= MAX_IMPORT_COLUMNS) continue;
+    byTop.set(top, [...(byTop.get(top) ?? []), merge]);
+  }
+  return byTop;
+}
+
+/**
+ * Fill this row's cells from the merges covering it, in place.
+ *
+ * `carried` is the caller's state across rows: the value each open merge is
+ * holding, and the row it stops at. Only an EMPTY cell inside an open range is
+ * filled, so a merge can never overwrite a value the sheet really carries.
+ */
+function applyVerticalMerges(
+  cells: string[],
+  rowNumber: number,
+  mergesByTop: Map<number, VerticalMerge[]>,
+  carried: Map<number, { value: string; bottom: number }>,
+): void {
+  for (const merge of mergesByTop.get(rowNumber) ?? []) {
+    const value = cells[merge.column] ?? '';
+    if (value) carried.set(merge.column, { value, bottom: merge.bottom });
+  }
+
+  for (const [column, held] of carried) {
+    if (rowNumber > held.bottom) {
+      carried.delete(column);
+      continue;
+    }
+    while (cells.length <= column) cells.push('');
+    if (!cells[column]) cells[column] = held.value;
+  }
+}
+
+/**
+ * One worksheet part as text, for its merge ranges. Returns null when the part
+ * is absent or past the scan budget — the caller then says so rather than
+ * quietly reading a sheet whose merges it could not check.
+ */
+function readWorksheetXml(
+  buffer: Buffer,
+  entries: ZipEntrySummary[],
+  sheetNo: string,
+): { xml: string | null; tooLarge: boolean } {
+  const name = `xl/worksheets/sheet${sheetNo}.xml`;
+  const entry = entries.find((candidate) => candidate.name === name);
+  if (!entry) return { xml: null, tooLarge: false };
+  if (entry.uncompressedSize > MAX_WORKSHEET_MERGE_SCAN_BYTES) {
+    return { xml: null, tooLarge: true };
+  }
+  const raw = readZipEntry(buffer, entries, name, MAX_WORKSHEET_MERGE_SCAN_BYTES);
+  return { xml: raw ? raw.toString('utf8') : null, tooLarge: raw === null };
+}
+
 /**
  * Parse an .xlsx buffer to a normalized grid. Every sheet contributes one header
  * row — the best of its first few non-empty rows, see `pickHeaderRow` — and the
@@ -290,6 +411,7 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
   seeded.workbookRels = readWorkbookRels(buffer, entries) ?? undefined;
 
   const sheets: ParsedSheet[] = [];
+  const uncheckedMergeSheets: string[] = [];
   let totalCharacters = 0;
   let emittedSheets = 0;
 
@@ -303,6 +425,10 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
 
     const sheetNo = String((worksheet as unknown as { id?: unknown }).id ?? '');
     const sheetName = (sheetNames.get(sheetNo) ?? `Sheet ${sheets.length + 1}`).slice(0, 200);
+    const worksheetXml = readWorksheetXml(buffer, entries, sheetNo);
+    if (worksheetXml.tooLarge) uncheckedMergeSheets.push(sheetName);
+    const mergesByTop = readVerticalMerges(worksheetXml.xml ?? '');
+    const carriedMerges = new Map<number, { value: string; bottom: number }>();
     let headers: string[] | null = null;
     const rows: string[][] = [];
     // Non-empty rows held back while the header band is still being chosen.
@@ -332,7 +458,10 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
         parseFailure('That workbook holds too much text to import. Split it into smaller files.');
       }
 
+      // AFTER the empty-row test on purpose: a merge carries a value down the
+      // rows it covers, but it must never resurrect a row the sheet left blank.
       if (isEmptyRow(cells)) continue;
+      applyVerticalMerges(cells, Number(row.number), mergesByTop, carriedMerges);
 
       if (!headers) {
         leading.push(cells);
@@ -366,5 +495,15 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
     );
   }
 
-  return { sheets };
+  return {
+    sheets,
+    // Bounded memory means a very large worksheet's merge ranges may be out of
+    // reach. That degrades to the old behaviour — but the reviewer is told,
+    // because a merged "H" read as blank is a hold point that never gets held.
+    ...(uncheckedMergeSheets.length > 0
+      ? {
+          notice: `Merged cells could not be checked on ${uncheckedMergeSheets.join(', ')} — those sheets are very large. Check that any activity or hold point written once and merged down several rows came through on every row.`,
+        }
+      : {}),
+  };
 }

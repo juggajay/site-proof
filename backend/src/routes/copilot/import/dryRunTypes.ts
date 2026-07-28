@@ -70,6 +70,14 @@ export interface DryRunRow {
   declaredStateSpec?: string | null;
   specAffirmed?: boolean;
   checklistItemCount?: number;
+  /** This row really is in the payload Apply would write. Derived from the
+   *  payload, never from the outcome — see `markWillImport`. */
+  willImport?: boolean;
+  /** For a `checklist_row` entry, the ledger key of the template it belongs to.
+   *  That is the key a `skipRows` resolution has to be written against, so
+   *  without it the review surface cannot offer the skip its own message
+   *  recommends. */
+  parentKey?: string;
 }
 
 export interface DryRunCounts {
@@ -79,6 +87,17 @@ export interface DryRunCounts {
   needsReview: number;
   ambiguous: number;
   blocked: number;
+  /**
+   * How many records Apply would actually create — the Apply CTA's number.
+   *
+   * NOT derivable from the outcomes: a `needs_review` row may or may not be in
+   * the payload depending on WHY it needs review (an ambiguous activity still
+   * imports; a duplicate or an unresolved twin does not). The CTA used to add
+   * up the outcomes it believed meant "creates", and every reason added since
+   * that could both need review AND import — `template_not_found` — was left
+   * out of the number while its lot was still written.
+   */
+  willImport: number;
 }
 
 export interface DryRunResult {
@@ -87,6 +106,17 @@ export interface DryRunResult {
   unmappedHeaders: { sheet: string; headers: string[] }[];
   /** Apply is refused while this is false (blocked rows or unresolved twins). */
   canApply: boolean;
+}
+
+/**
+ * Flag the ledger rows that are really in the payload, by pairing the ledger's
+ * own keys with the payload's. One place, for every import kind: a new
+ * outcome/reason combination cannot silently fall out of the count, because the
+ * count is read off the payload rather than guessed from the outcome.
+ */
+export function markWillImport(rows: DryRunRow[], proposedKeys: string[]): DryRunRow[] {
+  const proposed = new Set(proposedKeys);
+  return rows.map((row) => (proposed.has(row.key) ? { ...row, willImport: true } : row));
 }
 
 /** The counts block, derived from the rows so the two can never disagree. */
@@ -98,5 +128,6 @@ export function countDryRunRows(rows: DryRunRow[]): DryRunCounts {
     needsReview: rows.filter((row) => row.outcome === 'needs_review').length,
     ambiguous: rows.filter((row) => row.reason === 'ambiguous_activity').length,
     blocked: rows.filter((row) => row.outcome === 'blocked').length,
+    willImport: rows.filter((row) => row.willImport).length,
   };
 }

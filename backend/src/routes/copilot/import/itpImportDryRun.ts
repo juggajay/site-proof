@@ -20,7 +20,7 @@ import {
   MAX_TEMPLATE_DESCRIPTION_LENGTH,
   MAX_TEMPLATE_NAME_LENGTH,
 } from '../../itp/templateValidation.js';
-import { countDryRunRows } from './dryRunTypes.js';
+import { countDryRunRows, markWillImport } from './dryRunTypes.js';
 import type {
   ChecklistDiff,
   DryRunCounts,
@@ -476,6 +476,10 @@ export function computeItpImportDryRun(input: DryRunInput): {
         rows.push({
           key: `row:${entry.row.rowRef.sheet}#${entry.row.rowRef.rowIndex}`,
           unit: 'checklist_row',
+          // The template this row belongs to: the key a `skipRows` resolution
+          // is written against, so the reviewer can act on the advice the
+          // message gives them ("shorten it, or skip the row").
+          parentKey: template.key,
           rowRef: entry.row.rowRef,
           label: (entry.row.values.description ?? '').slice(0, 80),
           outcome: 'blocked',
@@ -505,6 +509,7 @@ export function computeItpImportDryRun(input: DryRunInput): {
           rows.push({
             key: `row:${row.rowRef.sheet}#${row.rowRef.rowIndex}`,
             unit: 'checklist_row',
+            parentKey: template.key,
             rowRef: row.rowRef,
             label: (row.values.description ?? '').slice(0, 80),
             outcome: 'needs_review',
@@ -605,21 +610,26 @@ export function computeItpImportDryRun(input: DryRunInput): {
     });
   }
 
-  const counts: DryRunCounts = countDryRunRows(rows);
+  // The CTA's number comes off the payload, not off the outcomes (§M10).
+  const ledger = markWillImport(
+    rows,
+    proposed.map((template) => template.key),
+  );
+  const counts: DryRunCounts = countDryRunRows(ledger);
 
   // A batch with unresolved intra-batch twins cannot be applied either —
   // silently importing one of two identically-named ITPs is the kind of error a
   // contractor finds six months later, in an audit.
-  const unresolvedCollisions = rows.some((row) => row.reason === 'slug_collision');
+  const unresolvedCollisions = ledger.some((row) => row.reason === 'slug_collision');
   // Unresolved Milestone rows likewise: applying would write an approval-bearing
   // point as a plain check item — a gate that never gets held.
-  const unresolvedMilestones = rows.some((row) => row.reason === 'milestone_point_type');
+  const unresolvedMilestones = ledger.some((row) => row.reason === 'milestone_point_type');
   const applicable = proposed.length > 0;
 
   return {
     dryRun: {
       counts,
-      rows,
+      rows: ledger,
       unmappedHeaders: unmapped,
       canApply:
         counts.blocked === 0 && !unresolvedCollisions && !unresolvedMilestones && applicable,

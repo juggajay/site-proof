@@ -66,6 +66,7 @@ export function buildReconciliationReport(input: ReconciliationInput): Reconcili
       needsReview: 0,
       ambiguous: 0,
       blocked: 0,
+      willImport: 0,
     },
     entries: rows.map((row) => {
       const createdId = idByKey.get(row.key);
