@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   lotFindMany: vi.fn(),
   holdPointFindMany: vi.fn(),
   checklistItemFindMany: vi.fn(),
+  completionFindMany: vi.fn(),
 }));
 
 vi.mock('./prisma.js', () => ({
@@ -16,6 +17,7 @@ vi.mock('./prisma.js', () => ({
     lot: { findUnique: mocks.lotFindUnique, findMany: mocks.lotFindMany },
     holdPoint: { findMany: mocks.holdPointFindMany },
     iTPChecklistItem: { findMany: mocks.checklistItemFindMany },
+    iTPCompletion: { findMany: mocks.completionFindMany },
   },
 }));
 
@@ -38,6 +40,32 @@ function serveLiveChecklistItems() {
       where.templateId.in.flatMap(
         (templateId) => liveChecklistItemsByTemplateId.get(templateId) ?? [],
       ),
+  );
+}
+
+/**
+ * Completions by ITP instance id, as the database holds them. The conformance
+ * fetch no longer nests `itpInstance.completions` — they arrive through ONE flat
+ * `iTPCompletion.findMany` over the instance ids — so `makeLot` registers its
+ * fixture completions here and this mock serves them, exactly as Postgres would.
+ */
+const completionsByInstanceId = new Map<
+  string,
+  {
+    itpInstanceId: string;
+    checklistItemId: string;
+    status: string;
+    verificationStatus?: string | null;
+  }[]
+>();
+let nextInstanceSeq = 0;
+
+function serveCompletions() {
+  completionsByInstanceId.clear();
+  nextInstanceSeq = 0;
+  mocks.completionFindMany.mockImplementation(
+    async ({ where }: { where: { itpInstanceId: { in: string[] } } }) =>
+      where.itpInstanceId.in.flatMap((id) => completionsByInstanceId.get(id) ?? []),
   );
 }
 
@@ -357,19 +385,27 @@ function makeLot(opts: {
       responsibleParty: item.responsibleParty ?? 'contractor',
     })),
   );
+  // One instance id per fixture lot, so two lots in a batch never share
+  // completions even when they share a template.
+  const instanceId = `instance-${(nextInstanceSeq += 1)}`;
+  completionsByInstanceId.set(
+    instanceId,
+    Object.entries(opts.completionStatuses).map(([checklistItemId, status]) => ({
+      itpInstanceId: instanceId,
+      checklistItemId,
+      status: typeof status === 'string' ? status : status.status,
+      verificationStatus: typeof status === 'string' ? 'none' : status.verificationStatus,
+    })),
+  );
   return {
     id: 'lot-1',
     lotNumber: 'LOT-001',
     status: opts.status ?? 'completed',
     projectId: 'project-1',
     itpInstance: {
+      id: instanceId,
       templateId,
       templateSnapshot: opts.templateSnapshot ?? null,
-      completions: Object.entries(opts.completionStatuses).map(([checklistItemId, status]) => ({
-        checklistItemId,
-        status: typeof status === 'string' ? status : status.status,
-        verificationStatus: typeof status === 'string' ? 'none' : status.verificationStatus,
-      })),
     },
     testResults: (opts.testResults ?? []).map((testResult) => ({
       ...testResult,
@@ -450,6 +486,7 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     // Default: no released hold points (overridden per test as needed)
     mocks.holdPointFindMany.mockResolvedValue([]);
     serveLiveChecklistItems();
+    serveCompletions();
   });
 
   it('loads only conformance fields and filters closed NCRs in the database query', async () => {
@@ -477,11 +514,9 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
           projectId: true,
           itpInstance: {
             select: {
+              id: true,
               templateId: true,
               templateSnapshot: true,
-              completions: {
-                select: { checklistItemId: true, status: true, verificationStatus: true },
-              },
             },
           },
           testResults: {
@@ -873,11 +908,11 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
  */
 describe('computeConformanceResult — pure conformance core (M39)', () => {
   /**
-   * The pure core receives what the FETCH layer hands it: an instance with the
-   * live template items already attached (the legacy fallback path
-   * `attachLegacyChecklistItems` builds) or a parseable `templateSnapshot`. The
-   * conformance query itself no longer hydrates `template.checklistItems`, so
-   * these fixtures attach what `makeLot` registered as the live template.
+   * The pure core receives what the FETCH layer hands it: an instance with its
+   * completions and (on the legacy path) the live template items already
+   * attached — what `hydrateFetchedLots` builds. The conformance query itself
+   * hydrates neither `itpInstance.completions` nor `template.checklistItems`
+   * any more, so these fixtures attach what `makeLot` registered for both.
    */
   function hydratedLot(opts: Parameters<typeof makeLot>[0]) {
     const lot = makeLot(opts);
@@ -885,6 +920,7 @@ describe('computeConformanceResult — pure conformance core (M39)', () => {
       ...lot,
       itpInstance: {
         ...lot.itpInstance,
+        completions: completionsByInstanceId.get(lot.itpInstance.id) ?? [],
         template: {
           checklistItems: liveChecklistItemsByTemplateId.get(lot.itpInstance.templateId) ?? [],
         },
@@ -1071,6 +1107,7 @@ describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Pr
     vi.clearAllMocks();
     mocks.holdPointFindMany.mockResolvedValue([]);
     serveLiveChecklistItems();
+    serveCompletions();
   });
 
   function lotWithId<T extends { id: string; lotNumber: string }>(base: T, id: string): T {
@@ -1099,6 +1136,18 @@ describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Pr
     const result = await checkConformancePrerequisitesBatch(['lot-a', 'lot-b']);
 
     expect(mocks.lotFindMany).toHaveBeenCalledTimes(1);
+    // Completions arrive FLAT: ONE query over every instance in the batch, not
+    // one per lot and not a nested relation Prisma has to re-shape.
+    expect(mocks.completionFindMany).toHaveBeenCalledTimes(1);
+    expect(mocks.completionFindMany).toHaveBeenCalledWith({
+      where: { itpInstanceId: { in: ['instance-1', 'instance-2'] } },
+      select: {
+        itpInstanceId: true,
+        checklistItemId: true,
+        status: true,
+        verificationStatus: true,
+      },
+    });
     // Both lots are legacy (no snapshot), so the live-template fallback runs —
     // ONCE for every template involved, not once per lot.
     expect(mocks.checklistItemFindMany).toHaveBeenCalledTimes(1);
