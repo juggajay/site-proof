@@ -74,6 +74,21 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['itp-holdpoints-tests', 'a GPS fix coarser than 30 m is refused'],
   ['itp-holdpoints-tests', 'a map pick carries no accuracy figure'],
   ['itp-holdpoints-tests', 'CIVOS never derives a sample location'],
+  // Wave E exit item 13 — the automatic chase. Same discipline: written first in
+  // the backend mirror and pinned there against the shipped code. The canary
+  // sentence is the one that must never be softened — the automation is inert
+  // until a project is named, so copy promising it unconditionally is false on
+  // every project today.
+  ['itp-holdpoints-tests', 'sits at Notified until it is released'],
+  ['itp-holdpoints-tests', 'only on projects that have been switched on for it by name'],
+  ['itp-holdpoints-tests', 'one working day before the scheduled release date'],
+  ['itp-holdpoints-tests', 'every two working days while it stays overdue'],
+  ['itp-holdpoints-tests', 'up to three reminders per release request'],
+  ['itp-holdpoints-tests', 'one email per recipient per project per day'],
+  ['itp-holdpoints-tests', 'each with its own live release link'],
+  ['itp-holdpoints-tests', 'It does not show them the other addresses the request went to'],
+  ['itp-holdpoints-tests', 'never shows the email address of the person who requested release'],
+  ['itp-holdpoints-tests', 'There is no CIVOS inbox or queue for them to sign into'],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

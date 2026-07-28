@@ -29,6 +29,19 @@ export interface HelpTopic {
 // `site-map` and `itp-holdpoints-tests`, on the same terms: every sentence is
 // grounded in shipped code (routes/projectTestCoverage.ts,
 // frontend testCoverageData.ts, frontend lib/samplePoint.ts) and pinned below.
+//
+// Wave E (exit item 13) adds the automatic chase to `itp-holdpoints-tests` on
+// the same terms. The gap it closes is sharper than a missing paragraph: Clancy
+// knew the MANUAL hold-point flow well and had no idea an automatic one now
+// exists, so "does CIVOS chase the superintendent for us?" answered as if E1/E2
+// had never shipped. Every sentence is grounded — the cadence and caps in
+// notificationAutomation/holdPointChaseAutomation.ts, the awaiting status in
+// readiness/predicates.ts, the reissuance terminators in chaseCore.ts, the
+// alert in notificationAutomation/systemAutomation.ts, and the public-link
+// disclosure limits in holdpoints/publicReleasePayload.ts + publicBatchRoutes.ts
+// after E.0a — and pinned below. The canary sentence is load-bearing: the
+// automation is inert until a project is named, so copy that promised it
+// unconditionally would be false on every project today.
 export const HELP_TOPICS: readonly HelpTopic[] = [
   {
     slug: 'projects-lots',
@@ -91,6 +104,16 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       'Complete and verify quality items. Record checklist outcomes, upload supporting evidence, and verify test results before relying on them for claim evidence.',
       'Request and release hold points. Request release from the lot, then record release in-app or through the secure public hold point link.',
       'Tips:',
+      '- A hold point waiting on the superintendent sits at Notified until it is released. That is the only status CIVOS treats as awaiting release.',
+      '- CIVOS can chase the superintendent for you, but only on projects that have been switched on for it by name. Everywhere else nothing is sent automatically and you chase manually as before.',
+      '- Where it is switched on, the first reminder goes out one working day before the scheduled release date and then every two working days while it stays overdue, up to three reminders per release request. Requesting release again starts a fresh request with a fresh three.',
+      '- A reminder is one email per recipient per project per day, listing every hold point of yours they owe a decision on, each with its own live release link. They never get a second message that day, however many hold points fall due.',
+      '- Each reminder mints a fresh link because the original one expires. Releasing the hold point, re-requesting it, closing the project, or removing that address from the notification list all stop the reminders.',
+      '- Every automated reminder is written to the audit log, including the ones deliberately not sent.',
+      '- A secure hold point link covers that one hold point only, and it shows the holder the lot, the hold point, the schedule, and the evidence package. It does not show them the other addresses the request went to, and it never shows the email address of the person who requested release — the release record and its PDF name that person or say Site Team.',
+      '- Replies to a hold point email reach the person who requested the release. If that account is gone or inactive it goes to company support, and the email says so rather than putting their name on it.',
+      '- On those same switched-on projects, a hold point still Notified more than a day past its scheduled date raises an internal Hold Point stale alert to the project team, at high severity and critical once it is two days past.',
+      '- Superintendents work entirely from the emailed links. There is no CIVOS inbox or queue for them to sign into and no list of everything they owe you across projects.',
       '- Seeded jurisdictional templates are global and can be copied into a project.',
       '- Assigned the wrong ITP? It can be unassigned from the lot until work is recorded against it.',
       '- Test results count toward conformance once linked to their ITP checklist item and verified.',

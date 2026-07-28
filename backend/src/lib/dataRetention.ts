@@ -10,7 +10,19 @@ export const RETENTION_POLICIES = {
   // Construction records (7 years per Australian standards)
   projectRecords: 7 * 365, // 2555 days
 
-  // Audit trails (7 years for compliance)
+  // Audit trails (7 years for compliance). REPORT-ONLY, and deliberately so:
+  // nothing deletes an audit row. `RetentionPrismaClient` below omits
+  // `auditLog` on purpose, so `applyRetentionPolicies` cannot reach the table
+  // even by accident, and `chaseCore.ts:391` depends on that ("audit rows are
+  // retention-exempt") to resolve a hold point's original requester after every
+  // capability token for it has been purged. The single consumer of this number
+  // is the operator report at `scripts/data-retention.ts:211`/`:224`/`:264`,
+  // which COUNTS rows inside the window and never deletes.
+  //
+  // Wave E.0 §9.3 called this constant dead — a grep scoped to `backend/src`,
+  // which the CLI sits outside. It is read; it just does not authorise a
+  // deletion, and wiring it to one would destroy compliance evidence to fix a
+  // privacy finding that `auditLog.ts`'s ninth redaction pattern already fixes.
   auditLogs: 7 * 365,
 
   // Session/auth data (short-lived)

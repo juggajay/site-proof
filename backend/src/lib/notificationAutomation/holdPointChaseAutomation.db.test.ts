@@ -31,6 +31,12 @@ import {
 } from '../../routes/holdpoints/chaseCore.js';
 import { hashHoldPointReleaseToken } from '../../routes/holdpoints/tokens.js';
 import { processHoldPointChaseReminders } from '../notificationAutomation.js';
+// The failed-send arm needs a transport that rejects, so it calls the job with
+// injected deps rather than the default-deps wrapper above. Same function.
+import {
+  buildHoldPointChaseAutomationDependencies,
+  processHoldPointChaseReminders as runChaseJob,
+} from './holdPointChaseAutomation.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -889,6 +895,65 @@ describe('AT-101 / AT-115 / AT-117 — reach, attribution and audit', () => {
     expect(changes.sendResult).toBe('sent');
     expect(changes.digestSize).toBe(1);
     expect(changes.requesterResolution).toEqual(expect.any(String));
+  });
+
+  it('AT-117: a FAILED send is audited too, and refunds the reservation', async () => {
+    // The other arm of AT-117. `finaliseGroupItems` audits all three outcomes
+    // and refunds the attempt on a transport failure (`[E-j]`) — the refund was
+    // only ever tested on the MANUAL route (actionRoutes.chase.test.ts:245),
+    // never on the job path, so the failed row itself had no test at all.
+    const holdPoint = await createAwaitingHoldPoint({
+      suffix: 'send-failed',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    // The transport rejects. Deliberately NOT a suppression signal — that word
+    // list (`isSuppressionFailure`) routes to 'suppressed', which CONSUMES the
+    // attempt; a transport problem is retryable and must refund it.
+    const result = await runChaseJob(
+      { now: new Date() },
+      {
+        ...buildHoldPointChaseAutomationDependencies(prisma),
+        sendEmail: async () => ({
+          success: false,
+          error: 'connection reset by peer',
+          errorCode: 'transport_error',
+        }),
+      },
+    );
+
+    expect(result.sendFailures).toBe(1);
+    expect(result.digestsSent).toBe(0);
+    expect(result.holdPointsReminded).toBe(0);
+
+    // The audit row exists and says `failed` — the claim #1662's body made and
+    // no test held.
+    const audits = await chaseAudits(holdPoint.id);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.userId).toBeNull();
+    const changes = JSON.parse(audits[0]!.changes!);
+    expect(changes.source).toBe('automation');
+    expect(changes.sendResult).toBe('failed');
+    expect(changes.chaseCount).toBe(1);
+    expect(changes.digestSize).toBe(1);
+
+    // The refund, read back from the row: the reservation is given back, so the
+    // next pass may try again and the daily limit does not lock the recipient
+    // out on a message they never received.
+    const after = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPoint.id } });
+    expect(after.chaseCount).toBe(0);
+    expect(after.lastChasedAt).toBeNull();
+
+    // PROOF OF CATCH: with the SAME fixture and a transport that succeeds, the
+    // attempt is consumed instead — so the zeroes above are the rollback, not an
+    // unreserved hold point.
+    await prisma.auditLog.deleteMany({ where: { entityId: holdPoint.id } });
+    const sent = await processHoldPointChaseReminders({ now: new Date() });
+    expect(sent.digestsSent).toBe(1);
+    const settled = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPoint.id } });
+    expect(settled.chaseCount).toBe(1);
+    expect(settled.lastChasedAt).not.toBeNull();
+    expect(JSON.parse((await chaseAudits(holdPoint.id))[0]!.changes!).sendResult).toBe('sent');
   });
 
   it('AT-109: the recipient never lands in the audit log un-redacted', async () => {

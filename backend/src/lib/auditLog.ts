@@ -24,6 +24,19 @@ const SENSITIVE_AUDIT_KEY_PATTERNS = [
   /^authorization$/i,
   /^credential$/i,
   /^signature$/i,
+  // Wave E.0 §9.3 / §18 row 9c, the ninth pattern. `HP_RELEASE_REQUESTED` wrote
+  // external superintendents' email addresses verbatim into `changes` on both
+  // request paths, and `AuditLog` is the codebase's one indefinite store. This
+  // redacts them at write AND on every historic read, because
+  // `parseAuditLogChanges` re-runs the same sanitiser over rows already on disk.
+  //
+  // Nothing legitimate reads the raw value back: the durable recipient record is
+  // the `HoldPoint.notificationSentTo` COLUMN (`schema.prisma:769`), which the
+  // chase resolvers read; the only consumer of this audit row is
+  // `chaseCore.ts:408`, which selects `userId` alone. The two surfaces that
+  // display `changes` (`routes/auditLog.ts:298`, `projects/auditResponses.ts:24`)
+  // both go through the sanitiser, so they were the leak, not a reader.
+  /^notificationSentTo$/i,
 ];
 
 function isSensitiveAuditKey(key: string): boolean {
