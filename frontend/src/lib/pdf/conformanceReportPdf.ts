@@ -15,6 +15,7 @@ import type {
   ConformanceReportData,
   ITPChecklistItem,
   ITPCompletion,
+  TestResult,
 } from './types';
 
 // The aggregate coverage group key (matches ALL_WORK_TYPES in the map module);
@@ -106,6 +107,29 @@ const FORMAT_CONFIGS: Record<
     specPrefix: 'RD/ST',
   },
 };
+
+/**
+ * A test result only counts once a verifier has signed it off — the same
+ * `status === 'verified'` bar the sufficiency engine, readiness and claims use.
+ */
+function isVerifiedTest(test: TestResult): boolean {
+  return test.status === 'verified';
+}
+
+/**
+ * Verdict printed in the test table. An unverified row prints its true state,
+ * never a pass/fail this document has no authority to assert.
+ */
+function getTestVerdict(test: TestResult): string {
+  if (!isVerifiedTest(test)) {
+    // 'entered' means a result was recorded but not yet verified; every earlier
+    // status (requested / at_lab / results_received) has no result to verify.
+    return test.passFail === 'pass' || test.passFail === 'fail'
+      ? 'Pending Verification'
+      : 'Awaiting Result';
+  }
+  return test.passFail === 'pass' ? 'PASS' : test.passFail === 'fail' ? 'FAIL' : 'Pending';
+}
 
 function isAcceptedItpCompletion(completion: ITPCompletion | undefined): boolean {
   if (!completion) return false;
@@ -340,13 +364,22 @@ export async function generateConformanceReportPDF(
   yPos += 7;
 
   if (data.testResults.length > 0) {
-    const passedTests = data.testResults.filter((t) => t.passFail === 'pass').length;
-    const failedTests = data.testResults.filter((t) => t.passFail === 'fail').length;
+    // Only a VERIFIED result is a result this document may assert. Everywhere
+    // else in the product (sufficiency, readiness, claims) `status === 'verified'`
+    // is the bar; an authority-formatted certificate must not be the one surface
+    // that counts an unverified entry as passed.
+    const passedTests = data.testResults.filter(
+      (t) => isVerifiedTest(t) && t.passFail === 'pass',
+    ).length;
+    const failedTests = data.testResults.filter(
+      (t) => isVerifiedTest(t) && t.passFail === 'fail',
+    ).length;
+    const unverifiedTests = data.testResults.filter((t) => !isVerifiedTest(t)).length;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(
-      `Total Tests: ${data.testResults.length}  |  Passed: ${passedTests}  |  Failed: ${failedTests}`,
+      `Total Tests: ${data.testResults.length}  |  Passed: ${passedTests}  |  Failed: ${failedTests}  |  Unverified: ${unverifiedTests}`,
       margin,
       yPos,
     );
@@ -354,7 +387,9 @@ export async function generateConformanceReportPDF(
 
     // Table header: result analysed against the acceptance limit.
     const testHeaders = ['Test Type', 'Result', 'Spec Limit', 'Verdict', 'Lab Report'];
-    const testColWidths = [38, 30, 42, 22, 38];
+    // Verdict widened (22 -> 28) so 'Pending Verification' (24.7mm at 8pt) fits
+    // on one line; Lab Report gives up the slack (18-char values need ~28mm).
+    const testColWidths = [38, 30, 42, 28, 32];
     doc.setFillColor(240, 240, 240);
     doc.rect(margin, yPos, contentWidth, 7, 'F');
     doc.setFont('helvetica', 'bold');
@@ -384,9 +419,8 @@ export async function generateConformanceReportPDF(
         yPos + 4,
       );
       txPos += testColWidths[2];
-      const verdict =
-        test.passFail === 'pass' ? 'PASS' : test.passFail === 'fail' ? 'FAIL' : 'Pending';
-      if (test.passFail === 'fail') doc.setTextColor(200, 30, 30);
+      const verdict = getTestVerdict(test);
+      if (isVerifiedTest(test) && test.passFail === 'fail') doc.setTextColor(200, 30, 30);
       doc.text(verdict, txPos, yPos + 4);
       doc.setTextColor(0, 0, 0);
       txPos += testColWidths[3];
