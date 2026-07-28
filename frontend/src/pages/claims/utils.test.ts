@@ -16,15 +16,22 @@ import { toLocalDateKey } from './sopaBusinessDays';
 import type { Claim, ConformedLot } from './types';
 
 describe('calendarDaysUntil (M41 SOPA day-floor)', () => {
-  it('counts whole calendar days and is stable across the time of day', () => {
+  it('counts whole calendar days and is stable across the project-timezone day', () => {
     const due = '2026-06-13';
-    // Same calendar day (10 June) at very different times => identical countdown.
-    expect(calendarDaysUntil(due, new Date(2026, 5, 10, 0, 1))).toBe(3);
-    expect(calendarDaysUntil(due, new Date(2026, 5, 10, 23, 59))).toBe(3);
+    // `now` is written as an INSTANT with its Sydney wall time named, because
+    // "the same all day" now means the same across the PROJECT timezone's day
+    // (M4) — not the machine's. These used to be `new Date(2026, 5, 10, ...)`
+    // local-time fixtures, which silently meant a different day off AEST.
+    // June = AEST (UTC+10), no DST.
+    const sydney = (iso: string) => new Date(iso);
+
+    // Same Sydney calendar day (10 June) at very different times => identical countdown.
+    expect(calendarDaysUntil(due, sydney('2026-06-09T14:01:00.000Z'))).toBe(3); // 10 Jun 00:01
+    expect(calendarDaysUntil(due, sydney('2026-06-10T13:59:00.000Z'))).toBe(3); // 10 Jun 23:59
     // Due today => 0 (not -1 just because it's the afternoon).
-    expect(calendarDaysUntil(due, new Date(2026, 5, 13, 15, 0))).toBe(0);
+    expect(calendarDaysUntil(due, sydney('2026-06-13T05:00:00.000Z'))).toBe(0); // 13 Jun 15:00
     // Past the due date => negative whole days.
-    expect(calendarDaysUntil(due, new Date(2026, 5, 15, 9, 0))).toBe(-2);
+    expect(calendarDaysUntil(due, sydney('2026-06-14T23:00:00.000Z'))).toBe(-2); // 15 Jun 09:00
   });
 });
 
