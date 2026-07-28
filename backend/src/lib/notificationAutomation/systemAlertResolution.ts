@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { AWAITING_RELEASE_HOLD_POINT_STATUSES } from '../readiness/predicates.js';
 
 /**
  * Auto-resolution of system alerts whose underlying condition has cleared.
@@ -13,9 +14,20 @@ import type { PrismaClient } from '@prisma/client';
  *   - overdue_ncr     created for NCRs status NOT IN (closed, closed_concession)
  *                     AND dueDate < now  -> resolve when the NCR no longer
  *                     matches (closed, due date pushed/cleared, or deleted).
- *   - stale_hold_point created for hold points status IN (requested, scheduled)
- *                     AND scheduledDate < now - 1 day -> resolve when it no
- *                     longer matches (released/completed, rescheduled, deleted).
+ *   - stale_hold_point created for hold points awaiting an external release
+ *                     decision (AWAITING_RELEASE_HOLD_POINT_STATUSES) AND
+ *                     scheduledDate < now - 1 day -> resolve when it no longer
+ *                     matches (released/completed, rescheduled, deleted, or
+ *                     re-requested into another status). Wave E1 imports the
+ *                     SHARED constant the creator uses, replacing the private
+ *                     copy this file carried: creator and resolver cannot
+ *                     disagree about what "awaiting release" means.
+ *
+ *                     Deliberately NOT horizon-scoped and NOT canary-scoped,
+ *                     unlike creation: an alert that exists must always be able
+ *                     to close, however old its hold point is and whether or not
+ *                     its project is still on the Wave E allowlist. Resolution
+ *                     is a strict shrink of what stays open — it can never storm.
  *   - pending_approval/diary (the retired missing-diary alert) is no longer
  *                     created. This pass unconditionally resolves ANY active
  *                     alert of that type so the standing prod backlog drains
@@ -29,7 +41,6 @@ import type { PrismaClient } from '@prisma/client';
 const RESOLVABLE_TYPES = ['overdue_ncr', 'stale_hold_point', 'pending_approval'];
 const DEFAULT_BATCH_SIZE = 500;
 const NCR_OPEN_STATUS_EXCLUDE = ['closed', 'closed_concession'];
-const STALE_HOLD_POINT_STATUSES = ['requested', 'scheduled'];
 
 type ResolutionPrisma = Pick<PrismaClient, 'nCR' | 'holdPoint' | 'notificationAlert'>;
 
@@ -86,7 +97,7 @@ async function idsStillMatchingHoldPoint(
   const rows = await prisma.holdPoint.findMany({
     where: {
       id: { in: holdPointIds },
-      status: { in: STALE_HOLD_POINT_STATUSES },
+      status: { in: [...AWAITING_RELEASE_HOLD_POINT_STATUSES] },
       scheduledDate: { lt: staleThreshold },
     },
     select: { id: true },

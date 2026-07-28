@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { PENDING_TEST_RESULT_STATUSES } from '../testResultStatus.js';
 import type { NcrRow } from './predicates.js';
 import {
+  AWAITING_RELEASE_HOLD_POINT_STATUSES,
+  holdPointAwaitingRelease,
   holdPointOverdue,
+  holdPointReleaseOverdue,
   holdPointReleased,
   holdPointStagnant,
   holdPointTerminal,
@@ -90,6 +93,59 @@ describe('hold-point predicates', () => {
       for (const status of HOLD_POINT_STATUSES) {
         if ((['pending', 'scheduled', 'requested'] as readonly string[]).includes(status)) continue;
         expect(holdPointStagnant({ status, createdAt: daysAgo(30) }, NOW)).toBe(false);
+      }
+    });
+  });
+
+  // Wave E1 (spec §4.1.2). The predicate the ALERT ENGINE now reads.
+  describe('holdPointAwaitingRelease / holdPointReleaseOverdue', () => {
+    it('awaiting-release is exactly the status the request-release paths write', () => {
+      expect([...AWAITING_RELEASE_HOLD_POINT_STATUSES]).toEqual(['notified']);
+      for (const status of HOLD_POINT_STATUSES) {
+        expect(holdPointAwaitingRelease({ status })).toBe(status === 'notified');
+      }
+    });
+
+    it('overdue only when notified AND the scheduled date is more than a day past', () => {
+      expect(holdPointReleaseOverdue({ status: 'notified', scheduledDate: daysAgo(3) }, NOW)).toBe(
+        true,
+      );
+      // Exactly at the one-day boundary is NOT yet overdue (strict <).
+      expect(holdPointReleaseOverdue({ status: 'notified', scheduledDate: daysAgo(1) }, NOW)).toBe(
+        false,
+      );
+      expect(
+        holdPointReleaseOverdue({ status: 'notified', scheduledDate: daysFromNow(3) }, NOW),
+      ).toBe(false);
+    });
+
+    it('a null scheduled date is never overdue — the production `requested` bucket', () => {
+      // All 9 legacy 'requested' rows in production carry a NULL scheduled_date
+      // (inventory, spec §0.6/§4.1.1): matched by neither predicate, before or
+      // after E1, which is why E1 needed no data migration.
+      expect(holdPointReleaseOverdue({ status: 'notified', scheduledDate: null }, NOW)).toBe(false);
+      expect(holdPointOverdue({ status: 'requested', scheduledDate: null }, NOW)).toBe(false);
+      expect(holdPointReleaseOverdue({ status: 'requested', scheduledDate: null }, NOW)).toBe(
+        false,
+      );
+    });
+
+    it('DIVERGES from holdPointOverdue on the status set, and only there', () => {
+      // This is the whole of E1: the old alert predicate matches nothing the
+      // request-release paths create, and the new one matches exactly it.
+      const notified = { status: 'notified', scheduledDate: daysAgo(3) };
+      expect(holdPointOverdue(notified, NOW)).toBe(false);
+      expect(holdPointReleaseOverdue(notified, NOW)).toBe(true);
+
+      const requested = { status: 'requested', scheduledDate: daysAgo(3) };
+      expect(holdPointOverdue(requested, NOW)).toBe(true);
+      expect(holdPointReleaseOverdue(requested, NOW)).toBe(false);
+
+      // Same date arithmetic on the one status neither accepts.
+      for (const status of ['released', 'completed', 'pending'] as const) {
+        const row = { status, scheduledDate: daysAgo(3) };
+        expect(holdPointOverdue(row, NOW)).toBe(false);
+        expect(holdPointReleaseOverdue(row, NOW)).toBe(false);
       }
     });
   });

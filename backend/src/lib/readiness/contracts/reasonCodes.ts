@@ -212,14 +212,25 @@ export const REASON_CODE_PROVENANCE: Record<
       'systemAutomation overdue-NCR pass (systemAutomation.ts:194-197 — open ∧ dueDate < now)',
   },
   hold_point_overdue: {
-    // NAMING TRAP: the alert this comes from is typed `stale_hold_point`, but
-    // its query (systemAutomation.ts:278-279) is the OVERDUE definition —
-    // status in requested|scheduled ∧ scheduledDate past. That is
-    // `holdPointOverdue`, NOT `holdPointStagnant` (createdAt aging, 7d), which
-    // is what the dashboard widgets labelled "stale" use. A4 decision D2 takes
-    // the scheduled-date semantics.
-    predicate: 'holdPointOverdue',
-    source: 'systemAutomation stale_hold_point pass (systemAutomation.ts:277-279)',
+    // NAMING TRAP, twice over.
+    //
+    // 1. The alert this comes from is typed `stale_hold_point`, but its query
+    //    is the OVERDUE definition — scheduled-date based, not the dashboards'
+    //    createdAt aging (`holdPointStagnant`, 7d). A4 decision D2 takes the
+    //    scheduled-date semantics, and that has not changed.
+    // 2. Until Wave E1 this record named `holdPointOverdue` — and the alert
+    //    engine never imported it. It carried an inline literal of the same two
+    //    statuses (['requested','scheduled']), neither of which any production
+    //    path writes together with a scheduledDate, so the alert could not
+    //    fire. E1 repointed the literal onto `holdPointAwaitingRelease` /
+    //    `AWAITING_RELEASE_HOLD_POINT_STATUSES` (= ['notified'], what the
+    //    request-release paths actually write) and this record with it.
+    //    `holdPointOverdue` still exists and still has two LIVE consumers —
+    //    `statsRoute.ts:89` and `actionAssignments.ts:135` — which are
+    //    dashboards, not the alert engine. Wave E spec §0.3, §4.1.4.
+    predicate: 'holdPointAwaitingRelease',
+    source:
+      'systemAutomation stale_hold_point pass (systemAutomation.ts — status in AWAITING_RELEASE_HOLD_POINT_STATUSES ∧ scheduledDate past, within the 30-day horizon)',
   },
 };
 

@@ -7,6 +7,7 @@ import {
   isDueForProjectTime,
   isWorkingDay,
   parsePositiveInteger,
+  parseProjectIdAllowlist,
   parseTimeOfDay,
 } from './helpers.js';
 import {
@@ -22,6 +23,35 @@ const ORIGINAL_ENV = { ...process.env };
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
+});
+
+/**
+ * E.0 threat-model item 8c, `Mitigate before E1` — the fail-open canary.
+ * `findActiveProjects` reads `projectIds: []` as "no projects" but
+ * `projectIds: undefined` as "every active project", so a parser that returns
+ * undefined for an unset env var turns the canary into an estate-wide scan.
+ * These pin the empty-list result for every shape of "not configured".
+ */
+describe('parseProjectIdAllowlist FAILS CLOSED', () => {
+  it.each([
+    ['unset', undefined],
+    ['null', null],
+    ['empty string', ''],
+    ['whitespace', '   '],
+    ['a single separator', ','],
+    ['separators and whitespace only', ' , , '],
+  ])('%s -> [] (never undefined, never the whole estate)', (_label, value) => {
+    const parsed = parseProjectIdAllowlist(value);
+    expect(parsed).toEqual([]);
+    // The distinction that matters downstream: [] is falsy-length but is NOT
+    // undefined, and `projectIds ? ... : {}` on an empty array still scopes.
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).not.toBeUndefined();
+  });
+
+  it('parses, trims and de-duplicates a real allowlist', () => {
+    expect(parseProjectIdAllowlist(' proj-a , proj-b,proj-a ,, ')).toEqual(['proj-a', 'proj-b']);
+  });
 });
 
 describe('getZonedMinutesOfDay (Australia/Sydney wall-clock)', () => {

@@ -204,7 +204,9 @@ describe('resolveClearedSystemAlerts — stale_hold_point', () => {
   });
 
   it('resolves when the hold point was rescheduled inside the stale window', async () => {
-    const hpId = await createHoldPoint('requested', new Date('2026-06-20T06:00:00.000Z'));
+    // 'notified' so the reschedule is the ONLY reason it resolves — Wave E1
+    // makes 'requested' resolve on the status axis alone.
+    const hpId = await createHoldPoint('notified', new Date('2026-06-20T06:00:00.000Z'));
     const alertId = await createAlert({
       type: 'stale_hold_point',
       entityType: 'holdpoint',
@@ -215,8 +217,10 @@ describe('resolveClearedSystemAlerts — stale_hold_point', () => {
     expect(await isResolved(alertId)).toBe(true);
   });
 
-  it('does NOT resolve while the hold point is still pending past the threshold', async () => {
-    const hpId = await createHoldPoint('requested', stale);
+  it('does NOT resolve while the hold point is still awaiting release past the threshold', async () => {
+    // Wave E1: "still awaiting release" is `notified` — the status the
+    // request-release paths write — not the `requested` this used to assert.
+    const hpId = await createHoldPoint('notified', stale);
     const alertId = await createAlert({
       type: 'stale_hold_point',
       entityType: 'holdpoint',
@@ -225,6 +229,23 @@ describe('resolveClearedSystemAlerts — stale_hold_point', () => {
 
     expect(await runResolve(now)).toBe(0);
     expect(await isResolved(alertId)).toBe(false);
+  });
+
+  it('resolves a pre-E1 alert whose hold point is `requested` — creator and resolver agree', async () => {
+    // The resolver used to carry its own private copy of the status list
+    // (['requested','scheduled']). E1 points both it and the creator at the
+    // shared AWAITING_RELEASE_HOLD_POINT_STATUSES, so an alert the creator
+    // would no longer raise is one the resolver now closes, instead of the two
+    // definitions drifting apart in production.
+    const hpId = await createHoldPoint('requested', stale);
+    const alertId = await createAlert({
+      type: 'stale_hold_point',
+      entityType: 'holdpoint',
+      entityId: hpId,
+    });
+
+    expect(await runResolve(now)).toBe(1);
+    expect(await isResolved(alertId)).toBe(true);
   });
 });
 

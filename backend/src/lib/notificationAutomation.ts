@@ -92,6 +92,7 @@ export type SystemAlertJobResult = {
   staleHoldPointAlerts: number;
   notificationsCreated: number;
   skippedAlerts: number;
+  staleHoldPointsDeferred: number;
   createdAlerts: CreatedSystemAlert[];
 };
 

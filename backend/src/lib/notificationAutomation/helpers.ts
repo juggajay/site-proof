@@ -12,6 +12,35 @@ export function parsePositiveInteger(value: unknown, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * Parse a comma-separated project-id allowlist into a list that FAILS CLOSED.
+ *
+ * E.0 threat-model item 8c, `Mitigate before E1`. `findActiveProjects`
+ * (`notificationAutomation.ts:172-190`) treats `projectIds: []` as "no projects"
+ * but `projectIds: undefined` as "every active project in the estate" — the
+ * spread `...(projectIds ? { id: { in: projectIds } } : {})` contributes nothing
+ * when the value is undefined. That default is correct for the four shipped
+ * jobs and is a fail-OPEN default for a canary: the obvious
+ * `process.env.X?.split(',')` yields `undefined` when the variable is unset,
+ * which is precisely the "inert" case a canary rollout means, and it lands on
+ * the branch that scans the whole estate.
+ *
+ * So this ALWAYS returns an array, never undefined: unset, empty, whitespace
+ * and separator-only values ('', ' ', ',', ' , , ') all return `[]`, and `[]`
+ * means "no projects" everywhere it is consumed. Duplicates are collapsed and
+ * entries are trimmed.
+ */
+export function parseProjectIdAllowlist(value: string | null | undefined): string[] {
+  return [
+    ...new Set(
+      (value ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0),
+    ),
+  ];
+}
+
 export function parseTimeOfDay(value: string | null | undefined): {
   hours: number;
   minutes: number;

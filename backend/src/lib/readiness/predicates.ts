@@ -87,25 +87,88 @@ export function holdPointTerminal(holdPoint: HoldPointStatusRow): boolean {
   return holdPoint.status === 'released' || holdPoint.status === 'completed';
 }
 
-/** Statuses the alert engine treats as awaiting action for overdue detection. */
+/**
+ * Statuses the DASHBOARDS treat as awaiting action for overdue detection.
+ *
+ * NOT the alert engine's — Wave E §0.3 established that the alert engine never
+ * imported this constant at all: it carried an inline literal of the same two
+ * values, and E1 repointed that literal onto
+ * {@link AWAITING_RELEASE_HOLD_POINT_STATUSES}. This constant is deliberately
+ * left at its old value because it has two LIVE production consumers that are
+ * counting screens, not reminders: `statsRoute.ts:9,:89` (`/api/dashboard/stats`)
+ * and `actionAssignments.ts:18,:135` (the My Work `hold_point_overdue` reason
+ * code and the "Review hold point" vs "Release hold point" button label).
+ * Changing it silently moves both. Wave E spec §3.2, §4.1.2.
+ */
 export const OVERDUE_HOLD_POINT_STATUSES = ['requested', 'scheduled'] as const;
 
 /**
- * Alert-engine "stale hold point" signal: awaiting a scheduled inspection whose
+ * Dashboard "overdue hold point" signal: awaiting a scheduled inspection whose
  * scheduled date has passed by more than one day.
  *
- * Definition (map §5 A2#5, `systemAutomation.ts:274-280`):
- * `status in ['requested','scheduled'] && scheduledDate < now - 1 day`.
- * The Prisma `scheduledDate: { lt: threshold }` filter excludes nulls, so a
- * hold point with no scheduledDate is never overdue.
+ * Definition (map §5 A2#5): `status in ['requested','scheduled'] &&
+ * scheduledDate < now - 1 day`. The Prisma `scheduledDate: { lt: threshold }`
+ * filter excludes nulls, so a hold point with no scheduledDate is never overdue.
+ *
+ * `'requested'` has exactly one production writer (`sampleProjectRoute.ts:197`)
+ * and it never sets `scheduledDate`, and `'scheduled'` has no writer at all —
+ * so this predicate matches nothing the current code can create. That is why
+ * the alert engine's copy of it was dead, and why E1 moved the alert engine
+ * onto {@link holdPointReleaseOverdue} instead. See Wave E spec §3.
  *
  * Diverges from {@link holdPointStagnant} on ALL THREE axes: status set,
  * date column (scheduledDate here vs createdAt there) and threshold (1d vs 7d).
+ * Diverges from {@link holdPointReleaseOverdue} on the status set only.
  */
 export function holdPointOverdue(holdPoint: HoldPointSchedulingRow, now: Date): boolean {
   if (!(OVERDUE_HOLD_POINT_STATUSES as readonly string[]).includes(holdPoint.status)) {
     return false;
   }
+  const scheduled = toDate(holdPoint.scheduledDate);
+  if (!scheduled) return false;
+  return scheduled.getTime() < now.getTime() - DAY_MS;
+}
+
+/**
+ * The status a hold point actually carries while it waits on an external
+ * release decision — the one the request-release paths write
+ * (`requestReleaseRoutes.ts:349` batch, `:823` single).
+ *
+ * Wave E `[E-B1]`: this is the SINGLE definition of "awaiting release". The
+ * alert creator (`systemAutomation.ts`) and its auto-resolver
+ * (`systemAlertResolution.ts`) both import it, so they can never disagree
+ * again. Anything that needs "is this hold point still waiting on the super?"
+ * imports this — it does not write a fifth list.
+ */
+export const AWAITING_RELEASE_HOLD_POINT_STATUSES = ['notified'] as const;
+
+/**
+ * Is this hold point waiting on an external release decision?
+ *
+ * Wave E spec §4.1.2. Deliberately status-only: the caller decides whether
+ * "waiting" is also "late" ({@link holdPointReleaseOverdue}).
+ */
+export function holdPointAwaitingRelease(holdPoint: HoldPointStatusRow): boolean {
+  return (AWAITING_RELEASE_HOLD_POINT_STATUSES as readonly string[]).includes(holdPoint.status);
+}
+
+/**
+ * Alert-engine "stale hold point" signal, corrected: awaiting an external
+ * release decision whose scheduled date has passed by more than one day.
+ *
+ * Same shape and the same one-day threshold as {@link holdPointOverdue} — the
+ * ONLY difference is the status set, and that difference is the whole of Wave
+ * E1: `holdPointOverdue`'s statuses are never written together with a
+ * `scheduledDate`, so the alert that used them could not fire (spec §3.1).
+ *
+ * The Prisma `scheduledDate: { lt: threshold }` filter excludes nulls, and so
+ * does this predicate: a hold point with no scheduled date is never overdue,
+ * before or after E1. That is why the 9 legacy `requested` rows in production
+ * (all with a NULL `scheduled_date`) are matched by neither the old predicate
+ * nor the new one, and no data migration was needed.
+ */
+export function holdPointReleaseOverdue(holdPoint: HoldPointSchedulingRow, now: Date): boolean {
+  if (!holdPointAwaitingRelease(holdPoint)) return false;
   const scheduled = toDate(holdPoint.scheduledDate);
   if (!scheduled) return false;
   return scheduled.getTime() < now.getTime() - DAY_MS;
