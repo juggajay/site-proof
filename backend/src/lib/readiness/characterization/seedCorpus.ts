@@ -194,10 +194,13 @@ export const CORPUS: LotSpec[] = [
 // item type. Under F1.1 they all count ZERO — the corpus records today's wrong
 // numbers deliberately, so F1.2's diff IS the behaviour change.
 //
-// They live on a SEPARATE VIC/`vicroads` project, because only a project whose
-// pack resolves can exercise a rule at all. The main corpus project is
-// NSW/TfNSW and resolves NO ruleset (see the note in `seedLot`), and changing
-// that is out of scope.
+// They live on a SEPARATE VIC/`vicroads` project. That was originally because
+// the main NSW/TfNSW project resolved NO ruleset at all; since D14.3 (#1615) it
+// resolves the CONFIRMED `tfnsw-q6.v1`, so the reason is now narrower and still
+// holds: Q6 publishes no `defaultScale`, the corpus records no band, and every
+// main-corpus lot therefore reads `unknown` / `scale_not_selected` and can
+// exercise no COUNT. Only the VIC project, which has a default scale, produces
+// `satisfied` / `insufficient` verdicts. See the note in `seedLot`.
 //
 // Shipped strings, cited:
 //   `AS 1289.5.4.1 or AS 1289.5.7.1, RC 316.00` — seed-itp-templates-vic-earthworks.js:206

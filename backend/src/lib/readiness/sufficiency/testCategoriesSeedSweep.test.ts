@@ -71,10 +71,13 @@ function readSeedItems(filter: RegExp): SeedItem[] {
 }
 
 const VIC_MODULES = /^seed-itp-templates-vic-.*\.js$/;
+/** `seed-itp-templates-nsw.js` plus the six `nsw-*.js` modules. */
+const NSW_MODULES = /^seed-itp-templates-nsw(-.*)?\.js$/;
 const ALL_MODULES = /^seed-itp-templates-.*\.js$/;
 
 // ---------------------------------------------------------------------------
-// AT-58 — the seed-derived fixture, across all EIGHT vic-* modules [F1C-B6].
+// AT-58 — the seed-derived fixture, across all EIGHT vic-* modules [F1C-B6]
+// and, since the H2 fix, all SEVEN nsw modules.
 //
 // Parameterized by seed module, so D14.3 adds the NSW modules as rows rather
 // than a new test (§10).
@@ -152,53 +155,103 @@ const VIC_COMPACTION_SUSPECT_ADJUDICATION: Readonly<Record<string, string>> = {
   'Section 407.27 (in-situ density/air voids)': 'asphalt in-situ density (`asphalt_density`)',
 };
 
+/**
+ * The NSW strings that resolve to `compaction` once the TfNSW method codes are
+ * aliased. BEFORE that fix this list was EMPTY while `tfnsw-q6.v1` shipped
+ * `confirmed` — seven distinct shipped strings, on the two rules of a blocking
+ * pack, all counting zero. That is the whole of H2, and this row is what would
+ * have caught it.
+ */
+const NSW_COMPACTION_EXPECTED: readonly string[] = [
+  'T166',
+  'T173',
+  'T173 (Nuclear) / T166',
+  'T173 (Nuclear) / T166 / T162',
+  'T173 / T106 / T108',
+  'T173 / T162',
+  'T173 / T166',
+];
+
+/** §5.4's adjudication list for the NSW modules — same contract as the VIC one. */
+const NSW_COMPACTION_SUSPECT_ADJUDICATION: Readonly<Record<string, string>> = {
+  'AS 2891.9.2': 'asphalt in-situ density / air voids from cores (`asphalt_density`)',
+  'T120 / T121 / T180':
+    'the three field MOISTURE CONTENT methods (R71 cl. 8.4.5) — a separate characteristic from density',
+  'T120 / T180': 'same: moisture conditioning before compaction, not a density determination',
+};
+
 const SUSPECT_WORDS = /compaction|density|\bddr\b|\bmdd\b/i;
 
-describe('AT-58 the shipped VIC seeders, swept by the resolver', () => {
-  const vicItems = readSeedItems(VIC_MODULES);
-  const withTestType = vicItems.filter((item) => item.testType !== '');
+interface SweepFixture {
+  label: string;
+  modules: RegExp;
+  /** Guards on the FIXTURE: if a seeder is reformatted so the regex stops matching, every assertion below would pass vacuously. */
+  itemCount: number;
+  distinctCount: number;
+  compactionExpected: readonly string[];
+  adjudication: Readonly<Record<string, string>>;
+}
+
+const SWEEPS: readonly SweepFixture[] = [
+  {
+    label: 'VIC (8 modules, 355 items, 264 distinct)',
+    modules: VIC_MODULES,
+    itemCount: 355,
+    distinctCount: 264,
+    compactionExpected: VIC_COMPACTION_EXPECTED,
+    adjudication: VIC_COMPACTION_SUSPECT_ADJUDICATION,
+  },
+  {
+    label: 'NSW (7 modules, 56 items, 35 distinct)',
+    modules: NSW_MODULES,
+    itemCount: 56,
+    distinctCount: 35,
+    compactionExpected: NSW_COMPACTION_EXPECTED,
+    adjudication: NSW_COMPACTION_SUSPECT_ADJUDICATION,
+  },
+];
+
+describe.each(SWEEPS)('AT-58 the shipped $label seeders, swept by the resolver', (sweep) => {
+  const withTestType = readSeedItems(sweep.modules).filter((item) => item.testType !== '');
   const distinct = [...new Set(withTestType.map((item) => item.testType))];
 
-  it('the text sweep recovers the whole VIC corpus (8 modules, 355 items, 264 distinct)', () => {
-    // A guard on the FIXTURE, not the registry: if the seeders are reformatted
-    // so the regex stops matching, the three assertions below would pass
-    // vacuously. This is what stops that.
-    expect(withTestType.length).toBe(355);
-    expect(distinct.length).toBe(264);
+  it('the text sweep recovers the whole corpus', () => {
+    expect(withTestType.length).toBe(sweep.itemCount);
+    expect(distinct.length).toBe(sweep.distinctCount);
   });
 
-  it('the set of VIC strings resolving to `compaction` is EXACTLY the 20 of §5.1', () => {
+  it('the set of strings resolving to `compaction` is EXACTLY the expected set', () => {
     const resolving = distinct
       .filter((value) => resolveTestCategory(value) === 'compaction')
       .sort((a, b) => a.localeCompare(b));
-    expect(resolving).toEqual([...VIC_COMPACTION_EXPECTED].sort((a, b) => a.localeCompare(b)));
+    expect(resolving).toEqual([...sweep.compactionExpected].sort((a, b) => a.localeCompare(b)));
   });
 
-  it('ZERO conflicts across all 264 distinct VIC values', () => {
+  it('ZERO conflicts across every distinct value', () => {
     const conflicts = distinct.filter((value) => classifyTestType(value).conflict);
     expect(conflicts).toEqual([]);
   });
 
-  it('every compaction-flavoured VIC item that resolves to null is adjudicated', () => {
+  it('every compaction-flavoured item that resolves to null is adjudicated', () => {
     const unadjudicated = new Set<string>();
     for (const item of withTestType) {
       const haystack = `${item.testType} ${item.description} ${item.acceptanceCriteria}`;
       if (!SUSPECT_WORDS.test(haystack)) continue;
       if (resolveTestCategory(item.testType) !== null) continue;
-      if (item.testType in VIC_COMPACTION_SUSPECT_ADJUDICATION) continue;
+      if (item.testType in sweep.adjudication) continue;
       unadjudicated.add(`${item.testType}  [${item.file}]  ${item.description}`);
     }
     expect(
       [...unadjudicated],
-      'a compaction-flavoured VIC seed item resolves to null and is not in ' +
-        'VIC_COMPACTION_SUSPECT_ADJUDICATION — classify it (field test => alias, ' +
-        'lab reference => LAB_REFERENCE_TOKENS, other category => adjudicate here)',
+      'a compaction-flavoured seed item resolves to null and is not adjudicated — ' +
+        'classify it (field test => alias, lab reference => LAB_REFERENCE_TOKENS, ' +
+        'other category => adjudicate in this file)',
     ).toEqual([]);
   });
 
   it('the adjudication list carries no stale rows', () => {
     const present = new Set(withTestType.map((item) => item.testType));
-    const stale = Object.keys(VIC_COMPACTION_SUSPECT_ADJUDICATION).filter(
+    const stale = Object.keys(sweep.adjudication).filter(
       (value) => !present.has(value) || resolveTestCategory(value) !== null,
     );
     expect(stale).toEqual([]);
@@ -219,9 +272,19 @@ describe('AT-59 mixed-method items resolve `compaction` today — §17.5s accept
   //
   // Accepted rather than fixed because the exposure is bounded by RULE SCOPE:
   // `vicroads-204.v1/compaction-density` applies only to `earthworks_general`
-  // and `earthworks_subgrade_prep`, and all three strings below live in DRAINAGE
-  // and ASPHALT seeds. Reaching the false count needs a drainage or asphalt
-  // template assigned to an earthworks lot AND a non-density test linked to it.
+  // and `earthworks_subgrade_prep`, and all three VIC strings below live in
+  // DRAINAGE and ASPHALT seeds. Reaching the false count needs a drainage or
+  // asphalt template assigned to an earthworks lot AND a non-density test linked
+  // to it.
+  //
+  // THE H2 FIX WIDENS THIS AND SAYS SO. `T173 / T106 / T108` is a
+  // `seed-itp-templates-nsw.js` EARTHWORKS item (Selected Material Zone lot
+  // conformance), which IS inside `tfnsw-q6.v1/compaction-density`'s scope — so
+  // on NSW the mixed-method ceiling needs no cross-activity template, just a
+  // grading (T106) or liquid-limit (T108) test linked to that one item. Still
+  // accepted rather than fixed, for the §4.3.2 reason: `compaction` remains the
+  // only category with aliases, so the conflict rule cannot fire, and splitting
+  // the string would need a `grading`/`atterberg` alias set no rule consumes.
   //
   // THE PR THAT SHIPS A SECOND CATEGORY MUST REVISIT THIS. At that point these
   // assertions change, and the change is visible rather than inherited.
@@ -230,6 +293,8 @@ describe('AT-59 mixed-method items resolve `compaction` today — §17.5s accept
     ['RC 316.00 / Survey', 'vic-drainage.js:317'],
     ['RC 316.00 / AS 1289 (grading, PI)', 'vic-drainage.js:113'],
     ['RC 316.00 / AS 2891.14.5 / RC 500.05', 'vic-asphalt.js:923'],
+    ['T173 / T106 / T108', 'nsw.js:280 — in `tfnsw-q6.v1` earthworks rule scope'],
+    ['T173 / T162', 'nsw-pavements.js:100'],
   ])('%s resolves to compaction (%s)', (value) => {
     expect(resolveTestCategory(value)).toBe('compaction');
     expect(classifyTestType(value).conflict).toBe(false);

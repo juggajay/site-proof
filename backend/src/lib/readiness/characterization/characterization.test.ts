@@ -27,8 +27,10 @@ app.use(errorHandler);
 let token: string;
 let projectId: string;
 // F1.1: a second, VIC/`vicroads` project so the real-vocabulary lots of
-// VIC_CORPUS resolve the shipped VicRoads pack (`.v2` since D14.2). The main corpus project
-// stays NSW/TfNSW and resolves no ruleset — deliberately unchanged.
+// VIC_CORPUS resolve the shipped VicRoads pack (`.v2` since D14.2). The main
+// corpus project stays NSW/TfNSW — deliberately unchanged — and since D14.3 it
+// resolves `tfnsw-q6.v1`, which publishes no default scale, so its lots record
+// the `scale_not_selected` advisory rather than a count (`seedCorpus.ts`).
 let vicProjectId: string;
 let companyId: string;
 let userId: string;
