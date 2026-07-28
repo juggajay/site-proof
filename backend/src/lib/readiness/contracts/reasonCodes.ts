@@ -228,8 +228,15 @@ export const REASON_CODE_PROVENANCE: Record<
   failed_tests: { predicate: 'testPassing', source: 'claimReview (failed)' },
   passing_tests: { predicate: 'testPassing', source: 'claimReview (positive)' },
   open_major_ncrs: {
-    predicate: 'ncrSeriousIncludingCritical',
-    source: 'claimReview (severity major/critical)',
+    // F0.2b unified NCR seriousness onto `ncrSerious` (severity === 'major').
+    // The emitter at `evidenceReadiness/claimReview.ts:224` filters open NCRs
+    // with `ncrSerious`; this entry named the superseded
+    // `ncrSeriousIncludingCritical` (severity in {major, critical}) until now.
+    // No real-data difference — 'critical' is not a schema severity — but the
+    // provenance registry's whole job is to be authoritative about which
+    // predicate backs a code, so a stale name here is the defect.
+    predicate: 'ncrSerious',
+    source: 'claimReview (open ∧ severity major)',
   },
   open_minor_ncrs: { predicate: 'ncrOpen', source: 'claimReview (open, not serious)' },
   ncrs_closed: { predicate: 'ncrOpen', source: 'claimReview (positive)' },

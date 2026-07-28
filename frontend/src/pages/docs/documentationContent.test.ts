@@ -56,6 +56,16 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['itp-holdpoints-tests', 'Density Ratio, AS 1289.5.4.1, and RC 316.00 all count as compaction'],
   ['itp-holdpoints-tests', 'never count toward the field test number'],
   ['itp-holdpoints-tests', 'means the test type is not recognised, not that the test is unlinked'],
+  // Wave C2 Phase 3 (J5) — the lab-wait honesty caveat. Pinned in the backend
+  // mirror since C2 and, until now, on that side ONLY: this page could have
+  // dropped "CIVOS never assumes a turnaround" and no test would have failed,
+  // even though the header above advertises the pair as guarded. `getLabWait`
+  // (backend sufficiency `constants.ts`) marks a row overdue only from a
+  // USER-supplied expectedResultDate, so a blank date reading as late here
+  // would be a fabricated turnaround.
+  ['itp-holdpoints-tests', 'Send to lab records that a sample went to a laboratory'],
+  ['itp-holdpoints-tests', 'CIVOS never assumes a turnaround'],
+  ['itp-holdpoints-tests', 'a blank date shows elapsed days only and is never flagged late'],
   ['admin', 'off, warn, or block, and is set per project'],
   // Wave C3 exit item 12 — the map's Testing overlay and the sample point.
   // Written first in the backend mirror and pinned there against the shipped
@@ -89,6 +99,33 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['itp-holdpoints-tests', 'It does not show them the other addresses the request went to'],
   ['itp-holdpoints-tests', 'never shows the email address of the person who requested release'],
   ['itp-holdpoints-tests', 'There is no CIVOS inbox or queue for them to sign into'],
+  // The rest of the Wave E chase copy, backend-pinned since E but never mirrored
+  // here. Each is a claim about shipped behaviour that a QM acts on, so a
+  // one-sided pin is not a pin: the canary's other half (nothing is sent
+  // elsewhere), the per-request reset, the daily-limit consequence, the four
+  // terminators, the requester-attribution fallbacks, and the alert severities.
+  ['itp-holdpoints-tests', 'nothing is sent automatically and you chase manually as before'],
+  ['itp-holdpoints-tests', 'Requesting release again starts a fresh request with a fresh three'],
+  ['itp-holdpoints-tests', 'They never get a second message that day'],
+  [
+    'itp-holdpoints-tests',
+    'Releasing the hold point, re-requesting it, closing the project, or removing that address from the notification list all stop the reminders',
+  ],
+  ['itp-holdpoints-tests', 'name that person or say Site Team'],
+  [
+    'itp-holdpoints-tests',
+    'Replies to a hold point email reach the person who requested the release',
+  ],
+  ['itp-holdpoints-tests', 'company support, and the email says so'],
+  [
+    'itp-holdpoints-tests',
+    'raises an internal Hold Point stale alert to the project team, at high severity and critical once it is two days past',
+  ],
+  // The second half of the anti-fabrication line, which NEITHER side pinned:
+  // "no inbox" was guarded, "no cross-project list" was not. E3 was specified,
+  // costed and deferred (`[E-g]`) — no HoldPointReviewQueue model exists — and
+  // a cross-project outstanding list is the exact thing Clancy would invent.
+  ['itp-holdpoints-tests', 'no list of everything they owe you across projects'],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

@@ -89,6 +89,14 @@ describe('reasonCode vocabulary (spec §2/§4)', () => {
     expect(REASON_CODE_PROVENANCE.ncr_overdue.predicate).toBe('ncrOverdue');
   });
 
+  it('open_major_ncrs cites the post-F0.2b unified predicate, not the superseded one', () => {
+    // The emitter (`evidenceReadiness/claimReview.ts`) filters open NCRs with
+    // `ncrSerious` since the F0.2b unification. `ncrSeriousIncludingCritical`
+    // still exists (deprecated) and would pass the "is a real export" test
+    // above, which is exactly why the stale name survived a wave — pin it.
+    expect(REASON_CODE_PROVENANCE.open_major_ncrs.predicate).toBe('ncrSerious');
+  });
+
   it('isReadinessReasonCode accepts vocabulary members and rejects invented codes', () => {
     expect(isReadinessReasonCode('itp_incomplete')).toBe(true);
     expect(isReadinessReasonCode('totally_made_up')).toBe(false);
@@ -272,7 +280,32 @@ function readinessInput(overrides: Partial<LotReadinessInput> = {}): LotReadines
   };
 }
 
-/** Every branch that can emit a `severity: 'blocker'` item, exercised. */
+/**
+ * Every branch that can emit a `severity: 'blocker'` item, exercised.
+ *
+ * ⚠️ ADDING A BLOCKING EMITTER? ADD A FIXTURE INPUT HERE IN THE SAME CHANGE. ⚠️
+ *
+ * This battery is hand-maintained, and AT-138 can only reason about codes it
+ * actually observes. A new hard-blocker branch (`blockingItem(...)`, or
+ * `item({ severity: 'blocker', blocksAction: true })`) whose triggering
+ * condition no fixture below sets emits nothing here, so AT-138(b) will not see
+ * it and will not fail — the emitter-vs-battery blind spot, one indirection out
+ * from the registry-vs-battery drift (b) does catch.
+ *
+ * What the type system already forces, so you do not have to trust this comment
+ * alone: `EvidenceReadinessItem['code']` is `ReadinessReasonCode`, so a new code
+ * is a COMPILE ERROR until it is registered in `READINESS_REASON_CODES` with
+ * provenance. What it does NOT force is that the new branch is REACHED here.
+ * That is this function's job, and only a human does it.
+ *
+ * Deliberately not automated: a static sweep of emitter files for
+ * `blocksAction: true` is a source-parsing heuristic that breaks on any
+ * refactor, and a full-vocabulary "emitted or exempt" ledger would be 28
+ * exemptions of positives/support items — a line devs add reflexively, which is
+ * a guard in name only. AT-138(b)/(c) instead pin both curated hard-blocker
+ * lists against what this battery really emits, so nothing can be CLASSIFIED as
+ * a hard blocker without a fixture that produces it.
+ */
 function emitBatteryItems(): EvidenceReadinessItem[] {
   const base = readinessInput();
   const inputs: LotReadinessInput[] = [
@@ -442,6 +475,19 @@ describe('AT-138 — HANDOVER_BLOCKING_REASON_CODES cannot drift [DH-B5]', () =>
     // `severity: 'blocker'` and reasonCodes.ts records the divergence.
     const unemitted = HANDOVER_BLOCKING_REASON_CODES.filter(
       (code) => !emittedBlockerCodes.has(code),
+    );
+    expect(unemitted).toEqual([]);
+  });
+
+  it('(c2) the out-of-scope classification is battery-backed too — no unemitted exclusions', () => {
+    // (c) proved the in-scope list; without this, the OTHER half of the
+    // classification could grow a code no emitter produces, and (b) would still
+    // pass — an exclusion is only honest if the thing being excluded exists.
+    // Together, (c) + (c2) mean a code cannot be CLASSIFIED as a hard blocker
+    // without a fixture in `emitBatteryItems` that produces it, which is the
+    // registry→battery forcing function the emitter-side comment cannot give.
+    const unemitted = COMMERCIAL_HARD_BLOCKERS_OUT_OF_SCOPE.filter(
+      (code) => !emittedHardBlockerCodes.has(code),
     );
     expect(unemitted).toEqual([]);
   });
