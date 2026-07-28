@@ -140,7 +140,12 @@ describe.skipIf(!enabled)(`§12 — closeout readiness at ${LOT_COUNT} lots`, ()
     // vs 0.6 s, measured). Any database that has been alive long enough to hold
     // 5,000 lots has been analysed; the bench has to be too, or it benchmarks
     // an empty `pg_statistic` rather than the query.
-    await prisma.$executeRawUnsafe('ANALYZE');
+    //
+    // `$executeRaw` as a TAGGED TEMPLATE, never the string-taking variant: this
+    // statement has no inputs, and the tagged form cannot be handed a built
+    // string at all — which is the property CI's unsafe-pattern guard exists to
+    // preserve.
+    await prisma.$executeRaw`ANALYZE`;
   }, 900_000);
 
   afterAll(async () => {
