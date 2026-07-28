@@ -28,6 +28,7 @@ import {
   MAX_CHASES_PER_REQUEST,
   loadHoldPointChaseTargets,
   loadLiveTokenChaseTargets,
+  reserveHoldPointChase,
 } from '../../routes/holdpoints/chaseCore.js';
 import { hashHoldPointReleaseToken } from '../../routes/holdpoints/tokens.js';
 import { processHoldPointChaseReminders } from '../notificationAutomation.js';
@@ -681,7 +682,158 @@ describe('AT-118 / E.0 item 11 — no expired capability is treated as live', ()
   });
 });
 
+// ---------------------------------------------------------------------------
+// The four confirmed findings of the 2026-07-28 deep review
+// (`docs/reviews/fable-deep-review-2026-07-28.md` H3, L1, L6). L2 — the
+// `daysSinceRequest` clamp — is asserted on the manual path in
+// `routes/holdpoints/actionRoutes.chase.test.ts`, which is where the unclamped
+// copy lived.
+
+describe('the chase revokes only what the chase minted', () => {
+  it('H3: a successful digest leaves the superintendent LIVE batch review-room token intact', async () => {
+    const holdPoint = await createAwaitingHoldPoint({
+      suffix: 'batch-room',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    // The review room CIVOS already emailed: a batch, and this hold point's
+    // token inside it. Every public batch route reaches its hold points through
+    // `batch.releaseTokens`, so this row IS the room's membership.
+    const batch = await prisma.holdPointReleaseBatch.create({
+      data: {
+        lotId,
+        recipientEmail: SUPER_EMAIL,
+        recipientName: 'External Superintendent',
+        token: hashHoldPointReleaseToken('d'.repeat(64)),
+        expiresAt: new Date(Date.now() + 2 * DAY_MS),
+      },
+    });
+    const batchToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: holdPoint.id,
+        batchId: batch.id,
+        recipientEmail: SUPER_EMAIL,
+        recipientName: 'External Superintendent',
+        token: hashHoldPointReleaseToken('e'.repeat(64)),
+        expiresAt: new Date(Date.now() + 2 * DAY_MS),
+      },
+    });
+    // A previous chase's own link to the same address — this one SHOULD go, and
+    // its going is what proves the revoker ran at all.
+    const supersededChaseToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: holdPoint.id,
+        recipientEmail: SUPER_EMAIL,
+        recipientName: 'External Superintendent',
+        token: hashHoldPointReleaseToken('f'.repeat(64)),
+        expiresAt: new Date(Date.now() + 2 * DAY_MS),
+      },
+    });
+
+    const result = await processHoldPointChaseReminders({ now: new Date() });
+    expect(result.digestsSent).toBe(1);
+
+    // PROOF OF CATCH: without `batchId: null` in the revoker's where clause this
+    // row is deleted — same `holdPointId`, same `recipientEmail`, `usedAt` null,
+    // different hash — and the room silently drops the hold point.
+    const survivor = await prisma.holdPointReleaseToken.findUnique({
+      where: { id: batchToken.id },
+    });
+    expect(survivor).not.toBeNull();
+    expect(survivor!.batchId).toBe(batch.id);
+
+    const room = await prisma.holdPointReleaseBatch.findUniqueOrThrow({
+      where: { id: batch.id },
+      include: { releaseTokens: true },
+    });
+    expect(room.releaseTokens.map((token) => token.holdPointId)).toContain(holdPoint.id);
+
+    // The revoker DID run: the chase's own superseded link is gone, and exactly
+    // one batch-less token survives — the one this digest delivered.
+    expect(
+      await prisma.holdPointReleaseToken.findUnique({ where: { id: supersededChaseToken.id } }),
+    ).toBeNull();
+    const chaseTokens = await prisma.holdPointReleaseToken.findMany({
+      where: { holdPointId: holdPoint.id, batchId: null },
+    });
+    expect(chaseTokens).toHaveLength(1);
+  });
+
+  it.each([
+    ['failed', { success: false, error: 'connection reset by peer', errorCode: 'transport_error' }],
+    ['suppressed', { success: false, error: 'hard bounce', errorCode: 'bounced' }],
+  ])('L6: a %s digest leaves no orphan release token behind', async (_label, transportResult) => {
+    const holdPoint = await createAwaitingHoldPoint({
+      suffix: `orphan-${_label}`,
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    await runChaseJob(
+      { now: new Date() },
+      {
+        ...buildHoldPointChaseAutomationDependencies(prisma),
+        sendEmail: async () => transportResult,
+      },
+    );
+
+    // The token is minted BEFORE the send, so a digest that never left the
+    // building leaves a live capability nobody was ever told about.
+    expect(await prisma.holdPointReleaseToken.count({ where: { holdPointId: holdPoint.id } })).toBe(
+      0,
+    );
+
+    // PROOF OF CATCH: the same fixture with a working transport DOES leave one
+    // live token — the link the recipient actually received — so the zero
+    // above is the revoke, not a hold point that never minted anything.
+    resetEmailSuppressionForTests();
+    await prisma.holdPoint.update({
+      where: { id: holdPoint.id },
+      data: { chaseCount: 0, lastChasedAt: null },
+    });
+    const sent = await processHoldPointChaseReminders({ now: new Date() });
+    expect(sent.digestsSent).toBe(1);
+    const live = await prisma.holdPointReleaseToken.findMany({
+      where: { holdPointId: holdPoint.id, usedAt: null },
+    });
+    expect(live).toHaveLength(1);
+    expect(live[0]!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+});
+
 describe('AT-114 the reservation is atomic', () => {
+  it('L1: a reservation from generation A does not succeed once a re-request opens generation B', async () => {
+    const generationA = new Date(Date.now() - 5 * DAY_MS);
+    const holdPoint = await createAwaitingHoldPoint({
+      suffix: 'generation-identity',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+      notificationSentAt: generationA,
+    });
+
+    // The re-request, exactly as `requestReleaseRoutes` writes it: a NEWER
+    // `notificationSentAt` with both counters reset in the same transaction.
+    const generationB = new Date(Date.now() - DAY_MS);
+    await prisma.holdPoint.update({
+      where: { id: holdPoint.id },
+      data: { notificationSentAt: generationB, chaseCount: 0, lastChasedAt: null },
+    });
+
+    const stale = await reserveHoldPointChase(holdPoint.id, new Date(), generationA);
+
+    // PROOF OF CATCH: with `gte` this reserved — every other clause passes on a
+    // freshly re-requested row — and the send was billed as chase #1 of a
+    // generation it was never about.
+    expect(stale.reserved).toBe(false);
+    const untouched = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPoint.id } });
+    expect(untouched.chaseCount).toBe(0);
+    expect(untouched.lastChasedAt).toBeNull();
+
+    // The bound is an identity, not a blanket refusal: the CURRENT generation
+    // still reserves.
+    const current = await reserveHoldPointChase(holdPoint.id, new Date(), generationB);
+    expect(current.reserved).toBe(true);
+    expect(current.chaseCount).toBe(1);
+  });
+
   it('two concurrent passes against one hold point send EXACTLY once', async () => {
     const holdPoint = await createAwaitingHoldPoint({
       suffix: 'concurrent',

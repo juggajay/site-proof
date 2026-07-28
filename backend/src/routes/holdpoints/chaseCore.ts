@@ -51,6 +51,21 @@ export const MAX_CHASES_PER_REQUEST = 3;
  */
 export const CHASE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whole days since the release request, clamped at zero, against the INJECTED
+ * clock. One implementation, because the manual chase email and the digest both
+ * print this number into the same sentence and had drifted: the digest clamped
+ * and the manual path did not, so a `notificationSentAt` a few hours in the
+ * future (clock skew, a scheduled-date override) printed "(-1 days ago)" to an
+ * external superintendent. Reading `Date.now()` instead of `now` also made the
+ * line untestable.
+ */
+export function daysSinceRequest(requestedAt: Date, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - requestedAt.getTime()) / DAY_MS));
+}
+
 export type HoldPointChaseTarget = {
   email: string;
   fullName: string | null;
@@ -75,10 +90,18 @@ export type ChaseReservation = {
  * ONE atomic reservation, shared by the route and the job (spec §4.2.2).
  *
  * Every clause is a correct reason not to send, and `count === 1` is the only
- * licence to send. `notificationSentAt: { gte: generationStart }` is the
+ * licence to send. `notificationSentAt: { equals: generationStart }` is the
  * generation bound: `notificationSentAt` is rewritten on every release request
  * (and E2 resets `chaseCount`/`lastChasedAt` in that same transaction), so an
  * in-flight reservation from a superseded generation fails CLOSED.
+ *
+ * It is an IDENTITY, not a floor. `{ gte: … }` was the original shape and it
+ * did not fail closed: a re-request writes a NEWER `notificationSentAt` with
+ * `chaseCount: 0` and `lastChasedAt: null`, so every clause passed and a
+ * reservation carried from the superseded generation succeeded — billed as
+ * chase #1 of a generation it was never about. `notificationSentAt` is
+ * `TIMESTAMP(3)`, so the read-back value round-trips exactly and equality is
+ * safe.
  *
  * `status: { in: AWAITING_RELEASE_HOLD_POINT_STATUSES }` also closes the
  * `completed` gap: the old route guard rejected only `'released'`, so a
@@ -108,7 +131,7 @@ export async function reserveHoldPointChase(
         { lastChasedAt: null },
         { lastChasedAt: { lt: new Date(now.getTime() - CHASE_COOLDOWN_MS) } },
       ],
-      notificationSentAt: { gte: generationStart },
+      notificationSentAt: { equals: generationStart },
     },
     data: { chaseCount: { increment: 1 }, lastChasedAt: now },
   });
@@ -207,6 +230,18 @@ export async function createChaseReleaseTokens(
   });
 }
 
+/**
+ * Revoke the recipient's OTHER live per-hold-point tokens once the fresh one is
+ * delivered — one live capability per recipient per hold point.
+ *
+ * `batchId: null` is load-bearing, not tidiness. A batch review-room token
+ * (`requestReleaseRoutes.ts`, minted with a `batchId`) carries the SAME
+ * `recipientEmail` and is unused, so without this clause a successful chase
+ * digest deleted it — and every public batch route reaches its hold points
+ * through `batch.releaseTokens`, so the superintendent's room silently lost the
+ * chased items and answered 404 for them. A chase must never rewrite an
+ * evidence artefact CIVOS already sent.
+ */
 export async function revokeSupersededChaseReleaseTokens(
   holdPointId: string,
   tokenTarget: HoldPointChaseTarget,
@@ -220,6 +255,7 @@ export async function revokeSupersededChaseReleaseTokens(
       holdPointId,
       recipientEmail: tokenTarget.email,
       usedAt: null,
+      batchId: null,
       token: { not: hashHoldPointReleaseToken(tokenTarget.secureToken) },
     },
   });

@@ -794,7 +794,9 @@ artifact settles it**, ratifying the proposal with one addition:
    route. No other caller.
 2. **For how long.** Bounded by **two** conditions, both of which must hold:
    `chaseCount < MAX_CHASES_PER_REQUEST` **and** the reservation's
-   `notificationSentAt: { gte: currentGenerationStart }` generation bound
+   `notificationSentAt: { equals: currentGenerationStart }` generation bound
+   (corrected from `gte` on 2026-07-28 — deep review L1; a floor admitted the
+   NEXT generation, so the bound was not the bound this row assumes)
    (Rev 2 §4.2.2). Reissuance is therefore bounded per **request generation**,
    not per row lifetime.
 3. **What terminates it** — four events, each of which means the ask that

@@ -167,6 +167,12 @@ describe('hold point chase action route', () => {
         holdPointId: 'hp-1',
         recipientEmail: 'external.super@example.com',
         usedAt: null,
+        // A batch review-room token shares this hold point AND this address, and
+        // the public batch routes reach their hold points through it — the chase
+        // must never delete a room CIVOS already sent. See H3 in
+        // `docs/reviews/fable-deep-review-2026-07-28.md`; the DB-level proof is
+        // in `holdPointChaseAutomation.db.test.ts`.
+        batchId: null,
         token: { not: tokenCreatePayload.data[0].token },
       },
     });
@@ -237,6 +243,7 @@ describe('hold point chase action route', () => {
         holdPointId: 'hp-1',
         recipientEmail: 'external.super@example.com',
         usedAt: null,
+        batchId: null,
         token: { not: tokenCreatePayload.data[0].token },
       },
     });
@@ -260,7 +267,11 @@ describe('hold point chase action route', () => {
       id: 'hp-1',
       status: { in: ['notified'] },
       chaseCount: { lt: 3 },
-      notificationSentAt: { gte: GENERATION_START },
+      // An IDENTITY, not a floor. `gte` admitted a NEWER generation: a
+      // re-request rewrites `notificationSentAt` and resets the counters, so a
+      // reservation carried from the superseded generation passed every clause
+      // (L1 of the 2026-07-28 deep review).
+      notificationSentAt: { equals: GENERATION_START },
     });
     expect(reservation.where.OR).toEqual([
       { lastChasedAt: null },
@@ -304,6 +315,36 @@ describe('hold point chase action route', () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('HP_CHASE_UNAVAILABLE');
     expect(mocks.sendHPChaseEmail).not.toHaveBeenCalled();
+  });
+
+  // L2 of the 2026-07-28 deep review. The digest clamped and this path did not,
+  // and the two numbers land in the same sentence of the same email. Both now
+  // call `daysSinceRequest` in `chaseCore`.
+  it('never prints a negative age for a future-dated request', async () => {
+    const tomorrow = new Date(Date.now() + 36 * 60 * 60 * 1000);
+    mocks.prisma.holdPoint.findUnique.mockResolvedValue({
+      id: 'hp-1',
+      status: 'notified',
+      description: 'Footing inspection',
+      chaseCount: 1,
+      lastChasedAt: null,
+      notificationSentAt: tomorrow,
+      notificationSentTo: 'site-team@example.com',
+      createdAt: GENERATION_START,
+      lot: {
+        id: 'lot-1',
+        lotNumber: 'LOT-1',
+        projectId: 'project-1',
+        project: { id: 'project-1', name: 'Bridge Upgrade', settings: null },
+      },
+    });
+    mocks.prisma.holdPointReleaseToken.findMany.mockResolvedValue([]);
+
+    await request(app).post('/api/holdpoints/hp-1/chase');
+
+    // PROOF OF CATCH: unclamped this is -2 (measured), and the superintendent
+    // reads "awaiting release for -2 days".
+    expect(mocks.sendHPChaseEmail.mock.calls[0][0].daysSinceRequest).toBe(0);
   });
 
   it('threads the resolved requester into "Requested By" and replyTo, never the recipient', async () => {

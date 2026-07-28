@@ -23,16 +23,16 @@ import { logError } from '../serverLogger.js';
 import {
   type HoldPointChaseTarget,
   createChaseReleaseTokens,
+  daysSinceRequest,
   loadLiveTokenChaseTargets,
   reserveHoldPointChase,
   resolveHoldPointRequester,
+  revokeFreshChaseReleaseToken,
   revokeSupersededChaseReleaseTokens,
   rollbackHoldPointChase,
 } from '../../routes/holdpoints/chaseCore.js';
 import { auditAutomatedSend } from './holdPointChaseAudit.js';
 import type { EligibleHoldPoint, RecipientGroup } from './holdPointChaseTypes.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ChaseSendResult = 'sent' | 'failed' | 'suppressed';
 
@@ -162,7 +162,7 @@ export async function sendGroupDigest(
         lotNumber: item.holdPoint.lot.lotNumber,
         holdPointDescription: item.holdPoint.description || 'Hold Point',
         originalRequestDate: formatRequestDate(requestedAt),
-        daysSinceRequest: Math.max(0, Math.floor((now.getTime() - requestedAt.getTime()) / DAY_MS)),
+        daysSinceRequest: daysSinceRequest(requestedAt, now),
         chaseCount: item.chaseCount,
         releaseUrl: secureReleaseUrl,
         evidencePackageUrl: `${secureReleaseUrl}#evidence-package`,
@@ -193,9 +193,17 @@ export async function sendGroupDigest(
 
 /**
  * Settle every reserved item against the group's one send outcome: revoke the
- * superseded tokens on success, refund the attempt on transport failure
- * (`[E-j]`), and audit all three outcomes — a reminder deliberately not sent is
- * an operational fact, and nothing recorded it before (§4.2.7, AT-117).
+ * superseded tokens on success, revoke the UNDELIVERED fresh token otherwise,
+ * refund the attempt on transport failure (`[E-j]`), and audit all three
+ * outcomes — a reminder deliberately not sent is an operational fact, and
+ * nothing recorded it before (§4.2.7, AT-117).
+ *
+ * The fresh token is minted BEFORE the send (`reserveGroupItems`), so on a
+ * failed or suppressed digest its secret was never transmitted to anyone and
+ * the row is a live capability nobody holds. Nothing revoked it, so orphans
+ * accumulated across all three chase attempts — exactly the drift `chaseCore`
+ * exists to prevent, and the manual path already calls
+ * `revokeFreshChaseReleaseToken` on both of its failure arms.
  */
 export async function finaliseGroupItems(
   group: RecipientGroup,
@@ -205,8 +213,11 @@ export async function finaliseGroupItems(
   for (const item of reserved) {
     if (sendResult === 'sent') {
       await revokeSupersededChaseReleaseTokens(item.holdPoint.id, item.target);
-    } else if (sendResult === 'failed') {
-      await rollbackHoldPointChase(item.holdPoint.id, item.previousLastChasedAt);
+    } else {
+      await revokeFreshChaseReleaseToken(item.holdPoint.id, item.target);
+      if (sendResult === 'failed') {
+        await rollbackHoldPointChase(item.holdPoint.id, item.previousLastChasedAt);
+      }
     }
 
     await auditAutomatedSend({

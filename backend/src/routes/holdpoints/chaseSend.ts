@@ -18,12 +18,11 @@ import { buildHoldPointChaseEmail, selectHoldPointChaseRecipients } from './chas
 import {
   buildChaseRecipientUrls,
   type ResolvedChaseRequester,
+  daysSinceRequest,
   loadHoldPointChaseTargets,
   revokeFreshChaseReleaseToken,
   revokeSupersededChaseReleaseTokens,
 } from './chaseCore.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ChaseHoldPoint = {
   id: string;
@@ -82,7 +81,7 @@ export async function sendHoldPointChase(
         day: 'numeric',
       }),
       chaseCount,
-      daysSinceRequest: Math.floor((Date.now() - originalRequestDate.getTime()) / DAY_MS),
+      daysSinceRequest: daysSinceRequest(originalRequestDate, now),
       requestedBy: requester.name,
     };
 
