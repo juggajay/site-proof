@@ -28,35 +28,26 @@
  * What it deliberately does NOT do: reach internal staff. Tier 3 of the shared
  * resolver is off here, because "no reminder to internal staff — that is E1's
  * alert" is an explicit non-goal (spec §4.2.8).
+ *
+ * The per-group half lives in `holdPointChaseAutomationGroup.ts`, extracted for
+ * the same reason E1 extracted `createStaleHoldPointAlerts`.
  */
 
-import { randomBytes, randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 
-import { AuditAction, createAuditLog } from '../auditLog.js';
 import { sendEmail } from '../email.js';
-import { renderHoldPointChaseDigestEmail } from '../email/holdPointChaseDigestTemplate.js';
-import {
-  isEmailSuppressed,
-  isSuppressionFailure,
-  normalizeRecipientEmail,
-  recordEmailSuppression,
-} from '../emailSuppression.js';
+import { isEmailSuppressed, normalizeRecipientEmail } from '../emailSuppression.js';
 import { AWAITING_RELEASE_HOLD_POINT_STATUSES } from '../readiness/predicates.js';
-import { buildFrontendUrl } from '../runtimeConfig.js';
-import { logError, logInfo } from '../serverLogger.js';
-import {
-  type HoldPointChaseTarget,
-  MAX_CHASES_PER_REQUEST,
-  createChaseReleaseTokens,
-  loadLiveTokenChaseTargets,
-  reserveHoldPointChase,
-  resolveHoldPointRequester,
-  revokeSupersededChaseReleaseTokens,
-  rollbackHoldPointChase,
-} from '../../routes/holdpoints/chaseCore.js';
+import { logInfo } from '../serverLogger.js';
+import { MAX_CHASES_PER_REQUEST } from '../../routes/holdpoints/chaseCore.js';
 import { parseNotificationEmailList } from '../../routes/holdpoints/validation.js';
 import { parseProjectIdAllowlist, resolveAppTimeZone } from './helpers.js';
+import {
+  finaliseGroupItems,
+  reserveGroupItems,
+  sendGroupDigest,
+} from './holdPointChaseAutomationGroup.js';
+import type { EligibleHoldPoint, RecipientGroup } from './holdPointChaseTypes.js';
 
 /**
  * The SAME allowlist E1 ships, read the same fail-closed way. Unset, blank or
@@ -203,140 +194,11 @@ export function isReminderDue(
   );
 }
 
-type EligibleHoldPoint = {
-  id: string;
-  description: string | null;
-  status: string;
-  scheduledDate: Date | null;
-  notificationSentAt: Date | null;
-  notificationSentTo: string | null;
-  chaseCount: number;
-  lastChasedAt: Date | null;
-  createdAt: Date;
-  lot: {
-    id: string;
-    lotNumber: string;
-    projectId: string;
-    project: { id: string; name: string; workingDays: string | null };
-  };
-};
-
-type RecipientGroup = {
-  projectId: string;
-  projectName: string;
-  workingDays: string | null;
-  normalizedEmail: string;
-  /** First-seen stored casing — what the address is actually mailed at. */
-  email: string;
-  holdPoints: EligibleHoldPoint[];
-};
-
-function groupByProjectAndRecipient(holdPoints: EligibleHoldPoint[]): RecipientGroup[] {
-  const groups = new Map<string, RecipientGroup>();
-
-  for (const holdPoint of holdPoints) {
-    for (const email of parseNotificationEmailList(holdPoint.notificationSentTo)) {
-      const normalizedEmail = normalizeRecipientEmail(email);
-      if (!normalizedEmail) continue;
-      const key = `${holdPoint.lot.projectId}::${normalizedEmail}`;
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          projectId: holdPoint.lot.projectId,
-          projectName: holdPoint.lot.project.name,
-          workingDays: holdPoint.lot.project.workingDays,
-          normalizedEmail,
-          email: email.trim(),
-          holdPoints: [],
-        };
-        groups.set(key, group);
-      }
-      group.holdPoints.push(holdPoint);
-    }
-  }
-
-  return Array.from(groups.values());
-}
-
-function formatRequestDate(value: Date): string {
-  return value.toLocaleDateString('en-AU', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
-/**
- * Every automated send writes an audit row — including the ones that did NOT
- * send. A reminder deliberately withheld is an operational fact, and nothing
- * recorded it before (§4.2.7, AT-117).
- *
- * `userId` is omitted: the actor is the automation worker, and the audit helper
- * already accepts an absent actor with a nullable, `SetNull` column. The
- * recipient goes under `tokenRecipient` on purpose — that key matches the
- * `/token/i` trap in `sanitizeAuditChanges`, so the address is REDACTED at rest.
- * Renaming it to anything without "token" in it would silently start persisting
- * external recipient emails to a store with no deletion path (E.0 item 9b).
- */
-async function auditAutomatedSend(params: {
-  projectId: string;
-  holdPointId: string;
-  reservationId: string;
-  generation: Date | null;
-  chaseCount: number;
-  tokenRecipient: string;
-  requesterResolution: string;
-  sendResult: 'sent' | 'failed' | 'suppressed';
-  digestSize: number;
-}): Promise<void> {
-  await createAuditLog({
-    projectId: params.projectId,
-    entityType: 'hold_point',
-    entityId: params.holdPointId,
-    action: AuditAction.HP_CHASED,
-    changes: {
-      source: 'automation',
-      reservationId: params.reservationId,
-      generation: params.generation?.toISOString() ?? null,
-      chaseCount: params.chaseCount,
-      tokenRecipient: params.tokenRecipient,
-      requesterResolution: params.requesterResolution,
-      sendResult: params.sendResult,
-      digestSize: params.digestSize,
-    },
-  });
-}
-
-export async function processHoldPointChaseReminders(
-  options: HoldPointChaseJobOptions,
+async function loadEligibleHoldPoints(
+  scopedIds: string[],
   deps: HoldPointChaseAutomationDependencies,
-): Promise<HoldPointChaseAutomationResult> {
-  const now = options.now ?? new Date();
-  const timeZone = resolveAppTimeZone();
-  const result: HoldPointChaseAutomationResult = {
-    canaryProjects: 0,
-    eligibleHoldPoints: 0,
-    recipientGroups: 0,
-    digestsSent: 0,
-    holdPointsReminded: 0,
-    dailyLimitSkipped: 0,
-    suppressedRecipients: 0,
-    sendFailures: 0,
-    deferred: 0,
-  };
-
-  const canary = parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV]);
-  const scopedIds = options.projectIds
-    ? canary.filter((id) => options.projectIds!.includes(id))
-    : canary;
-
-  // FAIL CLOSED. This is the whole deploy story: E2 is inert until the env var
-  // names projects.
-  if (scopedIds.length === 0) return result;
-  result.canaryProjects = scopedIds.length;
-
-  const eligible = (await deps.prisma.holdPoint.findMany({
+): Promise<EligibleHoldPoint[]> {
+  return (await deps.prisma.holdPoint.findMany({
     where: {
       status: { in: [...AWAITING_RELEASE_HOLD_POINT_STATUSES] },
       scheduledDate: { not: null },
@@ -372,7 +234,87 @@ export async function processHoldPointChaseReminders(
     orderBy: [{ scheduledDate: 'asc' }, { id: 'asc' }],
     take: REMINDER_SCAN_TAKE,
   })) as EligibleHoldPoint[];
+}
 
+function groupByProjectAndRecipient(holdPoints: EligibleHoldPoint[]): RecipientGroup[] {
+  const groups = new Map<string, RecipientGroup>();
+
+  for (const holdPoint of holdPoints) {
+    for (const email of parseNotificationEmailList(holdPoint.notificationSentTo)) {
+      const normalizedEmail = normalizeRecipientEmail(email);
+      if (!normalizedEmail) continue;
+      const key = `${holdPoint.lot.projectId}::${normalizedEmail}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          projectId: holdPoint.lot.projectId,
+          projectName: holdPoint.lot.project.name,
+          workingDays: holdPoint.lot.project.workingDays,
+          normalizedEmail,
+          email: email.trim(),
+          holdPoints: [],
+        };
+        groups.set(key, group);
+      }
+      group.holdPoints.push(holdPoint);
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+/**
+ * Control 2 — the daily limit. `lastChasedAt` across EVERY awaiting hold point
+ * this recipient holds on this project is the durable record of when CIVOS last
+ * mailed them about it, so a second digest the same day — whether from a second
+ * hourly pass or from an item that only just became due — is impossible. No new
+ * column, no new table.
+ */
+function isWithinDailyLimit(group: RecipientGroup, now: Date): boolean {
+  const lastRemindedAt = group.holdPoints.reduce<Date | null>(
+    (latest, holdPoint) =>
+      holdPoint.lastChasedAt && (!latest || holdPoint.lastChasedAt > latest)
+        ? holdPoint.lastChasedAt
+        : latest,
+    null,
+  );
+
+  return (
+    lastRemindedAt !== null &&
+    now.getTime() - lastRemindedAt.getTime() <
+      DAY_MS / MAX_REMINDER_EMAILS_PER_RECIPIENT_PER_PROJECT_PER_DAY
+  );
+}
+
+export async function processHoldPointChaseReminders(
+  options: HoldPointChaseJobOptions,
+  deps: HoldPointChaseAutomationDependencies,
+): Promise<HoldPointChaseAutomationResult> {
+  const now = options.now ?? new Date();
+  const timeZone = resolveAppTimeZone();
+  const result: HoldPointChaseAutomationResult = {
+    canaryProjects: 0,
+    eligibleHoldPoints: 0,
+    recipientGroups: 0,
+    digestsSent: 0,
+    holdPointsReminded: 0,
+    dailyLimitSkipped: 0,
+    suppressedRecipients: 0,
+    sendFailures: 0,
+    deferred: 0,
+  };
+
+  const canary = parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV]);
+  const scopedIds = options.projectIds
+    ? canary.filter((id) => options.projectIds!.includes(id))
+    : canary;
+
+  // FAIL CLOSED. This is the whole deploy story: E2 is inert until the env var
+  // names projects.
+  if (scopedIds.length === 0) return result;
+  result.canaryProjects = scopedIds.length;
+
+  const eligible = await loadEligibleHoldPoints(scopedIds, deps);
   result.eligibleHoldPoints = eligible.length;
 
   const groups = groupByProjectAndRecipient(eligible);
@@ -386,23 +328,7 @@ export async function processHoldPointChaseReminders(
       continue;
     }
 
-    // Control 2 — the daily limit. `lastChasedAt` across EVERY awaiting hold
-    // point this recipient holds on this project is the durable record of when
-    // CIVOS last mailed them about it, so a second digest the same day (whether
-    // from a second pass or from an item that only just became due) is
-    // impossible. No new column, no new table.
-    const lastRemindedAt = group.holdPoints.reduce<Date | null>(
-      (latest, holdPoint) =>
-        holdPoint.lastChasedAt && (!latest || holdPoint.lastChasedAt > latest)
-          ? holdPoint.lastChasedAt
-          : latest,
-      null,
-    );
-    if (
-      lastRemindedAt &&
-      now.getTime() - lastRemindedAt.getTime() <
-        DAY_MS / MAX_REMINDER_EMAILS_PER_RECIPIENT_PER_PROJECT_PER_DAY
-    ) {
+    if (isWithinDailyLimit(group, now)) {
       result.dailyLimitSkipped += 1;
       continue;
     }
@@ -415,135 +341,17 @@ export async function processHoldPointChaseReminders(
     if (dueHoldPoints.length === 0) continue;
 
     const suppressed = deps.isSuppressed(group.email);
-
-    type ReservedItem = {
-      holdPoint: EligibleHoldPoint;
-      reservationId: string;
-      chaseCount: number;
-      previousLastChasedAt: Date | null;
-      target: HoldPointChaseTarget;
-      requester: Awaited<ReturnType<typeof resolveHoldPointRequester>>;
-    };
-    const reserved: ReservedItem[] = [];
-
-    for (const holdPoint of dueHoldPoints) {
-      const previousLastChasedAt = holdPoint.lastChasedAt;
-      const reservation = await reserveHoldPointChase(
-        holdPoint.id,
-        now,
-        holdPoint.notificationSentAt,
-      );
-      if (!reservation.reserved) continue;
-
-      const reservationId = randomUUID();
-      const requester = await resolveHoldPointRequester(
-        holdPoint.id,
-        holdPoint.lot.projectId,
-        holdPoint.notificationSentAt,
-      );
-
-      if (suppressed) {
-        // A suppressed send CONSUMES the attempt (`[E-j]`): suppression is a
-        // delivery decision, and retrying a decision is not correct.
-        await auditAutomatedSend({
-          projectId: holdPoint.lot.projectId,
-          holdPointId: holdPoint.id,
-          reservationId,
-          generation: holdPoint.notificationSentAt,
-          chaseCount: reservation.chaseCount,
-          tokenRecipient: group.normalizedEmail,
-          requesterResolution: requester.outcome,
-          sendResult: 'suppressed',
-          digestSize: 0,
-        });
-        continue;
-      }
-
-      // The recipient's display name comes from a LIVE token when one exists
-      // (tier 1); otherwise this is a tier-2 link minted from
-      // `notificationSentTo`, which stores emails without names — so the token
-      // carries no `recipientName`, the identity override does not apply, and
-      // the signer types their own name. Weaker evidence, accepted and stated
-      // (`[E-l]`, spec §7.6).
-      const liveTargets = await loadLiveTokenChaseTargets(holdPoint.id, now);
-      const liveMatch = liveTargets.find(
-        (target) => normalizeRecipientEmail(target.email) === group.normalizedEmail,
-      );
-      const target: HoldPointChaseTarget = {
-        email: group.email,
-        fullName: liveMatch?.fullName ?? null,
-        secureToken: liveMatch?.secureToken ?? randomBytes(32).toString('hex'),
-      };
-      await createChaseReleaseTokens(holdPoint.id, [target]);
-
-      reserved.push({
-        holdPoint,
-        reservationId,
-        chaseCount: reservation.chaseCount,
-        previousLastChasedAt,
-        target,
-        requester,
-      });
-    }
+    const reserved = await reserveGroupItems(group, dueHoldPoints, now, suppressed);
 
     if (suppressed) {
-      if (reserved.length === 0 && dueHoldPoints.length > 0) result.suppressedRecipients += 1;
+      result.suppressedRecipients += 1;
       continue;
     }
     if (reserved.length === 0) continue;
 
-    // Control 1 — ONE email for the whole group. Per-item tokens, per-item
-    // reservations and per-item audit rows are unchanged; only the envelope is
-    // consolidated.
-    const envelope = reserved[0]!;
-    const rendered = renderHoldPointChaseDigestEmail({
-      superintendentName: envelope.target.fullName || 'Superintendent',
-      projectName: group.projectName,
-      requestedBy: envelope.requester.name,
-      requesterIsFallback: envelope.requester.isFallback,
-      holdPoints: reserved.map((item) => {
-        const secureReleaseUrl = buildFrontendUrl(`/hp-release/${item.target.secureToken}`);
-        const requestedAt = item.holdPoint.notificationSentAt ?? item.holdPoint.createdAt;
-        return {
-          lotNumber: item.holdPoint.lot.lotNumber,
-          holdPointDescription: item.holdPoint.description || 'Hold Point',
-          originalRequestDate: formatRequestDate(requestedAt),
-          daysSinceRequest: Math.max(
-            0,
-            Math.floor((now.getTime() - requestedAt.getTime()) / DAY_MS),
-          ),
-          chaseCount: item.chaseCount,
-          releaseUrl: secureReleaseUrl,
-          evidencePackageUrl: `${secureReleaseUrl}#evidence-package`,
-        };
-      }),
-    });
-
-    let sendResult: 'sent' | 'failed' | 'suppressed' = 'failed';
-    let failureDetail: { error?: string; errorCode?: string } = {};
-    try {
-      const emailResult = await deps.sendEmail({
-        to: group.email,
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-        replyTo: envelope.requester.replyTo ?? undefined,
-      });
-      if (emailResult.success) {
-        sendResult = 'sent';
-      } else {
-        failureDetail = { error: emailResult.error, errorCode: emailResult.errorCode };
-        sendResult = isSuppressionFailure(emailResult.error, emailResult.errorCode)
-          ? 'suppressed'
-          : 'failed';
-      }
-    } catch (error) {
-      logError('[HP Chase Automation] Digest send threw:', error);
-      sendResult = 'failed';
-    }
+    const sendResult = await sendGroupDigest(group, reserved, now, deps.sendEmail);
 
     if (sendResult === 'suppressed') {
-      recordEmailSuppression(group.email, failureDetail.errorCode || 'provider_rejected');
       result.suppressedRecipients += 1;
     } else if (sendResult === 'sent') {
       budget -= 1;
@@ -553,27 +361,7 @@ export async function processHoldPointChaseReminders(
       result.sendFailures += 1;
     }
 
-    for (const item of reserved) {
-      if (sendResult === 'sent') {
-        await revokeSupersededChaseReleaseTokens(item.holdPoint.id, item.target);
-      } else if (sendResult === 'failed') {
-        // A failed send does NOT consume an attempt (`[E-j]`, E.0 item 13
-        // clause 2): failure is a transport problem and retrying is correct.
-        await rollbackHoldPointChase(item.holdPoint.id, item.previousLastChasedAt);
-      }
-
-      await auditAutomatedSend({
-        projectId: item.holdPoint.lot.projectId,
-        holdPointId: item.holdPoint.id,
-        reservationId: item.reservationId,
-        generation: item.holdPoint.notificationSentAt,
-        chaseCount: item.chaseCount,
-        tokenRecipient: group.normalizedEmail,
-        requesterResolution: item.requester.outcome,
-        sendResult,
-        digestSize: reserved.length,
-      });
-    }
+    await finaliseGroupItems(group, reserved, sendResult);
   }
 
   if (result.digestsSent > 0 || result.deferred > 0) {

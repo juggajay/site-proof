@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
-import { sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../../lib/email.js';
+import { sendHPReleaseConfirmationEmail } from '../../lib/email.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
@@ -29,17 +29,13 @@ import {
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
 } from './releaseConfirmationEmails.js';
-import { buildHoldPointChaseEmail, selectHoldPointChaseRecipients } from './chaseNotifications.js';
 import {
   MAX_CHASES_PER_REQUEST,
-  buildChaseRecipientUrls,
-  loadHoldPointChaseTargets,
   reserveHoldPointChase,
   resolveHoldPointRequester,
-  revokeFreshChaseReleaseToken,
-  revokeSupersededChaseReleaseTokens,
   rollbackHoldPointChase,
 } from './chaseCore.js';
+import { sendHoldPointChase } from './chaseSend.js';
 import { buildHoldPointChaseResponse, buildHoldPointReleasedResponse } from './actionResponses.js';
 import { holdPointEscalationRouter } from './escalationRoutes.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
@@ -623,80 +619,12 @@ holdPointActionRouter.post(
     );
 
     // Feature #947 - Send HP chase email to superintendent
-    let anySendSucceeded = false;
-    try {
-      const recipientsToNotify = await loadHoldPointChaseTargets(
-        existingHP.id,
-        existingHP.lot.project.id,
-        now,
-        existingHP.notificationSentTo,
-        { allowProjectUserFallback: true, selectRecipients: selectHoldPointChaseRecipients },
-      );
-
-      const loggedInReleaseUrl = buildFrontendUrl(
-        `/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}?tab=itp`,
-      );
-      const loggedInEvidencePackageUrl = buildFrontendUrl(
-        `/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}/evidence-preview?holdPointId=${existingHP.id}`,
-      );
-
-      // Calculate days since original request
-      const originalRequestDate = existingHP.notificationSentAt || existingHP.createdAt;
-      const daysSinceRequest = Math.floor(
-        (Date.now() - originalRequestDate.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const formattedRequestDate = originalRequestDate.toLocaleDateString('en-AU', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-
-      const chaseContext = {
-        projectName: existingHP.lot.project.name,
-        lotNumber: existingHP.lot.lotNumber,
-        holdPointDescription: existingHP.description,
-        originalRequestDate: formattedRequestDate,
-        chaseCount: holdPoint.chaseCount,
-        daysSinceRequest,
-        requestedBy: requester.name,
-      };
-
-      for (const recipient of recipientsToNotify) {
-        const urls = buildChaseRecipientUrls(
-          recipient,
-          loggedInEvidencePackageUrl,
-          loggedInReleaseUrl,
-        );
-
-        try {
-          const emailResult = await sendHPChaseEmail({
-            ...buildHoldPointChaseEmail(
-              { user: { email: recipient.email, fullName: recipient.fullName } },
-              {
-                ...chaseContext,
-                evidencePackageUrl: urls.evidencePackageUrl,
-                releaseUrl: urls.releaseUrl,
-              },
-            ),
-            replyTo: requester.replyTo ?? undefined,
-          });
-
-          if (emailResult.success) {
-            anySendSucceeded = true;
-            await revokeSupersededChaseReleaseTokens(existingHP.id, recipient);
-          } else {
-            await revokeFreshChaseReleaseToken(existingHP.id, recipient);
-          }
-        } catch (emailError) {
-          await revokeFreshChaseReleaseToken(existingHP.id, recipient);
-          logError('[HP Chase] Failed to send chase email:', emailError);
-        }
-      }
-    } catch (emailError) {
-      logError('[HP Chase] Failed to prepare chase email:', emailError);
-      // Don't fail the main request
-    }
+    const anySendSucceeded = await sendHoldPointChase(
+      existingHP,
+      holdPoint.chaseCount,
+      requester,
+      now,
+    );
 
     // §4.2.2 / `[E-j]`: a failed send does not consume an attempt. The manual
     // route refunds the reservation when nothing reached anybody, mirroring the

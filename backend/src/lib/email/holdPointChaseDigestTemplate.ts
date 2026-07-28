@@ -47,6 +47,44 @@ function requesterLine(data: HoldPointChaseDigestTemplateData): string {
     : data.requestedBy;
 }
 
+function renderDigestHtmlItems(items: HoldPointChaseDigestItem[]): string {
+  return items
+    .map((item) => {
+      const safeLotNumber = escapeEmailHtml(item.lotNumber);
+      const safeDescription = escapeEmailHtml(item.holdPointDescription);
+      const safeRequestDate = escapeEmailHtml(item.originalRequestDate);
+      const safeReleaseUrl = escapeEmailHtml(item.releaseUrl);
+      const safeEvidenceUrl = item.evidencePackageUrl
+        ? escapeEmailHtml(item.evidencePackageUrl)
+        : '';
+      return `
+      <div class="message-box">
+        <div class="detail-row"><strong>📍 Lot:</strong> ${safeLotNumber}</div>
+        <div class="detail-row"><strong>🔒 Hold Point:</strong> ${safeDescription}</div>
+        <div class="detail-row"><strong>📅 Originally Requested:</strong> ${safeRequestDate} (${item.daysSinceRequest} days ago)</div>
+        <div style="text-align: center; margin: 15px 0 5px 0;">
+          ${safeEvidenceUrl ? `<a href="${safeEvidenceUrl}" class="button secondary">View Evidence Package</a>` : ''}
+          <a href="${safeReleaseUrl}" class="button">Review &amp; Release</a>
+        </div>
+      </div>`;
+    })
+    .join('\n');
+}
+
+function renderDigestTextItems(items: HoldPointChaseDigestItem[]): string {
+  return items
+    .map(
+      (item) => `
+Lot: ${item.lotNumber}
+Hold Point: ${item.holdPointDescription}
+Originally Requested: ${item.originalRequestDate} (${item.daysSinceRequest} days ago)
+Review & Release: ${item.releaseUrl}${
+        item.evidencePackageUrl ? `\nView evidence package: ${item.evidencePackageUrl}` : ''
+      }`,
+    )
+    .join('\n');
+}
+
 export function renderHoldPointChaseDigestEmail(
   data: HoldPointChaseDigestTemplateData,
 ): RenderedHoldPointEmail {
@@ -76,28 +114,7 @@ export function renderHoldPointChaseDigestEmail(
   const safeRequestedBy = escapeEmailHtml(requesterLine(data));
   const subject = `[CIVOS] REMINDER: ${items.length} Hold Points Awaiting Release - ${sanitizeSupportEmailLine(data.projectName, 'Project')}`;
   const oldest = Math.max(...items.map((item) => item.daysSinceRequest));
-
-  const htmlItems = items
-    .map((item) => {
-      const safeLotNumber = escapeEmailHtml(item.lotNumber);
-      const safeDescription = escapeEmailHtml(item.holdPointDescription);
-      const safeRequestDate = escapeEmailHtml(item.originalRequestDate);
-      const safeReleaseUrl = escapeEmailHtml(item.releaseUrl);
-      const safeEvidenceUrl = item.evidencePackageUrl
-        ? escapeEmailHtml(item.evidencePackageUrl)
-        : '';
-      return `
-      <div class="message-box">
-        <div class="detail-row"><strong>📍 Lot:</strong> ${safeLotNumber}</div>
-        <div class="detail-row"><strong>🔒 Hold Point:</strong> ${safeDescription}</div>
-        <div class="detail-row"><strong>📅 Originally Requested:</strong> ${safeRequestDate} (${item.daysSinceRequest} days ago)</div>
-        <div style="text-align: center; margin: 15px 0 5px 0;">
-          ${safeEvidenceUrl ? `<a href="${safeEvidenceUrl}" class="button secondary">View Evidence Package</a>` : ''}
-          <a href="${safeReleaseUrl}" class="button">Review &amp; Release</a>
-        </div>
-      </div>`;
-    })
-    .join('\n');
+  const htmlItems = renderDigestHtmlItems(items);
 
   const html = `
 <!DOCTYPE html>
@@ -150,18 +167,6 @@ export function renderHoldPointChaseDigestEmail(
 </html>
   `;
 
-  const textItems = items
-    .map(
-      (item) => `
-Lot: ${item.lotNumber}
-Hold Point: ${item.holdPointDescription}
-Originally Requested: ${item.originalRequestDate} (${item.daysSinceRequest} days ago)
-Review & Release: ${item.releaseUrl}${
-        item.evidencePackageUrl ? `\nView evidence package: ${item.evidencePackageUrl}` : ''
-      }`,
-    )
-    .join('\n');
-
   const text = `
 Hi ${data.superintendentName},
 
@@ -171,7 +176,7 @@ The oldest has been waiting ${oldest} days.
 Requested By: ${requesterLine(data)}
 
 HOLD POINTS
------------${textItems}
+-----------${renderDigestTextItems(items)}
 
 Please review and release each hold point, or reply to this email if you require additional information.
 
