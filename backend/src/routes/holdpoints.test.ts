@@ -2494,6 +2494,9 @@ describe('Hold Point Token Release', () => {
         itpChecklistItemId: checklistItemId,
         pointType: 'hold_point',
         status: 'pending',
+        // The bearer below is external@example.com. The second address is
+        // somebody else's, and E.0a says a link bearer must never see it.
+        notificationSentTo: 'external@example.com, other-reviewer@example.com',
       },
     });
     holdPointId = hp.id;
@@ -2551,7 +2554,12 @@ describe('Hold Point Token Release', () => {
     // token payload (PR A).
     expect(res.body.evidencePackage.project.company?.name).toBeTruthy();
     expect(res.body.evidencePackage.holdPoint).toHaveProperty('releaseSignatureUrl');
-    expect(res.body.evidencePackage.holdPoint).toHaveProperty('notificationSentTo');
+    // E.0a (threat model §7.4, item 4a): the recipient list is NOT public.
+    // The bearer's own address is still echoed back in tokenInfo (item 4b),
+    // but no other recipient's address may appear anywhere in the payload.
+    expect(res.body.evidencePackage.holdPoint).not.toHaveProperty('notificationSentTo');
+    expect(JSON.stringify(res.body)).not.toContain('other-reviewer@example.com');
+    expect(res.body.tokenInfo.recipientEmail).toBe('external@example.com');
   });
 
   it('should download only documents scoped to the public evidence package', async () => {
