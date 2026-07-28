@@ -393,7 +393,14 @@ lotQualityRouter.get(
       'ncrs',
     ]);
 
-    const result = await checkConformancePrerequisites(id);
+    // Wave C3 Phase A step 0 `[C3R-B6]`. This call used to supply no client and
+    // no options, so `regimeByRuleId` stayed empty and every rule evaluated at
+    // regime `full` — a DIFFERENT verdict from the one `/readiness` (`:313`)
+    // returns for the same lot at the same instant. "One verdict, everywhere"
+    // was false inside this file. AT-96 pins it.
+    const result = await checkConformancePrerequisites(id, prisma, {
+      regimeFetcher: prismaRegimeStreamFetcher(),
+    });
 
     res.json(result);
   }),

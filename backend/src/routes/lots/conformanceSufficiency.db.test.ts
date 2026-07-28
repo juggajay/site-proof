@@ -22,6 +22,8 @@
 // DB-backed: `Project.testSufficiencyMode` is a real column and the gate reads
 // through Prisma. Local disposable database only (`src/test/databaseSafety.ts`).
 
+import express from 'express';
+import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -31,6 +33,19 @@ import {
 } from '../../lib/conformancePrerequisites.js';
 import { prisma } from '../../lib/prisma.js';
 import { VICROADS_204_V2 } from '../../lib/readiness/sufficiency/rulesets/vicroads-204.v2.js';
+import { errorHandler } from '../../middleware/errorHandler.js';
+import { registerTestUser } from '../../test/routeTestHarness.js';
+import { authRouter } from '../auth.js';
+import { lotsRouter } from '../lots.js';
+
+// Wave C3 Phase A, AT-96. The two ROUTES, not the library — the finding
+// `[C3R-B6]` is that one of them supplies no regime fetcher, and only a request
+// through the route can show that.
+const app = express();
+app.use(express.json());
+app.use('/api/auth', authRouter);
+app.use('/api/lots', lotsRouter);
+app.use(errorHandler);
 
 const tag = `conform-suff-${Date.now()}`;
 
@@ -40,6 +55,10 @@ let projectId: string;
 let shortLotId: string;
 let nswProjectId: string;
 let nswBadScaleLotId: string;
+// C3 AT-96: a token for the two routes, and the checklist item the eligibility
+// fixture's conformed lots attribute their tests to.
+let routeToken: string;
+let checklistItemId: string;
 
 async function setMode(mode: string): Promise<void> {
   await prisma.project.update({ where: { id: projectId }, data: { testSufficiencyMode: mode } });
@@ -102,6 +121,7 @@ beforeAll(async () => {
     },
   });
   shortLotId = lot.id;
+  checklistItemId = item.id;
   await prisma.iTPInstance.create({
     data: {
       lotId: shortLotId,
@@ -150,17 +170,101 @@ beforeAll(async () => {
     },
   });
   nswBadScaleLotId = nswLot.id;
-}, 60_000);
+
+  // ---- C3 AT-96 fixture ---------------------------------------------------
+  // Three consecutive CONFORMING lots in `shortLotId`'s stream (same project +
+  // activitySlug), each with an attributable verified passing test — the
+  // 204.14(c) eligibility trigger. It changes no count `[C1C-6]`; it changes
+  // whether the regime fold RESOLVED, which is precisely what a route with no
+  // fetcher cannot know.
+  for (let i = 0; i < 3; i += 1) {
+    const conformed = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-CONF-${i}`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        activitySlug: 'earthworks_general',
+        status: 'conformed',
+        conformedAt: new Date(Date.parse('2026-01-01T00:00:00.000Z') + i * 60_000),
+        conformedById: userId,
+      },
+    });
+    await prisma.testResult.create({
+      data: {
+        projectId,
+        lotId: conformed.id,
+        itpChecklistItemId: checklistItemId,
+        testType: 'compaction',
+        passFail: 'pass',
+        status: 'verified',
+        enteredById: userId,
+      },
+    });
+  }
+
+  const routeUser = await registerTestUser(app, {
+    emailPrefix: 'conform-suff-route',
+    fullName: 'Conform Sufficiency Route User',
+    companyId,
+    roleInCompany: 'project_manager',
+  });
+  routeToken = routeUser.token;
+  await prisma.projectUser.create({
+    data: { projectId, userId: routeUser.userId, role: 'project_manager', status: 'active' },
+  });
+}, 120_000);
 
 afterAll(async () => {
   await prisma.testResult.deleteMany({ where: { projectId } });
   await prisma.iTPInstance.deleteMany({ where: { lot: { projectId } } });
+  await prisma.projectUser.deleteMany({ where: { projectId } });
   await prisma.lot.deleteMany({ where: { projectId } });
   await prisma.lot.deleteMany({ where: { projectId: nswProjectId } });
   await prisma.iTPTemplate.deleteMany({ where: { projectId } });
   await prisma.project.deleteMany({ where: { id: { in: [projectId, nswProjectId] } } });
+  await prisma.user.deleteMany({ where: { companyId } });
   await prisma.user.deleteMany({ where: { id: userId } });
   await prisma.company.deleteMany({ where: { id: companyId } });
+});
+
+describe('AT-96 `/conform-status` agrees with `/readiness` — including the regime fold', () => {
+  // `[C3R-B6]`. Before Phase A, `qualityRoutes.ts:396` called
+  // `checkConformancePrerequisites(id)` with NO client and NO options, so
+  // `regimeByRuleId` stayed empty and every rule read regime `full`. The lot
+  // page (`:313`) supplied `prismaRegimeStreamFetcher()` and did not.
+  //
+  // Both routes still report `requiredCount: 6` — eligibility never lowers a
+  // count `[C1C-6]` — so a state/count-only assertion would pass on a broken
+  // route. The fold's OBSERVABLE output is `reducedFrequencyEligible` and
+  // `regimeBasis`, and THAT is what fails at `5265a649`. The moment any pack
+  // ships reduced FIGURES, the same defect moves the count too.
+  async function get(path: string) {
+    const res = await request(app).get(path).set('Authorization', `Bearer ${routeToken}`);
+    expect(res.status).toBe(200);
+    return res.body;
+  }
+
+  it('returns the resolved regime, not the un-folded default', async () => {
+    await setMode('warn');
+    const body = await get(`/api/lots/${shortLotId}/conform-status`);
+    const rule = body.sufficiency.rules[0];
+
+    // The half that was already true.
+    expect(body.sufficiency.state).toBe('insufficient');
+    expect(rule.requiredCount).toBe(6);
+    // The half that was not: with no fetcher this is `false` and `regimeBasis`
+    // is absent, because the stream was never read.
+    expect(rule.reducedFrequencyEligible).toBe(true);
+    expect(rule.regimeBasis.lotIds).toHaveLength(3);
+  });
+
+  it('and the lot page says the same thing, in words, for the same lot', async () => {
+    const readiness = await get(`/api/lots/${shortLotId}/readiness`);
+    const titles = JSON.stringify(readiness);
+    expect(titles).toContain('Eligible to request reduced test frequency');
+    expect(titles).toContain('3 consecutive conforming lots recorded');
+  });
 });
 
 describe('the fixture really does resolve a confirmed pack with a real shortfall', () => {

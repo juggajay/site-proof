@@ -25,6 +25,7 @@ import {
   Camera,
   Crosshair,
   ExternalLink,
+  FlaskConical,
   History,
   Image as ImageIcon,
   Layers,
@@ -56,6 +57,13 @@ import { PlanSheetOverlay } from './PlanSheetOverlay';
 import { DrawLotLayer } from './DrawLotLayer';
 import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
 import { HistoryPanel } from './HistoryPanel';
+import { TestCoveragePanel } from './TestCoveragePanel';
+import {
+  getTestCoverageColor,
+  testCoverageByLot,
+  useTestCoverage,
+  TEST_COVERAGE_LEGEND,
+} from './testCoverageData';
 import { useSpatialSearch, type SpatialPhoto } from './spatialSearchData';
 import { historicalStatusByLot, useLotStatusTimeline } from './statusTimelineData';
 import {
@@ -258,14 +266,23 @@ function LotPopup({
 function LotGeometryLayer({
   geometry,
   onViewDetails,
+  fillOverride,
 }: {
   geometry: ProjectLotGeometry;
   onViewDetails: () => void;
+  /**
+   * C3 Phase A `[C3S-g]`. A RESOLVED colour for THIS geometry (never a Map the
+   * child looks itself up in), replacing exactly what `getStatusColor` fed and
+   * nothing else. Note the asymmetry it inherits: `Polygon` uses it as the fill
+   * behind a constant casing, `Polyline` uses it as the STROKE — which is how
+   * status already reaches a linear lot, so the testing colour lands the same way.
+   */
+  fillOverride?: string;
 }) {
   const shape = featureToShape(geometry.geometryWgs84);
   if (!shape) return null;
 
-  const color = getStatusColor(geometry.status);
+  const color = fillOverride ?? getStatusColor(geometry.status);
   const popup = <LotPopup geometry={geometry} onViewDetails={onViewDetails} />;
 
   if (shape.kind === 'polygon') {
@@ -345,7 +362,26 @@ function PhotoPin({ photo, onView }: { photo: SpatialPhoto; onView: (() => void)
   );
 }
 
-function StatusLegend() {
+function StatusLegend({ testing }: { testing: boolean }) {
+  if (testing) {
+    return (
+      <div
+        className="flex flex-wrap items-center gap-3 p-3 border-t bg-muted/20 text-xs"
+        data-testid="testing-legend"
+      >
+        <span className="font-medium">Testing:</span>
+        {TEST_COVERAGE_LEGEND.map(({ state, label }) => (
+          <div key={state} className="flex items-center gap-1">
+            <span
+              className="w-3 h-3 rounded"
+              style={{ backgroundColor: getTestCoverageColor(state) }}
+            />
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-3 p-3 border-t bg-muted/20 text-xs">
       <span className="font-medium">Status:</span>
@@ -560,6 +596,12 @@ export function LotMapView({
     });
   }, [resetPhotoSearch]);
 
+  // C3 Phase A: the testing overlay. Lazy — nothing is fetched until it is
+  // armed. Deliberately NOT in the mutually-exclusive tool set (it is a passive
+  // recolour, like Photos) but it IS in `toggleHistory`'s disarm list below
+  // `[C3R-B5]`: today's verdict must never be painted over a past map.
+  const [testingArmed, setTestingArmed] = useState(false);
+  const testCoverageQuery = useTestCoverage(projectId, testingArmed);
   const [coverageArmed, setCoverageArmed] = useState(false);
   const [coverageSelection, setCoverageSelection] = useState<Record<string, string>>({});
   const [gapFocusBounds, setGapFocusBounds] = useState<[LatLng, LatLng] | null>(null);
@@ -731,6 +773,21 @@ export function LotMapView({
     });
   }, [clearSearch]);
 
+  // The testing overlay is a passive recolour, so it is NOT in the
+  // mutually-exclusive tool set — but its PANEL shares one slot with
+  // Find-by-area's and Coverage's. Arming Testing takes that slot; opening
+  // either of those takes it back (the render guard at the panel). Last opened
+  // wins, and the recolour itself survives either way.
+  const toggleTesting = useCallback(() => {
+    setTestingArmed((on) => {
+      if (on) return false;
+      clearSearch();
+      setCoverageArmed(false);
+      setGapFocusBounds(null);
+      return true;
+    });
+  }, [clearSearch]);
+
   // Draw-lot is mutually exclusive with the find-by-area / coverage tools.
   const armDrawLot = useCallback(() => {
     setDrawLotArmed((armed) => {
@@ -754,6 +811,11 @@ export function LotMapView({
       setGapFocusBounds(null);
       setDrawLotArmed(false);
       setPlansOpen(false);
+      // `[C3R-B5]` The testing overlay's verdict is computed NOW, from today's
+      // verified tests. Painted over a historical map it would be two different
+      // dates in one picture. The reverse is deliberately not wired: History is
+      // the stricter mode and owns the map.
+      setTestingArmed(false);
       setHistoryDateKey(formatDateKey());
       return true;
     });
@@ -887,6 +949,15 @@ export function LotMapView({
     }
     return out;
   }, [filteredGeometries, historicalStatus]);
+
+  // C3 Phase A. lotId → testing verdict, populated ONLY once the fetch has
+  // resolved. In flight or failed it stays empty, so every polygon keeps its
+  // status colour: grey is a verdict ("CIVOS has no rule"), never a loading or
+  // an error state `[C3S-B7]` `[C3R-A13]`.
+  const testCoverageLots = useMemo(
+    () => testCoverageByLot(testingArmed ? testCoverageQuery.data : undefined),
+    [testingArmed, testCoverageQuery.data],
+  );
 
   const earliestKey = timelineQuery.data?.earliest
     ? formatDateKey(new Date(timelineQuery.data.earliest))
@@ -1082,6 +1153,18 @@ export function LotMapView({
                   compact={isMobile}
                   testId="plans-button"
                 />
+                {/* Ninth toolbar item (C3 Phase A). Unavailable in History —
+                    a live verdict has no meaning against a past date. */}
+                {!historyArmed && (
+                  <ToolbarButton
+                    icon={FlaskConical}
+                    label="Testing"
+                    onClick={toggleTesting}
+                    pressed={testingArmed}
+                    compact={isMobile}
+                    testId="testing-button"
+                  />
+                )}
                 <ToolbarButton
                   icon={ImageIcon}
                   label="Photos"
@@ -1227,13 +1310,17 @@ export function LotMapView({
                 );
               })}
 
-              {displayGeometries.map((geometry) => (
-                <LotGeometryLayer
-                  key={geometry.id}
-                  geometry={geometry}
-                  onViewDetails={() => navigate(linkPaths.lot(geometry.lotId))}
-                />
-              ))}
+              {displayGeometries.map((geometry) => {
+                const verdict = testCoverageLots.get(geometry.lotId);
+                return (
+                  <LotGeometryLayer
+                    key={geometry.id}
+                    geometry={geometry}
+                    onViewDetails={() => navigate(linkPaths.lot(geometry.lotId))}
+                    fillOverride={verdict ? getTestCoverageColor(verdict.state) : undefined}
+                  />
+                );
+              })}
 
               {photosArmed &&
                 (photoSearch.data?.photos ?? []).map((photo) => {
@@ -1354,8 +1441,22 @@ export function LotMapView({
                 onRetry={() => coverageQuery.refetch()}
               />
             )}
+            {testingArmed && !coverageArmed && !searchBounds && (
+              <TestCoveragePanel
+                lots={testCoverageQuery.data?.lots ?? []}
+                lotsWithoutGeometry={testCoverageQuery.data?.lotsWithoutGeometry ?? 0}
+                isLoading={testCoverageQuery.isLoading}
+                error={testCoverageQuery.error}
+                isMobile={isMobile}
+                updatedAt={testCoverageQuery.dataUpdatedAt}
+                isFetching={testCoverageQuery.isFetching}
+                onOpenLot={(lotId) => navigate(linkPaths.lot(lotId))}
+                onClear={toggleTesting}
+                onRefresh={() => testCoverageQuery.refetch()}
+              />
+            )}
           </div>
-          <StatusLegend />
+          <StatusLegend testing={testingArmed && testCoverageLots.size > 0} />
 
           {pendingDraw && (
             <AssignDrawnLotDialog
