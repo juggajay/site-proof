@@ -8,6 +8,7 @@ import { checkProjectAccess } from '../../lib/projectAccess.js';
 import { isSupabaseConfigured } from '../../lib/supabase.js';
 import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
 import { buildDocumentResponse } from '../documentResponses.js';
+import { isUniqueConstraintOn } from '../ncrs/ncrCoreValidation.js';
 import {
   attachDocumentToItpCompletion,
   resolveItpEvidenceAttachmentTarget,
@@ -162,8 +163,19 @@ function createUploadDocumentBodySchema({
     // never fail validation.
     entityType: optionalFormStringSchema('entityType', maxDocumentTypeLength),
     entityId: optionalFormStringSchema('entityId', maxDocumentIdLength),
+    // H5: opaque client idempotency key — the offline photo queue's own local
+    // photo id. A retry after a dropped connection returns the Document the
+    // first attempt created instead of uploading the same photo twice.
+    requestKey: optionalFormStringSchema('requestKey', maxDocumentIdLength),
   });
 }
+
+// The relations buildDocumentResponse reads. Shared so an H5 replay returns
+// the same JSON shape as the original upload.
+const DOCUMENT_UPLOAD_INCLUDE = {
+  lot: { select: { id: true, lotNumber: true } },
+  uploadedBy: { select: { id: true, fullName: true, email: true } },
+};
 
 export function createDocumentUploadRouter({
   prisma,
@@ -228,7 +240,16 @@ export function createDocumentUploadRouter({
         capturedAt,
         entityType,
         entityId,
+        requestKey,
       } = bodyParse.data;
+
+      const findDocumentByRequestKey = async () =>
+        requestKey
+          ? prisma.document.findFirst({
+              where: { projectId, requestKey },
+              include: DOCUMENT_UPLOAD_INCLUDE,
+            })
+          : null;
 
       const hasAccess = await checkProjectAccess(userId, projectId);
       if (!hasAccess) {
@@ -246,6 +267,19 @@ export function createDocumentUploadRouter({
       } catch (error) {
         cleanupUploadedFile(uploadedFile);
         throw error;
+      }
+
+      // H5 — offline-retry idempotency. The queue retries an upload whose POST
+      // committed but whose response never arrived; answering from the existing
+      // Document here, BEFORE the file is stored, is what stops a duplicate
+      // photo (and a duplicate storage object). This supersedes the
+      // serverDocumentId re-upload guard below, which is written only after the
+      // response body is read and so never fires on a dropped connection.
+      const alreadyUploaded = await findDocumentByRequestKey();
+      if (alreadyUploaded) {
+        cleanupUploadedFile(uploadedFile);
+        res.status(201).json(buildDocumentResponse(alreadyUploaded));
+        return;
       }
 
       // ITP evidence linkage (offline photo pipeline): resolve + authorize the
@@ -310,11 +344,9 @@ export function createDocumentUploadRouter({
             aiClassification: photoMetadata.deviceInfo
               ? JSON.stringify({ deviceInfo: photoMetadata.deviceInfo })
               : null,
+            requestKey,
           },
-          include: {
-            lot: { select: { id: true, lotNumber: true } },
-            uploadedBy: { select: { id: true, fullName: true, email: true } },
-          },
+          include: DOCUMENT_UPLOAD_INCLUDE,
         });
 
         createdDocumentId = document.id;
@@ -347,6 +379,18 @@ export function createDocumentUploadRouter({
           await prisma.document.deleteMany({ where: { id: createdDocumentId } });
         }
         await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
+
+        // Lost a same-requestKey race (two retries in flight at once): the
+        // winner's document is the answer, not an error. The file this attempt
+        // stored has just been cleaned up above.
+        if (isUniqueConstraintOn(error, ['projectId', 'requestKey'])) {
+          const winner = await findDocumentByRequestKey();
+          if (winner) {
+            res.status(201).json(buildDocumentResponse(winner));
+            return;
+          }
+        }
+
         throw error;
       }
     }),

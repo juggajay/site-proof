@@ -21,7 +21,12 @@ import {
   assertProjectAllowsWrite,
 } from '../../lib/projectAccess.js';
 import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js';
-import { createNcrSchema, parseOptionalNcrDueDate, updateNcrSchema } from './ncrCoreValidation.js';
+import {
+  createNcrSchema,
+  isUniqueConstraintOn,
+  parseOptionalNcrDueDate,
+  updateNcrSchema,
+} from './ncrCoreValidation.js';
 import { createNcrWithAllocatedNumber } from './ncrNumberAllocation.js';
 import { ncrListRouter } from './ncrListRoute.js';
 import { assertNcrLinkableLots } from './ncrLotStatus.js';
@@ -33,6 +38,43 @@ import {
 } from './ncrNotifications.js';
 
 export const ncrCoreRouter = Router();
+
+// The relations POST /api/ncrs answers with. Shared so an H5 replay (see
+// findNcrByRequestKey) returns byte-identical JSON to the original create.
+const NCR_CREATE_INCLUDE = {
+  project: { select: { name: true } },
+  raisedBy: { select: { fullName: true, email: true } },
+  responsibleSubcontractor: { select: { id: true, companyName: true } },
+  linkedTestResult: {
+    select: {
+      id: true,
+      testType: true,
+      testRequestNumber: true,
+      passFail: true,
+      status: true,
+    },
+  },
+  ncrLots: {
+    include: {
+      lot: { select: { lotNumber: true } },
+    },
+  },
+} satisfies Prisma.NCRInclude;
+
+type CreatedNcr = Prisma.NCRGetPayload<{ include: typeof NCR_CREATE_INCLUDE }>;
+
+// H5 idempotency: the NCR a client already committed under this key, if any.
+// Backed by the @@unique([projectId, requestKey]) index, so a pre-check miss
+// followed by a losing insert still converges on the winner's row.
+async function findNcrByRequestKey(
+  projectId: string,
+  requestKey: string,
+): Promise<CreatedNcr | null> {
+  return prisma.nCR.findFirst({
+    where: { projectId, requestKey },
+    include: NCR_CREATE_INCLUDE,
+  });
+}
 
 function addNcrUpdateAuditChange(
   changes: Record<string, unknown>,
@@ -220,6 +262,7 @@ ncrCoreRouter.post(
       linkedTestResultId,
       dueDate,
       lotIds,
+      requestKey,
     } = validation.data;
 
     await requireActiveProjectUser(
@@ -243,61 +286,77 @@ ncrCoreRouter.post(
     // Major NCRs require QM approval to close and client notification
     const isMajor = severity === 'major';
 
-    const ncr = await createNcrWithAllocatedNumber(projectId, async (tx, ncrNumber) => {
-      const createdNcr = await tx.nCR.create({
-        data: {
-          projectId,
-          ncrNumber,
-          description,
-          specificationReference,
-          category,
-          severity: severity || 'minor',
-          linkedTestResultId: linkedFailedTestResultId,
-          qmApprovalRequired: isMajor,
-          clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
-          raisedById: user.userId,
-          responsibleUserId,
-          responsibleSubcontractorId,
-          dueDate: parsedDueDate,
-          ncrLots: ncrLotIds.length
-            ? {
-                create: ncrLotIds.map((lotId: string) => ({
-                  lotId,
-                })),
-              }
-            : undefined,
-        },
-        include: {
-          project: { select: { name: true } },
-          raisedBy: { select: { fullName: true, email: true } },
-          responsibleSubcontractor: { select: { id: true, companyName: true } },
-          linkedTestResult: {
-            select: {
-              id: true,
-              testType: true,
-              testRequestNumber: true,
-              passFail: true,
-              status: true,
-            },
-          },
-          ncrLots: {
-            include: {
-              lot: { select: { lotNumber: true } },
-            },
-          },
-        },
-      });
+    // H5 — offline-retry idempotency. A queued NCR whose POST committed but
+    // whose response never arrived is retried by the sync worker with the SAME
+    // requestKey; without this it created a second, identical NCR. The
+    // pre-check answers the retry; the unique index + P2002 branch below covers
+    // two retries racing each other.
+    let ncr = requestKey ? await findNcrByRequestKey(projectId, requestKey) : null;
+    let replayed = ncr !== null;
 
-      // Update affected lots status in the same transaction as the NCR record.
-      if (ncrLotIds.length) {
-        await tx.lot.updateMany({
-          where: { id: { in: ncrLotIds }, projectId, status: { notIn: ['conformed', 'claimed'] } },
-          data: { status: 'ncr_raised' },
+    if (!ncr) {
+      try {
+        ncr = await createNcrWithAllocatedNumber(projectId, async (tx, ncrNumber) => {
+          const createdNcr = await tx.nCR.create({
+            data: {
+              projectId,
+              ncrNumber,
+              description,
+              specificationReference,
+              category,
+              severity: severity || 'minor',
+              linkedTestResultId: linkedFailedTestResultId,
+              qmApprovalRequired: isMajor,
+              clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
+              raisedById: user.userId,
+              responsibleUserId,
+              responsibleSubcontractorId,
+              dueDate: parsedDueDate,
+              requestKey,
+              ncrLots: ncrLotIds.length
+                ? {
+                    create: ncrLotIds.map((lotId: string) => ({
+                      lotId,
+                    })),
+                  }
+                : undefined,
+            },
+            include: NCR_CREATE_INCLUDE,
+          });
+
+          // Update affected lots status in the same transaction as the NCR record.
+          if (ncrLotIds.length) {
+            await tx.lot.updateMany({
+              where: {
+                id: { in: ncrLotIds },
+                projectId,
+                status: { notIn: ['conformed', 'claimed'] },
+              },
+              data: { status: 'ncr_raised' },
+            });
+          }
+
+          return createdNcr;
         });
+      } catch (error) {
+        if (!requestKey || !isUniqueConstraintOn(error, ['projectId', 'requestKey'])) {
+          throw error;
+        }
+        // Lost a same-key race: the winner's NCR is the answer, not an error.
+        ncr = await findNcrByRequestKey(projectId, requestKey);
+        if (!ncr) {
+          throw error;
+        }
+        replayed = true;
       }
+    }
 
-      return createdNcr;
-    });
+    // A replay must not re-run the create's side effects — the original request
+    // already wrote the audit row, the notifications and the webhook event.
+    if (replayed) {
+      res.status(201).json(buildNcrResponse(ncr));
+      return;
+    }
 
     await createAuditLog({
       projectId,

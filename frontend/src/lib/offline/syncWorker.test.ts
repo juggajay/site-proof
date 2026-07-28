@@ -480,6 +480,8 @@ describe('syncSingleItem — ncr_create', () => {
       projectId: 'proj-1',
       description: 'Cracked kerb',
       category: 'general',
+      // H5: the queued placeholder id doubles as the idempotency key.
+      requestKey: 'offline-ncr-abc',
       lotIds: ['lot-1'],
     });
     // The queued placeholder id is rewritten to the real NCR id so the photo
@@ -781,6 +783,7 @@ describe('syncSingleItem — delivery_save / event_save (diary quick-add offline
         unit: 't',
         lotId: 'lot-1',
         notes: 'tipped at CH200',
+        requestKey: 'del-1',
       }),
     });
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(81);
@@ -867,6 +870,7 @@ describe('syncSingleItem — delivery_save / event_save (diary quick-add offline
         description: 'Council walkover',
         notes: 'no issues raised',
         lotId: 'lot-2',
+        requestKey: 'evt-1',
       }),
     });
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(82);
@@ -1644,5 +1648,141 @@ describe('syncSingleItem — unknown-type GC (invariant 8)', () => {
     expect(result).toEqual({ status: 'handled' });
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
     expect(devWarnMock).not.toHaveBeenCalled();
+  });
+});
+
+// H5 — the commit-then-connection-drop retry.
+//
+// The failure the review found: the request lands, the server commits, the
+// connection drops before the response, `authFetch` throws, `runSyncStep`
+// error-marks the item and LEAVES IT QUEUED, and the 60s auto-retry POSTs the
+// same body again. The client can never detect this from its own state (it
+// never saw a response), so the only fix is that both attempts carry the same
+// idempotency key for the server to dedupe on.
+//
+// Each test below drops the first attempt exactly that way, retries, and pins
+// the invariant the server-side dedupe depends on: SAME key, both attempts.
+describe('syncSingleItem — H5 offline-retry idempotency keys', () => {
+  const droppedConnection = () => new TypeError('Failed to fetch');
+
+  function jsonRequestKeys(): unknown[] {
+    return authFetchMock.mock.calls.map(([, options]) => JSON.parse(options.body).requestKey);
+  }
+
+  it('ncr_create sends the queued placeholder id as requestKey on the commit AND the retry', async () => {
+    const data = {
+      ncrId: 'offline-ncr-stable',
+      projectId: 'proj-1',
+      description: 'Cracked kerb',
+      category: 'general',
+    };
+    // Attempt 1: the server commits, then the radio drops before the 201.
+    authFetchMock.mockRejectedValueOnce(droppedConnection());
+
+    const dropped = await syncSingleItem(queueItem({ id: 21, type: 'ncr_create', data }));
+
+    // The precondition for the duplicate: errored but still queued.
+    expect(dropped).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'Failed to fetch');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+
+    // Attempt 2: the 60s auto-retry, same queue item.
+    authFetchMock.mockResolvedValueOnce(okJson({ ncr: { id: 'ncr-server-1' } }));
+    const retried = await syncSingleItem(queueItem({ id: 21, type: 'ncr_create', data }));
+
+    expect(retried).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledTimes(2);
+    expect(jsonRequestKeys()).toEqual(['offline-ncr-stable', 'offline-ncr-stable']);
+  });
+
+  it('delivery_save sends the queued delivery id as requestKey on the commit AND the retry', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue({
+      id: 'del-stable',
+      diaryId: 'server-d-1',
+      description: '20t road base',
+    });
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockRejectedValueOnce(droppedConnection());
+
+    const dropped = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-stable' } }),
+    );
+
+    expect(dropped).toEqual({ status: 'handled' });
+    expect(markDeliverySyncErrorMock).toHaveBeenCalledWith('del-stable');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+
+    authFetchMock.mockResolvedValueOnce(okJson({ ok: true }));
+    const retried = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-stable' } }),
+    );
+
+    expect(retried).toEqual({ status: 'synced' });
+    expect(jsonRequestKeys()).toEqual(['del-stable', 'del-stable']);
+  });
+
+  it('event_save sends the queued event id as requestKey on the commit AND the retry', async () => {
+    diaryEventsGetMock.mockResolvedValue({
+      id: 'evt-stable',
+      diaryId: 'server-d-1',
+      eventType: 'visitor',
+      description: 'Council walkover',
+    });
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockRejectedValueOnce(droppedConnection());
+
+    const dropped = await syncSingleItem(
+      queueItem({ id: 82, type: 'event_save', data: { eventId: 'evt-stable' } }),
+    );
+
+    expect(dropped).toEqual({ status: 'handled' });
+    expect(markEventSyncErrorMock).toHaveBeenCalledWith('evt-stable');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+
+    authFetchMock.mockResolvedValueOnce(okJson({ ok: true }));
+    const retried = await syncSingleItem(
+      queueItem({ id: 82, type: 'event_save', data: { eventId: 'evt-stable' } }),
+    );
+
+    expect(retried).toEqual({ status: 'synced' });
+    expect(jsonRequestKeys()).toEqual(['evt-stable', 'evt-stable']);
+  });
+
+  it('photo_upload sends the queued photo id as requestKey even though the re-upload guard cannot fire', async () => {
+    // No serverDocumentId: the first attempt never read a response body, so
+    // markPhotoUploadedAwaitingAttach never ran and the guard is blind — this
+    // is the one case the existing guard was written for and cannot cover.
+    const photo = {
+      dataUrl: 'data:image/jpeg;base64,abc',
+      fileName: 'site.jpg',
+      projectId: 'proj-1',
+      lotId: 'lot-1',
+      documentType: 'photo',
+      entityType: 'lot',
+      capturedAt: '2026-01-01T00:00:00.000Z',
+    };
+    getOfflinePhotoMock.mockResolvedValue(photo);
+    authFetchMock.mockRejectedValueOnce(droppedConnection());
+
+    const dropped = await syncSingleItem(
+      queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-stable' } }),
+    );
+
+    expect(dropped).toEqual({ status: 'handled' });
+    expect(markPhotoUploadedAwaitingAttachMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncErrorMock).toHaveBeenCalledWith('ph-stable');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+
+    authFetchMock.mockResolvedValueOnce(okJson({ id: 'doc-9' }));
+    const retried = await syncSingleItem(
+      queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-stable' } }),
+    );
+
+    expect(retried).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledTimes(2);
+    const formDataKeys = authFetchMock.mock.calls.map(([, options]) =>
+      (options.body as FormData).get('requestKey'),
+    );
+    expect(formDataKeys).toEqual(['ph-stable', 'ph-stable']);
   });
 });
