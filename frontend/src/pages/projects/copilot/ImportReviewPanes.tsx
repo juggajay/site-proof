@@ -204,6 +204,96 @@ export function CorporateMasterPanel({
   );
 }
 
+/**
+ * What the reviewer can decide about ONE proposed record. Every control here is
+ * a `resolution` the next dry run is re-computed with; nothing is written.
+ */
+function RowResolutionControls({
+  row,
+  resolution,
+  onResolve,
+  busy,
+}: {
+  row: DryRunRow;
+  resolution: Resolutions[string] | undefined;
+  onResolve: (patch: Resolutions[string]) => void;
+  busy: boolean;
+}) {
+  const families = useMemo(() => activitiesByFamily(), []);
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {row.reason === 'unresolvable_activity' && (
+        <NativeSelect
+          aria-label={`Activity for ${row.label}`}
+          disabled={busy}
+          value={resolution?.activitySlug ?? ''}
+          onChange={(event) => onResolve({ activitySlug: event.target.value || undefined })}
+          className="h-8 max-w-[16rem] text-xs"
+        >
+          <option value="">Pick an activity…</option>
+          {families.map((family) => (
+            <optgroup key={family.slug} label={family.displayName}>
+              {family.activities.map((activity) => (
+                <option key={activity.slug} value={activity.slug}>
+                  {activity.displayName}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </NativeSelect>
+      )}
+
+      {/* CivilPro's Milestone is approval-bearing and has no vocabulary value
+          to fold to, so the server leaves it unresolved and the reviewer says
+          what this template's milestones really are. One choice per template —
+          matching TemplateResolution.milestoneAs. */}
+      {row.reason === 'milestone_point_type' && (
+        <NativeSelect
+          aria-label={`Milestone point type for ${row.label}`}
+          disabled={busy}
+          value={resolution?.milestoneAs ?? ''}
+          onChange={(event) =>
+            onResolve({
+              milestoneAs: (event.target.value || undefined) as Resolutions[string]['milestoneAs'],
+            })
+          }
+          className="h-8 max-w-[16rem] text-xs"
+        >
+          <option value="">Pick a point type…</option>
+          <option value="standard">S - Standard</option>
+          <option value="witness">W - Witness</option>
+          <option value="hold_point">H - Hold Point</option>
+        </NativeSelect>
+      )}
+
+      {row.reason === 'state_spec_conflict' && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => onResolve({ affirmSpec: !resolution?.affirmSpec })}
+        >
+          {resolution?.affirmSpec ? 'Affirmed' : `Affirm ${row.declaredStateSpec} anyway`}
+        </Button>
+      )}
+
+      {row.outcome !== 'skip' && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => onResolve({ skip: !resolution?.skip })}
+        >
+          {resolution?.skip ? 'Skipped — undo' : 'Leave this one out'}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** Right pane: one card per proposed record, exceptions drilled into. */
 export function ProposalRow({
   row,
@@ -224,7 +314,6 @@ export function ProposalRow({
   rowSkipped?: boolean;
   busy: boolean;
 }) {
-  const families = useMemo(() => activitiesByFamily(), []);
   const detail = rowDetail(row);
 
   return (
@@ -274,76 +363,12 @@ export function ProposalRow({
       )}
 
       {row.unit !== 'checklist_row' && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {row.reason === 'unresolvable_activity' && (
-            <NativeSelect
-              aria-label={`Activity for ${row.label}`}
-              disabled={busy}
-              value={resolution?.activitySlug ?? ''}
-              onChange={(event) => onResolve({ activitySlug: event.target.value || undefined })}
-              className="h-8 max-w-[16rem] text-xs"
-            >
-              <option value="">Pick an activity…</option>
-              {families.map((family) => (
-                <optgroup key={family.slug} label={family.displayName}>
-                  {family.activities.map((activity) => (
-                    <option key={activity.slug} value={activity.slug}>
-                      {activity.displayName}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </NativeSelect>
-          )}
-
-          {/* CivilPro's Milestone is approval-bearing and has no vocabulary
-              value to fold to, so the server leaves it unresolved and the
-              reviewer says what this template's milestones really are. One
-              choice per template — matching TemplateResolution.milestoneAs. */}
-          {row.reason === 'milestone_point_type' && (
-            <NativeSelect
-              aria-label={`Milestone point type for ${row.label}`}
-              disabled={busy}
-              value={resolution?.milestoneAs ?? ''}
-              onChange={(event) =>
-                onResolve({
-                  milestoneAs: (event.target.value ||
-                    undefined) as Resolutions[string]['milestoneAs'],
-                })
-              }
-              className="h-8 max-w-[16rem] text-xs"
-            >
-              <option value="">Pick a point type…</option>
-              <option value="standard">S - Standard</option>
-              <option value="witness">W - Witness</option>
-              <option value="hold_point">H - Hold Point</option>
-            </NativeSelect>
-          )}
-
-          {row.reason === 'state_spec_conflict' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => onResolve({ affirmSpec: !resolution?.affirmSpec })}
-            >
-              {resolution?.affirmSpec ? 'Affirmed' : `Affirm ${row.declaredStateSpec} anyway`}
-            </Button>
-          )}
-
-          {row.outcome !== 'skip' && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => onResolve({ skip: !resolution?.skip })}
-            >
-              {resolution?.skip ? 'Skipped — undo' : 'Leave this one out'}
-            </Button>
-          )}
-        </div>
+        <RowResolutionControls
+          row={row}
+          resolution={resolution}
+          onResolve={onResolve}
+          busy={busy}
+        />
       )}
     </li>
   );

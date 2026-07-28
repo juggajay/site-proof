@@ -30,6 +30,7 @@ import {
   type ZipEntrySummary,
 } from '../../../lib/zipSafety.js';
 import { deriveFieldMapFromHeaders } from './mappingProfiles.js';
+import { applyVerticalMerges, readSheetMerges, type SheetMerges } from './sheetMerges.js';
 
 export const MAX_IMPORT_SHEETS = 50;
 export const MAX_IMPORT_ROWS_PER_SHEET = 5_000;
@@ -274,115 +275,75 @@ function readSheetNames(buffer: Buffer, entries: ZipEntrySummary[]): Map<string,
   return names;
 }
 
-// ---------------------------------------------------------------------------
-// Vertically merged cells
-//
-// A real ITP writes an activity once and merges it down the checklist rows it
-// governs; the same happens to an "H" that holds several checks. In the FILE
-// only the master cell carries the value — every slave cell is genuinely empty
-// (`<c r="A3"/>`) — so reading the sheet data alone drops the marking on every
-// row but the first, and a hold point becomes a plain check item.
-//
-// The ranges live in `<mergeCells>`, which sits after `</sheetData>` and is
-// therefore never seen by a streaming row reader. It is read here from the
-// worksheet part directly, the same way the workbook metadata already is.
-// ---------------------------------------------------------------------------
-
-/** Inflate budget for one worksheet part, read only for its merge ranges. */
-export const MAX_WORKSHEET_MERGE_SCAN_BYTES = 16 * 1024 * 1024;
-
-/** `<mergeCell ref="A2:A4"/>`, without parsing the whole worksheet as XML. */
-const MERGE_REF = /<mergeCell[^>]*\bref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g;
-
-interface VerticalMerge {
-  /** Zero-based column, matching the cell arrays this module emits. */
-  column: number;
-  top: number;
-  bottom: number;
-}
-
-/** Spreadsheet column letters to a zero-based index: A -> 0, AA -> 26. */
-function columnIndex(letters: string): number {
-  let index = 0;
-  for (const letter of letters) index = index * 26 + (letter.charCodeAt(0) - 64);
-  return index - 1;
+/** Whole-workbook character budget, carried across sheets. */
+interface CharacterBudget {
+  used: number;
 }
 
 /**
- * The VERTICAL merge ranges in a worksheet, keyed by the row they start on.
- *
- * ponytail: vertical only. A horizontally merged cell is a title banner far more
- * often than it is data, and the grid is padded to the header width anyway, so
- * nothing shifts — unlike the Word path, where a merge really does move columns.
+ * One worksheet's rows: the header band (the best of its first few non-empty
+ * rows, see `pickHeaderRow`), and the rows below it padded/clipped to the header
+ * width so downstream code can index by column position without bounds checks.
+ * Anything above the header row is a title banner and is dropped. Null when the
+ * sheet holds no rows at all.
  */
-export function readVerticalMerges(worksheetXml: string): Map<number, VerticalMerge[]> {
-  const byTop = new Map<number, VerticalMerge[]>();
-  for (const match of worksheetXml.matchAll(MERGE_REF)) {
-    const [, startColumn, startRow, , endRow] = match;
-    const top = Number(startRow);
-    const bottom = Number(endRow);
-    if (bottom <= top) continue;
-    const merge = { column: columnIndex(startColumn), top, bottom };
-    if (merge.column < 0 || merge.column >= MAX_IMPORT_COLUMNS) continue;
-    byTop.set(top, [...(byTop.get(top) ?? []), merge]);
-  }
-  return byTop;
-}
+async function readSheet(
+  worksheet: AsyncIterable<{ values: unknown; number: number }>,
+  sheetName: string,
+  kind: string,
+  merges: SheetMerges,
+  budget: CharacterBudget,
+): Promise<ParsedSheet | null> {
+  let headers: string[] | null = null;
+  const rows: string[][] = [];
+  // Non-empty rows held back while the header band is still being chosen.
+  const leading: string[][] = [];
 
-/**
- * Fill this row's cells from the merges covering it, in place.
- *
- * `carried` is the caller's state across rows: the value each open merge is
- * holding, and the row it stops at. Only an EMPTY cell inside an open range is
- * filled, so a merge can never overwrite a value the sheet really carries.
- */
-function applyVerticalMerges(
-  cells: string[],
-  rowNumber: number,
-  mergesByTop: Map<number, VerticalMerge[]>,
-  carried: Map<number, { value: string; bottom: number }>,
-): void {
-  for (const merge of mergesByTop.get(rowNumber) ?? []) {
-    const value = cells[merge.column] ?? '';
-    if (value) carried.set(merge.column, { value, bottom: merge.bottom });
-  }
+  const pushRow = (cells: string[]) => rows.push(headers!.map((_, index) => cells[index] ?? ''));
+  const chooseHeaders = () => {
+    const pick = pickHeaderRow(leading, kind);
+    headers = leading[pick].map((cell, index) => cell || `Column ${index + 1}`);
+    for (const cells of leading.slice(pick + 1)) pushRow(cells);
+    leading.length = 0;
+  };
 
-  for (const [column, held] of carried) {
-    if (rowNumber > held.bottom) {
-      carried.delete(column);
+  for await (const row of worksheet) {
+    if (rows.length >= MAX_IMPORT_ROWS_PER_SHEET) {
+      parseFailure(
+        `Sheet "${sheetName}" has more than ${MAX_IMPORT_ROWS_PER_SHEET} rows. Split it into smaller files.`,
+      );
+    }
+
+    // row.values is 1-based with a leading hole; drop it and cap the width.
+    const raw = (Array.isArray(row.values) ? row.values : []).slice(1, MAX_IMPORT_COLUMNS + 1);
+    const cells = raw.map((value) => normalizeCell(value, sheetName));
+
+    budget.used += cells.reduce((sum, cell) => sum + cell.length, 0);
+    if (budget.used > MAX_IMPORT_TOTAL_CHARACTERS) {
+      parseFailure('That workbook holds too much text to import. Split it into smaller files.');
+    }
+
+    // AFTER the empty-row test on purpose: a merge carries a value down the
+    // rows it covers, but it must never resurrect a row the sheet left blank.
+    if (isEmptyRow(cells)) continue;
+    applyVerticalMerges(cells, Number(row.number), merges);
+
+    if (!headers) {
+      leading.push(cells);
+      if (leading.length >= HEADER_SCAN_ROWS) chooseHeaders();
       continue;
     }
-    while (cells.length <= column) cells.push('');
-    if (!cells[column]) cells[column] = held.value;
+
+    pushRow(cells);
   }
+
+  // A sheet shorter than the scan window still has to pick a header row.
+  if (!headers && leading.length > 0) chooseHeaders();
+  return headers ? { name: sheetName, headers, rows } : null;
 }
 
 /**
- * One worksheet part as text, for its merge ranges. Returns null when the part
- * is absent or past the scan budget — the caller then says so rather than
- * quietly reading a sheet whose merges it could not check.
- */
-function readWorksheetXml(
-  buffer: Buffer,
-  entries: ZipEntrySummary[],
-  sheetNo: string,
-): { xml: string | null; tooLarge: boolean } {
-  const name = `xl/worksheets/sheet${sheetNo}.xml`;
-  const entry = entries.find((candidate) => candidate.name === name);
-  if (!entry) return { xml: null, tooLarge: false };
-  if (entry.uncompressedSize > MAX_WORKSHEET_MERGE_SCAN_BYTES) {
-    return { xml: null, tooLarge: true };
-  }
-  const raw = readZipEntry(buffer, entries, name, MAX_WORKSHEET_MERGE_SCAN_BYTES);
-  return { xml: raw ? raw.toString('utf8') : null, tooLarge: raw === null };
-}
-
-/**
- * Parse an .xlsx buffer to a normalized grid. Every sheet contributes one header
- * row — the best of its first few non-empty rows, see `pickHeaderRow` — and the
- * rows below it, padded/clipped to the header width so downstream code can index
- * by column position without bounds checks. Anything above the header row is a
- * title banner and is dropped.
+ * Parse an .xlsx buffer to a normalized grid, one `ParsedSheet` per worksheet.
  */
 export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<ParsedGrid> {
   const entries = assertSafeOoxmlArchive(buffer);
@@ -412,7 +373,7 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
 
   const sheets: ParsedSheet[] = [];
   const uncheckedMergeSheets: string[] = [];
-  let totalCharacters = 0;
+  const budget: CharacterBudget = { used: 0 };
   let emittedSheets = 0;
 
   for await (const worksheet of reader) {
@@ -425,59 +386,11 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
 
     const sheetNo = String((worksheet as unknown as { id?: unknown }).id ?? '');
     const sheetName = (sheetNames.get(sheetNo) ?? `Sheet ${sheets.length + 1}`).slice(0, 200);
-    const worksheetXml = readWorksheetXml(buffer, entries, sheetNo);
-    if (worksheetXml.tooLarge) uncheckedMergeSheets.push(sheetName);
-    const mergesByTop = readVerticalMerges(worksheetXml.xml ?? '');
-    const carriedMerges = new Map<number, { value: string; bottom: number }>();
-    let headers: string[] | null = null;
-    const rows: string[][] = [];
-    // Non-empty rows held back while the header band is still being chosen.
-    const leading: string[][] = [];
+    const merges = readSheetMerges(buffer, entries, sheetNo, MAX_IMPORT_COLUMNS);
+    if (merges.unchecked) uncheckedMergeSheets.push(sheetName);
 
-    const pushRow = (cells: string[]) => rows.push(headers!.map((_, index) => cells[index] ?? ''));
-    const chooseHeaders = () => {
-      const pick = pickHeaderRow(leading, kind);
-      headers = leading[pick].map((cell, index) => cell || `Column ${index + 1}`);
-      for (const cells of leading.slice(pick + 1)) pushRow(cells);
-      leading.length = 0;
-    };
-
-    for await (const row of worksheet) {
-      if (rows.length >= MAX_IMPORT_ROWS_PER_SHEET) {
-        parseFailure(
-          `Sheet "${sheetName}" has more than ${MAX_IMPORT_ROWS_PER_SHEET} rows. Split it into smaller files.`,
-        );
-      }
-
-      // row.values is 1-based with a leading hole; drop it and cap the width.
-      const raw = (Array.isArray(row.values) ? row.values : []).slice(1, MAX_IMPORT_COLUMNS + 1);
-      const cells = raw.map((value) => normalizeCell(value, sheetName));
-
-      totalCharacters += cells.reduce((sum, cell) => sum + cell.length, 0);
-      if (totalCharacters > MAX_IMPORT_TOTAL_CHARACTERS) {
-        parseFailure('That workbook holds too much text to import. Split it into smaller files.');
-      }
-
-      // AFTER the empty-row test on purpose: a merge carries a value down the
-      // rows it covers, but it must never resurrect a row the sheet left blank.
-      if (isEmptyRow(cells)) continue;
-      applyVerticalMerges(cells, Number(row.number), mergesByTop, carriedMerges);
-
-      if (!headers) {
-        leading.push(cells);
-        if (leading.length >= HEADER_SCAN_ROWS) chooseHeaders();
-        continue;
-      }
-
-      pushRow(cells);
-    }
-
-    // A sheet shorter than the scan window still has to pick a header row.
-    if (!headers && leading.length > 0) chooseHeaders();
-
-    if (headers) {
-      sheets.push({ name: sheetName, headers, rows });
-    }
+    const sheet = await readSheet(worksheet, sheetName, kind, merges, budget);
+    if (sheet) sheets.push(sheet);
   }
 
   if (sheets.length === 0) {
