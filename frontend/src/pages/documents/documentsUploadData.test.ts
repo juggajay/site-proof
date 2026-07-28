@@ -13,6 +13,14 @@ vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
 
 import { authFetch } from '@/lib/api';
 import {
+  CCTV_DOCUMENT_TYPE,
+  CCTV_UPLOAD_PATH,
+  CONCEALED_WORKS_DOCUMENT_TYPE,
+  DOCUMENT_TYPES,
+  DOCUMENTS_UPLOAD_PATH,
+  getUploadGuidance,
+  requiresLotAssociation,
+  resolveUploadPath,
   buildDocumentUploadFormData,
   buildPartialFailureMessage,
   buildUploadSuccessMessage,
@@ -328,5 +336,63 @@ describe('uploadDocuments', () => {
 
     expect(result.uploadedDocs).toEqual([]);
     expect(result.failedUploads).toEqual(['a.pdf: Network down']);
+  });
+});
+
+// Wave D `D1d` — spec `docs/plans/wave-d-handover-spec-2026-07-28.md` §4.8
+// items 3 and 4, **AT-149**.
+describe('D1d handover document types', () => {
+  it('offers both classifications, with the exact strings the folio resolvers read', () => {
+    // `backend/src/lib/handover/loganPsp5Profile.ts` named these first
+    // (CCTV_DOCUMENT_TYPE / CONCEALED_WORKS_DOCUMENT_TYPE). Drift here silently
+    // blinds items (e) and (f).
+    expect(CCTV_DOCUMENT_TYPE).toBe('cctv_stormwater');
+    expect(CONCEALED_WORKS_DOCUMENT_TYPE).toBe('concealed_works_photo');
+    expect(DOCUMENT_TYPES.map((type) => type.id)).toEqual(
+      expect.arrayContaining([CCTV_DOCUMENT_TYPE, CONCEALED_WORKS_DOCUMENT_TYPE]),
+    );
+  });
+
+  it('routes only CCTV to the video-capable surface', () => {
+    expect(resolveUploadPath(CCTV_DOCUMENT_TYPE)).toBe(CCTV_UPLOAD_PATH);
+    // Concealed-works photos are images: they take the ordinary 50 MB path, and
+    // the video allow-set stays off every other surface (spec §4.8 item 1).
+    expect(resolveUploadPath(CONCEALED_WORKS_DOCUMENT_TYPE)).toBe(DOCUMENTS_UPLOAD_PATH);
+    expect(resolveUploadPath('photo')).toBe(DOCUMENTS_UPLOAD_PATH);
+  });
+
+  it('requires a lot for both types and nothing else', () => {
+    expect(requiresLotAssociation(CCTV_DOCUMENT_TYPE)).toBe(true);
+    expect(requiresLotAssociation(CONCEALED_WORKS_DOCUMENT_TYPE)).toBe(true);
+    expect(requiresLotAssociation('photo')).toBe(false);
+  });
+
+  it('carries the clause guidance as text, for both types only', () => {
+    expect(getUploadGuidance(CCTV_DOCUMENT_TYPE)).toContain('maintenance hole');
+    expect(getUploadGuidance(CONCEALED_WORKS_DOCUMENT_TYPE)).toContain('BEFORE backfilling');
+    expect(getUploadGuidance('photo')).toBeNull();
+  });
+
+  it('defaults the manifest category so a blank field still files correctly', () => {
+    const formData = buildDocumentUploadFormData({
+      file: makeFile('run.mp4', 'video/mp4'),
+      projectId: 'p',
+      form: { ...baseForm, documentType: CCTV_DOCUMENT_TYPE, lotId: 'lot-1' },
+      totalFiles: 1,
+    });
+    expect(formData.get('category')).toBe('quality');
+    expect(formData.get('lotId')).toBe('lot-1');
+    expect(formData.get('documentType')).toBe(CCTV_DOCUMENT_TYPE);
+  });
+
+  it('posts a CCTV upload to the CCTV endpoint', async () => {
+    authFetchMock.mockResolvedValueOnce(okResponse({ id: 'doc-cctv' }));
+    await uploadDocuments({
+      files: [makeFile('run.mp4', 'video/mp4')],
+      projectId: 'p',
+      form: { ...baseForm, documentType: CCTV_DOCUMENT_TYPE, lotId: 'lot-1' },
+      onProgress: vi.fn(),
+    });
+    expect(authFetchMock.mock.calls[0][0]).toBe(CCTV_UPLOAD_PATH);
   });
 });

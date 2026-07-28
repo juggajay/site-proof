@@ -20,9 +20,11 @@ import { createDocumentFileAccessRouter } from './documents/fileAccessRoutes.js'
 import { createDocumentVersionRouter } from './documents/versionRoutes.js';
 import { createDocumentDeleteRouter } from './documents/deleteRoutes.js';
 import { createDocumentClassificationRouter } from './documents/classificationRoutes.js';
+import { createCctvUploadMiddleware } from './documents/cctvUploadMiddleware.js';
 import {
   buildStoredFilename,
   createTempUploadPath,
+  DOCUMENT_UPLOAD_MAX_BYTES,
   generateSignedUrlToken,
   getNormalizedDocumentMimeType,
   getSafeStoredDocumentMimeType,
@@ -275,7 +277,7 @@ const memoryStorage = multer.memoryStorage();
 // Use memory storage when Supabase is configured for cloud uploads
 const upload = multer({
   storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  limits: { fileSize: DOCUMENT_UPLOAD_MAX_BYTES }, // 50MB limit
   fileFilter: (_req, file, cb) => {
     if (isAllowedDocumentMimeType(getNormalizedDocumentMimeType(file))) {
       cb(null, true);
@@ -284,6 +286,13 @@ const upload = multer({
     }
   },
 });
+
+// D1d (spec §4.8): the CCTV surface. Same storage engine, its OWN allow-set and
+// its OWN ceiling — the 50 MB limit above is untouched and video is still
+// rejected there.
+const cctvUploadFileMiddleware = createCctvUploadMiddleware(
+  isSupabaseConfigured() ? memoryStorage : diskStorage,
+);
 
 function uploadDocumentToSupabase(
   file: Express.Multer.File,
@@ -311,24 +320,39 @@ router.use(
   }),
 );
 
+const uploadRouterDependencies = {
+  prisma,
+  maxDocumentIdLength: MAX_DOCUMENT_ID_LENGTH,
+  maxDocumentTypeLength: MAX_DOCUMENT_TYPE_LENGTH,
+  maxCategoryLength: MAX_CATEGORY_LENGTH,
+  maxCaptionLength: MAX_CAPTION_LENGTH,
+  maxTagsLength: MAX_TAGS_LENGTH,
+  cleanupUploadedFile,
+  requireDocumentUploadAccess,
+  getSafeStoredDocumentMimeType,
+  extractPhotoMetadata,
+  extractPhotoMetadataFromBuffer,
+  uploadToSupabase: uploadDocumentToSupabase,
+  cleanupStoredDocumentUpload,
+  sanitizeUploadFilename,
+  generateDocumentThumbnail,
+};
+
 router.use(
   createDocumentUploadRouter({
-    prisma,
+    ...uploadRouterDependencies,
     uploadFileMiddleware: upload.single('file'),
-    maxDocumentIdLength: MAX_DOCUMENT_ID_LENGTH,
-    maxDocumentTypeLength: MAX_DOCUMENT_TYPE_LENGTH,
-    maxCategoryLength: MAX_CATEGORY_LENGTH,
-    maxCaptionLength: MAX_CAPTION_LENGTH,
-    maxTagsLength: MAX_TAGS_LENGTH,
-    cleanupUploadedFile,
-    requireDocumentUploadAccess,
-    getSafeStoredDocumentMimeType,
-    extractPhotoMetadata,
-    extractPhotoMetadataFromBuffer,
-    uploadToSupabase: uploadDocumentToSupabase,
-    cleanupStoredDocumentUpload,
-    sanitizeUploadFilename,
-    generateDocumentThumbnail,
+  }),
+);
+
+// D1d — POST /api/documents/upload/cctv. Same handler, video allow-set,
+// 256 MiB ceiling. Mounted after the general surface; `/upload` is an exact
+// match so it never swallows this path.
+router.use(
+  createDocumentUploadRouter({
+    ...uploadRouterDependencies,
+    uploadPath: '/upload/cctv',
+    uploadFileMiddleware: cctvUploadFileMiddleware,
   }),
 );
 

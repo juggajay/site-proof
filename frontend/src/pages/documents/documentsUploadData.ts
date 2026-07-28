@@ -20,10 +20,23 @@ export interface DocumentOption {
   label: string;
 }
 
+/**
+ * Wave D `D1d` (spec §4.8 items 3-4). These two strings are read by
+ * `backend/src/lib/handover/loganPsp5Profile.ts` (`CCTV_DOCUMENT_TYPE`,
+ * `CONCEALED_WORKS_DOCUMENT_TYPE`) — the profile named them first so this
+ * surface would write the same values instead of picking new ones and leaving
+ * the item (e) and (f) resolvers blind. Changing either string here silently
+ * blinds a folio resolver.
+ */
+export const CCTV_DOCUMENT_TYPE = 'cctv_stormwater';
+export const CONCEALED_WORKS_DOCUMENT_TYPE = 'concealed_works_photo';
+
 export const DOCUMENT_TYPES: DocumentOption[] = [
   { id: 'specification', label: 'Specification' },
   { id: 'drawing', label: 'Drawing' },
   { id: 'photo', label: 'Photo' },
+  { id: CONCEALED_WORKS_DOCUMENT_TYPE, label: 'Concealed works photo' },
+  { id: CCTV_DOCUMENT_TYPE, label: 'CCTV video (stormwater)' },
   { id: 'certificate', label: 'Certificate' },
   { id: 'report', label: 'Report' },
   { id: 'correspondence', label: 'Correspondence' },
@@ -41,10 +54,63 @@ export const CATEGORIES: DocumentOption[] = [
   { id: 'general', label: 'General' },
 ];
 
+/**
+ * D1d, spec §4.8 item 4 — the manifest category each new type files under. Both
+ * are quality evidence, so they reuse the shipped `quality` category rather than
+ * inventing one; the handover manifest reads `category` the same way every other
+ * document surface does.
+ */
+export const DEFAULT_CATEGORY_BY_DOCUMENT_TYPE: Record<string, string> = {
+  [CCTV_DOCUMENT_TYPE]: 'quality',
+  [CONCEALED_WORKS_DOCUMENT_TYPE]: 'quality',
+};
+
+/**
+ * D1d, spec §4.8 item 4 — both types are lot-scoped evidence. The Logan PSP5
+ * resolvers run per lot, so an unassociated CCTV run or concealed-works photo
+ * never reaches a folio. The backend enforces this too; this list is what lets
+ * the form say so before the request is sent.
+ */
+export const LOT_REQUIRED_DOCUMENT_TYPES: readonly string[] = [
+  CCTV_DOCUMENT_TYPE,
+  CONCEALED_WORKS_DOCUMENT_TYPE,
+];
+
+export function requiresLotAssociation(documentType: string): boolean {
+  return LOT_REQUIRED_DOCUMENT_TYPES.includes(documentType);
+}
+
+/**
+ * Logan PSP5 §5.6.5(1)(e)'s run-endpoint requirement, carried as guidance text
+ * on the upload surface rather than as a data model (spec §4.8: "stays guidance
+ * text on the upload surface, not a data model").
+ */
+export const CCTV_UPLOAD_GUIDANCE =
+  'One file per pipe run — first drainage maintenance hole upstream to the maintenance ' +
+  'hole downstream. Name the file with those endpoints. MP4, MPEG, .mov or .avi, up to ' +
+  '256 MB per run; a combined reel will be refused.';
+
+export const CONCEALED_WORKS_UPLOAD_GUIDANCE =
+  'Use for work that will be below ground or not visible once complete, photographed ' +
+  'BEFORE backfilling (Logan PSP5 §5.6.5(1)(f)(i)-(ii)). Include the chainage or exact ' +
+  'location in the file name, and keep the camera date stamp on.';
+
+export function getUploadGuidance(documentType: string): string | null {
+  if (documentType === CCTV_DOCUMENT_TYPE) return CCTV_UPLOAD_GUIDANCE;
+  if (documentType === CONCEALED_WORKS_DOCUMENT_TYPE) return CONCEALED_WORKS_UPLOAD_GUIDANCE;
+  return null;
+}
+
 export const MIN_IMAGE_WIDTH = 100;
 export const MIN_IMAGE_HEIGHT = 100;
 
 export const DOCUMENTS_UPLOAD_PATH = '/api/documents/upload';
+/** D1d — the video-capable surface (separate allow-set, 256 MiB ceiling). */
+export const CCTV_UPLOAD_PATH = '/api/documents/upload/cctv';
+
+export function resolveUploadPath(documentType: string): string {
+  return documentType === CCTV_DOCUMENT_TYPE ? CCTV_UPLOAD_PATH : DOCUMENTS_UPLOAD_PATH;
+}
 
 export interface UploadDocumentForm {
   documentType: string;
@@ -147,7 +213,10 @@ export function buildDocumentUploadFormData({
   formData.append('file', file);
   formData.append('projectId', projectId || '');
   formData.append('documentType', form.documentType);
-  if (form.category) formData.append('category', form.category);
+  // D1d: the two handover types always carry a manifest category, so an operator
+  // who leaves the field blank still files them where the manifest looks.
+  const category = form.category || DEFAULT_CATEGORY_BY_DOCUMENT_TYPE[form.documentType] || '';
+  if (category) formData.append('category', category);
   const caption = form.caption.trim();
   if (caption && totalFiles === 1) {
     formData.append('caption', caption);
@@ -195,7 +264,7 @@ export async function uploadDocuments({
         totalFiles: files.length,
       });
 
-      const res = await authFetch(DOCUMENTS_UPLOAD_PATH, {
+      const res = await authFetch(resolveUploadPath(form.documentType), {
         method: 'POST',
         body: formData,
       });

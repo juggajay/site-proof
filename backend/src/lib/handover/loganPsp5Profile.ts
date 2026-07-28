@@ -173,12 +173,20 @@ export const LOGAN_PSP5_ITEMS: readonly LoganPsp5RequirementItem[] = Object.free
     id: 'cctv_stormwater',
     clause: clauseOf('e'),
     clauseText: 'CCTV video for underground stormwater infrastructure work',
-    coverage: 'gap_closable',
+    coverage: 'storage_only',
     coverageNote:
-      'The upload path rejects the deliverable twice: `ALLOWED_DOCUMENT_MIME_TYPES` ' +
-      '(routes/documents/fileHelpers.ts:35-47) contains no video type, and multer caps ' +
-      'document uploads at 50 MB against a routinely GB-scale run. D1d owns the ' +
-      "capability (spec §4.8, AT-149). Until then the verdict is ours, not the customer's.",
+      'D1d shipped the capability (spec §4.8, AT-149): a SEPARATE video allow-set ' +
+      '(`isAllowedCctvVideoMimeType`, routes/documents/fileHelpers.ts) covering the ' +
+      "clause's named containers, and its own 256 MiB ceiling on " +
+      '`POST /api/documents/upload/cctv`, enforced independently of the 50 MB document ' +
+      'limit which is unchanged. CIVOS now HOLDS, files and lists a CCTV run against a ' +
+      'lot; it does not decode, index or validate one, and never will — the coded ' +
+      "observation record is the CCTV specialist's deliverable, produced in WinCan or " +
+      'PipeTech. "storage_only", the same verdict as (h), and for the same reason. ' +
+      'TWO limits remain and are stated rather than hidden: a run larger than 256 MiB ' +
+      'cannot be uploaded until a resumable/streaming path exists (the shipped path ' +
+      'buffers whole files in memory), and 31 runs at the ceiling fill the entire ' +
+      '8 GiB folio archive admission cap on their own.',
   },
   {
     letter: 'f',
@@ -197,10 +205,14 @@ export const LOGAN_PSP5_ITEMS: readonly LoganPsp5RequirementItem[] = Object.free
     coverageNote:
       'Date stamp (iv) and file format (v) are assessable today from ' +
       '`Document.captureTimestamp` and `mimeType` (schema.prisma:1609-1611); location is ' +
-      'shipped via GPS and the photo-pin and chainage-generator work. NEITHER qualifying ' +
-      'clause (i) nor (ii) is: nothing records that a photo depicts work not visible after ' +
-      'construction, or was taken prior to backfilling. The `documentType` value is D1d ' +
-      '(spec §4.8); the filename rule (iii) is D1c.2 (§4.7.3, AT-140).',
+      'shipped via GPS and the photo-pin and chainage-generator work. Qualifying clauses ' +
+      '(i) and (ii) became RECORDABLE in D1d (spec §4.8 item 3): the ' +
+      '`concealed_works_photo` classification shipped as a `documentType` value on the ' +
+      'upload surface, with no `Document` column added ([DH-e]). It stays `partial`, not ' +
+      '`shipped`, for two reasons that are the customer-visible truth: the value is ' +
+      'OPERATOR-APPLIED, so an unclassified lot means "not classified", never "not ' +
+      'concealed"; and the filename rule (iii) is D1c.2 (§4.7.3, AT-140). Clause (v) is a ' +
+      'disjunction CIVOS cannot fully evaluate — no image dimensions are stored.',
   },
   {
     letter: 'g',
@@ -274,13 +286,27 @@ export const PSP5_PHOTO_MIN_BYTES = 4_000_000;
 /**
  * Whether the shipped upload path can hold a CCTV video at all.
  *
- * `false` at this SHA, and it is a CONSTANT rather than a probe because
- * production code in `lib/` must not import from `routes/`. The premise is
- * asserted instead — `loganPsp5Profile.test.ts` calls the shipped
- * `isAllowedDocumentMimeType('video/mp4')` and fails when D1d widens the allow
- * set, which is what forces this line to flip in the same change.
+ * **`true` since D1d** (spec §4.8, AT-149). It is still a CONSTANT rather than a
+ * probe because production code in `lib/` must not import from `routes/`; the
+ * premise is asserted instead. `loganPsp5Profile.test.ts` now pins BOTH halves
+ * of the shipped design — `isAllowedCctvVideoMimeType('video/mp4')` is true on
+ * the CCTV surface AND `isAllowedDocumentMimeType('video/mp4')` is still false
+ * on the general document surface, because §4.8 item 1 required a separate
+ * allow-set rather than a widening. Narrowing either one fails a test here.
+ *
+ * What it does NOT mean: that every run fits. The ceiling is
+ * {@link CCTV_UPLOAD_MAX_BYTES_NOTE} — 256 MiB — and a larger run still cannot
+ * be uploaded. That is recorded in item (e)'s `coverageNote`, not smuggled into
+ * this boolean.
  */
-export const CCTV_UPLOAD_SUPPORTED = false;
+export const CCTV_UPLOAD_SUPPORTED = true;
+
+/**
+ * The D1d ceiling, restated here as prose because `lib/` must not import from
+ * `routes/`. A test asserts this string against the shipped
+ * `CCTV_UPLOAD_MAX_BYTES` so the two cannot drift.
+ */
+export const CCTV_UPLOAD_MAX_BYTES_NOTE = '256 MiB';
 
 export interface LoganPsp5TestInput {
   readonly id: string;
@@ -662,13 +688,20 @@ const resolveRetestRectification: Resolver = (input) => {
 };
 
 /**
- * Item (e) — CCTV. `not_assessable` unconditionally while
- * {@link CCTV_UPLOAD_SUPPORTED} is false, and the reason blames the right party.
- * Spec §2.3: "the folio says 'CIVOS cannot yet hold this file type', not
- * 'missing'. Blaming the customer for a gap we own is the worst thing this
- * document could do."
+ * Item (e) — CCTV. D1d flipped {@link CCTV_UPLOAD_SUPPORTED}, so this resolver
+ * now reports the held files.
+ *
+ * It still never returns `missing`. Spec §2.3's rule survives the capability
+ * change, only its reason changes: CIVOS has no record of which lots contain
+ * underground stormwater infrastructure, so "no CCTV file held" is a fact about
+ * CIVOS's knowledge, not a finding against the customer. Whether a run was owed
+ * remains the certifying consultant's determination.
+ *
+ * The `!CCTV_UPLOAD_SUPPORTED` branch is retained: it is the honest output if
+ * the capability is ever rolled back, and the constant is what the spec pins.
  */
 const resolveCctv: Resolver = (input) => {
+  /* c8 ignore start -- CCTV_UPLOAD_SUPPORTED is true since D1d; the branch is the rollback path. */
   if (!CCTV_UPLOAD_SUPPORTED) {
     return {
       status: 'not_assessable',
@@ -680,24 +713,28 @@ const resolveCctv: Resolver = (input) => {
       named: [],
     };
   }
-  /* c8 ignore start -- unreachable until D1d flips CCTV_UPLOAD_SUPPORTED; AT-149 covers it there. */
+  /* c8 ignore stop */
   const held = documentsOfType(input, CCTV_DOCUMENT_TYPE);
   return held.length > 0
     ? {
         status: 'present',
-        reason: `${held.length} CCTV file(s) held for this lot, as supplied.`,
+        reason:
+          `${held.length} CCTV file(s) held for this lot, as supplied. CIVOS stores and ` +
+          'lists the run; it does not decode or review the footage, and the coded ' +
+          "observation record remains the CCTV specialist's deliverable.",
         evidenceIds: held.map((d) => d.id),
         named: [],
       }
     : {
         status: 'not_assessable',
         reason:
-          'No CCTV file is held. CIVOS cannot determine whether this lot contains ' +
-          'underground stormwater infrastructure requiring one.',
+          'No CCTV file is held. CIVOS can hold one since D1d, but records nothing that ' +
+          'says whether this lot contains underground stormwater infrastructure ' +
+          `requiring one, and a run larger than ${CCTV_UPLOAD_MAX_BYTES_NOTE} cannot yet ` +
+          'be uploaded.',
         evidenceIds: [],
         named: [],
       };
-  /* c8 ignore stop */
 };
 
 /**

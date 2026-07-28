@@ -14,7 +14,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { testTypeSpecifications } from '../../routes/testResults/specifications.js';
-import { isAllowedDocumentMimeType } from '../../routes/documents/fileHelpers.js';
+import {
+  CCTV_UPLOAD_MAX_BYTES,
+  DOCUMENT_UPLOAD_MAX_BYTES,
+  isAllowedCctvVideoMimeType,
+  isAllowedDocumentMimeType,
+} from '../../routes/documents/fileHelpers.js';
 import { TEST_TYPE_ALIASES } from '../readiness/sufficiency/testCategories.js';
 import {
   LOGAN_18,
@@ -23,6 +28,8 @@ import {
   isAmbiguouslyAttributed,
 } from './loganPsp5Crosswalk.js';
 import {
+  CCTV_DOCUMENT_TYPE,
+  CCTV_UPLOAD_MAX_BYTES_NOTE,
   CCTV_UPLOAD_SUPPORTED,
   CONCEALED_WORKS_DOCUMENT_TYPE,
   LOGAN_PSP5_ITEMS,
@@ -81,18 +88,49 @@ const byId = (result: ReturnType<typeof resolveLoganPsp5Profile>, id: LoganPsp5I
   return item;
 };
 
+const byLetter = (letter: string) => {
+  const item = LOGAN_PSP5_ITEMS.find((candidate) => candidate.letter === letter);
+  if (!item) throw new Error(`no pack item ${letter}`);
+  return item;
+};
+
 // ---------------------------------------------------------------------------
 // Premises — the shipped and published facts the profile encodes
 // ---------------------------------------------------------------------------
 describe('premises', () => {
-  // `CCTV_UPLOAD_SUPPORTED = false` is a constant because production code in
-  // `lib/` must not import from `routes/`. This is the assertion that makes the
-  // constant honest: when D1d widens the allow set, THIS fails, which is what
-  // forces the constant to flip in the same change (AT-149).
-  it('the document upload path still accepts no video type, so CCTV_UPLOAD_SUPPORTED is false', () => {
+  // D1d, AT-149. The pin did its job: flipping `CCTV_UPLOAD_SUPPORTED` failed
+  // the previous version of this test, which asserted `false` alongside
+  // `isAllowedDocumentMimeType('video/mp4') === false`.
+  //
+  // It is REPLACED, not deleted, and it now pins BOTH halves of what D1d
+  // actually shipped — because spec §4.8 item 1 required a SEPARATE allow-set,
+  // not a widening. `isAllowedDocumentMimeType('video/mp4')` is still false and
+  // must stay false: widening the general document set would let video onto
+  // every upload surface in the product, which is the thing §4.8 forbids.
+  it('video is accepted on the CCTV surface and STILL rejected on the general document surface', () => {
+    // The separation IS the design (spec §4.8 item 1).
     expect(isAllowedDocumentMimeType('video/mp4')).toBe(false);
     expect(isAllowedDocumentMimeType('video/x-msvideo')).toBe(false);
-    expect(CCTV_UPLOAD_SUPPORTED).toBe(false);
+
+    // …and the CCTV surface holds the clause's named containers.
+    expect(isAllowedCctvVideoMimeType('video/mp4')).toBe(true);
+    expect(isAllowedCctvVideoMimeType('video/x-msvideo')).toBe(true);
+    // A document type is not a video type: the CCTV set is not a superset.
+    expect(isAllowedCctvVideoMimeType('application/pdf')).toBe(false);
+    expect(isAllowedCctvVideoMimeType('image/jpeg')).toBe(false);
+
+    expect(CCTV_UPLOAD_SUPPORTED).toBe(true);
+  });
+
+  // `lib/` must not import from `routes/`, so item (e)'s coverageNote states the
+  // ceiling as prose. This is what stops the prose and the enforced number from
+  // drifting apart.
+  it('the ceiling item (e) states in prose is the ceiling the upload path enforces', () => {
+    expect(CCTV_UPLOAD_MAX_BYTES).toBe(256 * 1024 * 1024);
+    expect(CCTV_UPLOAD_MAX_BYTES_NOTE).toBe('256 MiB');
+    expect(byLetter('e').coverageNote).toContain(CCTV_UPLOAD_MAX_BYTES_NOTE);
+    // Separately governed: well above the 50 MB document cap, and not equal to it.
+    expect(CCTV_UPLOAD_MAX_BYTES).toBeGreaterThan(DOCUMENT_UPLOAD_MAX_BYTES);
   });
 
   // `[LP5-DELTA]`. The clause enumerates (a) through (h); spec §2.2 tabulates
@@ -183,15 +221,23 @@ describe('AT-144 the requirement profile is executable', () => {
       counts[item.coverage] = (counts[item.coverage] ?? 0) + 1;
       return counts;
     }, {});
-    // Re-scored against the primary clause: one shipped-as-storage, three
-    // partial, four gaps (three deliberate, one closable). NOTHING is `shipped`.
+    // D1d moved item (e) from `gap_closable` to `storage_only` — the ONLY
+    // coverage change this phase makes, and the pin above forced it to be
+    // stated. CIVOS can now hold, file and list a CCTV run; it does not decode,
+    // index or validate one, which is exactly item (h)'s verdict and word.
+    //
+    // TWO storage-only, three partial, three deliberate-and-permanent gaps, and
+    // ZERO closable gaps left in the pack. NOTHING is `shipped` and D1d did not
+    // promote anything to it: the classification value is operator-applied and
+    // the ceiling is 256 MiB, neither of which is a finished requirement.
     expect(distribution).toEqual({
-      storage_only: 1,
+      storage_only: 2,
       partial: 3,
       gap_deliberate: 3,
-      gap_closable: 1,
     });
     expect(distribution.shipped).toBeUndefined();
+    expect(distribution.gap_closable).toBeUndefined();
+    expect(byLetter('e').coverage).toBe('storage_only');
   });
 
   it('every item carries a clause and transcribed clause text', () => {
@@ -244,14 +290,46 @@ describe('AT-144 the requirement profile is executable', () => {
     }
   });
 
-  // Spec §2.3: "the folio says 'CIVOS cannot yet hold this file type', not
-  // 'missing'. Blaming the customer for a gap we own is the worst thing this
-  // document could do."
-  it('item (e) (CCTV) reports a CIVOS capability gap, never a missing deliverable', () => {
+  // Spec §2.3's rule SURVIVES D1d; only its reason changes. The old assertion
+  // ("CIVOS cannot yet hold this file type") failed against the shipped
+  // capability and is replaced by the new truth. What must never change is the
+  // status: still `not_assessable`, never `missing`, because CIVOS records
+  // nothing that says a given lot contains underground stormwater
+  // infrastructure. Blaming the customer for a gap we own is the worst thing
+  // this document could do — and now that we CAN hold the file, blaming them
+  // for not supplying one we cannot know is owed would be the same failure.
+  it('item (e) (CCTV) never reports a missing deliverable, before or after D1d', () => {
     const item = byId(resolveLoganPsp5Profile(EMPTY), 'cctv_stormwater');
     expect(item.status).toBe('not_assessable');
     expect(item.status).not.toBe('missing');
-    expect(item.reason).toContain('CIVOS cannot yet hold this file type');
+    expect(item.reason).toContain('CIVOS can hold one since D1d');
+    expect(item.reason).toContain('cannot yet be uploaded');
+    expect(item.evidenceIds).toEqual([]);
+  });
+
+  // AT-149. Unreachable before D1d (the resolver was behind a `c8 ignore` for
+  // exactly that reason); this is the test the spec said would cover it here.
+  it('item (e) reports a held CCTV run as present, as supplied, without reviewing it', () => {
+    const item = byId(
+      resolveLoganPsp5Profile(
+        input({
+          documents: [
+            {
+              id: 'doc-cctv',
+              documentType: CCTV_DOCUMENT_TYPE,
+              mimeType: 'video/mp4',
+              captureTimestamp: null,
+            },
+          ],
+        }),
+      ),
+      'cctv_stormwater',
+    );
+    expect(item.status).toBe('present');
+    expect(item.evidenceIds).toEqual(['doc-cctv']);
+    expect(item.reason).toContain('1 CCTV file(s) held');
+    // The honesty limb: holding is not reviewing.
+    expect(item.reason).toContain('does not decode or review the footage');
   });
 
   it('item (d) is not_applicable when nothing failed, and names unlinked failures when something did', () => {
