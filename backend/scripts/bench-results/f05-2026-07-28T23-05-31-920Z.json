@@ -1,0 +1,37 @@
+{
+  "benchmark": "F0.5 exit gate (execution spec §8, Rev 3.1)",
+  "spec": "docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md",
+  "startedAt": "2026-07-28T23:05:31.920Z",
+  "finishedAt": "2026-07-28T23:06:41.842Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 100,
+      "sampleMs": 1000,
+      "freeMemMiB": 4573,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 100,
+      "sampleMs": 1000,
+      "freeMemMiB": 4080,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "only": "A",
+    "lots": 5000,
+    "claimIterations": 5,
+    "entityIterations": 50,
+    "pageIterations": 20
+  },
+  "results": {},
+  "verdict": {
+    "failures": [],
+    "pass": false,
+    "error": "claim create failed: 500 {\"error\":{\"message\":\"Failed to record the decision snapshot\",\"code\":\"SNAPSHOT_WRITE_FAILED\",\"details\":{\"cause\":\"\\nInvalid `tx.requirementEvaluation.createManyAndReturn()` invocation in\\nC:\\\\Users\\\\jayso\\\\site-proofv3\\\\.claude\\\\worktrees\\\\agent-a93a454dda702c0e8\\\\backend\\\\src\\\\lib\\\\readiness\\\\recordDecision.ts:416:52\\n\\n  413 const createdIds: string[] = [];\\n  414 for (let start = 0; start < rows.length; start += SNAPSHOT_CHUNK_SIZE) {\\n  415   const chunk = rows.slice(start, start + SNAPSHOT_CH"
+  }
+}

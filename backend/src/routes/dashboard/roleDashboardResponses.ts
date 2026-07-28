@@ -1,5 +1,6 @@
 import type { DashboardProject } from './access.js';
 import { getDocketCommercialCosts, type DocketNumericLike } from '../../lib/docketCosts.js';
+import { daysOverdue } from '../../lib/readiness/predicates.js';
 
 // =============================================================================
 // Role dashboard response builders. These helpers keep the route modules focused
@@ -190,6 +191,9 @@ export function buildProjectManagerDashboardResponse({
   primaryProject: DashboardProject;
 }) {
   const lotProgress = buildProjectManagerLotProgress(lotStats);
+  // L11: one clock read for the whole response, so two rows of identical age
+  // cannot print different day counts because a millisecond fell between them.
+  const now = new Date();
 
   let totalClaimed = 0;
   let totalCertified = 0;
@@ -256,7 +260,9 @@ export function buildProjectManagerDashboardResponse({
         description: ncr.description,
         category: ncr.category,
         status: ncr.status,
-        daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
+        // L11: the shared floor, same helper `roleDashboards.ts` uses — this was
+        // its byte-identical twin. Anchor is `createdAt`: age, not lateness.
+        daysOpen: daysOverdue(ncr.createdAt, now),
         link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
       })),
     },

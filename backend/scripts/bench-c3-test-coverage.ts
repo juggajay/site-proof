@@ -22,7 +22,12 @@
  *     npm run bench:c3
  *
  * Flags: --lots=N (default 5000), --drawn=N (default 400),
- *        --iterations=N (default 12; the first is discarded as cold).
+ *        --iterations=N (default 12; the first is discarded as cold),
+ *        --no-write (skip the committed JSON record).
+ *
+ * Every run writes `scripts/bench-results/c3-test-coverage-<stamp>.json`. Cite
+ * that file, not a PR body — the 2026-07-28 deep review found this bench's
+ * numbers existed only in #1644's description.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -33,6 +38,10 @@ import { performance } from 'node:perf_hooks';
 import dotenv from 'dotenv';
 import express from 'express';
 import request from 'supertest';
+
+import { machineBlock, sampleMachineLoad, writeBenchResult } from './benchResults.js';
+
+const STARTED_AT = new Date().toISOString();
 
 dotenv.config();
 
@@ -215,6 +224,10 @@ async function main(): Promise<void> {
   });
 
   process.stdout.write(`measuring ${ITERATIONS} iterations (first discarded as cold)…\n`);
+  // Bracketing the measurement, not the seed: these are wall-clock numbers on a
+  // shared workstation, so a record without its contention is not comparable
+  // with any other record.
+  const machine = await machineBlock();
   const routeMs: number[] = [];
   const unscopedMs: number[] = [];
   const allLotIds = lots.map((lot) => lot.id);
@@ -260,6 +273,43 @@ async function main(): Promise<void> {
       percentile(unscopedMs, 95),
     )} ms\n\n`,
   );
+
+  if (!process.argv.includes('--no-write')) {
+    const summary = (values: number[]) => ({
+      n: values.length,
+      minMs: Math.round(Math.min(...values)),
+      medianMs: Math.round(percentile(values, 50)),
+      p95Ms: Math.round(percentile(values, 95)),
+      maxMs: Math.round(Math.max(...values)),
+      samplesMs: values.map((v) => Math.round(v)),
+    });
+    const scoped = summary(routeMs);
+    const unscoped = summary(unscopedMs);
+    const out = writeBenchResult('c3-test-coverage', {
+      benchmark: 'wave-c3/Phase A testing-overlay read',
+      spec: 'docs/plans/wave-c3-exit-evidence-2026-07-28.md (exit item 8); spec §12',
+      startedAt: STARTED_AT,
+      finishedAt: new Date().toISOString(),
+      machine: { ...machine, loadAfterMeasurement: await sampleMachineLoad() },
+      options: { lots: TOTAL_LOTS, drawn: DRAWN_LOTS, iterations: ITERATIONS },
+      shape,
+      results: {
+        // The route as shipped: `[C3R-A1]` scopes the batch to geometry-bearing
+        // lots only.
+        scopedRoute: { route: 'GET /api/projects/:projectId/lots/test-coverage', ...scoped },
+        // The counterfactual: the same batch over every lot, i.e. what the route
+        // would cost without `[C3R-A1]`. The wave's only latency lever.
+        unscopedBatch: { call: 'checkConformancePrerequisitesBatch(allLotIds)', ...unscoped },
+        coldFirstCallMs: Math.round(cold),
+        scopeSpeedupMedian: Number((unscoped.medianMs / scoped.medianMs).toFixed(2)),
+      },
+      // The spec grants this route no budget (C1 exit item 8 has no passing
+      // measurement and the closest analogue is a lighter shape), so the record
+      // states the measurement rather than a pass/fail.
+      verdict: { budget: null, note: 'MEASURED, no inherited budget — see the header comment.' },
+    });
+    process.stdout.write(`  results: ${out}\n\n`);
+  }
 
   if (!process.argv.includes('--keep')) {
     await prisma.testResult.deleteMany({ where: { projectId: project.id } });

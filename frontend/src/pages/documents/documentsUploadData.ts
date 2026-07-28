@@ -21,15 +21,23 @@ export interface DocumentOption {
 }
 
 /**
- * Wave D `D1d` (spec §4.8 items 3-4). These two strings are read by
+ * Wave D `D1d` (spec §4.8 items 3-4). These strings are read by
  * `backend/src/lib/handover/loganPsp5Profile.ts` (`CCTV_DOCUMENT_TYPE`,
- * `CONCEALED_WORKS_DOCUMENT_TYPE`) — the profile named them first so this
- * surface would write the same values instead of picking new ones and leaving
- * the item (e) and (f) resolvers blind. Changing either string here silently
- * blinds a folio resolver.
+ * `CONCEALED_WORKS_DOCUMENT_TYPE`, `OM_MANUAL_DOCUMENT_TYPE`) — the profile
+ * named them first so this surface would write the same values instead of
+ * picking new ones and leaving the item (e), (f) and (h) resolvers blind.
+ * Changing any string here silently blinds a folio resolver.
  */
 export const CCTV_DOCUMENT_TYPE = 'cctv_stormwater';
 export const CONCEALED_WORKS_DOCUMENT_TYPE = 'concealed_works_photo';
+/**
+ * D1d follow-up. `resolveOmManuals` has always read `om_manual`, but no option
+ * offered it, so pack item (h) could never resolve `present` however many PDF
+ * manuals a customer uploaded. A resolver reading a value no surface can write
+ * is a gap that scores itself as customer fault — the exact failure `[DH-B1]`
+ * forbids. `storage_only` is unchanged: CIVOS holds the manual, never reviews it.
+ */
+export const OM_MANUAL_DOCUMENT_TYPE = 'om_manual';
 
 export const DOCUMENT_TYPES: DocumentOption[] = [
   { id: 'specification', label: 'Specification' },
@@ -37,6 +45,7 @@ export const DOCUMENT_TYPES: DocumentOption[] = [
   { id: 'photo', label: 'Photo' },
   { id: CONCEALED_WORKS_DOCUMENT_TYPE, label: 'Concealed works photo' },
   { id: CCTV_DOCUMENT_TYPE, label: 'CCTV video (stormwater)' },
+  { id: OM_MANUAL_DOCUMENT_TYPE, label: 'O&M manual (vendor)' },
   { id: 'certificate', label: 'Certificate' },
   { id: 'report', label: 'Report' },
   { id: 'correspondence', label: 'Correspondence' },

@@ -10,4 +10,4 @@ logs/
 src/lib/readiness/characterization/__fixtures__/
 # Machine-generated benchmark results, appended one file per run. Reformatting
 # them would edit a measurement record after the fact.
-scripts/bench-results/pdf-folio-*.json
+scripts/bench-results/
