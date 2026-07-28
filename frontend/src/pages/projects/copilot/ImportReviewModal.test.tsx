@@ -59,6 +59,46 @@ function dryRun(overrides: Partial<DryRunResult> = {}): DryRunResult {
   };
 }
 
+/**
+ * A CivilPro export whose "Milestone" rows the transform deliberately leaves
+ * unfolded: one `needs_review` row per milestone checklist row, plus the
+ * template row itself. Unresolved, `canApply` is false (itpImportDryRun.ts).
+ */
+function milestoneDryRun(templateKeys: string[] = ['ITP-01::ITP-01']): DryRunResult {
+  return dryRun({
+    counts: {
+      willCreate: 0,
+      willUpdate: 0,
+      willSkip: 0,
+      needsReview: templateKeys.length,
+      ambiguous: 0,
+      blocked: 0,
+    },
+    canApply: false,
+    rows: templateKeys.flatMap((key, index) => {
+      const sheet = key.split('::')[0];
+      return [
+        {
+          key: `row:${sheet}#4`,
+          unit: 'checklist_row' as const,
+          rowRef: { sheet, rowIndex: 4 },
+          label: 'Superintendent approval to proceed',
+          outcome: 'needs_review' as const,
+          reason: 'milestone_point_type',
+        },
+        {
+          key,
+          unit: 'template' as const,
+          rowRef: { sheet, rowIndex: 2 },
+          label: `${sheet} ${index === 0 ? 'Subgrade' : 'Pavement'}`,
+          outcome: 'needs_review' as const,
+          reason: 'milestone_point_type',
+        },
+      ];
+    }),
+  });
+}
+
 function detailFor(result: DryRunResult): ImportBatchDetail {
   return {
     batch: {
@@ -393,6 +433,76 @@ describe('ImportReviewModal', () => {
     expect(screen.getByText(/Record the moisture content/)).toBeInTheDocument();
     // A duplicate creates nothing, so it is not counted as an import.
     expect(screen.getByRole('button', { name: /^Import 0 ITPs$/ })).toBeDisabled();
+  });
+
+  // H6: a CivilPro Milestone is approval-bearing, so the server refuses to
+  // guess and holds the whole batch. Without this control the reviewer had no
+  // way to answer it and the file could never be imported.
+  it('offers a point-type picker for a milestone row and unblocks the import', async () => {
+    state.detail = detailFor(milestoneDryRun());
+    renderModal();
+
+    // The checklist row and its template both carry the reason.
+    expect(screen.getAllByText(/A milestone row needs a point type/)).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /^Import 0 ITPs$/ })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Milestone point type for ITP-01 Subgrade'), {
+      target: { value: 'hold_point' },
+    });
+
+    expect(state.dryRunSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: 'batch-1',
+        resolutions: { 'ITP-01::ITP-01': { milestoneAs: 'hold_point' } },
+      }),
+    );
+
+    // The re-run's verdict is what the apply CTA reads, and the resolution
+    // travels with the batch when it is sent to review.
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Import 1 ITP$/ })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Import 1 ITP$/ }));
+    await vi.waitFor(() => expect(state.decideSpy).toHaveBeenCalled());
+    expect(state.reviewSpy).toHaveBeenCalledWith({
+      batchId: 'batch-1',
+      resolutions: { 'ITP-01::ITP-01': { milestoneAs: 'hold_point' } },
+    });
+  });
+
+  it('still lets a milestone template be left out instead of resolved', () => {
+    state.detail = detailFor(milestoneDryRun());
+    renderModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave this one out' }));
+
+    expect(state.dryRunSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ resolutions: { 'ITP-01::ITP-01': { skip: true } } }),
+    );
+  });
+
+  it('resolves each milestone template on its own', () => {
+    const keys = ['ITP-01::ITP-01', 'ITP-02::ITP-02'];
+    state.detail = detailFor(milestoneDryRun(keys));
+    // The re-run still needs the other template resolved, so both cards stay.
+    state.dryRunSpy = vi.fn(async () => ({ dryRun: milestoneDryRun(keys) }));
+    renderModal();
+
+    fireEvent.change(screen.getByLabelText('Milestone point type for ITP-01 Subgrade'), {
+      target: { value: 'hold_point' },
+    });
+    fireEvent.change(screen.getByLabelText('Milestone point type for ITP-02 Pavement'), {
+      target: { value: 'witness' },
+    });
+
+    expect(state.dryRunSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        resolutions: {
+          'ITP-01::ITP-01': { milestoneAs: 'hold_point' },
+          'ITP-02::ITP-02': { milestoneAs: 'witness' },
+        },
+      }),
+    );
   });
 
   it('offers corporate masters on the upload step and opens the one picked', async () => {
