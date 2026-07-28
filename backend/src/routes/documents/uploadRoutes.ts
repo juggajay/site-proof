@@ -187,9 +187,9 @@ function createUploadDocumentBodySchema({
  * rather than on the CCTV route, so the general upload cannot be used to slip
  * an unassociated one in.
  */
-const LOT_REQUIRED_DOCUMENT_TYPES = new Set(['cctv_stormwater', 'concealed_works_photo']);
+export const LOT_REQUIRED_DOCUMENT_TYPES = new Set(['cctv_stormwater', 'concealed_works_photo']);
 
-function assertLotAssociation(documentType: string, lotId: string | null | undefined): void {
+export function assertLotAssociation(documentType: string, lotId: string | null | undefined): void {
   if (LOT_REQUIRED_DOCUMENT_TYPES.has(documentType) && !lotId) {
     throw AppError.badRequest(
       `A "${documentType}" document must be associated with a lot — the handover folio ` +

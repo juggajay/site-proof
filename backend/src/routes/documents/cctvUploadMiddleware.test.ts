@@ -21,7 +21,12 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import { AppError } from '../../lib/AppError.js';
+import {
+  CCTV_DOCUMENT_TYPE,
+  CONCEALED_WORKS_DOCUMENT_TYPE,
+} from '../../lib/handover/loganPsp5Profile.js';
 import { createCctvUploadMiddleware } from './cctvUploadMiddleware.js';
+import { assertLotAssociation, LOT_REQUIRED_DOCUMENT_TYPES } from './uploadRoutes.js';
 import {
   CCTV_UPLOAD_MAX_BYTES,
   DOCUMENT_UPLOAD_MAX_BYTES,
@@ -139,5 +144,28 @@ describe('AT-149 the CCTV upload surface', () => {
     expect(DOCUMENT_UPLOAD_MAX_BYTES).toBe(52_428_800); // 50 MB, unchanged
     // Separately governed, not derived: changing one must not move the other.
     expect(CCTV_UPLOAD_MAX_BYTES % DOCUMENT_UPLOAD_MAX_BYTES).not.toBe(0);
+  });
+});
+
+// Spec §4.8 item 4. The guard lives on the SHARED body path, not on the CCTV
+// route, so the general `/upload` cannot be used to file an unassociated one.
+describe('D1d lot association', () => {
+  it('names the two handover types the folio resolves per lot', () => {
+    expect([...LOT_REQUIRED_DOCUMENT_TYPES].sort()).toEqual(
+      [CCTV_DOCUMENT_TYPE, CONCEALED_WORKS_DOCUMENT_TYPE].sort(),
+    );
+  });
+
+  it('refuses both handover types without a lot, and says why', () => {
+    for (const documentType of [CCTV_DOCUMENT_TYPE, CONCEALED_WORKS_DOCUMENT_TYPE]) {
+      expect(() => assertLotAssociation(documentType, null)).toThrow(/associated with a lot/);
+      expect(() => assertLotAssociation(documentType, undefined)).toThrow(/resolves this evidence/);
+      expect(() => assertLotAssociation(documentType, 'lot-1')).not.toThrow();
+    }
+  });
+
+  it('leaves every other document type alone', () => {
+    expect(() => assertLotAssociation('photo', null)).not.toThrow();
+    expect(() => assertLotAssociation('om_manual', null)).not.toThrow();
   });
 });
