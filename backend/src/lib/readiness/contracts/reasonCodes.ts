@@ -288,3 +288,18 @@ export const REASON_CODE_PROVENANCE: Record<
 export function isReadinessReasonCode(value: string): value is ReadinessReasonCode {
   return (READINESS_REASON_CODES as readonly string[]).includes(value);
 }
+
+/**
+ * The same narrowing for the closeout subset (Wave D `D1a`), so a consumer
+ * filtering emitted codes down to the handover vocabulary narrows through one
+ * checked guard rather than asserting the type at each call site.
+ *
+ * The return type is spelled out rather than imported as `HandoverReasonCode`:
+ * that alias lives in `./futureConsumers.ts`, which imports THIS file, and it is
+ * defined as exactly this expression.
+ */
+export function isHandoverReasonCode(
+  value: string,
+): value is (typeof HANDOVER_BLOCKING_REASON_CODES)[number] {
+  return (HANDOVER_BLOCKING_REASON_CODES as readonly string[]).includes(value);
+}

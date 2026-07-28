@@ -141,6 +141,19 @@ export interface LotCloseoutReadinessSnapshot {
   /** §4.1.4: null means fold confidence `family`/`none` — the lot is UNCLASSIFIED. */
   activitySlug: string | null;
   /**
+   * The two remaining lot-state fields the SHIPPED readiness builders read.
+   * Added by `D1a` (§4.1.2's "the lot page's definition wins"): without them the
+   * closeout fold diverges from `GET /api/lots/:id/readiness` on exactly two
+   * real states — a force-conformed lot (`conformanceOverriddenAt` suppresses
+   * the accepted prerequisites, so the panel would still call it blocked) and a
+   * lot carrying `claimedInId` ahead of its status. Both are drift `[DH-B5]`
+   * forbids, and neither is visible from the field's own name, which is why
+   * they are carried rather than defaulted.
+   */
+  claimedInId: string | null;
+  /** ISO timestamp of a persisted force-conformance override, or null. */
+  conformanceOverriddenAt: string | null;
+  /**
    * `checkConformancePrerequisites` (the lot page's own call,
    * `routes/lots/qualityRoutes.ts`). Feeds `no_itp_assigned`, `itp_incomplete`,
    * `no_passing_verified_test`, `open_ncrs`, `na_hold_point_not_released` and

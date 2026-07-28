@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { ProjectCloseoutReadiness } from './ProjectCloseoutReadiness';
 import { ActivityRow, NCRCategoryBar, StatPill, StatusCount } from './ProjectDashboardParts';
 import {
   formatStatusLabel,
@@ -474,6 +475,11 @@ export function ProjectDashboard() {
               </div>
             )}
           </div>
+
+          {/* Quality closeout readiness (Wave D D1a) */}
+          {projectId ? (
+            <ProjectCloseoutReadiness projectId={projectId} projectRouteBase={projectRouteBase} />
+          ) : null}
         </div>
 
         {/* Right Column - Activity */}

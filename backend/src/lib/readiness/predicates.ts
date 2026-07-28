@@ -328,7 +328,13 @@ export interface NcrRow {
   dueDate?: Date | string | null;
 }
 
-const CLOSED_NCR_STATUSES = ['closed', 'closed_concession'];
+/**
+ * Exported (Wave D `D1a`) so a Prisma `notIn` can bind to the SAME value
+ * {@link ncrOpen} tests, keeping the query and the predicate from drifting —
+ * the pattern F0.2a already used for {@link SERIOUS_NCR_SEVERITY} and the
+ * stagnant hold-point statuses.
+ */
+export const CLOSED_NCR_STATUSES = ['closed', 'closed_concession'];
 
 /**
  * An NCR is open unless it has reached a closed status. Consistent across every

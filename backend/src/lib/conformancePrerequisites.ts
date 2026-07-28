@@ -1,6 +1,11 @@
 import { prisma } from './prisma.js';
 import { isReleaseGatedChecklistItem } from './holdPointReleaseGating.js';
-import { lotConformable, testMatchesItem, testPassing } from './readiness/predicates.js';
+import {
+  CLOSED_NCR_STATUSES,
+  lotConformable,
+  testMatchesItem,
+  testPassing,
+} from './readiness/predicates.js';
 import {
   getChecklistItemsForInstance,
   parseTemplateSnapshot,
@@ -444,8 +449,10 @@ export const CONFORMANCE_LOT_SELECT = {
   },
   ncrLots: {
     where: {
+      // Bound to the predicate library's constant rather than re-listed, so this
+      // query and `ncrOpen` cannot drift (Wave D `D1a`).
       ncr: {
-        status: { notIn: ['closed', 'closed_concession'] },
+        status: { notIn: CLOSED_NCR_STATUSES },
       },
     },
     select: {
