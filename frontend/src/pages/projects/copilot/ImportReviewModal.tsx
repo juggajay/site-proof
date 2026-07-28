@@ -337,6 +337,30 @@ function ProposalRow({
             </NativeSelect>
           )}
 
+          {/* CivilPro's Milestone is approval-bearing and has no vocabulary
+              value to fold to, so the server leaves it unresolved and the
+              reviewer says what this template's milestones really are. One
+              choice per template — matching TemplateResolution.milestoneAs. */}
+          {row.reason === 'milestone_point_type' && (
+            <NativeSelect
+              aria-label={`Milestone point type for ${row.label}`}
+              disabled={busy}
+              value={resolution?.milestoneAs ?? ''}
+              onChange={(event) =>
+                onResolve({
+                  milestoneAs: (event.target.value ||
+                    undefined) as Resolutions[string]['milestoneAs'],
+                })
+              }
+              className="h-8 max-w-[16rem] text-xs"
+            >
+              <option value="">Pick a point type…</option>
+              <option value="standard">S - Standard</option>
+              <option value="witness">W - Witness</option>
+              <option value="hold_point">H - Hold Point</option>
+            </NativeSelect>
+          )}
+
           {row.reason === 'state_spec_conflict' && (
             <Button
               type="button"
