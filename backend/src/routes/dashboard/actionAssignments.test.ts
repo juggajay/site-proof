@@ -51,7 +51,7 @@ function holdPoint(overrides: Partial<Parameters<typeof toHoldPointAssignment>[0
     description: 'Subgrade proof roll',
     status: 'scheduled',
     scheduledDate: null as Date | null,
-    lot: { project: { id: PROJECT_ID } },
+    lot: { lotNumber: 'LOT-014', project: { id: PROJECT_ID } },
     ...overrides,
   };
 }
@@ -102,6 +102,82 @@ describe('A4 P1.1 ActionAssignment adapter', () => {
       isOverdue: false,
       severity: 'warning',
     });
+  });
+});
+
+// M8 (review 2026-07-28) — a `kind: 'role'` assignee was treated as
+// unconditionally held by the viewer, so ONE QUALITY_MANAGER hold point sat in
+// "Needs you" for owner + admin + project_manager + quality_manager at once:
+// four people each told the ball was in their court.
+describe('M8 — a role assignee is only the viewer when the role matches', () => {
+  const roleHoldPoint = holdPoint({ status: 'pending' });
+
+  it('puts the role-assigned hold point in Needs you for the named role only', () => {
+    const qm = toHoldPointAssignment(roleHoldPoint, viewerWithRole('quality_manager'), NOW);
+    expect(qm.assignee).toEqual({ kind: 'role', role: 'quality_manager' });
+    expect(qm.status).toBe('waiting_on_me');
+    expect(qm.needsAction).toBe(true);
+  });
+
+  it.each(['owner', 'admin', 'project_manager'])(
+    'leaves the same hold point in Waiting on others for %s, who can act but does not hold it',
+    (role) => {
+      const assignment = toHoldPointAssignment(roleHoldPoint, viewerWithRole(role), NOW);
+      // These roles ARE in executableByRoles — the old code therefore claimed
+      // ownership for all of them. Ball-in-court is not "may act".
+      expect(assignment.primaryAction.executableByRoles).toContain(role);
+      expect(assignment.status).toBe('waiting_on_others');
+      expect(assignment.needsAction).toBe(false);
+      expect(groupByBallInCourt([assignment]).needsYou).toHaveLength(0);
+    },
+  );
+
+  it('applies the same rule to an unassigned NCR (role fallback)', () => {
+    const unassigned = overdueNcr();
+    expect(toNcrAssignment(unassigned, viewerWithRole('quality_manager'), NOW).status).toBe(
+      'waiting_on_me',
+    );
+    // owner can review NCRs, but this one is the QM's ball.
+    const owner = toNcrAssignment(unassigned, viewerWithRole('owner'), NOW);
+    expect(owner.status).toBe('waiting_on_others');
+    expect(owner.needsAction).toBe(false);
+  });
+
+  it('still keeps a user-assigned row keyed to that user', () => {
+    const mine = toNcrAssignment(
+      overdueNcr({ responsibleUserId: VIEWER_ID }),
+      viewerWithRole('quality_manager'),
+      NOW,
+    );
+    expect(mine.status).toBe('waiting_on_me');
+    const theirs = toNcrAssignment(
+      overdueNcr({ responsibleUserId: OTHER_USER_ID }),
+      viewerWithRole('quality_manager'),
+      NOW,
+    );
+    expect(theirs.status).toBe('waiting_on_others');
+  });
+});
+
+// M8 — five "Subgrade proof roll" hold points rendered as five identical rows.
+// The dashboard PDF prints the lot number; the screen must too.
+describe('M8 — hold-point rows carry their lot number', () => {
+  it('puts the lot number in the assignment title', () => {
+    const assignment = toHoldPointAssignment(
+      holdPoint({ lot: { lotNumber: 'LOT-014', project: { id: PROJECT_ID } } }),
+      viewerWithRole('quality_manager'),
+      NOW,
+    );
+    expect(assignment.title).toBe('Subgrade proof roll · Lot LOT-014');
+  });
+
+  it('falls back to the description alone when the lot has no number', () => {
+    const assignment = toHoldPointAssignment(
+      holdPoint({ lot: { lotNumber: '', project: { id: PROJECT_ID } } }),
+      viewerWithRole('quality_manager'),
+      NOW,
+    );
+    expect(assignment.title).toBe('Subgrade proof roll');
   });
 });
 

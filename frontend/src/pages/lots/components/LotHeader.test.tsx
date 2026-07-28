@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LotHeader, type LotHeaderProps } from './LotHeader';
 import type { Lot } from '../types';
@@ -29,14 +30,18 @@ vi.mock('@/hooks/useMediaQuery', () => ({
 // The desktop action row hosts the Ask-Clancy button, whose gate reads auth + AI
 // status; stub those so it renders without an AuthProvider.
 vi.mock('@/hooks/useAiStatus', () => ({ useAiStatus: () => ({ aiConfigured: true }) }));
+// `actualRole` is the RoleSwitcher-aware role — the header must gate on it, not
+// on `user.role`.
+const authState = vi.hoisted(() => ({ actualRole: 'quality_manager' as string | null }));
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
-  useAuth: () => ({ user: { roleInCompany: 'owner' } }),
+  useAuth: () => ({ user: { roleInCompany: 'owner' }, actualRole: authState.actualRole }),
 }));
 
 afterEach(() => {
   cleanup();
   mockIsMobile = false;
+  authState.actualRole = 'quality_manager';
 });
 
 const baseLot: Lot = {
@@ -109,7 +114,18 @@ function renderHeader(overrides: Partial<LotHeaderProps> = {}) {
     onRemoveAssignment: vi.fn(),
     ...overrides,
   };
-  return render(<LotHeader {...props} />);
+  return render(
+    <MemoryRouter>
+      <LotHeader {...props} />
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+}
+
+/** Reports the router's current location, so a soft transition is observable. */
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
 }
 
 // ── Desktop permission tests (unchanged behaviour) ──────────────────────────
@@ -266,6 +282,69 @@ describe('LotHeader readiness primary action', () => {
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
     expect(document.querySelector('.bg-primary')).toBeNull();
     expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument();
+  });
+
+  // M8 (deep review 2026-07-28) — `pickPrimaryReadinessAction` took no role, so a
+  // viewer got a solid primary button pointing at an INTERNAL_ROLES-only route
+  // (`/projects/:id/hold-points`) and landed on the access-denied screen.
+  const navigatingBlocker: EvidenceReadinessItem = {
+    code: 'unreleased_hold_points',
+    severity: 'blocker',
+    area: 'hold_point',
+    title: 'Hold points not released',
+    detail: '2 outstanding',
+    blocksAction: true,
+    actionLabel: 'Open Hold Points',
+    actionHref: '/projects/project-1/hold-points?lotId=lot-1',
+  };
+
+  it('renders the navigating primary as a router Link, not a full-page reload', () => {
+    renderHeader({
+      canManageLot: true,
+      readiness: readinessWith([navigatingBlocker]),
+      onReadinessAction: vi.fn(),
+    });
+
+    const link = screen.getByRole('link', { name: 'Open Hold Points' });
+    expect(link).toHaveAttribute('href', '/projects/project-1/hold-points?lotId=lot-1');
+
+    // A raw <a> leaves the router where it was (jsdom refuses the navigation);
+    // a router Link moves it. This is the whole difference between a soft
+    // transition and a full document reload.
+    fireEvent.click(link);
+    expect(screen.getByTestId('location-probe')).toHaveTextContent(
+      '/projects/project-1/hold-points?lotId=lot-1',
+    );
+  });
+
+  it('suppresses a navigating primary the viewer role cannot reach', () => {
+    authState.actualRole = 'viewer';
+    renderHeader({
+      canManageLot: false,
+      canEditLot: false,
+      readiness: readinessWith([navigatingBlocker]),
+      onReadinessAction: vi.fn(),
+    });
+
+    expect(screen.queryByRole('link', { name: 'Open Hold Points' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Open Hold Points')).not.toBeInTheDocument();
+    expect(document.querySelector('.bg-primary')).toBeNull();
+  });
+
+  it('still offers in-page tab actions to a viewer', () => {
+    // A tab switch stays on a page the viewer can already see, so it is not
+    // gated — only destinations behind a route guard are.
+    authState.actualRole = 'viewer';
+    const onReadinessAction = vi.fn();
+    renderHeader({
+      canManageLot: false,
+      canEditLot: false,
+      readiness: readinessWith([blocker]),
+      onReadinessAction,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Release hold point' }));
+    expect(onReadinessAction).toHaveBeenCalledWith('itp', 'unreleased_hold_points');
   });
 
   it('uses the readiness action as the mobile primary and pushes Edit Lot into the sheet', () => {

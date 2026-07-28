@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { NeedsAttentionQuickLink } from './NeedsAttentionQuickLink';
 import { useDashboardProjectId } from '@/hooks/useDashboardProjectId';
 
 interface QMDashboardData {
@@ -508,6 +509,7 @@ export function QualityManagerDashboard() {
             <BarChart3 className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">Quality Reports</span>
           </Link>
+          <NeedsAttentionQuickLink />
         </div>
       </div>
     </div>

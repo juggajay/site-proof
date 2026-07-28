@@ -15,6 +15,7 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { getRoleDisplayName } from '@/lib/roles';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { buttonVariants } from '@/components/ui/button';
 import {
@@ -224,7 +225,9 @@ function AssignmentRow({ assignment, projectName, ownerName, now }: AssignmentRo
           </span>{' '}
           {ownerName}
           {projectName ? <> &middot; {projectName}</> : null} &middot;{' '}
-          <span className="font-mono">{assignment.reasonCode}</span>
+          {/* L13 — the raw code (`hold_point_overdue`) used to render here in
+              font-mono. Through the shared label helper it reads as English. */}
+          <span>{formatStatusLabel(assignment.reasonCode)}</span>
         </p>
       </div>
 
@@ -366,10 +369,13 @@ export function NeedsAttentionPage() {
     <div className="min-w-0">
       <h1 className="text-2xl font-semibold tracking-tight">Needs Attention</h1>
       {/* The feed is capped per source, so the screen says so rather than letting
-          the cap masquerade as the truth. */}
+          the cap masquerade as the truth. It says only what is true: the NCR limb
+          is fetched `dueDate asc` but the hold-point limb is `createdAt asc` and
+          deliberately carries rows that are not overdue at all (`statsRoute.ts`),
+          so "the N most overdue" was a claim the query never made. */}
       {totalCount > items.length && (
         <p className="mt-1 text-sm text-muted-foreground">
-          Showing the {items.length} most overdue of {totalCount}.
+          Showing {items.length} of {totalCount} items needing attention.
         </p>
       )}
     </div>

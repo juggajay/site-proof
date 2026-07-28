@@ -58,6 +58,9 @@ export function useLotConformanceActions({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.lotReadiness(lotId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) }),
+        // Conforming a lot clears its readiness rows from the dashboard attention
+        // widget and /dashboard/needs-attention, which share one cache entry.
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStatsAll }),
         ...(projectId
           ? [
               queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),

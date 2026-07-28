@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Link2, Check, RefreshCw, Printer, MoreVertical, Pencil } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 import { LotQRCode } from '@/components/lots/LotQRCode';
 import { AskClancyButton } from '@/components/copilot/AskClancy';
 import { Button } from '@/components/ui/button';
@@ -90,6 +92,9 @@ export function LotHeader({
   onRemoveAssignment,
 }: LotHeaderProps) {
   const isMobile = useIsMobile();
+  // `actualRole` — the RoleSwitcher-aware role — gates the primary action's
+  // destination. `user.role` would be wrong under a role switch.
+  const { actualRole } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -113,7 +118,7 @@ export function LotHeader({
   // The one action that earns the solid primary slot. A tab action needs a
   // handler to run through; without one there is no primary — we never
   // fabricate an action to fill the slot.
-  const topAction = pickPrimaryReadinessAction(readiness);
+  const topAction = pickPrimaryReadinessAction(readiness, actualRole);
   const primary = topAction && (topAction.href || onReadinessAction) ? topAction : null;
   const canEdit = Boolean(canEditLot && isEditable);
   // Edit Lot only holds the slot when nothing outranked it.
@@ -122,8 +127,10 @@ export function LotHeader({
   const primaryButton = (className: string) => {
     if (primary) {
       return primary.href ? (
+        // A router Link, not <a href> — the destination is an in-app route, and
+        // a full document reload here threw away the whole lot page's cache.
         <Button asChild className={className}>
-          <a href={primary.href}>{primary.label}</a>
+          <Link to={primary.href}>{primary.label}</Link>
         </Button>
       ) : (
         <Button

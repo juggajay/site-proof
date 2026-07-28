@@ -178,6 +178,9 @@ export function HoldPointsPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
       queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) }),
       queryClient.invalidateQueries({ queryKey: queryKeys.foremanBadges(projectId) }),
+      // The dashboard attention widget and /dashboard/needs-attention read one
+      // cache entry; a release request is what moves a hold point off that feed.
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStatsAll }),
     ]);
   }, [projectId, queryClient]);
 

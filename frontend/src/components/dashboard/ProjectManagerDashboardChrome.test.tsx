@@ -49,14 +49,34 @@ describe('ProjectManagerDashboardChrome', () => {
     );
   });
 
-  it('falls quick actions back to the project list when no project is selected', () => {
+  // M8 (review 2026-07-28) — DashboardPage returns early for project_manager, so
+  // the ONLY link to /dashboard/needs-attention (the widget header on the default
+  // dashboard) was unreachable for the role the screen was built for.
+  it('reaches Needs Attention regardless of the selected project', () => {
     render(
       <MemoryRouter>
         <ProjectManagerQuickActions projectId={undefined} />
       </MemoryRouter>,
     );
 
-    for (const link of screen.getAllByRole('link')) {
+    expect(screen.getByRole('link', { name: /needs attention/i })).toHaveAttribute(
+      'href',
+      '/dashboard/needs-attention',
+    );
+  });
+
+  it('falls project-scoped quick actions back to the project list when no project is selected', () => {
+    render(
+      <MemoryRouter>
+        <ProjectManagerQuickActions projectId={undefined} />
+      </MemoryRouter>,
+    );
+
+    const projectScoped = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href') !== '/dashboard/needs-attention');
+    expect(projectScoped.length).toBeGreaterThan(0);
+    for (const link of projectScoped) {
       expect(link).toHaveAttribute('href', '/projects');
     }
   });

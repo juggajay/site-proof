@@ -91,6 +91,9 @@ export function useNCRActions({
     const invalidations = [
       queryClient.invalidateQueries({ queryKey: ['lot'] }),
       queryClient.invalidateQueries({ queryKey: ['lot-readiness'] }),
+      // The dashboard attention widget and /dashboard/needs-attention read one
+      // cache entry; closing an NCR is exactly what removes it from that feed.
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStatsAll }),
     ];
 
     if (projectId) {

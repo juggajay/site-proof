@@ -33,7 +33,7 @@ export function useCreateSampleProject() {
     onSuccess: ({ project }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects });
       // Prefix match: dashboardStats keys are parameterised by date range.
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStatsAll });
       navigate(`/projects/${encodeURIComponent(project.id)}`);
     },
   });

@@ -53,7 +53,7 @@ export interface AttentionHoldPointRow {
   description: string | null;
   status: string;
   scheduledDate: Date | null;
-  lot: { project: { id: string } };
+  lot: { lotNumber: string; project: { id: string } };
 }
 
 /**
@@ -62,6 +62,14 @@ export interface AttentionHoldPointRow {
  * court. Phase 1 therefore only ever produces two of the three statuses; the
  * "your court — needs another role" group stays empty, which spec §9 mandates
  * ("with only two reason codes there is nothing honest to put in it").
+ *
+ * A `role` assignee is held by the viewer only when it names the viewer's OWN
+ * project role. Treating every `role` assignee as the viewer's (the shipped
+ * behaviour until the 2026-07-28 review's M8) put one QUALITY_MANAGER hold point
+ * in "Needs you" for owner + admin + project_manager + quality_manager at once —
+ * four people each told the ball was in their court. Those roles still SEE the
+ * row; it lands in "Waiting on others", which is where a thing somebody else
+ * owns belongs. `executableByRoles` answers "may act", never "owns".
  */
 function resolveStatus(
   assignee: ActionAssignee,
@@ -70,7 +78,11 @@ function resolveStatus(
   viewerRole: string,
 ): ActionAssignmentStatus {
   const heldByViewer =
-    assignee.kind === 'role' || (assignee.kind === 'user' && assignee.id === viewer.userId);
+    assignee.kind === 'user'
+      ? assignee.id === viewer.userId
+      : assignee.kind === 'role'
+        ? assignee.role === viewerRole
+        : false;
   return heldByViewer && primaryAction.executableByRoles.includes(viewerRole as Role)
     ? 'waiting_on_me'
     : 'waiting_on_others';
@@ -140,10 +152,19 @@ export function toHoldPointAssignment(
     executableByRoles: HOLD_POINT_ROLES,
   };
   const status = resolveStatus(assignee, primaryAction, viewer, viewerRole);
+  // The lot number is the ONLY thing that tells five "Subgrade proof roll" rows
+  // apart — the dashboard PDF has always printed it (`statsRoute` puts the same
+  // `Lot ${lotNumber}` in the widget row's `description`).
+  const title = [
+    holdPoint.description || 'Hold Point',
+    holdPoint.lot.lotNumber && `Lot ${holdPoint.lot.lotNumber}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return {
     subjectType: 'hold_point',
     subjectId: holdPoint.id,
-    title: holdPoint.description || 'Hold Point',
+    title,
     status,
     needsAction: deriveNeedsAction({ status, primaryAction }, viewerRole),
     isOverdue: overdue,
