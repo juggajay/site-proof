@@ -241,3 +241,138 @@ describe('email service configuration', () => {
     expect(queuedEmail.subject).not.toMatch(/[\r\n]/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// L12 — suppression on the SHARED send path. The module existed with no caller
+// here, so a hard-bounced or complained address kept receiving invites, NCR
+// notifications, claim notices and hold point release requests.
+// ---------------------------------------------------------------------------
+
+/** The suppression set is module state, so both modules must load together. */
+async function loadEmailWithSuppression() {
+  process.env.NODE_ENV = 'development';
+  process.env.EMAIL_PROVIDER = 'mock';
+  delete process.env.RESEND_API_KEY;
+  vi.resetModules();
+  const suppression = await import('./emailSuppression.js');
+  suppression.resetEmailSuppressionForTests();
+  const email = await import('./email.js');
+  return { ...email, ...suppression };
+}
+
+/** Same, with a stubbed Resend transport that answers with `providerError`. */
+async function loadWithFailingResend(providerError: Record<string, unknown>) {
+  process.env.NODE_ENV = 'development';
+  process.env.RESEND_API_KEY = 're_test_key';
+  delete process.env.EMAIL_PROVIDER;
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const send = vi.fn().mockResolvedValue({ data: null, error: providerError });
+  vi.resetModules();
+  vi.doMock('resend', () => ({
+    Resend: class {
+      emails = { send };
+    },
+  }));
+  const suppression = await import('./emailSuppression.js');
+  suppression.resetEmailSuppressionForTests();
+  const email = await import('./email.js');
+  return { ...email, ...suppression, send };
+}
+
+const HARD_BOUNCE = { name: 'bounced', message: 'hard bounce: mailbox not found' };
+
+describe('sendEmail recipient suppression', () => {
+  afterEach(() => {
+    vi.doUnmock('resend');
+  });
+
+  it('skips a suppressed recipient without erroring', async () => {
+    const { sendEmail, getQueuedEmails, recordEmailSuppression } = await loadEmailWithSuppression();
+    recordEmailSuppression('Bounced@Example.com', 'hard_bounce');
+
+    const result = await sendEmail({
+      to: 'bounced@example.com',
+      subject: 'Invitation',
+      text: 'You are invited',
+    });
+
+    // PROOF OF CATCH: before the wiring this queued (i.e. sent) the message.
+    expect(getQueuedEmails()).toHaveLength(0);
+    expect(result.suppressed).toBe(true);
+    // A no-op, NOT a failure: callers must not 503 or retry a message the
+    // provider already refused permanently.
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('still sends to an address that is not suppressed', async () => {
+    const { sendEmail, getQueuedEmails, recordEmailSuppression } = await loadEmailWithSuppression();
+    recordEmailSuppression('bounced@example.com', 'hard_bounce');
+
+    const result = await sendEmail({
+      to: 'live@example.com',
+      subject: 'Invitation',
+      text: 'You are invited',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.suppressed).toBeUndefined();
+    expect(getQueuedEmails()).toHaveLength(1);
+    expect(getQueuedEmails()[0]!.to).toBe('live@example.com');
+  });
+
+  it('drops only the suppressed addresses from a multi-recipient send', async () => {
+    const { sendEmail, getQueuedEmails, recordEmailSuppression } = await loadEmailWithSuppression();
+    recordEmailSuppression('bounced@example.com', 'hard_bounce');
+
+    const result = await sendEmail({
+      to: ['bounced@example.com', 'live@example.com'],
+      subject: 'Digest',
+      text: 'Daily digest',
+    });
+
+    expect(result.success).toBe(true);
+    expect(getQueuedEmails()[0]!.to).toEqual(['live@example.com']);
+  });
+
+  it('suppresses the recipient after a PERMANENT provider failure', async () => {
+    const { sendEmail, isEmailSuppressed, isResendConfigured, send } =
+      await loadWithFailingResend(HARD_BOUNCE);
+    expect(isResendConfigured()).toBe(true);
+
+    const failed = await sendEmail({ to: 'gone@example.com', subject: 'NCR', text: 'NCR' });
+    expect(failed.success).toBe(false);
+    expect(isEmailSuppressed('gone@example.com')).toBe(true);
+
+    // And the next send to that address never reaches the transport.
+    const second = await sendEmail({ to: 'gone@example.com', subject: 'NCR', text: 'NCR' });
+    expect(second.suppressed).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT suppress the recipient after a TRANSIENT provider failure', async () => {
+    const { sendEmail, isEmailSuppressed, send } = await loadWithFailingResend({
+      name: 'rate_limit_exceeded',
+      message: 'Too many requests',
+      statusCode: 429,
+    });
+
+    const failed = await sendEmail({ to: 'busy@example.com', subject: 'NCR', text: 'NCR' });
+    expect(failed.success).toBe(false);
+    // PROOF OF CATCH: suppressing here would permanently mute a real recipient
+    // over a provider hiccup, and nothing durable records why.
+    expect(isEmailSuppressed('busy@example.com')).toBe(false);
+
+    await sendEmail({ to: 'busy@example.com', subject: 'NCR', text: 'NCR' });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('cannot attribute a multi-recipient failure, so suppresses nobody', async () => {
+    const { sendEmail, isEmailSuppressed } = await loadWithFailingResend(HARD_BOUNCE);
+
+    await sendEmail({ to: ['a@example.com', 'b@example.com'], subject: 'Digest', text: 'Digest' });
+
+    expect(isEmailSuppressed('a@example.com')).toBe(false);
+    expect(isEmailSuppressed('b@example.com')).toBe(false);
+  });
+});

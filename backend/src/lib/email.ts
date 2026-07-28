@@ -38,6 +38,11 @@ import {
   sendScheduledReportEmail as sendScheduledReportTemplateEmail,
   type ScheduledReportEmailData,
 } from './email/reportTemplates.js';
+import {
+  isEmailSuppressed,
+  isSuppressionFailure,
+  recordEmailSuppression,
+} from './emailSuppression.js';
 import { buildFrontendUrl } from './runtimeConfig.js';
 import { logError, logInfo } from './serverLogger.js';
 
@@ -72,6 +77,12 @@ export interface EmailResult {
   errorCode?: string;
   statusCode?: number;
   provider?: 'resend' | 'mock';
+  /**
+   * Every recipient was on the suppression list, so nothing was sent. This is a
+   * NON-ERROR no-op on purpose: a caller must not surface a 503 or retry a
+   * message the provider has already told us never to deliver again.
+   */
+  suppressed?: boolean;
 }
 
 // Email queue for testing/development
@@ -115,6 +126,40 @@ function readProviderErrorStatus(error: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) ? value : undefined;
 }
 
+/**
+ * Wave E2 suppression, applied to every real send (review finding L12). The
+ * module existed with no caller on the shared path, so a hard-bounced or
+ * complained address kept receiving invites, NCR notifications, claim notices
+ * and hold point release requests.
+ *
+ * Returns the addresses still allowed to receive this message, in the caller's
+ * own shape, or `null` when every one of them is suppressed.
+ */
+function deliverableRecipients(to: string | string[]): string | string[] | null {
+  if (!Array.isArray(to)) return isEmailSuppressed(to) ? null : to;
+  const kept = to.filter((address) => !isEmailSuppressed(address));
+  return kept.length > 0 ? kept : null;
+}
+
+/**
+ * Suppress on a PERMANENT provider failure only — `isSuppressionFailure` is the
+ * existing classifier, so a rate limit, timeout or 5xx stays retryable.
+ *
+ * ponytail: single-recipient sends only. Resend answers a multi-recipient send
+ * with one error that does not say which address it was about, and muting a
+ * valid recipient is worse than missing a bounce. The upgrade path is a Resend
+ * bounce webhook, which reports per-address.
+ */
+function recordSuppressionFromFailure(
+  recipients: string[],
+  error: string | undefined,
+  errorCode: string | undefined,
+): void {
+  if (recipients.length !== 1) return;
+  if (!isSuppressionFailure(error, errorCode)) return;
+  recordEmailSuppression(recipients[0]!, errorCode || 'provider_rejected');
+}
+
 // Initialize Resend client if API key is provided and valid
 const resend =
   !useMockEmail && isValidResendApiKey(EMAIL_CONFIG.resendApiKey)
@@ -145,6 +190,17 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
     }
     return { success: false, error: 'Email sending disabled' };
   }
+
+  const deliverableTo = deliverableRecipients(email.to);
+  if (deliverableTo === null) {
+    // Never the address itself — spec §7.5, `[E-B7]`.
+    logInfo('[Email Service] Send skipped: every recipient is suppressed', {
+      recipientCount: getRecipientCount(email.to),
+    });
+    return { success: true, suppressed: true };
+  }
+  email.to = deliverableTo;
+  const recipients = Array.isArray(deliverableTo) ? deliverableTo : [deliverableTo];
 
   // Store in queue for testing/development diagnostics without retaining production email contents.
   if (!isProductionEmailRuntime) {
@@ -180,7 +236,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
 
       const response = await resend.emails.send({
         from: email.from,
-        to: Array.isArray(email.to) ? email.to : [email.to],
+        to: recipients,
         subject: email.subject,
         text: email.text || '',
         html: email.html,
@@ -191,10 +247,12 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
 
       if (response.error) {
         logError('[Email Service] Resend API error:', response.error);
+        const errorCode = readProviderErrorString(response.error, 'name');
+        recordSuppressionFromFailure(recipients, response.error.message, errorCode);
         return {
           success: false,
           error: response.error.message,
-          errorCode: readProviderErrorString(response.error, 'name'),
+          errorCode,
           statusCode: readProviderErrorStatus(response.error),
           provider: 'resend',
         };
@@ -211,10 +269,14 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
       };
     } catch (error) {
       logError('[Email Service] Resend API exception:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      const errorCode =
+        readProviderErrorString(error, 'name') || readProviderErrorString(error, 'code');
+      recordSuppressionFromFailure(recipients, message, errorCode);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        errorCode: readProviderErrorString(error, 'name') || readProviderErrorString(error, 'code'),
+        error: message,
+        errorCode,
         statusCode: readProviderErrorStatus(error),
         provider: 'resend',
       };
