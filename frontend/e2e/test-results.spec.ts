@@ -433,7 +433,9 @@ test.describe('Test results seeded quality evidence contract', () => {
     await expect(densityRow.getByText('98.2 % DDR')).toBeVisible();
     await expect(densityRow.getByText('pass')).toBeVisible();
     await expect(densityRow.getByText('Entered')).toBeVisible();
-    await expect(densityRow.getByText('AI')).toBeVisible();
+    // exact: the row also carries a "Read with AI" attach action (#1634), which a
+    // substring match would collide with. This asserts the extraction badge only.
+    await expect(densityRow.getByText('AI', { exact: true })).toBeVisible();
     await expect(
       densityRow.getByRole('button', {
         name: 'Print material conformance record for Density Ratio',
@@ -500,7 +502,8 @@ test.describe('Test results seeded quality evidence contract', () => {
     await createModal.getByLabel('Lab Report Number').fill('  LAB-E2E-003  ');
     await createModal.getByLabel('Laboratory Name').fill('  E2E Concrete Lab  ');
     await createModal.getByLabel('Test Date').fill('2026-05-08');
-    await createModal.getByLabel('Result Date').fill('2026-05-09');
+    // exact: the modal also has an "Expected Result Date" input (#1637).
+    await createModal.getByLabel('Result Date', { exact: true }).fill('2026-05-09');
     await createModal.getByRole('button', { name: 'Create Test Result' }).click();
 
     expect(api.getCreateTestRequest()).toMatchObject({
