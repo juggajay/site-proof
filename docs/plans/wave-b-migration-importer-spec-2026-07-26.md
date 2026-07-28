@@ -11,6 +11,7 @@
 | Rev 1 | 26 Jul 2026 | Authored (branch `wave-b-spec`, citations verified at HEAD `dfbd01e0`). |
 | — | 26 Jul 2026 | **Opus 5 adversarial review** at HEAD `668a9592`. Verdict **7/10**: 5 blockers, 9 majors. **All findings accepted by Jay same day.** |
 | **Rev 2** | 26 Jul 2026 | **This revision applies all 12 accepted changes**, tagged `[WBR2-1]`…`[WBR2-12]` at the point of edit. All nine open decisions D1–D9 are now **DECIDED** (§9). |
+| — | 28 Jul 2026 | **Amendment `[C2L-4]` (§4.7, and the §1 non-goal bullet).** Wave C2 shipped (#1633 #1634 #1636 #1637) and its J1 settled the sample/test lifecycle model on `TestResult` with **no `Sample` entity** (`wave-c2-test-lifecycle-spec-2026-07-28.md` Rev 2 §3.4). The test-register reservation is **no longer parked on a model decision** — it awaits a build slot. Body of the spec otherwise unchanged; still Rev 2. |
 
 All `file:line` citations were **re-verified in this worktree at HEAD `7e71e632`** (branch `wave-b-rev2`, off `origin/master`). Two citations in the accepted review had drifted and are corrected here — see the drift note in §10. Re-verify line numbers at build time (the F0 staleness lesson applies).
 
@@ -30,7 +31,7 @@ All `file:line` citations were **re-verified in this worktree at HEAD `7e71e632`
 - File-upload threat model per program §7 (parser hardening, size/type limits, tenant isolation, prompt-injection containment) — §8, rewritten in Rev 2 around named, implementable controls.
 
 **Non-goals (explicit — do not build):**
-- **Test-register / certificate-register import is DEFERRED** until the Wave C sample/test model is final (program §9 sequencing correction — "otherwise it gets rebuilt"). This spec designs **nothing** for it beyond the placeholder note in §4.7. The existing single-certificate extraction (`certificateExtraction.ts:182`) is unchanged and is not a bulk register importer.
+- **Test-register / certificate-register import is DEFERRED** — still out of Wave B, but **the reason changed on 28 Jul 2026 `[C2L-4]`**. Rev 2 deferred it *until the Wave C sample/test model is final* (program §9 sequencing correction — "otherwise it gets rebuilt"); **that model is now final** — C2's J1 put the lifecycle on `TestResult` with no `Sample` entity (`wave-c2-test-lifecycle-spec-2026-07-28.md` Rev 2 §3.4), so the remaining blocker is a build slot, not a decision. See the amendment in §4.7. This spec still designs **nothing** for it beyond that placeholder. The existing single-certificate extraction (`certificateExtraction.ts:182`) is unchanged and is not a bulk register importer.
 - **No direct CivilPro DB/API integration** — CivilPro migration is a mapped-Excel profile only (program §Wave B, §4).
 - **No promotion of imported spec text to shared/global libraries.** All imported ITP templates are **private-tenant** (`ITPTemplate.projectId` set to the importing project — never `null`, which is the global/library scope the matcher treats as shared: `backend/src/routes/itp/templates.ts:124–129`). Imported acceptance-criteria prose is tenant data, never seeded into `backend/scripts/seeds/itp-templates/`.
 - No new AI review vocabulary, no parallel proposal table, no auto-apply — every batch passes through human decision (`decideProposal`, `backend/src/routes/copilot/proposalService.ts:131`).
@@ -368,7 +369,17 @@ An imported ITP set can be marked a **corporate master**. Applying to a project 
 - Import apply handlers create **private-tenant** `ITPTemplate` (`projectId = batch.projectId`) + `ITPChecklistItem` (B1), or lots + ITP instances (B2), returning `AppliedRecordGroup[]` for rollback. Each re-validates the reviewed payload with the same Zod schema the manual route uses (`createTemplateSchema` / `bulkCreateLotsCoreSchema`) — the `lotBreakdownExecutor.ts:22` pattern.
 
 ### 4.7 Test-register placeholder (DEFERRED)
-`ImportBatch.kind` reserves `'test_register'` but **no parser, no mapping profile, no apply handler, and no schema for it ships in Wave B.** It is built only after the Wave C sample/test lifecycle model is final (program §9). This section exists so the reservation is explicit and nobody wires it early.
+`ImportBatch.kind` reserves `'test_register'` but **no parser, no mapping profile, no apply handler, and no schema for it ships in Wave B.** This section exists so the reservation is explicit and nobody wires it early.
+
+> **AMENDMENT — 28 Jul 2026 `[C2L-4]`. The model question this section was parked on is RESOLVED.**
+>
+> Rev 2 parked this on *"the Wave C sample/test lifecycle model is final (program §9)"*. **It now is.** `docs/plans/wave-c2-test-lifecycle-spec-2026-07-28.md` (**Rev 2**, implementation-ready) settles it in §3.4 as decision **J1**: the lifecycle lives on **`TestResult`** — **there is no `Sample` entity**, no `TestRequest` entity and no `Laboratory` entity, and none is coming in this wave (C2 §3.4 reasons 1–5; C2 §1.3 non-goals confirms `Sample`, `TestRequest`, `TestSpecification`, `Laboratory` and `TestCertificate` all absent from the schema at `c9a16fac` — verified absent, not merely unlocated). C2 declares that **the final model** and made writing it back here **exit item 8** of its own gate (C2 §13.1 J1, J6). C2 has since shipped in full: spec Rev 2 #1633, Phase 1 #1634, Phase 2 #1636, Phase 3 #1637.
+>
+> **What that changes for the test-register importer:** nothing about its Wave B non-goal status, everything about *why*. The reservation is no longer waiting on a **model decision** — it is waiting on a **build slot**. When it is scheduled, it targets `TestResult` rows directly (the `sampleDate`, `sampleLocation` and `testRequestNumber` columns already on the row, plus C2's `sentToLabAt` / `expectedResultDate`), reusing this spec's parser, mapping-profile and batch/proposal machinery unchanged — no new parent entity to model first.
+>
+> **Upgrade path preserved:** if C4 later adds `Sample` + a nullable `TestResult.sampleId` (C2 §3.4 reason 5), an already-built test-register importer backfills 1:1 with it. Building now forecloses nothing.
+>
+> Anyone quoting "deferred until the sample model is final" as a reason not to schedule this work is quoting a **retired** blocker.
 
 ### 4.8 Rollback
 Batch rollback = `rollbackProposal` on the batch's single proposal (`proposalService.ts:194`). The handler guards accumulated work before deleting, exactly as `assertCreatedLotsHaveNoProgress` does (`lotBreakdownExecutor.ts:42`) — an imported template already attached to a lot with completions cannot be silently deleted; the rollback names the blocker and the whole rollback fails as one transaction. There is no partial rollback (§3.5).
