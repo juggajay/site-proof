@@ -7,10 +7,10 @@
 // deliberately does not carry. Inventing a vocabulary the product never writes is
 // the defect F1 exists to fix.
 //
-// PROOF-OF-CATCH. Several assertions below pin a NUMBER or a LITERAL rather than
-// a shape, deliberately: `[DR2-B1]` was a false SCORE over a table whose own
-// cells contradicted it, so the tests that matter are the ones that fail when the
-// score changes without the evidence changing.
+// PROOF-OF-CATCH. Several assertions pin a NUMBER or a LITERAL rather than a
+// shape, deliberately: `[DR2-B1]` was a false SCORE over a rendering of a clause,
+// so the tests that matter are the ones that fail when the score changes without
+// the clause changing.
 
 import { describe, expect, it } from 'vitest';
 import { testTypeSpecifications } from '../../routes/testResults/specifications.js';
@@ -19,7 +19,7 @@ import { TEST_TYPE_ALIASES } from '../readiness/sufficiency/testCategories.js';
 import {
   LOGAN_18,
   LOGAN_18_CLAUSE,
-  LOGAN_18_SOURCE_PROSE,
+  LOGAN_18_OPEN_ENDED,
   isAmbiguouslyAttributed,
 } from './loganPsp5Crosswalk.js';
 import {
@@ -28,6 +28,7 @@ import {
   LOGAN_PSP5_ITEMS,
   LOGAN_PSP5_PROFILE_VERSION,
   OM_MANUAL_DOCUMENT_TYPE,
+  PSP5_PHOTO_MIN_BYTES,
   resolveLogan18Coverage,
   resolveLoganPsp5Profile,
   type LoganPsp5ItemId,
@@ -65,6 +66,15 @@ const LAB_REFERENCE_TEST = {
   passFail: 'pass',
 } as const;
 
+/** A photo satisfying clauses (f)(iv) and (f)(v) outright. */
+const COMPLIANT_PHOTO = {
+  id: 'doc-cw',
+  documentType: CONCEALED_WORKS_DOCUMENT_TYPE,
+  mimeType: 'image/jpeg',
+  fileSize: PSP5_PHOTO_MIN_BYTES + 1,
+  captureTimestamp: '2026-07-01T00:00:00.000Z',
+} as const;
+
 const byId = (result: ReturnType<typeof resolveLoganPsp5Profile>, id: LoganPsp5ItemId) => {
   const item = result.items.find((candidate) => candidate.id === id);
   if (!item) throw new Error(`no result for ${id}`);
@@ -72,9 +82,9 @@ const byId = (result: ReturnType<typeof resolveLoganPsp5Profile>, id: LoganPsp5I
 };
 
 // ---------------------------------------------------------------------------
-// Premises this module asserts about code it must not import
+// Premises — the shipped and published facts the profile encodes
 // ---------------------------------------------------------------------------
-describe('premises (the shipped facts the profile encodes)', () => {
+describe('premises', () => {
   // `CCTV_UPLOAD_SUPPORTED = false` is a constant because production code in
   // `lib/` must not import from `routes/`. This is the assertion that makes the
   // constant honest: when D1d widens the allow set, THIS fails, which is what
@@ -85,24 +95,68 @@ describe('premises (the shipped facts the profile encodes)', () => {
     expect(CCTV_UPLOAD_SUPPORTED).toBe(false);
   });
 
-  it('the crosswalk expands a source string that says 18, into 18', () => {
-    expect(LOGAN_18_SOURCE_PROSE).toContain('18 named categories');
-    expect(LOGAN_18).toHaveLength(18);
-    expect(LOGAN_18.map((entry) => entry.number)).toEqual(
-      Array.from({ length: 18 }, (_, index) => index + 1),
+  // `[LP5-DELTA]`. The clause enumerates (a) through (h); spec §2.2 tabulates
+  // seven items and drops (b). Pinned so a future agent reconciling this file
+  // against §2.2 changes §2.2, not this.
+  it('the pack has EIGHT items, lettered a through h, including the (b) spec §2.2 omits', () => {
+    expect(LOGAN_PSP5_ITEMS).toHaveLength(8);
+    expect(LOGAN_PSP5_ITEMS.map((item) => item.letter)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
+    ]);
+    expect(LOGAN_PSP5_ITEMS.map((item) => item.clause)).toEqual([
+      '5.6.5(1)(a)',
+      '5.6.5(1)(b)',
+      '5.6.5(1)(c)',
+      '5.6.5(1)(d)',
+      '5.6.5(1)(e)',
+      '5.6.5(1)(f)',
+      '5.6.5(1)(g)',
+      '5.6.5(1)(h)',
+    ]);
+    const foundation = LOGAN_PSP5_ITEMS[1];
+    expect(foundation.id).toBe('foundation_conditions_certification');
+    expect(foundation.clauseText).toBe(
+      'a certification of foundation conditions signed by the consultant where relevant',
     );
   });
 
-  // Only two sub-clause letters are recorded in D.0. A future agent inventing a
-  // plausible `(b)` for the rest is the citation-fabrication this fails on.
-  it('only the two items D.0 records a sub-clause letter for carry one', () => {
-    const withLetter = LOGAN_PSP5_ITEMS.filter((item) => /\([a-z]\)$/.test(item.clause));
-    expect(withLetter.map((item) => item.id)).toEqual([
-      'inspection_testing_certificate',
-      'cctv_stormwater',
+  it('the eighteen matters carry the clause’s own roman numerals, in order', () => {
+    expect(LOGAN_18).toHaveLength(18);
+    expect(LOGAN_18_CLAUSE).toBe('5.6.5(1)(c)');
+    expect(LOGAN_18.map((entry) => entry.numeral)).toEqual([
+      'i',
+      'ii',
+      'iii',
+      'iv',
+      'v',
+      'vi',
+      'vii',
+      'viii',
+      'ix',
+      'x',
+      'xi',
+      'xii',
+      'xiii',
+      'xiv',
+      'xv',
+      'xvi',
+      'xvii',
+      'xviii',
     ]);
-    expect(withLetter.map((item) => item.clause)).toEqual(['5.6.5(1)(a)', '5.6.5(1)(e)']);
-    expect(LOGAN_18_CLAUSE).toBe('5.6.5(1)');
+    // `[LP5-DELTA]`: the clause makes fill and trench backfill ONE matter — the
+    // prose rendering the spec was written against split them — and closes with
+    // an open-ended catch-all the rendering drops entirely.
+    expect(LOGAN_18[0].psp5Name).toBe(
+      'the compaction of fill including compaction of trench backfill',
+    );
+    expect(LOGAN_18_OPEN_ENDED.map((entry) => entry.numeral)).toEqual(['xviii']);
   });
 });
 
@@ -110,11 +164,11 @@ describe('premises (the shipped facts the profile encodes)', () => {
 // AT-144 — the requirement profile is executable
 // ---------------------------------------------------------------------------
 describe('AT-144 the requirement profile is executable', () => {
-  it('resolves all seven PSP5 items, each with a status and a reason', () => {
+  it('resolves every pack item, each with a status and a reason', () => {
     const result = resolveLoganPsp5Profile(input({ tests: [COMPACTION_TEST] }));
     expect(result.profileVersion).toBe(LOGAN_PSP5_PROFILE_VERSION);
-    expect(result.items).toHaveLength(7);
-    expect(result.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(result.items).toHaveLength(8);
+    expect(result.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     for (const item of result.items) {
       expect(['present', 'missing', 'not_applicable', 'not_assessable']).toContain(item.status);
       expect(item.reason.length).toBeGreaterThan(0);
@@ -124,35 +178,34 @@ describe('AT-144 the requirement profile is executable', () => {
   // The `[DR2-B1]` guard. A profile whose item count or version changes without a
   // test change fails; so does one that promotes a gap to a fed status.
   it('pins the item count, the profile version and the honest coverage distribution', () => {
-    expect(LOGAN_PSP5_ITEMS).toHaveLength(7);
     expect(LOGAN_PSP5_PROFILE_VERSION).toBe('logan-psp5.v1');
     const distribution = LOGAN_PSP5_ITEMS.reduce<Record<string, number>>((counts, item) => {
       counts[item.coverage] = (counts[item.coverage] ?? 0) + 1;
       return counts;
     }, {});
-    // Spec §2.2, re-scored: one shipped-as-storage, three partial, three gaps
-    // (two deliberate, one closable). NOTHING is `shipped`.
+    // Re-scored against the primary clause: one shipped-as-storage, three
+    // partial, four gaps (three deliberate, one closable). NOTHING is `shipped`.
     expect(distribution).toEqual({
       storage_only: 1,
       partial: 3,
-      gap_deliberate: 2,
+      gap_deliberate: 3,
       gap_closable: 1,
     });
     expect(distribution.shipped).toBeUndefined();
   });
 
-  it('every item carries a clause and clause text', () => {
+  it('every item carries a clause and transcribed clause text', () => {
     for (const item of LOGAN_PSP5_ITEMS) {
-      expect(item.clause).toMatch(/^5\.6\.5/);
+      expect(item.clause).toMatch(/^5\.6\.5\(1\)\([a-h]\)$/);
       expect(item.clauseText.length).toBeGreaterThan(10);
       expect(item.coverageNote.length).toBeGreaterThan(10);
     }
   });
 
-  // The load-bearing honesty assertion: the two permanent gaps cannot be fed by
-  // ANY input, so no fixture and no future data can make the folio imply CIVOS
-  // produced the consultant's certificate or the surveyor's asset list.
-  it('items 1 and 6 are structurally incapable of returning present', () => {
+  // The load-bearing honesty assertion: the three permanent gaps take no input at
+  // all, so no fixture and no future data can make the folio imply CIVOS produced
+  // a consultant's certification or the surveyor's asset list.
+  it('items (a), (b) and (g) are structurally incapable of returning present', () => {
     const maximal = input({
       tests: [COMPACTION_TEST],
       ncrs: [
@@ -165,32 +218,43 @@ describe('AT-144 the requirement profile is executable', () => {
         },
       ],
       documents: [
+        COMPLIANT_PHOTO,
         { id: 'doc-cert', documentType: 'certificate', captureTimestamp: null },
-        { id: 'doc-asset', documentType: 'general', captureTimestamp: null },
-        { id: 'doc-om', documentType: OM_MANUAL_DOCUMENT_TYPE, captureTimestamp: null },
+        {
+          id: 'doc-om',
+          documentType: OM_MANUAL_DOCUMENT_TYPE,
+          mimeType: 'application/pdf',
+          captureTimestamp: null,
+        },
       ],
     });
+    const permanent: LoganPsp5ItemId[] = [
+      'inspection_testing_certificate',
+      'foundation_conditions_certification',
+      'asset_list',
+    ];
     for (const result of [resolveLoganPsp5Profile(EMPTY), resolveLoganPsp5Profile(maximal)]) {
-      expect(byId(result, 'inspection_testing_certificate').status).toBe('not_applicable');
-      expect(byId(result, 'asset_list').status).toBe('not_applicable');
+      for (const id of permanent) expect(byId(result, id).status).toBe('not_applicable');
     }
-    // And the verdicts are identical whatever the input, i.e. constants.
-    expect(byId(resolveLoganPsp5Profile(EMPTY), 'asset_list')).toEqual(
-      byId(resolveLoganPsp5Profile(maximal), 'asset_list'),
-    );
+    // And each verdict is identical whatever the input, i.e. a constant.
+    for (const id of permanent) {
+      expect(byId(resolveLoganPsp5Profile(EMPTY), id)).toEqual(
+        byId(resolveLoganPsp5Profile(maximal), id),
+      );
+    }
   });
 
   // Spec §2.3: "the folio says 'CIVOS cannot yet hold this file type', not
   // 'missing'. Blaming the customer for a gap we own is the worst thing this
   // document could do."
-  it('item 4 (CCTV) reports a CIVOS capability gap, never a missing deliverable', () => {
+  it('item (e) (CCTV) reports a CIVOS capability gap, never a missing deliverable', () => {
     const item = byId(resolveLoganPsp5Profile(EMPTY), 'cctv_stormwater');
     expect(item.status).toBe('not_assessable');
     expect(item.status).not.toBe('missing');
     expect(item.reason).toContain('CIVOS cannot yet hold this file type');
   });
 
-  it('item 3 is not_applicable when nothing failed, and names unlinked failures when something did', () => {
+  it('item (d) is not_applicable when nothing failed, and names unlinked failures when something did', () => {
     expect(
       byId(resolveLoganPsp5Profile(input({ tests: [COMPACTION_TEST] })), 'retest_rectification')
         .status,
@@ -247,8 +311,8 @@ describe('AT-144 the requirement profile is executable', () => {
     expect(complete.evidenceIds).toEqual(['ncr-full']);
   });
 
-  it('item 5 distinguishes "no photos" from "photos, none classified as concealed works"', () => {
-    expect(byId(resolveLoganPsp5Profile(EMPTY), 'concealed_works_photos').reason).toContain(
+  it('item (f) distinguishes "no photos" from "photos, none classified"', () => {
+    expect(byId(resolveLoganPsp5Profile(EMPTY), 'asset_attribute_imagery').reason).toContain(
       'No photographs are held',
     );
 
@@ -259,53 +323,72 @@ describe('AT-144 the requirement profile is executable', () => {
             {
               id: 'doc-photo',
               documentType: 'photo',
+              mimeType: 'image/jpeg',
               captureTimestamp: '2026-07-01T00:00:00.000Z',
             },
           ],
         }),
       ),
-      'concealed_works_photos',
+      'asset_attribute_imagery',
     );
     expect(unclassified.status).toBe('not_assessable');
-    expect(unclassified.reason).toContain('none classified as concealed works');
+    expect(unclassified.reason).toContain('none classified under clause (f)(i)-(ii)');
+  });
 
+  it('item (f) enforces the clause’s own date-stamp and .jpg conditions', () => {
     const undated = byId(
       resolveLoganPsp5Profile(
-        input({
-          documents: [
-            { id: 'doc-cw', documentType: CONCEALED_WORKS_DOCUMENT_TYPE, captureTimestamp: null },
-          ],
-        }),
+        input({ documents: [{ ...COMPLIANT_PHOTO, captureTimestamp: null }] }),
       ),
-      'concealed_works_photos',
+      'asset_attribute_imagery',
     );
     expect(undated.status).toBe('missing');
     expect(undated.named).toEqual(['doc-cw']);
+    expect(undated.reason).toContain('(f)(iv)');
 
-    const good = byId(
+    const notJpeg = byId(
       resolveLoganPsp5Profile(
-        input({
-          documents: [
-            {
-              id: 'doc-cw',
-              documentType: CONCEALED_WORKS_DOCUMENT_TYPE,
-              captureTimestamp: '2026-07-01T00:00:00.000Z',
-            },
-          ],
-        }),
+        input({ documents: [{ ...COMPLIANT_PHOTO, mimeType: 'image/png' }] }),
       ),
-      'concealed_works_photos',
+      'asset_attribute_imagery',
     );
-    expect(good.status).toBe('present');
-    expect(good.evidenceIds).toEqual(['doc-cw']);
+    expect(notJpeg.status).toBe('missing');
+    expect(notJpeg.reason).toContain('(f)(v)');
+
+    const compliant = byId(
+      resolveLoganPsp5Profile(input({ documents: [COMPLIANT_PHOTO] })),
+      'asset_attribute_imagery',
+    );
+    expect(compliant.status).toBe('present');
+    expect(compliant.evidenceIds).toEqual(['doc-cw']);
+    expect(compliant.reason).not.toContain('unconfirmed');
   });
 
-  it('item 7 (O&M) is present-as-supplied, and never implies review', () => {
+  // Clause (f)(v) is a DISJUNCTION and CIVOS stores no image dimensions, so a
+  // small file is reported unconfirmed rather than failed. Reporting it as
+  // `missing` would accuse a compliant 720x576 photo.
+  it('item (f) reports the size limb as unconfirmed, never as a failure', () => {
+    const small = byId(
+      resolveLoganPsp5Profile(input({ documents: [{ ...COMPLIANT_PHOTO, fileSize: 900_000 }] })),
+      'asset_attribute_imagery',
+    );
+    expect(small.status).toBe('present');
+    expect(small.reason).toContain('unconfirmed');
+    expect(small.reason).toContain('720x576');
+    expect(small.named).toEqual(['doc-cw']);
+  });
+
+  it('item (h) is present-as-supplied, enforces clause (2)(b) pdf, and never implies review', () => {
     const held = byId(
       resolveLoganPsp5Profile(
         input({
           documents: [
-            { id: 'doc-om', documentType: OM_MANUAL_DOCUMENT_TYPE, captureTimestamp: null },
+            {
+              id: 'doc-om',
+              documentType: OM_MANUAL_DOCUMENT_TYPE,
+              mimeType: 'application/pdf',
+              captureTimestamp: null,
+            },
           ],
         }),
       ),
@@ -314,6 +397,25 @@ describe('AT-144 the requirement profile is executable', () => {
     expect(held.status).toBe('present');
     expect(held.reason).toContain('as supplied');
     expect(held.reason).toContain('does not assemble, index or validate');
+
+    const notPdf = byId(
+      resolveLoganPsp5Profile(
+        input({
+          documents: [
+            {
+              id: 'doc-om-docx',
+              documentType: OM_MANUAL_DOCUMENT_TYPE,
+              mimeType: 'application/msword',
+              captureTimestamp: null,
+            },
+          ],
+        }),
+      ),
+      'om_manuals',
+    );
+    expect(notPdf.status).toBe('missing');
+    expect(notPdf.reason).toContain('5.6.5(2)(b)');
+
     expect(byId(resolveLoganPsp5Profile(EMPTY), 'om_manuals').status).toBe('not_assessable');
   });
 
@@ -324,17 +426,18 @@ describe('AT-144 the requirement profile is executable', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AT-145 — the Logan-18 crosswalk names what it cannot resolve
+// AT-145 — the crosswalk names what it cannot resolve
 // ---------------------------------------------------------------------------
 describe('AT-145 the crosswalk names what it cannot resolve', () => {
   // The spec's AT-145 asks that every one of the 18 map to at least one
-  // `TestCategory`. SEVEN CANNOT — three name a material "quality" whose
-  // constituent tests the clause does not enumerate, one names an application
-  // rate, three name hydraulic/water tests CIVOS has no canonical category for.
-  // Mapping them anyway is precisely the fake coverage `[DR2-B1]` caught. So the
-  // assertion is the honest form of AT-145: mapped, or explicitly unmappable with
-  // a reason — never silently empty.
-  it('every category is mapped or explicitly unmappable with a reason', () => {
+  // `TestCategory`. EIGHT CANNOT — three name a material "quality" whose
+  // constituent tests the clause does not enumerate, one names spray and
+  // application rates, three name hydraulic/water tests CIVOS has no canonical
+  // category for, and one is the clause's own open-ended catch-all. Mapping them
+  // anyway is precisely the fake coverage `[DR2-B1]` caught. So the assertion is
+  // the honest form of AT-145: mapped, or explicitly unmappable with a reason —
+  // never silently empty.
+  it('every matter is mapped or explicitly unmappable with a reason', () => {
     for (const entry of LOGAN_18) {
       if (entry.canonicalCategories.length === 0) {
         expect(entry.unmappedReason, `${entry.id} has no mapping and no reason`).toBeTruthy();
@@ -346,8 +449,8 @@ describe('AT-145 the crosswalk names what it cannot resolve', () => {
       }
     }
     const mapped = LOGAN_18.filter((entry) => entry.canonicalCategories.length > 0);
-    expect(mapped).toHaveLength(11);
-    expect(LOGAN_18.length - mapped.length).toBe(7);
+    expect(mapped).toHaveLength(10);
+    expect(LOGAN_18.length - mapped.length).toBe(8);
   });
 
   // AT-22's namespace contract, applied to this table: the crosswalk declares
@@ -362,27 +465,22 @@ describe('AT-145 the crosswalk names what it cannot resolve', () => {
     }
   });
 
-  // The most important limitation in the table, and it is DERIVED from the table
-  // rather than declared per entry, so it cannot drift.
-  it('marks as ambiguous every category whose canonical category is shared', () => {
-    const ambiguous = LOGAN_18.filter(isAmbiguouslyAttributed).map((entry) => entry.id);
-    expect(ambiguous).toEqual([
-      'fill_compaction',
-      'trench_compaction',
-      'subgrade_compaction',
-      'cbr15_compaction',
-      'subsoil_drain_filter_grading',
-      'bedding_grading',
-      'base_compaction',
-      'subbase_compaction',
+  // The most important limitation in the table, DERIVED from the table rather
+  // than declared per entry, so it cannot drift.
+  it('marks as ambiguous every matter whose canonical category is shared', () => {
+    expect(LOGAN_18.filter(isAmbiguouslyAttributed).map((entry) => entry.numeral)).toEqual([
+      'i',
+      'iii',
+      'v',
+      'vi',
+      'vii',
+      'ix',
+      'xi',
     ]);
     // Sole owners of their canonical categories.
-    expect(LOGAN_18.filter((e) => e.id === 'subgrade_cbr').every(isAmbiguouslyAttributed)).toBe(
-      false,
-    );
-    expect(LOGAN_18.filter((e) => e.id === 'ac_core_tests').every(isAmbiguouslyAttributed)).toBe(
-      false,
-    );
+    for (const id of ['subgrade_cbr', 'ac_core_tests', 'concrete_testing']) {
+      expect(LOGAN_18.filter((e) => e.id === id).every(isAmbiguouslyAttributed)).toBe(false);
+    }
   });
 
   it('a test type outside the crosswalk yields not_assessable NAMING that string', () => {
@@ -391,9 +489,11 @@ describe('AT-145 the crosswalk names what it cannot resolve', () => {
     expect(item.status).toBe('not_assessable');
     expect(item.named).toEqual(['CBR']);
     expect(result.logan18.unresolvedTestTypes).toEqual(['CBR']);
+    // And it is not reported as outside the pack: clause (c)(xviii) admits it.
+    expect(item.reason).toContain('(c)(xviii)');
   });
 
-  it('never reports a category as missing — CIVOS does not decide which apply', () => {
+  it('never reports a matter as missing — CIVOS does not decide which apply', () => {
     for (const fixture of [
       input({ tests: [COMPACTION_TEST] }),
       input({ tests: [COMPACTION_TEST, UNRESOLVABLE_TEST] }),
@@ -403,8 +503,8 @@ describe('AT-145 the crosswalk names what it cannot resolve', () => {
       expect(item.status).not.toBe('missing');
       expect(item.reason).toContain("certifying consultant's determination");
     }
-    // The one `missing` item 2 may return is "no verified result at all", which
-    // names no category.
+    // The one `missing` item (c) may return is "no verified result at all", which
+    // names no matter.
     const none = byId(resolveLoganPsp5Profile(EMPTY), 'test_results');
     expect(none.status).toBe('missing');
     expect(none.named).toEqual(['no verified test result']);
@@ -425,41 +525,32 @@ describe('AT-145 the crosswalk names what it cannot resolve', () => {
     expect(coverage.categories.every((c) => c.evidenceIds.length === 0)).toBe(true);
   });
 
-  it('a compaction test evidences all six compaction categories and attributes to none', () => {
+  it('a compaction test evidences all five compaction matters and attributes to none', () => {
     const coverage = resolveLogan18Coverage(input({ tests: [COMPACTION_TEST] }));
     const evidenced = coverage.categories.filter((c) => c.state === 'evidenced');
-    expect(evidenced.map((c) => c.id)).toEqual([
-      'fill_compaction',
-      'trench_compaction',
-      'subgrade_compaction',
-      'cbr15_compaction',
-      'base_compaction',
-      'subbase_compaction',
-    ]);
+    expect(evidenced.map((c) => c.numeral)).toEqual(['i', 'iii', 'v', 'ix', 'xi']);
     for (const category of evidenced) {
       expect(category.attribution).toBe('ambiguous');
-      expect(category.reason).toContain('cannot');
+      expect(category.reason).toContain('cannot be attributed to this one');
       expect(category.evidenceIds).toEqual(['test-compaction']);
     }
-    // Unmappable categories never read as "no evidence" — absence of a mapping is
+    // Unmappable matters never read as "no evidence" — absence of a mapping is
     // not absence of a test.
-    expect(coverage.categories.filter((c) => c.state === 'unmappable')).toHaveLength(7);
-    for (const category of coverage.categories.filter((c) => c.state === 'unmappable')) {
-      expect(category.reason).toBeTruthy();
-    }
+    const unmappable = coverage.categories.filter((c) => c.state === 'unmappable');
+    expect(unmappable).toHaveLength(8);
+    for (const category of unmappable) expect(category.reason).toBeTruthy();
   });
 
   // A pinned ceiling, not a wish. `TEST_TYPE_ALIASES` resolves ONLY `compaction`
   // at this SHA (its own SCOPE note: an alias ships only for a string a lot under
-  // a RESOLVED pack can carry). So five of the eleven mapped Logan categories are
-  // unreachable through resolution today. When F1 adds a non-compaction alias
-  // this fails, which is the prompt to re-read this crosswalk rather than assume
-  // it already worked.
-  it('records that only compaction-family categories are reachable at this SHA', () => {
+  // a RESOLVED pack can carry). So five of the ten mapped matters are unreachable
+  // through resolution today. When F1 adds a non-compaction alias this fails,
+  // which is the prompt to re-read this crosswalk rather than assume it already
+  // worked.
+  it('records that only compaction-family matters are reachable at this SHA', () => {
     expect([...new Set(Object.values(TEST_TYPE_ALIASES))]).toEqual(['compaction']);
-    const reachableEntries = LOGAN_18.filter((entry) =>
-      entry.canonicalCategories.includes('compaction'),
-    );
-    expect(reachableEntries).toHaveLength(6);
+    expect(
+      LOGAN_18.filter((entry) => entry.canonicalCategories.includes('compaction')),
+    ).toHaveLength(5);
   });
 });
