@@ -48,6 +48,7 @@ import {
 } from '../offlineDb';
 import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './diaryMessages';
 import { readResponseError, syncOfflineDiarySnapshot } from './syncClient';
+import { describeSyncFailure } from './syncErrors';
 import { buildOfflineLotEditPayload } from './syncPayloads';
 
 // Outcome of dispatching a single queue item.
@@ -119,8 +120,32 @@ function isOfflineCompletionId(completionId: string): boolean {
   return completionId.startsWith('offline-');
 }
 
-function isTerminalItpSyncRejection(status: number): boolean {
+// A 4xx will never succeed on replay (bad body, deleted anchor, no permission,
+// stale base), so retrying it is pure noise — dead-letter it instead. 408 and
+// 429 are the two 4xx the server WANTS retried. This started as the ITP-only
+// predicate; it is now the one classifier every executor shares, so a queue
+// type can no longer be born retry-forever by omission.
+function isTerminalSyncRejection(status: number): boolean {
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+// Shared not-ok handler for the executors whose only failure vocabulary is the
+// HTTP status: terminal 4xx dead-letters with a sentence the foreman can read,
+// everything else (5xx, 408, 429) stays on the retry path with the server's own
+// text. Returns HANDLED so callers can `return` it directly.
+async function markSyncFailure(
+  itemId: number,
+  status: number,
+  errorText: string,
+  markEntityError: () => Promise<void>,
+): Promise<SyncItemResult> {
+  if (isTerminalSyncRejection(status)) {
+    await markSyncItemTerminalError(itemId, describeSyncFailure(status, errorText));
+  } else {
+    await markSyncItemError(itemId, errorText);
+  }
+  await markEntityError();
+  return HANDLED;
 }
 
 function isKnownTerminalDiarySyncError(errorText: string): boolean {
@@ -131,10 +156,7 @@ function isKnownTerminalDiarySyncError(errorText: string): boolean {
 }
 
 function isTerminalDiarySyncRejection(status: number, errorText: string): boolean {
-  return (
-    isKnownTerminalDiarySyncError(errorText) ||
-    (status >= 400 && status < 500 && status !== 408 && status !== 429)
-  );
+  return isKnownTerminalDiarySyncError(errorText) || isTerminalSyncRejection(status);
 }
 
 async function markDiaryTerminalSyncError(
@@ -346,7 +368,7 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
       return SYNCED;
     } else {
       const errorText = await response.text();
-      if (isTerminalItpSyncRejection(response.status)) {
+      if (isTerminalSyncRejection(response.status)) {
         const serverCompletion = instanceData.instance?.completions?.find(
           (candidate) => candidate.checklistItemId === completion.checklistItemId,
         );
@@ -355,6 +377,25 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
           completion.checklistItemId,
           serverCompletion,
         );
+
+        // 409 is the optimistic-concurrency guard (backend
+        // completionWorkflow.ts assertExpectedPreviousItpCompletion): the server
+        // row moved on while this tick sat in the queue. The reconcile above has
+        // just repaired the local row from that server snapshot, so there is
+        // nothing left to send — this is RESOLVED, not failed. Dead-lettering it
+        // showed a red "1 failed" whose Retry reproduced the same 409 forever.
+        if (response.status === 409) {
+          devLog(
+            '[Sync] ITP completion superseded on the server; local row reconciled, dropping the queued tick:',
+            completion.lotId,
+            completion.checklistItemId,
+          );
+          await removeSyncQueueItem(itemId);
+          // Not SYNCED: this write never landed, and lastSyncedAt is
+          // success-only. Handled means "off the queue, nothing to report".
+          return HANDLED;
+        }
+
         await markSyncItemTerminalError(itemId, errorText);
         return HANDLED;
       }
@@ -470,10 +511,11 @@ async function syncDelivery(item: DeliveryItem, itemId: number): Promise<SyncIte
       });
 
       if (!response.ok) {
-        const errorText = await readResponseError(response);
-        await markSyncItemError(itemId, errorText);
-        await markDeliverySyncError(deliveryId);
-        return HANDLED;
+        // A delivery anchored to a diary the PM deleted answers 404 to every
+        // replay; classify it terminal instead of retrying it forever.
+        return markSyncFailure(itemId, response.status, await readResponseError(response), () =>
+          markDeliverySyncError(deliveryId),
+        );
       }
 
       await removeSyncQueueItem(itemId);
@@ -519,10 +561,9 @@ async function syncEvent(item: EventItem, itemId: number): Promise<SyncItemResul
       });
 
       if (!response.ok) {
-        const errorText = await readResponseError(response);
-        await markSyncItemError(itemId, errorText);
-        await markEventSyncError(eventId);
-        return HANDLED;
+        return markSyncFailure(itemId, response.status, await readResponseError(response), () =>
+          markEventSyncError(eventId),
+        );
       }
 
       await removeSyncQueueItem(itemId);
@@ -684,10 +725,9 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         });
 
         if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          await markSyncItemError(itemId, errorText);
-          await markPhotoSyncError(photoId);
-          return HANDLED;
+          return markSyncFailure(itemId, uploadResponse.status, await uploadResponse.text(), () =>
+            markPhotoSyncError(photoId),
+          );
         }
 
         const result = await uploadResponse.json();
@@ -817,7 +857,7 @@ async function syncNcrCreate(item: NcrCreateItem, itemId: number): Promise<SyncI
     }
 
     const errorText = await response.text();
-    if (isTerminalItpSyncRejection(response.status)) {
+    if (isTerminalSyncRejection(response.status)) {
       // A 4xx (bad body, deleted project) will never succeed on retry — dead-letter
       // it so the foreman can see it failed rather than retrying forever.
       await markSyncItemTerminalError(itemId, errorText);
@@ -865,10 +905,12 @@ async function syncLotEdit(
       });
 
       if (!serverCheckResponse.ok) {
-        const errorText = await serverCheckResponse.text();
-        await markSyncItemError(itemId, errorText);
-        await markLotSyncError(lotId);
-        return HANDLED;
+        return markSyncFailure(
+          itemId,
+          serverCheckResponse.status,
+          await serverCheckResponse.text(),
+          () => markLotSyncError(lotId),
+        );
       }
 
       const serverLot = await serverCheckResponse.json();
@@ -932,10 +974,9 @@ async function syncLotEdit(
         devLog('[Sync] Lot synced successfully:', lotId);
         return SYNCED;
       } else {
-        const errorText = await syncResponse.text();
-        await markSyncItemError(itemId, errorText);
-        await markLotSyncError(lotId);
-        return HANDLED;
+        return markSyncFailure(itemId, syncResponse.status, await syncResponse.text(), () =>
+          markLotSyncError(lotId),
+        );
       }
     },
     async () => {

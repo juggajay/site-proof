@@ -82,7 +82,10 @@ describe('summariseSyncQueue', () => {
     expect(offlineDb.syncQueue.toArray).toHaveBeenCalledTimes(1);
     expect(summary.live).toBe(2);
     expect(summary.failed).toBe(2);
-    expect(summary.byKind.photos).toBe(4);
+    // byKind is the LIVE breakdown ("Waiting" rows); dead-lettered rows are
+    // reported separately so the panel never labels a stopped item "Waiting".
+    expect(summary.byKind.photos).toBe(2);
+    expect(summary.failedItems).toHaveLength(2);
     // The oldest row is dead-lettered and still sets the age (the stuck signal).
     expect(summary.oldestPendingAgeMs).toBeGreaterThanOrEqual(10 * 60 * 1000 - 100);
     expect(summary.oldestPendingAgeMs).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);

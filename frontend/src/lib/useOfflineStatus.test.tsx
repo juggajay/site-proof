@@ -255,6 +255,7 @@ function summary(overrides: Partial<SyncQueueSummary> = {}): SyncQueueSummary {
     failed: 0,
     oldestPendingAgeMs: null,
     byKind: emptySyncKindCounts(),
+    failedItems: [],
     ...overrides,
   };
 }
@@ -787,18 +788,34 @@ describe('photo_upload dispatch', () => {
     expect(fd.get('gpsLongitude')).toBe('151.2');
   });
 
-  it('marks the item + photo error (no removal) when the upload is not ok', async () => {
+  // [M9-2] A 413 is terminal: the same bytes will be refused on every replay.
+  it('dead-letters the item + marks the photo (no removal) when the upload is refused for good', async () => {
     getPendingSyncItemsMock.mockResolvedValue([photoItem({ photoId: 'ph-3' })]);
     getOfflinePhotoMock.mockResolvedValue(basePhoto);
     authFetchMock.mockResolvedValue(errorResponse(413, 'file too large'));
 
     await runSync();
 
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(41, 'file too large');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      41,
+      'This file is too large to upload.',
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     // The error marker keys off the queue item's photoId, not the photo record.
     expect(markPhotoSyncErrorMock).toHaveBeenCalledWith('ph-3');
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
     expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a 5xx upload on the retry path', async () => {
+    getPendingSyncItemsMock.mockResolvedValue([photoItem({ photoId: 'ph-3' })]);
+    getOfflinePhotoMock.mockResolvedValue(basePhoto);
+    authFetchMock.mockResolvedValue(errorResponse(503, 'upstream down'));
+
+    await runSync();
+
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(41, 'upstream down');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
   });
 
   it('removes the queue item when the photo no longer exists locally', async () => {
@@ -961,20 +978,25 @@ describe('lot_edit dispatch', () => {
     expect(markLotSyncedMock).toHaveBeenCalledWith('lot-1', '2026-03-01T00:00:00.000Z');
   });
 
-  it('marks item + lot error when the server GET is not ok (no PATCH)', async () => {
+  // [M9-2] The lot was deleted server-side; every replay 404s.
+  it('dead-letters item + marks the lot when the server GET is refused for good (no PATCH)', async () => {
     getPendingSyncItemsMock.mockResolvedValue([lotItem({ lotId: 'lot-1' })]);
     getOfflineLotMock.mockResolvedValue(pendingLot);
     authFetchMock.mockResolvedValueOnce(errorResponse(404, 'lot not found'));
 
     await runSync();
 
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'lot not found');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      51,
+      'The thing this was attached to was deleted.',
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
     expect(authFetchMock).toHaveBeenCalledTimes(1);
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 
-  it('marks item + lot error when the PATCH is not ok (no removal)', async () => {
+  it('dead-letters item + marks the lot when the PATCH is refused for good (no removal)', async () => {
     seedLotEdit(
       okJson({ lot: { updatedAt: '2026-02-01T00:00:00.000Z' } }),
       errorResponse(400, 'invalid lot'),
@@ -982,7 +1004,11 @@ describe('lot_edit dispatch', () => {
 
     await runSync();
 
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'invalid lot');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      51,
+      "The server wouldn't accept this — it can't be sent as it is.",
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
     expect(markLotSyncedMock).not.toHaveBeenCalled();
@@ -1364,5 +1390,44 @@ describe('pendingByKind', () => {
     });
 
     expect(result.current.pendingByKind).toBe(first);
+  });
+});
+
+// ===========================================================================
+// failedItems — the dead-letter detail rows the Sync Centre renders (M9-4).
+// ===========================================================================
+describe('failedItems', () => {
+  it('exposes each dead-lettered row with its reason', async () => {
+    const failedItems = [
+      { id: 7, kind: 'diary' as const, message: 'The thing this was attached to was deleted.' },
+    ];
+    summariseSyncQueueMock.mockResolvedValue(summary({ failed: 1, failedItems }));
+
+    const { result } = renderHook(() => useOfflineStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.failedItems).toEqual(failedItems);
+  });
+
+  it('keeps its identity across polls while nothing has changed', async () => {
+    summariseSyncQueueMock.mockResolvedValue(summary({}));
+
+    const { result } = renderHook(() => useOfflineStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const first = result.current.failedItems;
+    expect(first).toEqual([]);
+
+    // A later poll returns an equal-but-new array; the hook must not hand all
+    // fifteen consumers a fresh identity (and a re-render) every five seconds.
+    summariseSyncQueueMock.mockResolvedValue(summary({}));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(result.current.failedItems).toBe(first);
   });
 });

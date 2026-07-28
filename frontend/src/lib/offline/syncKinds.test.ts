@@ -19,6 +19,8 @@ function item(overrides: {
   attempts?: number;
   createdAt?: string;
   id?: number;
+  data?: unknown;
+  lastError?: string;
 }): SyncQueueItem {
   return {
     id: 1,
@@ -77,6 +79,7 @@ describe('summariseSyncQueueItems', () => {
       failed: 0,
       oldestPendingAgeMs: null,
       byKind: emptySyncKindCounts(),
+      failedItems: [],
     });
   });
 
@@ -95,12 +98,15 @@ describe('summariseSyncQueueItems', () => {
     expect(summary.failed).toBe(2);
   });
 
-  it('counts by kind across the totals, live and failed alike', () => {
+  // [M9-5b] byKind feeds the panel's "Waiting" rows, so a dead-lettered item
+  // must NEVER appear in it — it is not waiting, it has stopped. Failed rows get
+  // their own bucket (failedItems) and their own label.
+  it('counts LIVE rows by kind and keeps dead-lettered rows out of the waiting breakdown', () => {
     const summary = summariseSyncQueueItems(
       [
         item({ type: 'photo_upload', attempts: 0 }),
         item({ type: 'photo_upload', attempts: MAX_SYNC_ATTEMPTS }),
-        item({ type: 'diary_save', attempts: 0 }),
+        item({ type: 'diary_save', attempts: 0, data: { diaryId: 'd-1' } }),
         item({ type: 'event_save', attempts: 0 }),
         item({ type: 'docket_submit', attempts: 0 }),
       ],
@@ -108,7 +114,7 @@ describe('summariseSyncQueueItems', () => {
     );
 
     expect(summary.byKind).toEqual({
-      photos: 2,
+      photos: 1,
       diary: 2,
       dockets: 1,
       itp: 0,
@@ -116,7 +122,129 @@ describe('summariseSyncQueueItems', () => {
       lots: 0,
     });
     const kindTotal = SYNC_KINDS.reduce((sum, kind) => sum + summary.byKind[kind], 0);
-    expect(kindTotal).toBe(summary.live + summary.failed);
+    expect(kindTotal).toBe(summary.live);
+  });
+
+  // [M9-4] The reason a row failed is the only thing the foreman can act on;
+  // it must ride the summary out to the Sync Centre, de-JSON-ified.
+  it('reports every dead-lettered row with its kind and a readable reason', () => {
+    const summary = summariseSyncQueueItems(
+      [
+        item({ type: 'photo_upload', attempts: 0 }),
+        item({
+          id: 7,
+          type: 'delivery_save',
+          attempts: MAX_SYNC_ATTEMPTS,
+          lastError: 'The thing this was attached to was deleted.',
+        }),
+        item({
+          id: 8,
+          type: 'lot_edit',
+          attempts: MAX_SYNC_ATTEMPTS + 1,
+          lastError: '{"error":{"message":"Lot is claimed"}}',
+        }),
+      ],
+      NOW,
+    );
+
+    expect(summary.failedItems).toEqual([
+      { id: 7, kind: 'diary', message: 'The thing this was attached to was deleted.' },
+      { id: 8, kind: 'lots', message: 'Lot is claimed' },
+    ]);
+  });
+
+  // [M9-5a] One offline diary quick-add rewrites the whole snapshot and queues
+  // another idempotent `diary_save` replay. Twelve replays of ONE diary are one
+  // piece of pending work, not "12 diary entries waiting".
+  it('counts many queued replays of one diary snapshot as a single piece of work', () => {
+    const replays = Array.from({ length: 12 }, (_, index) =>
+      item({ id: index + 1, type: 'diary_save', data: { diaryId: 'diary-p1-2026-07-28' } }),
+    );
+
+    const summary = summariseSyncQueueItems(replays, NOW);
+
+    expect(summary.live).toBe(1);
+    expect(summary.byKind.diary).toBe(1);
+  });
+
+  it('still counts replays of DIFFERENT diaries separately', () => {
+    const summary = summariseSyncQueueItems(
+      [
+        item({ id: 1, type: 'diary_save', data: { diaryId: 'diary-p1-2026-07-27' } }),
+        item({ id: 2, type: 'diary_save', data: { diaryId: 'diary-p1-2026-07-27' } }),
+        item({ id: 3, type: 'diary_save', data: { diaryId: 'diary-p1-2026-07-28' } }),
+      ],
+      NOW,
+    );
+
+    expect(summary.live).toBe(2);
+    expect(summary.byKind.diary).toBe(2);
+  });
+
+  it('never coalesces a diary_submit into the snapshot replays', () => {
+    const summary = summariseSyncQueueItems(
+      [
+        item({ id: 1, type: 'diary_save', data: { diaryId: 'd-1' } }),
+        item({ id: 2, type: 'diary_save', data: { diaryId: 'd-1' } }),
+        item({ id: 3, type: 'diary_submit', data: { diaryId: 'd-1' } }),
+      ],
+      NOW,
+    );
+
+    expect(summary.live).toBe(2);
+    expect(summary.byKind.diary).toBe(2);
+  });
+
+  it('counts a coalesced diary as WAITING while any replay is still live', () => {
+    const summary = summariseSyncQueueItems(
+      [
+        item({
+          id: 1,
+          type: 'diary_save',
+          attempts: MAX_SYNC_ATTEMPTS,
+          data: { diaryId: 'd-1' },
+          lastError: 'boom',
+        }),
+        item({ id: 2, type: 'diary_save', attempts: 1, data: { diaryId: 'd-1' } }),
+      ],
+      NOW,
+    );
+
+    expect(summary.live).toBe(1);
+    expect(summary.failed).toBe(0);
+    expect(summary.failedItems).toEqual([]);
+  });
+
+  it('reports a coalesced diary as failed only when every replay has dead-lettered', () => {
+    const summary = summariseSyncQueueItems(
+      [
+        item({ id: 1, type: 'diary_save', attempts: MAX_SYNC_ATTEMPTS, data: { diaryId: 'd-1' } }),
+        item({
+          id: 2,
+          type: 'diary_save',
+          attempts: MAX_SYNC_ATTEMPTS,
+          data: { diaryId: 'd-1' },
+          lastError: 'boom',
+        }),
+      ],
+      NOW,
+    );
+
+    expect(summary.live).toBe(0);
+    expect(summary.failed).toBe(1);
+  });
+
+  it('keeps the oldest-row age over EVERY replay, coalesced or not', () => {
+    const summary = summariseSyncQueueItems(
+      [
+        item({ id: 1, type: 'diary_save', data: { diaryId: 'd-1' }, createdAt: minutesAgo(200) }),
+        item({ id: 2, type: 'diary_save', data: { diaryId: 'd-1' }, createdAt: minutesAgo(5) }),
+      ],
+      NOW,
+    );
+
+    expect(summary.live).toBe(1);
+    expect(summary.oldestPendingAgeMs).toBe(200 * 60_000);
   });
 
   it('counts an unknown type in the totals but never in a kind row', () => {

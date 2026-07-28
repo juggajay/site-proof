@@ -25,7 +25,12 @@ import { deriveSyncState, syncChipLabel, type SyncState } from './syncChipState'
 // would change that for every foreman screen.
 const SyncPanel = lazy(() => import('./SyncPanel').then((m) => ({ default: m.SyncPanel })));
 
-function syncChipAriaLabel(state: SyncState, pendingSyncCount: number, failedSyncCount: number) {
+function syncChipAriaLabel(
+  state: SyncState,
+  pendingSyncCount: number,
+  failedSyncCount: number,
+  conflictCount: number,
+) {
   switch (state) {
     case 'saved':
       return 'All changes saved';
@@ -33,6 +38,8 @@ function syncChipAriaLabel(state: SyncState, pendingSyncCount: number, failedSyn
       return 'Syncing changes';
     case 'failed':
       return `${failedSyncCount} change${failedSyncCount === 1 ? '' : 's'} failed to sync. Tap to retry.`;
+    case 'conflict':
+      return `${conflictCount} sync conflict${conflictCount === 1 ? '' : 's'} need${conflictCount === 1 ? 's' : ''} resolving. Tap for details.`;
     case 'offline':
       return 'Offline. Changes will sync when you reconnect.';
     case 'waiting':
@@ -42,7 +49,8 @@ function syncChipAriaLabel(state: SyncState, pendingSyncCount: number, failedSyn
 
 function syncChipToneClass(state: SyncState) {
   if (state === 'failed') return 'text-destructive';
-  if (state === 'waiting' || state === 'syncing') return 'text-warning';
+  // Amber for a conflict, matching the floating pill's tone for the same fact.
+  if (state === 'waiting' || state === 'syncing' || state === 'conflict') return 'text-warning';
   if (state === 'offline') return 'text-muted-foreground';
   return 'text-success';
 }
@@ -50,10 +58,16 @@ function syncChipToneClass(state: SyncState) {
 export function SyncChip() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const status = useOfflineStatus();
-  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing } = status;
-  const state = deriveSyncState(isOnline, pendingSyncCount, isSyncing, failedSyncCount);
-  const label = syncChipLabel(state, pendingSyncCount, failedSyncCount);
-  const ariaLabel = syncChipAriaLabel(state, pendingSyncCount, failedSyncCount);
+  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing, conflictCount } = status;
+  const state = deriveSyncState(
+    isOnline,
+    pendingSyncCount,
+    isSyncing,
+    failedSyncCount,
+    conflictCount,
+  );
+  const label = syncChipLabel(state, pendingSyncCount, failedSyncCount, conflictCount);
+  const ariaLabel = syncChipAriaLabel(state, pendingSyncCount, failedSyncCount, conflictCount);
 
   const baseClass = [
     'inline-flex items-center gap-1.5 whitespace-nowrap',
