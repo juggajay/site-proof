@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { generateConformanceReportPDF } from '../../pdfGenerator';
-import type { ConformanceReportData } from '../../pdfGenerator';
+import { defaultConformanceOptions, generateConformanceReportPDF } from '../../pdfGenerator';
+import type { ConformanceFormat, ConformanceReportData } from '../../pdfGenerator';
 import { JsPdfRecorder, latestPdf, renderedText } from './pdfTestRecorder';
 
 vi.mock('jspdf', () => ({
@@ -106,6 +106,25 @@ const baseReport: ConformanceReportData = {
   photoCount: 2,
 };
 
+// A test entered as "pass" that nobody has verified yet. The register's own
+// status vocabulary (`pages/tests/constants.ts`) calls this state `entered`.
+const unverifiedPassTest: ConformanceReportData['testResults'][number] = {
+  testType: 'Field Density',
+  testRequestNumber: 'TR-900',
+  laboratoryName: 'Acme Labs',
+  resultValue: 98.5,
+  resultUnit: '%',
+  passFail: 'pass',
+  status: 'entered',
+  sampleDate: '2026-05-29T00:00:00.000Z',
+  resultDate: '2026-05-30T00:00:00.000Z',
+  specificationMin: 95,
+  specificationMax: null,
+  laboratoryReportNumber: 'LR-900',
+};
+
+const CONFORMANCE_FORMATS: ConformanceFormat[] = ['standard', 'tmr', 'tfnsw', 'vicroads', 'dit'];
+
 describe('generateConformanceReportPDF', () => {
   beforeEach(() => {
     JsPdfRecorder.instances = [];
@@ -161,5 +180,58 @@ describe('generateConformanceReportPDF', () => {
 
     expect(textContent).toContain('Released: Not recorded by Unknown');
     expect(textContent).not.toContain('Invalid Date');
+  });
+
+  it.each(CONFORMANCE_FORMATS)(
+    'never prints PASS for an unverified test (%s format)',
+    async (format) => {
+      await generateConformanceReportPDF(
+        { ...baseReport, testResults: [unverifiedPassTest] },
+        { ...defaultConformanceOptions, format },
+      );
+
+      const text = renderedText(latestPdf());
+
+      expect(text).not.toContain('PASS');
+      expect(text).toContain('Pending Verification');
+      expect(text.join('\n')).toContain(
+        'Total Tests: 1  |  Passed: 0  |  Failed: 0  |  Unverified: 1',
+      );
+    },
+  );
+
+  it('prints the verified verdict and the true state of every other test', async () => {
+    await generateConformanceReportPDF({
+      ...baseReport,
+      testResults: [
+        { ...unverifiedPassTest, testType: 'Verified Pass', status: 'verified' },
+        {
+          ...unverifiedPassTest,
+          testType: 'Verified Fail',
+          status: 'verified',
+          passFail: 'fail',
+          resultValue: 91,
+        },
+        { ...unverifiedPassTest, testType: 'Entered Fail', passFail: 'fail', resultValue: 91 },
+        unverifiedPassTest,
+        {
+          ...unverifiedPassTest,
+          testType: 'At Lab',
+          status: 'at_lab',
+          passFail: 'pending',
+          resultValue: null,
+        },
+      ],
+    });
+
+    const text = renderedText(latestPdf());
+
+    expect(text).toContain('PASS');
+    expect(text).toContain('FAIL');
+    expect(text).toContain('Pending Verification');
+    expect(text).toContain('Awaiting Result');
+    expect(text.join('\n')).toContain(
+      'Total Tests: 5  |  Passed: 1  |  Failed: 1  |  Unverified: 3',
+    );
   });
 });
