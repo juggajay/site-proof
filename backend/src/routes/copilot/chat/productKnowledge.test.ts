@@ -119,6 +119,56 @@ describe('product knowledge — test sufficiency facts', () => {
     );
   });
 
+  // -------------------------------------------------------------------------
+  // Wave C3 exit item 12. Same discipline as the C1 block above: every sentence
+  // is a claim about shipped code, cited to the file that makes it true. The
+  // overlay and the sample point are the two things a QM asks Clancy about the
+  // moment they arm the layer, and a fabricated answer here has no other guard.
+  // -------------------------------------------------------------------------
+  it('names the overlay layers on the map tool list', () => {
+    // LotMapView.tsx toolbar items 9 and 10: `label="Testing"`, `label="Test pins"`.
+    expect(body('site-map')).toContain('Use Testing to recolour drawn lots by test frequency');
+    expect(body('site-map')).toContain('Test pins to show where samples were taken');
+  });
+
+  it('states the overlay verdict labels and that grey is a verdict, not a gap', () => {
+    // frontend testCoverageData.ts TEST_COVERAGE_LEGEND — the three shipped
+    // labels, Okabe-Ito palette; the state union has no fourth value.
+    const map = body('site-map');
+    expect(map).toContain('green for Testing satisfied');
+    expect(map).toContain('amber for Fewer tests than required');
+    expect(map).toContain('grey for No rule');
+  });
+
+  it('keeps undrawn lots counted-not-coloured and the overlay internal-only', () => {
+    // projectTestCoverage.ts: `requireInternalProjectAccess` (J3, spec §10.1) and
+    // `lotsWithoutGeometry`, rendered as "N lots not on the map — not drawn, so
+    // not coloured." LotMapView hides both toggles while History is armed.
+    const map = body('site-map');
+    expect(map).toContain('Lots that are not drawn are counted, not coloured');
+    expect(map).toContain('internal layer that subcontractors never see');
+    expect(map).toContain('unavailable in History');
+  });
+
+  it('states that no sample location is ever derived — the [C3S-B1] honesty rule', () => {
+    // frontend lib/samplePoint.ts `readSamplePoint` returning null is the only
+    // gate for a pin (LotMapView AT-84): no centroid, no parse of the
+    // `sampleLocation` free text, no default.
+    const map = body('site-map');
+    expect(map).toContain('shows a pin only where someone captured a sample point');
+    expect(map).toContain('counted toward the frequency but never drawn');
+    expect(body('itp-holdpoints-tests')).toContain('CIVOS never derives a sample location');
+  });
+
+  it('states capture is optional and names the GPS accuracy refusal', () => {
+    // samplePoint.ts MAX_ACCURACY_M = 30 + tooCoarseMessage(); a map pick writes
+    // `accuracyM: null` (SampleLocationCapture.tsx CapturedSamplePoint).
+    const itp = body('itp-holdpoints-tests');
+    expect(itp).toContain('optional and blocks nothing');
+    expect(itp).toContain('a GPS fix coarser than 30 m is refused');
+    expect(itp).toContain('a map pick carries no accuracy figure');
+  });
+
   it('keeps reduced frequency advisory and VicRoads-only', () => {
     // vicroads-204.v2.ts `reducedFrequencyEligibility.consecutiveConformingLots: 3`;
     // tfnsw-q6.v1.ts ships no reduced limb.

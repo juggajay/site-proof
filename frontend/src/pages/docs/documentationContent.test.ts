@@ -57,6 +57,23 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['itp-holdpoints-tests', 'never count toward the field test number'],
   ['itp-holdpoints-tests', 'means the test type is not recognised, not that the test is unlinked'],
   ['admin', 'off, warn, or block, and is set per project'],
+  // Wave C3 exit item 12 — the map's Testing overlay and the sample point.
+  // Written first in the backend mirror and pinned there against the shipped
+  // code (routes/projectTestCoverage.ts, testCoverageData.ts, lib/samplePoint.ts).
+  ['site-map', 'Use Testing to recolour drawn lots by test frequency'],
+  ['site-map', 'Test pins to show where samples were taken'],
+  ['site-map', 'green for Testing satisfied'],
+  ['site-map', 'amber for Fewer tests than required'],
+  ['site-map', 'grey for No rule'],
+  ['site-map', 'Lots that are not drawn are counted, not coloured'],
+  ['site-map', 'internal layer that subcontractors never see'],
+  ['site-map', 'unavailable in History'],
+  ['site-map', 'shows a pin only where someone captured a sample point'],
+  ['site-map', 'counted toward the frequency but never drawn'],
+  ['itp-holdpoints-tests', 'optional and blocks nothing'],
+  ['itp-holdpoints-tests', 'a GPS fix coarser than 30 m is refused'],
+  ['itp-holdpoints-tests', 'a map pick carries no accuracy figure'],
+  ['itp-holdpoints-tests', 'CIVOS never derives a sample location'],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

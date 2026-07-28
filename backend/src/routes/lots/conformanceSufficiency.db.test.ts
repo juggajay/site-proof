@@ -37,6 +37,7 @@ import { errorHandler } from '../../middleware/errorHandler.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
 import { authRouter } from '../auth.js';
 import { lotsRouter } from '../lots.js';
+import { projectTestCoverageRouter } from '../projectTestCoverage.js';
 
 // Wave C3 Phase A, AT-96. The two ROUTES, not the library — the finding
 // `[C3R-B6]` is that one of them supplies no regime fetcher, and only a request
@@ -45,6 +46,9 @@ const app = express();
 app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/lots', lotsRouter);
+// C3 exit item 5 / AT-87 — the overlay route, so the claim-unblockability
+// assertion can exercise it rather than reason about it.
+app.use('/api/projects', projectTestCoverageRouter);
 app.use(errorHandler);
 
 const tag = `conform-suff-${Date.now()}`;
@@ -363,5 +367,66 @@ describe('AT-11 §5.3 PROHIBITION: sufficiency never blocks a claim', () => {
     // previously claimable lot.
     expect(new Set(outputs).size).toBe(1);
     expect(JSON.parse(outputs[0])).toEqual([]);
+  });
+});
+
+// Wave C3 `[C3S-B9]`, AT-87 — the same prohibition read through C3's two new
+// surfaces, extending AT-11 above (and C2's AT-71) rather than restating it.
+//
+// It runs LAST in this file on purpose: it mutates the shared fixture's test row
+// to carry a real captured sample point, and every earlier assertion is written
+// against the unlocated row.
+//
+// Deliberately DB-backed and route-level, not a unit test in
+// `lib/conformancePrerequisites.test.ts`. There are two ways this invariant can
+// break — a location-derived reason inside
+// `getClaimBlockingReasonsForConformedLot`, or the four B1 columns entering
+// `CONFORMANCE_LOT_SELECT` and reaching the gate — and only a real row read
+// through the real select can catch the second. A mocked lot proves nothing
+// about a select it does not use.
+describe('AT-87 §5.3 PROHIBITION survives C3: a located test still cannot block a claim', () => {
+  it('getClaimBlockingReasonsForConformedLot is byte-identical with the overlay exercised and a sample point captured', async () => {
+    await setMode('block');
+
+    // One reading = the overlay route exercised, THEN both branches of the claim
+    // function. The overlay is a read; this is the assertion that it stays one.
+    const read = async () => {
+      const overlay = await request(app)
+        .get(`/api/projects/${projectId}/lots/test-coverage`)
+        .set('Authorization', `Bearer ${routeToken}`);
+      expect(overlay.status).toBe(200);
+      const result = await checkConformancePrerequisites(shortLotId);
+      return JSON.stringify([
+        getClaimBlockingReasonsForConformedLot(result),
+        getClaimBlockingReasonsForConformedLot(result, { conformanceOverridden: true }),
+      ]);
+    };
+
+    const unlocated = await read();
+
+    // A REAL located row: the four `20260729000000_test_sample_point` columns,
+    // written through Prisma so all three DB `CHECK`s have to accept them.
+    await prisma.testResult.updateMany({
+      where: { lotId: shortLotId },
+      data: {
+        sampleLatitude: -33.8688,
+        sampleLongitude: 151.2093,
+        sampleLocationSource: 'gps',
+        sampleLocationAccuracyM: 6,
+      },
+    });
+    // Proof the fixture actually changed — otherwise the byte-identity below
+    // could pass because nothing happened.
+    const located = await prisma.testResult.findFirst({
+      where: { lotId: shortLotId },
+      select: { sampleLatitude: true, sampleLocationSource: true },
+    });
+    expect(located!.sampleLatitude).not.toBeNull();
+    expect(located!.sampleLocationSource).toBe('gps');
+
+    // Same lot, same mode, same two readings — and the same bytes. A claim is
+    // decided by conformance evidence, never by where a sample was taken.
+    expect(await read()).toBe(unlocated);
+    expect(JSON.parse(unlocated)[0]).toEqual([]);
   });
 });
