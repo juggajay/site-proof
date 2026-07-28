@@ -67,6 +67,12 @@ describe('map data pattern', () => {
     '/api/projects/p-1/spatial-search',
     '/api/projects/p-1/plan-sheets/s-1/image',
     '/api/projects/p-1/plan-sheets/s-1',
+    // C3 Phase A, AT-94 `[C3R-A12]` `[C3S-d]`. The testing overlay is a live
+    // COMPLIANCE VERDICT. MAP_DATA_URL is NetworkFirst with a 7-day cache, so
+    // matching here would serve a field user a stale "testing satisfied" — the
+    // single most dangerous thing this wave could cache. Offline, the layer
+    // states it is unavailable instead.
+    '/api/projects/p-1/lots/test-coverage',
   ])('does not match %s', (path) => {
     expect(MAP_DATA_URL.test(`${origin}${path}`)).toBe(false);
   });

@@ -36,8 +36,18 @@ vi.mock('react-leaflet', () => {
     },
     ScaleControl: () => <div data-testid="scale-control" />,
     LayersControl,
-    Polygon: ({ children }: { children?: React.ReactNode }) => (
-      <div data-testid="polygon">{children}</div>
+    // `data-fill` exposes the resolved fill so the C3 `fillOverride` recolour is
+    // assertable without a real Leaflet layer.
+    Polygon: ({
+      children,
+      pathOptions,
+    }: {
+      children?: React.ReactNode;
+      pathOptions?: { fillColor?: string };
+    }) => (
+      <div data-testid="polygon" data-fill={pathOptions?.fillColor}>
+        {children}
+      </div>
     ),
     Polyline: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="polyline">{children}</div>
@@ -134,6 +144,21 @@ const timelineQuery = {
 vi.mock('./statusTimelineData', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./statusTimelineData')>();
   return { ...actual, useLotStatusTimeline: () => timelineQuery };
+});
+
+// C3 Phase A. The testing-overlay query calls useQuery; stub it. The pure
+// palette/label helpers stay real so the colour assertions test the shipped map.
+const testCoverageQuery = {
+  data: undefined as import('./testCoverageData').TestCoverageResponse | undefined,
+  isLoading: false,
+  isFetching: false,
+  error: null as unknown,
+  dataUpdatedAt: 0,
+  refetch: vi.fn(),
+};
+vi.mock('./testCoverageData', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./testCoverageData')>();
+  return { ...actual, useTestCoverage: () => testCoverageQuery };
 });
 
 const useProjectLotGeometries = vi.fn();
@@ -238,6 +263,11 @@ beforeEach(() => {
   // storage helper (raw localStorage access is banned by a readiness guardrail).
   spatialSearchMutation.data = undefined;
   writeLocalStorageItem('siteproof.mapPhotos.proj-1', 'false');
+  testCoverageQuery.data = undefined;
+  testCoverageQuery.isLoading = false;
+  testCoverageQuery.isFetching = false;
+  testCoverageQuery.error = null;
+  testCoverageQuery.dataUpdatedAt = 0;
 });
 
 describe('LotMapView', () => {
@@ -461,6 +491,76 @@ describe('LotMapView', () => {
     fireEvent.click(screen.getByTestId('history-button'));
     expect(screen.getByTestId('history-slider')).toBeInTheDocument();
     expect(screen.getByTestId('history-date')).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------
+  // Wave C3 Phase A — the tested/under-tested overlay.
+  // ---------------------------------------------------------------------
+
+  function renderWithTesting() {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(
+      <LotMapView
+        projectId="proj-1"
+        filteredLotIds={new Set(['lot-1'])}
+        canManageSettings={false}
+      />,
+    );
+  }
+
+  it('recolours a lot from its status fill to its testing verdict when armed', () => {
+    // in_progress -> #56B4E9 on the status palette; insufficient -> #E69F00.
+    testCoverageQuery.data = {
+      lots: [{ lotId: 'lot-1', state: 'insufficient', lotNumber: 'LOT-001', rules: [] }],
+      lotsWithoutGeometry: 0,
+    };
+    renderWithTesting();
+
+    expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
+    fireEvent.click(screen.getByTestId('testing-button'));
+    expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#E69F00');
+    expect(screen.getByTestId('testing-legend')).toBeInTheDocument();
+    expect(screen.getByTestId('test-coverage-panel')).toBeInTheDocument();
+  });
+
+  it('AT-86 an in-flight or failed fetch keeps STATUS colours — never grey', () => {
+    // Grey is the `unknown` VERDICT. Painting it while the answer is unknown to
+    // the CLIENT would be CIVOS asserting it has no rule when it has no answer.
+    testCoverageQuery.isLoading = true;
+    renderWithTesting();
+    fireEvent.click(screen.getByTestId('testing-button'));
+    expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
+
+    testCoverageQuery.isLoading = false;
+    testCoverageQuery.error = new ApiError(500, 'boom');
+    fireEvent.click(screen.getByTestId('testing-button')); // off
+    fireEvent.click(screen.getByTestId('testing-button')); // on again, now errored
+    expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
+    expect(screen.getByTestId('test-coverage-error')).toBeInTheDocument();
+  });
+
+  it('AT-95 History disarms Testing, and the toggle is unavailable in History', () => {
+    testCoverageQuery.data = {
+      lots: [{ lotId: 'lot-1', state: 'satisfied' }],
+      lotsWithoutGeometry: 0,
+    };
+    renderWithTesting();
+
+    fireEvent.click(screen.getByTestId('testing-button'));
+    expect(screen.getByTestId('testing-button')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#009E73');
+
+    fireEvent.click(screen.getByTestId('history-button'));
+    // Disarmed, its panel gone, its toggle gone, and the map back on the
+    // historical STATUS colours — one date in the picture, not two.
+    expect(screen.queryByTestId('testing-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('test-coverage-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
+    expect(screen.getByTestId('history-panel')).toBeInTheDocument();
+
+    // Leaving History restores the toggle, still disarmed (never re-armed for you).
+    fireEvent.click(screen.getByTestId('history-button'));
+    expect(screen.getByTestId('testing-button')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('shows an access-denied message on a 403', () => {
