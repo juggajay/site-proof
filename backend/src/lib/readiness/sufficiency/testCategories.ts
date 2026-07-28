@@ -47,10 +47,21 @@ export type Resolution = TestCategory | typeof LAB_REFERENCE | null;
  *     recover.
  *
  * SCOPE (§5.4, D-F1d): an alias ships only for a string a lot under a RESOLVED
- * pack can actually carry from a shipped seed. The only resolved pack is
- * `vicroads-204.v1` (VIC, `earthworks_general` / `earthworks_subgrade_prep`), so
- * the QLD/SA/WA "Compaction testing"-family phrasings of §5.4 are deliberately
- * absent — they count toward nothing today whatever they resolve to.
+ * pack can actually carry from a shipped seed. TWO pack families resolve today:
+ * `vicroads-204` (VIC, `.v2` since D14.2, `earthworks_general` /
+ * `earthworks_subgrade_prep`) and `tfnsw-q6.v1` (NSW, D14.3/D14.5 — those same
+ * two earthworks slugs plus `pavement_unbound` / `pavement_bound` /
+ * `pavement_stabilisation`). The QLD/SA/WA "Compaction testing"-family phrasings
+ * of §5.4 stay deliberately absent — they count toward nothing today whatever
+ * they resolve to.
+ *
+ * THE TfNSW ROWS BELOW ARE THE F1 HALF D14.3 DID NOT SHIP. `tfnsw-q6.v1` went
+ * out `status: 'confirmed'` carrying no alias of its own, so every shipped NSW
+ * seed compaction string tokenised to nothing and every NSW compaction test
+ * counted ZERO — `insufficient` on a correctly-tested lot, and in `block` mode
+ * an unclearable gate (`docs/reviews/fable-deep-review-2026-07-28.md` H2). The
+ * NSW rows of `testCategoriesSeedSweep.test.ts` are what makes the next
+ * occurrence fail CI instead of a lot screen.
  */
 export const TEST_TYPE_ALIASES: Readonly<Record<string, TestCategory>> = Object.freeze({
   // --- descriptive, authority-agnostic -------------------------------------
@@ -80,6 +91,45 @@ export const TEST_TYPE_ALIASES: Readonly<Record<string, TestCategory>> = Object.
   'as 1289.5.7.1': 'compaction',
   /** VIC seed (6 strings) + prod items `rc 316.00` (5) and `rc 316.00 / rc 500.05` (4); VicRoads RC 316.00 = compaction testing. */
   'rc 316.00': 'compaction',
+
+  // --- TfNSW method codes (`tfnsw-q6.v1`; pack-class, see GOVERNANCE) -------
+  // Method NAMES are verbatim from Q6 Annexure Q6/M's own test-method list (PDF
+  // p. 49), transcribed at `docs/research/c1-q6-pavements-2026-07-27.md` §3.4 —
+  // the grade-A pass that also checked R71/R73/R75 (2020-21) against Q6 Ed 2
+  // (2024) and found NO renumbering, so the characteristic tables below and this
+  // list address the same tests.
+  /**
+   * Q6/M: "T173 Field wet density (nuclear)". The in-situ density determination
+   * R71 cl. 8.4.2, R73 cl. 8.4.1 and R75 cl. 7.4.1 each name against the
+   * characteristic "Insitu density" (research §2.6-2.8) — the same field test as
+   * the descriptive `field density nuclear` / `insitu density` rows above.
+   * NSW seeds: `seed-itp-templates-nsw-pavements.js:184`,
+   * `seed-itp-templates-nsw-drainage.js:795`, plus five composite strings.
+   */
+  t173: 'compaction',
+  /**
+   * Q6/M: "T166 Relative compaction" — the characteristic itself (R71 cl. 8.4.4,
+   * R73 cl. 8.4.3, R75 cl. 7.4.3), i.e. exactly what Table Q6/L.1 counts samples
+   * of.
+   * NSW seeds: `seed-itp-templates-nsw-environmental.js:116`,
+   * `seed-itp-templates-nsw-road-furniture.js:175`, plus three composites.
+   */
+  t166: 'compaction',
+  // DELIBERATELY NOT ALIASED, recorded so it is not re-derived:
+  //   * `T162`. Q6/M names it "Compaction control test (rapid)" — the exact name
+  //     of AS 1289.5.7.1, which this table already reads as a FIELD test. But
+  //     R71 cl. 8.4.3 and R75 cl. 7.4.2 cite T162 against the characteristic
+  //     "Maximum wet (or dry) density", beside the T111/T112 LABORATORY
+  //     determinations, i.e. the Hilf REFERENCE limb. Two grade-A readings point
+  //     opposite ways and nothing forces the call: T162 never appears alone in a
+  //     shipped seed (only `T173 (Nuclear) / T166 / T162` and `T173 / T162`,
+  //     both of which resolve on their T173 token), so leaving it unmapped can
+  //     only UNDER-state, which is the visible direction and the recoverable
+  //     one. Flip condition: a seed or production string carrying T162 alone.
+  //   * `T119` (field density, sand replacement) and `T111`/`T112` (dry
+  //     density/moisture relationships — the laboratory MDD, hence
+  //     LAB_REFERENCE material, not aliases). The R-specs cite all three, but no
+  //     shipped seed emits them and the SCOPE note admits only observed strings.
 
   // --- WHOLE-STRING entries, deliberately (§5.2, [F1C-B6]) ----------------
   /**
