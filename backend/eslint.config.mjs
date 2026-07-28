@@ -41,14 +41,18 @@ export default tseslint.config(
       'scripts/seeds/itp-templates/index.mjs',
       'scripts/smoke-production.mjs',
       'scripts/bench-pdf-folio.mjs',
+      'scripts/bench-zip-spike.mjs',
+      'scripts/bench-zip-cost.mjs',
     ],
     languageOptions: {
       globals: {
         AbortController: 'readonly',
         clearTimeout: 'readonly',
+        clearInterval: 'readonly',
         console: 'readonly',
         fetch: 'readonly',
         setTimeout: 'readonly',
+        setInterval: 'readonly',
         process: 'readonly',
         // `--expose-gc` makes this a real global in the bench's child processes.
         // The bench reads it defensively (`if (global.gc)`) and records whether it
