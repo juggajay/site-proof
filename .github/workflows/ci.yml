@@ -28,6 +28,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      pages: ${{ steps.filter.outputs.pages }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -42,6 +43,7 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             backend=true
             frontend=true
+            pages=true
           else
             base_sha="${{ github.event.pull_request.base.sha }}"
             head_sha="${{ github.event.pull_request.head.sha }}"
@@ -62,10 +64,21 @@ jobs:
             else
               frontend=false
             fi
+
+            # Full-E2E page gate: the seeded suite exercises the page/shell/
+            # component surfaces. Twice on 2026-07-28 a PR that changed those
+            # merged green while breaking the push-only full suite (#1643,
+            # #1647) — a PR touching them now pays for the full run up front.
+            if grep -Eq '^(frontend/src/pages/|frontend/src/shell/|frontend/src/components/|frontend/e2e/)' /tmp/changed-files; then
+              pages=true
+            else
+              pages=false
+            fi
           fi
 
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "pages=$pages" >> "$GITHUB_OUTPUT"
 
   backend:
     name: Backend
@@ -303,8 +316,15 @@ jobs:
   frontend-e2e:
     name: Frontend E2E
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
-    if: github.event_name != 'pull_request'
+    needs: [changes, backend, frontend]
+    # Push runs always; PRs pay for the full suite when they touch the
+    # surfaces it exercises (changes.pages). needs.result guards let the job
+    # run when backend was legitimately skipped on a frontend-only diff.
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'pull_request' || needs.changes.outputs.pages == 'true') &&
+      needs.frontend.result == 'success' &&
+      (needs.backend.result == 'success' || needs.backend.result == 'skipped')
     services:
       postgres:
         image: postgres:15

@@ -1676,7 +1676,13 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).toContain("if: github.event_name == 'pull_request'");
     expect(ciWorkflow).toContain('npx playwright test --grep @pr-smoke');
     expect(ciWorkflow).toContain('name: Frontend E2E');
-    expect(ciWorkflow).toContain('needs: [backend, frontend]');
+    expect(ciWorkflow).toContain('needs: [changes, backend, frontend]');
+    // The full-E2E page gate (#1650): push runs must ALWAYS run the suite —
+    // the PR limb only ADDS runs. Pinning the expression keeps a future edit
+    // from silently dropping the push guarantee.
+    expect(ciWorkflow).toContain(
+      "(github.event_name != 'pull_request' || needs.changes.outputs.pages == 'true')",
+    );
     expect(ciWorkflow).toContain('POSTGRES_DB: siteproof_e2e');
     expect(ciWorkflow).toContain('npm run seed:e2e');
     expect(ciWorkflow).toContain('run: npm run test:e2e');
