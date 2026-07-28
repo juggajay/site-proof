@@ -83,6 +83,54 @@ describe('HP evidence package options', () => {
     );
   });
 
+  // E.0a (threat model §7.4, item 4c): "Recipient of Record" lists every other
+  // address the release request was sent to. The template is shared between the
+  // authed and the public download, and the ONLY thing that renders the row is
+  // data.holdPoint.notificationSentTo — which the public payload no longer
+  // carries (backend/src/routes/holdpoints/publicReleasePayload.ts). These two
+  // arms pin that: authed shape renders it, public shape cannot.
+  describe('Recipient of Record row', () => {
+    const withRelease = (
+      holdPoint: Partial<typeof releasedHpEvidencePackageFixture.holdPoint>,
+    ) => ({
+      ...releasedHpEvidencePackageFixture,
+      holdPoint: {
+        ...releasedHpEvidencePackageFixture.holdPoint,
+        releasedByName: 'Sam Supervisor',
+        releaseMethod: 'secure_link',
+        ...holdPoint,
+      },
+    });
+
+    it('renders for the authed payload, which still carries notificationSentTo', async () => {
+      await generateHPEvidencePackagePDF(
+        withRelease({ notificationSentTo: 'super@client.example, other@client.example' }),
+      );
+
+      const textContent = renderedText(latestPdf()).join('\n');
+      expect(textContent).toContain(
+        'Recipient of Record: super@client.example, other@client.example',
+      );
+    });
+
+    it('cannot render for the public payload, which omits notificationSentTo', async () => {
+      const publicHoldPoint = { ...withRelease({}).holdPoint };
+      delete (publicHoldPoint as { notificationSentTo?: string | null }).notificationSentTo;
+
+      await generateHPEvidencePackagePDF({
+        ...releasedHpEvidencePackageFixture,
+        holdPoint: publicHoldPoint,
+      });
+
+      const textContent = renderedText(latestPdf()).join('\n');
+      // The rest of the Release Authorisation block still renders — only the
+      // recipient list is gone.
+      expect(textContent).toContain('Released By: Sam Supervisor');
+      expect(textContent).not.toContain('Recipient of Record');
+      expect(textContent).not.toContain('@client.example');
+    });
+  });
+
   it('renders the company details line (ABN · address) under the header band', async () => {
     await generateHPEvidencePackagePDF({
       ...releasedHpEvidencePackageFixture,

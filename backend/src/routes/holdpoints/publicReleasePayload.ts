@@ -134,7 +134,12 @@ export async function buildPublicHoldPointReleasePayload(
       releaseMethod: holdPoint.releaseMethod,
       releaseSignatureUrl: holdPoint.releaseSignatureUrl,
       releaseNotes: holdPoint.releaseNotes,
-      notificationSentTo: holdPoint.notificationSentTo,
+      // E.0a / threat model §7.4: notificationSentTo is the list of every OTHER
+      // address the request went to. A link bearer may not see it. The authed
+      // callers (readRoutes.ts) still pass it — internal staff seeing the
+      // recipient list is not a disclosure. Starving it here also starves the
+      // "Recipient of Record" row in the public evidence PDF, which renders
+      // straight off this payload.
     },
     lot,
     itpTemplate,

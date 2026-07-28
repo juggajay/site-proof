@@ -104,7 +104,9 @@ holdPointPublicBatchRouter.get(
     const requestedByUser = batch.requestedByUserId
       ? await prisma.user.findUnique({
           where: { id: batch.requestedByUserId },
-          select: { fullName: true, email: true },
+          // E.0a / threat model §7.4: "who asked" is in-scope context as a NAME.
+          // The staff email is not, so it is never loaded on this public route.
+          select: { fullName: true },
         })
       : null;
 
@@ -139,7 +141,7 @@ holdPointPublicBatchRouter.get(
           lotNumber: batch.lot.lotNumber,
           activityType: batch.lot.activityType,
         },
-        requestedBy: requestedByUser?.fullName || requestedByUser?.email || null,
+        requestedBy: requestedByUser ? requestedByUser.fullName || 'Site Team' : null,
         scheduledDate: batch.scheduledDate,
         scheduledTime: batch.scheduledTime,
         recipient: {

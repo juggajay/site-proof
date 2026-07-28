@@ -279,6 +279,31 @@ describe('Hold Point batch review-room public routes', () => {
     expect(res.body.batch.holdPoints[0]).toMatchObject({ sequenceNumber: 1, status: 'notified' });
   });
 
+  // E.0a (threat model §7.4, item 4d): "who asked" may be a NAME. When the
+  // requester has no fullName the public surface falls back to a role label —
+  // never to the staff email address.
+  it('never falls back to the requester email when fullName is null', async () => {
+    const requester = await prisma.user.findUniqueOrThrow({
+      where: { id: requestingUserId },
+      select: { email: true, fullName: true },
+    });
+    await prisma.user.update({ where: { id: requestingUserId }, data: { fullName: null } });
+
+    try {
+      const res = await request(app).get(`/api/holdpoints/public/batch/${batchRawToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.batch.requestedBy).toBe('Site Team');
+      expect(res.body.batch.requestedBy).not.toContain('@');
+      expect(JSON.stringify(res.body)).not.toContain(requester.email);
+    } finally {
+      await prisma.user.update({
+        where: { id: requestingUserId },
+        data: { fullName: requester.fullName },
+      });
+    }
+  });
+
   it('rejects an unknown or hash-supplied batch token', async () => {
     const unknown = await request(app).get('/api/holdpoints/public/batch/not-a-real-token');
     expect(unknown.status).toBe(404);
