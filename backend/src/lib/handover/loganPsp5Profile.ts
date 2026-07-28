@@ -517,6 +517,40 @@ const resolveItem2: Resolver = (_input, logan18) => {
 };
 
 /**
+ * Sort a lot's failed verified tests into the three states item 3 distinguishes:
+ * no NCR at all (CIVOS cannot tell), an NCR with no rectification detail (the
+ * detail is genuinely absent), and a complete trail.
+ */
+function triageFailedTests(
+  failed: readonly LoganPsp5TestInput[],
+  ncrs: readonly LoganPsp5NcrInput[],
+): { unlinked: string[]; linkedWithoutDetail: string[]; evidenceIds: string[] } {
+  const byTest = new Map<string, LoganPsp5NcrInput[]>();
+  for (const ncr of ncrs) {
+    if (!ncr.linkedTestResultId) continue;
+    const bucket = byTest.get(ncr.linkedTestResultId);
+    if (bucket) bucket.push(ncr);
+    else byTest.set(ncr.linkedTestResultId, [ncr]);
+  }
+
+  const unlinked: string[] = [];
+  const linkedWithoutDetail: string[] = [];
+  const evidenceIds: string[] = [];
+  for (const test of failed) {
+    const linked = byTest.get(test.id) ?? [];
+    const detailed = linked.filter(
+      (n) =>
+        Boolean(n.rectificationNotes) || Boolean(n.rectificationSubmittedAt) || n.evidenceCount > 0,
+    );
+    if (linked.length === 0) unlinked.push(test.id);
+    else if (detailed.length === 0)
+      linkedWithoutDetail.push(linked.map((n) => n.ncrNumber || n.id).join(', '));
+    else evidenceIds.push(...detailed.map((n) => n.id));
+  }
+  return { unlinked, linkedWithoutDetail, evidenceIds };
+}
+
+/**
  * Item 3 — retest and rectification where a test fails.
  *
  * The §2.2 item-3 hole, printed rather than papered over: a failed verified test
@@ -535,34 +569,7 @@ const resolveItem3: Resolver = (input) => {
     };
   }
 
-  const ncrByTest = new Map<string, LoganPsp5NcrInput[]>();
-  for (const ncr of input.ncrs) {
-    if (!ncr.linkedTestResultId) continue;
-    const bucket = ncrByTest.get(ncr.linkedTestResultId);
-    if (bucket) bucket.push(ncr);
-    else ncrByTest.set(ncr.linkedTestResultId, [ncr]);
-  }
-
-  const unlinked: string[] = [];
-  const linkedWithoutDetail: string[] = [];
-  const evidenceIds: string[] = [];
-
-  for (const test of failed) {
-    const ncrs = ncrByTest.get(test.id) ?? [];
-    if (ncrs.length === 0) {
-      unlinked.push(test.id);
-      continue;
-    }
-    const detailed = ncrs.filter(
-      (n) =>
-        Boolean(n.rectificationNotes) || Boolean(n.rectificationSubmittedAt) || n.evidenceCount > 0,
-    );
-    if (detailed.length === 0) {
-      linkedWithoutDetail.push(ncrs.map((n) => n.ncrNumber || n.id).join(', '));
-      continue;
-    }
-    evidenceIds.push(...detailed.map((n) => n.id));
-  }
+  const { unlinked, linkedWithoutDetail, evidenceIds } = triageFailedTests(failed, input.ncrs);
 
   if (unlinked.length > 0) {
     return {
