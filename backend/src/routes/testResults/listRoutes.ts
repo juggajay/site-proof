@@ -218,6 +218,13 @@ listRoutes.get(
           laboratoryReportNumber: true,
           sampleDate: true,
           sampleLocation: true,
+          // Wave C3 Phase B1: the captured sample point rides alongside the
+          // free-text location it does NOT replace. The words are the record;
+          // the pin is the position (spec §5.2).
+          sampleLatitude: true,
+          sampleLongitude: true,
+          sampleLocationSource: true,
+          sampleLocationAccuracyM: true,
           testDate: true,
           resultDate: true,
           resultValue: true,

@@ -14,6 +14,11 @@
  * sees lots assigned to their company (legacy field OR an active assignment),
  * and therefore only those lots' geometries, test results, and photos. Photos
  * not linked to any lot are visible to internal roles only.
+ *
+ * `only=tests` (Wave C3 Phase B1) queries a bbox on each test's OWN captured
+ * sample point, which carries no transitive lot scoping — so it applies the same
+ * explicit subbie filter the photo path does, including the `lotId != null` half.
+ * [C3S-B11]
  */
 
 import { Router } from 'express';
@@ -47,11 +52,14 @@ const searchBodySchema = z.object({
     .object({ west: lng, south: lat, east: lng, north: lat })
     .refine((b) => b.west < b.east, { message: 'west must be less than east' })
     .refine((b) => b.south < b.north, { message: 'south must be less than north' }),
-  // Photos-only mode: the map's Photos layer refetches on every pan and reads
-  // only `.photos`. This skips the geometry scan + intersection + test-result
-  // load, returning empty arrays for those collections (shape unchanged). Absent
-  // => full find-by-area behaviour for the draw-a-box search.
-  only: z.literal('photos').optional(),
+  // Single-layer modes: the map's Photos / Test-pin layers refetch on every pan
+  // and read only their own collection, so each mode skips the work the other
+  // collections need and returns them empty (shape unchanged). Absent => full
+  // find-by-area behaviour for the draw-a-box search.
+  //
+  // `tests` (Wave C3 Phase B1) is NOT the default test query narrowed — it is a
+  // different query with a different scoping story. See below.
+  only: z.enum(['photos', 'tests']).optional(),
 });
 
 function cap<T>(items: T[]): { items: T[]; truncated: boolean } {
@@ -70,6 +78,7 @@ spatialSearchRouter.post(
     }
     const bounds: SearchBounds = parsed.data.bounds;
     const photosOnly = parsed.data.only === 'photos';
+    const testsOnly = parsed.data.only === 'tests';
 
     if (!(await checkProjectAccess(user.id, projectId))) {
       throw AppError.forbidden('Access denied');
@@ -113,18 +122,19 @@ spatialSearchRouter.post(
 
     // Lots: load the project's (scoped) geometries and keep those whose Feature
     // intersects the box. One row per lot (first intersecting geometry wins).
-    // Photos-only mode skips this scan entirely — with no geometries the
-    // intersection loop and the test-result guard below yield empty arrays, so
-    // the response shape is unchanged for the map's Photos layer.
-    const geometries = photosOnly
-      ? []
-      : await prisma.lotGeometry.findMany({
-          where: { lot: lotWhere },
-          orderBy: { createdAt: 'asc' },
-          include: {
-            lot: { select: { id: true, lotNumber: true, status: true, activityType: true } },
-          },
-        });
+    // Single-layer modes skip this scan entirely — with no geometries the
+    // intersection loop and the default test-result guard below yield empty
+    // arrays, so the response shape is unchanged for the map's layers.
+    const geometries =
+      photosOnly || testsOnly
+        ? []
+        : await prisma.lotGeometry.findMany({
+            where: { lot: lotWhere },
+            orderBy: { createdAt: 'asc' },
+            include: {
+              lot: { select: { id: true, lotNumber: true, status: true, activityType: true } },
+            },
+          });
 
     const seenLotIds = new Set<string>();
     const intersectingLots: ReturnType<typeof mapGeometry>[] = [];
@@ -142,52 +152,103 @@ spatialSearchRouter.post(
     // Bounded server-side with `take` (CAP + 1 so cap() can still detect
     // truncation from the one extra row); the app-side subbie filter + cap()
     // below stay as a belt (a scoped subbie may see fewer than RESULT_CAP).
-    const photoRows = await prisma.document.findMany({
-      where: {
-        projectId,
-        documentType: 'photo',
-        gpsLatitude: { gte: bounds.south, lte: bounds.north },
-        gpsLongitude: { gte: bounds.west, lte: bounds.east },
-      },
-      orderBy: { captureTimestamp: 'desc' },
-      take: RESULT_CAP + 1,
-      select: {
-        id: true,
-        filename: true,
-        caption: true,
-        captureTimestamp: true,
-        lotId: true,
-        gpsLatitude: true,
-        gpsLongitude: true,
-      },
-    });
+    const photoRows = testsOnly
+      ? []
+      : await prisma.document.findMany({
+          where: {
+            projectId,
+            documentType: 'photo',
+            gpsLatitude: { gte: bounds.south, lte: bounds.north },
+            gpsLongitude: { gte: bounds.west, lte: bounds.east },
+          },
+          orderBy: { captureTimestamp: 'desc' },
+          take: RESULT_CAP + 1,
+          select: {
+            id: true,
+            filename: true,
+            caption: true,
+            captureTimestamp: true,
+            lotId: true,
+            gpsLatitude: true,
+            gpsLongitude: true,
+          },
+        });
     const visiblePhotos = photoRows.filter((p) => {
       if (!isSubcontractor) return true;
       return p.lotId != null && visibleLotIds!.has(p.lotId);
     });
     const photosResult = cap(visiblePhotos);
 
-    // Test results: for the intersecting lots only (already scoped via lotWhere).
-    const intersectingLotIds = intersectingLots.map((l) => l.lotId);
-    const testResultRows =
-      intersectingLotIds.length === 0
-        ? []
-        : await prisma.testResult.findMany({
-            where: { projectId, lotId: { in: intersectingLotIds } },
-            orderBy: { createdAt: 'desc' },
-            select: {
-              id: true,
-              status: true,
-              lotId: true,
-              testType: true,
-              testRequestNumber: true,
-            },
-          });
-    const lotNumberById = new Map(intersectingLots.map((l) => [l.lotId, l.lotNumber]));
-    const testResults = testResultRows.map((t) => ({
-      ...t,
-      lotNumber: t.lotId ? (lotNumberById.get(t.lotId) ?? null) : null,
-    }));
+    // Test results. TWO queries with deliberately different shapes, because they
+    // have deliberately different scoping stories.
+    //
+    // Default mode: the tests on the intersecting lots. Scoping is TRANSITIVE —
+    // `intersectingLotIds` came from a geometry query already filtered by
+    // `lotWhere`, so a subbie can only ever name their own lots here.
+    //
+    // `only=tests` (Wave C3 Phase B1 [C3R-B1]): a DB bbox on the test's OWN
+    // captured coordinate. There are no `intersectingLotIds`, so the transitive
+    // scoping that protects the query above is GONE, and this mode copies the
+    // PHOTO query's shape instead — DB-side range filter, `take: RESULT_CAP + 1`,
+    // then an EXPLICIT app-side subbie filter. `TestResult.lotId` is nullable, so
+    // the `!= null` half of that filter is load-bearing: without it an unlinked
+    // located test leaks to a subcontractor. [C3S-B11], AT-92.
+    let testResults: Array<Record<string, unknown>>;
+    if (testsOnly) {
+      // NULL coordinates fail both range predicates, so this also excludes every
+      // unlocated test without a second condition.
+      const locatedRows = await prisma.testResult.findMany({
+        where: {
+          projectId,
+          sampleLatitude: { gte: bounds.south, lte: bounds.north },
+          sampleLongitude: { gte: bounds.west, lte: bounds.east },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: RESULT_CAP + 1,
+        select: {
+          id: true,
+          status: true,
+          lotId: true,
+          testType: true,
+          testRequestNumber: true,
+          sampleLatitude: true,
+          sampleLongitude: true,
+          sampleLocationSource: true,
+          sampleLocationAccuracyM: true,
+        },
+      });
+      testResults = locatedRows
+        .filter((t) => {
+          if (!isSubcontractor) return true;
+          return t.lotId != null && visibleLotIds!.has(t.lotId);
+        })
+        // No geometry scan ran in this mode, so no lot numbers are in hand. Null
+        // is the shape the default mode already returns for an unknown lot.
+        .map((t) => ({ ...t, lotNumber: null }));
+    } else {
+      const intersectingLotIds = intersectingLots.map((l) => l.lotId);
+      const testResultRows =
+        intersectingLotIds.length === 0
+          ? []
+          : await prisma.testResult.findMany({
+              where: { projectId, lotId: { in: intersectingLotIds } },
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                status: true,
+                lotId: true,
+                testType: true,
+                testRequestNumber: true,
+              },
+            });
+      const lotNumberById = new Map(intersectingLots.map((l) => [l.lotId, l.lotNumber]));
+      testResults = testResultRows.map((t) => ({
+        ...t,
+        lotNumber: t.lotId ? (lotNumberById.get(t.lotId) ?? null) : null,
+      }));
+    }
+    // cap() AFTER the filter, as photos do — a scoped subbie may legitimately see
+    // fewer than RESULT_CAP, and the one extra row is what flags truncation.
     const testResultsResult = cap(testResults);
 
     res.json({

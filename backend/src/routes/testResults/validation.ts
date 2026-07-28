@@ -1,4 +1,7 @@
+import { z } from 'zod';
+
 import { AppError } from '../../lib/AppError.js';
+import { parseOptionalGpsCoordinate } from '../itp/completionValidation.js';
 
 /**
  * Pure test-result input validation, extracted verbatim from
@@ -163,6 +166,112 @@ export function toNullableFloat(value: unknown, fieldName = 'value'): number | n
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) {
     throw AppError.badRequest(`${fieldName} must be a valid number`);
+  }
+
+  return parsed;
+}
+
+// ---------------------------------------------------------------------------
+// Wave C3 Phase B1 — the sample point (spec §5.2, §5.3, §9.1)
+// ---------------------------------------------------------------------------
+
+/** Provenance of a captured sample point. Mirrors the DB CHECK constraint. */
+export const SAMPLE_LOCATION_SOURCES = ['gps', 'map_pick'] as const;
+
+/**
+ * The four columns that describe WHERE a sample was taken, as one list.
+ *
+ * One list, three readers: the write path, `NON_SUBSTANTIVE_EDIT_FIELDS`, and
+ * the audit pre-image. `hasSubstantiveEdit` iterates `Object.keys(updateData)`,
+ * so naming only "the coordinate" in prose would leave three of the four keys
+ * un-verifying a verified row [C3R-A8].
+ */
+export const SAMPLE_LOCATION_FIELDS = [
+  'sampleLatitude',
+  'sampleLongitude',
+  'sampleLocationSource',
+  'sampleLocationAccuracyM',
+] as const;
+
+/**
+ * Route-level sanity bound on a GPS accuracy radius, in metres. The DB column is
+ * deliberately unconstrained (spec §7) — a zero or absent accuracy is a fact
+ * worth recording rather than rejecting — but a non-numeric or absurd value at
+ * the trust boundary should be a 400, not a stored number nobody can read.
+ * ponytail: one bound, no `> 0` rule; tighten when a real value proves nonsense.
+ */
+export const MAX_SAMPLE_ACCURACY_M = 100_000;
+
+const sampleLocationSourceSchema = z.enum(SAMPLE_LOCATION_SOURCES);
+
+export type SampleLocationInput = {
+  sampleLatitude?: number | null;
+  sampleLongitude?: number | null;
+  sampleLocationSource?: (typeof SAMPLE_LOCATION_SOURCES)[number] | null;
+  sampleLocationAccuracyM?: number | null;
+};
+
+function parseSampleLocationSource(
+  value: unknown,
+): (typeof SAMPLE_LOCATION_SOURCES)[number] | null {
+  if (value === null || (typeof value === 'string' && value.trim() === '')) {
+    return null;
+  }
+
+  const parsed = sampleLocationSourceSchema.safeParse(value);
+  if (!parsed.success) {
+    throw AppError.badRequest(
+      `sampleLocationSource must be one of: ${SAMPLE_LOCATION_SOURCES.join(', ')}`,
+    );
+  }
+
+  return parsed.data;
+}
+
+/**
+ * Wave C3 Phase B1. Validate the four sample-point keys off a request body.
+ *
+ * Only keys PRESENT in the body appear in the result, so a PATCH that never
+ * mentions a location cannot clear one, and an explicit `null` on all four
+ * (the "Clear" action) nulls them together — which the pair constraints
+ * require to happen together anyway.
+ *
+ * The pair/provenance coherence rules are NOT re-implemented here: they are DB
+ * CHECK constraints (§5.3), because prose rules do not survive the next route
+ * that forgets them. This function only turns malformed input into a 400.
+ */
+export function parseSampleLocationInput(body: Record<string, unknown>): SampleLocationInput {
+  const parsed: SampleLocationInput = {};
+
+  if (body.sampleLatitude !== undefined) {
+    parsed.sampleLatitude = parseOptionalGpsCoordinate(
+      body.sampleLatitude,
+      'sampleLatitude',
+      -90,
+      90,
+    );
+  }
+  if (body.sampleLongitude !== undefined) {
+    parsed.sampleLongitude = parseOptionalGpsCoordinate(
+      body.sampleLongitude,
+      'sampleLongitude',
+      -180,
+      180,
+    );
+  }
+  if (body.sampleLocationSource !== undefined) {
+    parsed.sampleLocationSource = parseSampleLocationSource(body.sampleLocationSource);
+  }
+  if (body.sampleLocationAccuracyM !== undefined) {
+    // ponytail: `parseOptionalGpsCoordinate` is a range-checked optional decimal
+    // parser that accepts numbers AND strings. Reused rather than cloned; the
+    // only cost is its "decimal coordinate" wording on a malformed string.
+    parsed.sampleLocationAccuracyM = parseOptionalGpsCoordinate(
+      body.sampleLocationAccuracyM,
+      'sampleLocationAccuracyM',
+      0,
+      MAX_SAMPLE_ACCURACY_M,
+    );
   }
 
   return parsed;

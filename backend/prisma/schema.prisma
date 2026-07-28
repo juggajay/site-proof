@@ -855,44 +855,59 @@ model HoldPointReleaseBatch {
 // ============================================================================
 
 model TestResult {
-  id                     String    @id @default(uuid())
-  projectId              String    @map("project_id")
-  lotId                  String?   @map("lot_id")
-  itpChecklistItemId     String?   @map("itp_checklist_item_id")
-  testType               String    @map("test_type")
-  testRequestNumber      String?   @map("test_request_number")
-  laboratoryName         String?   @map("laboratory_name")
-  laboratoryReportNumber String?   @map("laboratory_report_number")
-  sampleDate             DateTime? @map("sample_date")
-  sampleLocation         String?   @map("sample_location")
-  testDate               DateTime? @map("test_date")
-  resultDate             DateTime? @map("result_date")
-  resultValue            Decimal?  @map("result_value")
-  resultUnit             String?   @map("result_unit")
-  testMethod             String?   @map("test_method")
-  specificationMin       Decimal?  @map("specification_min")
-  specificationMax       Decimal?  @map("specification_max")
-  passFail               String    @default("pending") @map("pass_fail")
-  certificateDocId       String?   @map("certificate_document_id")
-  status                 String    @default("requested")
-  enteredById            String?   @map("entered_by")
-  enteredAt              DateTime? @map("entered_at")
-  verifiedById           String?   @map("verified_by")
-  verifiedAt             DateTime? @map("verified_at")
+  id                      String    @id @default(uuid())
+  projectId               String    @map("project_id")
+  lotId                   String?   @map("lot_id")
+  itpChecklistItemId      String?   @map("itp_checklist_item_id")
+  testType                String    @map("test_type")
+  testRequestNumber       String?   @map("test_request_number")
+  laboratoryName          String?   @map("laboratory_name")
+  laboratoryReportNumber  String?   @map("laboratory_report_number")
+  sampleDate              DateTime? @map("sample_date")
+  sampleLocation          String?   @map("sample_location")
+  testDate                DateTime? @map("test_date")
+  resultDate              DateTime? @map("result_date")
+  resultValue             Decimal?  @map("result_value")
+  resultUnit              String?   @map("result_unit")
+  testMethod              String?   @map("test_method")
+  specificationMin        Decimal?  @map("specification_min")
+  specificationMax        Decimal?  @map("specification_max")
+  passFail                String    @default("pending") @map("pass_fail")
+  certificateDocId        String?   @map("certificate_document_id")
+  status                  String    @default("requested")
+  enteredById             String?   @map("entered_by")
+  enteredAt               DateTime? @map("entered_at")
+  verifiedById            String?   @map("verified_by")
+  verifiedAt              DateTime? @map("verified_at")
   /// Wave C2 Phase 3: system-stamped when the row transitions to 'at_lab'.
   /// Never user-editable, and deliberately NOT cleared by reject [C2R-A3] —
   /// rejecting a result does not un-send the sample.
-  sentToLabAt            DateTime? @map("sent_to_lab_at")
+  sentToLabAt             DateTime? @map("sent_to_lab_at")
   /// Wave C2 Phase 3: user-supplied, optional. CIVOS never defaults it (J5) —
   /// blank is the normal case, and blank shows elapsed days only.
-  expectedResultDate     DateTime? @map("expected_result_date")
-  rejectedById           String?   @map("rejected_by")
-  rejectedAt             DateTime? @map("rejected_at")
-  rejectionReason        String?   @map("rejection_reason")
-  aiExtracted            Boolean   @default(false) @map("ai_extracted")
-  aiConfidence           String?   @map("ai_confidence") // Stored as JSON string for SQLite
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  expectedResultDate      DateTime? @map("expected_result_date")
+  /// Wave C3 Phase B1. Where the sample was taken, WGS84. Written ONLY from an
+  /// explicit human capture (a map tap or a device GPS fix) [C3S-B1] — never
+  /// derived from `sampleLocation` text, never defaulted to a lot centroid.
+  /// Vocabulary validated against TfNSW LIMS v6 Table 1
+  /// `SampleLocationChainageGPSCoordinates` (C3 spec §3.4).
+  sampleLatitude          Decimal?  @map("sample_latitude")
+  sampleLongitude         Decimal?  @map("sample_longitude")
+  /// 'gps' | 'map_pick' — provenance of the pair above. NULL iff both are NULL.
+  /// A future imported source adds a value here; it never overloads an existing
+  /// one. Enforced by a CHECK constraint, mirrored by a Zod enum at the route.
+  sampleLocationSource    String?   @map("sample_location_source")
+  /// Metres, from the GPS fix that produced the pair. NULL for 'map_pick' and
+  /// for any unlocated row. Unrecoverable after capture, which is why it is
+  /// captured [C3R-A4] — a +/-40 m pin and a +/-4 m pin are different evidence.
+  sampleLocationAccuracyM Decimal?  @map("sample_location_accuracy_m")
+  rejectedById            String?   @map("rejected_by")
+  rejectedAt              DateTime? @map("rejected_at")
+  rejectionReason         String?   @map("rejection_reason")
+  aiExtracted             Boolean   @default(false) @map("ai_extracted")
+  aiConfidence            String?   @map("ai_confidence") // Stored as JSON string for SQLite
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lot              Lot?              @relation(fields: [lotId], references: [id], onDelete: SetNull)
