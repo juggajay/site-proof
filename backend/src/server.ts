@@ -8,6 +8,7 @@ import { requireAuth, requireRole } from './middleware/authMiddleware.js';
 import { authRouter } from './routes/auth.js';
 import { projectsRouter } from './routes/projects.js';
 import { lotsRouter } from './routes/lots.js';
+import { foliosRouter } from './routes/folio/index.js';
 import { ncrsRouter } from './routes/ncrs/index.js';
 import { subcontractorsRouter } from './routes/subcontractors.js';
 import { reportsRouter } from './routes/reports.js';
@@ -142,6 +143,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/api-keys', apiKeysRouter); // Feature #747: API key management
   app.use('/api/projects', projectsRouter);
   app.use('/api/lots', lotsRouter);
+  // Wave D `D1b` — folio issue and download. Mounts no multer and accepts no
+  // bytes on any route (`[DH-i]`, AT-143).
+  app.use('/api/folios', foliosRouter);
   app.use('/api/ncrs', ncrsRouter);
   app.use('/api/subcontractors', subcontractorsRouter);
   app.use('/api/reports', reportsRouter);

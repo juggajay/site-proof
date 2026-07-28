@@ -25,6 +25,8 @@ import { useLotConformanceActions } from './hooks/useLotConformanceActions';
 import { useLotSubcontractorAssignments } from './hooks/useLotSubcontractorAssignments';
 import { useItpActionModals, type ItpActionModalHandlers } from './hooks/useItpActionModals';
 import { QualityManagementSection } from './components/QualityManagementSection';
+import { EvidenceFolioSection } from './components/EvidenceFolioSection';
+import { FOLIO_ISSUER_ROLES } from './hooks/useLotFolios';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
 import { LotReadinessPanel } from './components/LotReadinessPanel';
@@ -520,6 +522,18 @@ export function LotDetailPage() {
         onCloseReportDialog={() => setShowReportFormatDialog(false)}
         onReportFormatChange={setSelectedReportFormat}
       />
+
+      {/* Wave D `D1b` — the issued evidence folio (spec §9). Role-gated on the
+          SERVER-derived effective project role, and re-checked by the backend
+          regardless: a client-side gate is a UI affordance, never a control. */}
+      {lotId && (
+        <EvidenceFolioSection
+          lotId={lotId}
+          lotNumber={lot.lotNumber}
+          effectiveRole={effectiveRole}
+          canIssueFolio={FOLIO_ISSUER_ROLES.includes(effectiveRole)}
+        />
+      )}
 
       <LotDetailModals
         lot={lot}

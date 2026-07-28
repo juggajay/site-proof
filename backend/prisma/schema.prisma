@@ -109,6 +109,9 @@ model User {
   revokedAuthTokens           RevokedAuthToken[]
   requirementEvaluations      RequirementEvaluation[]
   importBatches               ImportBatch[]
+  folioSnapshots              FolioSnapshot[]              @relation("FolioSnapshotCreatedBy")
+  folioIssueReservations      FolioIssueReservation[]      @relation("FolioReservedBy")
+  folioIssues                 FolioIssue[]                 @relation("FolioIssuedBy")
 
   @@index([companyId])
   @@map("users")
@@ -361,36 +364,36 @@ model NotificationAlert {
 }
 
 model Project {
-  id                String    @id @default(uuid())
-  companyId         String    @map("company_id")
-  name              String
-  projectNumber     String    @map("project_number")
-  clientName        String?   @map("client_name")
-  contractValue     Decimal?  @map("contract_value")
-  startDate         DateTime? @map("start_date")
-  targetCompletion  DateTime? @map("target_completion")
-  status            String    @default("active")
-  state             String
-  specificationSet  String    @map("specification_set")
+  id                  String    @id @default(uuid())
+  companyId           String    @map("company_id")
+  name                String
+  projectNumber       String    @map("project_number")
+  clientName          String?   @map("client_name")
+  contractValue       Decimal?  @map("contract_value")
+  startDate           DateTime? @map("start_date")
+  targetCompletion    DateTime? @map("target_completion")
+  status              String    @default("active")
+  state               String
+  specificationSet    String    @map("specification_set")
   // C1 gate strength (§5.1.2). Default 'warn' NEVER changes conformance
   // outcomes; 'block' is opt-in per project (§16 D1).
-  testSufficiencyMode String  @default("warn") @map("test_sufficiency_mode")
-  chainageStart     Decimal?  @map("chainage_start")
-  chainageEnd       Decimal?  @map("chainage_end")
-  lotPrefix         String?   @default("LOT-") @map("lot_prefix")
-  lotStartingNumber Int?      @default(1) @map("lot_starting_number")
-  ncrPrefix         String?   @default("NCR-") @map("ncr_prefix")
-  ncrStartingNumber Int?      @default(1) @map("ncr_starting_number")
-  settings          String? // Stored as JSON string for SQLite
+  testSufficiencyMode String    @default("warn") @map("test_sufficiency_mode")
+  chainageStart       Decimal?  @map("chainage_start")
+  chainageEnd         Decimal?  @map("chainage_end")
+  lotPrefix           String?   @default("LOT-") @map("lot_prefix")
+  lotStartingNumber   Int?      @default(1) @map("lot_starting_number")
+  ncrPrefix           String?   @default("NCR-") @map("ncr_prefix")
+  ncrStartingNumber   Int?      @default(1) @map("ncr_starting_number")
+  settings            String? // Stored as JSON string for SQLite
   // Location for weather API
-  latitude          Decimal?  @map("latitude")
-  longitude         Decimal?  @map("longitude")
+  latitude            Decimal?  @map("latitude")
+  longitude           Decimal?  @map("longitude")
   // Working hours for notification timing
-  workingHoursStart String?   @default("07:00") @map("working_hours_start") // Format: HH:mm
-  workingHoursEnd   String?   @default("17:00") @map("working_hours_end") // Format: HH:mm
-  workingDays       String?   @default("1,2,3,4,5") @map("working_days") // Comma-separated: 0=Sun, 1=Mon, etc.
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  workingHoursStart   String?   @default("07:00") @map("working_hours_start") // Format: HH:mm
+  workingHoursEnd     String?   @default("17:00") @map("working_hours_end") // Format: HH:mm
+  workingDays         String?   @default("1,2,3,4,5") @map("working_days") // Comma-separated: 0=Sun, 1=Mon, etc.
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   company                     Company                            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   projectUsers                ProjectUser[]
@@ -420,6 +423,9 @@ model Project {
   requirementEvaluations      RequirementEvaluation[]
   importBatches               ImportBatch[]
   importMappingProfiles       ImportMappingProfile[]
+  folioSnapshots              FolioSnapshot[]
+  folioIssueReservations      FolioIssueReservation[]
+  folioIssues                 FolioIssue[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -543,20 +549,20 @@ model PlanSheet {
 // ============================================================================
 
 model Lot {
-  id                      String    @id @default(uuid())
-  projectId               String    @map("project_id")
-  lotNumber               String    @map("lot_number")
-  lotType                 String    @map("lot_type")
-  description             String?
-  chainageStart           Decimal?  @map("chainage_start")
-  chainageEnd             Decimal?  @map("chainage_end")
-  offset                  String?
-  offsetCustom            String?   @map("offset_custom")
-  layer                   String?
-  areaZone                String?   @map("area_zone")
-  structureId             String?   @map("structure_id")
-  structureElement        String?   @map("structure_element")
-  activityType            String    @map("activity_type")
+  id                        String    @id @default(uuid())
+  projectId                 String    @map("project_id")
+  lotNumber                 String    @map("lot_number")
+  lotType                   String    @map("lot_type")
+  description               String?
+  chainageStart             Decimal?  @map("chainage_start")
+  chainageEnd               Decimal?  @map("chainage_end")
+  offset                    String?
+  offsetCustom              String?   @map("offset_custom")
+  layer                     String?
+  areaZone                  String?   @map("area_zone")
+  structureId               String?   @map("structure_id")
+  structureElement          String?   @map("structure_element")
+  activityType              String    @map("activity_type")
   // C1 [C1R-B6]: the FOLDED activity slug, stored. `activityType` is free text
   // (never constrained to CANONICAL_ACTIVITIES), so an index on it cannot serve a
   // folded-slug frequency-stream key: the fold is many-to-one through LEGACY_FOLD
@@ -564,15 +570,15 @@ model Lot {
   // case-sensitive. NULL = fold confidence 'family' or 'none' (§16 D7). A
   // CLASSIFICATION, not a readiness verdict, so F0's no-stored-state doctrine
   // does not bite. Written by every path that writes activityType.
-  activitySlug            String?   @map("activity_slug")
+  activitySlug              String?   @map("activity_slug")
   // C1: the production quantity a per-quantity rule divides. NULL is first-class
   // and means "unknown" — never zero, never assumed (§7).
-  quantityValue           Decimal?  @map("quantity_value")
-  quantityUnit            String?   @map("quantity_unit")
+  quantityValue             Decimal?  @map("quantity_value")
+  quantityUnit              String?   @map("quantity_unit")
   // C1: the testing scale the governing specification regiments by. Validated
   // against the resolved ruleset's `scaleKeys`; NULL falls back to
   // `ruleset.defaultScale` when the ruleset declares one (§16 D6), else unknown.
-  testScale               String?   @map("test_scale")
+  testScale                 String?   @map("test_scale")
   // D14 §3.1: the authority's material classification for this lot — VicRoads
   // Type A / Type B / Type C, and whatever a future authority calls its classes.
   // FREE TEXT like `layer` and `areaZone`, NOT an enum: 'Type A' is VicRoads
@@ -581,14 +587,14 @@ model Lot {
   // validates against them, so the column generalises while the values stay
   // authority-scoped. NULL = not recorded, and a material-scoped cap then simply
   // does not match (§3.4).
-  materialType            String?   @map("material_type")
-  status                  String    @default("not_started")
-  itpTemplateId           String?   @map("itp_template_id")
-  assignedSubcontractorId String?   @map("assigned_subcontractor_id")
-  budgetAmount            Decimal?  @map("budget_amount")
-  createdById             String?   @map("created_by")
-  conformedAt             DateTime? @map("conformed_at")
-  conformedById           String?   @map("conformed_by")
+  materialType              String?   @map("material_type")
+  status                    String    @default("not_started")
+  itpTemplateId             String?   @map("itp_template_id")
+  assignedSubcontractorId   String?   @map("assigned_subcontractor_id")
+  budgetAmount              Decimal?  @map("budget_amount")
+  createdById               String?   @map("created_by")
+  conformedAt               DateTime? @map("conformed_at")
+  conformedById             String?   @map("conformed_by")
   // Force-conformance override marker (owner/admin). Persisted so the claim
   // gate can distinguish a deliberate override from a later regression; kept
   // in sync with conformedAt/ById (set on force-conform, cleared on override
@@ -596,18 +602,18 @@ model Lot {
   conformanceOverriddenAt   DateTime? @map("conformance_overridden_at")
   conformanceOverriddenById String?   @map("conformance_overridden_by")
   conformanceOverrideReason String?   @map("conformance_override_reason")
-  claimedInId             String?   @map("claimed_in_id")
-  notes                   String?
-  createdAt               DateTime  @default(now()) @map("created_at")
-  updatedAt               DateTime  @updatedAt @map("updated_at")
+  claimedInId               String?   @map("claimed_in_id")
+  notes                     String?
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
 
-  project               Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  itpTemplate           ITPTemplate?          @relation(fields: [itpTemplateId], references: [id], onDelete: SetNull)
-  assignedSubcontractor SubcontractorCompany? @relation(fields: [assignedSubcontractorId], references: [id], onDelete: SetNull)
-  createdBy             User?                 @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: SetNull)
-  conformedBy           User?                 @relation("ConformedByUser", fields: [conformedById], references: [id], onDelete: SetNull)
-  conformanceOverriddenBy User?               @relation("ConformanceOverriddenByUser", fields: [conformanceOverriddenById], references: [id], onDelete: SetNull)
-  claimedIn             ProgressClaim?        @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
+  project                 Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itpTemplate             ITPTemplate?          @relation(fields: [itpTemplateId], references: [id], onDelete: SetNull)
+  assignedSubcontractor   SubcontractorCompany? @relation(fields: [assignedSubcontractorId], references: [id], onDelete: SetNull)
+  createdBy               User?                 @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: SetNull)
+  conformedBy             User?                 @relation("ConformedByUser", fields: [conformedById], references: [id], onDelete: SetNull)
+  conformanceOverriddenBy User?                 @relation("ConformanceOverriddenByUser", fields: [conformanceOverriddenById], references: [id], onDelete: SetNull)
+  claimedIn               ProgressClaim?        @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
 
   itpInstance              ITPInstance?
   holdPoints               HoldPoint[]
@@ -627,6 +633,9 @@ model Lot {
   variations               Variation[]
   subcontractorAssignments LotSubcontractorAssignment[]
   geometries               LotGeometry[]
+  folioSnapshots           FolioSnapshot[]
+  folioIssueReservations   FolioIssueReservation[]
+  folioIssues              FolioIssue[]
 
   @@unique([projectId, lotNumber])
   @@index([projectId])
@@ -793,11 +802,11 @@ model HoldPoint {
   itpChecklistItem ITPChecklistItem        @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
   releaseTokens    HoldPointReleaseToken[]
 
+  @@unique([lotId, itpChecklistItemId])
   @@index([lotId])
   @@index([lotId, status])
   @@index([status, createdAt])
   @@index([status, scheduledDate])
-  @@unique([lotId, itpChecklistItemId])
   @@map("hold_points")
 }
 
@@ -1579,10 +1588,10 @@ model Variation {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lot       Lot?                 @relation(fields: [lotId], references: [id], onDelete: SetNull)
-  claimedIn ProgressClaim?       @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
-  createdBy User?                @relation("CreatedVariations", fields: [createdById], references: [id], onDelete: SetNull)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot       Lot?                @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  claimedIn ProgressClaim?      @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
+  createdBy User?               @relation("CreatedVariations", fields: [createdById], references: [id], onDelete: SetNull)
   evidence  VariationEvidence[]
 
   @@unique([projectId, variationNumber])
@@ -1816,15 +1825,15 @@ model RequirementEvaluation {
 /// userId/companyId are derived server-side from the authenticated user, never
 /// from the client body.
 model ProductEvent {
-  id        String   @id @default(uuid())
-  userId    String?  @map("user_id")
-  projectId String?  @map("project_id")
-  companyId String?  @map("company_id")
+  id        String    @id @default(uuid())
+  userId    String?   @map("user_id")
+  projectId String?   @map("project_id")
+  companyId String?   @map("company_id")
   event     String // dot-namespaced, catalog-registered, e.g. 'lot_create.opened'
   step      String?
   metadata  Json? // structured, whitelisted keys only — never free text
   clientTs  DateTime? @map("client_ts")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -2086,7 +2095,7 @@ model ImportBatch {
   sourceFormat String @map("source_format") // 'excel' | 'pdf' | 'word'
 
   // Why status='failed' — operator- and user-readable, never a stack trace.
-  failedReason String? @map("failed_reason")
+  failedReason     String? @map("failed_reason")
   // NULLABLE + SetNull, deliberately NOT Restrict. Document.project is
   // onDelete: Cascade, so a Restrict child hanging off a cascade parent would
   // abort project deletion outright. Source survival is enforced in the
@@ -2140,4 +2149,127 @@ model ImportMappingProfile {
   @@index([companyId, kind])
   @@index([projectId, kind])
   @@map("import_mapping_profiles")
+}
+
+// ============================================================================
+// Wave D `D1b` — the issued folio
+// (spec `docs/plans/wave-d-handover-spec-2026-07-28.md` Rev 3, §7.1–§7.3, §7.7,
+// §4.4.2; threat model `docs/plans/wave-d1b-threat-model-2026-07-28.md`.)
+//
+// Three tables, one issuance sequence, two UPDATE-rejecting triggers and one
+// CHECK. Read §4.4.2 before changing any of it — the ORDER is the invariant:
+// snapshot + reservation commit first, the bytes are written outside any
+// transaction, and the `FolioIssue` row lands only once those bytes are
+// durable (**AT-146**). A row here means a readable folio exists.
+// ============================================================================
+
+/// The immutable source snapshot (`[DR-B3]`, spec §7.3). Everything the folio
+/// renders comes from `payload`; the renderer never re-reads the database, so
+/// the folio is a true statement about ONE moment (threat model T-2).
+model FolioSnapshot {
+  id                   String   @id @default(uuid())
+  projectId            String   @map("project_id")
+  lotId                String   @map("lot_id")
+  /// The whole server-assembled payload: lot, project, frozen branding (§2.5),
+  /// evidence rows and the RESOLVED §2.3 profile verdicts. JSON, because it is
+  /// a frozen document and never a query surface.
+  payload              Json
+  /// Bumped whenever `payload`'s shape OR a §7.7 digest field list changes — a
+  /// digest whose input set moves silently is worse than no digest.
+  payloadSchemaVersion Int      @map("payload_schema_version")
+  /// `LOGAN_PSP5_PROFILE_VERSION` at assembly time (§2.3).
+  profileVersion       String   @map("profile_version")
+  /// §7.7 revision tokens for every source row the payload compiled from.
+  sourceRowRefs        Json     @map("source_row_refs")
+  createdById          String?  @map("created_by")
+  createdAt            DateTime @default(now()) @map("created_at")
+  /// A snapshot with no folio issued against it before this is stale, and
+  /// rendering from it is refused (threat model T-2). The SWEEP itself is
+  /// `D1c`; expiry is enforced on read here.
+  expiresAt            DateTime @map("expires_at")
+
+  project      Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot          Lot                     @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  createdBy    User?                   @relation("FolioSnapshotCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reservations FolioIssueReservation[]
+  issues       FolioIssue[]
+
+  @@index([lotId, createdAt])
+  @@index([expiresAt])
+  @@map("folio_snapshots")
+}
+
+/// The durable version binding (`[DR2-B3]`, spec §7.2). Rev 2 asserted this in
+/// prose and persisted it nowhere; two concurrent sessions cannot share a
+/// version because the SECOND INSERT FAILS on `[lot_id, version]`.
+///
+/// Rows are never deleted by `D1b`: the next version is `MAX(version) + 1` over
+/// THIS table, so an unissued or expired reservation retires its version rather
+/// than recycling it (§10.5, "a gap in a version sequence is harmless, reuse is
+/// not"). A reservation is RETIRED when a `FolioIssue` points at it.
+model FolioIssueReservation {
+  /// The preallocated `FolioIssue` id, per §7.2 — the id is reserved, not
+  /// minted later, so the storage object path is known before the bytes exist.
+  issueId      String   @id @map("issue_id")
+  projectId    String   @map("project_id")
+  lotId        String   @map("lot_id")
+  snapshotId   String   @map("snapshot_id")
+  version      Int
+  reservedById String?  @map("reserved_by")
+  reservedAt   DateTime @default(now()) @map("reserved_at")
+  expiresAt    DateTime @map("expires_at")
+
+  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot        Lot           @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  snapshot   FolioSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  reservedBy User?         @relation("FolioReservedBy", fields: [reservedById], references: [id], onDelete: SetNull)
+  issue      FolioIssue?
+
+  @@unique([lotId, version])
+  @@index([expiresAt])
+  @@map("folio_issue_reservations")
+}
+
+/// The issued folio (spec §7.1). Append-only: a database TRIGGER rejects
+/// `UPDATE`, because the absence of an `updatedAt` column prevents nothing
+/// (`[DR-B7]`, **AT-141**). `format` is CHECK-constrained to `'folio'` so a
+/// route bypass cannot persist an authority-certificate format on an artefact
+/// that carries no certification (`[DR2-B5]`, **AT-147**).
+model FolioIssue {
+  id               String    @id
+  projectId        String    @map("project_id")
+  lotId            String    @map("lot_id")
+  snapshotId       String    @map("snapshot_id")
+  reservationId    String    @unique @map("reservation_id")
+  version          Int
+  /// Always `'folio'`. A column rather than a constant so a second
+  /// server-rendered document is additive; a CHECK rather than a vocabulary so
+  /// nothing else can be written today.
+  format           String    @default("folio")
+  /// `supabase://documents/...` reference, or the local dev path. Never a
+  /// browser-facing URL — downloads go through the authenticated route.
+  fileUrl          String    @map("file_url")
+  fileSize         BigInt    @map("file_size")
+  /// SHA-256 over the bytes THE SERVER PRODUCED. Never client-supplied
+  /// (**AT-124**).
+  sha256           String
+  issuedById       String?   @map("issued_by")
+  issuedAt         DateTime  @default(now()) @map("issued_at")
+  /// Schema-versioned source identity: every entry carries a §7.7 revision
+  /// token of the kind declared for its source type.
+  compiledFrom     Json      @map("compiled_from")
+  lotStatusAtIssue String    @map("lot_status_at_issue")
+  conformedAtIssue DateTime? @map("conformed_at_issue")
+
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot         Lot                   @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  snapshot    FolioSnapshot         @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  reservation FolioIssueReservation @relation(fields: [reservationId], references: [issueId], onDelete: Cascade)
+  issuedBy    User?                 @relation("FolioIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+
+  // The unique constraint already indexes `[lotId, version]`; Rev 1's extra
+  // identical index is deliberately absent (`[DR-B7]`).
+  @@unique([lotId, version])
+  @@index([projectId, issuedAt])
+  @@map("folio_issues")
 }

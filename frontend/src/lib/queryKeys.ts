@@ -17,6 +17,8 @@ export const queryKeys = {
   projectCloseoutReadiness: (projectId: string) =>
     ['project-closeout-readiness', projectId] as const,
   lotReadiness: (id: string) => ['lot-readiness', id] as const,
+  // Wave D `D1b` — issued evidence folios for a lot.
+  lotFolios: (lotId: string) => ['lot-folios', lotId] as const,
   lotQualityAccess: (projectId: string) => ['lot-quality-access', projectId] as const,
 
   // NCRs
