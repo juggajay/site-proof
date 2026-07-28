@@ -13,11 +13,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { renderHoldPointChaseDigestEmail } from '../email/holdPointChaseDigestTemplate.js';
-import {
-  isSuppressionFailure,
-  normalizeRecipientEmail,
-  recordEmailSuppression,
-} from '../emailSuppression.js';
+import { isSuppressionFailure, normalizeRecipientEmail } from '../emailSuppression.js';
 import { buildFrontendUrl } from '../runtimeConfig.js';
 import { logError } from '../serverLogger.js';
 import {
@@ -180,8 +176,10 @@ export async function sendGroupDigest(
     });
     if (emailResult.success) return 'sent';
 
+    // The RECORD now happens once, inside the shared `sendEmail` (L12), so every
+    // caller gets it and not just this job. Classifying here is still this
+    // module's own job: 'suppressed' consumes the attempt, 'failed' refunds it.
     if (isSuppressionFailure(emailResult.error, emailResult.errorCode)) {
-      recordEmailSuppression(group.email, emailResult.errorCode || 'provider_rejected');
       return 'suppressed';
     }
     return 'failed';
