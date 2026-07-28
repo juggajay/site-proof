@@ -269,9 +269,9 @@ dashboardStatsRouter.get(
       status: hp.status,
       scheduledDate: hp.scheduledDate?.toISOString(),
       createdAt: hp.createdAt.toISOString(),
-      daysStale: Math.ceil(
-        (today.getTime() - new Date(hp.createdAt).getTime()) / (1000 * 60 * 60 * 24),
-      ),
+      // Floored through the shared helper, like every other day count on this
+      // response — `Math.ceil` reported an 8-day-old hold point as 9.
+      daysStale: daysOverdue(hp.createdAt, today),
       project: hp.lot?.project
         ? {
             id: hp.lot.project.id,
@@ -280,7 +280,7 @@ dashboardStatsRouter.get(
           }
         : { id: '', name: 'Unknown', projectNumber: '' },
       lotId: hp.lot?.id,
-      link: hp.lot?.project ? `/projects/${hp.lot.project.id}/holdpoints` : '/projects',
+      link: hp.lot?.project ? `/projects/${hp.lot.project.id}/hold-points` : '/projects',
     }));
 
     const [recentNCRs, recentLots] = await Promise.all([

@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { ProjectCloseoutReadiness } from './ProjectCloseoutReadiness';
 import { ActivityRow, NCRCategoryBar, StatPill, StatusCount } from './ProjectDashboardParts';
 import {
+  formatAttentionAge,
   formatStatusLabel,
   getAttentionFallbackRoute,
   getSafeProjectLink,
@@ -254,7 +255,7 @@ export function ProjectDashboard() {
                     item.urgency === 'critical' ? 'text-destructive' : 'text-warning',
                   )}
                 >
-                  {item.daysOverdue}d overdue
+                  {formatAttentionAge(item)}
                 </span>
               </Link>
             ))}

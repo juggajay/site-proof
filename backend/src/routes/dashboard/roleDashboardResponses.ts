@@ -272,7 +272,9 @@ export function buildProjectManagerDashboardResponse({
         lotNumber: hp.lot.lotNumber,
         status: hp.status,
         scheduledDate: hp.scheduledDate?.toISOString() || null,
-        link: `/projects/${hp.lot.projectId}/lots/${hp.lot.id}/holdpoints?hp=${hp.id}`,
+        // Same target as the other role dashboards (`roleDashboards.ts`): there
+        // is no `/lots/:lotId/holdpoints` route, so this dead-ended too.
+        link: `/projects/${hp.lot.projectId}/hold-points?hp=${hp.id}`,
       })),
     },
     claimStatus: {

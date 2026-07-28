@@ -363,6 +363,59 @@ describe('overdue-NCR alert age matches the dashboard', () => {
   });
 });
 
+/**
+ * F1b (fable deep review 2026-07-28) — the same divergence one limb over: the
+ * stale-hold-point alert quoted CEIL-ed hours ("50 hours") while the Needs
+ * Attention chip floors the same span to days ("2 days"). The recipient number
+ * now comes from the shared helper; severity keeps its hour buckets, which are
+ * routing, not something anybody reads.
+ */
+describe('stale hold-point alert age matches the dashboard chip', () => {
+  const NOW = new Date('2026-06-20T12:00:00.000Z');
+  const HOUR_MS = 60 * 60 * 1000;
+
+  async function runWithStaleHoldPoint(scheduledDate: Date) {
+    const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-hp' });
+    const deps = withPrisma(buildDeps(), {
+      holdPoint: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'hp-1',
+            status: 'notified',
+            scheduledDate,
+            lot: { id: 'lot-1', lotNumber: 'L-001' },
+            itpChecklistItem: { description: 'Client release' },
+          },
+        ]),
+      },
+      notificationAlert: { create: alertCreate },
+    });
+
+    const result = await processSystemAlerts({ now: NOW, projectIds: ['project-1'] }, deps);
+    return { result, created: alertCreate.mock.calls[0]![0].data as Record<string, string> };
+  }
+
+  it('quotes floored days, not ceil-ed hours', async () => {
+    const scheduledDate = new Date(NOW.getTime() - 50 * HOUR_MS);
+    const { result, created } = await runWithStaleHoldPoint(scheduledDate);
+
+    expect(result.staleHoldPointAlerts).toBe(1);
+    expect(created.message).toContain(`for ${daysOverdue(scheduledDate, NOW)} day(s).`);
+    // 50 hours is 2 full days on the chip; the email used to say "50 hours".
+    expect(created.message).toContain('has been notified for 2 day(s).');
+    expect(created.message).not.toContain('hours');
+  });
+
+  it('keeps the hour-based severity buckets the alert routing depends on', async () => {
+    expect((await runWithStaleHoldPoint(new Date(NOW.getTime() - 25 * HOUR_MS))).created.severity)
+      // 25h floors to 1 day, but severity is unchanged: still 'high'.
+      .toBe('high');
+    expect(
+      (await runWithStaleHoldPoint(new Date(NOW.getTime() - 49 * HOUR_MS))).created.severity,
+    ).toBe('critical');
+  });
+});
+
 describe('processSystemAlerts missing-diary alert is retired', () => {
   it('never creates a pending_approval/diary alert, even with no hold points or NCRs', async () => {
     const alertCreate = vi.fn().mockResolvedValue({ id: 'alert-x' });
