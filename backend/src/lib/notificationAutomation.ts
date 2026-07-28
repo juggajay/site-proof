@@ -26,6 +26,12 @@ import {
   processSystemAlerts as processSystemAlertsJob,
 } from './notificationAutomation/systemAutomation.js';
 import {
+  type HoldPointChaseAutomationResult,
+  type HoldPointChaseJobOptions,
+  buildHoldPointChaseAutomationDependencies,
+  processHoldPointChaseReminders as processHoldPointChaseRemindersJob,
+} from './notificationAutomation/holdPointChaseAutomation.js';
+import {
   processNotificationAutomationWithLock,
   runWithNotificationAutomationLock,
   startNotificationAutomationWorker as startNotificationAutomationWorkerJob,
@@ -98,11 +104,14 @@ export type SystemAlertJobResult = {
 
 export type AlertEscalationJobResult = AlertEscalationAutomationResult;
 
+export type HoldPointChaseReminderJobResult = HoldPointChaseAutomationResult;
+
 export type NotificationAutomationRunResult = {
   diaryReminders: DiaryReminderJobResult;
   docketBacklogAlerts: DocketBacklogAlertJobResult;
   systemAlerts: SystemAlertJobResult;
   alertEscalations: AlertEscalationJobResult;
+  holdPointChaseReminders: HoldPointChaseReminderJobResult;
 };
 
 async function getEmailPreferences(userId: string): Promise<EmailPreferences> {
@@ -416,7 +425,20 @@ async function processNotificationAutomationUnlocked(
     docketBacklogAlerts: await processDocketBacklogAlerts(sharedOptions),
     systemAlerts: await processSystemAlerts(sharedOptions),
     alertEscalations: await processAlertEscalations(sharedOptions),
+    // Wave E2: the fifth arm of the SAME hourly pass, inside the SAME advisory
+    // lock. Fails closed on the Wave-E canary allowlist, so it is inert until
+    // `WAVE_E_STALE_ALERT_PROJECT_IDS` names projects.
+    holdPointChaseReminders: await processHoldPointChaseReminders(sharedOptions),
   };
+}
+
+export async function processHoldPointChaseReminders(
+  options: HoldPointChaseJobOptions = {},
+): Promise<HoldPointChaseReminderJobResult> {
+  return processHoldPointChaseRemindersJob(
+    options,
+    buildHoldPointChaseAutomationDependencies(prisma),
+  );
 }
 
 export async function processNotificationAutomation(

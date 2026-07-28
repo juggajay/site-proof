@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import type { Prisma } from '@prisma/client';
-import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../../lib/email.js';
@@ -31,10 +30,19 @@ import {
   selectHoldPointReleaseSuperintendents,
 } from './releaseConfirmationEmails.js';
 import { buildHoldPointChaseEmail, selectHoldPointChaseRecipients } from './chaseNotifications.js';
+import {
+  MAX_CHASES_PER_REQUEST,
+  buildChaseRecipientUrls,
+  loadHoldPointChaseTargets,
+  reserveHoldPointChase,
+  resolveHoldPointRequester,
+  revokeFreshChaseReleaseToken,
+  revokeSupersededChaseReleaseTokens,
+  rollbackHoldPointChase,
+} from './chaseCore.js';
 import { buildHoldPointChaseResponse, buildHoldPointReleasedResponse } from './actionResponses.js';
 import { holdPointEscalationRouter } from './escalationRoutes.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
-import { SECURE_LINK_EXPIRY_HOURS, hashHoldPointReleaseToken } from './tokens.js';
 import { updateLotStatusFromITP } from '../itp/helpers/lotProgression.js';
 import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 import { assertHoldPointCompletionCanBeReleased } from './releaseCompletionGuard.js';
@@ -60,17 +68,6 @@ export const holdPointActionRouter = Router();
 
 const HP_RELEASE_ROLES = [...HP_REQUEST_ROLES, 'superintendent'];
 
-type HoldPointChaseTarget = {
-  email: string;
-  fullName: string | null;
-  secureToken?: string;
-};
-
-type HoldPointReleaseTokenRecipient = {
-  recipientEmail: string;
-  recipientName: string | null;
-};
-
 type ExistingHoldPointForRelease = {
   status: string;
   lotId: string;
@@ -82,161 +79,6 @@ type ExistingHoldPointForRelease = {
     };
   };
 };
-
-function buildTokenChaseTargets(
-  existingReleaseTokens: HoldPointReleaseTokenRecipient[],
-): HoldPointChaseTarget[] {
-  const tokenTargetsByEmail = new Map<string, HoldPointChaseTarget>();
-
-  for (const tokenRecipient of existingReleaseTokens) {
-    const email = tokenRecipient.recipientEmail.trim();
-    if (!email) continue;
-
-    const key = email.toLowerCase();
-    if (!tokenTargetsByEmail.has(key)) {
-      tokenTargetsByEmail.set(key, {
-        email,
-        fullName: tokenRecipient.recipientName,
-        secureToken: crypto.randomBytes(32).toString('hex'),
-      });
-    }
-  }
-
-  return Array.from(tokenTargetsByEmail.values());
-}
-
-async function createChaseReleaseTokens(
-  holdPointId: string,
-  tokenTargets: HoldPointChaseTarget[],
-): Promise<void> {
-  if (tokenTargets.length === 0) {
-    return;
-  }
-
-  const tokenExpiry = new Date(Date.now() + SECURE_LINK_EXPIRY_HOURS * 60 * 60 * 1000);
-
-  await prisma.holdPointReleaseToken.createMany({
-    data: tokenTargets.map((recipient) => ({
-      holdPointId,
-      recipientEmail: recipient.email,
-      recipientName: recipient.fullName,
-      token: hashHoldPointReleaseToken(recipient.secureToken!),
-      expiresAt: tokenExpiry,
-    })),
-  });
-}
-
-async function revokeSupersededChaseReleaseTokens(
-  holdPointId: string,
-  tokenTarget: HoldPointChaseTarget,
-): Promise<void> {
-  if (!tokenTarget.secureToken) {
-    return;
-  }
-
-  await prisma.holdPointReleaseToken.deleteMany({
-    where: {
-      holdPointId,
-      recipientEmail: tokenTarget.email,
-      usedAt: null,
-      token: { not: hashHoldPointReleaseToken(tokenTarget.secureToken) },
-    },
-  });
-}
-
-async function revokeFreshChaseReleaseToken(
-  holdPointId: string,
-  tokenTarget: HoldPointChaseTarget,
-): Promise<void> {
-  if (!tokenTarget.secureToken) {
-    return;
-  }
-
-  await prisma.holdPointReleaseToken.deleteMany({
-    where: {
-      holdPointId,
-      recipientEmail: tokenTarget.email,
-      usedAt: null,
-      token: hashHoldPointReleaseToken(tokenTarget.secureToken),
-    },
-  });
-}
-
-async function loadProjectChaseTargets(projectId: string): Promise<HoldPointChaseTarget[]> {
-  // Get project users with superintendent role to notify.
-  const superintendents = await prisma.projectUser.findMany({
-    where: {
-      projectId,
-      role: 'superintendent',
-      status: 'active',
-    },
-    include: {
-      user: { select: { id: true, email: true, fullName: true } },
-    },
-  });
-
-  // If no superintendents, also check for project managers. Keep the lookup
-  // lazy: project managers are only queried when there are no superintendents.
-  const projectManagers: typeof superintendents =
-    superintendents.length > 0
-      ? []
-      : await prisma.projectUser.findMany({
-          where: {
-            projectId,
-            role: 'project_manager',
-            status: 'active',
-          },
-          include: {
-            user: { select: { id: true, email: true, fullName: true } },
-          },
-        });
-
-  return selectHoldPointChaseRecipients(superintendents, projectManagers).map((recipient) => ({
-    email: recipient.user.email,
-    fullName: recipient.user.fullName,
-  }));
-}
-
-async function loadHoldPointChaseTargets(
-  holdPointId: string,
-  projectId: string,
-): Promise<HoldPointChaseTarget[]> {
-  const existingReleaseTokens = await prisma.holdPointReleaseToken.findMany({
-    where: {
-      holdPointId,
-      usedAt: null,
-    },
-    select: { recipientEmail: true, recipientName: true },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  const tokenTargets = buildTokenChaseTargets(existingReleaseTokens);
-  if (tokenTargets.length > 0) {
-    await createChaseReleaseTokens(holdPointId, tokenTargets);
-    return tokenTargets;
-  }
-
-  return loadProjectChaseTargets(projectId);
-}
-
-function buildChaseRecipientUrls(
-  recipient: HoldPointChaseTarget,
-  loggedInEvidencePackageUrl: string,
-  loggedInReleaseUrl: string,
-) {
-  if (recipient.secureToken) {
-    const secureReleaseUrl = buildFrontendUrl(`/hp-release/${recipient.secureToken}`);
-    return {
-      evidencePackageUrl: `${secureReleaseUrl}#evidence-package`,
-      releaseUrl: secureReleaseUrl,
-    };
-  }
-
-  return {
-    evidencePackageUrl: loggedInEvidencePackageUrl,
-    releaseUrl: loggedInReleaseUrl,
-  };
-}
 
 async function loadReleaseEvidenceDocumentForHoldPoint(
   releaseEvidenceDocumentId: string | undefined,
@@ -746,19 +588,49 @@ holdPointActionRouter.post(
       throw AppError.badRequest('Released hold points cannot be chased.');
     }
 
-    const holdPoint = await prisma.holdPoint.update({
-      where: { id },
-      data: {
-        chaseCount: { increment: 1 },
-        lastChasedAt: new Date(),
-      },
-    });
+    // Wave E2 §4.2.2 / E.0 item 13. This replaces a read-then-write
+    // (`findUnique` -> status check -> bare `update({ where: { id } })`) under
+    // which two concurrent chases both passed and both sent, and under which
+    // `chaseCount` was incremented forever because NO cap existed anywhere in
+    // the codebase. Three of its clauses are intended behaviour CHANGES to this
+    // route, asserted as such in the tests: the per-generation cap, the
+    // cooldown, and `completed` becoming un-chaseable (the old guard rejected
+    // only `'released'`, unlike every release path).
+    const now = new Date();
+    const previousLastChasedAt = existingHP.lastChasedAt;
+    const reservation = await reserveHoldPointChase(id, now, existingHP.notificationSentAt);
+    if (!reservation.reserved) {
+      throw new AppError(
+        400,
+        reservation.reason === 'not_awaiting'
+          ? 'Only hold points awaiting release can be chased.'
+          : reservation.reason === 'cooldown'
+            ? 'This hold point was chased in the last 24 hours.'
+            : `This release request has already been chased the maximum of ${MAX_CHASES_PER_REQUEST} times. Re-request the release to chase again.`,
+        'HP_CHASE_UNAVAILABLE',
+        { reason: reservation.reason },
+      );
+    }
+    const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id } });
+
+    // §4.2.4 / E.0 item 14: the reminder must say who actually asked. The old
+    // context passed `notificationSentTo` — the RECIPIENT list — so the chase
+    // email told the superintendent the request came from their own address.
+    const requester = await resolveHoldPointRequester(
+      id,
+      existingHP.lot.projectId,
+      existingHP.notificationSentAt,
+    );
 
     // Feature #947 - Send HP chase email to superintendent
+    let anySendSucceeded = false;
     try {
       const recipientsToNotify = await loadHoldPointChaseTargets(
         existingHP.id,
         existingHP.lot.project.id,
+        now,
+        existingHP.notificationSentTo,
+        { allowProjectUserFallback: true, selectRecipients: selectHoldPointChaseRecipients },
       );
 
       const loggedInReleaseUrl = buildFrontendUrl(
@@ -787,7 +659,7 @@ holdPointActionRouter.post(
         originalRequestDate: formattedRequestDate,
         chaseCount: holdPoint.chaseCount,
         daysSinceRequest,
-        notificationSentTo: existingHP.notificationSentTo,
+        requestedBy: requester.name,
       };
 
       for (const recipient of recipientsToNotify) {
@@ -798,8 +670,8 @@ holdPointActionRouter.post(
         );
 
         try {
-          const emailResult = await sendHPChaseEmail(
-            buildHoldPointChaseEmail(
+          const emailResult = await sendHPChaseEmail({
+            ...buildHoldPointChaseEmail(
               { user: { email: recipient.email, fullName: recipient.fullName } },
               {
                 ...chaseContext,
@@ -807,9 +679,11 @@ holdPointActionRouter.post(
                 releaseUrl: urls.releaseUrl,
               },
             ),
-          );
+            replyTo: requester.replyTo ?? undefined,
+          });
 
           if (emailResult.success) {
+            anySendSucceeded = true;
             await revokeSupersededChaseReleaseTokens(existingHP.id, recipient);
           } else {
             await revokeFreshChaseReleaseToken(existingHP.id, recipient);
@@ -824,6 +698,13 @@ holdPointActionRouter.post(
       // Don't fail the main request
     }
 
+    // §4.2.2 / `[E-j]`: a failed send does not consume an attempt. The manual
+    // route refunds the reservation when nothing reached anybody, mirroring the
+    // token-revocation failure path above.
+    if (!anySendSucceeded) {
+      await rollbackHoldPointChase(id, previousLastChasedAt);
+    }
+
     // Audit log for HP chase
     await createAuditLog({
       projectId: existingHP.lot.project.id,
@@ -831,7 +712,11 @@ holdPointActionRouter.post(
       entityType: 'hold_point',
       entityId: id,
       action: AuditAction.HP_CHASED,
-      changes: { chaseCount: holdPoint.chaseCount },
+      changes: {
+        chaseCount: holdPoint.chaseCount,
+        requesterResolution: requester.outcome,
+        sendResult: anySendSucceeded ? 'sent' : 'failed',
+      },
       req,
     });
 

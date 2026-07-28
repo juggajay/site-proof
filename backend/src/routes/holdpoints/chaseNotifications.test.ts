@@ -30,7 +30,10 @@ const baseContext: HoldPointChaseContext = {
   daysSinceRequest: 5,
   evidencePackageUrl: 'https://app.example.com/evidence',
   releaseUrl: 'https://app.example.com/release',
-  notificationSentTo: 'requester@example.com',
+  // Wave E2 §4.2.6: this was `notificationSentTo` — the RECIPIENT list — so the
+  // chase email told the superintendent the request came from their own
+  // address. It is now the requester resolved from the audit log.
+  requestedBy: 'Rita Requester',
 };
 
 describe('selectHoldPointChaseRecipients', () => {
@@ -64,8 +67,22 @@ describe('buildHoldPointChaseEmail', () => {
       daysSinceRequest: 5,
       evidencePackageUrl: 'https://app.example.com/evidence',
       releaseUrl: 'https://app.example.com/release',
-      requestedBy: 'requester@example.com',
+      requestedBy: 'Rita Requester',
     });
+  });
+
+  it('never attributes the request to the recipient (`[E-B8b]`, Wave E2)', () => {
+    // The pre-E2 defect, pinned as a regression: `requestedBy` came from
+    // `notificationSentTo`, so a superintendent was told they had asked
+    // themselves. The context no longer carries the recipient list at all.
+    const recipient: HoldPointChaseRecipient = {
+      user: { email: 'sup1@example.com', fullName: 'Sue Super' },
+    };
+    const payload = buildHoldPointChaseEmail(recipient, baseContext);
+
+    expect(payload.requestedBy).not.toBe(payload.to);
+    expect(payload.requestedBy).toBe('Rita Requester');
+    expect(Object.keys(baseContext)).not.toContain('notificationSentTo');
   });
 
   it('falls back to "Superintendent" when the recipient has no full name', () => {
@@ -85,7 +102,7 @@ describe('buildHoldPointChaseEmail', () => {
       ...baseContext,
       holdPointDescription: null,
       chaseCount: 0,
-      notificationSentTo: null,
+      requestedBy: '',
     });
 
     expect(payload.holdPointDescription).toBe('Hold Point');
