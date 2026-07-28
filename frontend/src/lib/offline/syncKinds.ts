@@ -1,9 +1,11 @@
-// Pure sync-queue vocabulary and folding. NO runtime imports: the only import
-// is the erased `SyncQueueItem` type, so anything that needs the kind
-// vocabulary (including UI in the shell chunk) can use this module without
-// pulling Dexie in behind it.
+// Pure sync-queue vocabulary and folding. The only runtime import is
+// ./syncErrors, which is itself pure and dependency-free; the `SyncQueueItem`
+// import is type-only and erased. So anything that needs the kind vocabulary
+// (including UI in the shell chunk) can use this module without pulling Dexie
+// in behind it.
 
 import type { SyncQueueItem } from './core';
+import { humanSyncErrorText } from './syncErrors';
 
 // A queue item that has failed this many times is "dead-lettered": the sync
 // worker stops retrying it (so it can't trigger an endless retry storm) but it
@@ -82,37 +84,98 @@ export function formatLastSynced(iso: string | null, now: number): string {
   return `Last synced ${date}, ${time}`;
 }
 
+// A dead-lettered row, carrying the reason it stopped so the Sync Centre can
+// say WHY instead of just how many. `lastError` was captured on every failure
+// and rendered nowhere until this shape existed.
+export interface SyncFailedItem {
+  id?: number;
+  kind?: SyncKind;
+  message?: string;
+}
+
 export interface SyncQueueSummary {
   live: number; // attempts < MAX_SYNC_ATTEMPTS
   failed: number; // attempts >= MAX_SYNC_ATTEMPTS (dead-lettered)
   oldestPendingAgeMs: number | null; // null when the queue is empty
-  byKind: Record<SyncKind, number>; // live + failed, every key present
+  // LIVE rows only. This feeds the panel's "Waiting" rows, and a dead-lettered
+  // row is not waiting — it has stopped. Failures are reported by `failedItems`
+  // under their own label; counting them here told the foreman to sit tight on
+  // work that will never move on its own.
+  byKind: Record<SyncKind, number>;
+  failedItems: SyncFailedItem[];
+}
+
+function isDeadLettered(item: SyncQueueItem): boolean {
+  return item.attempts >= MAX_SYNC_ATTEMPTS;
+}
+
+// One offline diary quick-add rewrites the whole day snapshot and queues
+// ANOTHER `diary_save` replay for the same diary. The replays are idempotent
+// (the snapshot sync dedupes per entry server-side), so twelve queued rows for
+// one diary are ONE piece of pending work — "12 diary entries waiting" for a
+// single diary is a lie about how much is outstanding.
+//
+// Counted once here rather than suppressed at enqueue time on purpose: the
+// worker re-reads the diary from Dexie when it runs an item, so refusing the
+// enqueue could silently drop a quick-add made while that item was mid-flight.
+// ponytail: display-level coalescing; the queue still holds every replay (they
+// are cheap and self-healing). Move it to enqueue time only if the redundant
+// POSTs start costing something measurable.
+function coalesceDiaryReplays(items: SyncQueueItem[]): SyncQueueItem[] {
+  const indexByDiaryId = new Map<string, number>();
+  const distinct: SyncQueueItem[] = [];
+
+  for (const item of items) {
+    if (item.type !== 'diary_save') {
+      distinct.push(item);
+      continue;
+    }
+
+    const diaryId = item.data.diaryId;
+    const at = indexByDiaryId.get(diaryId);
+    if (at === undefined) {
+      indexByDiaryId.set(diaryId, distinct.length);
+      distinct.push(item);
+      continue;
+    }
+    // Prefer a replay the worker will still attempt: the diary only counts as
+    // failed once EVERY replay for it has dead-lettered.
+    if (isDeadLettered(distinct[at]) && !isDeadLettered(item)) {
+      distinct[at] = item;
+    }
+  }
+
+  return distinct;
 }
 
 // One pass over the queue, replacing the three separate full scans that used to
 // run every 5 s in every mounted consumer.
 export function summariseSyncQueueItems(items: SyncQueueItem[], now: number): SyncQueueSummary {
   const byKind = emptySyncKindCounts();
+  const failedItems: SyncFailedItem[] = [];
   let live = 0;
   let failed = 0;
   let oldestCreatedMs: number | null = null;
 
-  for (const item of items) {
-    if (item.attempts >= MAX_SYNC_ATTEMPTS) {
+  for (const item of coalesceDiaryReplays(items)) {
+    const kind = syncKindForType(item.type);
+
+    if (isDeadLettered(item)) {
       failed += 1;
+      failedItems.push({ id: item.id, kind, message: humanSyncErrorText(item.lastError) });
     } else {
       live += 1;
+      if (kind) {
+        byKind[kind] += 1;
+      }
     }
+  }
 
-    const kind = syncKindForType(item.type);
-    if (kind) {
-      byKind[kind] += 1;
-    }
-
-    // Deliberately over EVERY row, dead-lettered included: this reproduces
-    // getOldestPendingItemAge's Math.min over all createdAt values, and its
-    // value feeds the "stuck" warning. Filtering to live rows would switch that
-    // warning off on precisely the queues that are most stuck.
+  // Deliberately over EVERY row — dead-lettered AND coalesced replays included:
+  // this reproduces getOldestPendingItemAge's Math.min over all createdAt
+  // values, and its value feeds the "stuck" warning. Filtering here would switch
+  // that warning off on precisely the queues that are most stuck.
+  for (const item of items) {
     const createdMs = new Date(item.createdAt).getTime();
     if (!Number.isNaN(createdMs) && (oldestCreatedMs === null || createdMs < oldestCreatedMs)) {
       oldestCreatedMs = createdMs;
@@ -123,6 +186,7 @@ export function summariseSyncQueueItems(items: SyncQueueItem[], now: number): Sy
     live,
     failed,
     byKind,
+    failedItems,
     oldestPendingAgeMs: oldestCreatedMs === null ? null : now - oldestCreatedMs,
   };
 }

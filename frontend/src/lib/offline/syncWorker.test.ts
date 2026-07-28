@@ -422,6 +422,46 @@ describe('syncSingleItem — itp_completion', () => {
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 
+  // [M9-3] A 409 from the optimistic-concurrency guard
+  // (backend completionWorkflow.ts assertExpectedPreviousItpCompletion) means
+  // the server row moved on. The executor already repairs the local row from the
+  // server snapshot, so there is nothing left to send: the item must LEAVE the
+  // queue, not sit in the Sync Centre as a red "1 failed" whose Retry reproduces
+  // the same 409 forever.
+  it('treats a 409 stale-completion conflict as self-repaired: reconciles and dequeues, never "failed"', async () => {
+    const serverCompletion = {
+      id: 'sc-9',
+      checklistItemId: 'c',
+      isCompleted: true,
+      notes: 'Ticked online by the QM',
+      completedAt: '2026-07-28T01:02:03.000Z',
+      completedBy: { fullName: 'QA Manager' },
+    };
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'i', completions: [serverCompletion] } }))
+      .mockResolvedValueOnce(
+        errorResponse(
+          409,
+          '{"error":{"message":"ITP completion changed while this offline update was queued"}}',
+        ),
+      );
+
+    const result = await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: { lotId: 'l', checklistItemId: 'c', status: 'completed' },
+      }),
+    );
+
+    // Not counted as a sync (the write never landed), but not a failure either.
+    expect(result).toEqual({ status: 'handled' });
+    expect(reconcileItpCompletionFromServerMock).toHaveBeenCalledWith('l', 'c', serverCompletion);
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(11);
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+  });
+
   it('keeps retriable completion POST failures on the normal retry path', async () => {
     authFetchMock
       .mockResolvedValueOnce(okJson({ instance: { id: 'i' } }))
@@ -822,7 +862,30 @@ describe('syncSingleItem — delivery_save / event_save (diary quick-add offline
     expect(authFetchMock).not.toHaveBeenCalled();
   });
 
-  it('delivery_save POST not ok -> error-marks item + delivery (handled, no removal)', async () => {
+  // [M9-2] The named case: a delivery anchored to a diary the PM deleted. The
+  // server answers 404 to every replay, so retrying is pure noise — dead-letter
+  // it with a sentence the foreman can read.
+  it('delivery_save 404 (anchor diary deleted) -> dead-letters with a plain-English reason', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(deliveryRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(errorResponse(404, 'Diary not found'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      81,
+      'The thing this was attached to was deleted.',
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(markDeliverySyncErrorMock).toHaveBeenCalledWith('del-1');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markDeliverySyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('delivery_save 422 -> dead-letters (terminal), never retried forever', async () => {
     diaryDeliveriesGetMock.mockResolvedValue(deliveryRecord);
     diariesGetMock.mockResolvedValue(undefined);
     authFetchMock.mockResolvedValue(errorResponse(422, 'invalid delivery'));
@@ -832,10 +895,27 @@ describe('syncSingleItem — delivery_save / event_save (diary quick-add offline
     );
 
     expect(result).toEqual({ status: 'handled' });
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(81, 'invalid delivery');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      81,
+      expect.stringContaining('not valid'),
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markDeliverySyncErrorMock).toHaveBeenCalledWith('del-1');
-    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
-    expect(markDeliverySyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('delivery_save 5xx stays on the normal retry path', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(deliveryRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(errorResponse(503, 'server unavailable'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(81, 'server unavailable');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(markDeliverySyncErrorMock).toHaveBeenCalledWith('del-1');
   });
 
   it('delivery_save catches a thrown error and marks item + delivery via the shared onError', async () => {
@@ -889,20 +969,38 @@ describe('syncSingleItem — delivery_save / event_save (diary quick-add offline
     expect(authFetchMock).not.toHaveBeenCalled();
   });
 
-  it('event_save POST not ok -> error-marks item + event (handled, no removal)', async () => {
+  it('event_save 403 -> dead-letters with a permission sentence', async () => {
     diaryEventsGetMock.mockResolvedValue(eventRecord);
     diariesGetMock.mockResolvedValue(undefined);
-    authFetchMock.mockResolvedValue(errorResponse(400, 'invalid event'));
+    authFetchMock.mockResolvedValue(errorResponse(403, 'Forbidden'));
 
     const result = await syncSingleItem(
       queueItem({ id: 82, type: 'event_save', data: { eventId: 'evt-1' } }),
     );
 
     expect(result).toEqual({ status: 'handled' });
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(82, 'invalid event');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      82,
+      "You don't have permission to save this.",
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markEventSyncErrorMock).toHaveBeenCalledWith('evt-1');
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
     expect(markEventSyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('event_save 5xx stays on the normal retry path', async () => {
+    diaryEventsGetMock.mockResolvedValue(eventRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(errorResponse(500, 'server unavailable'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 82, type: 'event_save', data: { eventId: 'evt-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(82, 'server unavailable');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1403,6 +1501,25 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     expect(authFetchMock).not.toHaveBeenCalled();
   });
 
+  it('dead-letters the upload on a terminal 4xx instead of retrying it forever', async () => {
+    getOfflinePhotoMock.mockResolvedValue(photoRecord);
+    authFetchMock.mockResolvedValue(errorResponse(404, 'Lot not found'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      41,
+      'The thing this was attached to was deleted.',
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncErrorMock).toHaveBeenCalledWith('ph-1');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+  });
+
   it('error-marks item + photo (handled, no removal) when the upload is not ok', async () => {
     getOfflinePhotoMock.mockResolvedValue(photoRecord);
     authFetchMock.mockResolvedValue(errorResponse(500, 'upload boom'));
@@ -1559,7 +1676,7 @@ describe('syncSingleItem — lot_edit (Slice 3, moved from the hook)', () => {
     expect(authFetchMock).not.toHaveBeenCalled();
   });
 
-  it('GET not ok -> error-marks item + lot (handled, no removal, no PATCH)', async () => {
+  it('GET 404 (lot deleted server-side) -> dead-letters, no PATCH', async () => {
     getOfflineLotMock.mockResolvedValue(lotRecord);
     authFetchMock.mockResolvedValueOnce(errorResponse(404, 'lot gone server-side'));
 
@@ -1568,13 +1685,30 @@ describe('syncSingleItem — lot_edit (Slice 3, moved from the hook)', () => {
     );
 
     expect(result).toEqual({ status: 'handled' });
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'lot gone server-side');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      51,
+      'The thing this was attached to was deleted.',
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
     expect(authFetchMock).toHaveBeenCalledTimes(1);
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 
-  it('PATCH not ok -> error-marks item + lot (handled, no removal)', async () => {
+  it('GET 5xx stays on the normal retry path', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    authFetchMock.mockResolvedValueOnce(errorResponse(502, 'bad gateway'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'bad gateway');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('PATCH 422 -> dead-letters with a plain-English reason (handled, no removal)', async () => {
     getOfflineLotMock.mockResolvedValue(lotRecord);
     detectLotSyncConflictMock.mockResolvedValue({ hasConflict: false });
     authFetchMock
@@ -1586,9 +1720,29 @@ describe('syncSingleItem — lot_edit (Slice 3, moved from the hook)', () => {
     );
 
     expect(result).toEqual({ status: 'handled' });
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'invalid patch');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(
+      51,
+      expect.stringContaining('not valid'),
+    );
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
     expect(markLotSyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('PATCH 5xx stays on the normal retry path', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    detectLotSyncConflictMock.mockResolvedValue({ hasConflict: false });
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: 'x' } })) // GET
+      .mockResolvedValueOnce(errorResponse(500, 'patch boom')); // PATCH
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'patch boom');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
   });
 
   it('catches a thrown error and marks item + lot via the shared onError', async () => {

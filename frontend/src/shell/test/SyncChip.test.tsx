@@ -50,6 +50,24 @@ describe('deriveSyncState', () => {
   it('returns "saved" when online and no pending items', () => {
     expect(deriveSyncState(true, 0, false)).toBe('saved');
   });
+
+  // [M9-1] A lot_edit conflict is REMOVED from the queue (syncWorker.ts), so it
+  // is invisible to every count above. Without conflict awareness the chip went
+  // green "All saved" while the floating pill showed amber "1 sync conflict"
+  // centimetres away — and the reassuring one was the new one.
+  it('never claims "saved" while a conflict is waiting to be resolved', () => {
+    expect(deriveSyncState(true, 0, false, 0, 1)).toBe('conflict');
+    expect(deriveSyncState(true, 0, false, 0, 1)).not.toBe('saved');
+  });
+
+  it('ranks an outright failure above a conflict, and a live flush above both', () => {
+    expect(deriveSyncState(true, 0, false, 2, 1)).toBe('failed');
+    expect(deriveSyncState(true, 0, true, 0, 1)).toBe('syncing');
+  });
+
+  it('still reports "conflict" when offline — the conflict is the actionable fact', () => {
+    expect(deriveSyncState(false, 0, false, 0, 1)).toBe('conflict');
+  });
 });
 
 // ── SyncChip render tests (mock useOfflineStatus) ─────────────────────────────
@@ -69,8 +87,10 @@ function mockStatus(overrides: Record<string, unknown>) {
     pendingSyncCount: 0,
     failedSyncCount: 0,
     isSyncing: false,
+    conflictCount: 0,
     oldestPendingItemAge: null,
     pendingByKind: emptySyncKindCounts(),
+    failedItems: [],
     lastSyncedAt: null,
     retryFailedSyncs,
     ...overrides,
@@ -110,6 +130,16 @@ describe('SyncChip — render', () => {
     expect(chip).toHaveTextContent('Offline');
     expect(chip).not.toHaveTextContent('waiting');
     expect(chip).toHaveAttribute('aria-label', 'Offline. Changes will sync when you reconnect.');
+  });
+
+  // [M9-1] The chip and the legacy floating pill read the SAME conflictCount
+  // (useOfflineStatus -> getConflictedLotsCount), in the same words.
+  it('shows an unresolved conflict in the same words as the floating pill', () => {
+    mockStatus({ conflictCount: 1 });
+    render(<SyncChip />);
+    const chip = screen.getByRole('button');
+    expect(chip).toHaveTextContent('1 sync conflict');
+    expect(chip).not.toHaveTextContent('All saved');
   });
 
   it('shows failed syncs with the retry-tap aria label', () => {

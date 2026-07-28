@@ -23,8 +23,10 @@ function status(overrides: Partial<SyncPanelStatus> = {}): SyncPanelStatus {
     isOnline: true,
     pendingSyncCount: 0,
     failedSyncCount: 0,
+    conflictCount: 0,
     oldestPendingItemAge: null,
     pendingByKind: emptySyncKindCounts(),
+    failedItems: [],
     lastSyncedAt: null,
     retryFailedSyncs,
     ...overrides,
@@ -73,17 +75,47 @@ describe('SyncPanel — kind rows', () => {
     expect(screen.getByText('1 photo').closest('a')).toBeNull();
   });
 
-  it('keeps one row for a kind that has both live and dead-lettered items, plus one failure line', () => {
+  // [M9-5b] A dead-lettered item has STOPPED. Labelling its row "Waiting" tells
+  // the foreman to sit tight on work that will never move on its own.
+  it('never labels a dead-lettered item "Waiting" — it gets its own bucket', () => {
     renderPanel('failed', {
       pendingSyncCount: 2,
       failedSyncCount: 1,
-      // byKind counts live + failed, so a kind with one of each is still 1 row.
-      pendingByKind: { ...emptySyncKindCounts(), photos: 3 },
+      pendingByKind: { ...emptySyncKindCounts(), photos: 2 },
+      failedItems: [{ id: 9, kind: 'photos', message: 'You do not have permission to save this.' }],
     });
 
-    expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(screen.getByText('3 photos')).toBeInTheDocument();
+    expect(screen.getByText('2 photos')).toBeInTheDocument();
+    expect(screen.getAllByText('Waiting')).toHaveLength(1);
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
     expect(screen.getByText('1 failed — tap Retry')).toBeInTheDocument();
+  });
+
+  // [M9-4] lastError was captured on every failure and rendered nowhere: the
+  // foreman could never learn WHY anything failed.
+  it('renders the reason each dead-lettered item failed', () => {
+    renderPanel('failed', {
+      failedSyncCount: 2,
+      failedItems: [
+        { id: 1, kind: 'diary', message: 'The thing this was attached to was deleted.' },
+        { id: 2, kind: 'lots', message: "You don't have permission to save this." },
+      ],
+    });
+
+    expect(screen.getByText('The thing this was attached to was deleted.')).toBeInTheDocument();
+    expect(screen.getByText("You don't have permission to save this.")).toBeInTheDocument();
+    expect(screen.getByText('diary entry')).toBeInTheDocument();
+    expect(screen.getByText('lot change')).toBeInTheDocument();
+  });
+
+  it('still names a failed item when the server gave no reason at all', () => {
+    renderPanel('failed', {
+      failedSyncCount: 1,
+      failedItems: [{ id: 1, kind: 'photos' }],
+    });
+
+    expect(screen.getByText('photo')).toBeInTheDocument();
+    expect(screen.getByText('Needs attention')).toBeInTheDocument();
   });
 
   it('renders no rows when the queue is empty', () => {
@@ -145,6 +177,14 @@ describe('SyncPanel — actions', () => {
 });
 
 describe('SyncPanel — context lines', () => {
+  // [M9-1] The panel must carry the conflict the chip now reports, and point at
+  // the one surface that can resolve it.
+  it('surfaces an unresolved sync conflict and where to resolve it', () => {
+    renderPanel('conflict', { conflictCount: 1 });
+    expect(screen.getByRole('status')).toHaveTextContent('1 sync conflict');
+    expect(screen.getByText(/Resolve/)).toBeInTheDocument();
+  });
+
   it('reassures when offline', () => {
     renderPanel('offline', { isOnline: false });
     expect(screen.getByText(/saved on this phone/)).toBeInTheDocument();
@@ -177,6 +217,7 @@ describe('SyncPanel — status line', () => {
     ['saved', {}],
     ['waiting', { pendingSyncCount: 4 }],
     ['failed', { failedSyncCount: 2 }],
+    ['conflict', { conflictCount: 2 }],
     ['offline', { isOnline: false }],
   ] as [SyncState, Partial<SyncPanelStatus>][])(
     'matches the chip label in the %s state',
@@ -184,7 +225,7 @@ describe('SyncPanel — status line', () => {
       const s = status(overrides);
       renderPanel(state, overrides);
       expect(screen.getByRole('status')).toHaveTextContent(
-        syncChipLabel(state, s.pendingSyncCount, s.failedSyncCount),
+        syncChipLabel(state, s.pendingSyncCount, s.failedSyncCount, s.conflictCount),
       );
     },
   );
