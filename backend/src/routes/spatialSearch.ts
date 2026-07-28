@@ -15,6 +15,10 @@
  * and therefore only those lots' geometries, test results, and photos. Photos
  * not linked to any lot are visible to internal roles only.
  *
+ * Subcontractor PORTAL MODULES are enforced per collection, not once for the
+ * whole response: photos need `documents`, test results need `testResults`,
+ * lots need `lots`. See the guard in the handler.
+ *
  * `only=tests` (Wave C3 Phase B1) queries a bbox on each test's OWN captured
  * sample point, which carries no transitive lot scoping — so it applies the same
  * explicit subbie filter the photo path does, including the `lotId != null` half.
@@ -28,7 +32,7 @@ import { z } from 'zod';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { prisma } from '../lib/prisma.js';
-import { checkProjectAccess } from '../lib/projectAccess.js';
+import { checkProjectAccess, hasSubcontractorPortalModuleAccess } from '../lib/projectAccess.js';
 import { featureIntersectsBounds, type SearchBounds } from '../lib/spatial/spatialSearch.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { parseProjectRouteParam } from './controlLines/validation.js';
@@ -83,7 +87,35 @@ spatialSearchRouter.post(
     if (!(await checkProjectAccess(user.id, projectId))) {
       throw AppError.forbidden('Access denied');
     }
-    await requireSubcontractorLotPortalModules(user, projectId);
+
+    // Portal modules are enforced PER COLLECTION, because this one endpoint
+    // serves three of them: lots, photos (`documents` module) and test results
+    // (`testResults`). A single `lots`-only check would serve a subcontractor
+    // data the head contractor switched off — the module switch is the explicit
+    // "do not show them this" control.
+    //
+    // Single-layer modes name their collection, so a forbidden one is a 403
+    // (silently returning an empty layer would read as "no data in this box").
+    // Full find-by-area names none, so a forbidden collection is omitted and
+    // the layers they DO have — always lots — still come back.
+    const only = parsed.data.only;
+    const modulesFor = { photos: 'documents', tests: 'testResults' } as const;
+    await requireSubcontractorLotPortalModules(user, projectId, only ? [modulesFor[only]] : []);
+    // In a single-layer mode the requested collection already cleared its module
+    // above and the other one is skipped anyway; otherwise ask per collection.
+    // `hasSubcontractorPortalModuleAccess` is true for every non-subcontractor
+    // role without touching the DB, so internal callers pay nothing.
+    const canRead = (collection: 'photos' | 'tests') =>
+      only
+        ? only === collection
+        : hasSubcontractorPortalModuleAccess({
+            userId: user.id,
+            role: user.roleInCompany,
+            projectId,
+            module: modulesFor[collection],
+          });
+    const withPhotos = await canRead('photos');
+    const withTests = await canRead('tests');
 
     const isSubcontractor =
       user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin';
@@ -152,7 +184,7 @@ spatialSearchRouter.post(
     // Bounded server-side with `take` (CAP + 1 so cap() can still detect
     // truncation from the one extra row); the app-side subbie filter + cap()
     // below stay as a belt (a scoped subbie may see fewer than RESULT_CAP).
-    const photoRows = testsOnly
+    const photoRows = !withPhotos
       ? []
       : await prisma.document.findMany({
           where: {
@@ -194,7 +226,9 @@ spatialSearchRouter.post(
     // the `!= null` half of that filter is load-bearing: without it an unlinked
     // located test leaks to a subcontractor. [C3S-B11], AT-92.
     let testResults: Array<Record<string, unknown>>;
-    if (testsOnly) {
+    if (!withTests) {
+      testResults = [];
+    } else if (testsOnly) {
       // NULL coordinates fail both range predicates, so this also excludes every
       // unlocated test without a second condition.
       const locatedRows = await prisma.testResult.findMany({
