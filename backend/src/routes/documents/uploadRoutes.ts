@@ -27,6 +27,14 @@ type PhotoMetadata = {
 type CreateDocumentUploadRouterDependencies = {
   prisma: PrismaClient;
   uploadFileMiddleware: RequestHandler;
+  /**
+   * D1d: the same handler serves a second surface. `POST /upload` is the general
+   * document upload; `POST /upload/cctv` (spec §4.8) is the same flow behind a
+   * video allow-set and a 256 MiB ceiling. Only the multer middleware differs,
+   * so the access checks, idempotency, lot association and storage path are
+   * shared rather than duplicated.
+   */
+  uploadPath?: string;
   maxDocumentIdLength: number;
   maxDocumentTypeLength: number;
   maxCategoryLength: number;
@@ -170,6 +178,26 @@ function createUploadDocumentBodySchema({
   });
 }
 
+/**
+ * D1d (spec §4.8 item 4) — lot association for the two handover types.
+ *
+ * Both Logan PSP5 resolvers run per lot (`loganPsp5Profile.ts` items (e) and
+ * (f)), so a CCTV run or concealed-works photo filed against a project but no
+ * lot is evidence the folio can never find. Enforced on the SHARED body schema
+ * rather than on the CCTV route, so the general upload cannot be used to slip
+ * an unassociated one in.
+ */
+export const LOT_REQUIRED_DOCUMENT_TYPES = new Set(['cctv_stormwater', 'concealed_works_photo']);
+
+export function assertLotAssociation(documentType: string, lotId: string | null | undefined): void {
+  if (LOT_REQUIRED_DOCUMENT_TYPES.has(documentType) && !lotId) {
+    throw AppError.badRequest(
+      `A "${documentType}" document must be associated with a lot — the handover folio ` +
+        'resolves this evidence per lot and cannot find an unassociated file.',
+    );
+  }
+}
+
 // The relations buildDocumentResponse reads. Shared so an H5 replay returns
 // the same JSON shape as the original upload.
 const DOCUMENT_UPLOAD_INCLUDE = {
@@ -180,6 +208,7 @@ const DOCUMENT_UPLOAD_INCLUDE = {
 export function createDocumentUploadRouter({
   prisma,
   uploadFileMiddleware,
+  uploadPath = '/upload',
   maxDocumentIdLength,
   maxDocumentTypeLength,
   maxCategoryLength,
@@ -207,8 +236,9 @@ export function createDocumentUploadRouter({
   uploadRoutes.use(requireAuth);
 
   // POST /api/documents/upload - Upload a document
+  // POST /api/documents/upload/cctv - the same flow, video allow-set (D1d)
   uploadRoutes.post(
-    '/upload',
+    uploadPath,
     uploadFileMiddleware,
     asyncHandler(async (req: Request, res: Response) => {
       const userId = req.user!.id;
@@ -303,6 +333,13 @@ export function createDocumentUploadRouter({
       let photoMetadata: PhotoMetadata = {};
       let createdDocumentId: string | null = null;
       const effectiveLotId = itpEvidenceTarget?.lotId ?? lotId ?? null;
+
+      try {
+        assertLotAssociation(documentType, effectiveLotId);
+      } catch (error) {
+        cleanupUploadedFile(uploadedFile);
+        throw error;
+      }
 
       try {
         // Upload to Supabase Storage if configured, otherwise use local filesystem

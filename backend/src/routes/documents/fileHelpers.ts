@@ -59,8 +59,77 @@ const INLINE_RENDERABLE_DOCUMENT_MIME_TYPES = new Set([
   'image/webp',
 ]);
 
+/** The general document upload ceiling, extracted from `documents.ts`. 50 MB. */
+export const DOCUMENT_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Wave D `D1d` — the CCTV video allow-set, spec §4.8 item 1, **AT-149**.
+ *
+ * A SEPARATE set, deliberately NOT a widening of `ALLOWED_DOCUMENT_MIME_TYPES`:
+ * that set governs every document upload in the product, and video belongs only
+ * on the surface that expects it (`POST /api/documents/upload/cctv`). The
+ * separation is the design — `isAllowedDocumentMimeType('video/mp4')` stays
+ * `false` and a test pins it.
+ *
+ * Derived from Logan PSP5 §5.6.5(1)(e) read with §5.7.1(1)(a)'s named
+ * containers — *"WINCAM (version 7 or later) or CCTV footage or DVD-ROM … or
+ * MPEG 4"*. In practice a WINCAN/PACP export is MPEG-4; the other three are the
+ * legacy containers the clause's own wording still admits (a DVD-ROM rip is
+ * MPEG-1/2 program stream, and WinCan v7-era exports are AVI or QuickTime).
+ * Four entries, each traceable to the clause. Adding a fifth is a pack-class
+ * change, not a convenience.
+ */
+const ALLOWED_CCTV_VIDEO_MIME_TYPES = new Set([
+  'video/mp4', // MPEG 4 — the clause's named format and the WINCAN export default
+  'video/mpeg', // "DVD-ROM" / .mpg MPEG-1/2 program stream
+  'video/quicktime', // .mov, legacy WinCan/PACP export
+  'video/x-msvideo', // .avi, "WINCAM (version 7 or later)"-era export
+]);
+const SUPPORTED_CCTV_FILE_TYPE_DESCRIPTION = 'MP4, MPEG, QuickTime (.mov) and AVI video';
+
+/**
+ * The CCTV surface's own size ceiling — **256 MiB**, spec §4.8 item 2.
+ *
+ * Enforced independently of {@link DOCUMENT_UPLOAD_MAX_BYTES} (50 MB), and
+ * derived in the D1d PR body from four inputs, the binding one being (d): the
+ * shipped upload path is `multer.memoryStorage()` (`documents.ts:273-278`),
+ * which buffers the whole file in RAM and `Buffer.concat`s it on finish, so
+ * peak RSS is ~2x the file per in-flight upload; the Supabase leg then posts
+ * that same buffer in one shot. 256 MiB is what that path can honestly carry.
+ *
+ * ponytail: a number, not a streaming path. Raising it requires a resumable /
+ * multipart upload path (TUS or S3 multipart) — that is D1c-adjacent
+ * infrastructure and is deliberately NOT built here. It also requires the
+ * Supabase `documents` bucket's own `file_size_limit` to be raised to match,
+ * which is an ops action, not a code change.
+ */
+export const CCTV_UPLOAD_MAX_BYTES = 256 * 1024 * 1024;
+
 export function isAllowedDocumentMimeType(mimeType: string): boolean {
   return ALLOWED_DOCUMENT_MIME_TYPES.has(mimeType);
+}
+
+export function isAllowedCctvVideoMimeType(mimeType: string): boolean {
+  return ALLOWED_CCTV_VIDEO_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
+export function getUnsupportedCctvFileTypeMessage(
+  file: Pick<Express.Multer.File, 'mimetype' | 'originalname'>,
+): string {
+  const filename = sanitizeUploadFilename(file.originalname);
+  return (
+    `Invalid file type for ${filename}. The CCTV upload accepts video only: ` +
+    `${SUPPORTED_CCTV_FILE_TYPE_DESCRIPTION}. Upload other evidence through the ` +
+    'standard document upload.'
+  );
+}
+
+export function getCctvFileTooLargeMessage(maxBytes = CCTV_UPLOAD_MAX_BYTES): string {
+  return (
+    `CCTV video exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload ceiling. ` +
+    'Logan PSP5 §5.6.5(1)(e) is a per-run deliverable — submit one file per pipe run ' +
+    '(maintenance hole upstream to maintenance hole downstream) rather than a combined reel.'
+  );
 }
 
 function hashSignedUrlToken(token: string): string {
@@ -191,7 +260,11 @@ export function getSafeStoredDocumentMimeType(
   file: Pick<Express.Multer.File, 'mimetype' | 'originalname'>,
 ): string {
   const normalizedMimeType = getNormalizedDocumentMimeType(file);
-  return ALLOWED_DOCUMENT_MIME_TYPES.has(normalizedMimeType)
+  // D1d: a CCTV video admitted by the separate allow-set must keep its real
+  // type. Coercing it to octet-stream would file the deliverable as an unknown
+  // blob and make `Document.mimeType` useless to the folio.
+  return ALLOWED_DOCUMENT_MIME_TYPES.has(normalizedMimeType) ||
+    isAllowedCctvVideoMimeType(normalizedMimeType)
     ? normalizedMimeType
     : 'application/octet-stream';
 }

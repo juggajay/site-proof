@@ -96,7 +96,14 @@ export function useDocumentUpload(
 
     const firstFile = fileArray[0];
     const detected = firstFile ? detectDocumentTypeFromFile(firstFile) : null;
-    if (detected) setUploadForm((prev) => ({ ...prev, documentType: detected }));
+    // Auto-detect FILLS a blank type; it never overwrites one the operator
+    // chose. D1d made this load-bearing: a concealed-works photo is a JPEG, so
+    // the old unconditional assignment silently rewrote
+    // `concealed_works_photo` back to `photo` on every re-selection and blinded
+    // the folio's item (f) resolver.
+    if (detected) {
+      setUploadForm((prev) => (prev.documentType ? prev : { ...prev, documentType: detected }));
+    }
     return firstFile;
   }, []);
 

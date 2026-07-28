@@ -117,6 +117,28 @@ describe('useDocumentUpload preview URL cleanup', () => {
     expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:document-preview-1');
   });
 
+  // D1d. `concealed_works_photo` is a JPEG, so auto-detect used to overwrite an
+  // operator's deliberate classification with `photo` on every re-selection —
+  // which would file the evidence where the folio's item (f) resolver cannot
+  // see it.
+  it('fills a blank document type from the file but never overwrites a chosen one', () => {
+    const { result } = renderDocumentUploadHook();
+
+    act(() => {
+      result.current.handleFileSelect(makeChangeEvent([makeImageFile('trench.png')]));
+    });
+    expect(result.current.uploadForm.documentType).toBe('photo');
+
+    act(() => {
+      result.current.updateUploadForm({ documentType: 'concealed_works_photo' });
+    });
+    act(() => {
+      result.current.handleFileSelect(makeChangeEvent([makeImageFile('trench-2.png')]));
+    });
+
+    expect(result.current.uploadForm.documentType).toBe('concealed_works_photo');
+  });
+
   it('ignores file changes while an upload is in flight', async () => {
     apiMocks.authFetch.mockReturnValue(new Promise(() => undefined));
     const { result } = renderDocumentUploadHook();

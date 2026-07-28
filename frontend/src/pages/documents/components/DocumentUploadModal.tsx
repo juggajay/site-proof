@@ -12,12 +12,17 @@ import {
 } from '@/components/ui/Modal';
 import {
   CATEGORIES,
+  CCTV_DOCUMENT_TYPE,
   DOCUMENT_TYPES,
+  getUploadGuidance,
+  requiresLotAssociation,
   type ImageDimensions,
   type UploadDocumentForm,
 } from '../documentsUploadData';
 
 const DOCUMENT_UPLOAD_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.eml,.msg';
+/** D1d — the CCTV surface's own allow-set, mirroring the backend's four containers. */
+const CCTV_UPLOAD_ACCEPT = '.mp4,.mpg,.mpeg,.mov,.avi';
 
 interface DocumentUploadLot {
   id: string;
@@ -60,6 +65,11 @@ export function DocumentUploadModal({
   onFormChange,
   onUpload,
 }: DocumentUploadModalProps) {
+  const isCctvUpload = uploadForm.documentType === CCTV_DOCUMENT_TYPE;
+  const guidance = getUploadGuidance(uploadForm.documentType);
+  const lotRequired = requiresLotAssociation(uploadForm.documentType);
+  const lotMissing = lotRequired && !uploadForm.lotId;
+
   return (
     <Modal onClose={onClose} className="max-w-lg">
       <ModalHeader>Upload Document</ModalHeader>
@@ -91,7 +101,7 @@ export function DocumentUploadModal({
                 type="file"
                 multiple
                 onChange={onFileSelect}
-                accept={DOCUMENT_UPLOAD_ACCEPT}
+                accept={isCctvUpload ? CCTV_UPLOAD_ACCEPT : DOCUMENT_UPLOAD_ACCEPT}
                 disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
@@ -152,7 +162,9 @@ export function DocumentUploadModal({
                     drop
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    PDF, DOC, XLS, JPG, PNG, EML, MSG up to 50MB (select multiple files)
+                    {isCctvUpload
+                      ? 'MP4, MPEG, MOV, AVI up to 256MB per run (select multiple files)'
+                      : 'PDF, DOC, XLS, JPG, PNG, EML, MSG up to 50MB (select multiple files)'}
                   </p>
                 </>
               )}
@@ -192,6 +204,13 @@ export function DocumentUploadModal({
                 </option>
               ))}
             </NativeSelect>
+            {/* D1d — Logan PSP5's run-endpoint and pre-backfill rules are
+                guidance on the surface, not a data model (spec §4.8). */}
+            {guidance && (
+              <p className="mt-2 text-sm text-muted-foreground" data-testid="upload-type-guidance">
+                {guidance}
+              </p>
+            )}
           </div>
 
           {/* Category */}
@@ -217,7 +236,7 @@ export function DocumentUploadModal({
           {/* Link to Lot */}
           <div>
             <Label htmlFor="document-upload-lot" className="mb-2">
-              Link to Lot (optional)
+              {lotRequired ? 'Link to Lot *' : 'Link to Lot (optional)'}
             </Label>
             <NativeSelect
               id="document-upload-lot"
@@ -232,6 +251,12 @@ export function DocumentUploadModal({
                 </option>
               ))}
             </NativeSelect>
+            {lotMissing && (
+              <p className="mt-2 text-sm text-warning" data-testid="upload-lot-required">
+                Handover evidence is resolved per lot — pick the lot this belongs to or the folio
+                will never find it.
+              </p>
+            )}
           </div>
 
           {/* Description/Caption */}
@@ -271,7 +296,9 @@ export function DocumentUploadModal({
         </Button>
         <Button
           onClick={onUpload}
-          disabled={selectedFiles.length === 0 || !uploadForm.documentType || uploading}
+          disabled={
+            selectedFiles.length === 0 || !uploadForm.documentType || lotMissing || uploading
+          }
         >
           {uploading
             ? 'Uploading...'
