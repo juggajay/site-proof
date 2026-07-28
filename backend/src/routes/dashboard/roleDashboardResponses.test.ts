@@ -147,7 +147,9 @@ describe('role dashboard response helpers', () => {
       expect(response.holdPointPipeline.items[0]).toMatchObject({
         description: 'Hold Point',
         scheduledDate: '2026-06-07T00:00:00.000Z',
-        link: '/projects/project-1/lots/lot-1/holdpoints?hp=hp-1',
+        // M8: there is no `/lots/:lotId/holdpoints` route in App.tsx — this
+        // pipeline row dead-ended on NotFoundPage like the other two sites.
+        link: '/projects/project-1/hold-points?hp=hp-1',
       });
       expect(response.claimStatus).toMatchObject({
         totalClaimed: 1400,

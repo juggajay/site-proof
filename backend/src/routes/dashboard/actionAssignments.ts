@@ -136,7 +136,7 @@ export function toHoldPointAssignment(
   const assignee: ActionAssignee = { kind: 'role', role: ROLES.QUALITY_MANAGER };
   const primaryAction: PrimaryAction = {
     label: overdue ? 'Review hold point' : 'Release hold point',
-    href: `/projects/${projectId}/holdpoints`,
+    href: `/projects/${projectId}/hold-points`,
     executableByRoles: HOLD_POINT_ROLES,
   };
   const status = resolveStatus(assignee, primaryAction, viewer, viewerRole);

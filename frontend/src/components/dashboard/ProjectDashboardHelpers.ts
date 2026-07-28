@@ -4,6 +4,13 @@ export interface AttentionItem {
   title: string;
   description: string;
   urgency: 'critical' | 'warning';
+  /**
+   * FULL days elapsed (floored, shared backend helper) since this row's anchor:
+   * the due date for `ncr`, `createdAt` for `holdpoint` — hold points have no
+   * due date, so their number is AGE and renders as "waiting", not "overdue".
+   * Kept under one key because one rounding rule is the point; the `type` above
+   * already carries the distinction the label needs.
+   */
   daysOverdue: number;
   link: string;
 }
@@ -74,6 +81,17 @@ export function getAttentionFallbackRoute(
     return `${projectRouteBase}/ncr`;
   }
   return `${projectRouteBase}/hold-points`;
+}
+
+/**
+ * The attention row's age chip. ONE number (full days elapsed, floored by the
+ * backend's shared `daysOverdue` helper) under ONE key, but two meanings: NCRs
+ * are aged from a due date, hold points from `createdAt` — they have no due
+ * date, so "overdue" would be a claim the data does not support. Same word the
+ * attention widget already uses for hold points.
+ */
+export function formatAttentionAge(item: Pick<AttentionItem, 'type' | 'daysOverdue'>): string {
+  return `${item.daysOverdue}d ${item.type === 'holdpoint' ? 'waiting' : 'overdue'}`;
 }
 
 export function getActivityFallbackRoute(

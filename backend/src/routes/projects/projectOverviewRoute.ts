@@ -291,9 +291,12 @@ export function createProjectOverviewRouter({
           title: `Hold point stale — Lot ${hp.lot?.lotNumber || 'Unknown'}`,
           description: hp.description?.substring(0, 80) || 'Pending for over 7 days',
           urgency: 'warning' as const,
-          daysOverdue: Math.ceil(
-            (today.getTime() - new Date(hp.createdAt).getTime()) / (1000 * 60 * 60 * 24),
-          ),
+          // Same key, same rounding rule as the NCR rows above: a hold point and
+          // an NCR of identical elapsed span must print the same number under
+          // the single "{daysOverdue}d" line the dashboard renders both through.
+          // The anchor stays `createdAt` — hold points have no due date, so this
+          // is AGE, which is why the frontend labels these rows "waiting".
+          daysOverdue: daysOverdue(hp.createdAt, today),
           link: hp.lot
             ? `/projects/${projectId}/lots/${hp.lot.id}`
             : `/projects/${projectId}/hold-points`,

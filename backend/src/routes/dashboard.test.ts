@@ -698,6 +698,12 @@ describe('Dashboard Stats API', () => {
       );
       expect(staleHP).toBeDefined();
       expect(staleHP.daysStale).toBeGreaterThan(7);
+      // Fixture is exactly 8 days old at seed time, so the span at request time
+      // is a hair OVER 8 days: floor says 8, the old `Math.ceil` said 9.
+      expect(staleHP.daysStale).toBe(8);
+      // M8: `/holdpoints` is not a registered frontend route (App.tsx has
+      // `/projects/:projectId/hold-points`), so this row used to 404.
+      expect(staleHP.link).toBe(`/projects/${projectId}/hold-points`);
     });
 
     // A4R-B4 characterization: the hold-point fetch is widened with an additive

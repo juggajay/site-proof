@@ -41,7 +41,9 @@ const NEEDS_YOU_HOLD_POINT: ActionAssignment = {
   reasonCode: 'unreleased_hold_points',
   primaryAction: {
     label: 'Release hold point',
-    href: '/projects/p1/holdpoints',
+    // Mirrors what the backend adapter emits, which must be the route App.tsx
+    // registers (`/hold-points`) — the unhyphenated form 404'd.
+    href: '/projects/p1/hold-points',
     executableByRoles: ['quality_manager'],
   },
 };

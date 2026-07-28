@@ -303,13 +303,17 @@ async function createStaleHoldPointAlerts(
       continue;
     }
 
+    // Severity buckets stay in hours (never printed); the number the recipient
+    // READS is the same floored day count the Needs Attention chip shows for
+    // this hold point, so the email and the screen cannot disagree (#1625).
     const hoursStale = holdPoint.scheduledDate
-      ? Math.ceil((now.getTime() - holdPoint.scheduledDate.getTime()) / deps.hourMs)
+      ? (now.getTime() - holdPoint.scheduledDate.getTime()) / deps.hourMs
       : 0;
+    const daysStale = daysOverdue(holdPoint.scheduledDate, now);
     const severity: SystemAlertSeverity =
       hoursStale > 48 ? 'critical' : hoursStale > 24 ? 'high' : 'medium';
     const title = `Hold Point stale: Lot ${holdPoint.lot.lotNumber}`;
-    const message = `Hold Point for Lot ${holdPoint.lot.lotNumber} has been ${holdPoint.status} for ${hoursStale} hours. ${holdPoint.itpChecklistItem?.description?.substring(0, 80) || ''}`;
+    const message = `Hold Point for Lot ${holdPoint.lot.lotNumber} has been ${holdPoint.status} for ${daysStale} day(s). ${holdPoint.itpChecklistItem?.description?.substring(0, 80) || ''}`;
     const alertId = await createAlertRecord(deps.prisma, {
       type: 'stale_hold_point',
       severity,

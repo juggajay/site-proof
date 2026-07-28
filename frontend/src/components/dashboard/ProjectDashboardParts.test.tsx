@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityRow } from './ProjectDashboardParts';
 import {
+  formatAttentionAge,
   formatRelativeTime,
   formatStatusLabel,
   getActivityFallbackRoute,
@@ -21,6 +22,15 @@ describe('ProjectDashboardParts helpers', () => {
     expect(formatStatusLabel('on_hold')).toBe('On Hold');
     expect(formatStatusLabel('in-progress')).toBe('In Progress');
     expect(formatStatusLabel('ACTIVE')).toBe('Active');
+  });
+
+  // H1: the backend now floors BOTH limbs of `daysOverdue` through the shared
+  // helper, so the two row types finally carry the same number — but a hold
+  // point is aged from `createdAt`, not a due date, so the line must not call
+  // it overdue.
+  it('labels a hold-point age as waiting and an NCR age as overdue', () => {
+    expect(formatAttentionAge({ type: 'holdpoint', daysOverdue: 8 })).toBe('8d waiting');
+    expect(formatAttentionAge({ type: 'ncr', daysOverdue: 8 })).toBe('8d overdue');
   });
 
   it('keeps dashboard links inside the current project route', () => {

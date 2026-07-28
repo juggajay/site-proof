@@ -3,6 +3,10 @@
 // BOTH overdue and waiting on somebody else must land in *Waiting on others*.
 // `isOverdue` is a lens (§4.2 rule 3), never a group and never a promotion.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, it, expect } from 'vitest';
 
 import type { ActionAssignment } from '../../lib/readiness/contracts/actionAssignment.js';
@@ -14,6 +18,7 @@ import {
   type AssignmentViewer,
 } from './actionAssignments.js';
 
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const NOW = new Date('2026-07-27T00:00:00.000Z');
 const PROJECT_ID = 'project-1';
 const VIEWER_ID = 'viewer-1';
@@ -206,5 +211,50 @@ describe('overdue age is one number across both surfaces', () => {
     expect(daysOverdue(null, NOW)).toBe(0);
     // Never negative for a row that is not yet due.
     expect(daysOverdue(new Date(NOW.getTime() + 5 * DAY_MS), NOW)).toBe(0);
+  });
+});
+
+/**
+ * M8 (fable deep review 2026-07-28) — the adapter emitted
+ * `/projects/:projectId/holdpoints`; `App.tsx` registers
+ * `/projects/:projectId/hold-points`, and React Router has no redirect for the
+ * unhyphenated form, so every hold-point row on the new My Work / Needs
+ * Attention surfaces landed on `NotFoundPage`.
+ *
+ * Pinned BY CITATION against App.tsx, the way `conformanceCopy.test.ts` pins
+ * frontend copy: there is no shared package between `frontend/` and `backend/`,
+ * and building one for one path string is not warranted. This assertion is the
+ * tripwire if either side moves.
+ */
+describe('M8 — the hold-point primary action resolves to a registered route', () => {
+  const APP_TSX = readFileSync(path.join(REPO_ROOT, 'frontend/src/App.tsx'), 'utf8');
+  const REGISTERED_PATHS = [...APP_TSX.matchAll(/<Route\s[^>]*?path="([^"]+)"/gs)]
+    .map((m) => m[1]!)
+    // The `*` catch-all renders NotFoundPage — matching it is exactly the bug.
+    .filter((routePath) => routePath.startsWith('/'));
+
+  function isRegisteredRoute(href: string): boolean {
+    const pathname = href.split('?')[0]!;
+    return REGISTERED_PATHS.some((routePath) =>
+      new RegExp(`^${routePath.replace(/:[A-Za-z0-9_]+/g, '[^/]+')}$`).test(pathname),
+    );
+  }
+
+  it('reads App.tsx and finds the hold-points route', () => {
+    // Guards the guard: a regex that matched nothing would pass everything.
+    expect(REGISTERED_PATHS).toContain('/projects/:projectId/hold-points');
+  });
+
+  it('points at /hold-points, which App.tsx registers', () => {
+    const { primaryAction } = toHoldPointAssignment(
+      holdPoint(),
+      viewerWithRole('quality_manager'),
+      NOW,
+    );
+
+    expect(primaryAction.href).toBe(`/projects/${PROJECT_ID}/hold-points`);
+    expect(isRegisteredRoute(primaryAction.href!)).toBe(true);
+    // The shape that shipped: no route matches it, so it rendered NotFoundPage.
+    expect(isRegisteredRoute(`/projects/${PROJECT_ID}/holdpoints`)).toBe(false);
   });
 });
