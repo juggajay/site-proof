@@ -1,0 +1,666 @@
+{
+  "benchmark": "wave-d/D1c.0 archive cost model",
+  "spec": "docs/plans/wave-d-handover-spec-2026-07-28.md Rev 3 §4.5.6, §12, §16.1 J8",
+  "acceptanceTest": "AT-150 (cost reported per leg)",
+  "generatedAt": "2026-07-28T19:22:51.347Z",
+  "spikeResults": "scripts/bench-results/zip-spike-zipjs-2026-07-28T18-54-20-123Z.json",
+  "ceiling": {
+    "audExGst": 12,
+    "wording": "a full-project archive on the program's reference dataset must cost CIVOS <= AUD 12.00 ex-GST all-in for one generation plus three downloads within the retention window",
+    "owner": "Jay (J8). Declared before measurement. A build agent may not move it."
+  },
+  "reference": {
+    "lots": 5000,
+    "evidenceGb": 50,
+    "source": "docs/plans/wave-d-handover-spec-2026-07-28.md §12 (program §8 lines 138-139)",
+    "downloadsInCeiling": 3,
+    "ceilingWording": "a full-project archive on the program's reference dataset must cost CIVOS <= AUD 12.00 ex-GST all-in for one generation plus three downloads within the retention window",
+    "unitNote": "Cost arithmetic uses DECIMAL GB because that is the unit both vendors bill in. The §4.5.3 cap formula uses BINARY GiB as the spec directs. The two are kept separate and converted explicitly, never conflated."
+  },
+  "rates": {
+    "railwayEgressPerGb": {
+      "usd": 0.05,
+      "url": "https://docs.railway.com/pricing/understanding-your-bill",
+      "quote": "Network egress (outbound data transfer) is charged at $0.05/GB.",
+      "readOn": "2026-07-29"
+    },
+    "railwayUploadCountsAsEgress": {
+      "url": "https://docs.railway.com/storage-buckets/billing",
+      "quote": "Note that service egress is not free. If your service sends data to users or uploads files to a bucket, that traffic counts as service egress.",
+      "readOn": "2026-07-29"
+    },
+    "railwayIngressPerGb": {
+      "usd": null,
+      "notPublished": "Railway publishes no ingress rate and no \"ingress is free\" statement; the billable-resource list is vCPU, memory, volumes and network egress only. Modelled at 0 with that assumption stated, not asserted as free.",
+      "url": "https://docs.railway.com/pricing/understanding-your-bill",
+      "readOn": "2026-07-29"
+    },
+    "railwayVcpuPerMonth": {
+      "usd": 20,
+      "url": "https://docs.railway.com/reference/pricing",
+      "quote": "$20 / vCPU / month ($0.000463 / vCPU / minute)",
+      "readOn": "2026-07-29"
+    },
+    "railwayRamGbPerMonth": {
+      "usd": 10,
+      "url": "https://docs.railway.com/reference/pricing",
+      "quote": "$10 / GB / month ($0.000231 / GB / minute)",
+      "readOn": "2026-07-29"
+    },
+    "supabaseStoragePerGbMonth": {
+      "usd": 0.0213,
+      "plan": "Pro",
+      "included": "100 GB",
+      "url": "https://supabase.com/pricing",
+      "quote": "100 GB included, then $0.0213 per GB",
+      "readOn": "2026-07-29"
+    },
+    "supabaseEgressUncachedPerGb": {
+      "usd": 0.09,
+      "plan": "Pro",
+      "included": "250 GB",
+      "url": "https://supabase.com/docs/guides/platform/manage-your-usage/egress",
+      "quote": "$0.09 per GB per month for uncached egress, $0.03 per GB per month for cached egress",
+      "readOn": "2026-07-29"
+    },
+    "supabaseEgressCachedPerGb": {
+      "usd": 0.03,
+      "plan": "Pro",
+      "included": "250 GB",
+      "url": "https://supabase.com/pricing",
+      "quote": "250 GB included, then $0.03 per GB",
+      "readOn": "2026-07-29"
+    },
+    "supabaseIngressPerGb": {
+      "usd": null,
+      "notPublished": "Supabase publishes no ingress/upload charge and no explicit \"ingress is free\" statement. Modelled at 0 with that assumption stated.",
+      "url": "https://supabase.com/pricing",
+      "readOn": "2026-07-29"
+    },
+    "audPerUsd": {
+      "rate": 0.69685,
+      "asAt": "2026-07-28",
+      "url": "https://api.frankfurter.dev/v1/latest?base=AUD&symbols=USD",
+      "note": "ECB-derived reference rate. 2026-07-28 close; no 2026-07-29 rate was published at the time of reading. Cross-checked against https://tradingeconomics.com/australia/currency (0.6968).",
+      "readOn": "2026-07-29"
+    }
+  },
+  "uploadLimits": {
+    "standardUpload": {
+      "maxBytes": 5000000000,
+      "stated": "5 GB",
+      "url": "https://supabase.com/docs/guides/storage/uploads/standard-uploads",
+      "quote": "Though you can upload up to 5GB files using the standard upload method, we recommend using TUS Resumable Upload for uploading files greater than 6MB in size for better reliability.",
+      "readOn": "2026-07-29"
+    },
+    "resumableAndS3": {
+      "maxBytes": 500000000000,
+      "stated": "500 GB on Pro and above",
+      "url": "https://supabase.com/docs/guides/storage/uploads/file-limits",
+      "quote": "On the Pro Plan and up, you can set this value to up to 500 GB.",
+      "readOn": "2026-07-29",
+      "correctsSpec": "Spec §4.5.3 says 'TUS/S3 paths reach 50 GB'. That is OUT OF DATE. Supabase raised the ceiling to 500 GB (https://supabase.com/blog/storage-500gb-uploads-cheaper-egress-pricing, 2025-07-18: 'Increasing the maximum file size to 500 GB, up from 50 GB') and the s3-uploads guide now states 500 GB. The 50 GB figure survives only on a stale troubleshooting page (https://supabase.com/docs/guides/troubleshooting/upload-file-size-restrictions-Y4wQLT), which contradicts both. The upload-protocol limb of the cap formula is therefore NOT the binding constraint it was assumed to be.",
+      "isPlanSetting": "It is a configurable global Storage setting capped by plan, not a hard product limit — Free 50 MB, Pro/Team 500 GB, Enterprise custom, and above 500 GB requires contacting Supabase."
+    }
+  },
+  "measuredInputs": {
+    "compressionRatioOnFixture2Mix": 0.944838,
+    "compressionRatioPerCandidate": [
+      {
+        "candidate": "@zip.js/zip.js",
+        "ratio": 0.944838
+      }
+    ],
+    "archiveGb": 47.24,
+    "compute": {
+      "seconds": 2085.7656104352513,
+      "vcpu": 1,
+      "ramGb": 0.25,
+      "basis": "slowest selectable candidate on the 8 GiB leg: 22.6 MB/s, peak RSS 115 MiB; vCPU modelled at 1 fully utilised (deflate is CPU-bound)"
+    }
+  },
+  "scenarios": [
+    {
+      "id": "as-specified-30d",
+      "deliveryPath": "backendMediated",
+      "downloadCacheAssumption": "uncached",
+      "compliesWithSpec": "§10.2 and §4.7.4 as written",
+      "legs": [
+        {
+          "leg": "original-reads",
+          "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+          "gb": 50,
+          "billedBy": "Supabase (uncached egress) + Railway ingress",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.5,
+          "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+          "aud": 6.4576
+        },
+        {
+          "leg": "archive-upload",
+          "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+          "gb": 47.2419,
+          "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+          "rateUsdPerGb": 0.05,
+          "usd": 2.3621,
+          "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+          "aud": 3.3897
+        },
+        {
+          "leg": "storage-retention",
+          "what": "47.2 GB held for 30 days",
+          "gb": 47.2419,
+          "billedBy": "Supabase Storage",
+          "rateUsdPerGb": 0.0213,
+          "usd": 0.9918,
+          "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 30 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+          "aud": 1.4233
+        },
+        {
+          "leg": "download-first",
+          "what": "47.2 GB Supabase -> Railway -> browser (two billed transfers)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress) AND Railway (service egress)",
+          "rateUsdPerGb": 0.14,
+          "usd": 6.6139,
+          "note": "Spec §10.2 requires this path: \"No public link, no Supabase signed URL, no email attachment.\" The double transfer is a SECURITY REQUIREMENT, not an implementation choice.",
+          "aud": 9.4911
+        },
+        {
+          "leg": "download-2",
+          "what": "47.2 GB Supabase -> Railway -> browser (two billed transfers)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress) AND Railway (service egress)",
+          "rateUsdPerGb": 0.14,
+          "usd": 6.6139,
+          "note": "Spec §10.2 requires this path: \"No public link, no Supabase signed URL, no email attachment.\" The double transfer is a SECURITY REQUIREMENT, not an implementation choice.",
+          "aud": 9.4911
+        },
+        {
+          "leg": "download-3",
+          "what": "47.2 GB Supabase -> Railway -> browser (two billed transfers)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress) AND Railway (service egress)",
+          "rateUsdPerGb": 0.14,
+          "usd": 6.6139,
+          "note": "Spec §10.2 requires this path: \"No public link, no Supabase signed URL, no email attachment.\" The double transfer is a SECURITY REQUIREMENT, not an implementation choice.",
+          "aud": 9.4911
+        },
+        {
+          "leg": "compute",
+          "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+          "gb": null,
+          "billedBy": "Railway (vCPU + memory, metered per second)",
+          "rateUsdPerGb": null,
+          "usd": 0.0179,
+          "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+          "aud": 0.0256
+        }
+      ],
+      "totalUsd": 27.7134,
+      "totalAud": 39.77
+    },
+    {
+      "id": "signed-url-direct-uncached-30d",
+      "deliveryPath": "signedUrlDirect",
+      "downloadCacheAssumption": "uncached",
+      "compliesWithSpec": "NO — requires amending §10.2 (\"No public link, no Supabase signed URL\") and re-running the D1b threat model. A commercial/security decision, not an engineering one.",
+      "legs": [
+        {
+          "leg": "original-reads",
+          "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+          "gb": 50,
+          "billedBy": "Supabase (uncached egress) + Railway ingress",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.5,
+          "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+          "aud": 6.4576
+        },
+        {
+          "leg": "archive-upload",
+          "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+          "gb": 47.2419,
+          "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+          "rateUsdPerGb": 0.05,
+          "usd": 2.3621,
+          "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+          "aud": 3.3897
+        },
+        {
+          "leg": "storage-retention",
+          "what": "47.2 GB held for 30 days",
+          "gb": 47.2419,
+          "billedBy": "Supabase Storage",
+          "rateUsdPerGb": 0.0213,
+          "usd": 0.9918,
+          "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 30 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+          "aud": 1.4233
+        },
+        {
+          "leg": "download-first",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress)",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.2518,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 6.1014
+        },
+        {
+          "leg": "download-2",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress)",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.2518,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 6.1014
+        },
+        {
+          "leg": "download-3",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress)",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.2518,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 6.1014
+        },
+        {
+          "leg": "compute",
+          "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+          "gb": null,
+          "billedBy": "Railway (vCPU + memory, metered per second)",
+          "rateUsdPerGb": null,
+          "usd": 0.0179,
+          "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+          "aud": 0.0256
+        }
+      ],
+      "totalUsd": 20.6271,
+      "totalAud": 29.6
+    },
+    {
+      "id": "signed-url-direct-cached-30d",
+      "deliveryPath": "signedUrlDirect",
+      "downloadCacheAssumption": "cached",
+      "compliesWithSpec": "NO — as above, and additionally assumes every download is a CDN cache HIT, which is the most optimistic reading of the published rates.",
+      "legs": [
+        {
+          "leg": "original-reads",
+          "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+          "gb": 50,
+          "billedBy": "Supabase (uncached egress) + Railway ingress",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.5,
+          "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+          "aud": 6.4576
+        },
+        {
+          "leg": "archive-upload",
+          "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+          "gb": 47.2419,
+          "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+          "rateUsdPerGb": 0.05,
+          "usd": 2.3621,
+          "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+          "aud": 3.3897
+        },
+        {
+          "leg": "storage-retention",
+          "what": "47.2 GB held for 30 days",
+          "gb": 47.2419,
+          "billedBy": "Supabase Storage",
+          "rateUsdPerGb": 0.0213,
+          "usd": 0.9918,
+          "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 30 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+          "aud": 1.4233
+        },
+        {
+          "leg": "download-first",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (cached egress)",
+          "rateUsdPerGb": 0.03,
+          "usd": 1.4173,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 2.0338
+        },
+        {
+          "leg": "download-2",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (cached egress)",
+          "rateUsdPerGb": 0.03,
+          "usd": 1.4173,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 2.0338
+        },
+        {
+          "leg": "download-3",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (cached egress)",
+          "rateUsdPerGb": 0.03,
+          "usd": 1.4173,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 2.0338
+        },
+        {
+          "leg": "compute",
+          "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+          "gb": null,
+          "billedBy": "Railway (vCPU + memory, metered per second)",
+          "rateUsdPerGb": null,
+          "usd": 0.0179,
+          "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+          "aud": 0.0256
+        }
+      ],
+      "totalUsd": 12.1235,
+      "totalAud": 17.4
+    },
+    {
+      "id": "as-specified-90d",
+      "deliveryPath": "backendMediated",
+      "downloadCacheAssumption": "uncached",
+      "compliesWithSpec": "§10.2 and §4.7.4 as written",
+      "legs": [
+        {
+          "leg": "original-reads",
+          "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+          "gb": 50,
+          "billedBy": "Supabase (uncached egress) + Railway ingress",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.5,
+          "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+          "aud": 6.4576
+        },
+        {
+          "leg": "archive-upload",
+          "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+          "gb": 47.2419,
+          "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+          "rateUsdPerGb": 0.05,
+          "usd": 2.3621,
+          "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+          "aud": 3.3897
+        },
+        {
+          "leg": "storage-retention",
+          "what": "47.2 GB held for 90 days",
+          "gb": 47.2419,
+          "billedBy": "Supabase Storage",
+          "rateUsdPerGb": 0.0213,
+          "usd": 2.9754,
+          "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 90 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+          "aud": 4.2698
+        },
+        {
+          "leg": "download-first",
+          "what": "47.2 GB Supabase -> Railway -> browser (two billed transfers)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress) AND Railway (service egress)",
+          "rateUsdPerGb": 0.14,
+          "usd": 6.6139,
+          "note": "Spec §10.2 requires this path: \"No public link, no Supabase signed URL, no email attachment.\" The double transfer is a SECURITY REQUIREMENT, not an implementation choice.",
+          "aud": 9.4911
+        },
+        {
+          "leg": "download-2",
+          "what": "47.2 GB Supabase -> Railway -> browser (two billed transfers)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress) AND Railway (service egress)",
+          "rateUsdPerGb": 0.14,
+          "usd": 6.6139,
+          "note": "Spec §10.2 requires this path: \"No public link, no Supabase signed URL, no email attachment.\" The double transfer is a SECURITY REQUIREMENT, not an implementation choice.",
+          "aud": 9.4911
+        },
+        {
+          "leg": "download-3",
+          "what": "47.2 GB Supabase -> Railway -> browser (two billed transfers)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress) AND Railway (service egress)",
+          "rateUsdPerGb": 0.14,
+          "usd": 6.6139,
+          "note": "Spec §10.2 requires this path: \"No public link, no Supabase signed URL, no email attachment.\" The double transfer is a SECURITY REQUIREMENT, not an implementation choice.",
+          "aud": 9.4911
+        },
+        {
+          "leg": "compute",
+          "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+          "gb": null,
+          "billedBy": "Railway (vCPU + memory, metered per second)",
+          "rateUsdPerGb": null,
+          "usd": 0.0179,
+          "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+          "aud": 0.0256
+        }
+      ],
+      "totalUsd": 29.697,
+      "totalAud": 42.62
+    },
+    {
+      "id": "signed-url-direct-uncached-90d",
+      "deliveryPath": "signedUrlDirect",
+      "downloadCacheAssumption": "uncached",
+      "compliesWithSpec": "NO — requires amending §10.2 (\"No public link, no Supabase signed URL\") and re-running the D1b threat model. A commercial/security decision, not an engineering one.",
+      "legs": [
+        {
+          "leg": "original-reads",
+          "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+          "gb": 50,
+          "billedBy": "Supabase (uncached egress) + Railway ingress",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.5,
+          "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+          "aud": 6.4576
+        },
+        {
+          "leg": "archive-upload",
+          "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+          "gb": 47.2419,
+          "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+          "rateUsdPerGb": 0.05,
+          "usd": 2.3621,
+          "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+          "aud": 3.3897
+        },
+        {
+          "leg": "storage-retention",
+          "what": "47.2 GB held for 90 days",
+          "gb": 47.2419,
+          "billedBy": "Supabase Storage",
+          "rateUsdPerGb": 0.0213,
+          "usd": 2.9754,
+          "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 90 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+          "aud": 4.2698
+        },
+        {
+          "leg": "download-first",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress)",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.2518,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 6.1014
+        },
+        {
+          "leg": "download-2",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress)",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.2518,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 6.1014
+        },
+        {
+          "leg": "download-3",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (uncached egress)",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.2518,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 6.1014
+        },
+        {
+          "leg": "compute",
+          "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+          "gb": null,
+          "billedBy": "Railway (vCPU + memory, metered per second)",
+          "rateUsdPerGb": null,
+          "usd": 0.0179,
+          "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+          "aud": 0.0256
+        }
+      ],
+      "totalUsd": 22.6107,
+      "totalAud": 32.45
+    },
+    {
+      "id": "signed-url-direct-cached-90d",
+      "deliveryPath": "signedUrlDirect",
+      "downloadCacheAssumption": "cached",
+      "compliesWithSpec": "NO — as above, and additionally assumes every download is a CDN cache HIT, which is the most optimistic reading of the published rates.",
+      "legs": [
+        {
+          "leg": "original-reads",
+          "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+          "gb": 50,
+          "billedBy": "Supabase (uncached egress) + Railway ingress",
+          "rateUsdPerGb": 0.09,
+          "usd": 4.5,
+          "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+          "aud": 6.4576
+        },
+        {
+          "leg": "archive-upload",
+          "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+          "gb": 47.2419,
+          "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+          "rateUsdPerGb": 0.05,
+          "usd": 2.3621,
+          "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+          "aud": 3.3897
+        },
+        {
+          "leg": "storage-retention",
+          "what": "47.2 GB held for 90 days",
+          "gb": 47.2419,
+          "billedBy": "Supabase Storage",
+          "rateUsdPerGb": 0.0213,
+          "usd": 2.9754,
+          "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 90 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+          "aud": 4.2698
+        },
+        {
+          "leg": "download-first",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (cached egress)",
+          "rateUsdPerGb": 0.03,
+          "usd": 1.4173,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 2.0338
+        },
+        {
+          "leg": "download-2",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (cached egress)",
+          "rateUsdPerGb": 0.03,
+          "usd": 1.4173,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 2.0338
+        },
+        {
+          "leg": "download-3",
+          "what": "47.2 GB Supabase -> browser (one billed transfer)",
+          "gb": 47.2419,
+          "billedBy": "Supabase (cached egress)",
+          "rateUsdPerGb": 0.03,
+          "usd": 1.4173,
+          "note": "Requires amending §10.2. Modelled for comparison only.",
+          "aud": 2.0338
+        },
+        {
+          "leg": "compute",
+          "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+          "gb": null,
+          "billedBy": "Railway (vCPU + memory, metered per second)",
+          "rateUsdPerGb": null,
+          "usd": 0.0179,
+          "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+          "aud": 0.0256
+        }
+      ],
+      "totalUsd": 14.1071,
+      "totalAud": 20.24
+    }
+  ],
+  "generationOnlyFloor": {
+    "legs": [
+      {
+        "leg": "original-reads",
+        "what": "worker reads 50 GB of evidence objects out of Supabase Storage",
+        "gb": 50,
+        "billedBy": "Supabase (uncached egress) + Railway ingress",
+        "rateUsdPerGb": 0.09,
+        "usd": 4.5,
+        "note": "Uncached: an archive read is a one-off pull of cold objects, not a CDN-warm read. Railway ingress modelled at 0 (not published).",
+        "aud": 6.4576
+      },
+      {
+        "leg": "archive-upload",
+        "what": "worker pushes the 47.2 GB archive to Supabase Storage",
+        "gb": 47.2419,
+        "billedBy": "Railway (service egress). Supabase ingress not published, modelled 0.",
+        "rateUsdPerGb": 0.05,
+        "usd": 2.3621,
+        "note": "THE LEG THE NAIVE MODEL DROPS. Railway bills a service for bytes it uploads to a bucket.",
+        "aud": 3.3897
+      },
+      {
+        "leg": "storage-retention",
+        "what": "47.2 GB held for 30 days",
+        "gb": 47.2419,
+        "billedBy": "Supabase Storage",
+        "rateUsdPerGb": 0.0213,
+        "usd": 0.9918,
+        "note": "§10.5 sets a TTL but names no number (\"default conservative, configurable per project\"). 30 days is a DECLARED MODELLING ASSUMPTION, not a spec value.",
+        "aud": 1.4233
+      },
+      {
+        "leg": "compute",
+        "what": "2086 s of archive job at 1 vCPU / 0.25 GB RAM",
+        "gb": null,
+        "billedBy": "Railway (vCPU + memory, metered per second)",
+        "rateUsdPerGb": null,
+        "usd": 0.0179,
+        "note": "730 h/month. Wall clock extrapolated from the measured writer throughput; RAM from the measured peak RSS.",
+        "aud": 0.0256
+      }
+    ],
+    "totalUsd": 7.8718,
+    "totalAud": 11.3,
+    "meaning": "Read + upload + storage, ZERO downloads, on the spec-compliant path. This is the irreducible cost of producing the artefact at all."
+  },
+  "capThatFitsTheCeilingGbEvidence": {
+    "as-specified-30d": 15.1,
+    "signed-url-direct-uncached-30d": 20.3,
+    "signed-url-direct-cached-30d": 34.5
+  },
+  "verdict": {
+    "headlineScenario": "as-specified-30d",
+    "totalAud": 39.77,
+    "ceilingAud": 12,
+    "pass": false,
+    "overCeilingByFactor": 3.31,
+    "generationOnlyFloorAud": 11.3,
+    "floorAlreadyOverCeiling": false,
+    "theThreeFixes": "§4.5.6 names three, all Jay decisions: (1) a lower cap, (2) a cheaper delivery path, (3) a priced add-on. This script reports which the numbers point at. It does not choose."
+  }
+}

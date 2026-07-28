@@ -128,3 +128,8 @@ frontend/.env.production
 
 # Local security/deep audit output
 .deepsec/
+
+# Wave D D1c.0 spike: throwaway dependency tree for backend/scripts/bench-zip-spike.mjs.
+# The four ZIP writer candidates are NOT product dependencies (spec §4.5.2 — the winner
+# becomes one in D1c.1). Recreate with the npm install line in the harness header.
+backend/scripts/bench-zip-deps/

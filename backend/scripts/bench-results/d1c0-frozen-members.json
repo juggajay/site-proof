@@ -1,0 +1,3609 @@
+{
+  "purpose": "Fixture 6 (spec §4.5.1) simulates the D1c.1 frozen-member ledger (§4.6.1) as a FIXED JSON member list. The ledger itself is not built in D1c.0. Members are PRNG-generated from `seed` so two processes materialise identical bytes; `sourceChecksum` is the SHA-256 of those bytes.",
+  "spec": "docs/plans/wave-d-handover-spec-2026-07-28.md Rev 3 §4.5.1 fixture 6, §4.6.1, §4.6.3",
+  "generatedBy": "backend/scripts/bench-zip-spike.mjs",
+  "memberCount": 400,
+  "totalBytes": 8892929,
+  "members": [
+    {
+      "path": "LOT-0001/photos/CH1250_m000000.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4042260481,
+      "size": 14218,
+      "compressible": 0,
+      "sourceChecksum": "9f4433aa7e82fbe163f1fe63a5f6c72e5ce006af24309678db8e029a7354b6ef"
+    },
+    {
+      "path": "LOT-0001/photos/CH1251_m000001.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2401728946,
+      "size": 22436,
+      "compressible": 0,
+      "sourceChecksum": "ce624d6a82a45bd5399b9c8cdc0f454182e65edad2b89ee896c38dea5be0220b"
+    },
+    {
+      "path": "LOT-0001/photos/CH1252_m000002.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 761197411,
+      "size": 14269,
+      "compressible": 0,
+      "sourceChecksum": "de7acdc5e63953534cab2d4d8f2c0ce502ff0aa7d4460b317be3f07dccd4a81a"
+    },
+    {
+      "path": "LOT-0001/photos/CH1253_m000003.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3415633172,
+      "size": 22489,
+      "compressible": 0,
+      "sourceChecksum": "4c571ca8de9850065f3dc61f019636fa38e201808b30568032ed9ed67f01b139"
+    },
+    {
+      "path": "LOT-0001/photos/CH1254_m000004.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1775101637,
+      "size": 14322,
+      "compressible": 0,
+      "sourceChecksum": "4ad8605950b4f89f72b0f230494aebeaa62faca34652f97ed0f6d8b225911b06"
+    },
+    {
+      "path": "LOT-0001/photos/CH1255_m000005.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 134570102,
+      "size": 22540,
+      "compressible": 0,
+      "sourceChecksum": "1402239b29c8e190418278328d2f58226a9f801c355def903dd9bc74bd24b48d"
+    },
+    {
+      "path": "LOT-0001/photos/CH1256_m000006.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2789005863,
+      "size": 14375,
+      "compressible": 0,
+      "sourceChecksum": "d30e43f1287f9729202d56c2b6c5fc561d0f9008f6ed6b10c9b602264ce8da31"
+    },
+    {
+      "path": "LOT-0001/photos/CH1257_m000007.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1148474328,
+      "size": 22594,
+      "compressible": 0,
+      "sourceChecksum": "2632850ff45d8ea6bb876d2698e5a48fca7464954c8bda2833850b7b406e1462"
+    },
+    {
+      "path": "LOT-0001/photos/CH1258_m000008.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3802910089,
+      "size": 14429,
+      "compressible": 0,
+      "sourceChecksum": "6518dc1e209e677ce9709e65079779dbde69120800b8656b330331cd27c48b7a"
+    },
+    {
+      "path": "LOT-0001/photos/CH1259_m000009.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2162378554,
+      "size": 22647,
+      "compressible": 0,
+      "sourceChecksum": "853a18810a04458ce78e93fa10bdd159572727ac000eabc614e77d5717363831"
+    },
+    {
+      "path": "LOT-0001/test-certificates/CH1260_m000010.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 521847019,
+      "size": 45143,
+      "compressible": 0.2,
+      "sourceChecksum": "3036dc65fd70633a7a7311fab733d3e9885bcce38b51b1b27641123c99295fe7"
+    },
+    {
+      "path": "LOT-0001/photos/CH1261_m000011.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3176282780,
+      "size": 22700,
+      "compressible": 0,
+      "sourceChecksum": "a775c2e974ec5bd3704846b5c35d0d29d6a5544aa3954fec0810a6668bc9a52f"
+    },
+    {
+      "path": "LOT-0001/test-certificates/CH1262_m000012.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1535751245,
+      "size": 32679,
+      "compressible": 0.2,
+      "sourceChecksum": "d42ba35ac8455da08d45c92e86ffa3ff03a6e140286c0d78bf0abd202f28bf2a"
+    },
+    {
+      "path": "LOT-0001/test-certificates/CH1263_m000013.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 4190187006,
+      "size": 51024,
+      "compressible": 0.2,
+      "sourceChecksum": "39a2a113549686700946ad75030a3aa941cca4d9790345188df6d01bd8aad4f2"
+    },
+    {
+      "path": "LOT-0001/registers/CH1264_m000014.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2549655471,
+      "size": 4701,
+      "compressible": 1,
+      "sourceChecksum": "d7458e9733e1ed3e4506247db870510ffedf0af5b8aee977a36454f70665ef0f"
+    },
+    {
+      "path": "LOT-0001/photos/CH1265_m000015.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 909123936,
+      "size": 22805,
+      "compressible": 0,
+      "sourceChecksum": "6d67c028cef3b67311cd59e2705735913324066c3da9b00455d0ba9b439733b8"
+    },
+    {
+      "path": "LOT-0001/photos/CH1266_m000016.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3563559697,
+      "size": 14640,
+      "compressible": 0,
+      "sourceChecksum": "051887d975d5ffbe5c0a061b058240cd97ca4fe4cac413c1e2cbc24fd831a6d3"
+    },
+    {
+      "path": "LOT-0001/photos/CH1267_m000017.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1923028162,
+      "size": 22858,
+      "compressible": 0,
+      "sourceChecksum": "d07fe630880c996d102902ee988b0b8b1a909467fb7d237185baea2a25ea4971"
+    },
+    {
+      "path": "LOT-0001/photos/CH1268_m000018.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 282496627,
+      "size": 14691,
+      "compressible": 0,
+      "sourceChecksum": "a700d50bdff80c556e69cbb6754e1f88ba1b3262dc7f0ea2aea1d5e22a8088a1"
+    },
+    {
+      "path": "LOT-0001/photos/CH1269_m000019.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2936932388,
+      "size": 22911,
+      "compressible": 0,
+      "sourceChecksum": "b7adefc6c5f7a3deca8a0521f2cd076e4929e1b7762b5c4f2f5dde429b10b71c"
+    },
+    {
+      "path": "LOT-0001/photos/CH1270_m000020.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1296400853,
+      "size": 14744,
+      "compressible": 0,
+      "sourceChecksum": "f48d0a2a243d2bec337732119c1a7593e905d59e4ce8c4c7633634f1f8666926"
+    },
+    {
+      "path": "LOT-0001/photos/CH1271_m000021.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3950836614,
+      "size": 22964,
+      "compressible": 0,
+      "sourceChecksum": "e0567c2e5a5e0fc32b9d1ae68a0727cf1ac123986679640e83fc3facb94d6d3d"
+    },
+    {
+      "path": "LOT-0001/photos/CH1272_m000022.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2310305079,
+      "size": 14797,
+      "compressible": 0,
+      "sourceChecksum": "eccafa4c2c490fe4d3c9471e0043d362c5b22b8643f885795e4031bcd358e4d3"
+    },
+    {
+      "path": "LOT-0001/photos/CH1273_m000023.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 669773544,
+      "size": 23016,
+      "compressible": 0,
+      "sourceChecksum": "1b43ec5a4ff980223ae44751d513f8ada6fb818e4b51b2816d8d58d7d12bdf3f"
+    },
+    {
+      "path": "LOT-0001/photos/CH1274_m000024.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3324209305,
+      "size": 14851,
+      "compressible": 0,
+      "sourceChecksum": "04b8ed02e88cba65d2c2af3f8dd8a72e25ad1159e5f1572a7afa2208e0f9a1b4"
+    },
+    {
+      "path": "LOT-0002/photos/CH1275_m000025.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1683677770,
+      "size": 23069,
+      "compressible": 0,
+      "sourceChecksum": "b13e8a76685ed2539aeec98ab3da379f9a19008096ea50aa8512556e50081856"
+    },
+    {
+      "path": "LOT-0002/test-certificates/CH1276_m000026.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 43146235,
+      "size": 43739,
+      "compressible": 0.2,
+      "sourceChecksum": "9868a44b195590f8035eaa4f3b5e002f7d6d8edd1318ab39e9eddac3d3345072"
+    },
+    {
+      "path": "LOT-0002/photos/CH1277_m000027.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2697581996,
+      "size": 23122,
+      "compressible": 0,
+      "sourceChecksum": "652366fce6967e10902f804087580b6f6009d0c41c8477414cd935eadb5ec6c0"
+    },
+    {
+      "path": "LOT-0002/test-certificates/CH1278_m000028.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1057050461,
+      "size": 31275,
+      "compressible": 0.2,
+      "sourceChecksum": "a7bba41d2c84f5e961de31cfb5fc215cdd835cacedc2048eb45bdaabd1f9a0de"
+    },
+    {
+      "path": "LOT-0002/test-certificates/CH1279_m000029.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3711486222,
+      "size": 49620,
+      "compressible": 0.2,
+      "sourceChecksum": "eb220935fdf4e7470bbbdc31a77f23436007dac64dc4d6e11a01bc315153c5e2"
+    },
+    {
+      "path": "LOT-0002/registers/CH1280_m000030.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2070954687,
+      "size": 7113,
+      "compressible": 1,
+      "sourceChecksum": "71093ecf77b058886583d72f3127d62fcbfd0f687cff717081160a658409caac"
+    },
+    {
+      "path": "LOT-0002/photos/CH1281_m000031.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 430423152,
+      "size": 23227,
+      "compressible": 0,
+      "sourceChecksum": "4d783a509909f13a212dfac5570db592558bcf49366dabd95722dc52b8619a7a"
+    },
+    {
+      "path": "LOT-0002/photos/CH1282_m000032.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3084858913,
+      "size": 15062,
+      "compressible": 0,
+      "sourceChecksum": "24e8cb30df7bfc4d92154efe965142610997395f3566bc33df804e8739977a0b"
+    },
+    {
+      "path": "LOT-0002/photos/CH1283_m000033.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1444327378,
+      "size": 23280,
+      "compressible": 0,
+      "sourceChecksum": "481bad953e308e81d769a87966a030a42ad8fc8ccd95f3d98ad0514c0810e4d7"
+    },
+    {
+      "path": "LOT-0002/photos/CH1284_m000034.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4098763139,
+      "size": 15115,
+      "compressible": 0,
+      "sourceChecksum": "8046115b2b7e0f6044108eaf16aad39784e73abc9778fc22fed47e9251887e20"
+    },
+    {
+      "path": "LOT-0002/photos/CH1285_m000035.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2458231604,
+      "size": 23333,
+      "compressible": 0,
+      "sourceChecksum": "6d7f53c30918a83448446e3e0bc756f9edc06b18913e0fdae2c38f589d91cb31"
+    },
+    {
+      "path": "LOT-0002/photos/CH1286_m000036.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 817700069,
+      "size": 15166,
+      "compressible": 0,
+      "sourceChecksum": "d4ca52ffe1b884c6ddb7d8e2fdcba1cb77f95c1a7eaf87f6e154dcc6ec3992af"
+    },
+    {
+      "path": "LOT-0002/photos/CH1287_m000037.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3472135830,
+      "size": 23386,
+      "compressible": 0,
+      "sourceChecksum": "6a5e66fba5acbaa19291581a895d86d255b951a5b7163d045e1e3801bde89506"
+    },
+    {
+      "path": "LOT-0002/photos/CH1288_m000038.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1831604295,
+      "size": 15219,
+      "compressible": 0,
+      "sourceChecksum": "176928a699178ff1c09119957c9f7e4c0a9702b63dae2aaad58b2c884b2ef7fd"
+    },
+    {
+      "path": "LOT-0002/photos/CH1289_m000039.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 191072760,
+      "size": 23438,
+      "compressible": 0,
+      "sourceChecksum": "12da03097fd402df4076ba7cf1c40d7347212ef056d716ebdd2c48d97667046f"
+    },
+    {
+      "path": "LOT-0002/photos/CH1290_m000040.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2845508521,
+      "size": 15273,
+      "compressible": 0,
+      "sourceChecksum": "ed6fe65dd73853b1cf5dfb9d6611d7e532b7dab0b5b4d67edb97c05a546d750f"
+    },
+    {
+      "path": "LOT-0002/photos/CH1291_m000041.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1204976986,
+      "size": 23491,
+      "compressible": 0,
+      "sourceChecksum": "8bcc43722c21ab42a08972a5ea7cb54f319c6ee1faff26d6914903156e4e4f80"
+    },
+    {
+      "path": "LOT-0002/photos/CH1292_m000042.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3859412747,
+      "size": 15326,
+      "compressible": 0,
+      "sourceChecksum": "3853838153d4f00fce5f1bb215960b6d93eb4d927993b545d85cc9c7f1af2531"
+    },
+    {
+      "path": "LOT-0002/photos/CH1293_m000043.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2218881212,
+      "size": 23544,
+      "compressible": 0,
+      "sourceChecksum": "35ed85fc546bbcff79b0fa4a37628159a3129ffbb30e3d76c88f57cd070a376e"
+    },
+    {
+      "path": "LOT-0002/test-certificates/CH1294_m000044.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 578349677,
+      "size": 29871,
+      "compressible": 0.2,
+      "sourceChecksum": "25e9eb4176f95d6fe80b150da280f295fdc14b9018426cb94a86b6dcfe318d5f"
+    },
+    {
+      "path": "LOT-0002/test-certificates/CH1295_m000045.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3232785438,
+      "size": 48216,
+      "compressible": 0.2,
+      "sourceChecksum": "b159162506ef7814779f0d12245bec66c87f24b95a67594fb2c70be57842e88c"
+    },
+    {
+      "path": "LOT-0002/registers/CH1296_m000046.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 1592253903,
+      "size": 3380,
+      "compressible": 1,
+      "sourceChecksum": "8e1cee61597f5d9e1bd67d231055bfe394320175a401cbbf9a686b7e4f9f7ea9"
+    },
+    {
+      "path": "LOT-0002/test-certificates/CH1297_m000047.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 4246689664,
+      "size": 35753,
+      "compressible": 0.2,
+      "sourceChecksum": "7b7ec3c8c3c28014b9c9dadf708b71570ccdbd0bb1bfe24366f751ee7ebca9ca"
+    },
+    {
+      "path": "LOT-0002/photos/CH1298_m000048.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2606158129,
+      "size": 15484,
+      "compressible": 0,
+      "sourceChecksum": "b4d775f1ccd0e0cacf65ba365cf7a6d9ae516a45e9292212ff06f11cb767cf4b"
+    },
+    {
+      "path": "LOT-0002/photos/CH1299_m000049.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 965626594,
+      "size": 23702,
+      "compressible": 0,
+      "sourceChecksum": "affc3a411002905b9deb22a4c318f8644fc532b1d0424f397c878a2f655f6af5"
+    },
+    {
+      "path": "LOT-0003/photos/CH1300_m000050.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3620062355,
+      "size": 15537,
+      "compressible": 0,
+      "sourceChecksum": "69b49f48d9ddc93529f406ed653d71ce08b22cf88c955f561da04a53e43ff19f"
+    },
+    {
+      "path": "LOT-0003/photos/CH1301_m000051.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1979530820,
+      "size": 23755,
+      "compressible": 0,
+      "sourceChecksum": "a58f00f4668c57b3b6e9d3017f9b2366ccdb18949c18651f5d4aece12ee9e491"
+    },
+    {
+      "path": "LOT-0003/photos/CH1302_m000052.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 338999285,
+      "size": 15588,
+      "compressible": 0,
+      "sourceChecksum": "6feb20bb1d5b2f4db930ad5d69822e42ab46742a2a8b7721afd8d2d3a577a2c2"
+    },
+    {
+      "path": "LOT-0003/photos/CH1303_m000053.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2993435046,
+      "size": 23808,
+      "compressible": 0,
+      "sourceChecksum": "b9f9037de226bef4189c936b065457322e59a30ee6f4b0a09c20941b5517b120"
+    },
+    {
+      "path": "LOT-0003/photos/CH1304_m000054.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1352903511,
+      "size": 15641,
+      "compressible": 0,
+      "sourceChecksum": "90a4f35686d37d84b7a4f2e26d5f637cda84210f489e884a0e165be7005e5024"
+    },
+    {
+      "path": "LOT-0003/photos/CH1305_m000055.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4007339272,
+      "size": 23862,
+      "compressible": 0,
+      "sourceChecksum": "a5297fba74bf02398b3e6add3112678201b519a90cb07a39f7cffe6104f25fa7"
+    },
+    {
+      "path": "LOT-0003/photos/CH1306_m000056.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2366807737,
+      "size": 15695,
+      "compressible": 0,
+      "sourceChecksum": "e65db1b78fa0b32fcb079f2ac4412e500b904fab3f42cfb8d00fde13d403eb57"
+    },
+    {
+      "path": "LOT-0003/photos/CH1307_m000057.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 726276202,
+      "size": 23913,
+      "compressible": 0,
+      "sourceChecksum": "019eb047e0bfd7b503a4239f03b1fe01c61877df02ddbd91d3de7c15d725c224"
+    },
+    {
+      "path": "LOT-0003/photos/CH1308_m000058.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3380711963,
+      "size": 15748,
+      "compressible": 0,
+      "sourceChecksum": "cac9ab175151159a21ec641633f8222ad976e2e28a04731a058b8cf28cfe54c2"
+    },
+    {
+      "path": "LOT-0003/photos/CH1309_m000059.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1740180428,
+      "size": 23966,
+      "compressible": 0,
+      "sourceChecksum": "b89ea25a66a514d77e402c2ac01b67f34b8251bad4aae5aac0063f0025d9b3d0"
+    },
+    {
+      "path": "LOT-0003/test-certificates/CH1310_m000060.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 99648893,
+      "size": 28467,
+      "compressible": 0.2,
+      "sourceChecksum": "f61ffb12b388649e638fc3a0e653ce9f2514069c7d08231173b1c65b1b4238af"
+    },
+    {
+      "path": "LOT-0003/test-certificates/CH1311_m000061.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2754084654,
+      "size": 46812,
+      "compressible": 0.2,
+      "sourceChecksum": "b1aef27e9516c08abf66fff8122a4bcedda726bd4c6a6ac14c057ce9ed22ac6e"
+    },
+    {
+      "path": "LOT-0003/registers/CH1312_m000062.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 1113553119,
+      "size": 5792,
+      "compressible": 1,
+      "sourceChecksum": "608796607261daeaafa3b4c801cfde8901c609c8ca714006205d01d13f500676"
+    },
+    {
+      "path": "LOT-0003/test-certificates/CH1313_m000063.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3767988880,
+      "size": 34349,
+      "compressible": 0.2,
+      "sourceChecksum": "35539dadb537424b83eb1961370d556e5d82b8ec6826ea5b7893b21c5e69ef67"
+    },
+    {
+      "path": "LOT-0003/photos/CH1314_m000064.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2127457345,
+      "size": 15906,
+      "compressible": 0,
+      "sourceChecksum": "e749576bc6e5101743027401f680b54094c049c1c310954a7839f5f90061d591"
+    },
+    {
+      "path": "LOT-0003/photos/CH1315_m000065.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 486925810,
+      "size": 24124,
+      "compressible": 0,
+      "sourceChecksum": "191275aa4fc9c2483c2ef5429cfd50ab95042b38b97e524980983af7a3ae6343"
+    },
+    {
+      "path": "LOT-0003/photos/CH1316_m000066.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3141361571,
+      "size": 15959,
+      "compressible": 0,
+      "sourceChecksum": "11d18d511ec22fc23ec59becbbbe94e58dfc12bc068a5dd389cc2d410cc7116a"
+    },
+    {
+      "path": "LOT-0003/photos/CH1317_m000067.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1500830036,
+      "size": 24177,
+      "compressible": 0,
+      "sourceChecksum": "14ba142f18d6bf6d5bf9c8b8b44ea4d8e61a91da0e33306ffe5e5c3835aa494b"
+    },
+    {
+      "path": "LOT-0003/photos/CH1318_m000068.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4155265797,
+      "size": 16012,
+      "compressible": 0,
+      "sourceChecksum": "4cd1a81d08a28a29f0f25b37292e3fa4bf67a0d661a946b9663874a432c6f98d"
+    },
+    {
+      "path": "LOT-0003/photos/CH1319_m000069.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2514734262,
+      "size": 24230,
+      "compressible": 0,
+      "sourceChecksum": "ce68aa5da433d48b0305bbebe30b5ec458e29db3484fbcfe28e53eb21ee4e651"
+    },
+    {
+      "path": "LOT-0003/photos/CH1320_m000070.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 874202727,
+      "size": 16063,
+      "compressible": 0,
+      "sourceChecksum": "ccb8128ad054a47f3d64f9ae48335d17e69396a1710bb24d2e74f75149049abb"
+    },
+    {
+      "path": "LOT-0003/photos/CH1321_m000071.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3528638488,
+      "size": 24284,
+      "compressible": 0,
+      "sourceChecksum": "d680a5c3e2a65c47ee8a4c8b2dff11b538c6a5c5851e899031e6bf24c8cb0cb7"
+    },
+    {
+      "path": "LOT-0003/photos/CH1322_m000072.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1888106953,
+      "size": 16117,
+      "compressible": 0,
+      "sourceChecksum": "f756ed6a0df078cfb3c6c8c149fe55282c4599caf43731ab62175e5ffc325c14"
+    },
+    {
+      "path": "LOT-0003/photos/CH1323_m000073.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 247575418,
+      "size": 24335,
+      "compressible": 0,
+      "sourceChecksum": "e042768ef1eef1f6ae319b86fb9351bc557a81cf483b0d3c711cfbb68acd23d7"
+    },
+    {
+      "path": "LOT-0003/photos/CH1324_m000074.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2902011179,
+      "size": 16170,
+      "compressible": 0,
+      "sourceChecksum": "ea8cfea852011ec70b3ae9e16a88812a930d8e893ecc052fbf4929378c6a0900"
+    },
+    {
+      "path": "LOT-0004/photos/CH1325_m000075.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1261479644,
+      "size": 24388,
+      "compressible": 0,
+      "sourceChecksum": "976ddef0f4b345629361cd7a7401f764d165f919eedfffa00bf5a9beef079bbf"
+    },
+    {
+      "path": "LOT-0004/photos/CH1326_m000076.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3915915405,
+      "size": 16223,
+      "compressible": 0,
+      "sourceChecksum": "dd8012c0026d805f4af02ebdce29a16722a7866ed3215e68f8763b74a6d1273e"
+    },
+    {
+      "path": "LOT-0004/test-certificates/CH1327_m000077.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2275383870,
+      "size": 45408,
+      "compressible": 0.2,
+      "sourceChecksum": "09324b1361a5871e8c82f381a558bea017005a4bf62123708e5ade2ed7ee4fbf"
+    },
+    {
+      "path": "LOT-0004/registers/CH1328_m000078.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 634852335,
+      "size": 2059,
+      "compressible": 1,
+      "sourceChecksum": "c01d9450be8569aeb5b955a12c26bc09789143cf34ec6a82a4fb2a82951e843e"
+    },
+    {
+      "path": "LOT-0004/test-certificates/CH1329_m000079.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3289288096,
+      "size": 32945,
+      "compressible": 0.2,
+      "sourceChecksum": "9858499352a3e176bb4de45b45c4a5aaec4d82a9a8d355336798fc1553e50bcc"
+    },
+    {
+      "path": "LOT-0004/photos/CH1330_m000080.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1648756561,
+      "size": 16328,
+      "compressible": 0,
+      "sourceChecksum": "9728659afe45b8e93f252df5d09ea508a673742636e400eed506a96395f79b0b"
+    },
+    {
+      "path": "LOT-0004/photos/CH1331_m000081.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 8225026,
+      "size": 24546,
+      "compressible": 0,
+      "sourceChecksum": "dc2197c3ec72e69233e6c1a3c6e50ad21bcd86e86e027dc0edf5dd16e2d02e17"
+    },
+    {
+      "path": "LOT-0004/photos/CH1332_m000082.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2662660787,
+      "size": 16381,
+      "compressible": 0,
+      "sourceChecksum": "fe27eaa8e6d3248b870f61371ab34c5eff0c6144f0c192559a6ac1f360cd159f"
+    },
+    {
+      "path": "LOT-0004/photos/CH1333_m000083.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1022129252,
+      "size": 24599,
+      "compressible": 0,
+      "sourceChecksum": "52ca8bf43239805a11ef8797a9fa9e8a94c891549c2400663d99b548d3cc0b1c"
+    },
+    {
+      "path": "LOT-0004/photos/CH1334_m000084.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3676565013,
+      "size": 16434,
+      "compressible": 0,
+      "sourceChecksum": "96712b0c93d4470955bddce28cf314de8d123c47a063ea552a8bb6fe0a9424a6"
+    },
+    {
+      "path": "LOT-0004/photos/CH1335_m000085.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2036033478,
+      "size": 24652,
+      "compressible": 0,
+      "sourceChecksum": "b6e78598fd5a8da93d22f2e3fe9b6135675059e60cd73775eeb045455ed36341"
+    },
+    {
+      "path": "LOT-0004/photos/CH1336_m000086.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 395501943,
+      "size": 16485,
+      "compressible": 0,
+      "sourceChecksum": "8a82df41dc20b25250d7a2c85b4f29ed972d928f47afab212275c21891309ec8"
+    },
+    {
+      "path": "LOT-0004/photos/CH1337_m000087.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3049937704,
+      "size": 24706,
+      "compressible": 0,
+      "sourceChecksum": "b73a3eeb44c219f618eb58a2fa84e2318caca306e68662e39cb605b9d177afb6"
+    },
+    {
+      "path": "LOT-0004/photos/CH1338_m000088.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1409406169,
+      "size": 16539,
+      "compressible": 0,
+      "sourceChecksum": "afe4c1cad4dd2b4e4d4f809a3205c549748092bf7dd2bb3da5a6cb4908bfd52c"
+    },
+    {
+      "path": "LOT-0004/photos/CH1339_m000089.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4063841930,
+      "size": 24759,
+      "compressible": 0,
+      "sourceChecksum": "22be4b7a061ebbec2f4062e278281066bdda684615b29fbe180959a29eec1b62"
+    },
+    {
+      "path": "LOT-0004/photos/CH1340_m000090.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2423310395,
+      "size": 16592,
+      "compressible": 0,
+      "sourceChecksum": "57f7ef58e30cd9d441d40c3759f8f085ba5756a3f76b6e2c40f1597d89d9cbe7"
+    },
+    {
+      "path": "LOT-0004/photos/CH1341_m000091.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 782778860,
+      "size": 24810,
+      "compressible": 0,
+      "sourceChecksum": "a73878a8ecc036d85b621596c0c133388b55c2714c7a236c927a995bebf65b72"
+    },
+    {
+      "path": "LOT-0004/photos/CH1342_m000092.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3437214621,
+      "size": 16645,
+      "compressible": 0,
+      "sourceChecksum": "d5d8a8eef4bcc3eb9536ad81d5ab9d1b60a406f2e921791b9cfb44345ce9d933"
+    },
+    {
+      "path": "LOT-0004/test-certificates/CH1343_m000093.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1796683086,
+      "size": 44004,
+      "compressible": 0.2,
+      "sourceChecksum": "b4da101419e923f310946717b8feb62e89f917f595751af8d4b5ce0fdcbe50ed"
+    },
+    {
+      "path": "LOT-0004/registers/CH1344_m000094.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 156151551,
+      "size": 4471,
+      "compressible": 1,
+      "sourceChecksum": "3752516c1bf3df772912af432f092267c068f3225034557e2f30d8c2b86e92bf"
+    },
+    {
+      "path": "LOT-0004/test-certificates/CH1345_m000095.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2810587312,
+      "size": 31541,
+      "compressible": 0.2,
+      "sourceChecksum": "5a17fc660f551cd423d73cb7103acc0ecb26cb4a61fa61bf78135e9abda21aa7"
+    },
+    {
+      "path": "LOT-0004/photos/CH1346_m000096.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1170055777,
+      "size": 16750,
+      "compressible": 0,
+      "sourceChecksum": "0da0352b3bf4c27c666925931a3bdf7b469accbb60d51fb5bba06a1a93cfea82"
+    },
+    {
+      "path": "LOT-0004/registers/CH1347_m000097.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3824491538,
+      "size": 7070,
+      "compressible": 1,
+      "sourceChecksum": "3f4b3540cf9a83d43e24cfe1db574b90a5c678a1779450327bb38051a2820faa"
+    },
+    {
+      "path": "LOT-0004/photos/CH1348_m000098.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2183960003,
+      "size": 16803,
+      "compressible": 0,
+      "sourceChecksum": "86d1294c8c58fa6270728558b163af743b11ddf84267006cef6500474dee343d"
+    },
+    {
+      "path": "LOT-0004/photos/CH1349_m000099.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 543428468,
+      "size": 25021,
+      "compressible": 0,
+      "sourceChecksum": "b23820d95093cd10ca88c4bc835923d7bcb9afaae79680fc7d7851889b32b9b9"
+    },
+    {
+      "path": "LOT-0005/photos/CH1350_m000100.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3197864229,
+      "size": 16856,
+      "compressible": 0,
+      "sourceChecksum": "ecf473a641618998387f5d2e48423a9666b0dea4d441e08e68f85c4b06abb3dc"
+    },
+    {
+      "path": "LOT-0005/photos/CH1351_m000101.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1557332694,
+      "size": 25074,
+      "compressible": 0,
+      "sourceChecksum": "73b026a1251ab91bc20bfc6caa49698dbf8aab86b184b6c7fc4c1fe2f98c00e4"
+    },
+    {
+      "path": "LOT-0005/photos/CH1352_m000102.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4211768455,
+      "size": 16909,
+      "compressible": 0,
+      "sourceChecksum": "423805f5cdd1ffdf13ca6783a0c9de19d9a1e73a5bf7133804e6bd6622ef81ad"
+    },
+    {
+      "path": "LOT-0005/photos/CH1353_m000103.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2571236920,
+      "size": 25128,
+      "compressible": 0,
+      "sourceChecksum": "9711069bca42f7b427b87d077ac23905018a13bd06b31d3049480b48a23c84b4"
+    },
+    {
+      "path": "LOT-0005/photos/CH1354_m000104.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 930705385,
+      "size": 16961,
+      "compressible": 0,
+      "sourceChecksum": "08690edca2a500d05aa27a25d7f93e1c4e599d60fd7e7f6d2f37952310764dc9"
+    },
+    {
+      "path": "LOT-0005/photos/CH1355_m000105.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3585141146,
+      "size": 25181,
+      "compressible": 0,
+      "sourceChecksum": "d9a439cafce34901d564315b31a803d7d353aa03286c590aa71f7020a31b7e42"
+    },
+    {
+      "path": "LOT-0005/photos/CH1356_m000106.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1944609611,
+      "size": 17014,
+      "compressible": 0,
+      "sourceChecksum": "c3af0a581d54297effc134e6912b74aaf9733902348b8f2ef51b8611454eb8ba"
+    },
+    {
+      "path": "LOT-0005/test-certificates/CH1357_m000107.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 304078076,
+      "size": 55064,
+      "compressible": 0.2,
+      "sourceChecksum": "79c43715577c51f937fdd6516e580f2858bf79f10047b78ac189bb4f8b0ad1aa"
+    },
+    {
+      "path": "LOT-0005/photos/CH1358_m000108.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2958513837,
+      "size": 17067,
+      "compressible": 0,
+      "sourceChecksum": "b156368a99279b9b3edc4add89dee42e2bbb3efaaafe0cfd3cb3955a99f23d1f"
+    },
+    {
+      "path": "LOT-0005/test-certificates/CH1359_m000109.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1317982302,
+      "size": 42600,
+      "compressible": 0.2,
+      "sourceChecksum": "7a959ea4a8551bff508f1e52c8b1bb6675305d61a7063dbc7ffc2cd4365553a3"
+    },
+    {
+      "path": "LOT-0005/photos/CH1360_m000110.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3972418063,
+      "size": 17120,
+      "compressible": 0,
+      "sourceChecksum": "e3397c5279c6d6948cece9472cdfeeb4e1c2e0983cdf4c9da29f7ef480e7f979"
+    },
+    {
+      "path": "LOT-0005/test-certificates/CH1361_m000111.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2331886528,
+      "size": 30137,
+      "compressible": 0.2,
+      "sourceChecksum": "e9bedba402a6d7c5fe11ae016a47d8e59f226f59c57c1d8f2656614a1f3d5a45"
+    },
+    {
+      "path": "LOT-0005/photos/CH1362_m000112.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 691354993,
+      "size": 17172,
+      "compressible": 0,
+      "sourceChecksum": "7e57e75acaf87a7e151d249305404048c9bf23f6c040d968edece182da9c628d"
+    },
+    {
+      "path": "LOT-0005/registers/CH1363_m000113.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3345790754,
+      "size": 3337,
+      "compressible": 1,
+      "sourceChecksum": "fa688305fd11e187dbcf81165cc09b47b2cfe209d38451c736ef1317e3415504"
+    },
+    {
+      "path": "LOT-0005/photos/CH1364_m000114.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1705259219,
+      "size": 17225,
+      "compressible": 0,
+      "sourceChecksum": "6bc7558bb05168b64e1efc63741effd96cd800381b39af3e77635e9ce2416975"
+    },
+    {
+      "path": "LOT-0005/photos/CH1365_m000115.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 64727684,
+      "size": 25443,
+      "compressible": 0,
+      "sourceChecksum": "80ea7c836d5e9caa5b2c58cdadb507e9e16b4ff7507f74882f0b5eba7d3fc0d4"
+    },
+    {
+      "path": "LOT-0005/photos/CH1366_m000116.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2719163445,
+      "size": 17278,
+      "compressible": 0,
+      "sourceChecksum": "421743797214f5c24cad315995a83c103b5f0f647bf1cb94b9ebf5519367a3f2"
+    },
+    {
+      "path": "LOT-0005/photos/CH1367_m000117.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1078631910,
+      "size": 25496,
+      "compressible": 0,
+      "sourceChecksum": "aeef14dc35943b5b4d8ad7491a2b3265eefebe40d342cc310c0f03a91ff21821"
+    },
+    {
+      "path": "LOT-0005/photos/CH1368_m000118.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3733067671,
+      "size": 17331,
+      "compressible": 0,
+      "sourceChecksum": "e0f3859ec5673ac5a982edfceaa882f10cad2abb576a5288380cb4ef5156b9ae"
+    },
+    {
+      "path": "LOT-0005/photos/CH1369_m000119.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2092536136,
+      "size": 25550,
+      "compressible": 0,
+      "sourceChecksum": "297fd25dc4a063e9db93050732e0a5d3c894e5408ec59706762e3b2fbf54696c"
+    },
+    {
+      "path": "LOT-0005/photos/CH1370_m000120.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 452004601,
+      "size": 17383,
+      "compressible": 0,
+      "sourceChecksum": "a910c3e78e6c436e0cc23927dc8c3c6ccc705d769da5cbeb985c23a7474d37db"
+    },
+    {
+      "path": "LOT-0005/photos/CH1371_m000121.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3106440362,
+      "size": 25603,
+      "compressible": 0,
+      "sourceChecksum": "0b020ce26a9c108a0b8b5f404491b26f7cbada4185ad2da601ee657fe28b2b5e"
+    },
+    {
+      "path": "LOT-0005/photos/CH1372_m000122.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1465908827,
+      "size": 17436,
+      "compressible": 0,
+      "sourceChecksum": "d640367e2b17c5e4dcce63b009a93146860f8ff95e90612902353da41a097708"
+    },
+    {
+      "path": "LOT-0005/photos/CH1373_m000123.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4120344588,
+      "size": 25656,
+      "compressible": 0,
+      "sourceChecksum": "eeb07f7c2ec683ed4d4dc9a27dae78839de486500f70a0d8182cf590cb873a25"
+    },
+    {
+      "path": "LOT-0005/photos/CH1374_m000124.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2479813053,
+      "size": 17489,
+      "compressible": 0,
+      "sourceChecksum": "77e1af96e8d4d46501ccce580c36ba96e768583265de1fca66fe203dd4861ae0"
+    },
+    {
+      "path": "LOT-0006/test-certificates/CH1375_m000125.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 839281518,
+      "size": 41196,
+      "compressible": 0.2,
+      "sourceChecksum": "1a98f3f05ca421d987c338b37ce572d290f425eaf56abb662e58880152e125a0"
+    },
+    {
+      "path": "LOT-0006/photos/CH1376_m000126.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3493717279,
+      "size": 17542,
+      "compressible": 0,
+      "sourceChecksum": "8590d5d3f50c330bdbb08709baac7864a91c081426f07d9da703eccc7e7d325d"
+    },
+    {
+      "path": "LOT-0006/test-certificates/CH1377_m000127.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1853185744,
+      "size": 28733,
+      "compressible": 0.2,
+      "sourceChecksum": "a6a056160c13de93d3c0dfd4056ee83b134525e4073400acb2d58b8f6be00d33"
+    },
+    {
+      "path": "LOT-0006/photos/CH1378_m000128.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 212654209,
+      "size": 17594,
+      "compressible": 0,
+      "sourceChecksum": "50adeac948269e22231878a14771775f174a25aac888bb77e3c4c3fdf85fcf8b"
+    },
+    {
+      "path": "LOT-0006/registers/CH1379_m000129.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2867089970,
+      "size": 5749,
+      "compressible": 1,
+      "sourceChecksum": "2dfce045f73d66a812dba89ad1b24552fcf7bede58d3c9e667792b935f999dcd"
+    },
+    {
+      "path": "LOT-0006/photos/CH1380_m000130.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1226558435,
+      "size": 17647,
+      "compressible": 0,
+      "sourceChecksum": "e354721ad692c7e41d5470034a1834f0954aeda0bce9c1dba6b21e654a5ef064"
+    },
+    {
+      "path": "LOT-0006/photos/CH1381_m000131.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3880994196,
+      "size": 25867,
+      "compressible": 0,
+      "sourceChecksum": "63e4437eeb9a1402d25b771d2d7c59e3a4ff9b965203aba7e2ea599130fb2271"
+    },
+    {
+      "path": "LOT-0006/photos/CH1382_m000132.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2240462661,
+      "size": 17700,
+      "compressible": 0,
+      "sourceChecksum": "01c352b133a78e52d5a954de8ed7df7f0d636239745c49989d29d28a13497d4e"
+    },
+    {
+      "path": "LOT-0006/photos/CH1383_m000133.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 599931126,
+      "size": 25918,
+      "compressible": 0,
+      "sourceChecksum": "cac5cfb00160d2e26317902d2f87aefa5de4fef1f9ddc2152375b23f600e5c83"
+    },
+    {
+      "path": "LOT-0006/photos/CH1384_m000134.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3254366887,
+      "size": 17753,
+      "compressible": 0,
+      "sourceChecksum": "7ee19346876aeca9d3db9edf608450fae8f4a3d8ca00c3890d4619f6590cf88c"
+    },
+    {
+      "path": "LOT-0006/photos/CH1385_m000135.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1613835352,
+      "size": 25972,
+      "compressible": 0,
+      "sourceChecksum": "d85052dbe3cdd9cc95acad8c8c58cd323383d8bd18c4c0d531e2d607450a327f"
+    },
+    {
+      "path": "LOT-0006/photos/CH1386_m000136.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4268271113,
+      "size": 17807,
+      "compressible": 0,
+      "sourceChecksum": "7613dd22e213e72172d8f20814ab53be139b5a708b8f28129f90edc54bc9ed3a"
+    },
+    {
+      "path": "LOT-0006/photos/CH1387_m000137.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2627739578,
+      "size": 26025,
+      "compressible": 0,
+      "sourceChecksum": "a573c1842cd25761e24becc647c47186f1e86029220bb1cf794804b705c35fd3"
+    },
+    {
+      "path": "LOT-0006/photos/CH1388_m000138.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 987208043,
+      "size": 17858,
+      "compressible": 0,
+      "sourceChecksum": "957fca37624171e57fa2efc4591abe25492d9476ef0c945ef67a8a35694db6a7"
+    },
+    {
+      "path": "LOT-0006/photos/CH1389_m000139.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3641643804,
+      "size": 26078,
+      "compressible": 0,
+      "sourceChecksum": "ca03aaea2183c3a4925837c2de5f4fd5ac0e850edfea91f256d43cf493446424"
+    },
+    {
+      "path": "LOT-0006/photos/CH1390_m000140.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2001112269,
+      "size": 17911,
+      "compressible": 0,
+      "sourceChecksum": "6633748f55d66373af6ad1edbb08597aacfb80eda7d91c06ae483f358113814c"
+    },
+    {
+      "path": "LOT-0006/test-certificates/CH1391_m000141.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 360580734,
+      "size": 39792,
+      "compressible": 0.2,
+      "sourceChecksum": "bb67fd303076b0648f603bb8faf17151fc835059525102b9de622bf70e6ddcd8"
+    },
+    {
+      "path": "LOT-0006/photos/CH1392_m000142.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3015016495,
+      "size": 17964,
+      "compressible": 0,
+      "sourceChecksum": "834fd154ad8e77295add48c762d11b9b7c21e7b50c9ea669ad39fd12fafd8c07"
+    },
+    {
+      "path": "LOT-0006/test-certificates/CH1393_m000143.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1374484960,
+      "size": 27329,
+      "compressible": 0.2,
+      "sourceChecksum": "efdc44f80b449d54ab8ef98cfa768d287b1fe512f08b5fbb43ce9703d1020d16"
+    },
+    {
+      "path": "LOT-0006/test-certificates/CH1394_m000144.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 4028920721,
+      "size": 45674,
+      "compressible": 0.2,
+      "sourceChecksum": "9f489826a771965a1ea0f8aa048a63984e9854e18d149665f7d05390d7293014"
+    },
+    {
+      "path": "LOT-0006/registers/CH1395_m000145.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2388389186,
+      "size": 8161,
+      "compressible": 1,
+      "sourceChecksum": "a5cfdcb82754cee49ff32944cdbbb4c9832e7d1ce7813dfd4f843b9a1e16da51"
+    },
+    {
+      "path": "LOT-0006/photos/CH1396_m000146.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 747857651,
+      "size": 18069,
+      "compressible": 0,
+      "sourceChecksum": "6e12068be4797c7ff733f037729eaa48211b4ea38c8aa37152fc9ab8d04526a5"
+    },
+    {
+      "path": "LOT-0006/photos/CH1397_m000147.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3402293412,
+      "size": 26289,
+      "compressible": 0,
+      "sourceChecksum": "6aab264cce01e81f9f49e8b6772efd7f9cf4baa87e4a2bbbd003739f165dd8de"
+    },
+    {
+      "path": "LOT-0006/photos/CH1398_m000148.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1761761877,
+      "size": 18122,
+      "compressible": 0,
+      "sourceChecksum": "6121ee4d59c4a53f497fe74cb1d18e90e36c9c072c2c7e20b54aec75ec7bb04c"
+    },
+    {
+      "path": "LOT-0006/photos/CH1399_m000149.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 121230342,
+      "size": 26340,
+      "compressible": 0,
+      "sourceChecksum": "9c5d1ae5028cb84eef875ab679820e98db76901cc6acab763a1d6650ede50641"
+    },
+    {
+      "path": "LOT-0007/photos/CH1400_m000150.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2775666103,
+      "size": 18175,
+      "compressible": 0,
+      "sourceChecksum": "e999c1afa269527bfb58ae6cc8cfdd68b57f924af626eff8cdd23a03765d5b09"
+    },
+    {
+      "path": "LOT-0007/photos/CH1401_m000151.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1135134568,
+      "size": 26394,
+      "compressible": 0,
+      "sourceChecksum": "5a930f54c0983dd687a2bbe6dceac0b8f2768d61095ebb814753c973bb49d39d"
+    },
+    {
+      "path": "LOT-0007/photos/CH1402_m000152.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3789570329,
+      "size": 18229,
+      "compressible": 0,
+      "sourceChecksum": "8e227d05b925c032563465ac03dbf41848045e3d5196232d187d32b5c1088766"
+    },
+    {
+      "path": "LOT-0007/photos/CH1403_m000153.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2149038794,
+      "size": 26447,
+      "compressible": 0,
+      "sourceChecksum": "5b31f275b609558c439cb36971a7309a46d57006e6b0b9e1ab2d7f71b55a2906"
+    },
+    {
+      "path": "LOT-0007/photos/CH1404_m000154.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 508507259,
+      "size": 18280,
+      "compressible": 0,
+      "sourceChecksum": "e78cee7298e89e036d8e2d9da8fac7b9be5a38684a16ec7f86cf38a3d03d71af"
+    },
+    {
+      "path": "LOT-0007/photos/CH1405_m000155.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3162943020,
+      "size": 26500,
+      "compressible": 0,
+      "sourceChecksum": "8fef85c8e00fc8839fb406bae44474baac353edf77e3606ce5ce1f920590a628"
+    },
+    {
+      "path": "LOT-0007/photos/CH1406_m000156.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1522411485,
+      "size": 18333,
+      "compressible": 0,
+      "sourceChecksum": "b3c818f5e42290e707d1cdefe417a1386efca4e76ac13e514d9d3759e42adf66"
+    },
+    {
+      "path": "LOT-0007/photos/CH1407_m000157.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4176847246,
+      "size": 26553,
+      "compressible": 0,
+      "sourceChecksum": "c6027f59297d70b7efc9052e0da7987b7d3e28d1c200e3f7a847fc8ed29fde49"
+    },
+    {
+      "path": "LOT-0007/photos/CH1408_m000158.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2536315711,
+      "size": 18386,
+      "compressible": 0,
+      "sourceChecksum": "8b57c54588b3b6d5b80d49b5e674262ec59624b9bcd646c4b0711e0d5e59c83d"
+    },
+    {
+      "path": "LOT-0007/test-certificates/CH1409_m000159.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 895784176,
+      "size": 25925,
+      "compressible": 0.2,
+      "sourceChecksum": "d2da255633db062b514a659cd641726aab7bc36ff98b44b726615bfc4dcb3202"
+    },
+    {
+      "path": "LOT-0007/test-certificates/CH1410_m000160.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3550219937,
+      "size": 44270,
+      "compressible": 0.2,
+      "sourceChecksum": "d3939c1699b77b89a518c7fde2d17c453f9e1072619cea77ab81c0dab3ada27b"
+    },
+    {
+      "path": "LOT-0007/registers/CH1411_m000161.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 1909688402,
+      "size": 4428,
+      "compressible": 1,
+      "sourceChecksum": "9ec7e679cf581d80407cdb450ffcd6a66c6ef7ce664298481b6df7727c916965"
+    },
+    {
+      "path": "LOT-0007/photos/CH1412_m000162.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 269156867,
+      "size": 18491,
+      "compressible": 0,
+      "sourceChecksum": "7697741a4a1e74e49c1bfa43acaa01eb21ab1e9ffed5b251d67f3f794c61bf65"
+    },
+    {
+      "path": "LOT-0007/photos/CH1413_m000163.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2923592628,
+      "size": 26711,
+      "compressible": 0,
+      "sourceChecksum": "3783d6479aec0db3aaa998b9bdfe8af1035631c8441745e7c4627b2b1dad33a6"
+    },
+    {
+      "path": "LOT-0007/photos/CH1414_m000164.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1283061093,
+      "size": 18544,
+      "compressible": 0,
+      "sourceChecksum": "96430dd374f60a2f039cb7b00d27f74422edf1c02edcf6dbf358437189cbfcf5"
+    },
+    {
+      "path": "LOT-0007/photos/CH1415_m000165.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3937496854,
+      "size": 26764,
+      "compressible": 0,
+      "sourceChecksum": "202bdb2d9d6c3d7acd69cf993560037b16f0da2b0b3c4905fcc495f2257e4c75"
+    },
+    {
+      "path": "LOT-0007/photos/CH1416_m000166.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2296965319,
+      "size": 18597,
+      "compressible": 0,
+      "sourceChecksum": "9f8e5b532cbfcb8d8760c2ca1a7530c235f5a75d6c6008ec64767f31af02b650"
+    },
+    {
+      "path": "LOT-0007/photos/CH1417_m000167.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 656433784,
+      "size": 26816,
+      "compressible": 0,
+      "sourceChecksum": "cd43099b9d1b302ce8561a970956ab83817e2b850cd4f37a15095075f4296086"
+    },
+    {
+      "path": "LOT-0007/photos/CH1418_m000168.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3310869545,
+      "size": 18651,
+      "compressible": 0,
+      "sourceChecksum": "96b70078ab9b2ba7dcd35b8c1ada32e0310fb64e5273b195548f55a6184748ea"
+    },
+    {
+      "path": "LOT-0007/photos/CH1419_m000169.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1670338010,
+      "size": 26869,
+      "compressible": 0,
+      "sourceChecksum": "0da5e6f2be6a87255aae47ab03698ca7d9f8a522f1b6c9167b1f08226f3e8476"
+    },
+    {
+      "path": "LOT-0007/photos/CH1420_m000170.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 29806475,
+      "size": 18702,
+      "compressible": 0,
+      "sourceChecksum": "d8b86ec02b0b57787ddcd8ac51afcbe60e38788a3adec27ca8aa14c8830c6faf"
+    },
+    {
+      "path": "LOT-0007/photos/CH1421_m000171.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2684242236,
+      "size": 26922,
+      "compressible": 0,
+      "sourceChecksum": "61309d0d2d8fde35007f1124ec480c954c039cc69042cbd6c685fd5ca35c0e47"
+    },
+    {
+      "path": "LOT-0007/photos/CH1422_m000172.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1043710701,
+      "size": 18755,
+      "compressible": 0,
+      "sourceChecksum": "98e7b6c785fd5fc0998c8832a3153dfd9304b0fa4c60c69468722a68bcdf28dd"
+    },
+    {
+      "path": "LOT-0007/photos/CH1423_m000173.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3698146462,
+      "size": 26975,
+      "compressible": 0,
+      "sourceChecksum": "12b92e685be4eee3aa7f6d34523161ed2f2d275af06a8c79bef469cdffa1de92"
+    },
+    {
+      "path": "LOT-0007/photos/CH1424_m000174.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2057614927,
+      "size": 18808,
+      "compressible": 0,
+      "sourceChecksum": "d4f68f327e25c6b5726a2db8856d49b1984d0b759b82ffdb0bcd514848958995"
+    },
+    {
+      "path": "LOT-0008/test-certificates/CH1425_m000175.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 417083392,
+      "size": 57290,
+      "compressible": 0.2,
+      "sourceChecksum": "a1c8ddf2dbdfc6ce4f0f8116c0f02833c6420146cd1bde939a2c960476710590"
+    },
+    {
+      "path": "LOT-0008/test-certificates/CH1426_m000176.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3071519153,
+      "size": 42866,
+      "compressible": 0.2,
+      "sourceChecksum": "12f02fe6711b841cb944374e8f98e7bde2760f0abea46d490ac3ca6b777d2969"
+    },
+    {
+      "path": "LOT-0008/registers/CH1427_m000177.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 1430987618,
+      "size": 6840,
+      "compressible": 1,
+      "sourceChecksum": "40cb6776a5e1e91971bdfda0fdc4905d531e958fa4c123b8824eb04f34c7793d"
+    },
+    {
+      "path": "LOT-0008/test-certificates/CH1428_m000178.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 4085423379,
+      "size": 30402,
+      "compressible": 0.2,
+      "sourceChecksum": "be1ed9c246e9ebe7ca39b1ae52c71d4c7eddaeecdeffbb904dc07da19fd731f1"
+    },
+    {
+      "path": "LOT-0008/photos/CH1429_m000179.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2444891844,
+      "size": 27133,
+      "compressible": 0,
+      "sourceChecksum": "94ac9bd71cd8ee2240c84056827122e673200ae8232f419b6bcee1e2a3d03f01"
+    },
+    {
+      "path": "LOT-0008/photos/CH1430_m000180.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 804360309,
+      "size": 18966,
+      "compressible": 0,
+      "sourceChecksum": "fd1c0fcb3896fd60a712cf01087d51985af7a06f2a807d2e968cf00d7d9f84be"
+    },
+    {
+      "path": "LOT-0008/photos/CH1431_m000181.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3458796070,
+      "size": 27186,
+      "compressible": 0,
+      "sourceChecksum": "4e1532a767487fcd6cd7c013872779cd8d5fdb709f6dcac051f5ae108d107536"
+    },
+    {
+      "path": "LOT-0008/photos/CH1432_m000182.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1818264535,
+      "size": 19019,
+      "compressible": 0,
+      "sourceChecksum": "3b70f6c9a0cbde6bbc298be72da212210dde3cb9146f2bd74a848cb06fe44531"
+    },
+    {
+      "path": "LOT-0008/photos/CH1433_m000183.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 177733000,
+      "size": 27238,
+      "compressible": 0,
+      "sourceChecksum": "f3c218210bfbd8ccb5c0c52bc44c8135a5cf4c15111ab0e12e5b7e936034d72a"
+    },
+    {
+      "path": "LOT-0008/photos/CH1434_m000184.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2832168761,
+      "size": 19073,
+      "compressible": 0,
+      "sourceChecksum": "9b52818d98270503cf53f6572823d09cbe391a8c1950263cdf88d51bc28f1f51"
+    },
+    {
+      "path": "LOT-0008/photos/CH1435_m000185.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1191637226,
+      "size": 27291,
+      "compressible": 0,
+      "sourceChecksum": "1122091f9024721f1e1906e2fead67d857bb66ef46a03f4ecad09cf2d2dff7bf"
+    },
+    {
+      "path": "LOT-0008/photos/CH1436_m000186.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3846072987,
+      "size": 19126,
+      "compressible": 0,
+      "sourceChecksum": "1740e3db34c66e6315e122c6dc07e83bc8b2d7fe9dcf13fbb141c7e4e66dfce6"
+    },
+    {
+      "path": "LOT-0008/photos/CH1437_m000187.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2205541452,
+      "size": 27344,
+      "compressible": 0,
+      "sourceChecksum": "0f01aa26b055c037e8ef1edfa208d9df4c5a2fee8be0f2146e11ce0fc2b09e96"
+    },
+    {
+      "path": "LOT-0008/photos/CH1438_m000188.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 565009917,
+      "size": 19177,
+      "compressible": 0,
+      "sourceChecksum": "dc61fec8c16c0bc643f5392b61bc3d7a0b4f21aefa7709476343f5f2269b5281"
+    },
+    {
+      "path": "LOT-0008/photos/CH1439_m000189.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3219445678,
+      "size": 27397,
+      "compressible": 0,
+      "sourceChecksum": "edce4a5c3363538a91243bb2d8a5385adda01f7f2f2d8a67fa69117af0f04b14"
+    },
+    {
+      "path": "LOT-0008/photos/CH1440_m000190.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1578914143,
+      "size": 19230,
+      "compressible": 0,
+      "sourceChecksum": "e7ebdc9e7a3191404a9e751e99168e0495c5fdd3bf8f4de24d6bd06b73332a69"
+    },
+    {
+      "path": "LOT-0008/photos/CH1441_m000191.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4233349904,
+      "size": 27451,
+      "compressible": 0,
+      "sourceChecksum": "bd8ec566062dd96aeec3bd700b48e8888afd276693774241242bb80beb7d69d7"
+    },
+    {
+      "path": "LOT-0008/test-certificates/CH1442_m000192.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2592818369,
+      "size": 41462,
+      "compressible": 0.2,
+      "sourceChecksum": "a56640385b93ebba3fc229a7f1da739081901cfa183d172586ed9caaa2695e9e"
+    },
+    {
+      "path": "LOT-0008/registers/CH1443_m000193.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 952286834,
+      "size": 3107,
+      "compressible": 1,
+      "sourceChecksum": "5c7df7afd19384a1bc91f1a1328b79ac4e8e225194c9f6dfe9aec0d825d787b8"
+    },
+    {
+      "path": "LOT-0008/test-certificates/CH1444_m000194.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3606722595,
+      "size": 28998,
+      "compressible": 0.2,
+      "sourceChecksum": "e168b3a52a40bba9c04f143b1b0f3885abb93e33d52538d5cc4e030c9eb82667"
+    },
+    {
+      "path": "LOT-0008/photos/CH1445_m000195.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1966191060,
+      "size": 27555,
+      "compressible": 0,
+      "sourceChecksum": "5761b575b61dcaeafc139c4e256bdbcf2c3f5aae072a6508e63ffac5f8b9d18b"
+    },
+    {
+      "path": "LOT-0008/photos/CH1446_m000196.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 325659525,
+      "size": 19388,
+      "compressible": 0,
+      "sourceChecksum": "ea25fa7938108cbf136f6b8a695be50d27e40957baa6a3d29656cd0087e31b43"
+    },
+    {
+      "path": "LOT-0008/photos/CH1447_m000197.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2980095286,
+      "size": 27608,
+      "compressible": 0,
+      "sourceChecksum": "ee6d327381d0609e536d3ba247fb446d235a98cbdc4ab3385931ad263c8571df"
+    },
+    {
+      "path": "LOT-0008/photos/CH1448_m000198.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1339563751,
+      "size": 19441,
+      "compressible": 0,
+      "sourceChecksum": "a72e06bf563dc4ab58a4e6c83cf4f096aafa772937b08665186c7c9d06b943d8"
+    },
+    {
+      "path": "LOT-0008/photos/CH1449_m000199.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3993999512,
+      "size": 27662,
+      "compressible": 0,
+      "sourceChecksum": "2210d53352c6c28f6968027451b6645e1647bb2085369523303cd588b65c2a2e"
+    },
+    {
+      "path": "LOT-0009/photos/CH1450_m000200.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2353467977,
+      "size": 19495,
+      "compressible": 0,
+      "sourceChecksum": "2e24ecf6fdace360e71bb47d00a39976a883e88b9855edea796a18aa490152c2"
+    },
+    {
+      "path": "LOT-0009/photos/CH1451_m000201.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 712936442,
+      "size": 27713,
+      "compressible": 0,
+      "sourceChecksum": "3d5bdb44a0b574133c5999156e90a2975760e96a19982944044b03405752e4c6"
+    },
+    {
+      "path": "LOT-0009/photos/CH1452_m000202.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3367372203,
+      "size": 19548,
+      "compressible": 0,
+      "sourceChecksum": "ee28106a60eb6004fb0a10cb00f6522d306738627a7040720100dc36ae96c972"
+    },
+    {
+      "path": "LOT-0009/photos/CH1453_m000203.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1726840668,
+      "size": 27766,
+      "compressible": 0,
+      "sourceChecksum": "e76503b49cd3732cf4113344230ee2fff8a8d42a483da1fab0188da8a54751b9"
+    },
+    {
+      "path": "LOT-0009/photos/CH1454_m000204.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 86309133,
+      "size": 19599,
+      "compressible": 0,
+      "sourceChecksum": "1c6a0bf1e965bdb72c68ffa9a6a571a46db1dcd2cb6dbac8d39b875564de3cbd"
+    },
+    {
+      "path": "LOT-0009/photos/CH1455_m000205.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2740744894,
+      "size": 27819,
+      "compressible": 0,
+      "sourceChecksum": "bf77a48ab4356ce5c0fee4e66657d4fb046589e568dc6f0bc40b59e8309c8f48"
+    },
+    {
+      "path": "LOT-0009/photos/CH1456_m000206.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1100213359,
+      "size": 19652,
+      "compressible": 0,
+      "sourceChecksum": "b840ecec2efd2f77830bbd5ae422dd9d859151c2778f4bd9ece7a6625efe0ffb"
+    },
+    {
+      "path": "LOT-0009/photos/CH1457_m000207.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3754649120,
+      "size": 27873,
+      "compressible": 0,
+      "sourceChecksum": "4d6372d0f27a481e2aa524ce736dc438a7c5672156b78cc5c2abafb5c8c66d39"
+    },
+    {
+      "path": "LOT-0009/test-certificates/CH1458_m000208.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2114117585,
+      "size": 40058,
+      "compressible": 0.2,
+      "sourceChecksum": "b49d742297b28283c0f267c268027a63fea3d6952cfd664cae2121356983f8c7"
+    },
+    {
+      "path": "LOT-0009/registers/CH1459_m000209.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 473586050,
+      "size": 5519,
+      "compressible": 1,
+      "sourceChecksum": "ecc931f5482e66ea64cfffc2593d554788d1b2005a096c5f9137c9974c367fcd"
+    },
+    {
+      "path": "LOT-0009/test-certificates/CH1460_m000210.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3128021811,
+      "size": 27594,
+      "compressible": 0.2,
+      "sourceChecksum": "6fb4a12ce273abf064bd9350b6f6814da018a8e04cdf5530e965ddfdd59355d5"
+    },
+    {
+      "path": "LOT-0009/photos/CH1461_m000211.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1487490276,
+      "size": 27977,
+      "compressible": 0,
+      "sourceChecksum": "b5c73bd12eee5ec9175a59da05eb3e97e7239ddd3ca9697f562fb26eaef1b21f"
+    },
+    {
+      "path": "LOT-0009/registers/CH1462_m000212.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 4141926037,
+      "size": 8117,
+      "compressible": 1,
+      "sourceChecksum": "4a11d6774f93e5d737fe4b89774514793eb72a319df05857e5abc1857b41b04b"
+    },
+    {
+      "path": "LOT-0009/photos/CH1463_m000213.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2501394502,
+      "size": 28030,
+      "compressible": 0,
+      "sourceChecksum": "b2a21c8417f893d4d3013de0c35691a14ad97460ff0cd76437fd4d359c800e7e"
+    },
+    {
+      "path": "LOT-0009/photos/CH1464_m000214.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 860862967,
+      "size": 19863,
+      "compressible": 0,
+      "sourceChecksum": "fd5eaed2758c687aede21e81b26c3909afb947c1c375857593c8f9c28f4dfa6b"
+    },
+    {
+      "path": "LOT-0009/photos/CH1465_m000215.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3515298728,
+      "size": 28084,
+      "compressible": 0,
+      "sourceChecksum": "55eb0afbd160d3e7b683fd483229dd7ee0f6e590154b1afab41297dfb2190b0d"
+    },
+    {
+      "path": "LOT-0009/photos/CH1466_m000216.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1874767193,
+      "size": 19917,
+      "compressible": 0,
+      "sourceChecksum": "5f81568bdc4a11af97ff740290b8e85b0790d3ccbf36439ba98d5ba775a3482f"
+    },
+    {
+      "path": "LOT-0009/photos/CH1467_m000217.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 234235658,
+      "size": 28135,
+      "compressible": 0,
+      "sourceChecksum": "16c1da02f78127481b7256cbf949f137d52b58808f16ed872684a71c2706008b"
+    },
+    {
+      "path": "LOT-0009/photos/CH1468_m000218.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2888671419,
+      "size": 19970,
+      "compressible": 0,
+      "sourceChecksum": "041c5295e7ec9dceb42e1587b158ebfb5ad2538cd51f2d1196b571c97730abdf"
+    },
+    {
+      "path": "LOT-0009/photos/CH1469_m000219.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1248139884,
+      "size": 28188,
+      "compressible": 0,
+      "sourceChecksum": "130365b206d278bb687cdce211a92e3bf0445f17d9e0d0f6995ecbf02bf00740"
+    },
+    {
+      "path": "LOT-0009/photos/CH1470_m000220.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3902575645,
+      "size": 20023,
+      "compressible": 0,
+      "sourceChecksum": "c5c98f62830dcfcb8c97b8cfca6d320ad9221c4cfa6024c8181d6d16cf475833"
+    },
+    {
+      "path": "LOT-0009/photos/CH1471_m000221.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2262044110,
+      "size": 28241,
+      "compressible": 0,
+      "sourceChecksum": "dfa1f8268c8b8fbcef78efede5b89c65919ba4bb6699ea72974d78a39683433d"
+    },
+    {
+      "path": "LOT-0009/photos/CH1472_m000222.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 621512575,
+      "size": 20074,
+      "compressible": 0,
+      "sourceChecksum": "34b5dff916ee887e65d7505d1a98e239c0d50f7ffc3445cc7aebcb9b14cd2378"
+    },
+    {
+      "path": "LOT-0009/photos/CH1473_m000223.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3275948336,
+      "size": 28295,
+      "compressible": 0,
+      "sourceChecksum": "d797acf9bad678f5fcd3d73bb7769461c8b7603adac3db43468fdaf298ef8e98"
+    },
+    {
+      "path": "LOT-0009/test-certificates/CH1474_m000224.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1635416801,
+      "size": 38654,
+      "compressible": 0.2,
+      "sourceChecksum": "a9a61395797d38c4da900f8c6caf0129db88bf724db0288e7f01af2e321a3c97"
+    },
+    {
+      "path": "LOT-0010/photos/CH1475_m000225.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4289852562,
+      "size": 28348,
+      "compressible": 0,
+      "sourceChecksum": "f48c0e0ca3edc9a2c876806b4c58d1d2fb0d277b3f8eb32b3bc30f26e37b2d7a"
+    },
+    {
+      "path": "LOT-0010/test-certificates/CH1476_m000226.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2649321027,
+      "size": 26190,
+      "compressible": 0.2,
+      "sourceChecksum": "1854a5541f4f7611f2cb87ba5d527169a3d772b9d3d91150b8bbf1c0686e1b06"
+    },
+    {
+      "path": "LOT-0010/photos/CH1477_m000227.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1008789492,
+      "size": 28399,
+      "compressible": 0,
+      "sourceChecksum": "c60d7d10fd385788188e0a073786b01b0e8171c53c7d50683bedee9d61db9d13"
+    },
+    {
+      "path": "LOT-0010/registers/CH1478_m000228.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3663225253,
+      "size": 4384,
+      "compressible": 1,
+      "sourceChecksum": "6da84bccc170775562fe2efd7cebb303c5bb1cce2f329436ace963d49e4c0b05"
+    },
+    {
+      "path": "LOT-0010/photos/CH1479_m000229.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2022693718,
+      "size": 28452,
+      "compressible": 0,
+      "sourceChecksum": "7422818a05a6f4cf7d324a63bf9af706a4b7f81cfb665e972b20d70e295ca4e0"
+    },
+    {
+      "path": "LOT-0010/photos/CH1480_m000230.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 382162183,
+      "size": 20285,
+      "compressible": 0,
+      "sourceChecksum": "773ee93dfdae720aef1a892ed4d7cc294e04b31d85f0e74d799e0b9ceca4eef1"
+    },
+    {
+      "path": "LOT-0010/photos/CH1481_m000231.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3036597944,
+      "size": 28506,
+      "compressible": 0,
+      "sourceChecksum": "d42cdc3d44ffd2932dfc5da8a3b1933d05816aff616a1bea4953ff1274204e92"
+    },
+    {
+      "path": "LOT-0010/photos/CH1482_m000232.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1396066409,
+      "size": 20339,
+      "compressible": 0,
+      "sourceChecksum": "79dac06bf520b7b5e0c2335da5e90ee0abd04e9b0dc2319fed4a12a5fb5f665d"
+    },
+    {
+      "path": "LOT-0010/photos/CH1483_m000233.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4050502170,
+      "size": 28559,
+      "compressible": 0,
+      "sourceChecksum": "a70bbed8947a820d9bc2f16b17cf3aabbc21e200cf7df1876f805d57c579d836"
+    },
+    {
+      "path": "LOT-0010/photos/CH1484_m000234.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2409970635,
+      "size": 20392,
+      "compressible": 0,
+      "sourceChecksum": "33695f7462607909741903a3f87d2e297545510090a7cfacf7b6bb653a8f3941"
+    },
+    {
+      "path": "LOT-0010/photos/CH1485_m000235.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 769439100,
+      "size": 28610,
+      "compressible": 0,
+      "sourceChecksum": "c8ffa780d2629676a4b5720d6a9af54a43b28fc9f0067df1d492ed60de518df6"
+    },
+    {
+      "path": "LOT-0010/photos/CH1486_m000236.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3423874861,
+      "size": 20445,
+      "compressible": 0,
+      "sourceChecksum": "2e8605f25e05dd6d8c5ba339b5cec3dd63140094fc87ff6ba1cb780a3c7bd8f8"
+    },
+    {
+      "path": "LOT-0010/photos/CH1487_m000237.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1783343326,
+      "size": 28663,
+      "compressible": 0,
+      "sourceChecksum": "d7fc411d2852444d751be98207f6ab9e590d79885a47afc372eee31d2e729518"
+    },
+    {
+      "path": "LOT-0010/test-certificates/CH1488_m000238.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 142811791,
+      "size": 49713,
+      "compressible": 0.2,
+      "sourceChecksum": "4714d614bf03e74d0f5611c540dc10ac5a53d85176865151bd9b0bdd8ff92d7a"
+    },
+    {
+      "path": "LOT-0010/photos/CH1489_m000239.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2797247552,
+      "size": 12332,
+      "compressible": 0,
+      "sourceChecksum": "f119fa8595132f902ffa116950b6fb667a558c9e1097187954cf62cb67e4c003"
+    },
+    {
+      "path": "LOT-0010/test-certificates/CH1490_m000240.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1156716017,
+      "size": 37250,
+      "compressible": 0.2,
+      "sourceChecksum": "ab5a538e38699dff17cd0e9ddcef4e102eb08deb440fadef49c1fce2e9220210"
+    },
+    {
+      "path": "LOT-0010/photos/CH1491_m000241.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3811151778,
+      "size": 12385,
+      "compressible": 0,
+      "sourceChecksum": "99fe5f7643c646bbaedce4c459860ba5bd0fc5bed2ccb4f5ff0938670f71d99c"
+    },
+    {
+      "path": "LOT-0010/test-certificates/CH1492_m000242.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2170620243,
+      "size": 24786,
+      "compressible": 0.2,
+      "sourceChecksum": "fb64bc9d192cb97c46de6099fb7a6d47793f464151b400a74e0a7b9ce4b7d909"
+    },
+    {
+      "path": "LOT-0010/photos/CH1493_m000243.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 530088708,
+      "size": 12436,
+      "compressible": 0,
+      "sourceChecksum": "09b56c57aca2a90d1cc0e76bca295b6c78edf30ff799fa77af6fd806c35dd199"
+    },
+    {
+      "path": "LOT-0010/registers/CH1494_m000244.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3184524469,
+      "size": 6796,
+      "compressible": 1,
+      "sourceChecksum": "bbcc4754fc129537e952377a99bb4bea4082f0135eb1d693c2f4fa70c70327ec"
+    },
+    {
+      "path": "LOT-0010/photos/CH1495_m000245.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1543992934,
+      "size": 12489,
+      "compressible": 0,
+      "sourceChecksum": "ae90087f6b9c4781fffcb7f2e77e2cc83b71095e17806c108b5b17321ed7191c"
+    },
+    {
+      "path": "LOT-0010/photos/CH1496_m000246.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4198428695,
+      "size": 20709,
+      "compressible": 0,
+      "sourceChecksum": "990e4445a6d7a3d8c358f7fe46e5d2e8e59785e5cc8fd86e257f2daaed04de2b"
+    },
+    {
+      "path": "LOT-0010/photos/CH1497_m000247.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2557897160,
+      "size": 12543,
+      "compressible": 0,
+      "sourceChecksum": "8b03b3b207181220f323e61790445abf9ad7cfdd9fc15b3cd3efb843f111a53b"
+    },
+    {
+      "path": "LOT-0010/photos/CH1498_m000248.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 917365625,
+      "size": 20761,
+      "compressible": 0,
+      "sourceChecksum": "725cd1b511dd691f27d5749b97f635628fbc3ead190ad8b69f4c1940159d150c"
+    },
+    {
+      "path": "LOT-0010/photos/CH1499_m000249.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3571801386,
+      "size": 12596,
+      "compressible": 0,
+      "sourceChecksum": "3910e2fa6778108ba48bbf70063ed72144266203f3fae317896a488f6a5eca2a"
+    },
+    {
+      "path": "LOT-0011/photos/CH1500_m000250.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1931269851,
+      "size": 20814,
+      "compressible": 0,
+      "sourceChecksum": "7937db3a360ed0f0bb135bf323f9309029b18e438fc0006c1d0fe95e43af11fc"
+    },
+    {
+      "path": "LOT-0011/photos/CH1501_m000251.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 290738316,
+      "size": 12647,
+      "compressible": 0,
+      "sourceChecksum": "1f69a5516c78fc6d603ba91486bfa96b57aa2d07c3235406da95234d2387eb96"
+    },
+    {
+      "path": "LOT-0011/photos/CH1502_m000252.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2945174077,
+      "size": 20867,
+      "compressible": 0,
+      "sourceChecksum": "d677fdb6d64dd185beb28a449bc673948b2c928e3b22470276bd3c435822a75e"
+    },
+    {
+      "path": "LOT-0011/photos/CH1503_m000253.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1304642542,
+      "size": 12700,
+      "compressible": 0,
+      "sourceChecksum": "e9d5ca915122122b748581ba6b376a8f5058574dd1793144cf95201d285960a7"
+    },
+    {
+      "path": "LOT-0011/photos/CH1504_m000254.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3959078303,
+      "size": 20920,
+      "compressible": 0,
+      "sourceChecksum": "a6eece797683c35d94db8c1b65ba1c77c56f1ebb748c6e0b0b1c1e9f716606aa"
+    },
+    {
+      "path": "LOT-0011/photos/CH1505_m000255.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2318546768,
+      "size": 12754,
+      "compressible": 0,
+      "sourceChecksum": "597de0d4d3e15b9fd67032c14a342c410d2ff9b3b97d3380b77911c73f8dac5a"
+    },
+    {
+      "path": "LOT-0011/test-certificates/CH1506_m000256.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 678015233,
+      "size": 35846,
+      "compressible": 0.2,
+      "sourceChecksum": "edc0a67f61e3dc49a2dc6a680419534a5909372aa43f93772082d864e41c7247"
+    },
+    {
+      "path": "LOT-0011/photos/CH1507_m000257.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3332450994,
+      "size": 12807,
+      "compressible": 0,
+      "sourceChecksum": "0c235e0c068150a8ebce4bfba8dcd1fcb2bb3570400e0ed1acf97e9e3f41a019"
+    },
+    {
+      "path": "LOT-0011/test-certificates/CH1508_m000258.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1691919459,
+      "size": 56151,
+      "compressible": 0.2,
+      "sourceChecksum": "a6a122135abf32b57c3d715dffb9e055e2fafc4746835f6ff5591a7cda095776"
+    },
+    {
+      "path": "LOT-0011/photos/CH1509_m000259.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 51387924,
+      "size": 12858,
+      "compressible": 0,
+      "sourceChecksum": "a50f68be78352082dfcbb5fd9b35dc54b36bfc99011df463fae4e4e15c6be78d"
+    },
+    {
+      "path": "LOT-0011/registers/CH1510_m000260.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2705823685,
+      "size": 3063,
+      "compressible": 1,
+      "sourceChecksum": "5edb0b0307b80151cd250450c5e5090643dac0ad9601c0289696cadbc624727d"
+    },
+    {
+      "path": "LOT-0011/photos/CH1511_m000261.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1065292150,
+      "size": 12911,
+      "compressible": 0,
+      "sourceChecksum": "eff98f7943d5d9380f338a8acb9f8cdea3788d432dafa07db6f7828ad8b62cca"
+    },
+    {
+      "path": "LOT-0011/photos/CH1512_m000262.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3719727911,
+      "size": 21131,
+      "compressible": 0,
+      "sourceChecksum": "a07b843ebe70dc57de5b172604715f8751af536b17d5ce4d76ff6251ee87bedd"
+    },
+    {
+      "path": "LOT-0011/photos/CH1513_m000263.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2079196376,
+      "size": 12965,
+      "compressible": 0,
+      "sourceChecksum": "c46d093006885138c590cbd754cd4ddce0bdbf6977251a49895c29019469e456"
+    },
+    {
+      "path": "LOT-0011/photos/CH1514_m000264.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 438664841,
+      "size": 21183,
+      "compressible": 0,
+      "sourceChecksum": "c9fceb11b8b8ccf3e314d46d080db2b9e56d30de02047556f678a42146ded94e"
+    },
+    {
+      "path": "LOT-0011/photos/CH1515_m000265.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3093100602,
+      "size": 13018,
+      "compressible": 0,
+      "sourceChecksum": "b48cefe7506eb391490f8433127247e068cca8d4081b5bc498d0caa89c390475"
+    },
+    {
+      "path": "LOT-0011/photos/CH1516_m000266.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1452569067,
+      "size": 21236,
+      "compressible": 0,
+      "sourceChecksum": "c27d5ac5a4adc86e9a9e12463904eefe0e1d7adc8e3c60c81f13b4c0ba12e92b"
+    },
+    {
+      "path": "LOT-0011/photos/CH1517_m000267.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4107004828,
+      "size": 13071,
+      "compressible": 0,
+      "sourceChecksum": "0e3bca6e16fae6b59a1ae31a82d6f1858ca2f41ea1fd23f5b0a89a82dcc5589b"
+    },
+    {
+      "path": "LOT-0011/photos/CH1518_m000268.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2466473293,
+      "size": 21289,
+      "compressible": 0,
+      "sourceChecksum": "e77fa972a22f030855bb5438eff2ad8002329dc2ff3c55b88888c2bd9dea690f"
+    },
+    {
+      "path": "LOT-0011/photos/CH1519_m000269.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 825941758,
+      "size": 13122,
+      "compressible": 0,
+      "sourceChecksum": "39f00bf659c5892168c4692145e46b86946b5fc321d31c631ad891a3bd225382"
+    },
+    {
+      "path": "LOT-0011/photos/CH1520_m000270.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3480377519,
+      "size": 21342,
+      "compressible": 0,
+      "sourceChecksum": "24c403f9c1b7c8ce1827cf2cfa332923b3ced6067aad64fe609218db300522c2"
+    },
+    {
+      "path": "LOT-0011/photos/CH1521_m000271.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1839845984,
+      "size": 13176,
+      "compressible": 0,
+      "sourceChecksum": "e3e5a8aa523f69b1f752fc5a6b72250c0def83a2cfb288ec0409df9efd0199cb"
+    },
+    {
+      "path": "LOT-0011/test-certificates/CH1522_m000272.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 199314449,
+      "size": 34442,
+      "compressible": 0.2,
+      "sourceChecksum": "c42a8474d92f96a1f82fb88308f269a94087bccd23c5a56ff77d5f648ec5f8b5"
+    },
+    {
+      "path": "LOT-0011/photos/CH1523_m000273.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2853750210,
+      "size": 13229,
+      "compressible": 0,
+      "sourceChecksum": "de35e544cf2ed105a0923957ff613d08c9fd9e9b59c74849cf02a19e4f1db786"
+    },
+    {
+      "path": "LOT-0011/test-certificates/CH1524_m000274.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1213218675,
+      "size": 54747,
+      "compressible": 0.2,
+      "sourceChecksum": "3c016dd729b876c2fc1e94cc94261ccc4b2a9367ce96c27c78c4a51cf801005a"
+    },
+    {
+      "path": "LOT-0012/test-certificates/CH1525_m000275.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3867654436,
+      "size": 40323,
+      "compressible": 0.2,
+      "sourceChecksum": "09a9b52d06bf22bfd6ec856b817b1cd92344757a74dc20774c50980473fe9fd3"
+    },
+    {
+      "path": "LOT-0012/registers/CH1526_m000276.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2227122901,
+      "size": 5475,
+      "compressible": 1,
+      "sourceChecksum": "0fd1abf24073126a1fc4e41604de11b35903d374f9e06746228d2dffb402627b"
+    },
+    {
+      "path": "LOT-0012/photos/CH1527_m000277.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 586591366,
+      "size": 13333,
+      "compressible": 0,
+      "sourceChecksum": "ba08104a22a99b800cc11ba8a5b38d5aa8770275acb95f04cb2f65bbf7cf2a99"
+    },
+    {
+      "path": "LOT-0012/photos/CH1528_m000278.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3241027127,
+      "size": 21553,
+      "compressible": 0,
+      "sourceChecksum": "7aa587d0d680a42812bdb431b811e9f6ef89d55954c2badd990952cafbfc029b"
+    },
+    {
+      "path": "LOT-0012/photos/CH1529_m000279.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1600495592,
+      "size": 13387,
+      "compressible": 0,
+      "sourceChecksum": "9155620d4956dee29786bbb7c70137c3ca9b561c71ee7017f5f576300cf21aed"
+    },
+    {
+      "path": "LOT-0012/photos/CH1530_m000280.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4254931353,
+      "size": 21607,
+      "compressible": 0,
+      "sourceChecksum": "9751150f4cbc1394918a0c9693c30a2eeeb1fbf37e6202ada446992f8393858d"
+    },
+    {
+      "path": "LOT-0012/photos/CH1531_m000281.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2614399818,
+      "size": 13440,
+      "compressible": 0,
+      "sourceChecksum": "8fcbc8267731c7084c6b87527f01e1ca2d28b7befcd48c6a24fc121e3ac4740e"
+    },
+    {
+      "path": "LOT-0012/photos/CH1532_m000282.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 973868283,
+      "size": 21658,
+      "compressible": 0,
+      "sourceChecksum": "9f7ff7135220fc781eb6e52e04b6b55cebb94b14a9cbd135147bf05a0bf9945c"
+    },
+    {
+      "path": "LOT-0012/photos/CH1533_m000283.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3628304044,
+      "size": 13493,
+      "compressible": 0,
+      "sourceChecksum": "e8c13af8dc9a7a71a49092c5dd9cf7a8fe13739f765aad3c7743e439aa7cb07a"
+    },
+    {
+      "path": "LOT-0012/photos/CH1534_m000284.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1987772509,
+      "size": 21711,
+      "compressible": 0,
+      "sourceChecksum": "b8d012c130705d15f15314c5bcbb832ab915d0c1b747b7c2183a783c7059b2a2"
+    },
+    {
+      "path": "LOT-0012/photos/CH1535_m000285.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 347240974,
+      "size": 13544,
+      "compressible": 0,
+      "sourceChecksum": "33b93d0c2299d9a3b5bdfd49ebc1135edd5c0a676ab4416779e38ef2b06f0375"
+    },
+    {
+      "path": "LOT-0012/photos/CH1536_m000286.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3001676735,
+      "size": 21764,
+      "compressible": 0,
+      "sourceChecksum": "d2b41017e8b58a5e6b0b6d247ab7f724ecf139ff04c20672a4349c1a13e82f68"
+    },
+    {
+      "path": "LOT-0012/photos/CH1537_m000287.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1361145200,
+      "size": 13598,
+      "compressible": 0,
+      "sourceChecksum": "dec6442897df49f6d0cbb6b7756a5bf19f235ebd234cad6c45ce8dce2c3782a2"
+    },
+    {
+      "path": "LOT-0012/photos/CH1538_m000288.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4015580961,
+      "size": 21818,
+      "compressible": 0,
+      "sourceChecksum": "8dda661bb3c9196425b088ebb65e137d0a452d42a528ee56ab263f3164b2d740"
+    },
+    {
+      "path": "LOT-0012/photos/CH1539_m000289.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2375049426,
+      "size": 13651,
+      "compressible": 0,
+      "sourceChecksum": "4c0654036cb078c388a38660ac87bd8ffbe812108373cdd2fd5d59dd514645d7"
+    },
+    {
+      "path": "LOT-0012/test-certificates/CH1540_m000290.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 734517891,
+      "size": 53343,
+      "compressible": 0.2,
+      "sourceChecksum": "2dc53b49f61d93d74540a591ed40fafde9798cb4a2a85416bfcf0a88c4156702"
+    },
+    {
+      "path": "LOT-0012/test-certificates/CH1541_m000291.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3388953652,
+      "size": 38919,
+      "compressible": 0.2,
+      "sourceChecksum": "780ce2244c4deea4de91f4b78a2557c910d96b3336339880264dd4667369f4b1"
+    },
+    {
+      "path": "LOT-0012/registers/CH1542_m000292.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 1748422117,
+      "size": 7887,
+      "compressible": 1,
+      "sourceChecksum": "bae1a9e8f6455ba8762221355af8a948670962b8eefc4cef7601d524dd58b316"
+    },
+    {
+      "path": "LOT-0012/photos/CH1543_m000293.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 107890582,
+      "size": 13755,
+      "compressible": 0,
+      "sourceChecksum": "fac9745e99195fe642fc4e8bd69ab8600911643560544daa6841227b980041a5"
+    },
+    {
+      "path": "LOT-0012/photos/CH1544_m000294.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2762326343,
+      "size": 21975,
+      "compressible": 0,
+      "sourceChecksum": "65ffc67439d63980f7d6ff9131dd0b14f862275b691dfa5a327fe241acf901bd"
+    },
+    {
+      "path": "LOT-0012/photos/CH1545_m000295.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1121794808,
+      "size": 13809,
+      "compressible": 0,
+      "sourceChecksum": "fdded4df1b0d60407dc1cfde6b5e9925bf2b4ffc990cb222ff50fc439037ebd5"
+    },
+    {
+      "path": "LOT-0012/photos/CH1546_m000296.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3776230569,
+      "size": 22029,
+      "compressible": 0,
+      "sourceChecksum": "04e2d149c65cd230891371a2dce112bed361130712f3554e6e9ee54c87821140"
+    },
+    {
+      "path": "LOT-0012/photos/CH1547_m000297.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2135699034,
+      "size": 13862,
+      "compressible": 0,
+      "sourceChecksum": "b68afdd3c292ab7f396c5d801afb523042fca1ec630fde95a5302587b391d1af"
+    },
+    {
+      "path": "LOT-0012/photos/CH1548_m000298.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 495167499,
+      "size": 22080,
+      "compressible": 0,
+      "sourceChecksum": "7afb1aeef8ba28214d92ea3a9dbdabde0294a05df5d54957b5e2186028d9179e"
+    },
+    {
+      "path": "LOT-0012/photos/CH1549_m000299.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3149603260,
+      "size": 13915,
+      "compressible": 0,
+      "sourceChecksum": "6e694c21da482c9f5a82790e6bc157ca8c6a8c31fd9b1b561bcde29a5e14893c"
+    },
+    {
+      "path": "LOT-0013/photos/CH1550_m000300.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1509071725,
+      "size": 22133,
+      "compressible": 0,
+      "sourceChecksum": "82ba46d0f52ce2b45b5cdf3419305d02309ee7de0ad5fe32f16b33b30c32ebd0"
+    },
+    {
+      "path": "LOT-0013/photos/CH1551_m000301.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4163507486,
+      "size": 13968,
+      "compressible": 0,
+      "sourceChecksum": "9d09d09281dca218ba6bac45b3cc6f3b6e5fb270a58a1a46a249edb64260d9b5"
+    },
+    {
+      "path": "LOT-0013/photos/CH1552_m000302.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2522975951,
+      "size": 22186,
+      "compressible": 0,
+      "sourceChecksum": "fb74b855bb080d771f5eca9c06ca8dc42c0e065685da55ccf73ced94e1ccd06a"
+    },
+    {
+      "path": "LOT-0013/photos/CH1553_m000303.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 882444416,
+      "size": 14020,
+      "compressible": 0,
+      "sourceChecksum": "e7340643c9daca3441daef210f195afd81b3083091704c6ec3f7615c4df9b234"
+    },
+    {
+      "path": "LOT-0013/photos/CH1554_m000304.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3536880177,
+      "size": 22240,
+      "compressible": 0,
+      "sourceChecksum": "42963e3046ed41bd11bb4ffc6997957adbc015fcd635882901c1ae2811157e21"
+    },
+    {
+      "path": "LOT-0013/photos/CH1555_m000305.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1896348642,
+      "size": 14073,
+      "compressible": 0,
+      "sourceChecksum": "ef583521744bcc6eacfcdb51735346da5ee859c233ad35112e6972153c7b7378"
+    },
+    {
+      "path": "LOT-0013/test-certificates/CH1556_m000306.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 255817107,
+      "size": 51939,
+      "compressible": 0.2,
+      "sourceChecksum": "1b59539c8b8fc6bd5becca8f463676e686cc1068f0fca8528fe3419d6a93bb40"
+    },
+    {
+      "path": "LOT-0013/test-certificates/CH1557_m000307.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2910252868,
+      "size": 37515,
+      "compressible": 0.2,
+      "sourceChecksum": "8d104f315c569200f88932178d8b941332e123a69f8f8b7781613fce7e18c0a4"
+    },
+    {
+      "path": "LOT-0013/registers/CH1558_m000308.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 1269721333,
+      "size": 4154,
+      "compressible": 1,
+      "sourceChecksum": "efb06a275c1960b5d062ef30b30791a678bff7603e87d86e85db9ce182caeffc"
+    },
+    {
+      "path": "LOT-0013/test-certificates/CH1559_m000309.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3924157094,
+      "size": 25051,
+      "compressible": 0.2,
+      "sourceChecksum": "14fa3eea28b7da909fdacae61d74bcb9c0f7c9ac26fc750d5cc73ebe50350cc1"
+    },
+    {
+      "path": "LOT-0013/photos/CH1560_m000310.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2283625559,
+      "size": 22397,
+      "compressible": 0,
+      "sourceChecksum": "cdcd76685859db50a41edad3561a52c7009ab2c7329ac294e40211fb7d779de0"
+    },
+    {
+      "path": "LOT-0013/photos/CH1561_m000311.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 643094024,
+      "size": 14231,
+      "compressible": 0,
+      "sourceChecksum": "9cd91ebab59deac458f09ed7bc2c263f6f29ed4fc6a3088eabb595ff3bdff9fe"
+    },
+    {
+      "path": "LOT-0013/photos/CH1562_m000312.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3297529785,
+      "size": 22451,
+      "compressible": 0,
+      "sourceChecksum": "022229a59032dba137dfeb233caaefacae693774a87562dbb9152882dbe7e3b3"
+    },
+    {
+      "path": "LOT-0013/photos/CH1563_m000313.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1656998250,
+      "size": 14284,
+      "compressible": 0,
+      "sourceChecksum": "9eb4ac5ee32b08e9eaf5b1c17f6af07c7c494c9502089be982ce361307c84788"
+    },
+    {
+      "path": "LOT-0013/photos/CH1564_m000314.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 16466715,
+      "size": 22502,
+      "compressible": 0,
+      "sourceChecksum": "5ef4e8cfa016f9b28213037c57c12b7851e7faf3859173666c7de42c1a914fe5"
+    },
+    {
+      "path": "LOT-0013/photos/CH1565_m000315.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2670902476,
+      "size": 14337,
+      "compressible": 0,
+      "sourceChecksum": "b63e1d45c8fc3e1e5416908a230f4d86b97e8cb5c5cf159775100f5a46913571"
+    },
+    {
+      "path": "LOT-0013/photos/CH1566_m000316.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1030370941,
+      "size": 22555,
+      "compressible": 0,
+      "sourceChecksum": "f2efe133a712dba124e2e048a2ee55e734d1e2bc13f9f8dd232dec04d859a31c"
+    },
+    {
+      "path": "LOT-0013/photos/CH1567_m000317.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3684806702,
+      "size": 14390,
+      "compressible": 0,
+      "sourceChecksum": "b144edb425afd97adaeced3bea3fcb18bc0b5713372bc8415c8e6fbcea010a2b"
+    },
+    {
+      "path": "LOT-0013/photos/CH1568_m000318.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2044275167,
+      "size": 22608,
+      "compressible": 0,
+      "sourceChecksum": "dc2f9a92c71e48dec17782b8c56698611d405417e146967ab89b28f5120f8194"
+    },
+    {
+      "path": "LOT-0013/photos/CH1569_m000319.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 403743632,
+      "size": 14442,
+      "compressible": 0,
+      "sourceChecksum": "262138983abf2b1f9b2e8d3aac968ffb15cc1ed4866624f4d1d327753034f20c"
+    },
+    {
+      "path": "LOT-0013/photos/CH1570_m000320.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3058179393,
+      "size": 22662,
+      "compressible": 0,
+      "sourceChecksum": "10dcbc3ab9b9131974319c2b5070dcec3b474847dff35914c65688a654f3dd87"
+    },
+    {
+      "path": "LOT-0013/photos/CH1571_m000321.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1417647858,
+      "size": 14495,
+      "compressible": 0,
+      "sourceChecksum": "ae39f0dfb87b3c4839fedb9ebce94d89c41ded9506194b92a315a1c4ff6d4122"
+    },
+    {
+      "path": "LOT-0013/photos/CH1572_m000322.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4072083619,
+      "size": 22715,
+      "compressible": 0,
+      "sourceChecksum": "a74234beca39b2534a3da1e6281c0511c704941f2354ccc97ef1ff16e40f4d24"
+    },
+    {
+      "path": "LOT-0013/test-certificates/CH1573_m000323.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2431552084,
+      "size": 36111,
+      "compressible": 0.2,
+      "sourceChecksum": "e8303807d161390ffc616579575ff26dc608b7c9ee0ff91969df809614999c82"
+    },
+    {
+      "path": "LOT-0013/registers/CH1574_m000324.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 791020549,
+      "size": 6566,
+      "compressible": 1,
+      "sourceChecksum": "c2f15706726248ab64407de57191abb7274e533e49632db2d750c4a4ef0c3501"
+    },
+    {
+      "path": "LOT-0014/test-certificates/CH1575_m000325.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 3445456310,
+      "size": 56416,
+      "compressible": 0.2,
+      "sourceChecksum": "0be79838b6753448dbb992c18a486467678c5fbe835190767dcec16cb9b8ef1c"
+    },
+    {
+      "path": "LOT-0014/photos/CH1576_m000326.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1804924775,
+      "size": 22819,
+      "compressible": 0,
+      "sourceChecksum": "3cf685e97edb3b7e1476a5bb6db6fb4b8b583750f8238bdb5fb87eb864fb1c8e"
+    },
+    {
+      "path": "LOT-0014/photos/CH1577_m000327.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 164393240,
+      "size": 14653,
+      "compressible": 0,
+      "sourceChecksum": "3f8cea86b4f60104d16884274072a404a696ef76bac5682d7516a791bfc542fb"
+    },
+    {
+      "path": "LOT-0014/photos/CH1578_m000328.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2818829001,
+      "size": 22873,
+      "compressible": 0,
+      "sourceChecksum": "914a0beab1818aa7d07c5aacc524396364e9a7de5f129f1ef0e0af40fa524f54"
+    },
+    {
+      "path": "LOT-0014/photos/CH1579_m000329.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1178297466,
+      "size": 14706,
+      "compressible": 0,
+      "sourceChecksum": "a0356484ae9b2c7eec862caa000ee48eef6e5870e6b03f6f3b2b3be69d09663d"
+    },
+    {
+      "path": "LOT-0014/photos/CH1580_m000330.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3832733227,
+      "size": 22926,
+      "compressible": 0,
+      "sourceChecksum": "3d4e844285aab55e98b89785ba2749089c166aa4f6dd0bdbec16505186fc4461"
+    },
+    {
+      "path": "LOT-0014/photos/CH1581_m000331.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2192201692,
+      "size": 14759,
+      "compressible": 0,
+      "sourceChecksum": "56f464cabedb8878abfd1f7d338c94d942ca2425c574ab3b726140847f67a82c"
+    },
+    {
+      "path": "LOT-0014/photos/CH1582_m000332.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 551670157,
+      "size": 22977,
+      "compressible": 0,
+      "sourceChecksum": "d97902439e3facf768feafd93dda6e9e5f4388da74a28e5b424b4086657fc006"
+    },
+    {
+      "path": "LOT-0014/photos/CH1583_m000333.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3206105918,
+      "size": 14812,
+      "compressible": 0,
+      "sourceChecksum": "8bed87d3f21a554fb2e95711534526e62167c947edcae292247a8f96f0d8bfa4"
+    },
+    {
+      "path": "LOT-0014/photos/CH1584_m000334.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1565574383,
+      "size": 23030,
+      "compressible": 0,
+      "sourceChecksum": "0e822c2407ff4c987bbbdd67ad5a90d90f73df75932ed86dc0bfd4e753251551"
+    },
+    {
+      "path": "LOT-0014/photos/CH1585_m000335.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4220010144,
+      "size": 14866,
+      "compressible": 0,
+      "sourceChecksum": "35d652c7c65212462a7cc5ca5a9c38317b9e36f27be10c3039389fe9043552db"
+    },
+    {
+      "path": "LOT-0014/photos/CH1586_m000336.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2579478609,
+      "size": 23084,
+      "compressible": 0,
+      "sourceChecksum": "bc1ca54b9f8e06f554cd2d9a2156f6b63f3fe0221a4ddf6359a792062d0d6fbd"
+    },
+    {
+      "path": "LOT-0014/photos/CH1587_m000337.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 938947074,
+      "size": 14917,
+      "compressible": 0,
+      "sourceChecksum": "afa0310d61ebc3e32b03b6097143ad7e5cde93e8cb950c9b5c4dc36b7694cd94"
+    },
+    {
+      "path": "LOT-0014/photos/CH1588_m000338.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3593382835,
+      "size": 23137,
+      "compressible": 0,
+      "sourceChecksum": "63087cf64d30b4e355f56d7305ba914722fefa3f4fd84b2faebb3b6117fd0edf"
+    },
+    {
+      "path": "LOT-0014/test-certificates/CH1589_m000339.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1952851300,
+      "size": 34707,
+      "compressible": 0.2,
+      "sourceChecksum": "9b38b7ddd148b84c6c004aff6970d545abb2d8e1fe1c6eef77c92c23a8bdd5af"
+    },
+    {
+      "path": "LOT-0014/registers/CH1590_m000340.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 312319765,
+      "size": 2833,
+      "compressible": 1,
+      "sourceChecksum": "91231606f4f024a55f878442586d432cfaa669c70bf9d70986de5f69159677c1"
+    },
+    {
+      "path": "LOT-0014/test-certificates/CH1591_m000341.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2966755526,
+      "size": 55012,
+      "compressible": 0.2,
+      "sourceChecksum": "71744861cf97df864f964c29e4bb71d3fb65d0b216e9d6c1dce3d5b47cdea014"
+    },
+    {
+      "path": "LOT-0014/photos/CH1592_m000342.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1326223991,
+      "size": 23241,
+      "compressible": 0,
+      "sourceChecksum": "7977d4906e571bb0c97aa2f203fc35c6e18413b44f738cb9015c4d390da4e361"
+    },
+    {
+      "path": "LOT-0014/registers/CH1593_m000343.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3980659752,
+      "size": 5432,
+      "compressible": 1,
+      "sourceChecksum": "e0bef7bd6dbf2b12ad5615c16255c88615a8a53bc860d0c693b80a708842b6ef"
+    },
+    {
+      "path": "LOT-0014/photos/CH1594_m000344.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2340128217,
+      "size": 23295,
+      "compressible": 0,
+      "sourceChecksum": "4e753f13fd6d0502da4a18c6c4e7915b3fdfb90f67691244c3a922768bd316da"
+    },
+    {
+      "path": "LOT-0014/photos/CH1595_m000345.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 699596682,
+      "size": 15128,
+      "compressible": 0,
+      "sourceChecksum": "4e092ccfc944ad315b7ec160b3ac372427801cddd5face73889de8adbdb82b4d"
+    },
+    {
+      "path": "LOT-0014/photos/CH1596_m000346.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3354032443,
+      "size": 23348,
+      "compressible": 0,
+      "sourceChecksum": "18af6b72e3dfd5bd705182e8b2498a027d3cc4b7f4f816cc4f42d9fe386bf443"
+    },
+    {
+      "path": "LOT-0014/photos/CH1597_m000347.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1713500908,
+      "size": 15181,
+      "compressible": 0,
+      "sourceChecksum": "8f63d019f92af80657d6bab3558aac982bfbedcc0864d01c6e31d3363e624f70"
+    },
+    {
+      "path": "LOT-0014/photos/CH1598_m000348.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 72969373,
+      "size": 23399,
+      "compressible": 0,
+      "sourceChecksum": "8384617075a41f730bc3e716a8dfa1d447b6c9e0197b7714a6373f131ef3e6d9"
+    },
+    {
+      "path": "LOT-0014/photos/CH1599_m000349.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2727405134,
+      "size": 15234,
+      "compressible": 0,
+      "sourceChecksum": "4945275aad1232930a23239ad0d46b97e52f17ba367def2a5ede6fee3b326d12"
+    },
+    {
+      "path": "LOT-0015/photos/CH1600_m000350.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1086873599,
+      "size": 23452,
+      "compressible": 0,
+      "sourceChecksum": "775cf014febb0851d5a6d58d6c7cc22f65925c0da5f94f1f595319cb68b768c8"
+    },
+    {
+      "path": "LOT-0015/photos/CH1601_m000351.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3741309360,
+      "size": 15288,
+      "compressible": 0,
+      "sourceChecksum": "fa7006052a3acdf1622f7951120777810a25bc2ceaaeb3db3b94dcb5fd545312"
+    },
+    {
+      "path": "LOT-0015/photos/CH1602_m000352.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2100777825,
+      "size": 23506,
+      "compressible": 0,
+      "sourceChecksum": "5b410766862ec6621314aec2d3540e1081de42b94f2864a33f8ad24983c032b3"
+    },
+    {
+      "path": "LOT-0015/test-certificates/CH1603_m000353.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 460246290,
+      "size": 45767,
+      "compressible": 0.2,
+      "sourceChecksum": "f94d37f45ab4f571d70d015b7d386a97100039875d0b8533cead1b85f5e76ffb"
+    },
+    {
+      "path": "LOT-0015/photos/CH1604_m000354.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3114682051,
+      "size": 23559,
+      "compressible": 0,
+      "sourceChecksum": "690f4ecdb0f24b8baa3d8d01fa98b74de9c04ae6ba8a8dd4ed2fe294925010ad"
+    },
+    {
+      "path": "LOT-0015/test-certificates/CH1605_m000355.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1474150516,
+      "size": 33303,
+      "compressible": 0.2,
+      "sourceChecksum": "83c61897fc6f9b2cf4f3d837ef9129254596ce3b3d0b1b87baed8d7513c12501"
+    },
+    {
+      "path": "LOT-0015/photos/CH1606_m000356.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4128586277,
+      "size": 23612,
+      "compressible": 0,
+      "sourceChecksum": "3495b3a4329d8efb02a122532fe755aa04903bb69c4e8f5f672ea8e039d8a96c"
+    },
+    {
+      "path": "LOT-0015/test-certificates/CH1607_m000357.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2488054742,
+      "size": 53608,
+      "compressible": 0.2,
+      "sourceChecksum": "6610868198e713378a2ee1b3ad4c9f7f3e1a0e48064f18916432d36fc9de2c17"
+    },
+    {
+      "path": "LOT-0015/photos/CH1608_m000358.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 847523207,
+      "size": 23663,
+      "compressible": 0,
+      "sourceChecksum": "6fa2d969cd94612c117958e5834b33b60fe4cbb462224ccb4e04a57cd07e0fc7"
+    },
+    {
+      "path": "LOT-0015/registers/CH1609_m000359.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3501958968,
+      "size": 7844,
+      "compressible": 1,
+      "sourceChecksum": "be7ed3bfdadedb45d62be29ded305ad1abc35bf1fc491d3f07fd4181301dce7e"
+    },
+    {
+      "path": "LOT-0015/photos/CH1610_m000360.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1861427433,
+      "size": 23717,
+      "compressible": 0,
+      "sourceChecksum": "107c8e73c560576e63409627268eeff073780bb4d2601b694351245a220274ca"
+    },
+    {
+      "path": "LOT-0015/photos/CH1611_m000361.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 220895898,
+      "size": 15550,
+      "compressible": 0,
+      "sourceChecksum": "74b10e14eb98aeb8fd355b6422f51e593afd8b03be144ece9b7189c808c81e60"
+    },
+    {
+      "path": "LOT-0015/photos/CH1612_m000362.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2875331659,
+      "size": 23770,
+      "compressible": 0,
+      "sourceChecksum": "cb32ad0f686b96f2b2c4f200d8ce9cd24b609d7922861058b84d63476fe9ef2b"
+    },
+    {
+      "path": "LOT-0015/photos/CH1613_m000363.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1234800124,
+      "size": 15603,
+      "compressible": 0,
+      "sourceChecksum": "c57ac5a733f70dada348874b0f7d9f58982c855887415bfaae29e6f01868bf72"
+    },
+    {
+      "path": "LOT-0015/photos/CH1614_m000364.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3889235885,
+      "size": 23823,
+      "compressible": 0,
+      "sourceChecksum": "4b395dd690a6fcdf5b038838ea39ac19f7244dd7d3ef4ecb26cbeb23a2d85394"
+    },
+    {
+      "path": "LOT-0015/photos/CH1615_m000365.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2248704350,
+      "size": 15656,
+      "compressible": 0,
+      "sourceChecksum": "ae072f869231ec8fab32a82f1935818540db9c97d64098803d2f044e67daa268"
+    },
+    {
+      "path": "LOT-0015/photos/CH1616_m000366.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 608172815,
+      "size": 23874,
+      "compressible": 0,
+      "sourceChecksum": "1276db250de90124c693622d6cca621faff7bbcaef4ac8644f7a4553d5939297"
+    },
+    {
+      "path": "LOT-0015/photos/CH1617_m000367.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3262608576,
+      "size": 15710,
+      "compressible": 0,
+      "sourceChecksum": "b429e28970e90744a1472881b34f37a0a06f3fac058dcfa7f4678148962043cc"
+    },
+    {
+      "path": "LOT-0015/photos/CH1618_m000368.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1622077041,
+      "size": 23928,
+      "compressible": 0,
+      "sourceChecksum": "5e8d5ca4a9a52e832e974861449157df72673b2ca1429b512c70466067263532"
+    },
+    {
+      "path": "LOT-0015/photos/CH1619_m000369.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4276512802,
+      "size": 15763,
+      "compressible": 0,
+      "sourceChecksum": "0a0b6b707a68111914c3a88829b0f289f9f9fe2aee091f712f42e80ece0084e1"
+    },
+    {
+      "path": "LOT-0015/photos/CH1620_m000370.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2635981267,
+      "size": 23981,
+      "compressible": 0,
+      "sourceChecksum": "a4e3076f1d9cb44fe9eb60e3e2879be6e2e4a77cc17fceff3c86080726b15a66"
+    },
+    {
+      "path": "LOT-0015/test-certificates/CH1621_m000371.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 995449732,
+      "size": 31899,
+      "compressible": 0.2,
+      "sourceChecksum": "f5a302d3e50bc7fbde153e108dcfda7f28322fb50fbf5b8f57be078d3b8f58c7"
+    },
+    {
+      "path": "LOT-0015/photos/CH1622_m000372.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3649885493,
+      "size": 24034,
+      "compressible": 0,
+      "sourceChecksum": "c76c871e6c2a7e62378a106b124b25678d75f166e19eb91bd9e63cb35ec9f031"
+    },
+    {
+      "path": "LOT-0015/test-certificates/CH1623_m000373.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 2009353958,
+      "size": 52204,
+      "compressible": 0.2,
+      "sourceChecksum": "d596b53964bd15e32f772384295b5b0536c86411339c7d62f2b9f3c6af694971"
+    },
+    {
+      "path": "LOT-0015/photos/CH1624_m000374.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 368822423,
+      "size": 24085,
+      "compressible": 0,
+      "sourceChecksum": "75c2c9a03c0f58f946446ed84745c3ba7abcb4a276eb2986ae6895a0e7ce1b58"
+    },
+    {
+      "path": "LOT-0016/registers/CH1625_m000375.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 3023258184,
+      "size": 4111,
+      "compressible": 1,
+      "sourceChecksum": "0a1bb7e55f7637cd8177b19d631cc1253f44d7adc53547c9172021b6fc6ef4a1"
+    },
+    {
+      "path": "LOT-0016/photos/CH1626_m000376.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1382726649,
+      "size": 24139,
+      "compressible": 0,
+      "sourceChecksum": "cc1c22cce398ab59e9ba9f11e2014950d6313c4f380244dcd34d51f6599fb196"
+    },
+    {
+      "path": "LOT-0016/photos/CH1627_m000377.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 4037162410,
+      "size": 15974,
+      "compressible": 0,
+      "sourceChecksum": "c27e473b5b171114dfc6187652413a58114b075e6c5f0c39642f5373f71f31c2"
+    },
+    {
+      "path": "LOT-0016/photos/CH1628_m000378.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2396630875,
+      "size": 24192,
+      "compressible": 0,
+      "sourceChecksum": "35a54ca54aea5e38c18701c3cd3aa5633b400a72bff2732b9ebc413f2f0a2343"
+    },
+    {
+      "path": "LOT-0016/photos/CH1629_m000379.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 756099340,
+      "size": 16025,
+      "compressible": 0,
+      "sourceChecksum": "d70e2e7d53d4606fd933d95f461dc268a20b77d686a0d52fb5f702081cbe20b4"
+    },
+    {
+      "path": "LOT-0016/photos/CH1630_m000380.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3410535101,
+      "size": 24245,
+      "compressible": 0,
+      "sourceChecksum": "fb258267b311d47c91a83841f18dbde7fbd376d029678dbe426ff124903a43cf"
+    },
+    {
+      "path": "LOT-0016/photos/CH1631_m000381.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1770003566,
+      "size": 16078,
+      "compressible": 0,
+      "sourceChecksum": "ef6e0a3ebf8efc878fb4486413f00dbec0d4b41141b6bf0992013d160378e63a"
+    },
+    {
+      "path": "LOT-0016/photos/CH1632_m000382.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 129472031,
+      "size": 24296,
+      "compressible": 0,
+      "sourceChecksum": "c4d47e5c4d64055645d5ae01d965134a6d8aabf574ead94b50f5c56a4a5d5208"
+    },
+    {
+      "path": "LOT-0016/photos/CH1633_m000383.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2783907792,
+      "size": 16132,
+      "compressible": 0,
+      "sourceChecksum": "6e3adb9eb58d25183c6926650c8af5ed287aed0340c42515f96e056d584a0af6"
+    },
+    {
+      "path": "LOT-0016/photos/CH1634_m000384.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1143376257,
+      "size": 24350,
+      "compressible": 0,
+      "sourceChecksum": "52c538219dfab94a1f517cf52a6cc7a0839b9450c7b8e7000ec559ebd57ea134"
+    },
+    {
+      "path": "LOT-0016/photos/CH1635_m000385.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3797812018,
+      "size": 16185,
+      "compressible": 0,
+      "sourceChecksum": "3b7e91fa623310a008e8a7675a96c200d409eafbd0e7251a924f599d3c972470"
+    },
+    {
+      "path": "LOT-0016/photos/CH1636_m000386.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2157280483,
+      "size": 24403,
+      "compressible": 0,
+      "sourceChecksum": "8cdc0ff45b45270e9a58e1673263589e634f6b39cb8c1798f1d32937e22cb6f6"
+    },
+    {
+      "path": "LOT-0016/test-certificates/CH1637_m000387.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 516748948,
+      "size": 30495,
+      "compressible": 0.2,
+      "sourceChecksum": "b8fb7ea452db61f779d7fa74577b9c05aa66f26c1f6527e94c6fd175f1b97842"
+    },
+    {
+      "path": "LOT-0016/photos/CH1638_m000388.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3171184709,
+      "size": 24456,
+      "compressible": 0,
+      "sourceChecksum": "837bcb96c5c8853a1da6eda04c22f00bc5acdc95e106e29abfe29d10f7185983"
+    },
+    {
+      "path": "LOT-0016/test-certificates/CH1639_m000389.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 1530653174,
+      "size": 50800,
+      "compressible": 0.2,
+      "sourceChecksum": "c5fd3685558fd710e74f65a4eb49b73631d5b016cf7cdea91309a9e5640c0c7c"
+    },
+    {
+      "path": "LOT-0016/test-certificates/CH1640_m000390.pdf",
+      "kind": "prng",
+      "class": "pdf",
+      "seed": 4185088935,
+      "size": 36376,
+      "compressible": 0.2,
+      "sourceChecksum": "b6cb92849d031b0e779e7ee79dfd7075387f96265776c187ad359190bcdfc95c"
+    },
+    {
+      "path": "LOT-0016/registers/CH1641_m000391.csv",
+      "kind": "prng",
+      "class": "text",
+      "seed": 2544557400,
+      "size": 6523,
+      "compressible": 1,
+      "sourceChecksum": "a5329ddb87aefd5eb291071557325cb374e75c6dc79c1271d1a341a6c846d883"
+    },
+    {
+      "path": "LOT-0016/photos/CH1642_m000392.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 904025865,
+      "size": 24561,
+      "compressible": 0,
+      "sourceChecksum": "f17fcb2ba2b6c34e697f21805011dfc025fd16368fa0eeddc1bbea036eacb628"
+    },
+    {
+      "path": "LOT-0016/photos/CH1643_m000393.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3558461626,
+      "size": 16396,
+      "compressible": 0,
+      "sourceChecksum": "08aedc0d6fbb4cd1bb00ac01b4da7bc247e2f78b67dee4c996163276e67864da"
+    },
+    {
+      "path": "LOT-0016/photos/CH1644_m000394.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1917930091,
+      "size": 24614,
+      "compressible": 0,
+      "sourceChecksum": "53aabb801e4199e8444e6daa793411ca05937207433696a64bb3796f900b24e8"
+    },
+    {
+      "path": "LOT-0016/photos/CH1645_m000395.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 277398556,
+      "size": 16447,
+      "compressible": 0,
+      "sourceChecksum": "99fc23147fe775db4a56026d2af7e2964656cd3042c2f51818053c2f3efe8a25"
+    },
+    {
+      "path": "LOT-0016/photos/CH1646_m000396.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2931834317,
+      "size": 24667,
+      "compressible": 0,
+      "sourceChecksum": "fe686e5cb8c33d91d2040a5f58e724ec14b22780d42d853243275a54a2a215eb"
+    },
+    {
+      "path": "LOT-0016/photos/CH1647_m000397.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 1291302782,
+      "size": 16500,
+      "compressible": 0,
+      "sourceChecksum": "aae67f5ae130b4da9a32825f5bbe9676f8238873669b15a852d9fbdccff6fa7c"
+    },
+    {
+      "path": "LOT-0016/photos/CH1648_m000398.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 3945738543,
+      "size": 24720,
+      "compressible": 0,
+      "sourceChecksum": "df6f5aab3b5b6cd1d8b28c097a01370d8ca7a62448946d1077e6d1f621c32a71"
+    },
+    {
+      "path": "LOT-0016/photos/CH1649_m000399.jpg",
+      "kind": "prng",
+      "class": "photo",
+      "seed": 2305207008,
+      "size": 16554,
+      "compressible": 0,
+      "sourceChecksum": "80235fc598c9880fae911760d11c8b27e115ec4db39014cb980144da7d86aaff"
+    }
+  ]
+}
