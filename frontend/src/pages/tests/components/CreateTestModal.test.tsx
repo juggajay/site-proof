@@ -1,8 +1,24 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { CreateTestModal } from './CreateTestModal';
 import type { Lot } from '../types';
+
+// ── C3 Phase B2: the pick map is React.lazy'd (Leaflet stays out of this bundle).
+// Stub it with a button that reports a pick, so the capture contract is testable
+// without a real map. ──
+vi.mock('./SamplePointPicker', () => ({
+  default: ({ onPick, lotId }: { onPick: (lat: number, lng: number) => void; lotId?: string }) => (
+    <button
+      type="button"
+      data-testid="fake-pick"
+      data-lot-id={lotId ?? ''}
+      onClick={() => onPick(-33.5, 151.5)}
+    >
+      pick
+    </button>
+  ),
+}));
 
 // ── Mock BottomSheet so the module graph is light (desktop path renders Modal) ──
 vi.mock('@/components/foreman/sheets/BottomSheet', () => ({
@@ -44,10 +60,29 @@ vi.mock('../hooks/useLotItpTestItems', () => ({
 const LOTS: Lot[] = [{ id: 'lot-1', lotNumber: 'L-001' }];
 const TODAY = new Date().toISOString().slice(0, 10);
 
+// ── Real `useGeoLocation` against a fake device, so the `immediate: false` guard
+// [C3R-B4] is under test rather than mocked away. ──
+type GeoSuccess = (position: {
+  coords: { latitude: number; longitude: number; accuracy: number };
+}) => void;
+const getCurrentPosition = vi.fn((_success: GeoSuccess) => {});
+
+/** Deliver a fix to the pending getCurrentPosition call. */
+async function deliverFix(latitude: number, longitude: number, accuracy: number) {
+  const success = getCurrentPosition.mock.calls.at(-1)![0];
+  await act(async () => {
+    success({ coords: { latitude, longitude, accuracy } });
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useIsMobileMock.mockReturnValue(false);
   useLotItpTestItemsMock.mockReturnValue({ items: [], isLoading: false });
+  Object.defineProperty(globalThis.navigator, 'geolocation', {
+    value: { getCurrentPosition },
+    configurable: true,
+  });
 });
 
 function renderModal(props: Partial<React.ComponentProps<typeof CreateTestModal>> = {}) {
@@ -153,5 +188,128 @@ describe('CreateTestModal — slim create form', () => {
     const payload = onSuccess.mock.calls[0][0];
     expect(payload.testType).toBe('Density Ratio');
     expect(payload.itpChecklistItemId).toBe('chk-1');
+  });
+});
+
+// ── Wave C3 Phase B2 §5.4, AT-97 ──────────────────────────────────────────────
+describe('CreateTestModal — sample-point capture (AT-97)', () => {
+  const LOCATION_KEYS = [
+    'sampleLatitude',
+    'sampleLongitude',
+    'sampleLocationSource',
+    'sampleLocationAccuracyM',
+  ] as const;
+
+  async function submit(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText(/Test Type/i), 'Density Ratio');
+    await user.click(screen.getByRole('button', { name: /Create Test Result/i }));
+  }
+
+  it('[C3R-B4] opening the form asks for no GPS fix, and Pick on map is the primary control', () => {
+    renderModal();
+    // `immediate: false`: a create-test form must not prompt for location.
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+
+    // Primary/secondary is not cosmetic — the GPS label states its own precondition.
+    expect(screen.getByTestId('sample-pick-on-map')).toHaveTextContent('Pick on map');
+    expect(screen.getByTestId('sample-use-my-location')).toHaveTextContent(
+      "I'm at the sample point now",
+    );
+    expect(screen.queryByTestId('sample-point-summary')).not.toBeInTheDocument();
+  });
+
+  it('[C3S-B1] free text alone captures nothing — no key is derived from "CH 1000+50"', async () => {
+    const user = userEvent.setup();
+    const { onSuccess } = renderModal();
+
+    await user.type(screen.getByLabelText('Sample Location'), 'CH 1000+50, 2m LHS');
+    await submit(user);
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    const payload = onSuccess.mock.calls[0][0];
+    expect(payload.sampleLocation).toBe('CH 1000+50, 2m LHS');
+    // This is the guard against a "helpful" chainage parser: a coordinate built on
+    // a guess is still a guess, and the free text carries no control line anyway.
+    for (const key of LOCATION_KEYS) expect(payload).not.toHaveProperty(key);
+  });
+
+  it('refuses a coarse GPS fix WITH ITS NUMBER and writes nothing', async () => {
+    const user = userEvent.setup();
+    const { onSuccess } = renderModal();
+
+    await user.click(screen.getByTestId('sample-use-my-location'));
+    await deliverFix(-33.8688, 151.2093, 85);
+
+    expect(screen.getByTestId('sample-gps-error')).toHaveTextContent(
+      'GPS accuracy ±85 m — too coarse for a sample point. Pick on map instead.',
+    );
+    expect(screen.queryByTestId('sample-point-summary')).not.toBeInTheDocument();
+
+    await submit(user);
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    for (const key of LOCATION_KEYS) {
+      expect(onSuccess.mock.calls[0][0]).not.toHaveProperty(key);
+    }
+  });
+
+  it('persists a good GPS fix with its accuracy, then clears all four together', async () => {
+    const user = userEvent.setup();
+    const { onSuccess } = renderModal();
+
+    await user.click(screen.getByTestId('sample-use-my-location'));
+    await deliverFix(-33.8688, 151.2093, 6.2);
+
+    expect(screen.getByTestId('sample-point-summary')).toHaveTextContent('-33.868800, 151.209300');
+    expect(screen.getByTestId('sample-point-summary')).toHaveTextContent('GPS ±6 m');
+
+    await submit(user);
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    expect(onSuccess.mock.calls[0][0]).toMatchObject({
+      sampleLatitude: -33.8688,
+      sampleLongitude: 151.2093,
+      sampleLocationSource: 'gps',
+      sampleLocationAccuracyM: 6.2,
+    });
+  });
+
+  it('Clear removes all four keys at once (the pair constraints require it)', async () => {
+    const user = userEvent.setup();
+    const { onSuccess } = renderModal();
+
+    await user.click(screen.getByTestId('sample-use-my-location'));
+    await deliverFix(-33.8688, 151.2093, 4);
+    await user.click(screen.getByTestId('sample-point-clear'));
+
+    expect(screen.queryByTestId('sample-point-summary')).not.toBeInTheDocument();
+    await submit(user);
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    for (const key of LOCATION_KEYS) {
+      expect(onSuccess.mock.calls[0][0]).not.toHaveProperty(key);
+    }
+  });
+
+  it('a map pick persists source=map_pick with NULL accuracy, and passes the lot for orientation', async () => {
+    const user = userEvent.setup();
+    const { onSuccess } = renderModal();
+
+    await user.selectOptions(screen.getByLabelText(/Link to Lot/i), 'lot-1');
+    await user.click(screen.getByTestId('sample-pick-on-map'));
+
+    // The picker is lazy — it resolves after the click.
+    const pick = await screen.findByTestId('fake-pick');
+    expect(pick).toHaveAttribute('data-lot-id', 'lot-1');
+    await user.click(pick);
+
+    expect(screen.getByTestId('sample-point-summary')).toHaveTextContent('Picked on map');
+
+    await submit(user);
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
+    expect(onSuccess.mock.calls[0][0]).toMatchObject({
+      sampleLatitude: -33.5,
+      sampleLongitude: 151.5,
+      sampleLocationSource: 'map_pick',
+      // A tap has no accuracy radius. NULL is the fact, not a missing value.
+      sampleLocationAccuracyM: null,
+    });
   });
 });

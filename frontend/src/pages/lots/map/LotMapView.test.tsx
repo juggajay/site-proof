@@ -114,7 +114,7 @@ const spatialSearchMutation = {
   reset: vi.fn(),
   data: undefined as import('./spatialSearchData').SpatialSearchResult | undefined,
   isLoading: false,
-  error: null,
+  error: null as unknown,
 };
 vi.mock('./spatialSearchData', () => ({
   useSpatialSearch: () => spatialSearchMutation,
@@ -262,7 +262,9 @@ beforeEach(() => {
   // it and it must not leak. Reset the persisted Photos toggle via the safe
   // storage helper (raw localStorage access is banned by a readiness guardrail).
   spatialSearchMutation.data = undefined;
+  spatialSearchMutation.error = null;
   writeLocalStorageItem('siteproof.mapPhotos.proj-1', 'false');
+  writeLocalStorageItem('siteproof.mapTests.proj-1', 'false');
   testCoverageQuery.data = undefined;
   testCoverageQuery.isLoading = false;
   testCoverageQuery.isFetching = false;
@@ -715,6 +717,30 @@ describe('LotMapView', () => {
       expect(screen.queryByTestId('photo-pin-view-photo-1')).not.toBeInTheDocument();
     });
 
+    it('AT-94 an armed marker layer whose fetch failed says so instead of showing an empty map', () => {
+      setPhotos([]);
+      spatialSearchMutation.error = new ApiError(0, 'offline');
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+      expect(screen.queryByTestId('map-pin-layers-unavailable')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('photos-button'));
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      // Named, not silent: `spatial-search` is a POST and deliberately uncached
+      // (AT-94 `[C3S-d]`), so offline there is nothing to show — and a blank map
+      // reads as "no tests here", which is a different and false statement.
+      expect(screen.getByTestId('map-pin-layers-unavailable')).toHaveTextContent(
+        /Photos and Test pins are unavailable/i,
+      );
+      spatialSearchMutation.error = null;
+    });
+
     it('persists the Photos toggle per project', () => {
       mockQueries({ geometries: [polygonGeometry()] });
       const { unmount } = render(
@@ -738,6 +764,204 @@ describe('LotMapView', () => {
         />,
       );
       expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
+  // ── C3 Phase B2: test pins ────────────────────────────────────────────────
+  describe('Test pins layer', () => {
+    type SpatialTest = import('./spatialSearchData').SpatialTestResult;
+
+    function setTests(testResults: SpatialTest[]) {
+      spatialSearchMutation.data = {
+        lots: [],
+        lotsTruncated: false,
+        photos: [],
+        photosTruncated: false,
+        testResults,
+        testResultsTruncated: false,
+      };
+    }
+    const located = (over: Partial<SpatialTest> = {}): SpatialTest => ({
+      id: 'tr-1',
+      status: 'verified',
+      passFail: 'pass',
+      lotId: 'lot-1',
+      lotNumber: 'LOT-001',
+      testType: 'Density Ratio',
+      testRequestNumber: 'TR-1',
+      sampleLatitude: -33.8005,
+      sampleLongitude: 151.0005,
+      sampleLocationSource: 'gps',
+      sampleLocationAccuracyM: 6.2,
+      ...over,
+    });
+
+    function renderMap(linkTargets?: { lot: (lotId: string) => string }) {
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+          linkTargets={linkTargets}
+        />,
+      );
+    }
+
+    it('renders a pin with provenance and accuracy once the layer is on', () => {
+      setTests([located()]);
+      renderMap();
+
+      // Default off.
+      expect(screen.queryByTestId('test-pin-tr-1')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      expect(screen.getByTestId('test-pins-button')).toHaveAttribute('aria-pressed', 'true');
+      const pin = screen.getByTestId('test-pin-tr-1');
+      expect(pin).toHaveTextContent('Density Ratio');
+      expect(pin).toHaveTextContent('Verified');
+      expect(pin).toHaveTextContent('Pass');
+      // `[C3R-A5]` a pin whose accuracy is unstated invites more trust than it earns.
+      expect(screen.getByTestId('test-pin-point-tr-1')).toHaveTextContent(
+        '-33.800500, 151.000500 · GPS ±6 m',
+      );
+    });
+
+    it('says "Picked on map" and no radius for a map pick', () => {
+      setTests([located({ sampleLocationSource: 'map_pick', sampleLocationAccuracyM: null })]);
+      renderMap();
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      expect(screen.getByTestId('test-pin-point-tr-1')).toHaveTextContent('Picked on map');
+      expect(screen.getByTestId('test-pin-point-tr-1')).not.toHaveTextContent('±');
+    });
+
+    it('AT-84 an unlocated test is never drawn — no centroid, no text-derived pin', () => {
+      // The lot HAS a polygon (so a centroid was available) and the test HAS free
+      // text a parser could have read a chainage out of. Neither may become a
+      // marker `[C3S-B1]`. A third row carries half a coordinate — also not a
+      // location. This test is the guard: add a fallback and it fails.
+      setTests([
+        located({
+          id: 'tr-unlocated',
+          sampleLatitude: null,
+          sampleLongitude: null,
+          sampleLocationSource: null,
+          sampleLocationAccuracyM: null,
+        }),
+        located({ id: 'tr-half', sampleLongitude: null }),
+      ]);
+      renderMap();
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+
+      expect(screen.queryByTestId('test-pin-tr-unlocated')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('test-pin-tr-half')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('marker')).not.toBeInTheDocument();
+    });
+
+    it('routes a pin View through linkTargets so the foreman shell stays under /m', () => {
+      setTests([located()]);
+      renderMap({ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` });
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      fireEvent.click(screen.getByTestId('test-pin-view-tr-1'));
+      expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
+    });
+
+    it('renders an unlinked pin (no View) when the shell test has no lot destination', () => {
+      setTests([located({ lotId: null, lotNumber: null })]);
+      renderMap({ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` });
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      expect(screen.getByTestId('test-pin-tr-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('test-pin-view-tr-1')).not.toBeInTheDocument();
+    });
+
+    it('persists the Test pins toggle per project', () => {
+      setTests([located()]);
+      const { unmount } = render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+      mockQueries({ geometries: [polygonGeometry()] });
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      expect(readLocalStorageItem('siteproof.mapTests.proj-1')).toBe('true');
+
+      unmount();
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+      expect(screen.getByTestId('test-pins-button')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('AT-95 History disarms the pin layer too, and its toggle is unavailable there', () => {
+      setTests([located()]);
+      testCoverageQuery.data = {
+        lots: [{ lotId: 'lot-1', state: 'satisfied' }],
+        lotsWithoutGeometry: 0,
+      };
+      renderMap();
+
+      // Both C3 layers armed at once.
+      fireEvent.click(screen.getByTestId('testing-button'));
+      fireEvent.click(screen.getByTestId('test-pins-button'));
+      expect(screen.getByTestId('test-pin-tr-1')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('history-button'));
+      // `[C3R-B5]` today's captures have no place on a map showing a past date.
+      expect(screen.queryByTestId('testing-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('test-pins-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('test-pin-tr-1')).not.toBeInTheDocument();
+
+      // Leaving History restores both toggles, still disarmed.
+      fireEvent.click(screen.getByTestId('history-button'));
+      expect(screen.getByTestId('testing-button')).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByTestId('test-pins-button')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    // Exit item 13 `[C3R-A10]`. jsdom has no layout, so this asserts the two things
+    // that DECIDE the 360px outcome: every toolbar item is icon-only at a ≥44px hit
+    // area, and the container wraps. 10 items x 44px + 9 gaps x 8px = 512px, so at
+    // 360px the toolbar takes exactly two rows (~96px) and the map keeps its
+    // min(520px, 60dvh) height — a stolen row, never a clipped or hidden button.
+    it('[C3R-A10] all ten toolbar items stay reachable and icon-only at phone width', () => {
+      isMobileValue = true;
+      setTests([located()]);
+      testCoverageQuery.data = { lots: [], lotsWithoutGeometry: 0 };
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      const ids = [
+        'find-by-area-button',
+        'coverage-button',
+        'plans-button',
+        'testing-button',
+        'test-pins-button',
+        'photos-button',
+        'draw-lot-button',
+        'snapshot-button',
+        'locate-me-button',
+        'history-button',
+      ];
+      for (const id of ids) {
+        const button = screen.getByTestId(id);
+        expect(button).toHaveAttribute('aria-label');
+        expect(button.className).toMatch(/\bh-11\b/);
+        expect(button.className).toMatch(/\bw-11\b/);
+      }
+      expect(screen.getByRole('button', { name: 'Test pins' })).toBeInTheDocument();
+      // flex-wrap is what makes the failure mode "a second row", not "a hidden button".
+      expect(screen.getByTestId('find-by-area-button').parentElement?.className).toMatch(
+        /flex-wrap/,
+      );
+      expect(mapContainerProps.current.style).toMatchObject({ height: 'min(520px, 60dvh)' });
     });
   });
 });

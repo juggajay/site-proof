@@ -3,6 +3,7 @@ import { Printer, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
 import { Button } from '@/components/ui/button';
+import { formatCoordinate, formatProvenance, readSamplePoint } from '@/lib/samplePoint';
 import type { TestResult } from '../types';
 import {
   statusColors,
@@ -174,6 +175,7 @@ function TestResultMobileCard({
       : '—';
   const nextStatus = nextStatusMap[test.status];
   const canAdvance = canAdvanceTestStatus(test);
+  const samplePoint = readSamplePoint(test);
 
   return (
     <div ref={cardRef} data-deep-linked={isHighlighted ? 'true' : undefined}>
@@ -261,6 +263,18 @@ function TestResultMobileCard({
                   ) : (
                     formatLabWait(labWait)
                   ),
+                  priority: 'secondary' as const,
+                },
+              ] as const)
+            : []),
+          // Wave C3 Phase B2 §5.7 `[C3R-A5]`. Coordinate, provenance and accuracy
+          // in the SAME words as the map pin popup. Shown only when a human
+          // captured one — an absent point renders no row rather than a guess.
+          ...(samplePoint
+            ? ([
+                {
+                  label: 'Sample point',
+                  value: `${formatCoordinate(samplePoint)} · ${formatProvenance(samplePoint)}`,
                   priority: 'secondary' as const,
                 },
               ] as const)

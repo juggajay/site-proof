@@ -6,6 +6,15 @@ interface GeoLocationOptions {
   enableHighAccuracy?: boolean;
   timeout?: number;
   maximumAge?: number;
+  /**
+   * Wave C3 Phase B2 `[C3R-B4]`. Fetch a fix on mount. Default `true`, so every
+   * existing caller is unchanged.
+   *
+   * `false` is for callers where the fix is an ANSWER TO A BUTTON, not ambient
+   * context — the sample-point capture control passes it so opening the
+   * create-test form does not ask for a GPS permission every time.
+   */
+  immediate?: boolean;
 }
 
 interface GeoLocationState {
@@ -35,6 +44,7 @@ export function useGeoLocation(options: GeoLocationOptions = {}) {
   const enableHighAccuracy = options.enableHighAccuracy ?? defaultOptions.enableHighAccuracy;
   const timeout = options.timeout ?? defaultOptions.timeout;
   const maximumAge = options.maximumAge ?? defaultOptions.maximumAge;
+  const immediate = options.immediate ?? true;
 
   const getCurrentPosition = useCallback(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -79,10 +89,11 @@ export function useGeoLocation(options: GeoLocationOptions = {}) {
     );
   }, [enableHighAccuracy, timeout, maximumAge, setCurrentLocation, setGpsError]);
 
-  // Get position on mount
+  // Get position on mount — unless the caller asked for button-driven capture.
   useEffect(() => {
+    if (!immediate) return;
     getCurrentPosition();
-  }, [getCurrentPosition]);
+  }, [immediate, getCurrentPosition]);
 
   return {
     ...state,

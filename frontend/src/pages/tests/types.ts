@@ -11,6 +11,12 @@ export interface TestResult {
   laboratoryReportNumber: string | null;
   sampleDate: string | null;
   sampleLocation: string | null;
+  // Wave C3 Phase B2: WHERE the sample was taken, captured by a human (spec §5.2).
+  // Prisma Decimal serialises as a string; read them through `readSamplePoint`.
+  sampleLatitude?: number | string | null;
+  sampleLongitude?: number | string | null;
+  sampleLocationSource?: string | null;
+  sampleLocationAccuracyM?: number | string | null;
   testDate: string | null;
   resultDate: string | null;
   resultValue: number | null;
@@ -95,4 +101,11 @@ export interface CreateTestFormData {
   // Optional link to the ITP checklist item this test satisfies. Set from the
   // Test Type picker / satisfiesItem flow; backend validates it against the lot.
   itpChecklistItemId?: string;
+  // Wave C3 Phase B2. Present ONLY when a human captured a sample point in the
+  // create form; absent means NULL, which is what "no location" is `[C3S-B1]`.
+  // Numbers, not strings — they never go through the form's string trim.
+  sampleLatitude?: number;
+  sampleLongitude?: number;
+  sampleLocationSource?: 'gps' | 'map_pick';
+  sampleLocationAccuracyM?: number | null;
 }

@@ -17,6 +17,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
+import { SampleLocationCapture, type CapturedSamplePoint } from './SampleLocationCapture';
 
 const createTestSchema = z.object({
   testType: z.string().trim().min(1, 'Test type is required'),
@@ -83,6 +84,11 @@ export const CreateTestModal = React.memo(function CreateTestModal({
   const [selectedItpItemId, setSelectedItpItemId] = useState<string | null>(null);
   const [manualTestType, setManualTestType] = useState(false);
 
+  // Wave C3 Phase B2. The captured sample point. Deliberately NOT a react-hook-form
+  // field: it is not typed, it has four keys, and an empty-string default would be
+  // a coordinate the user never gave. `null` until a human captures one `[C3S-B1]`.
+  const [samplePoint, setSamplePoint] = useState<CapturedSamplePoint | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -104,6 +110,7 @@ export const CreateTestModal = React.memo(function CreateTestModal({
       reset({ ...INITIAL_FORM_DATA, sampleDate: todayKey(), ...initialValues });
       setSelectedItpItemId(null);
       setManualTestType(false);
+      setSamplePoint(null);
       setFormError(null);
     }
     // Only re-seed when the modal opens; `initialValues`/`satisfiesItem` are
@@ -123,10 +130,22 @@ export const CreateTestModal = React.memo(function CreateTestModal({
         await onSuccess({
           ...(data as CreateTestFormData),
           ...(itpItemId ? { itpChecklistItemId: itpItemId } : {}),
+          // The four location keys are sent ONLY when a human captured a point.
+          // Absent keys stay NULL server-side (`parseSampleLocationInput` reads
+          // only present keys), which is what "cleared" means on a create.
+          ...(samplePoint
+            ? {
+                sampleLatitude: samplePoint.lat,
+                sampleLongitude: samplePoint.lng,
+                sampleLocationSource: samplePoint.source,
+                sampleLocationAccuracyM: samplePoint.accuracyM,
+              }
+            : {}),
         });
         reset({ ...INITIAL_FORM_DATA, sampleDate: todayKey() });
         setSelectedItpItemId(null);
         setManualTestType(false);
+        setSamplePoint(null);
       } catch (err) {
         setFormError(extractErrorMessage(err, 'Failed to create test result.'));
       } finally {
@@ -134,13 +153,14 @@ export const CreateTestModal = React.memo(function CreateTestModal({
         setCreating(false);
       }
     },
-    [onSuccess, reset, satisfiesItem, selectedItpItemId],
+    [onSuccess, reset, satisfiesItem, selectedItpItemId, samplePoint],
   );
 
   const handleClose = useCallback(() => {
     reset({ ...INITIAL_FORM_DATA, sampleDate: todayKey() });
     setSelectedItpItemId(null);
     setManualTestType(false);
+    setSamplePoint(null);
     setFormError(null);
     onClose();
   }, [onClose, reset]);
@@ -323,6 +343,16 @@ export const CreateTestModal = React.memo(function CreateTestModal({
               {...register('sampleLocation')}
               placeholder="e.g., CH 1000+50, 2m LHS"
             />
+            {/* Wave C3 Phase B2 §5.4. The words above are the record; the point
+                below is the position. Neither is derived from the other — nothing
+                parses that chainage string into a coordinate `[C3S-B1]`. */}
+            <div className="mt-2">
+              <SampleLocationCapture
+                lotId={lotId || undefined}
+                value={samplePoint}
+                onChange={setSamplePoint}
+              />
+            </div>
           </div>
 
           <div>

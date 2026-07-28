@@ -124,4 +124,31 @@ describe('TestResultsMobileList send-to-lab action', () => {
 
     expect(screen.queryAllByRole('button', { name: 'Send to lab' })).toHaveLength(0);
   });
+
+  // C3 Phase B2 §5.7 `[C3R-A5]`. The card is the per-test detail surface, and it
+  // says the coordinate in the SAME words as the map pin popup.
+  it('shows the captured sample point with its provenance and accuracy', () => {
+    renderList({
+      tests: [
+        makeTest({
+          sampleLocation: 'CH 1000+50, 2m LHS',
+          // Prisma Decimal arrives as a string over JSON.
+          sampleLatitude: '-33.8688',
+          sampleLongitude: '151.2093',
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: '6.2',
+        }),
+      ],
+    });
+
+    // MobileDataCard renders a secondary field as one "label: value" span.
+    expect(screen.getByText('Sample point: -33.868800, 151.209300 · GPS ±6 m')).toBeInTheDocument();
+  });
+
+  it('shows no sample-point row for a test whose location was never captured', () => {
+    // Free text alone is not a location `[C3S-B1]`: the words are the record, the
+    // pin is the position, and nothing turns one into the other.
+    renderList({ tests: [makeTest({ sampleLocation: 'CH 1000+50, 2m LHS' })] });
+    expect(screen.queryByText(/^Sample point:/)).not.toBeInTheDocument();
+  });
 });

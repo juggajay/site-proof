@@ -481,6 +481,38 @@ describe('POST /api/projects/:projectId/spatial-search', () => {
       expect(res.body.photos).toEqual([]);
     });
 
+    // Wave C3 Phase B2. Two additive select changes, one assertion each.
+    it('B2: pins carry passFail, and the DEFAULT mode carries the coordinates so the panel can count the unlocated', async () => {
+      const pins = await postTests(pmToken);
+      expect(pins.status).toBe(200);
+      expect(pins.body.testResults[0]).toHaveProperty('passFail');
+
+      // Default (find-by-area) mode: every test on the intersecting lots, located
+      // or not. This is the only response that can honestly state "N with a
+      // captured location · M without" (spec §5.5).
+      const full = await request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${pmToken}`)
+        .send({ bounds: BOUNDS });
+      expect(full.status).toBe(200);
+      const rows = full.body.testResults as Array<{
+        testType: string;
+        sampleLatitude: string | null;
+        sampleLocationSource: string | null;
+      }>;
+
+      const unlocated = rows.find((t) => t.testType === 'C3 Unlocated Free Text');
+      expect(unlocated).toBeDefined();
+      // Counted, never drawn: the free text is returned untouched and NO
+      // coordinate is invented from it `[C3S-B1]`.
+      expect(unlocated!.sampleLatitude).toBeNull();
+      expect(unlocated!.sampleLocationSource).toBeNull();
+
+      const located = rows.find((t) => t.testType === 'C3 Located Assigned');
+      expect(Number(located!.sampleLatitude)).toBeCloseTo(-33.805, 5);
+      expect(located!.sampleLocationSource).toBe('gps');
+    });
+
     it('(d) refuses a cross-company caller', async () => {
       const res = await postTests(outsiderToken);
       expect(res.status).toBe(403);
