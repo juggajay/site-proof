@@ -379,6 +379,10 @@ An imported ITP set can be marked a **corporate master**. Applying to a project 
 >
 > **Upgrade path preserved:** if C4 later adds `Sample` + a nullable `TestResult.sampleId` (C2 §3.4 reason 5), an already-built test-register importer backfills 1:1 with it. Building now forecloses nothing.
 >
+> **The LIMS sibling is not coming, and that is now a NAMED blocker too `[C3S-j]`.** Wave C3's research pass (#1640, `docs/research/c3-lims-format-research-2026-07-28.md`, grade A) established that the TfNSW LIMS data-submission format is a **laboratory → TfNSW** fortnightly eMFT submission and a condition of laboratory registration — CIVOS is not a party to it — so Phase C **closed**: LIMS *export* is closed permanently (a contractor producing those files would be fabricating a lab record), and LIMS *import* survives only as **research NOT FOUND #2 — no evidence at any grade that laboratories will supply these files to their clients** (QESTLab, the dominant AU construction-materials LIMS, documents AGS and generic CSV export, grade C).
+>
+> **That is a commercial-access question, not a format question**, and it is answered by a real lab saying yes in writing, not by another research pass — so if `'test_register'` is ever scheduled against a lab-emitted file rather than a contractor's own spreadsheet, the named blocker to clear first is NOT FOUND #2. Nothing in `IMPORT_KINDS`, `TARGETS_BY_KIND`, `DryRunRow.unit`, `sourceFormat` or the frontend `ImportKind` union may gain a LIMS or "format-compatible" entry before that (`[C3S-B6]`, now permanent with that one named unlock).
+>
 > Anyone quoting "deferred until the sample model is final" as a reason not to schedule this work is quoting a **retired** blocker.
 
 ### 4.8 Rollback

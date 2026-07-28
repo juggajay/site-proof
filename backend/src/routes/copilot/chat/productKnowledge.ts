@@ -24,6 +24,11 @@ export interface HelpTopic {
 // productKnowledge.test.ts, and again in the frontend's
 // documentationContent.test.ts — do not soften one without rechecking the code
 // and changing both sides together.
+//
+// Wave C3 (exit item 12) adds the map's Testing overlay and the sample point to
+// `site-map` and `itp-holdpoints-tests`, on the same terms: every sentence is
+// grounded in shipped code (routes/projectTestCoverage.ts,
+// frontend testCoverageData.ts, frontend lib/samplePoint.ts) and pinned below.
 export const HELP_TOPICS: readonly HelpTopic[] = [
   {
     slug: 'projects-lots',
@@ -47,8 +52,10 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       'See lots on a satellite map, place them from control lines or plan sheets, and check coverage.',
       'Open the map view. Switch the Lot Register to Map to see each lot as a shape on satellite imagery, coloured by status, with control lines and a status legend.',
       'Place lots on the map. Generate lot footprints from a control line and chainage, import an alignment from LandXML or DXF, trace a lot off a plan sheet, or draw one by hand.',
-      'Read coverage, photos, and history. Use Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and History to scrub lot status by date.',
+      'Read coverage, testing, photos, and history. Use Testing to recolour drawn lots by test frequency, Test pins to show where samples were taken, Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and History to scrub lot status by date.',
       'Tips:',
+      '- The Testing layer recolours drawn lots with the same three-valued test frequency verdict the lot page shows: green for Testing satisfied, amber for Fewer tests than required, and grey for No rule. Lots that are not drawn are counted, not coloured, and the panel says how many. Testing is an internal layer that subcontractors never see, and it is unavailable in History because a live verdict has no meaning against a past date.',
+      '- The Test pins layer shows a pin only where someone captured a sample point on a test. Nothing is derived, so a test recorded with a chainage description and no captured coordinate is counted toward the frequency but never drawn. The pin gives the coordinate and how it was captured, such as GPS plus or minus 6 m, or Picked on map.',
       '- Overlay registered plan sheets on the imagery and blend the paper away so only the linework shows.',
       '- Tiles, plan sheets, and map data you have already viewed stay available offline; there is no bulk pre-download.',
       '- Snapshot the map to save it into project Documents, ready to attach to a conformance pack or claim.',
@@ -88,6 +95,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       '- Assigned the wrong ITP? It can be unassigned from the lot until work is recorded against it.',
       '- Test results count toward conformance once linked to their ITP checklist item and verified.',
       '- Where a governing specification sets a test frequency, only verified passing tests whose type is recognised for that rule count toward it. Density Ratio, AS 1289.5.4.1, and RC 316.00 all count as compaction; laboratory reference tests such as MDD never count toward the field test number. A "Verified tests not counted" warning means the test type is not recognised, not that the test is unlinked.',
+      '- Recording where a sample was taken is optional and blocks nothing. On the test forms you can pick the point on a map or use your current GPS fix; a GPS fix coarser than 30 m is refused with its own accuracy shown rather than saved, and a map pick carries no accuracy figure. CIVOS never derives a sample location — no capture means no location, not a pin in the middle of the lot.',
       '- Send to lab records that a sample went to a laboratory, and the register then shows how long it has been waiting. Setting an expected result date is optional and marks the row overdue once that date passes; CIVOS never assumes a turnaround, so a blank date shows elapsed days only and is never flagged late.',
       '- Verified ITP and test records are protected from unsafe edits.',
       '- Failing an ITP checklist item online requires a photo of the issue first, and still raises an NCR automatically.',

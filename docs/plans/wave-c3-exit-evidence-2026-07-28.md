@@ -136,3 +136,25 @@ The six open items are what stands between that and "a QM on a pilot project tru
 overlay": Jay's live round-trip and his phone (one session closes both), one missing test,
 and four write-backs across three items — two of them into files that live outside this
 repo, which is exactly why those are the ones most likely to rot.
+
+---
+
+## Addendum — 28 Jul 2026, same day (orchestrator)
+
+Four of the six OPEN rows closed within hours of this record's assembly:
+
+- **Item 5** ✅ — AT-87 written and landed in **#1659** (this PR), with a three-part
+  proof-of-catch mutation showing AT-11 alone never covered the gap.
+- **Item 9** ✅ — the commercial-access clause added to the Wave B spec's `[C2L-4]`
+  amendment in **#1659**; the grep is no longer zero.
+- **Item 11** ✅ — both out-of-repo edits made directly by the orchestrator on
+  28 Jul: the appendix row now records v6 XLSX (2024-08-29) with the decision
+  rewritten to "Table 1 spatial vocabulary; no ingestion", and plan line 77's
+  LIMS clause carries the correction flag citing
+  `docs/research/c3-lims-format-research-2026-07-28.md`.
+- **Item 12** ✅ — Clancy + docs mirrors gained the Testing overlay, verdict
+  states, and sample-point content in **#1659**, test-pinned both sides.
+
+**Revised tally: 12 DONE · 2 OPEN · 0 SUPERSEDED.** Both remaining items are
+Jay's and close in one phone session: item 4 (live project round-trip) and
+item 13 (the 360 px on-device look).
