@@ -732,12 +732,37 @@ async function benchClaimReadiness(project: SeededProject): Promise<void> {
 // ---------------------------------------------------------------------------
 // D. Diagnostic (read-only): where the 5,000-lot conformance read spends time.
 //
-// NOT a product change and not part of the gate — it sizes the levers named in
-// the results write-up. Every instance seeded here carries a `templateSnapshot`
-// (as `POST /itp/instances` writes one), and `getChecklistItemsForInstance`
-// therefore reads the snapshot JSON and NEVER touches `template.checklistItems`
-// — yet `CONFORMANCE_LOT_INCLUDE` hydrates those rows for every lot in the
-// decision. Variant 2 measures what dropping that dead hydration would save.
+// NOT a product change and not part of the gate. READ THIS BEFORE QUOTING ANY
+// NUMBER FROM SECTION D.
+//
+// Every variant below is a HARDCODED query literal, not an import of the shipped
+// select. They are an ARCHAEOLOGICAL LADDER of read shapes the conformance path
+// has already moved through — they do not track `CONFORMANCE_LOT_SELECT` and
+// none of them is "as shipped" any more:
+//
+//   - #1580 replaced `CONFORMANCE_LOT_INCLUDE` with `CONFORMANCE_LOT_SELECT` and
+//     dropped `template.checklistItems` from the hot query.
+//   - #1641 then took `itpInstance.completions` OUT of that select entirely; it
+//     is fetched flat by one `iTPCompletion.findMany` and grouped in JS
+//     (`hydrateFetchedLots`, `conformancePrerequisites.ts:413` for the select),
+//     and narrowed the eligibility read to the four `ClaimableLot` columns
+//     (`inclusionDecision.ts:163`).
+//
+// So the ~1.4s spread between variant 2 and variant 4 is a lever ALREADY PULLED
+// by #1580, NOT a saving still on the table. #1641 flagged the old
+// "CONFORMANCE_LOT_INCLUDE as shipped" label for exactly that reason: it read as
+// a live 1.4s win in a perf brief when it was a historical baseline.
+//
+// The #1641 flat-completion shape is deliberately NOT added here as a fifth
+// literal — a fifth hardcoded copy is how variants 1-4 drifted in the first
+// place. For what the product actually costs today, read sections A-C, which
+// drive the REAL route handlers.
+//
+// Context that motivated the ladder and still holds: every instance seeded here
+// carries a `templateSnapshot` (as `POST /itp/instances` writes one), so
+// `getChecklistItemsForInstance` reads the snapshot JSON and NEVER touches
+// `template.checklistItems` — variant 2 hydrated those rows for every lot in the
+// decision, and variant 3 is what dropping that dead hydration bought.
 // ---------------------------------------------------------------------------
 
 async function diagnoseConformanceRead(project: SeededProject): Promise<void> {
@@ -755,7 +780,11 @@ async function diagnoseConformanceRead(project: SeededProject): Promise<void> {
     reportStats(label, samples);
   };
 
-  await timed('1. plain lot.findMany (eligibility read)', () =>
+  // Pre-#1641 eligibility read: the all-columns default. The shipped read now
+  // selects only the four columns `ClaimableLot` declares
+  // (`inclusionDecision.ts:163`), so this is the BEFORE number, not the current
+  // one — 199ms vs 51ms at the 5,000-lot ceiling.
+  await timed('1. pre-#1641 eligibility read (all columns)', () =>
     prisma.lot.findMany({
       where: {
         id: { in: ids },
@@ -765,7 +794,11 @@ async function diagnoseConformanceRead(project: SeededProject): Promise<void> {
       },
     }),
   );
-  await timed('2. CONFORMANCE_LOT_INCLUDE as shipped', () =>
+  // The pre-#1580 `CONFORMANCE_LOT_INCLUDE` shape, kept for historical
+  // comparison. NOT shipped since #1580 — `include` pulls all columns of every
+  // joined row, including `template.checklistItems` the predicates never read.
+  // This is the ladder's TOP rung (worst), not its baseline.
+  await timed('2. pre-#1580 CONFORMANCE_LOT_INCLUDE shape', () =>
     prisma.lot.findMany({
       where: { id: { in: ids } },
       include: {
@@ -790,7 +823,9 @@ async function diagnoseConformanceRead(project: SeededProject): Promise<void> {
       },
     }),
   );
-  await timed('3. same, minus template.checklistItems', () =>
+  // Variant 2 minus `template.checklistItems` — isolates #1580's dead-hydration
+  // cut on its own. Still an `include`, so still not a shipped shape.
+  await timed('3. pre-#1580 include, minus checklistItems', () =>
     prisma.lot.findMany({
       where: { id: { in: ids } },
       include: {
@@ -813,7 +848,13 @@ async function diagnoseConformanceRead(project: SeededProject): Promise<void> {
       },
     }),
   );
-  await timed('4. same, completions narrowed to gate columns', () =>
+  // The #1580-era `select`: gate columns only, completions still NESTED. This
+  // was "as shipped" between #1580 and #1641 and is the closest rung to today,
+  // but it is SUPERSEDED — #1641 removed `itpInstance.completions` from the
+  // select and fetches them flat, and C1/D14 since added the sufficiency columns
+  // (`activitySlug`, `materialType`, `testScale`, `project`, …) this literal
+  // lacks. Treat it as a floor for the nested-relation era, not a current cost.
+  await timed('4. #1580-era select (superseded by #1641)', () =>
     prisma.lot.findMany({
       where: { id: { in: ids } },
       select: {
