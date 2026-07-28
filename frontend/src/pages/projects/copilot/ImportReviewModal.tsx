@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Download, FileSpreadsheet, FileUp, Loader2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { AlertTriangle, Download, FileUp, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -13,9 +13,9 @@ import {
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { activitiesByFamily } from '@/lib/activityTaxonomy';
 import { useDecideProposal } from './copilotData';
 import { ImportPanel } from './ImportPanel';
+import { CorporateMasterPanel, CountsBar, ProposalRow, SourcePane } from './ImportReviewPanes';
 import {
   reconciliationCsvPath,
   useCancelImport,
@@ -26,17 +26,17 @@ import {
   useImportProfiles,
   useSendImportToReview,
   useUploadImport,
-  type CorporateMaster,
   type DryRunResult,
   type DryRunRow,
   type ImportBatchSummary,
   type ImportKind,
-  type ParsedSheet,
   type Resolutions,
   type UploadImportResult,
 } from './importData';
 
-const ACCEPT = '.xlsx,.pdf,.docx';
+// M10: `.csv` is back. SiteProof's own lot-register export is CSV-only, so
+// leaving it out meant the app could not re-import a register it had written.
+const ACCEPT = '.xlsx,.csv,.pdf,.docx';
 const MAX_FILE_MB = 25;
 
 /** Not a real profile: the columns read straight off the uploaded file. It is
@@ -77,317 +77,6 @@ interface ImportReviewModalProps {
   onRollback?: (proposalId: string) => void;
   onApplied?: () => void;
   onClose: () => void;
-}
-
-const OUTCOME_LABEL: Record<DryRunRow['outcome'], string> = {
-  create: 'Will import',
-  update: 'Will update',
-  skip: 'Skipped',
-  needs_review: 'Needs a look',
-  blocked: 'Must be fixed',
-};
-
-const OUTCOME_CHIP: Record<DryRunRow['outcome'], string> = {
-  create: 'bg-success/10 text-success',
-  update: 'bg-primary/10 text-primary',
-  skip: 'bg-muted text-muted-foreground',
-  needs_review: 'bg-warning/10 text-warning',
-  blocked: 'bg-destructive/10 text-destructive',
-};
-
-const DIFF_LABEL: Record<'added' | 'removed' | 'changed', string> = {
-  added: 'New',
-  removed: 'Not in this version',
-  changed: 'Changed',
-};
-
-const REASON_TEXT: Record<string, string> = {
-  duplicate: 'Already in this project',
-  slug_collision: 'Another row in this file has the same identity',
-  unmapped_column: 'A column this import needs is not mapped',
-  ambiguous_activity: 'The activity is only recognised at family level',
-  unresolvable_activity: 'The activity is not recognised — pick one or skip it',
-  over_length: 'A cell is longer than this field allows',
-  state_spec_conflict: 'Declares a different specification set to this project',
-  milestone_point_type: 'A milestone row needs a point type before it can import',
-  invalid_value: 'A cell cannot be read as the value it needs to be',
-  unsupported_attribute: 'A value is outside this project specification',
-  template_not_found: 'The named ITP is not in this project',
-  low_confidence: 'Read with low confidence',
-  empty: 'Nothing to import from this row',
-};
-
-/** §4.5: the project's copy is controlled. Say what differs; never overwrite. */
-function diffSummary(diff: NonNullable<DryRunRow['diff']>): string {
-  const parts = [
-    [diff.added, 'new'],
-    [diff.changed, 'changed'],
-    [diff.removed, 'not in this version'],
-  ]
-    .filter(([count]) => count)
-    .map(([count, label]) => `${count} ${label}`);
-  return `This project already has this ITP, and its copy differs — ${parts.join(', ')}. It is left as it is; update it by hand if you want these changes.`;
-}
-
-function rowDetail(row: DryRunRow): string {
-  // The server's own wording, where a reason code alone cannot say enough.
-  if (row.detail) return row.detail;
-  if (row.diff) return diffSummary(row.diff);
-  if (row.overLength) {
-    return `${row.overLength.field} is ${row.overLength.length} characters (max ${row.overLength.max}). Shorten it at the source, or skip the row.`;
-  }
-  if (row.collidesWith?.length) {
-    return `Also at ${row.collidesWith.map((ref) => `${ref.sheet} row ${ref.rowIndex}`).join(', ')}.`;
-  }
-  if (row.reason === 'state_spec_conflict') {
-    return `This ITP declares ${row.declaredStateSpec}; this project uses a different specification set.`;
-  }
-  return REASON_TEXT[row.reason ?? ''] ?? '';
-}
-
-function CountsBar({ counts }: { counts: DryRunResult['counts'] }) {
-  const parts = [
-    { label: 'import', value: counts.willCreate },
-    { label: 'skip', value: counts.willSkip },
-    { label: 'need a look', value: counts.needsReview },
-    { label: 'must be fixed', value: counts.blocked },
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
-      {parts.map((part) => (
-        <span key={part.label}>
-          <span className="font-semibold">{part.value}</span>{' '}
-          <span className="text-muted-foreground">{part.label}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/** Left pane: the source, rendered as the grid it was read into. */
-function SourcePane({
-  sheets,
-  activeSheet,
-}: {
-  sheets: ParsedSheet[];
-  activeSheet: string | null;
-}) {
-  const sheet = sheets.find((candidate) => candidate.name === activeSheet) ?? sheets[0];
-  if (!sheet) {
-    return <p className="text-sm text-muted-foreground">Source file no longer available.</p>;
-  }
-
-  return (
-    <div className="min-w-0">
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <FileSpreadsheet className="h-3.5 w-3.5" />
-        {sheet.name}
-      </p>
-      <div className="max-h-[22rem] overflow-auto rounded-lg border">
-        <table className="w-full border-collapse text-xs">
-          <thead className="sticky top-0 bg-muted">
-            <tr>
-              {sheet.headers.map((header, i) => (
-                <th key={i} className="border-b px-2 py-1.5 text-left font-medium">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sheet.rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="odd:bg-muted/20">
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="border-b px-2 py-1 align-top">
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/**
- * B3 §4.5 — ITP sets already applied on another project, offered as corporate
- * masters. Picking one opens it here as a CONTROLLED COPY: the same dry run,
- * the same review, the same rollback, and a visible difference against anything
- * this project already has.
- */
-function CorporateMasterPanel({
-  masters,
-  busy,
-  onUse,
-}: {
-  masters: CorporateMaster[];
-  busy: boolean;
-  onUse: (masterId: string) => void;
-}) {
-  return (
-    <section aria-label="Corporate masters" className="rounded-lg border bg-card">
-      <div className="border-b p-4">
-        <h3 className="text-sm font-medium">Bring in a corporate master</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          An ITP set you already imported on another project. This project gets its own controlled
-          copy — nothing here is overwritten.
-        </p>
-      </div>
-      <ul className="divide-y">
-        {masters.map((master) => (
-          <li key={master.id} className="flex items-center gap-2 p-3">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {master.sourceFileName ?? 'ITP set'}
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {master.projectName} · {master.templateCount}{' '}
-                {master.templateCount === 1 ? 'ITP' : 'ITPs'}
-              </span>
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => onUse(master.id)}
-            >
-              Use this master
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/** Right pane: one card per proposed ITP, exceptions drilled into. */
-function ProposalRow({
-  row,
-  resolution,
-  onResolve,
-  onSelect,
-  busy,
-}: {
-  row: DryRunRow;
-  resolution: Resolutions[string] | undefined;
-  onResolve: (patch: Resolutions[string]) => void;
-  onSelect: () => void;
-  busy: boolean;
-}) {
-  const families = useMemo(() => activitiesByFamily(), []);
-  const detail = rowDetail(row);
-
-  return (
-    <li className="rounded-lg border p-3">
-      <button type="button" onClick={onSelect} className="w-full text-left">
-        <span className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{row.label}</span>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${OUTCOME_CHIP[row.outcome]}`}
-          >
-            {OUTCOME_LABEL[row.outcome]}
-          </span>
-        </span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">
-          {row.rowRef.sheet} · row {row.rowRef.rowIndex}
-          {row.checklistItemCount ? ` · ${row.checklistItemCount} checklist rows` : ''}
-        </span>
-      </button>
-
-      {detail && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {detail}
-        </p>
-      )}
-
-      {row.diff && row.diff.items.length > 0 && (
-        <ul className="mt-2 space-y-1 border-l pl-3 text-xs text-muted-foreground">
-          {row.diff.items.map((item, index) => (
-            <li key={`${item.change}-${index}`} className="truncate">
-              <span className="font-medium">{DIFF_LABEL[item.change]}:</span> {item.description}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {row.unit !== 'checklist_row' && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {row.reason === 'unresolvable_activity' && (
-            <NativeSelect
-              aria-label={`Activity for ${row.label}`}
-              disabled={busy}
-              value={resolution?.activitySlug ?? ''}
-              onChange={(event) => onResolve({ activitySlug: event.target.value || undefined })}
-              className="h-8 max-w-[16rem] text-xs"
-            >
-              <option value="">Pick an activity…</option>
-              {families.map((family) => (
-                <optgroup key={family.slug} label={family.displayName}>
-                  {family.activities.map((activity) => (
-                    <option key={activity.slug} value={activity.slug}>
-                      {activity.displayName}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </NativeSelect>
-          )}
-
-          {/* CivilPro's Milestone is approval-bearing and has no vocabulary
-              value to fold to, so the server leaves it unresolved and the
-              reviewer says what this template's milestones really are. One
-              choice per template — matching TemplateResolution.milestoneAs. */}
-          {row.reason === 'milestone_point_type' && (
-            <NativeSelect
-              aria-label={`Milestone point type for ${row.label}`}
-              disabled={busy}
-              value={resolution?.milestoneAs ?? ''}
-              onChange={(event) =>
-                onResolve({
-                  milestoneAs: (event.target.value ||
-                    undefined) as Resolutions[string]['milestoneAs'],
-                })
-              }
-              className="h-8 max-w-[16rem] text-xs"
-            >
-              <option value="">Pick a point type…</option>
-              <option value="standard">S - Standard</option>
-              <option value="witness">W - Witness</option>
-              <option value="hold_point">H - Hold Point</option>
-            </NativeSelect>
-          )}
-
-          {row.reason === 'state_spec_conflict' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => onResolve({ affirmSpec: !resolution?.affirmSpec })}
-            >
-              {resolution?.affirmSpec ? 'Affirmed' : `Affirm ${row.declaredStateSpec} anyway`}
-            </Button>
-          )}
-
-          {row.outcome !== 'skip' && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => onResolve({ skip: !resolution?.skip })}
-            >
-              {resolution?.skip ? 'Skipped — undo' : 'Leave this one out'}
-            </Button>
-          )}
-        </div>
-      )}
-    </li>
-  );
 }
 
 /**
@@ -439,14 +128,15 @@ export function ImportReviewModal({
     decideMutation.isLoading;
 
   const sheets = batchQuery.data?.grid?.sheets ?? [];
+  // Something about the READ that no single row can say — a PDF whose page
+  // coverage the model never confirmed, merges too large to check.
+  const readNotice = batchQuery.data?.grid?.notice ?? null;
   const effectiveDryRun = dryRun ?? batchQuery.data?.dryRun ?? null;
   const blockedCount = effectiveDryRun?.counts.blocked ?? 0;
-  // What would actually be written: rows that will be created, plus the
-  // family-fold rows that still create. A `needs_review` row flagged as a
-  // duplicate, a twin or an unresolved milestone creates nothing, so counting
-  // every needs_review row would promise the reviewer records they will not get.
-  const willImportCount =
-    (effectiveDryRun?.counts.willCreate ?? 0) + (effectiveDryRun?.counts.ambiguous ?? 0);
+  // M10: the server's own count of what Apply will write, derived from the
+  // payload. It used to be re-derived here from the outcomes, which left every
+  // `template_not_found` row out of the number while still creating its lot.
+  const willImportCount = effectiveDryRun?.counts.willImport ?? 0;
   const derivedFieldMap = uploadFieldMap ?? effectiveDryRun?.fieldMap ?? null;
 
   /** What the next dry run maps with: an explicit map, or a named profile. */
@@ -518,6 +208,24 @@ export function ImportReviewModal({
     if (batchId) void runDryRun(batchId, next);
   };
 
+  /**
+   * M10: leave one checklist row out of its template. `skipRows` is keyed on
+   * the TEMPLATE and lists source row indexes, which is why the row's own card
+   * needs the parent key the server now sends — the message on a blocked row
+   * has always told the reviewer to skip it, with nothing to click.
+   */
+  const rowSkipped = (row: DryRunRow) =>
+    Boolean(row.parentKey && resolutions[row.parentKey]?.skipRows?.includes(row.rowRef.rowIndex));
+
+  const handleSkipRow = (parentKey: string, rowIndex: number) => {
+    const current = resolutions[parentKey]?.skipRows ?? [];
+    handleResolve(parentKey, {
+      skipRows: current.includes(rowIndex)
+        ? current.filter((index) => index !== rowIndex)
+        : [...current, rowIndex],
+    });
+  };
+
   const handleApply = async () => {
     if (!batchId) return;
     try {
@@ -572,7 +280,7 @@ export function ImportReviewModal({
     >
       <ModalHeader>{copy.title}</ModalHeader>
       <ModalDescription>
-        {copy.blurb}, with the counts before anything is written. Excel, PDF or Word, up to{' '}
+        {copy.blurb}, with the counts before anything is written. Excel, CSV, PDF or Word, up to{' '}
         {MAX_FILE_MB} MB.
       </ModalDescription>
       <ModalBody>
@@ -611,7 +319,7 @@ export function ImportReviewModal({
             >
               <FileUp className="mx-auto h-8 w-8 text-muted-foreground/60" />
               <p className="mt-2 text-sm text-muted-foreground">
-                Drag an .xlsx, .pdf or .docx file here, or
+                Drag an .xlsx, .csv, .pdf or .docx file here, or
               </p>
               <Button
                 type="button"
@@ -693,6 +401,16 @@ export function ImportReviewModal({
                 </p>
               )}
 
+              {/* M10: a read that could not account for the whole source says
+                  so here, above the counts — the counts describe what was
+                  read, and this says how much that was. */}
+              {readNotice && (
+                <p className="flex items-start gap-1.5 rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs text-warning">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {readNotice}
+                </p>
+              )}
+
               <CountsBar counts={effectiveDryRun.counts} />
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -707,6 +425,12 @@ export function ImportReviewModal({
                       busy={busy}
                       onSelect={() => setActiveSheet(row.rowRef.sheet)}
                       onResolve={(patch) => handleResolve(row.key, patch)}
+                      rowSkipped={rowSkipped(row)}
+                      onSkipRow={
+                        row.parentKey
+                          ? () => handleSkipRow(row.parentKey!, row.rowRef.rowIndex)
+                          : undefined
+                      }
                     />
                   ))}
                 </ul>

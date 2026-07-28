@@ -222,12 +222,12 @@ function normalizeCell(raw: string, tableName: string): string {
   return raw.trim();
 }
 
-/** Horizontally merged cells carry `colspan`; the columns they cover still have
- *  to exist or every column to their right shifts left. */
-function colspanOf(node: OrderedNode): number {
+/** A merged cell's `colspan`/`rowspan`; the cells it covers still have to
+ *  exist or every column after it shifts left. */
+function spanOf(node: OrderedNode, attribute: 'colspan' | 'rowspan'): number {
   const attributes = node[':@'] as Record<string, unknown> | undefined;
-  const raw = Number(attributes?.['@colspan']);
-  return Number.isFinite(raw) && raw > 1 ? Math.min(Math.floor(raw), MAX_IMPORT_COLUMNS) : 1;
+  const raw = Number(attributes?.[`@${attribute}`]);
+  return Number.isFinite(raw) && raw > 1 ? Math.min(Math.floor(raw), MAX_IMPORT_ROWS_PER_SHEET) : 1;
 }
 
 interface RawTable {
@@ -235,22 +235,70 @@ interface RawTable {
   rows: string[][];
 }
 
-/** One `<tr>` as cells, with merged cells expanded to the columns they cover. */
-function readRowCells(rowNode: OrderedNode, tableName: string): string[] {
+/** A cell a `rowspan` is holding open for the rows below it. */
+interface HeldCell {
+  value: string;
+  width: number;
+  /** Rows still to be covered, counted down once per row read. */
+  remaining: number;
+}
+
+/**
+ * One `<tr>` as cells, with merged cells expanded to the columns they cover.
+ *
+ * `held` is the caller's state across the table's rows: a `rowspan` cell is
+ * absent from the HTML of every row below its first, so without replacing it
+ * here every column after it shifts LEFT — a merged Activity column moves the
+ * acceptance criteria into the point-type column and the hold-point marking off
+ * the end of the row entirely.
+ */
+function readRowCells(
+  rowNode: OrderedNode,
+  tableName: string,
+  held: Map<number, HeldCell>,
+): string[] {
   const cells: string[] = [];
+
+  /** Emit any held cells that own the next column positions. */
+  const placeHeld = () => {
+    for (let entry = held.get(cells.length); entry; entry = held.get(cells.length)) {
+      for (let column = 0; column < entry.width; column += 1) {
+        if (cells.length >= MAX_IMPORT_COLUMNS) return;
+        cells.push(column === 0 ? entry.value : '');
+      }
+    }
+  };
+
   for (const cellNode of findCells(rowNode)) {
+    placeHeld();
     if (cells.length >= MAX_IMPORT_COLUMNS) break;
-    cells.push(normalizeCell(textOf(childrenOf(cellNode, tagOf(cellNode))), tableName));
-    for (let extra = 1; extra < colspanOf(cellNode); extra += 1) {
+
+    const startColumn = cells.length;
+    const width = spanOf(cellNode, 'colspan');
+    const depth = spanOf(cellNode, 'rowspan');
+    const value = normalizeCell(textOf(childrenOf(cellNode, tagOf(cellNode))), tableName);
+
+    cells.push(value);
+    for (let extra = 1; extra < width; extra += 1) {
       if (cells.length >= MAX_IMPORT_COLUMNS) break;
       cells.push('');
     }
+    // `depth`, not `depth - 1`: the count-down below runs for this row too.
+    if (depth > 1) held.set(startColumn, { value, width, remaining: depth });
+  }
+  // A rowspan at the very end of a row has no following cell to trigger it.
+  placeHeld();
+
+  for (const [column, entry] of held) {
+    entry.remaining -= 1;
+    if (entry.remaining <= 0) held.delete(column);
   }
   return cells;
 }
 
 function readTable(tableNode: OrderedNode, name: string): RawTable {
   const rows: string[][] = [];
+  const held = new Map<number, HeldCell>();
   // <tbody>/<thead> are not emitted by mammoth, so rows sit directly under the
   // table; the recursive search keeps this true if that ever changes.
   for (const rowNode of findAll(childrenOf(tableNode, 'table'), 'tr')) {
@@ -259,7 +307,7 @@ function readTable(tableNode: OrderedNode, name: string): RawTable {
         `Table "${name}" has more than ${MAX_IMPORT_ROWS_PER_SHEET} rows. Split it into smaller files.`,
       );
     }
-    rows.push(readRowCells(rowNode, name));
+    rows.push(readRowCells(rowNode, name, held));
   }
   return { name, rows };
 }

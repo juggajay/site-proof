@@ -152,7 +152,7 @@ describe('computeLotRegisterDryRun', () => {
   });
 
   it('blocks chainage that is not a number, and a range that runs backwards', () => {
-    const notNumber = run({ grid: grid([['L-1', '', 'Earthworks', 'CH 100', '', '', '']]) });
+    const notNumber = run({ grid: grid([['L-1', '', 'Earthworks', 'about 100', '', '', '']]) });
     expect(rowFor(notNumber, 'L-1')).toMatchObject({
       outcome: 'blocked',
       reason: 'invalid_value',
@@ -160,6 +160,25 @@ describe('computeLotRegisterDryRun', () => {
 
     const backwards = run({ grid: grid([['L-1', '', 'Earthworks', '400', '100', '', '']]) });
     expect(rowFor(backwards, 'L-1').detail).toContain('backwards');
+  });
+
+  // M10: the app PRINTS every chainage as "CH 1+020" (frontend `formatChainage`),
+  // and surveyors write registers in the same stationing. Refusing the app's own
+  // display format was the defect.
+  it('reads chainage in the stationing format the app itself prints', () => {
+    const result = run({
+      grid: grid([['L-1', '', 'Earthworks', 'CH 1+020', '1+250', '', '']]),
+    });
+    expect(rowFor(result, 'L-1').outcome).toBe('create');
+    expect(result.lots[0]).toMatchObject({ chainageStart: 1_020, chainageEnd: 1_250 });
+  });
+
+  it('still blocks stationing whose metre part is ambiguous', () => {
+    const result = run({ grid: grid([['L-1', '', 'Earthworks', '1+20', '', '', '']]) });
+    expect(rowFor(result, 'L-1')).toMatchObject({
+      outcome: 'blocked',
+      reason: 'invalid_value',
+    });
   });
 
   it('BLOCKS a testScale the project spec does not use, quoting the validator (D14.1)', () => {
@@ -206,6 +225,36 @@ describe('computeLotRegisterDryRun', () => {
     // Still imports — a register naming an ITP this project lacks is not fatal.
     expect(missing.lots[0].itpTemplateId).toBeNull();
     expect(missing.dryRun.canApply).toBe(true);
+  });
+
+  /**
+   * M10: the Apply CTA is `willCreate + ambiguous`, and a `template_not_found`
+   * row is neither — but it IS pushed to the payload. A register naming an ITP
+   * this project lacks could therefore read "Import 1 lot" and create 200.
+   * `willImport` is derived from the payload itself, so the two cannot drift.
+   */
+  it('counts exactly the rows Apply will create, template_not_found included', () => {
+    const result = run({
+      grid: grid([
+        ['L-001', '', 'Earthworks', '', '', '', 'ITP nobody has'],
+        ['L-002', '', 'Earthworks', '', '', '', 'ITP nobody has either'],
+        ['L-003', '', 'Earthworks', '', '', '', ''],
+        ['L-004', '', 'Drainage', '', '', '', ''],
+      ]),
+      templates: [],
+    });
+
+    expect(result.dryRun.counts.willImport).toBe(result.lots.length);
+    expect(result.dryRun.counts.willImport).toBe(4);
+    // The old CTA formula, for contrast: it saw 2 of the 4 lots it would make.
+    expect(result.dryRun.counts.willCreate + result.dryRun.counts.ambiguous).toBe(2);
+  });
+
+  it('does not count a blocked, skipped or duplicate row as an import', () => {
+    const result = run({ existingLots: [{ id: 'lot-1', lotNumber: 'L-001' }] });
+    // L-001 duplicate, L-003 blocked, blank row skipped: only L-002 is made.
+    expect(result.dryRun.counts.willImport).toBe(1);
+    expect(result.lots).toHaveLength(1);
   });
 
   it('blocks every row when no column is mapped to the lot number', () => {

@@ -51,11 +51,14 @@ const SOURCE_FORMAT_BY_EXTENSION = new Map<string, string>([
   ['.xlsx', 'excel'],
   ['.pdf', 'pdf'],
   ['.docx', 'word'],
+  // M10: SiteProof's own lot-register export is CSV-only, so refusing `.csv`
+  // meant the app could not re-import a register it had just written.
+  ['.csv', 'csv'],
 ]);
 
 /** One wording, used by the multer filter and by the reader that runs after it. */
 export const UNSUPPORTED_SOURCE_MESSAGE =
-  'Only .xlsx spreadsheets, .pdf documents and .docx Word files can be imported.';
+  'Only .xlsx spreadsheets, .csv files, .pdf documents and .docx Word files can be imported.';
 
 const MACRO_REJECTION_MESSAGE =
   'Macro-enabled Office files are not accepted. Save the file as .xlsx or .docx (no macros) and try again.';
@@ -92,6 +95,13 @@ export const importUpload = multer({
 export function assertImportUploadContent(file: Express.Multer.File): void {
   if (!file.buffer || file.buffer.length === 0) {
     throw AppError.badRequest('That file is empty.');
+  }
+  // A CSV has no magic bytes to check, so `assertUploadedFileMatchesDeclaredType`
+  // passes it through unexamined. Text is what it must be: a NUL byte means a
+  // binary file wearing a .csv name, and the reader would otherwise turn it into
+  // rows of mojibake for the reviewer to puzzle over.
+  if (path.extname(file.originalname).toLowerCase() === '.csv' && file.buffer.includes(0)) {
+    throw rejectUpload('That file is not readable text. Export it again as CSV.');
   }
   // .xlsx and its MIME type resolve to the 'zip' signature kind, .pdf to 'pdf',
   // so the existing "MIME and extension disagree" guard keeps working unchanged

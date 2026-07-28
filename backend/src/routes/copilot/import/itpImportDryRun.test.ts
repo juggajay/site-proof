@@ -200,6 +200,24 @@ describe('[WBR2-10](c) over-length cells are blocked, never truncated', () => {
     expect(dryRun.counts.blocked).toBe(0);
     expect(templates[0].checklistItems).toHaveLength(1);
   });
+
+  /**
+   * M10: the message on a blocked checklist row tells the reviewer to "skip the
+   * row", and `skipRows` is keyed on the TEMPLATE, not on the row. Without the
+   * parent key on the row entry the review surface has nothing to write the
+   * resolution against — which is why no UI ever offered the skip.
+   */
+  it('names the template a blocked checklist row belongs to, so the skip is reachable', () => {
+    const { dryRun } = run({
+      grid: grid([
+        { name: 'ITP-01', rows: [CLEAN_ROW, ['Earthworks', 'x'.repeat(1200), '', 'S', '', '']] },
+      ]),
+    });
+    const rowEntry = dryRun.rows.find((row) => row.unit === 'checklist_row');
+    expect(rowEntry?.parentKey).toBe('ITP-01::ITP-01');
+    expect(rowEntry?.rowRef.rowIndex).toBe(3);
+    // Which is exactly the resolution the test above proves the server honours.
+  });
 });
 
 describe('[WBR2-5](a) state/spec contradiction', () => {

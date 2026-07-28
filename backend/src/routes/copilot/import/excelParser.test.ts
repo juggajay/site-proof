@@ -28,6 +28,80 @@ describe('parseExcelWorkbook', () => {
     expect(grid.sheets[0].rows[2][4]).toBe('Superintendent');
   });
 
+  /**
+   * M10: a real ITP writes the activity once and merges it down the rows it
+   * governs, and does the same with an "H" that holds several checks. In the
+   * file the master cell holds the value and every slave cell is EMPTY, so
+   * without this the hold points on rows 2..n vanish into the column's database
+   * default — a gate that never gets held, from a workbook that looked right.
+   */
+  it('carries a vertically merged cell down the rows it covers', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildWorkbook([
+        {
+          name: 'ITP-01',
+          rows: [
+            ['Earthworks', 'Proof roll the subgrade', 'No deformation', 'H', 'Superintendent', ''],
+            ['', 'Survey the surface level', '+0 / -25 mm', '', 'Contractor', ''],
+            ['', 'Nuclear density test', '98% SMDD', '', 'Contractor', ''],
+          ],
+          // Rows 2-4 of the sheet: the header is row 1.
+          merges: ['A2:A4', 'D2:D4'],
+        },
+      ]),
+      'itp_template',
+    );
+
+    expect(grid.sheets[0].rows.map((row) => row[0])).toEqual([
+      'Earthworks',
+      'Earthworks',
+      'Earthworks',
+    ]);
+    expect(grid.sheets[0].rows.map((row) => row[3])).toEqual(['H', 'H', 'H']);
+  });
+
+  it('does not carry a merged cell past the range it covers', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildWorkbook([
+        {
+          name: 'ITP-01',
+          rows: [
+            ['Earthworks', 'Proof roll', '', 'H', '', ''],
+            ['', 'Survey level', '', '', '', ''],
+            ['Drainage', 'Pipe bedding', '', '', '', ''],
+          ],
+          merges: ['A2:A3', 'D2:D3'],
+        },
+      ]),
+      'itp_template',
+    );
+
+    expect(grid.sheets[0].rows.map((row) => row[0])).toEqual([
+      'Earthworks',
+      'Earthworks',
+      'Drainage',
+    ]);
+    // Row 4 is outside the merge: its point type stays empty, not 'H'.
+    expect(grid.sheets[0].rows[2][3]).toBe('');
+  });
+
+  it('leaves an unmerged empty cell empty rather than filling it from above', async () => {
+    const grid = await parseExcelWorkbook(
+      await buildWorkbook([
+        {
+          name: 'ITP-01',
+          rows: [
+            ['Earthworks', 'Proof roll', '', 'H', '', ''],
+            ['', 'Survey level', '', '', '', ''],
+          ],
+        },
+      ]),
+      'itp_template',
+    );
+    expect(grid.sheets[0].rows[1][0]).toBe('');
+    expect(grid.sheets[0].rows[1][3]).toBe('');
+  });
+
   it('pads short rows to the header width so column indexing is safe', async () => {
     const grid = await parseExcelWorkbook(
       await buildWorkbook([{ name: 'S', rows: [['Earthworks', 'Only two cells']] }]),

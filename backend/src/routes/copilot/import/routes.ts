@@ -33,6 +33,7 @@ import { getReadableProjects, TEMPLATE_MANAGER_ROLES } from '../../itp/templateA
 import { createProposal } from '../proposalService.js';
 import { assertBatchTransition, isTerminalImportBatchStatus } from './batchState.js';
 import type { DryRunResult } from './dryRunTypes.js';
+import { parseCsvSource } from './csvParser.js';
 import { parseExcelWorkbook, type ParsedGrid } from './excelParser.js';
 // Importing this module registers every import stage's apply/rollback handlers.
 import { requireImportKind, type ImportKindConfig } from './importKinds.js';
@@ -168,6 +169,8 @@ async function failBatch(batchId: string, status: string, reason: string): Promi
 /** One reader per accepted format, all emitting the SAME normalized grid. */
 const READERS: Record<string, (file: Express.Multer.File, kind: string) => Promise<ParsedGrid>> = {
   excel: (file, kind) => parseExcelWorkbook(file.buffer, kind),
+  // A CSV is already a grid, so it is parsed here rather than sent anywhere.
+  csv: async (file, kind) => parseCsvSource(file.buffer, file.originalname, kind),
   // A PDF has no grid to parse, so the model reads one out of it (§6-B2).
   pdf: (file, kind) => extractPdfGrid(file, kind),
   // A Word ITP is a table, so the tables are parsed — in a worker (§6-B3, §8.4).

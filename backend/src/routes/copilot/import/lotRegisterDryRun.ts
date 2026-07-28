@@ -33,11 +33,13 @@ import {
 } from '../../lots/validation.js';
 import {
   countDryRunRows,
+  markWillImport,
   type DryRunResult,
   type DryRunRow,
   type DryRunRowRef,
 } from './dryRunTypes.js';
 import type { ParsedGrid } from './excelParser.js';
+import { parseChainage, parseNumber } from './numberParsing.js';
 import {
   applyTransform,
   resolveColumnIndexes,
@@ -104,14 +106,6 @@ function normalizeLotNumber(value: string): string {
 
 function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-/** A register's numbers arrive with separators and units attached. */
-function parseNumber(raw: string): number | null {
-  const cleaned = raw.trim().replace(/,/g, '');
-  if (!cleaned) return null;
-  const value = Number(cleaned);
-  return Number.isFinite(value) ? value : null;
 }
 
 interface RawLotRow {
@@ -332,13 +326,18 @@ function judgeChainage(
 ):
   | { verdict: Verdict }
   | { chainage: { chainageStart: number | null; chainageEnd: number | null } } {
-  const chainageStart = row.values.chainageStart ? parseNumber(row.values.chainageStart) : null;
-  const chainageEnd = row.values.chainageEnd ? parseNumber(row.values.chainageEnd) : null;
+  const chainageStart = row.values.chainageStart ? parseChainage(row.values.chainageStart) : null;
+  const chainageEnd = row.values.chainageEnd ? parseChainage(row.values.chainageEnd) : null;
   const unreadable =
     (row.values.chainageStart && chainageStart === null) ||
     (row.values.chainageEnd && chainageEnd === null);
   if (unreadable) {
-    return { verdict: blocked('invalid_value', 'The chainage cells are not numbers.') };
+    return {
+      verdict: blocked(
+        'invalid_value',
+        'The chainage cells cannot be read as chainage. Use metres (1020) or stationing (CH 1+020).',
+      ),
+    };
   }
   if (chainageStart !== null && chainageEnd !== null && chainageStart > chainageEnd) {
     return {
@@ -477,12 +476,17 @@ export function computeLotRegisterDryRun(input: LotRegisterDryRunInput): {
     });
   }
 
-  const counts = countDryRunRows(ledger);
-  const unresolvedCollisions = ledger.some((row) => row.reason === 'slug_collision');
+  // The CTA's number comes off the payload, not off the outcomes (§M10).
+  const rows = markWillImport(
+    ledger,
+    proposed.map((lot) => lot.key),
+  );
+  const counts = countDryRunRows(rows);
+  const unresolvedCollisions = rows.some((row) => row.reason === 'slug_collision');
   return {
     dryRun: {
       counts,
-      rows: ledger,
+      rows,
       unmappedHeaders: unmapped,
       canApply: counts.blocked === 0 && !unresolvedCollisions && proposed.length > 0,
     },

@@ -21,6 +21,9 @@ export interface FixtureSheet {
   name: string;
   headers?: readonly string[];
   rows: string[][];
+  /** Merged ranges in A1 notation, e.g. `A2:A4` — how a real ITP writes an
+   *  activity or an "H" that governs several checklist rows. */
+  merges?: string[];
 }
 
 export async function buildWorkbook(sheets: FixtureSheet[]): Promise<Buffer> {
@@ -30,6 +33,9 @@ export async function buildWorkbook(sheets: FixtureSheet[]): Promise<Buffer> {
     worksheet.addRow([...(sheet.headers ?? AU_ITP_HEADERS)]);
     for (const row of sheet.rows) {
       worksheet.addRow(row);
+    }
+    for (const range of sheet.merges ?? []) {
+      worksheet.mergeCells(range);
     }
   }
   return Buffer.from(await workbook.xlsx.writeBuffer());

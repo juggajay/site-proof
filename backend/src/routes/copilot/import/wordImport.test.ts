@@ -123,6 +123,49 @@ describe('Wave B B3 — Word ITP import', () => {
       expect(grid.sheets[0].rows[0]).toEqual(['Earthworks', 'Trim', 'Level']);
     });
 
+    /**
+     * M10: a Word ITP merges the Activity column down the checks it governs.
+     * In HTML the slave rows simply have no `<td>` for it, so every column to
+     * its right shifts LEFT — the acceptance criteria lands in the point-type
+     * column and the "H" lands nowhere. Mirror of the colspan handling above.
+     */
+    it('repeats a vertically merged cell so the columns after it do not shift', () => {
+      const grid = wordHtmlToGrid(
+        '<table>' +
+          '<tr><td><p>Activity</p></td><td><p>Check</p></td><td><p>W/H/S</p></td></tr>' +
+          '<tr><td rowspan="3"><p>Earthworks</p></td><td><p>Proof roll</p></td><td><p>H</p></td></tr>' +
+          '<tr><td><p>Survey level</p></td><td><p>W</p></td></tr>' +
+          '<tr><td><p>Density test</p></td><td><p>S</p></td></tr>' +
+          '<tr><td><p>Drainage</p></td><td><p>Pipe bedding</p></td><td><p>W</p></td></tr>' +
+          '</table>',
+        'itp_template',
+      );
+
+      expect(grid.sheets[0].headers).toEqual(['Activity', 'Check', 'W/H/S']);
+      expect(grid.sheets[0].rows).toEqual([
+        ['Earthworks', 'Proof roll', 'H'],
+        ['Earthworks', 'Survey level', 'W'],
+        ['Earthworks', 'Density test', 'S'],
+        // The merge stops: row 5 keeps its own activity.
+        ['Drainage', 'Pipe bedding', 'W'],
+      ]);
+    });
+
+    it('handles a cell merged both down and across', () => {
+      const grid = wordHtmlToGrid(
+        '<table>' +
+          '<tr><td><p>A</p></td><td><p>B</p></td><td><p>C</p></td><td><p>D</p></td></tr>' +
+          '<tr><td rowspan="2" colspan="2"><p>Earthworks</p></td><td><p>Proof roll</p></td><td><p>H</p></td></tr>' +
+          '<tr><td><p>Survey</p></td><td><p>W</p></td></tr>' +
+          '</table>',
+        'itp_template',
+      );
+      expect(grid.sheets[0].rows).toEqual([
+        ['Earthworks', '', 'Proof roll', 'H'],
+        ['Earthworks', '', 'Survey', 'W'],
+      ]);
+    });
+
     it('refuses a table-less document by name rather than importing nothing', async () => {
       await expect(
         parseWordDocument(

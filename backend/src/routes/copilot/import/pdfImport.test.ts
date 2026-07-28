@@ -192,6 +192,45 @@ describe('Wave B B2 — PDF import', () => {
       });
     });
 
+    /**
+     * M10: the loop bound starts at one window and is corrected by the model's
+     * own `totalPages`. When the model omits it — it is one key in a free-form
+     * JSON answer — the bound stays at one window and pages 21+ are dropped
+     * without a word, in a module whose header rule is "never truncated
+     * silently". Reading on is not an option (nothing says where to stop, and
+     * every extra window is billed), so the read SAYS it is unconfirmed.
+     */
+    it('§4.4: says so when the model never confirmed how many pages it read', async () => {
+      fetchMock.mockResolvedValue(modelReply({ rows: [{ description: 'page 1-20' }] }));
+
+      const grid = await extractPdfGrid(
+        {
+          buffer: pdfBuffer(),
+          originalname: 'register.pdf',
+          mimetype: 'application/pdf',
+        } as Express.Multer.File,
+        'itp_template',
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(grid.notice).toMatch(/first 20 pages/i);
+      expect(grid.notice).toMatch(/could not confirm/i);
+    });
+
+    it('says nothing extra when the page count IS confirmed', async () => {
+      fetchMock.mockResolvedValue(modelReply({ totalPages: 3, rows: [{ description: 'row' }] }));
+
+      const grid = await extractPdfGrid(
+        {
+          buffer: pdfBuffer(),
+          originalname: 'register.pdf',
+          mimetype: 'application/pdf',
+        } as Express.Multer.File,
+        'itp_template',
+      );
+      expect(grid.notice).toBeUndefined();
+    });
+
     it('§9-D1: refuses a PDF over the 10 MB AI sub-cap before any model call', async () => {
       await expect(
         extractPdfGrid(
@@ -438,10 +477,12 @@ describe('Wave B B2 — PDF import', () => {
       expect(pdfAsWord.status).toBe(400);
       expect(pdfAsWord.body.error.message).toMatch(/does not match the declared file type/i);
 
-      const wrongFormat = await upload(pdfBuffer(), 'itps.csv', 'text/csv');
+      // M10 accepts .csv, so the unsupported-format example is a format that
+      // really is unsupported.
+      const wrongFormat = await upload(pdfBuffer(), 'itps.txt', 'text/plain');
       expect(wrongFormat.status).toBe(400);
       expect(wrongFormat.body.error.message).toMatch(
-        /\.xlsx spreadsheets, \.pdf documents and \.docx Word files/,
+        /\.xlsx spreadsheets, \.csv files, \.pdf documents and \.docx Word files/,
       );
 
       expect(await prisma.importBatch.count({ where: { projectId } })).toBe(0);

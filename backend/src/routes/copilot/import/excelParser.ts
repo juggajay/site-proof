@@ -20,6 +20,7 @@
  */
 import ExcelJS from 'exceljs';
 import { XMLParser } from 'fast-xml-parser';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 
 import { AppError } from '../../../lib/AppError.js';
@@ -29,6 +30,7 @@ import {
   type ZipEntrySummary,
 } from '../../../lib/zipSafety.js';
 import { deriveFieldMapFromHeaders } from './mappingProfiles.js';
+import { applyVerticalMerges, readSheetMerges, type SheetMerges } from './sheetMerges.js';
 
 export const MAX_IMPORT_SHEETS = 50;
 export const MAX_IMPORT_ROWS_PER_SHEET = 5_000;
@@ -49,6 +51,23 @@ export interface ParsedSheet {
 
 export interface ParsedGrid {
   sheets: ParsedSheet[];
+  /**
+   * Something the reviewer must know about the READ itself, rather than about
+   * any one row — today only "how much of this PDF was actually read". Shown
+   * above the dry-run counts. Absent means the read is fully accounted for.
+   */
+  notice?: string;
+}
+
+/**
+ * The sheet name a single-sheet source gets: its own file name. A row reference
+ * then reads as something the reviewer recognises. Shared by the PDF and CSV
+ * readers, neither of which has sheets of its own.
+ */
+export function sheetNameFromFilename(filename: string): string {
+  const base = path.basename(filename.replace(/\\/g, '/'));
+  const withoutExtension = base.replace(/\.[^.]+$/, '').trim();
+  return withoutExtension.slice(0, 80) || 'Document';
 }
 
 function parseFailure(message: string): never {
@@ -256,12 +275,75 @@ function readSheetNames(buffer: Buffer, entries: ZipEntrySummary[]): Map<string,
   return names;
 }
 
+/** Whole-workbook character budget, carried across sheets. */
+interface CharacterBudget {
+  used: number;
+}
+
 /**
- * Parse an .xlsx buffer to a normalized grid. Every sheet contributes one header
- * row — the best of its first few non-empty rows, see `pickHeaderRow` — and the
- * rows below it, padded/clipped to the header width so downstream code can index
- * by column position without bounds checks. Anything above the header row is a
- * title banner and is dropped.
+ * One worksheet's rows: the header band (the best of its first few non-empty
+ * rows, see `pickHeaderRow`), and the rows below it padded/clipped to the header
+ * width so downstream code can index by column position without bounds checks.
+ * Anything above the header row is a title banner and is dropped. Null when the
+ * sheet holds no rows at all.
+ */
+async function readSheet(
+  worksheet: AsyncIterable<{ values: unknown; number: number }>,
+  sheetName: string,
+  kind: string,
+  merges: SheetMerges,
+  budget: CharacterBudget,
+): Promise<ParsedSheet | null> {
+  let headers: string[] | null = null;
+  const rows: string[][] = [];
+  // Non-empty rows held back while the header band is still being chosen.
+  const leading: string[][] = [];
+
+  const pushRow = (cells: string[]) => rows.push(headers!.map((_, index) => cells[index] ?? ''));
+  const chooseHeaders = () => {
+    const pick = pickHeaderRow(leading, kind);
+    headers = leading[pick].map((cell, index) => cell || `Column ${index + 1}`);
+    for (const cells of leading.slice(pick + 1)) pushRow(cells);
+    leading.length = 0;
+  };
+
+  for await (const row of worksheet) {
+    if (rows.length >= MAX_IMPORT_ROWS_PER_SHEET) {
+      parseFailure(
+        `Sheet "${sheetName}" has more than ${MAX_IMPORT_ROWS_PER_SHEET} rows. Split it into smaller files.`,
+      );
+    }
+
+    // row.values is 1-based with a leading hole; drop it and cap the width.
+    const raw = (Array.isArray(row.values) ? row.values : []).slice(1, MAX_IMPORT_COLUMNS + 1);
+    const cells = raw.map((value) => normalizeCell(value, sheetName));
+
+    budget.used += cells.reduce((sum, cell) => sum + cell.length, 0);
+    if (budget.used > MAX_IMPORT_TOTAL_CHARACTERS) {
+      parseFailure('That workbook holds too much text to import. Split it into smaller files.');
+    }
+
+    // AFTER the empty-row test on purpose: a merge carries a value down the
+    // rows it covers, but it must never resurrect a row the sheet left blank.
+    if (isEmptyRow(cells)) continue;
+    applyVerticalMerges(cells, Number(row.number), merges);
+
+    if (!headers) {
+      leading.push(cells);
+      if (leading.length >= HEADER_SCAN_ROWS) chooseHeaders();
+      continue;
+    }
+
+    pushRow(cells);
+  }
+
+  // A sheet shorter than the scan window still has to pick a header row.
+  if (!headers && leading.length > 0) chooseHeaders();
+  return headers ? { name: sheetName, headers, rows } : null;
+}
+
+/**
+ * Parse an .xlsx buffer to a normalized grid, one `ParsedSheet` per worksheet.
  */
 export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<ParsedGrid> {
   const entries = assertSafeOoxmlArchive(buffer);
@@ -290,7 +372,8 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
   seeded.workbookRels = readWorkbookRels(buffer, entries) ?? undefined;
 
   const sheets: ParsedSheet[] = [];
-  let totalCharacters = 0;
+  const uncheckedMergeSheets: string[] = [];
+  const budget: CharacterBudget = { used: 0 };
   let emittedSheets = 0;
 
   for await (const worksheet of reader) {
@@ -303,52 +386,11 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
 
     const sheetNo = String((worksheet as unknown as { id?: unknown }).id ?? '');
     const sheetName = (sheetNames.get(sheetNo) ?? `Sheet ${sheets.length + 1}`).slice(0, 200);
-    let headers: string[] | null = null;
-    const rows: string[][] = [];
-    // Non-empty rows held back while the header band is still being chosen.
-    const leading: string[][] = [];
+    const merges = readSheetMerges(buffer, entries, sheetNo, MAX_IMPORT_COLUMNS);
+    if (merges.unchecked) uncheckedMergeSheets.push(sheetName);
 
-    const pushRow = (cells: string[]) => rows.push(headers!.map((_, index) => cells[index] ?? ''));
-    const chooseHeaders = () => {
-      const pick = pickHeaderRow(leading, kind);
-      headers = leading[pick].map((cell, index) => cell || `Column ${index + 1}`);
-      for (const cells of leading.slice(pick + 1)) pushRow(cells);
-      leading.length = 0;
-    };
-
-    for await (const row of worksheet) {
-      if (rows.length >= MAX_IMPORT_ROWS_PER_SHEET) {
-        parseFailure(
-          `Sheet "${sheetName}" has more than ${MAX_IMPORT_ROWS_PER_SHEET} rows. Split it into smaller files.`,
-        );
-      }
-
-      // row.values is 1-based with a leading hole; drop it and cap the width.
-      const raw = (Array.isArray(row.values) ? row.values : []).slice(1, MAX_IMPORT_COLUMNS + 1);
-      const cells = raw.map((value) => normalizeCell(value, sheetName));
-
-      totalCharacters += cells.reduce((sum, cell) => sum + cell.length, 0);
-      if (totalCharacters > MAX_IMPORT_TOTAL_CHARACTERS) {
-        parseFailure('That workbook holds too much text to import. Split it into smaller files.');
-      }
-
-      if (isEmptyRow(cells)) continue;
-
-      if (!headers) {
-        leading.push(cells);
-        if (leading.length >= HEADER_SCAN_ROWS) chooseHeaders();
-        continue;
-      }
-
-      pushRow(cells);
-    }
-
-    // A sheet shorter than the scan window still has to pick a header row.
-    if (!headers && leading.length > 0) chooseHeaders();
-
-    if (headers) {
-      sheets.push({ name: sheetName, headers, rows });
-    }
+    const sheet = await readSheet(worksheet, sheetName, kind, merges, budget);
+    if (sheet) sheets.push(sheet);
   }
 
   if (sheets.length === 0) {
@@ -366,5 +408,15 @@ export async function parseExcelWorkbook(buffer: Buffer, kind: string): Promise<
     );
   }
 
-  return { sheets };
+  return {
+    sheets,
+    // Bounded memory means a very large worksheet's merge ranges may be out of
+    // reach. That degrades to the old behaviour — but the reviewer is told,
+    // because a merged "H" read as blank is a hold point that never gets held.
+    ...(uncheckedMergeSheets.length > 0
+      ? {
+          notice: `Merged cells could not be checked on ${uncheckedMergeSheets.join(', ')} — those sheets are very large. Check that any activity or hold point written once and merged down several rows came through on every row.`,
+        }
+      : {}),
+  };
 }
