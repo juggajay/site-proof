@@ -38,8 +38,9 @@ function syncChipAriaLabel(
       return 'Syncing changes';
     case 'failed':
       return `${failedSyncCount} change${failedSyncCount === 1 ? '' : 's'} failed to sync. Tap to retry.`;
+    // Built off the visible label so the two can never pluralise differently.
     case 'conflict':
-      return `${conflictCount} sync conflict${conflictCount === 1 ? '' : 's'} need${conflictCount === 1 ? 's' : ''} resolving. Tap for details.`;
+      return `${syncChipLabel(state, pendingSyncCount, failedSyncCount, conflictCount)} to resolve. Tap for details.`;
     case 'offline':
       return 'Offline. Changes will sync when you reconnect.';
     case 'waiting':
