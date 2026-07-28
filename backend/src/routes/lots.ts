@@ -23,6 +23,7 @@ import { lotDeleteRouter } from './lots/deleteRoutes.js';
 import { lotSubcontractorAssignmentsRouter } from './lots/subcontractorAssignments.js';
 import { lotBulkMutationRouter } from './lots/bulkMutationRoutes.js';
 import { lotQualityRouter } from './lots/qualityRoutes.js';
+import { lotFolioRouter } from './lots/folioRoutes.js';
 import { emitLotWebhookEvent } from './lots/webhookEvents.js';
 
 export const lotsRouter = Router();
@@ -36,6 +37,11 @@ lotsRouter.use(lotReadRouter);
 // Lot geometry routes (GET/POST /:lotId/geometries, DELETE /:lotId/geometries/:geometryId).
 // Two-segment paths, so they never collide with the read router's dynamic `/:id`.
 lotsRouter.use(lotGeometryRouter);
+
+// Wave D `D1b` folio routes (POST /:id/folio/sessions, GET /:id/folios).
+// Three- and two-segment paths, so like the geometry router they never collide
+// with the read router's dynamic `/:id`. See ./lots/folioRoutes.ts
+lotsRouter.use(lotFolioRouter);
 
 // Lot create routes (POST /, /bulk, /:id/clone) — mounted after read routes, before update/delete/bulk routes. See ./lots/createRoutes.ts
 lotsRouter.use(lotCreateRouter);

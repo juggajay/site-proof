@@ -48,7 +48,22 @@ export function buildScheduledReportArtifactFrontendPath(runId: string): string 
   return `/reports/scheduled-runs/${encodeURIComponent(runId)}/artifact`;
 }
 
-function assertSafeStorageId(value: string, fieldName: string): void {
+/**
+ * Charset guard for any id interpolated into an object-storage path.
+ *
+ * `^[A-Za-z0-9_-]+$` rejects `/`, `\`, `.`, `..`, null bytes and every
+ * non-ASCII character, and the `+` rejects the empty string — so a segment can
+ * neither escape its prefix nor collapse into one that collides with another
+ * record's.
+ *
+ * EXPORTED for Wave D `D1b` (threat model
+ * `docs/plans/wave-d1b-threat-model-2026-07-28.md` T-5). It was module-private
+ * with a single call site; the folio writer needs the same bytes, and a second
+ * regex in a folio module is a second regex to get wrong that drifts from this
+ * one the first time either is touched. **AT-155** asserts against THIS export,
+ * not a copy.
+ */
+export function assertSafeStorageId(value: string, fieldName: string): void {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) {
     throw AppError.badRequest(`${fieldName} is invalid`);
   }

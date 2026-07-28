@@ -36,7 +36,8 @@ type RateLimitScope =
   | 'support'
   | 'verification-resend'
   | 'chat'
-  | 'product-events';
+  | 'product-events'
+  | 'folio-session';
 type AuthLockoutResult = { locked: boolean; remainingSeconds: number };
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
@@ -61,6 +62,26 @@ const CHAT_WINDOW_MS = 60 * 1000;
 const CHAT_MAX_REQUESTS = readPositiveIntegerEnv('CHAT_RATE_LIMIT_MAX', 20);
 const PRODUCT_EVENTS_WINDOW_MS = 60 * 1000;
 const PRODUCT_EVENTS_MAX_REQUESTS = readPositiveIntegerEnv('PRODUCT_EVENTS_RATE_LIMIT_MAX', 60);
+// Wave D `D1b`, threat model T-3 (reservation exhaustion). A folio session
+// burns a version number PERMANENTLY (§10.5: gaps are harmless, reuse is not)
+// and writes a full assembled payload, so an unbounded caller costs CIVOS a
+// wide row and a retired integer per request. The only limiter a new
+// `/api/lots` route inherits is the global 1000/min/IP at `server.ts:116`,
+// which is neither a mitigation nor even keyed on the actor.
+//
+// 6 per minute per USER, declared before measuring anything (`[DR2-B6]`).
+// Issuing a folio is a human act on a human's screen (§4.3.1) — six in a
+// minute is already an unusual burst of deliberate clicking, and the cap is
+// env-tunable if a real user ever proves otherwise.
+const FOLIO_SESSION_WINDOW_MS = 60 * 1000;
+
+/**
+ * Read at CALL time, in the `getSupportMaxRequests` shape, so the ceiling can be
+ * moved by env without a redeploy-shaped code change.
+ */
+function getFolioSessionMaxRequests(): number {
+  return readPositiveIntegerEnv('FOLIO_SESSION_RATE_LIMIT_MAX', 6);
+}
 const CLEANUP_INTERVAL = 5 * 60 * 1000;
 const MAX_MAP_SIZE = 10000;
 const LOCKOUT_THRESHOLD = readPositiveIntegerEnv('AUTH_LOCKOUT_THRESHOLD', 5);
@@ -623,4 +644,41 @@ async function handleProductEventsRateLimit(req: Request, res: Response, next: N
  */
 export function productEventsRateLimiter(req: Request, res: Response, next: NextFunction) {
   void handleProductEventsRateLimit(req, res, next).catch(next);
+}
+
+async function handleFolioSessionRateLimit(req: Request, res: Response, next: NextFunction) {
+  // requireAuth runs first, so key per user; fall back to source IP. Keying on
+  // the USER is the point (threat model T-3): an IP-keyed limit neither
+  // identifies the actor nor survives a mobile carrier NAT.
+  const identifier = req.user?.id || getClientIp(req);
+  const maxRequests = getFolioSessionMaxRequests();
+  const result = await consumeRateLimit(
+    'folio-session',
+    identifier,
+    FOLIO_SESSION_WINDOW_MS,
+    maxRequests,
+  );
+  setRateLimitHeaders(res, maxRequests, result.remaining, result.resetSeconds);
+
+  if (!result.allowed) {
+    throw new AppError(
+      429,
+      `Too many folio sessions. Maximum ${maxRequests} per minute. ` +
+        `Each session reserves a folio version, so unused sessions leave gaps. ` +
+        `Please try again in ${result.resetSeconds} seconds.`,
+      'RATE_LIMITED',
+      { retryAfter: result.resetSeconds },
+    );
+  }
+
+  next();
+}
+
+/**
+ * Per-user limiter for folio session creation (Wave D `D1b`, threat model T-3).
+ * Load-bearing twice: it also bounds how many concurrent server-side renders
+ * one actor can provoke in the API process (T-6).
+ */
+export function folioSessionRateLimiter(req: Request, res: Response, next: NextFunction) {
+  void handleFolioSessionRateLimit(req, res, next).catch(next);
 }

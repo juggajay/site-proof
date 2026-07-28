@@ -259,6 +259,11 @@ export const AuditAction = {
   SUBCONTRACTOR_PERMANENTLY_DELETED: 'subcontractor_permanently_deleted',
   SUBCONTRACTOR_PORTAL_ACCESS_CHANGED: 'subcontractor_portal_access_changed',
   SUBCONTRACTOR_PORTAL_ACCESS_UPDATED: 'subcontractor_portal_access_changed',
+  // Wave D `D1b` — handover. Written by `writeAuditLogInTransaction` inside the
+  // issue transaction, never by the swallowing `createAuditLog` (threat model
+  // T-1): an issuance whose audit row can vanish is an un-audited issuance.
+  FOLIO_ISSUED: 'folio_issued',
+  FOLIO_DOWNLOADED: 'folio_downloaded',
 } as const;
 
 export type AuditActionType = (typeof AuditAction)[keyof typeof AuditAction];
