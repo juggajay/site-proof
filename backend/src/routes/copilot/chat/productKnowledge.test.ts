@@ -270,5 +270,12 @@ describe('product knowledge — test sufficiency facts', () => {
     expect(body('itp-holdpoints-tests')).toContain(
       'There is no CIVOS inbox or queue for them to sign into',
     );
+    // The clause after it, which neither this pin nor the frontend mirror
+    // guarded until now: "no inbox" was covered, "no cross-project list" was
+    // not — and a list of everything a superintendent owes across projects is
+    // precisely the plausible-sounding feature Clancy would invent.
+    expect(body('itp-holdpoints-tests')).toContain(
+      'no list of everything they owe you across projects',
+    );
   });
 });
