@@ -33,11 +33,20 @@ export async function summariseSyncQueue(): Promise<SyncQueueSummary> {
 
 // Reset dead-lettered items so the worker will attempt them again. Used by the
 // "Retry" action on the failed indicator. Returns how many items were revived.
+//
+// Review L9: a row the server TERMINALLY rejected is skipped. #1686 gave every
+// queue kind one 4xx classifier (`syncWorker.isTerminalSyncRejection` — a 4xx
+// other than 408/429 will never succeed on replay: bad body, deleted anchor, no
+// permission, stale base) and `markSyncItemTerminalError` records its verdict on
+// the row. Reviving those meant the always-visible Retry button re-POSTed writes
+// the server has permanently refused, each one re-failing and re-dead-lettering,
+// with the foreman given no way to tell the two cases apart. Only rows that ran
+// out of attempts against a network/5xx failure are genuinely retryable.
 export async function resetFailedSyncItems(): Promise<number> {
   const items = await offlineDb.syncQueue.toArray();
   const failed = items.filter(
     (item): item is SyncQueueItem & { id: number } =>
-      typeof item.id === 'number' && item.attempts >= MAX_SYNC_ATTEMPTS,
+      typeof item.id === 'number' && item.attempts >= MAX_SYNC_ATTEMPTS && !item.terminal,
   );
 
   for (const item of failed) {
@@ -67,6 +76,11 @@ export async function markSyncItemTerminalError(id: number, error: string): Prom
     await offlineDb.syncQueue.update(id, {
       attempts: MAX_SYNC_ATTEMPTS,
       lastError: error,
+      // L9: `attempts` alone cannot distinguish "the server said no" from "the
+      // network was down five times", and Retry needs to. Set HERE rather than
+      // recomputed at retry time so the classification is #1686's, made once,
+      // with the status in hand.
+      terminal: true,
     });
   }
 }

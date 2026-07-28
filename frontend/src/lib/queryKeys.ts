@@ -31,6 +31,14 @@ export const queryKeys = {
 
   // Test Results
   testResults: (projectId: string) => ['test-results', projectId] as const,
+  /**
+   * Review L10 — the shipped test-frequency registry. Not project-scoped and it
+   * carries no tenant content (`routes/testSufficiency.ts`), so one key serves
+   * every project and it is cached for an hour. Here rather than inline in the
+   * hook so the day a pack correction has to be busted, the key is where the
+   * other 34 are instead of needing a grep.
+   */
+  sufficiencyRulesets: () => ['test-sufficiency', 'rulesets'] as const,
 
   // ITPs
   itps: (projectId: string) => ['itps', projectId] as const,

@@ -3,7 +3,14 @@
 // in-process retention worker (src/lib/dataRetentionWorker.ts). This module is
 // intentionally pure: it takes a Prisma client and performs no logging or
 // process side effects, so importing it never opens a database connection.
+// `importBatchGc` (the abandoned-batch sweep) does reference the `prisma`
+// singleton, but only as a default argument this module never takes — Prisma
+// constructs lazily and connects on first query, so the no-connection-on-import
+// property holds, and `dataRetention.test.ts` drives the whole module off a mock
+// client to keep it honest.
 import type { Prisma, PrismaClient } from '@prisma/client';
+
+import { sweepAbandonedImportBatches } from '../routes/copilot/import/importBatchGc.js';
 
 // Retention periods in days.
 export const RETENTION_POLICIES = {
@@ -72,6 +79,14 @@ export interface RetentionApplyResult {
   holdPointReleaseTokens: number;
   revokedAuthTokens: number;
   productEvents: number;
+  /**
+   * Wave B `[WBR2-3]` §3.1.2. Reported SEPARATELY and deliberately outside
+   * `totalDeleted`: an abandoned batch is CANCELLED, not deleted — the row and
+   * its source Document survive, only the reproducible parse artefacts are
+   * nulled. Folding it into a "records cleaned up" total would report deletions
+   * that did not happen.
+   */
+  abandonedImportBatches: number;
   totalDeleted: number;
 }
 
@@ -84,6 +99,7 @@ type RetentionPrismaClient = Pick<
   | 'holdPointReleaseToken'
   | 'revokedAuthToken'
   | 'productEvent'
+  | 'importBatch'
 >;
 
 /**
@@ -136,6 +152,13 @@ export async function applyRetentionPolicies(
     await client.productEvent.deleteMany({ where: { createdAt: { lt: productEventsCutoff } } })
   ).count;
 
+  // Wave B `[WBR2-3]` §3.1.2 — the abandoned-import-batch sweep. It shipped with
+  // its own index and its own tests and NO invoker (external review §4b), which
+  // made the retention claim in its own header false. This is that invoker: the
+  // policy module is the one place both the live worker and the operator CLI
+  // funnel through, so wiring it here reaches both.
+  const abandonedImportBatches = await sweepAbandonedImportBatches(now, client);
+
   return {
     passwordResetTokens,
     emailVerificationTokens,
@@ -144,6 +167,7 @@ export async function applyRetentionPolicies(
     holdPointReleaseTokens,
     revokedAuthTokens,
     productEvents,
+    abandonedImportBatches,
     totalDeleted:
       passwordResetTokens +
       emailVerificationTokens +

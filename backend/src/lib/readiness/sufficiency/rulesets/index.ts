@@ -11,7 +11,6 @@
 
 import type { Ruleset } from '../types.js';
 import { TFNSW_Q6_V1 } from './tfnsw-q6.v1.js';
-import { VICROADS_204_V1 } from './vicroads-204.v1.js';
 import { VICROADS_204_V2 } from './vicroads-204.v2.js';
 
 /**
@@ -27,22 +26,27 @@ import { VICROADS_204_V2 } from './vicroads-204.v2.js';
  * preserve it; `tfnsw-q6.v1.ts`'s header carries its findings forward.
  */
 /**
- * D14.2 §6.5 — `vicroads-204.v1` stays REGISTERED, not deleted, and is closed
- * with `effectiveTo`.
+ * External review 2026-07-28 §4b — **`vicroads-204.v1` is DELETED**, superseding
+ * D14.2 §6.5's "stays registered, frozen and `effectiveTo`-closed".
  *
- * C1.2 (#1594) writes `rules[].ruleId` into the immutable `RequirementEvaluation`
- * table, so `vicroads-204.v1/compaction-density` is referenced by decision
- * evidence that must keep resolving to the definition it was decided under. The
- * pack revision is therefore a NEW FILE, not an edit; `resolveRuleset` picks the
- * newest effective one, so every live VIC project reads `.v2` from 2026-07-27
- * and nothing reads `.v1` again. Both are still validated by CI.
+ * §6.5 kept it for one stated job: C1.2 (#1594) writes `rules[].ruleId` into the
+ * immutable `RequirementEvaluation` table, so `vicroads-204.v1/compaction-density`
+ * had to keep resolving to the definition it was decided under. The review
+ * verified that job is not being done and cannot be: `RequirementEvaluation` has
+ * ZERO rows (`READINESS_SNAPSHOTS_ENABLED` is off), and nothing anywhere resolves
+ * a `ruleId` back to a pack — the only two readers of this array are
+ * `effectiveRulesets` and `resolveRuleset`, and BOTH filter the effective window,
+ * which `.v1`'s `effectiveTo: '2026-07-27'` has been outside since that date. No
+ * production caller passes a historical `at`, so the file was unreachable code
+ * carrying a CONFIRMED grade-A provenance nobody could reach.
  *
- * Two ids, ONE authority. This is not "two VIC packs" in the shadowing sense the
- * spec warns about for NSW — the date windows abut, so exactly one is live at
- * any instant.
+ * Same treatment the tree already gave `tfnsw-r44.v1` (D14.3 §5.5). Git history
+ * and `docs/research/c1-pack-confirmation-vicroads-204-2026-07-27.md` preserve
+ * it, and `vicroads-204.v2.ts`'s header already carried every one of its findings
+ * forward verbatim — including the Wyndham contamination, the reduced-figures
+ * trap and the Scale A/B material-property ceiling.
+ *
+ * The day a pack revision genuinely needs its predecessor kept, the trigger is a
+ * NON-EMPTY `RequirementEvaluation`, not the mere existence of the snapshot code.
  */
-export const SUFFICIENCY_RULESETS: readonly Ruleset[] = [
-  VICROADS_204_V1,
-  VICROADS_204_V2,
-  TFNSW_Q6_V1,
-];
+export const SUFFICIENCY_RULESETS: readonly Ruleset[] = [VICROADS_204_V2, TFNSW_Q6_V1];

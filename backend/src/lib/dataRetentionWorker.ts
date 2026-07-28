@@ -52,7 +52,11 @@ export function startDataRetentionWorker(): { stop: () => void } | null {
     isRunning = true;
     try {
       const result = await applyRetentionPolicies(prisma);
-      if (result.totalDeleted > 0) {
+      // `abandonedImportBatches` is a CANCEL, not a delete, so it is outside
+      // `totalDeleted` — without it in the gate a run that only swept batches
+      // would log nothing and the sweep would stay as invisible as it was
+      // unwired.
+      if (result.totalDeleted > 0 || result.abandonedImportBatches > 0) {
         logInfo('[Data Retention] Swept expired records', { ...result });
       }
     } catch (error) {

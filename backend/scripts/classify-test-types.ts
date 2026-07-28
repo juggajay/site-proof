@@ -18,7 +18,7 @@
 // It logs values and row counts. It logs NO tenant identifiers, no lot ids and
 // no project names: a test type is product vocabulary, not tenant content.
 //
-//   npm exec tsx scripts/classify-test-types.ts
+//   npm run db:classify-test-types
 import 'dotenv/config';
 
 import { PrismaClient } from '@prisma/client';

@@ -18,6 +18,7 @@ import { authRouter } from '../../auth.js';
 import { copilotRouter } from '../index.js';
 import { applyHandlers, createProposal } from '../proposalService.js';
 import { sweepAbandonedImportBatches } from './importBatchGc.js';
+import { applyRetentionPolicies } from '../../../lib/dataRetention.js';
 import { IMPORT_ITP_TEMPLATES_STAGE } from './itpTemplateImportExecutor.js';
 
 const app = express();
@@ -687,6 +688,29 @@ describe('Wave B — Excel ITP import', () => {
     expect(batch.dryRun).toBeNull();
     expect(batch.sourceDocumentId).not.toBeNull();
   }, 60_000);
+
+  it('the RETENTION RUN sweeps it — the sweep had no invoker at all (review §4b)', async () => {
+    // `sweepAbandonedImportBatches` was written, indexed and tested, then never
+    // called from anywhere but its own test, while `dataRetentionWorker` ran live
+    // in production. That made the spec's retention claim false. This asserts the
+    // WIRING, against real rows, through the entry point the worker uses.
+    const abandoned = (await upload(pmToken, workbook)).body.batch.id as string;
+    const fresh = (await upload(pmToken, workbook)).body.batch.id as string;
+    const stale = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await prisma.$executeRaw`UPDATE import_batches SET updated_at = ${stale} WHERE id = ${abandoned}`;
+
+    const result = await applyRetentionPolicies(prisma);
+    expect(result.abandonedImportBatches).toBeGreaterThanOrEqual(1);
+
+    expect((await prisma.importBatch.findUniqueOrThrow({ where: { id: abandoned } })).status).toBe(
+      'cancelled',
+    );
+    // The one inside the window is untouched — a sweep that cancels live work is
+    // worse than no sweep.
+    expect((await prisma.importBatch.findUniqueOrThrow({ where: { id: fresh } })).status).not.toBe(
+      'cancelled',
+    );
+  }, 120_000);
 
   it('leaves an APPLIED batch alone when the sweep runs', async () => {
     const batchId = await batchReadyForReview();
