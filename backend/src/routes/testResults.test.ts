@@ -4777,4 +4777,369 @@ describe('Test Results API', () => {
       }
     });
   });
+
+  describe('Wave C3 Phase B1 - the sample point', () => {
+    const SAMPLE_POINT_SELECT = {
+      sampleLatitude: true,
+      sampleLongitude: true,
+      sampleLocationSource: true,
+      sampleLocationAccuracyM: true,
+    } as const;
+
+    // AT-85 [C3S-B1]: the columns are written ONLY by an explicit capture. A row
+    // created with nothing but free text — the exact text a chainage parser
+    // would have been tempted to derive a pin from — stays unlocated.
+    it('AT-85: creating a test with only sampleLocation leaves all four columns NULL', async () => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId,
+          testType: 'C3 Text Only',
+          sampleLocation: 'CH 1000+50, 2m LHS',
+        });
+      expect(res.status).toBe(201);
+
+      const id = res.body.testResult.id;
+      try {
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id },
+          select: { sampleLocation: true, ...SAMPLE_POINT_SELECT },
+        });
+        expect(stored.sampleLocation).toBe('CH 1000+50, 2m LHS');
+        expect(stored.sampleLatitude).toBeNull();
+        expect(stored.sampleLongitude).toBeNull();
+        expect(stored.sampleLocationSource).toBeNull();
+        expect(stored.sampleLocationAccuracyM).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id } });
+      }
+    });
+
+    // AT-85: an explicit capture persists all four, and a `map_pick` writes NULL
+    // accuracy [C3R-A4] — accuracy is a property of a GPS fix, not of a tap.
+    it('AT-85: an explicit capture persists the pair, its provenance and its accuracy', async () => {
+      const gps = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId,
+          testType: 'C3 GPS Capture',
+          sampleLatitude: -33.8688,
+          sampleLongitude: 151.2093,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 6,
+        });
+      const picked = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId,
+          testType: 'C3 Map Pick',
+          sampleLatitude: '-33.8700',
+          sampleLongitude: '151.2100',
+          sampleLocationSource: 'map_pick',
+        });
+      expect(gps.status).toBe(201);
+      expect(picked.status).toBe(201);
+
+      const ids = [gps.body.testResult.id, picked.body.testResult.id];
+      try {
+        const gpsRow = await prisma.testResult.findUniqueOrThrow({
+          where: { id: ids[0] },
+          select: SAMPLE_POINT_SELECT,
+        });
+        expect(Number(gpsRow.sampleLatitude)).toBeCloseTo(-33.8688, 6);
+        expect(Number(gpsRow.sampleLongitude)).toBeCloseTo(151.2093, 6);
+        expect(gpsRow.sampleLocationSource).toBe('gps');
+        expect(Number(gpsRow.sampleLocationAccuracyM)).toBe(6);
+
+        const pickedRow = await prisma.testResult.findUniqueOrThrow({
+          where: { id: ids[1] },
+          select: SAMPLE_POINT_SELECT,
+        });
+        expect(Number(pickedRow.sampleLatitude)).toBeCloseTo(-33.87, 6);
+        expect(pickedRow.sampleLocationSource).toBe('map_pick');
+        expect(pickedRow.sampleLocationAccuracyM).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: { in: ids } } });
+      }
+    });
+
+    // AT-85 [C3R-B7]: malformed input is a 400 at the route, not a 500 from the
+    // database. The Zod enum exists precisely so an unknown source never reaches
+    // the CHECK constraint.
+    it.each([
+      [
+        'out-of-range latitude',
+        { sampleLatitude: 95, sampleLongitude: 151, sampleLocationSource: 'gps' },
+      ],
+      [
+        'out-of-range longitude',
+        { sampleLatitude: -33.8, sampleLongitude: 200, sampleLocationSource: 'gps' },
+      ],
+      [
+        'unknown source',
+        { sampleLatitude: -33.8, sampleLongitude: 151, sampleLocationSource: 'inferred' },
+      ],
+      [
+        'non-numeric accuracy',
+        {
+          sampleLatitude: -33.8,
+          sampleLongitude: 151,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 'very precise',
+        },
+      ],
+    ])('AT-85: %s is a 400, not a 500', async (_name, payload) => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, lotId, testType: 'C3 Invalid', ...payload });
+      expect(res.status).toBe(400);
+
+      const leaked = await prisma.testResult.findFirst({
+        where: { projectId, testType: 'C3 Invalid' },
+      });
+      expect(leaked).toBeNull();
+    });
+
+    // AT-85 [C3R-B7]: each of the three CHECK constraints rejects its own
+    // violation AT THE DATABASE. Prose rules do not survive the next route that
+    // forgets them, so these are asserted against Prisma directly rather than
+    // through a handler that could be the only thing enforcing them.
+    it.each([
+      ['pair-null (lat without lng)', { sampleLatitude: -33.8, sampleLocationSource: 'gps' }],
+      ['source-null-iff (source without coordinates)', { sampleLocationSource: 'gps' }],
+      [
+        'source enum (an invented provenance)',
+        { sampleLatitude: -33.8, sampleLongitude: 151, sampleLocationSource: 'inferred' },
+      ],
+    ])('AT-85: the DB CHECK constraint rejects %s', async (_name, data) => {
+      await expect(
+        prisma.testResult.create({
+          data: { projectId, lotId, testType: 'C3 Constraint', status: 'requested', ...data },
+        }),
+      ).rejects.toThrow();
+
+      const leaked = await prisma.testResult.findFirst({
+        where: { projectId, testType: 'C3 Constraint' },
+      });
+      expect(leaked).toBeNull();
+    });
+
+    // AT-93 [C3S-f] [C3R-A8]: EACH of the four keys individually, because
+    // `hasSubstantiveEdit` iterates every key in `updateData` — a single-key test
+    // would pass while three keys stayed broken. Proof-of-catch: drop any one key
+    // from NON_SUBSTANTIVE_EDIT_FIELDS and that key's case fails.
+    it.each([
+      ['sampleLatitude', { sampleLatitude: -33.87 }],
+      ['sampleLongitude', { sampleLongitude: 151.21 }],
+      ['sampleLocationSource', { sampleLocationSource: 'map_pick' }],
+      ['sampleLocationAccuracyM', { sampleLocationAccuracyM: 12 }],
+    ])('AT-93: editing %s on a verified row does not un-verify it', async (_name, patch) => {
+      const verifiedAt = new Date('2026-07-10T00:00:00.000Z');
+      const test = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'C3 Verified Located',
+          status: 'verified',
+          resultValue: 98,
+          passFail: 'pass',
+          verifiedById: userId,
+          verifiedAt,
+          sampleLatitude: -33.8688,
+          sampleLongitude: 151.2093,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 6,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${test.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send(patch);
+        expect(res.status).toBe(200);
+
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: test.id },
+          select: { status: true, verifiedById: true, verifiedAt: true },
+        });
+        expect(stored.status).toBe('verified');
+        expect(stored.verifiedById).toBe(userId);
+        expect(stored.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: test.id } });
+      }
+    });
+
+    // AT-93 [C3R-A7]: the audit row is what makes the exemption above safe, so
+    // it must carry what the location moved FROM as well as what it moved to.
+    // The same PATCH shape that also touches a RESULT still un-verifies — the
+    // second half is the proof the exemption did not swallow evidence fields.
+    it('AT-93: the location edit is audited with old + new values; a result edit still un-verifies', async () => {
+      const verifiedAt = new Date('2026-07-10T00:00:00.000Z');
+      const seed = {
+        projectId,
+        lotId,
+        testType: 'C3 Audit Located',
+        status: 'verified',
+        resultValue: 98,
+        passFail: 'pass',
+        verifiedById: userId,
+        verifiedAt,
+        sampleLatitude: -33.8688,
+        sampleLongitude: 151.2093,
+        sampleLocationSource: 'gps',
+        sampleLocationAccuracyM: 6,
+      };
+      const audited = await prisma.testResult.create({ data: seed });
+      const substantive = await prisma.testResult.create({ data: seed });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${audited.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            sampleLatitude: -33.87,
+            sampleLongitude: 151.21,
+            sampleLocationSource: 'map_pick',
+            sampleLocationAccuracyM: null,
+          });
+        expect(res.status).toBe(200);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityType: 'test_result',
+            entityId: audited.id,
+            action: AuditAction.TEST_RESULT_UPDATED,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        const changes = JSON.parse(auditLog!.changes as string) as {
+          sampleLatitude: number;
+          sampleLocationSource: string;
+          previous: Record<string, unknown>;
+        };
+        // New values.
+        expect(changes.sampleLatitude).toBeCloseTo(-33.87, 6);
+        expect(changes.sampleLocationSource).toBe('map_pick');
+        // ...and what they moved FROM.
+        expect(changes.previous).toEqual({
+          sampleLatitude: -33.8688,
+          sampleLongitude: 151.2093,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 6,
+        });
+
+        const substantiveRes = await request(app)
+          .patch(`/api/test-results/${substantive.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ sampleLatitude: -33.87, sampleLongitude: 151.21, resultValue: '97.5' });
+        expect(substantiveRes.status).toBe(200);
+
+        const substantiveStored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: substantive.id },
+          select: { status: true, verifiedById: true, verifiedAt: true },
+        });
+        expect(substantiveStored.status).toBe('entered');
+        expect(substantiveStored.verifiedById).toBeNull();
+        expect(substantiveStored.verifiedAt).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({
+          where: { id: { in: [audited.id, substantive.id] } },
+        });
+      }
+    });
+
+    // AT-93: the verified-row guard is unchanged by this wave — a non-verifier
+    // still cannot touch a verified row, location or not.
+    it('AT-93: a non-verifier patching a location on a verified row is 409', async () => {
+      const foreman = await registerTestUser('C3 Foreman', 'foreman', companyId);
+      const test = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'C3 Verified Guard',
+          status: 'verified',
+          resultValue: 98,
+          passFail: 'pass',
+          verifiedById: userId,
+          verifiedAt: new Date('2026-07-10T00:00:00.000Z'),
+        },
+      });
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+        });
+
+        const res = await request(app)
+          .patch(`/api/test-results/${test.id}`)
+          .set('Authorization', `Bearer ${foreman.token}`)
+          .send({
+            sampleLatitude: -33.87,
+            sampleLongitude: 151.21,
+            sampleLocationSource: 'map_pick',
+          });
+        expect(res.status).toBe(409);
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: test.id },
+          select: { status: true, ...SAMPLE_POINT_SELECT },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(unchanged.sampleLatitude).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: test.id } });
+        await cleanupTestUser(foreman.userId);
+      }
+    });
+
+    // Reject un-does entering and verifying a RESULT. Where the sample was taken
+    // is not something a rejection un-does, so the four columns survive it — the
+    // same reasoning [C2R-A3] applied to `sentToLabAt`.
+    it('reject does not clear the captured sample point', async () => {
+      const test = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'C3 Reject Located',
+          status: 'entered',
+          resultValue: 98.5,
+          passFail: 'pass',
+          enteredById: userId,
+          enteredAt: new Date(),
+          sampleLatitude: -33.8688,
+          sampleLongitude: 151.2093,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 6,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${test.id}/reject`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: 'Values do not match the uploaded certificate.' });
+        expect(res.status).toBe(200);
+
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: test.id },
+          select: { status: true, ...SAMPLE_POINT_SELECT },
+        });
+        expect(stored.status).toBe('results_received');
+        expect(Number(stored.sampleLatitude)).toBeCloseTo(-33.8688, 6);
+        expect(stored.sampleLocationSource).toBe('gps');
+        expect(Number(stored.sampleLocationAccuracyM)).toBe(6);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: test.id } });
+      }
+    });
+  });
 });

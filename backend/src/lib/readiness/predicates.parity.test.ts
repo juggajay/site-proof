@@ -27,6 +27,14 @@ type TestResult = {
   // count, and neither the gate nor the predicate may start reading them.
   sentToLabAt?: Date | null;
   expectedResultDate?: Date | null;
+  // Wave C3 Phase B1 [C3S-B3]: the four sample-point columns, populated in the
+  // permutations below for the same reason the C2 stamps are — WHERE a sample
+  // was taken is not a count, and neither the gate nor the predicate may start
+  // reading it. If one ever does, the parity permutation moves and this fails.
+  sampleLatitude?: number | null;
+  sampleLongitude?: number | null;
+  sampleLocationSource?: string | null;
+  sampleLocationAccuracyM?: number | null;
 };
 
 function makeLot(opts: {
@@ -192,6 +200,51 @@ const scenarios: Array<{ name: string; lot: ReturnType<typeof makeLot>; released
           status: 'at_lab',
           sentToLabAt: new Date('2026-01-01T00:00:00.000Z'),
           expectedResultDate: new Date('2026-01-05T00:00:00.000Z'),
+        },
+      ],
+    }),
+  },
+  {
+    // AT-81: the same conformable lot, with a captured sample point on the
+    // verified row. A location must move nothing — the result was verified on
+    // the sample, not on the pin.
+    name: 'test required, passing-verified WITH a captured sample point → conformable',
+    lot: makeLot({
+      checklistItems: [testItem],
+      completions: [{ checklistItemId: 'i2', status: 'completed' }],
+      testResults: [
+        {
+          id: 't1',
+          itpChecklistItemId: 'i2',
+          testType: 'compaction',
+          passFail: 'pass',
+          status: 'verified',
+          sampleLatitude: -33.8688,
+          sampleLongitude: 151.2093,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 6,
+        },
+      ],
+    }),
+  },
+  {
+    // AT-81: an UNLOCATED failing row is exactly as unconformable as it was
+    // before the columns existed — no location is not a second kind of missing.
+    name: 'test required, failing result with NO captured location → not conformable',
+    lot: makeLot({
+      checklistItems: [testItem],
+      completions: [{ checklistItemId: 'i2', status: 'completed' }],
+      testResults: [
+        {
+          id: 't1',
+          itpChecklistItemId: 'i2',
+          testType: 'compaction',
+          passFail: 'fail',
+          status: 'entered',
+          sampleLatitude: null,
+          sampleLongitude: null,
+          sampleLocationSource: null,
+          sampleLocationAccuracyM: null,
         },
       ],
     }),

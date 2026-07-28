@@ -32,9 +32,11 @@ import {
   MAX_TEST_REQUEST_NUMBER_LENGTH,
   MAX_TEST_TEXT_LENGTH,
   MAX_TEST_TYPE_LENGTH,
+  SAMPLE_LOCATION_FIELDS,
   normalizeOptionalString,
   normalizePassFail,
   normalizeRequiredString,
+  parseSampleLocationInput,
   parseTestResultRouteParam,
   toNullableDate,
   toNullableFloat,
@@ -146,6 +148,10 @@ crudRoutes.post(
     const specificationMaxValue = toNullableFloat(specificationMax, 'specificationMax');
     // Wave C2 Phase 3 (J5): user-supplied only. CIVOS never invents a turnaround.
     const expectedResultDateValue = toNullableDate(expectedResultDate, 'expectedResultDate');
+    // Wave C3 Phase B1 [C3S-B1]: the sample point, and ONLY from an explicit
+    // human capture on the client. Never derived from `sampleLocation` text,
+    // never defaulted to a lot centroid — absent keys stay NULL.
+    const sampleLocationInput = parseSampleLocationInput(req.body);
     const passFailValue = normalizePassFail(passFail, 'pending');
     // H13 backstop: the client pass/fail cannot contradict the value + spec.
     const effectivePassFail = resolveEffectivePassFail(
@@ -191,6 +197,7 @@ crudRoutes.post(
         specificationMin: specificationMinValue,
         specificationMax: specificationMaxValue,
         expectedResultDate: expectedResultDateValue,
+        ...sampleLocationInput,
         passFail: effectivePassFail,
         status: 'requested', // Feature #196: Start in 'requested' status
       },
@@ -337,6 +344,13 @@ crudRoutes.patch(
       updateData.expectedResultDate = toNullableDate(expectedResultDate, 'expectedResultDate');
     }
 
+    // Wave C3 Phase B1: the sample point. Handled here rather than in the shared
+    // corrections mapper for the same reason `expectedResultDate` is — that
+    // mapper also feeds confirm-extraction, and a certificate has nothing to say
+    // about where a sample was taken [C3S-B1]. Only keys present in the body are
+    // written, so a PATCH that never mentions a location cannot clear one.
+    Object.assign(updateData, parseSampleLocationInput(req.body));
+
     // H13 backstop on the manual edit path (mirrors the confirm flow): when the
     // edit touches the value, spec, or pass/fail, recompute the outcome from the
     // effective value + spec so a stored/edited pass cannot contradict the data.
@@ -364,7 +378,20 @@ crudRoutes.patch(
     //   aid, not evidence. It says nothing about the result that was verified.
     //   (`sentToLabAt` needs no entry — it is system-stamped and never appears in
     //   a PATCH body.)
-    const NON_SUBSTANTIVE_EDIT_FIELDS = ['itpChecklistItemId', 'expectedResultDate'];
+    // - the four sample-point keys [C3S-f] [C3R-A8]: a location IS evidence, and
+    //   that is precisely why it is exempted. Correcting a mistyped pin is not a
+    //   new RESULT — the result was verified on the sample, not on the pin — and
+    //   un-verifying a passing test because someone dragged a marker three metres
+    //   would destroy the count the C3 overlay exists to display. The audit row
+    //   below (old + new values) is the control, and it is a PRECONDITION of this
+    //   exemption, not an optional companion. All four keys are named because
+    //   `hasSubstantiveEdit` iterates every key in `updateData` — naming one
+    //   would leave the other three un-verifying the row.
+    const NON_SUBSTANTIVE_EDIT_FIELDS = [
+      'itpChecklistItemId',
+      'expectedResultDate',
+      ...SAMPLE_LOCATION_FIELDS,
+    ];
     const hasSubstantiveEdit = Object.keys(updateData).some(
       (key) => !NON_SUBSTANTIVE_EDIT_FIELDS.includes(key),
     );
@@ -400,14 +427,33 @@ crudRoutes.patch(
       },
     });
 
-    // Audit log for test result update
+    // Audit log for test result update.
+    //
+    // Wave C3 Phase B1 [C3R-A7]: this call already records NEW values, and the
+    // pre-image is already in hand from the findUnique above. When a sample-point
+    // key moves, carry what it moved FROM as well. No new audit site, no new
+    // action — and this is the control that makes the exemption above safe, so it
+    // is a precondition of it rather than an optional companion.
+    const movedLocationKeys = SAMPLE_LOCATION_FIELDS.filter((key) => key in updateData);
+    const changes: Record<string, unknown> = { ...updateData };
+    if (movedLocationKeys.length > 0) {
+      changes.previous = Object.fromEntries(
+        // Decimal columns arrive as Prisma.Decimal objects; the audit sanitizer
+        // would recurse into one and store its internals. Numbers, or null.
+        movedLocationKeys.map((key) => {
+          const value = testResult[key];
+          return [key, value === null || typeof value === 'string' ? value : Number(value)];
+        }),
+      );
+    }
+
     await createAuditLog({
       projectId: testResult.projectId,
       userId: user.id,
       entityType: 'test_result',
       entityId: id,
       action: AuditAction.TEST_RESULT_UPDATED,
-      changes: updateData,
+      changes,
       req,
     });
 

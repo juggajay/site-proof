@@ -356,6 +356,161 @@ describe('POST /api/projects/:projectId/spatial-search', () => {
     expect(only.body.lots).toEqual([]);
   });
 
+  // Wave C3 Phase B1 [C3S-B11] — the wave's ONE security assertion.
+  //
+  // `only=tests` bboxes each test's OWN captured coordinate, so the transitive
+  // lot scoping that protects the default test query (via `intersectingLotIds`)
+  // is gone. Every located fixture below sits INSIDE the box, so anything a
+  // subcontractor does not receive is excluded by SCOPING, never by geometry.
+  //
+  // Proof-of-catch: delete either half of the app-side filter in
+  // `spatialSearch.ts` and cases (a) and (b) fail — (a) on the assigned-lot
+  // check, (b) on `lotId != null`.
+  describe('only=tests — tenancy (AT-92)', () => {
+    let locatedIds: string[] = [];
+
+    beforeAll(async () => {
+      const rows = await Promise.all([
+        // (a) on an assigned lot — the only test the subbie may see.
+        prisma.testResult.create({
+          data: {
+            projectId,
+            lotId: insideLotId,
+            testType: 'C3 Located Assigned',
+            status: 'requested',
+            sampleLatitude: -33.805,
+            sampleLongitude: 151.002,
+            sampleLocationSource: 'gps',
+            sampleLocationAccuracyM: 6,
+          },
+        }),
+        // (a) on an UNASSIGNED lot, coordinate inside the box.
+        prisma.testResult.create({
+          data: {
+            projectId,
+            lotId: unassignedInsideLotId,
+            testType: 'C3 Located Unassigned',
+            status: 'requested',
+            sampleLatitude: -33.82,
+            sampleLongitude: 151.021,
+            sampleLocationSource: 'map_pick',
+          },
+        }),
+        // (b) `lotId = NULL`, coordinate inside the box.
+        prisma.testResult.create({
+          data: {
+            projectId,
+            testType: 'C3 Located Unlinked',
+            status: 'requested',
+            sampleLatitude: -33.807,
+            sampleLongitude: 151.004,
+            sampleLocationSource: 'map_pick',
+          },
+        }),
+        // Unlocated, on an assigned lot, with free text that a derivation would
+        // have turned into a pin. It is never drawn [C3S-B1].
+        prisma.testResult.create({
+          data: {
+            projectId,
+            lotId: insideLotId,
+            testType: 'C3 Unlocated Free Text',
+            status: 'requested',
+            sampleLocation: 'CH 1000+50, 2m LHS',
+          },
+        }),
+      ]);
+      locatedIds = rows.map((r) => r.id);
+    });
+
+    afterAll(async () => {
+      await prisma.testResult.deleteMany({ where: { id: { in: locatedIds } } });
+    });
+
+    const postTests = (token: string) =>
+      request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ bounds: BOUNDS, only: 'tests' });
+
+    const typesOf = (body: { testResults: Array<{ testType: string }> }) =>
+      body.testResults.map((t) => t.testType).sort();
+
+    it('(a) excludes a test on an UNASSIGNED lot whose coordinate is inside the box', async () => {
+      const res = await postTests(subbieToken);
+      expect(res.status).toBe(200);
+      expect(typesOf(res.body)).not.toContain('C3 Located Unassigned');
+      expect(typesOf(res.body)).toEqual(['C3 Located Assigned']);
+    });
+
+    it('(b) excludes a located test with lotId = NULL for a subcontractor', async () => {
+      const res = await postTests(subbieToken);
+      expect(typesOf(res.body)).not.toContain('C3 Located Unlinked');
+    });
+
+    it('(c) an internal user in the same project sees both, with provenance', async () => {
+      const res = await postTests(pmToken);
+      expect(res.status).toBe(200);
+      expect(typesOf(res.body)).toEqual([
+        'C3 Located Assigned',
+        'C3 Located Unassigned',
+        'C3 Located Unlinked',
+      ]);
+
+      // The unlocated row is absent from every mode: NULL fails both range
+      // predicates, so no coordinate is ever invented from its free text.
+      expect(typesOf(res.body)).not.toContain('C3 Unlocated Free Text');
+
+      // Coordinates + provenance ride along. Prisma Decimal serialises as a
+      // string; the frontend Number()s it.
+      const gps = res.body.testResults.find(
+        (t: { testType: string }) => t.testType === 'C3 Located Assigned',
+      );
+      expect(Number(gps.sampleLatitude)).toBeCloseTo(-33.805, 5);
+      expect(Number(gps.sampleLongitude)).toBeCloseTo(151.002, 5);
+      expect(gps.sampleLocationSource).toBe('gps');
+      expect(Number(gps.sampleLocationAccuracyM)).toBe(6);
+
+      const picked = res.body.testResults.find(
+        (t: { testType: string }) => t.testType === 'C3 Located Unassigned',
+      );
+      expect(picked.sampleLocationSource).toBe('map_pick');
+      expect(picked.sampleLocationAccuracyM).toBeNull();
+
+      // Single-layer mode: the other collections stay empty, shape unchanged.
+      expect(res.body.lots).toEqual([]);
+      expect(res.body.photos).toEqual([]);
+    });
+
+    it('(d) refuses a cross-company caller', async () => {
+      const res = await postTests(outsiderToken);
+      expect(res.status).toBe(403);
+    });
+
+    it('(e) caps at RESULT_CAP and flags truncation at CAP + 1 rows', async () => {
+      await prisma.testResult.createMany({
+        data: Array.from({ length: 501 }, (_, i) => ({
+          projectId,
+          lotId: insideLotId,
+          testType: `C3 Bulk ${i}`,
+          status: 'requested',
+          sampleLatitude: -33.8,
+          sampleLongitude: 151.0,
+          sampleLocationSource: 'map_pick',
+        })),
+      });
+      try {
+        const res = await postTests(pmToken);
+        expect(res.status).toBe(200);
+        expect(res.body.testResults.length).toBe(500);
+        expect(res.body.testResultsTruncated).toBe(true);
+      } finally {
+        await prisma.testResult.deleteMany({
+          where: { projectId, testType: { startsWith: 'C3 Bulk ' } },
+        });
+      }
+    });
+  });
+
   it('caps photos server-side at RESULT_CAP and flags truncation', async () => {
     // 501 in-box photos > RESULT_CAP (500) => DB take bounds the fetch, cap()
     // slices to 500 and flags truncation from the one extra row.
