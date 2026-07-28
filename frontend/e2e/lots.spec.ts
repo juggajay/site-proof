@@ -284,6 +284,29 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
       return;
     }
 
+    // Wave B B2 lot register importer. The register lists earlier batches on
+    // load; the importer offers mapping profiles when it opens. Corporate
+    // masters are deliberately not served — that query is disabled for
+    // kind=lot_register (only ITP sets travel between projects).
+    if (url.pathname === `/api/projects/${E2E_PROJECT_ID}/copilot/imports`) {
+      await json({ batches: [] });
+      return;
+    }
+
+    if (url.pathname === `/api/projects/${E2E_PROJECT_ID}/copilot/imports-profiles`) {
+      await json({
+        builtIn: [
+          {
+            key: 'generic_au_lot_register_excel',
+            name: 'Generic AU lot register (Excel)',
+            fieldMap: [],
+          },
+        ],
+        saved: [],
+      });
+      return;
+    }
+
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
@@ -518,47 +541,18 @@ test.describe('Lots seeded UI contract', () => {
     expect(api.getBulkCreateRequest()).toBeUndefined();
   });
 
-  test('imports CSV lots with strict chainage parsing', async ({ page }) => {
-    const api = await mockSeededLotsApi(page);
+  // #1631 retired the client-side CSV importer this test used to drive. Parsing
+  // (chainage included) now runs server-side in the dry run, covered by
+  // backend/src/routes/copilot/import/lotRegisterDryRun.test.ts. What is left
+  // for E2E is the entry point: the register's button opens the importer.
+  test('opens the register importer from the lots page', async ({ page }) => {
+    await mockSeededLotsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
-    await page.getByRole('button', { name: 'Import CSV' }).click();
-    await expect(page.getByText('Import Lots from CSV')).toBeVisible();
+    await page.getByRole('button', { name: 'Import Register' }).click();
 
-    await page.locator('input[type="file"]').setInputFiles({
-      name: 'bad-lots.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from(
-        'lot_number,description,chainage_start,chainage_end,activity_type\nBAD-001,Bad chainage,1e2,20,Earthworks\n',
-      ),
-    });
-
-    await expect(page.getByText('Invalid chainage start value')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Import 1 Lots' })).toBeDisabled();
-
-    await page.getByRole('button', { name: 'Upload Different File' }).click();
-    await page.locator('input[type="file"]').setInputFiles({
-      name: 'decimal-lots.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from(
-        [
-          'lot_number,description,chainage_start,chainage_end,activity_type',
-          'CSV-001,Decimal import one,10.5,20.75,Earthworks',
-          'CSV-002,Decimal import two,20.75,31.25,Drainage',
-        ].join('\n'),
-      ),
-    });
-
-    await expect(page.getByText('All 2 rows passed validation. Ready to import!')).toBeVisible();
-    await page.getByRole('button', { name: 'Import 2 Lots' }).click();
-
-    expect(api.getBulkCreateRequest()).toMatchObject({
-      projectId: E2E_PROJECT_ID,
-      lots: [
-        { lotNumber: 'CSV-001', chainageStart: 10.5, chainageEnd: 20.75 },
-        { lotNumber: 'CSV-002', chainageStart: 20.75, chainageEnd: 31.25 },
-      ],
-    });
+    await expect(page.getByText('Import lots from a register')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Choose file' })).toBeVisible();
   });
 
   test('edits a lot without accepting encoded decimal inputs', async ({ page }) => {
