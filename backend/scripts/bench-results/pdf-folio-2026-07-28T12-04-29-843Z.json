@@ -1,0 +1,716 @@
+{
+  "benchmark": "wave-d/D1b.0 Node PDF library selection",
+  "spec": "docs/plans/wave-d-handover-spec-2026-07-28.md Rev 3 §4.3.5–4.3.6",
+  "acceptanceTest": "AT-151",
+  "startedAt": "2026-07-28T12:04:29.843Z",
+  "finishedAt": "2026-07-28T12:04:44.710Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692
+  },
+  "options": {
+    "iterations": 30,
+    "scaleIterations": 5,
+    "lots": 50,
+    "pinnedDate": "2026-01-01T00:00:00.000Z",
+    "candidates": [
+      "pdfkit",
+      "pdf-lib",
+      "jspdf"
+    ],
+    "footprint": {
+      "_": "Installed footprint per candidate, measured in ISOLATION so no shared transitive dependency is charged to whichever library happened to be installed second. Method, reproducible: mkdir <lib> && cd <lib> && npm init -y && npm install <lib> && du -sb node_modules && find node_modules -type f | wc -l. Measured 2026-07-28 on node v22.14.0, win32 x64. Informational only — spec §4.3.6 gives this axis no threshold; it decides ties, not selection.",
+      "jspdf": {
+        "version": "4.2.1",
+        "bytes": 42720403,
+        "mib": 40.74,
+        "files": 4853,
+        "packagesAdded": 23
+      },
+      "pdfkit": {
+        "version": "0.19.1",
+        "bytes": 20441226,
+        "mib": 19.49,
+        "files": 1195,
+        "packagesAdded": 22
+      },
+      "pdf-lib": {
+        "version": "1.17.1",
+        "bytes": 21811309,
+        "mib": 20.8,
+        "files": 1643,
+        "packagesAdded": 5
+      }
+    }
+  },
+  "thresholds": {
+    "nativeBuildStep": {
+      "value": "none",
+      "kind": "hard-reject"
+    },
+    "byteDeterminism": {
+      "value": "identical bytes across two renders of one snapshot under fixed clock + metadata",
+      "kind": "hard-reject"
+    },
+    "renderWallClockP95Ms": {
+      "value": 1500,
+      "kind": "threshold",
+      "unit": "ms",
+      "basis": "reference lot"
+    },
+    "peakRssDeltaMiB": {
+      "value": 96,
+      "kind": "threshold",
+      "unit": "MiB",
+      "basis": "per concurrent render"
+    },
+    "installedFootprint": {
+      "value": null,
+      "kind": "informational"
+    }
+  },
+  "results": [
+    {
+      "candidate": "pdfkit",
+      "version": "0.19.1",
+      "footprint": {
+        "version": "0.19.1",
+        "bytes": 20441226,
+        "mib": 19.49,
+        "files": 1195,
+        "packagesAdded": 22
+      },
+      "axes": {
+        "nativeBuildStep": {
+          "threshold": {
+            "value": "none",
+            "kind": "hard-reject"
+          },
+          "measured": "none",
+          "installScripts": [],
+          "otherFindings": [],
+          "packagesInClosure": 20,
+          "pass": true
+        },
+        "runsInNode": {
+          "pass": true,
+          "measured": "v0.19.1, require 1059.62 ms"
+        },
+        "byteDeterminism": {
+          "threshold": {
+            "value": "identical bytes across two renders of one snapshot under fixed clock + metadata",
+            "kind": "hard-reject"
+          },
+          "measured": "identical: 24ca39002c9ee72066c1a67dc355d9bbc008a56ffe01d4a197fe71e8bb9f3355",
+          "sameProcessPair": true,
+          "crossProcessPair": true,
+          "pass": true
+        },
+        "layout": {
+          "threshold": "§4.3.2 content contract: header block, 3 tables incl. the 18-row matter table, page footer",
+          "measured": "2 page(s) at 1x, 12 at 50 lots; all three tables and the page X of Y footer rendered",
+          "primitives": {
+            "textMeasurement": true,
+            "nativeWrapping": true,
+            "nativePagination": true,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": true,
+            "deterministicKnobsNeeded": [
+              "info.CreationDate",
+              "info.ModDate"
+            ]
+          },
+          "notes": [
+            "Top-left origin matches the layout engine; no coordinate translation.",
+            "bufferPages:true + switchToPage() gives the retro-active footer pass directly.",
+            "widthOfString / heightOfString are first-class; wrapping and page breaks are built in and were bypassed only for cross-library parity.",
+            "Standard-14 Helvetica available with no font file and no embedding."
+          ],
+          "pass": true
+        },
+        "wallClock": {
+          "threshold": {
+            "value": 1500,
+            "kind": "threshold",
+            "unit": "ms",
+            "basis": "reference lot"
+          },
+          "measured": {
+            "iterations": 30,
+            "p50Ms": 18.84,
+            "p95Ms": 25.79,
+            "maxMs": 26.83
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 88.19,
+            "p95Ms": 117.05,
+            "bytes": 33473,
+            "sha256": "5e0558a273c152b49e1adec706fac3237f948ff55bdeba674e28701345695168",
+            "pages": 12
+          },
+          "pass": true
+        },
+        "memory": {
+          "threshold": {
+            "value": 96,
+            "kind": "threshold",
+            "unit": "MiB",
+            "basis": "per concurrent render"
+          },
+          "measured": {
+            "peakRssGrowthMiB": 28.96,
+            "retainedRssGrowthMiB": 29.62,
+            "gcExposed": true
+          },
+          "pass": true
+        }
+      },
+      "disqualifiers": [],
+      "selectable": true,
+      "raw": {
+        "runA": {
+          "candidate": "pdfkit",
+          "pid": 534300,
+          "error": null,
+          "requireMs": 1059.62,
+          "version": "0.19.1",
+          "hashA": "24ca39002c9ee72066c1a67dc355d9bbc008a56ffe01d4a197fe71e8bb9f3355",
+          "hashB": "24ca39002c9ee72066c1a67dc355d9bbc008a56ffe01d4a197fe71e8bb9f3355",
+          "bytes1x": 5598,
+          "pages1x": 2,
+          "oneLot": {
+            "iterations": 30,
+            "p50Ms": 18.84,
+            "p95Ms": 25.79,
+            "maxMs": 26.83
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 88.19,
+            "p95Ms": 117.05,
+            "bytes": 33473,
+            "sha256": "5e0558a273c152b49e1adec706fac3237f948ff55bdeba674e28701345695168",
+            "pages": 12
+          },
+          "memory": {
+            "peakRssGrowthMiB": 28.96,
+            "retainedRssGrowthMiB": 29.62,
+            "gcExposed": true
+          },
+          "layoutNotes": [
+            "Top-left origin matches the layout engine; no coordinate translation.",
+            "bufferPages:true + switchToPage() gives the retro-active footer pass directly.",
+            "widthOfString / heightOfString are first-class; wrapping and page breaks are built in and were bypassed only for cross-library parity.",
+            "Standard-14 Helvetica available with no font file and no embedding."
+          ],
+          "layoutPrimitives": {
+            "textMeasurement": true,
+            "nativeWrapping": true,
+            "nativePagination": true,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": true,
+            "deterministicKnobsNeeded": [
+              "info.CreationDate",
+              "info.ModDate"
+            ]
+          }
+        },
+        "runB": {
+          "candidate": "pdfkit",
+          "pid": 520076,
+          "error": null,
+          "requireMs": 160.15,
+          "version": "0.19.1",
+          "hashA": "24ca39002c9ee72066c1a67dc355d9bbc008a56ffe01d4a197fe71e8bb9f3355",
+          "hashB": "24ca39002c9ee72066c1a67dc355d9bbc008a56ffe01d4a197fe71e8bb9f3355",
+          "bytes1x": 5598,
+          "pages1x": 2,
+          "oneLot": {
+            "iterations": 30,
+            "p50Ms": 16.21,
+            "p95Ms": 23.9,
+            "maxMs": 24.14
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 90.38,
+            "p95Ms": 92.83,
+            "bytes": 33473,
+            "sha256": "5e0558a273c152b49e1adec706fac3237f948ff55bdeba674e28701345695168",
+            "pages": 12
+          },
+          "memory": {
+            "peakRssGrowthMiB": 37.03,
+            "retainedRssGrowthMiB": 37.05,
+            "gcExposed": true
+          },
+          "layoutNotes": [
+            "Top-left origin matches the layout engine; no coordinate translation.",
+            "bufferPages:true + switchToPage() gives the retro-active footer pass directly.",
+            "widthOfString / heightOfString are first-class; wrapping and page breaks are built in and were bypassed only for cross-library parity.",
+            "Standard-14 Helvetica available with no font file and no embedding."
+          ],
+          "layoutPrimitives": {
+            "textMeasurement": true,
+            "nativeWrapping": true,
+            "nativePagination": true,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": true,
+            "deterministicKnobsNeeded": [
+              "info.CreationDate",
+              "info.ModDate"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "candidate": "pdf-lib",
+      "version": "1.17.1",
+      "footprint": {
+        "version": "1.17.1",
+        "bytes": 21811309,
+        "mib": 20.8,
+        "files": 1643,
+        "packagesAdded": 5
+      },
+      "axes": {
+        "nativeBuildStep": {
+          "threshold": {
+            "value": "none",
+            "kind": "hard-reject"
+          },
+          "measured": "none",
+          "installScripts": [],
+          "otherFindings": [],
+          "packagesInClosure": 5,
+          "pass": true
+        },
+        "runsInNode": {
+          "pass": true,
+          "measured": "v1.17.1, require 358 ms"
+        },
+        "byteDeterminism": {
+          "threshold": {
+            "value": "identical bytes across two renders of one snapshot under fixed clock + metadata",
+            "kind": "hard-reject"
+          },
+          "measured": "identical: a3e00e9e4f3e7cd9e708ca5b34894d157d9f0c7c04e5a20b83f233fc07f5482f",
+          "sameProcessPair": true,
+          "crossProcessPair": true,
+          "pass": true
+        },
+        "layout": {
+          "threshold": "§4.3.2 content contract: header block, 3 tables incl. the 18-row matter table, page footer",
+          "measured": "2 page(s) at 1x, 12 at 50 lots; all three tables and the page X of Y footer rendered",
+          "primitives": {
+            "textMeasurement": true,
+            "nativeWrapping": false,
+            "nativePagination": false,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": false,
+            "deterministicKnobsNeeded": [
+              "setCreationDate",
+              "setModificationDate"
+            ]
+          },
+          "notes": [
+            "Bottom-left origin: every y in the layout engine is flipped by the adapter.",
+            "No wrapping, no pagination, no heightOfString — widthOfTextAtSize is the only measurement primitive, so wrap() does all of it.",
+            "Page objects are retained in an array, so the retro-active footer pass is trivial.",
+            "StandardFonts.Helvetica needs no font file; embedFont is async, so the adapter needs an async init the other two do not."
+          ],
+          "pass": true
+        },
+        "wallClock": {
+          "threshold": {
+            "value": 1500,
+            "kind": "threshold",
+            "unit": "ms",
+            "basis": "reference lot"
+          },
+          "measured": {
+            "iterations": 30,
+            "p50Ms": 14.18,
+            "p95Ms": 21.66,
+            "maxMs": 43.16
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 164.71,
+            "p95Ms": 207.32,
+            "bytes": 86693,
+            "sha256": "6359b8bb984933b5edb07578c6d070098d39e748eff2aea47a7fe373107d2bca",
+            "pages": 12
+          },
+          "pass": true
+        },
+        "memory": {
+          "threshold": {
+            "value": 96,
+            "kind": "threshold",
+            "unit": "MiB",
+            "basis": "per concurrent render"
+          },
+          "measured": {
+            "peakRssGrowthMiB": 52.71,
+            "retainedRssGrowthMiB": 52.46,
+            "gcExposed": true
+          },
+          "pass": true
+        }
+      },
+      "disqualifiers": [],
+      "selectable": true,
+      "raw": {
+        "runA": {
+          "candidate": "pdf-lib",
+          "pid": 519324,
+          "error": null,
+          "requireMs": 358,
+          "version": "1.17.1",
+          "hashA": "a3e00e9e4f3e7cd9e708ca5b34894d157d9f0c7c04e5a20b83f233fc07f5482f",
+          "hashB": "a3e00e9e4f3e7cd9e708ca5b34894d157d9f0c7c04e5a20b83f233fc07f5482f",
+          "bytes1x": 7853,
+          "pages1x": 2,
+          "oneLot": {
+            "iterations": 30,
+            "p50Ms": 14.18,
+            "p95Ms": 21.66,
+            "maxMs": 43.16
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 164.71,
+            "p95Ms": 207.32,
+            "bytes": 86693,
+            "sha256": "6359b8bb984933b5edb07578c6d070098d39e748eff2aea47a7fe373107d2bca",
+            "pages": 12
+          },
+          "memory": {
+            "peakRssGrowthMiB": 52.71,
+            "retainedRssGrowthMiB": 52.46,
+            "gcExposed": true
+          },
+          "layoutNotes": [
+            "Bottom-left origin: every y in the layout engine is flipped by the adapter.",
+            "No wrapping, no pagination, no heightOfString — widthOfTextAtSize is the only measurement primitive, so wrap() does all of it.",
+            "Page objects are retained in an array, so the retro-active footer pass is trivial.",
+            "StandardFonts.Helvetica needs no font file; embedFont is async, so the adapter needs an async init the other two do not."
+          ],
+          "layoutPrimitives": {
+            "textMeasurement": true,
+            "nativeWrapping": false,
+            "nativePagination": false,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": false,
+            "deterministicKnobsNeeded": [
+              "setCreationDate",
+              "setModificationDate"
+            ]
+          }
+        },
+        "runB": {
+          "candidate": "pdf-lib",
+          "pid": 522376,
+          "error": null,
+          "requireMs": 365.49,
+          "version": "1.17.1",
+          "hashA": "a3e00e9e4f3e7cd9e708ca5b34894d157d9f0c7c04e5a20b83f233fc07f5482f",
+          "hashB": "a3e00e9e4f3e7cd9e708ca5b34894d157d9f0c7c04e5a20b83f233fc07f5482f",
+          "bytes1x": 7853,
+          "pages1x": 2,
+          "oneLot": {
+            "iterations": 30,
+            "p50Ms": 14.47,
+            "p95Ms": 26.21,
+            "maxMs": 36.04
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 157.48,
+            "p95Ms": 176.08,
+            "bytes": 86693,
+            "sha256": "6359b8bb984933b5edb07578c6d070098d39e748eff2aea47a7fe373107d2bca",
+            "pages": 12
+          },
+          "memory": {
+            "peakRssGrowthMiB": 52.48,
+            "retainedRssGrowthMiB": 52.56,
+            "gcExposed": true
+          },
+          "layoutNotes": [
+            "Bottom-left origin: every y in the layout engine is flipped by the adapter.",
+            "No wrapping, no pagination, no heightOfString — widthOfTextAtSize is the only measurement primitive, so wrap() does all of it.",
+            "Page objects are retained in an array, so the retro-active footer pass is trivial.",
+            "StandardFonts.Helvetica needs no font file; embedFont is async, so the adapter needs an async init the other two do not."
+          ],
+          "layoutPrimitives": {
+            "textMeasurement": true,
+            "nativeWrapping": false,
+            "nativePagination": false,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": false,
+            "deterministicKnobsNeeded": [
+              "setCreationDate",
+              "setModificationDate"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "candidate": "jspdf",
+      "version": "4.2.1",
+      "footprint": {
+        "version": "4.2.1",
+        "bytes": 42720403,
+        "mib": 40.74,
+        "files": 4853,
+        "packagesAdded": 23
+      },
+      "axes": {
+        "nativeBuildStep": {
+          "threshold": {
+            "value": "none",
+            "kind": "hard-reject"
+          },
+          "measured": "none",
+          "installScripts": [
+            {
+              "package": "core-js",
+              "issue": "postinstall script",
+              "detail": "node -e \"try{require('./postinstall')}catch(e){}\""
+            }
+          ],
+          "otherFindings": [
+            {
+              "package": "canvg",
+              "issue": "browser-canvas shim"
+            },
+            {
+              "package": "stackblur-canvas",
+              "issue": "browser-canvas shim"
+            },
+            {
+              "package": "html2canvas",
+              "issue": "browser-canvas shim"
+            }
+          ],
+          "packagesInClosure": 23,
+          "pass": true
+        },
+        "runsInNode": {
+          "pass": true,
+          "measured": "v4.2.1, require 155.19 ms"
+        },
+        "byteDeterminism": {
+          "threshold": {
+            "value": "identical bytes across two renders of one snapshot under fixed clock + metadata",
+            "kind": "hard-reject"
+          },
+          "measured": "identical: e6687d5dd6f3a3d8c7d10b09ec002b020aee7af4ce1a498a0411852739e77641",
+          "sameProcessPair": true,
+          "crossProcessPair": true,
+          "pass": true
+        },
+        "layout": {
+          "threshold": "§4.3.2 content contract: header block, 3 tables incl. the 18-row matter table, page footer",
+          "measured": "2 page(s) at 1x, 12 at 50 lots; all three tables and the page X of Y footer rendered",
+          "primitives": {
+            "textMeasurement": true,
+            "nativeWrapping": true,
+            "nativePagination": false,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": true,
+            "deterministicKnobsNeeded": [
+              "setCreationDate",
+              "setFileId (random /ID by default)"
+            ]
+          },
+          "notes": [
+            "Top-left origin, but text() is baseline-anchored — the adapter adds a 0.85em offset the other two do not need.",
+            "getTextWidth / splitTextToSize are first-class; setPage() gives the retro-active footer pass.",
+            "setCreationDate() exists; without it every render differs and AT-127 is unimplementable.",
+            "Standard-14 Helvetica available with no font file."
+          ],
+          "pass": true
+        },
+        "wallClock": {
+          "threshold": {
+            "value": 1500,
+            "kind": "threshold",
+            "unit": "ms",
+            "basis": "reference lot"
+          },
+          "measured": {
+            "iterations": 30,
+            "p50Ms": 10.52,
+            "p95Ms": 16.09,
+            "maxMs": 17.43
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 115.05,
+            "p95Ms": 154.89,
+            "bytes": 386680,
+            "sha256": "8fdd945e1fbfcb77b6c15f2171c86771a658b8e95a1df4d3d66c3d081b160be2",
+            "pages": 12
+          },
+          "pass": true
+        },
+        "memory": {
+          "threshold": {
+            "value": 96,
+            "kind": "threshold",
+            "unit": "MiB",
+            "basis": "per concurrent render"
+          },
+          "measured": {
+            "peakRssGrowthMiB": 43.47,
+            "retainedRssGrowthMiB": 41.88,
+            "gcExposed": true
+          },
+          "pass": true
+        }
+      },
+      "disqualifiers": [],
+      "selectable": true,
+      "raw": {
+        "runA": {
+          "candidate": "jspdf",
+          "pid": 533188,
+          "error": null,
+          "requireMs": 155.19,
+          "version": "4.2.1",
+          "hashA": "e6687d5dd6f3a3d8c7d10b09ec002b020aee7af4ce1a498a0411852739e77641",
+          "hashB": "e6687d5dd6f3a3d8c7d10b09ec002b020aee7af4ce1a498a0411852739e77641",
+          "bytes1x": 26814,
+          "pages1x": 2,
+          "oneLot": {
+            "iterations": 30,
+            "p50Ms": 10.52,
+            "p95Ms": 16.09,
+            "maxMs": 17.43
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 115.05,
+            "p95Ms": 154.89,
+            "bytes": 386680,
+            "sha256": "8fdd945e1fbfcb77b6c15f2171c86771a658b8e95a1df4d3d66c3d081b160be2",
+            "pages": 12
+          },
+          "memory": {
+            "peakRssGrowthMiB": 43.47,
+            "retainedRssGrowthMiB": 41.88,
+            "gcExposed": true
+          },
+          "layoutNotes": [
+            "Top-left origin, but text() is baseline-anchored — the adapter adds a 0.85em offset the other two do not need.",
+            "getTextWidth / splitTextToSize are first-class; setPage() gives the retro-active footer pass.",
+            "setCreationDate() exists; without it every render differs and AT-127 is unimplementable.",
+            "Standard-14 Helvetica available with no font file."
+          ],
+          "layoutPrimitives": {
+            "textMeasurement": true,
+            "nativeWrapping": true,
+            "nativePagination": false,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": true,
+            "deterministicKnobsNeeded": [
+              "setCreationDate",
+              "setFileId (random /ID by default)"
+            ]
+          }
+        },
+        "runB": {
+          "candidate": "jspdf",
+          "pid": 493376,
+          "error": null,
+          "requireMs": 91.05,
+          "version": "4.2.1",
+          "hashA": "e6687d5dd6f3a3d8c7d10b09ec002b020aee7af4ce1a498a0411852739e77641",
+          "hashB": "e6687d5dd6f3a3d8c7d10b09ec002b020aee7af4ce1a498a0411852739e77641",
+          "bytes1x": 26814,
+          "pages1x": 2,
+          "oneLot": {
+            "iterations": 30,
+            "p50Ms": 14.12,
+            "p95Ms": 22.32,
+            "maxMs": 22.65
+          },
+          "scaled": {
+            "lots": 50,
+            "evidenceRows": 600,
+            "iterations": 5,
+            "p50Ms": 199.75,
+            "p95Ms": 248.86,
+            "bytes": 386680,
+            "sha256": "8fdd945e1fbfcb77b6c15f2171c86771a658b8e95a1df4d3d66c3d081b160be2",
+            "pages": 12
+          },
+          "memory": {
+            "peakRssGrowthMiB": 43.38,
+            "retainedRssGrowthMiB": 41.31,
+            "gcExposed": true
+          },
+          "layoutNotes": [
+            "Top-left origin, but text() is baseline-anchored — the adapter adds a 0.85em offset the other two do not need.",
+            "getTextWidth / splitTextToSize are first-class; setPage() gives the retro-active footer pass.",
+            "setCreationDate() exists; without it every render differs and AT-127 is unimplementable.",
+            "Standard-14 Helvetica available with no font file."
+          ],
+          "layoutPrimitives": {
+            "textMeasurement": true,
+            "nativeWrapping": true,
+            "nativePagination": false,
+            "retroactivePageAccess": true,
+            "standardFontsWithoutEmbedding": true,
+            "topLeftOrigin": true,
+            "deterministicKnobsNeeded": [
+              "setCreationDate",
+              "setFileId (random /ID by default)"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "selected": "pdfkit",
+    "passing": [
+      "pdfkit",
+      "pdf-lib",
+      "jspdf"
+    ],
+    "at151": "pass"
+  }
+}

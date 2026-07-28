@@ -1,0 +1,24 @@
+{
+  "_": "Installed footprint per candidate, measured in ISOLATION so no shared transitive dependency is charged to whichever library happened to be installed second. Method, reproducible: mkdir <lib> && cd <lib> && npm init -y && npm install <lib> && du -sb node_modules && find node_modules -type f | wc -l. Measured 2026-07-28 on node v22.14.0, win32 x64. Informational only — spec §4.3.6 gives this axis no threshold; it decides ties, not selection.",
+  "jspdf": {
+    "version": "4.2.1",
+    "bytes": 42720403,
+    "mib": 40.74,
+    "files": 4853,
+    "packagesAdded": 23
+  },
+  "pdfkit": {
+    "version": "0.19.1",
+    "bytes": 20441226,
+    "mib": 19.49,
+    "files": 1195,
+    "packagesAdded": 22
+  },
+  "pdf-lib": {
+    "version": "1.17.1",
+    "bytes": 21811309,
+    "mib": 20.8,
+    "files": 1643,
+    "packagesAdded": 5
+  }
+}
