@@ -1,5 +1,7 @@
 // Type-only: no runtime edge from the readiness shapes to the sufficiency engine.
 import type { SufficiencyEvaluation } from '../readiness/sufficiency/evaluate.js';
+// Type-only: the canonical reasonCode vocabulary. Wave D `D1a-respec` §4.1.1.
+import type { ReadinessReasonCode } from '../readiness/contracts/reasonCodes.js';
 
 export type EvidenceReadinessSeverity = 'blocker' | 'warning' | 'support';
 
@@ -17,7 +19,16 @@ export type EvidenceReadinessArea =
   | 'permission';
 
 export interface EvidenceReadinessItem {
-  code: string;
+  /**
+   * Wave D `D1a-respec` (spec §4.1.1 step 2, `[DR2-B2]`). NARROWED from
+   * `string`. While this was `string` any builder could emit anything and no
+   * registry could be authoritative — the emitter-side half of the parity
+   * contract simply did not exist. An unregistered code is now a COMPILE ERROR
+   * at the emitter, which is where it should fail; adding a code to the engine
+   * means adding it (and its provenance) to `READINESS_REASON_CODES` in the
+   * same change, exactly as that file's header already required.
+   */
+  code: ReadinessReasonCode;
   severity: EvidenceReadinessSeverity;
   area: EvidenceReadinessArea;
   title: string;
@@ -255,6 +266,30 @@ export interface ClaimEvidenceReview {
 
 export function item(input: EvidenceReadinessItem): EvidenceReadinessItem {
   return input;
+}
+
+/**
+ * Wave D `D1a-respec` (spec §4.1.1 step 3, `[DR2-B2]`). The one typed
+ * constructor for a HARD blocker — `severity: 'blocker'` ∧ `blocksAction: true`,
+ * neither of them a caller's choice. Blocking emitters go through it so the set
+ * of hard blockers is a property of one call site rather than a grep, and
+ * AT-138 can enumerate the codes by running the emitters.
+ *
+ * `severity: 'blocker'` with `blocksAction: false` is a DIFFERENT, live thing —
+ * the advisory review surfaces (claimReview, the claim card's hold-point item)
+ * emit it deliberately. Those keep using `item()`; folding them in here would
+ * make every advisory item start gating an action.
+ */
+export function blockingItem(
+  input: Omit<EvidenceReadinessItem, 'severity' | 'blocksAction'>,
+): EvidenceReadinessItem {
+  // Key order is load-bearing: the readiness characterization snapshots are
+  // `JSON.stringify` of the response, so a spread that appended `severity` and
+  // `blocksAction` at the end would diff every blocker in the corpus. This
+  // reproduces the literal order the six call sites used before the extraction,
+  // which is how the refactor stays byte-identical.
+  const { code, area, title, detail, ...rest } = input;
+  return { code, severity: 'blocker', area, title, detail, blocksAction: true, ...rest };
 }
 
 export function splitItems(items: EvidenceReadinessItem[]): Omit<ReadinessBucket, 'state'> {
