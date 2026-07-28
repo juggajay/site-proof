@@ -131,6 +131,9 @@ export const addDeliverySchema = z.object({
   unit: optionalText('unit'),
   lotId: optionalText('lotId', DIARY_ID_MAX_LENGTH),
   notes: optionalText('notes', DIARY_LONG_TEXT_MAX_LENGTH),
+  // H5: opaque client idempotency key (the offline queue's own delivery id).
+  // Ignored by the PUT routes, which name their updatable fields explicitly.
+  requestKey: optionalText('requestKey', DIARY_ID_MAX_LENGTH),
 });
 
 export const addEventSchema = z.object({
@@ -138,4 +141,6 @@ export const addEventSchema = z.object({
   description: requiredText('description', DIARY_LONG_TEXT_MAX_LENGTH),
   notes: optionalText('notes', DIARY_LONG_TEXT_MAX_LENGTH),
   lotId: optionalText('lotId', DIARY_ID_MAX_LENGTH),
+  // H5: opaque client idempotency key (the offline queue's own event id).
+  requestKey: optionalText('requestKey', DIARY_ID_MAX_LENGTH),
 });

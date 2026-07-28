@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { prisma } from '../../lib/prisma.js';
+import { isUniqueConstraintOn } from '../ncrs/ncrCoreValidation.js';
 import { parseDiaryRouteParam, requireLotInProject } from './diaryAccess.js';
 import { buildDiaryItemRemovedResponse } from './diaryItemsResponses.js';
 import {
@@ -14,6 +16,46 @@ import { diaryRosterItemsRouter } from './diaryRosterItems.js';
 import { diarySuggestionsRouter } from './diarySuggestions.js';
 
 const router = Router();
+
+const DIARY_ITEM_LOT_INCLUDE = { lot: { select: { id: true, lotNumber: true } } };
+
+// H5 — offline-retry idempotency for the diary quick-add writes.
+//
+// A queued delivery/event whose POST committed but whose response never
+// arrived is retried by the sync worker with the SAME requestKey; without this
+// the retry wrote a second, identical row. Two layers:
+//   - the pre-check answers the ordinary retry, and answers it even when the
+//     diary has since been submitted (the editability gate inside `create`
+//     would otherwise reject a row that already exists);
+//   - the @@unique([diaryId, requestKey]) index + this P2002 branch answers the
+//     loser of a same-key race with the winner's row rather than a 500.
+async function createDiaryItemOnce<T>(
+  requestKey: string | undefined,
+  find: () => Promise<T | null>,
+  create: () => Promise<T>,
+): Promise<T> {
+  if (!requestKey) {
+    return create();
+  }
+
+  const existing = await find();
+  if (existing) {
+    return existing;
+  }
+
+  try {
+    return await create();
+  } catch (error) {
+    if (!isUniqueConstraintOn(error, ['diaryId', 'requestKey'])) {
+      throw error;
+    }
+    const winner = await find();
+    if (!winner) {
+      throw error;
+    }
+    return winner;
+  }
+}
 
 router.use(diaryRosterItemsRouter);
 router.use(diarySuggestionsRouter);
@@ -201,23 +243,33 @@ router.post(
     const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
     const data = addDeliverySchema.parse(req.body);
 
-    const delivery = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
-      await requireLotInProject(data.lotId, diary.projectId, tx);
+    const delivery = await createDiaryItemOnce(
+      data.requestKey,
+      () =>
+        prisma.diaryDelivery.findFirst({
+          where: { diaryId, requestKey: data.requestKey },
+          include: DIARY_ITEM_LOT_INCLUDE,
+        }),
+      () =>
+        withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+          await requireLotInProject(data.lotId, diary.projectId, tx);
 
-      return tx.diaryDelivery.create({
-        data: {
-          diaryId,
-          description: data.description,
-          supplier: data.supplier,
-          docketNumber: data.docketNumber,
-          quantity: data.quantity,
-          unit: data.unit,
-          lotId: data.lotId,
-          notes: data.notes,
-        },
-        include: { lot: { select: { id: true, lotNumber: true } } },
-      });
-    });
+          return tx.diaryDelivery.create({
+            data: {
+              diaryId,
+              description: data.description,
+              supplier: data.supplier,
+              docketNumber: data.docketNumber,
+              quantity: data.quantity,
+              unit: data.unit,
+              lotId: data.lotId,
+              notes: data.notes,
+              requestKey: data.requestKey,
+            },
+            include: DIARY_ITEM_LOT_INCLUDE,
+          });
+        }),
+    );
 
     res.status(201).json(delivery);
   }),
@@ -292,20 +344,30 @@ router.post(
     const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
     const data = addEventSchema.parse(req.body);
 
-    const event = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
-      await requireLotInProject(data.lotId, diary.projectId, tx);
+    const event = await createDiaryItemOnce(
+      data.requestKey,
+      () =>
+        prisma.diaryEvent.findFirst({
+          where: { diaryId, requestKey: data.requestKey },
+          include: DIARY_ITEM_LOT_INCLUDE,
+        }),
+      () =>
+        withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+          await requireLotInProject(data.lotId, diary.projectId, tx);
 
-      return tx.diaryEvent.create({
-        data: {
-          diaryId,
-          eventType: data.eventType,
-          description: data.description,
-          notes: data.notes,
-          lotId: data.lotId,
-        },
-        include: { lot: { select: { id: true, lotNumber: true } } },
-      });
-    });
+          return tx.diaryEvent.create({
+            data: {
+              diaryId,
+              eventType: data.eventType,
+              description: data.description,
+              notes: data.notes,
+              lotId: data.lotId,
+              requestKey: data.requestKey,
+            },
+            include: DIARY_ITEM_LOT_INCLUDE,
+          });
+        }),
+    );
 
     res.status(201).json(event);
   }),

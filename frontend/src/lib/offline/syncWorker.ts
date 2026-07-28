@@ -463,6 +463,9 @@ async function syncDelivery(item: DeliveryItem, itemId: number): Promise<SyncIte
           unit: delivery.unit,
           lotId: delivery.lotId,
           notes: delivery.notes,
+          // H5 idempotency key — see syncNcrCreate. The Dexie row's own id is
+          // stable across retries of this queue item.
+          requestKey: delivery.id,
         }),
       });
 
@@ -510,6 +513,8 @@ async function syncEvent(item: EventItem, itemId: number): Promise<SyncItemResul
           description: event.description,
           notes: event.notes,
           lotId: event.lotId,
+          // H5 idempotency key — see syncNcrCreate.
+          requestKey: event.id,
         }),
       });
 
@@ -665,6 +670,12 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
           formData.append('gpsLongitude', String(photo.gpsLongitude));
         }
         formData.append('capturedAt', photo.capturedAt);
+        // H5 idempotency key: the queued photo's own id, stable across every
+        // retry of this item. The serverDocumentId guard above only helps once
+        // a response body has been read, so it can never fire when the
+        // connection drops after the server committed — this key is what makes
+        // that retry return the original Document instead of a second one.
+        formData.append('requestKey', photoId);
 
         // Upload to server
         const uploadResponse = await authFetch(apiUrl('/api/documents/upload'), {
@@ -786,6 +797,11 @@ async function syncNcrCreate(item: NcrCreateItem, itemId: number): Promise<SyncI
         projectId,
         description,
         category,
+        // H5 idempotency key: the local placeholder id, minted once at enqueue
+        // time and stable across every retry of this queue item. A POST that
+        // committed but whose response was lost replays the original NCR
+        // instead of raising a second one.
+        requestKey: ncrId,
         ...(lotIds && lotIds.length > 0 ? { lotIds } : {}),
       }),
     });

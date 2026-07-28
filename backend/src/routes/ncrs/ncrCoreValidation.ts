@@ -109,6 +109,10 @@ export const createNcrSchema = z
     lotIds: z
       .array(requiredTrimmedNcrString('Lot ID', NCR_ID_MAX_LENGTH, 'Lot ID is required'))
       .optional(),
+    // H5: opaque client idempotency key. The offline sync worker sends its own
+    // stable local NCR id so a retry after a dropped connection replays the
+    // original NCR instead of raising a second one. Never interpreted.
+    requestKey: optionalTrimmedNcrString('requestKey', NCR_ID_MAX_LENGTH),
   })
   .superRefine((data, ctx) => {
     if (data.responsibleUserId && data.responsibleSubcontractorId) {
