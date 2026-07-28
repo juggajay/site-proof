@@ -229,6 +229,25 @@ function parseSampleLocationSource(
 }
 
 /**
+ * The stored row a PATCH is being merged onto. Only nullness matters here, so
+ * the values stay `unknown` — Prisma hands back `Decimal | null` for the two
+ * coordinates and this module has no reason to care which.
+ */
+export type StoredSampleLocation = {
+  sampleLatitude: unknown;
+  sampleLongitude: unknown;
+  sampleLocationSource: unknown;
+};
+
+function mergedSampleValue(
+  parsed: SampleLocationInput,
+  existing: StoredSampleLocation | undefined,
+  key: keyof StoredSampleLocation,
+): unknown {
+  return (key in parsed ? parsed[key] : existing?.[key]) ?? null;
+}
+
+/**
  * Wave C3 Phase B1. Validate the four sample-point keys off a request body.
  *
  * Only keys PRESENT in the body appear in the result, so a PATCH that never
@@ -236,11 +255,26 @@ function parseSampleLocationSource(
  * (the "Clear" action) nulls them together — which the pair constraints
  * require to happen together anyway.
  *
- * The pair/provenance coherence rules are NOT re-implemented here: they are DB
- * CHECK constraints (§5.3), because prose rules do not survive the next route
- * that forgets them. This function only turns malformed input into a 400.
+ * The DB CHECK constraints (§5.3) remain the enforcement of record — prose
+ * rules do not survive the next route that forgets them. Review M1: they are
+ * also MIRRORED here, which is what the migration's own comment always claimed.
+ * Without the mirror, `{sampleLatitude, sampleLongitude}` with no provenance —
+ * the obvious API-client mistake — reached Postgres, came back a 23514 the
+ * error handler has no mapping for, and was served as a 500 (plus a Sentry
+ * page) instead of the 400 it is.
+ *
+ * The constraints bind the ROW, not the body, so `existing` supplies the stored
+ * side of a PATCH: clearing only the provenance of a located row violates the
+ * source pair rule even though the body mentions one key. Callers that create a
+ * row pass nothing — every absent key is NULL.
+ *
+ * `sampleLocationAccuracyM` is deliberately absent from the coherence rules: it
+ * carries no CHECK constraint, and mirroring means mirroring, not tightening.
  */
-export function parseSampleLocationInput(body: Record<string, unknown>): SampleLocationInput {
+export function parseSampleLocationInput(
+  body: Record<string, unknown>,
+  existing?: StoredSampleLocation,
+): SampleLocationInput {
   const parsed: SampleLocationInput = {};
 
   if (body.sampleLatitude !== undefined) {
@@ -271,6 +305,28 @@ export function parseSampleLocationInput(body: Record<string, unknown>): SampleL
       'sampleLocationAccuracyM',
       0,
       MAX_SAMPLE_ACCURACY_M,
+    );
+  }
+
+  // Mirrors `test_results_sample_point_pair_check`: half a coordinate is not a
+  // location.
+  const latitude = mergedSampleValue(parsed, existing, 'sampleLatitude');
+  const longitude = mergedSampleValue(parsed, existing, 'sampleLongitude');
+  if ((latitude === null) !== (longitude === null)) {
+    throw AppError.badRequest(
+      'sampleLatitude and sampleLongitude must be supplied together, and cleared together.',
+    );
+  }
+
+  // Mirrors `test_results_sample_location_source_pair_check`: provenance without
+  // a coordinate is noise; a coordinate without provenance is unattributable
+  // evidence. Neither may exist alone.
+  const source = mergedSampleValue(parsed, existing, 'sampleLocationSource');
+  if ((source === null) !== (latitude === null)) {
+    throw AppError.badRequest(
+      `A sample point needs both a coordinate pair and its provenance: send sampleLocationSource (${SAMPLE_LOCATION_SOURCES.join(
+        ' or ',
+      )}) with the coordinates, or clear all three together.`,
     );
   }
 

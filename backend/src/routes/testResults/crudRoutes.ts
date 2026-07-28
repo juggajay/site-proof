@@ -349,7 +349,11 @@ crudRoutes.patch(
     // mapper also feeds confirm-extraction, and a certificate has nothing to say
     // about where a sample was taken [C3S-B1]. Only keys present in the body are
     // written, so a PATCH that never mentions a location cannot clear one.
-    Object.assign(updateData, parseSampleLocationInput(req.body));
+    //
+    // Review M1: the stored row goes in so the CHECK-constraint mirror can see
+    // the MERGED sample point. A body that clears only the provenance is
+    // coherent-looking on its own and still violates the source pair rule.
+    Object.assign(updateData, parseSampleLocationInput(req.body, testResult));
 
     // H13 backstop on the manual edit path (mirrors the confirm flow): when the
     // edit touches the value, spec, or pass/fail, recompute the outcome from the

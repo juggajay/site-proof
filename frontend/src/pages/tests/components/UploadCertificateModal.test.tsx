@@ -295,3 +295,99 @@ describe('UploadCertificateModal pass/fail review (H13)', () => {
     expect(onFailedResult).not.toHaveBeenCalled();
   });
 });
+
+// Review M6: `POST /upload-certificate` now lands the certificate on the test a
+// human had already planned instead of minting a second row. The confirm payload
+// sends every key the review form holds, so seeding purely from the extraction
+// would null whatever the certificate did not speak to — on a row that already
+// had it. This is the guard on that.
+describe('UploadCertificateModal seeding when the certificate lands on a planned row (M6)', () => {
+  const PLANNED_ROW = {
+    id: 'planned-1',
+    testType: 'Field Density (Nuclear)',
+    laboratoryName: 'Metro Materials Lab',
+    laboratoryReportNumber: 'TRN-2026-11',
+    sampleDate: '2026-04-10T00:00:00.000Z',
+    testDate: null,
+    sampleLocation: 'CH 1000+25',
+    resultValue: null,
+    resultUnit: null,
+    specificationMin: null,
+    specificationMax: null,
+    passFail: 'pending',
+    lotId: 'lot-9',
+  };
+
+  async function uploadOnto(landedOnExistingTest: boolean) {
+    authFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        extraction: {
+          // A successful read that simply does not mention the laboratory, the
+          // report number or the sample date — a normal certificate.
+          extractedFields: {
+            testType: { value: 'Field Density (Nuclear)', confidence: 0.96 },
+            laboratoryName: { value: '', confidence: 0 },
+            laboratoryReportNumber: { value: '', confidence: 0 },
+            sampleDate: { value: '', confidence: 0 },
+            resultValue: { value: '98.5', confidence: 0.95 },
+            specificationMin: { value: '95', confidence: 0.9 },
+          },
+          confidence: {},
+          lowConfidenceFields: [],
+          needsReview: false,
+        },
+        testResult: { id: PLANNED_ROW.id, landedOnExistingTest },
+        lotSuggestion: { suggestedLots: [] },
+      }),
+    } as unknown as Response);
+    apiFetchMock.mockResolvedValue({ testResults: [PLANNED_ROW] } as never);
+
+    render(
+      <UploadCertificateModal
+        isOpen
+        onClose={vi.fn()}
+        projectId="p1"
+        onTestResultsUpdated={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Select File'), {
+      target: { files: [new File(['x'], 'cert.pdf', { type: 'application/pdf' })] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Extract with AI/ }));
+    await screen.findByLabelText(/Pass\/Fail/);
+    fireEvent.click(screen.getByRole('button', { name: /Confirm & Save/ }));
+
+    return waitFor(() => {
+      const confirmCall = apiFetchMock.mock.calls.find((call) =>
+        String(call[0]).includes('/confirm-extraction'),
+      );
+      expect(confirmCall).toBeDefined();
+      return JSON.parse(String((confirmCall?.[1] as { body?: string })?.body)) as {
+        corrections: Record<string, string>;
+      };
+    });
+  }
+
+  it("confirming keeps the planned row's lab, report number, sample date and lot link", async () => {
+    const { corrections } = await uploadOnto(true);
+
+    expect(corrections.laboratoryName).toBe('Metro Materials Lab');
+    expect(corrections.laboratoryReportNumber).toBe('TRN-2026-11');
+    expect(corrections.sampleDate).toBe('2026-04-10');
+    expect(corrections.lotId).toBe('lot-9');
+    // What the certificate DID say still wins.
+    expect(corrections.resultValue).toBe('98.5');
+    expect(corrections.specificationMin).toBe('95');
+    expect(corrections.passFail).toBe('pass');
+  });
+
+  it('a certificate that minted its own row is still seeded from the extraction alone', async () => {
+    const { corrections } = await uploadOnto(false);
+
+    expect(corrections.laboratoryName).toBe('');
+    expect(corrections.sampleDate).toBe('');
+    expect(corrections.lotId).toBe('');
+    expect(corrections.resultValue).toBe('98.5');
+  });
+});

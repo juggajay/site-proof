@@ -231,6 +231,33 @@ workflowRoutes.post(
       return res.json(buildTestResultAlreadyVerifiedResponse(existingVerifiedTestResult));
     }
 
+    // Review M5: VALID_STATUS_TRANSITIONS is the single definition of which
+    // states may become 'verified'; this route used to hold its own, laxer
+    // opinion and never read the map. That made `requested -> verified` and
+    // `at_lab -> verified` reachable, skipping 'entered' entirely — so
+    // `enteredById`/`enteredAt` stayed NULL (no engineer/verifier separation on
+    // this path) and POST /:id/reject, which demands `status === 'entered'`,
+    // refused the row forever while it still counted as a passing test.
+    //
+    // Only `entered -> verified` exists in the map, so that is what this route
+    // accepts. A lab-handled row still reaches verification the way the map
+    // says: results_received -> entered (POST /:id/status, which stamps the
+    // engineer) -> verified. Same error shape as that route so a client sees one
+    // contract for one rule.
+    const allowedTransitions = VALID_STATUS_TRANSITIONS[testResult.status] || [];
+    if (!allowedTransitions.includes('verified')) {
+      throw AppError.badRequest(
+        `Cannot transition from '${STATUS_LABELS[testResult.status] || testResult.status}' to '${STATUS_LABELS.verified}'`,
+        {
+          currentStatus: testResult.status,
+          allowedTransitions: allowedTransitions.map((s) => ({
+            status: s,
+            label: STATUS_LABELS[s] || s,
+          })),
+        },
+      );
+    }
+
     // Feature #883: Require certificate before verification
     if (!testResult.certificateDocId) {
       throw new AppError(

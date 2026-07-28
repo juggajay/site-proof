@@ -778,6 +778,236 @@ describe('Test Results API', () => {
     });
   });
 
+  // Review M6: the legacy AI intake routes created a row unconditionally, so a
+  // test that was planned and sent to the lab (row A, `at_lab`) gained a second
+  // row when its certificate came back — row A pending forever, one extra
+  // countable test per certificate. #1634 fixed this for the register-row
+  // action; these two routes were untouched.
+  describe('AI certificate intake lands on the waiting row (review M6)', () => {
+    function mockExtraction(testType: string, confidence = 0.96) {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      process.env.ANTHROPIC_TEST_CERT_MODEL = 'claude-test-model';
+
+      const extractedFields = {
+        testType: { value: testType, confidence },
+        laboratoryName: { value: 'Metro Materials Lab', confidence: 0.94 },
+        laboratoryReportNumber: { value: `LAB-${Date.now()}`, confidence: 0.93 },
+        sampleDate: { value: '2026-04-10', confidence: 0.91 },
+        testDate: { value: '2026-04-12', confidence: 0.92 },
+        resultValue: { value: '98.5', confidence: 0.95 },
+        resultUnit: { value: '% MDD', confidence: 0.9 },
+        specificationMin: { value: '95', confidence: 0.88 },
+        specificationMax: { value: '100', confidence: 0.87 },
+        sampleLocation: { value: 'CH 1000+25', confidence: 0.9 },
+      };
+
+      return vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(extractedFields) }] }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+    }
+
+    function uploadOne(filename: string) {
+      return request(app)
+        .post('/api/test-results/upload-certificate')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('projectId', projectId)
+        .attach('certificate', Buffer.from(`%PDF-1.4\n${filename}\n%%EOF`), {
+          filename,
+          contentType: 'application/pdf',
+        });
+    }
+
+    it('M6: the certificate lands on the one waiting row instead of minting a second', async () => {
+      const testType = `M6 Landing ${Date.now()}`;
+      mockExtraction(testType);
+
+      const waiting = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType,
+          status: 'at_lab',
+          sentToLabAt: new Date('2026-04-11T00:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await uploadOne('m6-landing.pdf');
+        expect(res.status).toBe(201);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+
+        expect(res.body.testResult.id).toBe(waiting.id);
+
+        const rows = await prisma.testResult.findMany({ where: { projectId, testType } });
+        expect(rows).toHaveLength(1);
+        expect(rows[0].certificateDocId).toBe(res.body.testResult.certificateDoc.id);
+        expect(rows[0].status).toBe('results_received');
+        // The planned row keeps its own facts: the lot link, the lab-send stamp,
+        // and every value the human entered. No unreviewed AI value is written
+        // here — the reviewed values arrive via PATCH /:id/confirm-extraction.
+        expect(rows[0].lotId).toBe(lotId);
+        expect(rows[0].sentToLabAt).not.toBeNull();
+        expect(rows[0].laboratoryReportNumber).toBeNull();
+        expect(rows[0].resultValue).toBeNull();
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: waiting.id } });
+        await prisma.testResult.deleteMany({ where: { projectId, testType } });
+      }
+    });
+
+    it('M6: batch-upload lands on the waiting row too', async () => {
+      const testType = `M6 Batch Landing ${Date.now()}`;
+      mockExtraction(testType);
+
+      const waiting = await prisma.testResult.create({
+        data: { projectId, lotId, testType, status: 'requested' },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-upload')
+          .set('Authorization', `Bearer ${authToken}`)
+          .field('projectId', projectId)
+          .attach('certificates', Buffer.from('%PDF-1.4\nm6 batch\n%%EOF'), {
+            filename: 'm6-batch-landing.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.results[0].success).toBe(true);
+        await trackCertificateDocumentFile(res.body.results[0].testResult.certificateDoc?.id);
+
+        expect(res.body.results[0].testResult.id).toBe(waiting.id);
+
+        const rows = await prisma.testResult.findMany({ where: { projectId, testType } });
+        expect(rows).toHaveLength(1);
+        expect(rows[0].status).toBe('results_received');
+        expect(rows[0].certificateDocId).not.toBeNull();
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: waiting.id } });
+        await prisma.testResult.deleteMany({ where: { projectId, testType } });
+      }
+    });
+
+    // The refusals. A wrong match on an evidence surface is worse than a
+    // duplicate, so anything short of one unambiguous waiting row falls back to
+    // the shipped create-a-row behaviour.
+    it('M6: two waiting rows of the same test type are ambiguous, so a new row is created', async () => {
+      const testType = `M6 Ambiguous ${Date.now()}`;
+      mockExtraction(testType);
+
+      const first = await prisma.testResult.create({
+        data: { projectId, lotId, testType, status: 'at_lab' },
+      });
+      const second = await prisma.testResult.create({
+        data: { projectId, lotId, testType, status: 'requested' },
+      });
+
+      try {
+        const res = await uploadOne('m6-ambiguous.pdf');
+        expect(res.status).toBe(201);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+
+        expect(res.body.testResult.id).not.toBe(first.id);
+        expect(res.body.testResult.id).not.toBe(second.id);
+
+        const rows = await prisma.testResult.findMany({ where: { projectId, testType } });
+        expect(rows).toHaveLength(3);
+        for (const id of [first.id, second.id]) {
+          const untouched = rows.find((row) => row.id === id)!;
+          expect(untouched.certificateDocId).toBeNull();
+        }
+      } finally {
+        await prisma.testResult.deleteMany({ where: { projectId, testType } });
+      }
+    });
+
+    it('M6: a waiting row that already holds a certificate is never displaced', async () => {
+      const testType = `M6 Certificated ${Date.now()}`;
+      mockExtraction(testType);
+
+      const existingCertificate = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: `m6-existing-${Date.now()}.pdf`,
+          fileUrl: `/uploads/certificates/m6-existing-${Date.now()}.pdf`,
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const waiting = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType,
+          status: 'at_lab',
+          certificateDocId: existingCertificate.id,
+        },
+      });
+
+      try {
+        const res = await uploadOne('m6-certificated.pdf');
+        expect(res.status).toBe(201);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+
+        expect(res.body.testResult.id).not.toBe(waiting.id);
+
+        const untouched = await prisma.testResult.findUniqueOrThrow({
+          where: { id: waiting.id },
+          select: { certificateDocId: true, status: true },
+        });
+        expect(untouched.certificateDocId).toBe(existingCertificate.id);
+        expect(untouched.status).toBe('at_lab');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { projectId, testType } });
+        await prisma.document.deleteMany({ where: { id: existingCertificate.id } });
+      }
+    });
+
+    it('M6: a low-confidence test type (the filename guess) never lands on a planned row', async () => {
+      // No API key: `extractCertificateFields` degrades and the test type comes
+      // from the filename at 0.45 confidence. Guessing a row off a filename is
+      // exactly the wrong-match hazard, so the intake must not land.
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.ANTHROPIC_TEST_CERT_MODEL;
+
+      const waiting = await prisma.testResult.create({
+        data: { projectId, lotId, testType: 'Compaction Test', status: 'at_lab' },
+      });
+      let createdId: string | undefined;
+
+      try {
+        const res = await uploadOne('m6-compaction-guess.pdf');
+        expect(res.status).toBe(201);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
+        createdId = res.body.testResult.id as string;
+
+        expect(res.body.extraction.extractedFields.testType.value).toBe('Compaction Test');
+        expect(res.body.extraction.extractedFields.testType.confidence).toBeLessThan(0.8);
+        expect(createdId).not.toBe(waiting.id);
+
+        const untouched = await prisma.testResult.findUniqueOrThrow({
+          where: { id: waiting.id },
+          select: { certificateDocId: true, status: true },
+        });
+        expect(untouched.certificateDocId).toBeNull();
+        expect(untouched.status).toBe('at_lab');
+      } finally {
+        await prisma.testResult.deleteMany({
+          where: { id: { in: [waiting.id, ...(createdId ? [createdId] : [])] } },
+        });
+      }
+    });
+  });
+
   describe('POST /api/test-results/batch-upload', () => {
     it('rejects batch certificates whose content does not match the declared file type', async () => {
       const filename = `spoofed-batch-certificate-${Date.now()}.pdf`;
@@ -2454,6 +2684,110 @@ describe('Test Results API', () => {
           action: AuditAction.TEST_RESULT_VERIFIED,
         });
         expect(JSON.parse(auditLog?.changes ?? '{}')).toEqual({ status: 'verified' });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
+    // Review M5: this route never read VALID_STATUS_TRANSITIONS, so a row that
+    // had never been ENTERED could be verified straight from the lab states.
+    // That skipped the engineer step entirely (enteredById/enteredAt stay NULL,
+    // so engineer/verifier separation is unenforced on this path) and then
+    // POST /:id/reject — which demands status === 'entered' — refused the row
+    // forever. Only `entered -> verified` exists in the map, so these three are
+    // the complete set of non-terminal states the route must refuse.
+    it.each(['requested', 'at_lab', 'results_received'])(
+      'M5: refuses to verify a %s row, which the transition map cannot move to verified',
+      async (status) => {
+        const certificate = await createTestCertificate(`m5-${status}-cert`);
+        const testResult = await prisma.testResult.create({
+          data: {
+            projectId,
+            lotId,
+            testType: `M5 Skip ${status} ${Date.now()}`,
+            status,
+            certificateDocId: certificate.id,
+            resultValue: 98.5,
+            passFail: 'pass',
+          },
+        });
+
+        try {
+          const res = await request(app)
+            .post(`/api/test-results/${testResult.id}/verify`)
+            .set('Authorization', `Bearer ${authToken}`);
+
+          expect(res.status).toBe(400);
+          expect(res.body.error.message).toContain('Cannot transition');
+
+          const unchanged = await prisma.testResult.findUniqueOrThrow({
+            where: { id: testResult.id },
+            select: {
+              status: true,
+              verifiedAt: true,
+              verifiedById: true,
+              enteredById: true,
+              enteredAt: true,
+            },
+          });
+          expect(unchanged.status).toBe(status);
+          expect(unchanged.verifiedAt).toBeNull();
+          expect(unchanged.verifiedById).toBeNull();
+          expect(unchanged.enteredById).toBeNull();
+          expect(unchanged.enteredAt).toBeNull();
+
+          const auditCount = await prisma.auditLog.count({
+            where: { entityId: testResult.id, action: AuditAction.TEST_RESULT_VERIFIED },
+          });
+          expect(auditCount).toBe(0);
+        } finally {
+          await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+          await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+          await prisma.document.deleteMany({ where: { id: certificate.id } });
+        }
+      },
+    );
+
+    // Review M5, the path that must still work: a certificate row parked at
+    // `results_received` reaches verification through the map's own edge
+    // (results_received -> entered -> verified), and the engineer stamp exists
+    // by the time a verifier signs it off.
+    it('M5: a results_received row still reaches verified via entered', async () => {
+      const certificate = await createTestCertificate('m5-happy-path-cert');
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `M5 Lab Path ${Date.now()}`,
+          status: 'results_received',
+          certificateDocId: certificate.id,
+          resultValue: 98.5,
+          passFail: 'pass',
+        },
+      });
+
+      try {
+        const entered = await request(app)
+          .post(`/api/test-results/${testResult.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'entered' });
+        expect(entered.status).toBe(200);
+
+        const verified = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(verified.status).toBe(200);
+        expect(verified.body.testResult.status).toBe('verified');
+
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true, verifiedById: true },
+        });
+        expect(stored.status).toBe('verified');
+        expect(stored.enteredById).toBe(userId);
+        expect(stored.verifiedById).toBe(userId);
       } finally {
         await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
         await prisma.testResult.deleteMany({ where: { id: testResult.id } });
@@ -4905,6 +5239,147 @@ describe('Test Results API', () => {
         where: { projectId, testType: 'C3 Invalid' },
       });
       expect(leaked).toBeNull();
+    });
+
+    // Review M1: the OTHER two CHECK constraints — the coordinate pair and the
+    // source-null-iff-coordinate-null rule — are wire-reachable too, and the
+    // migration's own comment claims the route mirrors them. Only the enum was
+    // mirrored, so each payload below reached Postgres and came back a generic
+    // 500 (errorHandler maps P2002/P2025/P2003 and nothing else). Every case is
+    // internally coherent input a real API client would send.
+    it.each([
+      ['coordinates without provenance', { sampleLatitude: -33.87, sampleLongitude: 151.21 }],
+      ['latitude without longitude', { sampleLatitude: -33.87, sampleLocationSource: 'gps' }],
+      ['longitude without latitude', { sampleLongitude: 151.21, sampleLocationSource: 'gps' }],
+      ['provenance without coordinates', { sampleLocationSource: 'map_pick' }],
+      [
+        'accuracy and provenance without coordinates',
+        { sampleLocationSource: 'gps', sampleLocationAccuracyM: 8 },
+      ],
+    ])('M1: POST with %s is a 400, not a 500', async (_name, payload) => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, lotId, testType: 'M1 Incoherent', ...payload });
+
+      expect(res.status).toBe(400);
+
+      const leaked = await prisma.testResult.findFirst({
+        where: { projectId, testType: 'M1 Incoherent' },
+      });
+      expect(leaked).toBeNull();
+    });
+
+    // Review M1, PATCH half: the constraints apply to the ROW after the update,
+    // not to the body, so the guard has to reason about the merged state. A
+    // PATCH that clears only the provenance of a located row, or that adds only
+    // a latitude to an unlocated one, is coherent-looking and still violates.
+    it.each([
+      ['clearing only the provenance of a located row', { sampleLocationSource: null }],
+      ['clearing only the longitude of a located row', { sampleLongitude: null }],
+    ])('M1: PATCH %s is a 400, not a 500', async (_name, patch) => {
+      const located = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `M1 Patch Located ${Date.now()}${Math.random()}`,
+          status: 'requested',
+          sampleLatitude: -33.8688,
+          sampleLongitude: 151.2093,
+          sampleLocationSource: 'gps',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${located.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send(patch);
+
+        expect(res.status).toBe(400);
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: located.id },
+          select: { sampleLatitude: true, sampleLongitude: true, sampleLocationSource: true },
+        });
+        expect(unchanged.sampleLocationSource).toBe('gps');
+        expect(unchanged.sampleLongitude).not.toBeNull();
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: located.id } });
+        await prisma.testResult.deleteMany({ where: { id: located.id } });
+      }
+    });
+
+    it('M1: PATCH adding a latitude alone to an unlocated row is a 400, not a 500', async () => {
+      const unlocated = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `M1 Patch Unlocated ${Date.now()}${Math.random()}`,
+          status: 'requested',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${unlocated.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ sampleLatitude: -33.87 });
+
+        expect(res.status).toBe(400);
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: unlocated.id },
+          select: { sampleLatitude: true },
+        });
+        expect(unchanged.sampleLatitude).toBeNull();
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: unlocated.id } });
+        await prisma.testResult.deleteMany({ where: { id: unlocated.id } });
+      }
+    });
+
+    // Positive control for the M1 guard: the coherent writes it must NOT reject.
+    it('M1: a full sample point, and clearing all four together, both still succeed', async () => {
+      const created = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId,
+          testType: `M1 Coherent ${Date.now()}`,
+          sampleLatitude: -33.87,
+          sampleLongitude: 151.21,
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: 6,
+        });
+
+      expect(created.status).toBe(201);
+      const id = created.body.testResult.id as string;
+
+      try {
+        const cleared = await request(app)
+          .patch(`/api/test-results/${id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            sampleLatitude: null,
+            sampleLongitude: null,
+            sampleLocationSource: null,
+            sampleLocationAccuracyM: null,
+          });
+
+        expect(cleared.status).toBe(200);
+
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id },
+          select: { sampleLatitude: true, sampleLocationSource: true },
+        });
+        expect(stored.sampleLatitude).toBeNull();
+        expect(stored.sampleLocationSource).toBeNull();
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: id } });
+        await prisma.testResult.deleteMany({ where: { id } });
+      }
     });
 
     // AT-85 [C3R-B7]: each of the three CHECK constraints rejects its own

@@ -1,5 +1,5 @@
 import { calculatePassFail } from './constants';
-import type { ExtractedField, TestResult } from './types';
+import type { TestResult } from './types';
 
 /**
  * H13: keep the reviewed pass/fail in sync with the result value + spec bounds
@@ -84,7 +84,10 @@ function rowValueAsFormString(row: AttachReviewRow, field: CertificateReviewFiel
  * survives untouched. ponytail: absent beats guessed.
  */
 export function seedAttachReviewForm(
-  extractedFields: Record<string, ExtractedField | undefined> | undefined,
+  // Only `.value` is read, so the parameter asks for no more than that — the
+  // batch-upload modal carries its own narrower extracted-field shape and has
+  // the same seeding need (review M6).
+  extractedFields: Record<string, { value?: string; confidence?: number } | undefined> | undefined,
   row: AttachReviewRow,
 ): Record<string, string> {
   const seeded: Record<string, string> = {};
