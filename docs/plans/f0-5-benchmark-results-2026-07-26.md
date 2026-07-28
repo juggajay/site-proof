@@ -450,3 +450,131 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/siteproof_test_f05pe
     src/routes/holdpoints src/routes/ncrs src/lib/readiness src/routes/itp \
     src/lib/conformancePrerequisites.test.ts
 ```
+
+---
+
+## 2026-07-28 second perf pass — Target 1 back under the revised 3s budget
+
+The 2026-07-27 decision above set Target 1 at **p95 < 3,000ms** and recorded the
+post-#1580 result at 2,964ms — "tight but honest; any regression on this path
+will flip the verdict back to FAIL". It did. Between #1580 and `a21cb3c7`,
+C1.1 (#1585) reshaped `CONFORMANCE_LOT_SELECT` and D14/F1 added per-lot work,
+and the decision measured **p95 3,725ms** on the box used below.
+
+- **Base:** `origin/master` @ `a21cb3c7` (the branch's merge-base).
+- **Branch:** `perf/claim-decision-under-3s`.
+- **`backend/scripts/bench-f05.ts` is byte-identical on both sides** — the A/B is
+  the same script, the same database and the same seed.
+
+### Verdict
+
+| #   | Target                                          | Budget          | Base (p95)                       | Branch (p95)      | Result                              |
+| --- | ----------------------------------------------- | --------------- | -------------------------------- | ----------------- | ----------------------------------- |
+| 1   | Claim inclusion decision, 5,000 members, flag ON | p95 < 3,000ms   | 2,987–4,563ms (**FAIL** 4 of 5)  | **2,654–2,722ms** | **PASS** (5 of 5, 88–91% of budget) |
+| 2   | Single-entity decision overhead                 | p95 < 50ms      | 1.6ms                            | **3.0ms**         | PASS (6%) — noise on a 1–3ms figure |
+| 3   | Paginated claim-readiness, page of 100          | p95 < 1,000ms   | 69.4ms                           | **56.9ms**        | PASS (6%)                           |
+| 3   | Paginated claim-readiness, page of 500          | p95 < 1,000ms   | 205.8ms                          | **147.0ms**       | PASS (15%)                          |
+
+Snapshot verification at the ceiling is **unchanged and still all PASS**: 5,001
+rows (1 aggregate + 5,000 members) in 11 chunks, max member `result` 178 bytes,
+max aggregate `result` 215 bytes. The decision writes the same rows.
+
+### A/B, interleaved, one otherwise-idle box
+
+Five base/branch pairs, alternating, same machine, same database, nothing else
+running on it. **Absolute values drift; the deltas and the spread are the
+evidence.**
+
+| Pair       | Base p95      | Branch p95    | Delta        | Base p50 | Branch p50 | Delta   |
+| ---------- | ------------- | ------------- | ------------ | -------- | ---------- | ------- |
+| 0          | 3,725.0 FAIL  | 2,653.6 PASS  | −1,071.4     | —        | 2,374.4    | —       |
+| 1          | 3,423.7 FAIL  | 2,684.3 PASS  | −739.4       | 2,856.6  | 2,428.4    | −428.2  |
+| 2          | 2,987.0 PASS  | 2,667.2 PASS  | −319.8       | 2,795.1  | 2,384.6    | −410.5  |
+| 3          | 4,563.4 FAIL  | 2,722.5 PASS  | −1,840.9     | 3,194.5  | 2,559.1    | −635.4  |
+| 4          | 3,370.7 FAIL  | 2,710.0 PASS  | −660.7       | 2,944.6  | 2,605.9    | −338.7  |
+| **spread** | **1,576.4ms** | **68.9ms**    |              |          |            |         |
+
+Two readings, and the second matters as much as the first:
+
+1. **The p50 delta is stable at −339 to −635ms (mean −453ms).** That is the work
+   actually removed.
+2. **The branch collapses p95 VARIANCE.** Base p95 swings over 1.58 seconds run
+   to run and lands over budget in 4 of 5 runs; the branch sits in a 69ms band
+   and passes 5 of 5. The base's one PASS was 2,987.0ms — 13ms of headroom, i.e.
+   exactly the "99% of budget" position the 2026-07-27 decision flagged as one
+   regression away from FAIL. Part of the base's spread is autovacuum churn on
+   `lots`/`claimed_lots` after repeated 5,000-lot claim runs (confirmed in
+   `pg_stat_activity` mid-run); the branch reads far less through that same
+   churn, which is why it is insensitive to it.
+
+### Phase attribution (pair 1, p50)
+
+| Phase                                                 | Base       | Branch      | Delta          |
+| ----------------------------------------------------- | ---------- | ----------- | -------------- |
+| `evaluate` (reads inside the transaction)             | 1,133.9ms  | **447.1ms** | **−686.8ms**   |
+| `mutate` (claim + 5,000 members + status flips)       | 608.0ms    | 612.0ms     | +4.0ms         |
+| `snapshot` (11 × `createManyAndReturn`)               | 678.3ms    | 716.4ms     | +38.1ms        |
+| `audit`                                               | 8.9ms      | 8.7ms       | −0.2ms         |
+| unattributed (raw `FOR UPDATE` locks, auth reads, JS) | 354.3ms    | 651.8ms     | **+297.5ms**   |
+
+**Read the last two rows together, honestly.** `evaluate` drops 687ms but
+unattributed rises 298ms: roughly 300ms of the `evaluate` saving is
+RE-ATTRIBUTION, not elimination — grouping 60,000 completion rows moved out of
+Prisma's client-side relation joiner (Prisma-attributed) into a plain `Map`
+build in our own code (unattributed). The net is what the route measures, and
+that is the −453ms p50 above. The lever is real; it is worth ~390ms, not ~690ms.
+
+### Levers taken
+
+| #   | Lever                                                                                                                                                                | Measured, standalone at the 5,000-lot ceiling                                       |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1   | `itpInstance.completions` out of `CONFORMANCE_LOT_SELECT`, fetched FLAT by `hydrateFetchedLots` (one `iTPCompletion.findMany` + a JS `Map`)                             | 980ms → 734ms (**−246ms**); the whole conformance batch, DB+JS, 1,352ms → **857ms**   |
+| 2   | Eligibility read in `evaluateClaimInclusion` narrowed to the 4 columns `ClaimableLot` declares                                                                          | 199ms → 51ms (**−148ms**)                                                             |
+| 3   | `getNormalizedChecklistItems` memoized on the fetched instance object (`WeakMap`) — the batch derived the same items twice per lot, re-parsing a ~2 KB `templateSnapshot` | **~−45ms**                                                                            |
+
+Lever 1 is the 2026-07-26 table's "conformance completions fetched FLAT"
+(−303ms predicted, −246ms measured here). Lever 2 is its "eligibility read
+narrowed" (−137ms predicted, −148ms measured). **No query count changed** —
+Prisma already issued a separate completions query for the nested relation.
+
+### Levers measured and REJECTED
+
+| Candidate                                                                          | Predicted                                 | Measured                                                                | Verdict                                                                                                                                                          |
+| ---------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProgressClaim.create`'s 5,000 nested `claimedLots.create` → sibling `claimedLot.createMany` | ~−200ms (2026-07-26, "est.", never measured) | 325ms vs 293ms standalone; `mutate` p50 moves +4.0ms in the A/B          | **Refuted.** Prisma already compiles the nested create into one statement.                                                                                        |
+| Drop the `project` relation from `CONFORMANCE_LOT_SELECT`, resolve it once per batch | −57ms                                     | −57ms, real but small                                                    | **Rejected.** D14 AT-50 pins `sufficiencyInput()` against a real row fetched with the REAL select; removing `project` forces that test onto a stub — weakening a guardrail for 57ms. |
+| Plain `createMany` for snapshots (drop RETURNING entirely)                          | —                                         | —                                                                        | **Not retried.** #1580 measured the RETURNING payload at −13.5ms (noise), and it moves id generation off the schema default.                                       |
+
+### `bench-f05.ts` section D is STALE — read it with care
+
+Section D's variant 2 is still labelled _"`CONFORMANCE_LOT_INCLUDE` as shipped"_
+and is a hardcoded `include` literal. It has not matched shipped code since
+#1580 replaced that const with `CONFORMANCE_LOT_SELECT`, and after this change
+it is two rewrites behind. On this box it reads ~2,363ms against ~980ms for the
+select the code actually used — a ~1.4s phantom "lever" that does not exist.
+Variant 4 ("completions narrowed to gate columns") is the closest thing to a
+real reading of the shipped select, and it now overstates too: it still nests
+completions, which this change stops doing.
+
+The script was deliberately **left byte-identical** so this write-up's A/B
+compares like with like. Re-label section D in a separate commit, after the next
+A/B that needs it — not in a perf PR whose evidence depends on the script not
+moving.
+
+### What is left
+
+`evaluate` is now 447ms of a 2,437ms p50 decision. The remaining three quarters
+are floor-ish work this pass did not touch and should not:
+
+| Phase          | Branch p50 | Why it stays                                                        |
+| -------------- | ---------- | ------------------------------------------------------------------- |
+| `snapshot`     | 716ms      | 5,001 rows the decision is required to write; RETURNING already trimmed |
+| unattributed   | 652ms      | the `SELECT … FOR UPDATE` integrity lock over 5,000 lots, plus the JS grouping |
+| `mutate`       | 612ms      | claim + 5,000 `ClaimedLot` rows + 5,000 status flips                 |
+| `evaluate`     | 447ms      | the 60,000 completion rows the gate genuinely reads                  |
+
+Getting materially below ~2.4s p50 needs the option-3 rework the 2026-07-27
+decision declined (a maintained per-lot conformance summary instead of
+re-deriving inside the transaction), which changes the trust model of the gate.
+Not a tuning question. `DECISION_TRANSACTION_TIMEOUT_MS = 15_000` is now 5.3× the
+observed max (2,838ms).
