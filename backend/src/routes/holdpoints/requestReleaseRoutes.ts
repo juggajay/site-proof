@@ -71,6 +71,15 @@ type HoldPointRequestStateData = {
   notificationSentTo: string | null;
   scheduledDate: Date | null;
   scheduledTime: string | null;
+  /**
+   * Wave E2 §4.2.2: the chase cap is per REQUEST GENERATION, and the generation
+   * identifier is `notificationSentAt` — the one value already rewritten on
+   * every request. Resetting the counter here, inside the transaction that
+   * writes it, is what makes a re-requested hold point eligible for reminders
+   * again without a new column or a second monotonic value.
+   */
+  chaseCount: 0;
+  lastChasedAt: null;
   releaseNotes?: string;
 };
 
@@ -351,6 +360,8 @@ holdPointRequestReleaseRouter.post(
         notificationSentTo: recipient.email,
         scheduledDate: scheduledDateValue,
         scheduledTime: scheduledTime || null,
+        chaseCount: 0,
+        lastChasedAt: null,
       };
 
       const batch = await tx.holdPointReleaseBatch.create({
@@ -460,6 +471,10 @@ holdPointRequestReleaseRouter.post(
         subject: renderedEmail.subject,
         html: renderedEmail.html,
         text: renderedEmail.text,
+        // Wave E2 (E.0 row 7c): the fourth payload site, and the one easy to
+        // miss — it calls `sendEmail` directly instead of going through a
+        // `sendHP*` wrapper.
+        replyTo: requestingUser?.email,
       });
 
       if (result.success) {
@@ -795,6 +810,7 @@ holdPointRequestReleaseRouter.post(
           releaseUrl: secureReleaseUrl,
           requestedBy,
           noticeOverrideReason: noticePeriodOverrideReason || undefined,
+          replyTo: requestingUser?.email,
         });
       } catch (emailError) {
         logError('[HP Release Request] Failed to send superintendent email:', emailError);
@@ -825,6 +841,8 @@ holdPointRequestReleaseRouter.post(
         notificationSentTo: normalizedNotificationSentTo,
         scheduledDate: scheduledDateValue,
         scheduledTime: scheduledTime || null,
+        chaseCount: 0,
+        lastChasedAt: null,
         ...(overrideNote && { releaseNotes: overrideNote }),
       };
 

@@ -54,6 +54,14 @@ interface EmailOptions {
   text?: string;
   html?: string;
   from?: string;
+  /**
+   * Wave E2 (spec §4.2.6, E.0 row 7c). Automated reminders go to an external
+   * superintendent who is not a CIVOS user, so the only reachable human in the
+   * loop is the person who asked for the release. Before this the transport had
+   * no reply path at all — a repo-wide grep for `replyto|reply_to` returned zero
+   * hits.
+   */
+  replyTo?: string;
   attachments?: EmailAttachment[];
 }
 
@@ -176,6 +184,8 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
         subject: email.subject,
         text: email.text || '',
         html: email.html,
+        // The pinned Resend SDK (v2) names this `reply_to`, not `replyTo`.
+        ...(email.replyTo ? { reply_to: email.replyTo } : {}),
         attachments: resendAttachments,
       });
 
@@ -420,6 +430,7 @@ export async function sendHPReleaseRequestEmail(data: {
   secureReleaseUrl?: string; // Feature #23 - secure link for external release
   requestedBy: string;
   noticeOverrideReason?: string;
+  replyTo?: string;
 }): Promise<EmailResult> {
   const { subject, html, text } = renderHoldPointReleaseRequestEmail(data);
 
@@ -432,6 +443,7 @@ export async function sendHPReleaseRequestEmail(data: {
     subject,
     html,
     text,
+    replyTo: data.replyTo,
   });
 }
 
@@ -451,6 +463,7 @@ export async function sendHPChaseEmail(data: {
   evidencePackageUrl?: string;
   releaseUrl: string;
   requestedBy: string;
+  replyTo?: string;
 }): Promise<EmailResult> {
   const { subject, html, text } = renderHoldPointChaseEmail(data);
 
@@ -466,6 +479,7 @@ export async function sendHPChaseEmail(data: {
     subject,
     html,
     text,
+    replyTo: data.replyTo,
   });
 }
 
@@ -486,6 +500,7 @@ export async function sendHPReleaseConfirmationEmail(data: {
   releaseNotes?: string;
   releasedAt: string;
   lotUrl: string;
+  replyTo?: string;
 }): Promise<EmailResult> {
   const { subject, html, text } = renderHoldPointReleaseConfirmationEmail(data);
 
@@ -500,6 +515,7 @@ export async function sendHPReleaseConfirmationEmail(data: {
     subject,
     html,
     text,
+    replyTo: data.replyTo,
   });
 }
 

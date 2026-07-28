@@ -824,6 +824,11 @@ model HoldPointReleaseToken {
   requirementEvaluations RequirementEvaluation[]
 
   @@index([batchId])
+  /// Wave E2 (spec §4.2.8). `deleteMany({ where: { holdPointId, usedAt: null } })`
+  /// runs on every release request and every chase, and every chase resolver
+  /// read starts from `holdPointId`. E2 turns those from user-triggered to
+  /// hourly-and-automatic, which is what makes an existing gap load-bearing.
+  @@index([holdPointId])
   @@map("hold_point_release_tokens")
 }
 

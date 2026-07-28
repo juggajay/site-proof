@@ -44,7 +44,15 @@ export type HoldPointChaseContext = {
   daysSinceRequest: number;
   evidencePackageUrl: string;
   releaseUrl: string;
-  notificationSentTo: string | null;
+  /**
+   * Wave E2 §4.2.6 / E.0 item 14. This was `notificationSentTo` — the RECIPIENT
+   * list — so the chase email told the superintendent that the request came
+   * from the superintendent's own address. It is now the requester resolved
+   * from the `HP_RELEASE_REQUESTED` audit row for the current generation, or a
+   * NAMED support fallback. `[E-B8b]`: no email attributes a request to
+   * someone who did not make it.
+   */
+  requestedBy: string;
 };
 
 // The payload accepted by sendHPChaseEmail.
@@ -78,6 +86,6 @@ export function buildHoldPointChaseEmail(
     daysSinceRequest: context.daysSinceRequest,
     evidencePackageUrl: context.evidencePackageUrl,
     releaseUrl: context.releaseUrl,
-    requestedBy: context.notificationSentTo || 'Site Team',
+    requestedBy: context.requestedBy || 'Site Team',
   };
 }

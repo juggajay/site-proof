@@ -61,6 +61,17 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
       skippedAlerts: 0,
       usersNotified: 0,
     },
+    holdPointChaseReminders: {
+      canaryProjects: 0,
+      eligibleHoldPoints: 0,
+      recipientGroups: 0,
+      digestsSent: 0,
+      holdPointsReminded: 0,
+      dailyLimitSkipped: 0,
+      suppressedRecipients: 0,
+      sendFailures: 0,
+      deferred: 0,
+    },
   };
 }
 
