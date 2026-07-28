@@ -87,6 +87,56 @@ export const READINESS_REASON_CODES = [
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
 
 /**
+ * Wave D `D1a-respec` (spec §4.1.1, `[DR2-B2]`). The quality-closeout blocking
+ * vocabulary, as RUNTIME DATA — a declared SUBSET of `READINESS_REASON_CODES`,
+ * not a second vocabulary. It lives here, beside the registry, under the same
+ * header rule: a code is added here in the same change that makes an emitter
+ * produce it, and the contract test fails otherwise.
+ *
+ * `HandoverReasonCode` (`./futureConsumers.ts`) derives from this array. Before
+ * `D1a-respec` it was a hand-listed `Extract<>` — a hand-list wearing a
+ * derivation's clothes, which is why `insufficient_test_count` could ship as a
+ * live blocking item and stay absent from the union for two waves.
+ *
+ * Scope, stated because the name does not carry it: this is the QUALITY
+ * closeout scope (conformance, ITP, tests, hold points, NCRs). The commercial
+ * blockers `buildClaimItems` emits with the same `severity`/`blocksAction`
+ * shape — `already_claimed`, `missing_budget`, `conformance_no_longer_current` —
+ * are deliberately OUT (spec §4.2, `[DR-A1]`: D1a is renamed "quality closeout
+ * readiness" precisely so it stops implying the commercial dimension).
+ * `not_conformed` is in because a lot that is not conformed is not handed over,
+ * whichever surface says so.
+ *
+ * The two members no shipped emitter produces with `blocksAction: true` are
+ * marked below with the emitter that DOES produce them and its blocksAction
+ * value, so the divergence is recorded rather than discovered (spec §4.1.2).
+ */
+export const HANDOVER_BLOCKING_REASON_CODES = [
+  // buildConformanceBlockerItems — all six, `severity: 'blocker'` ∧
+  // `blocksAction: true`. This function IS the `lotConformable` gate, so this
+  // half of the set is emitter-enumerated by AT-138(b), not hand-maintained.
+  'no_itp_assigned',
+  'itp_incomplete',
+  'no_passing_verified_test',
+  'open_ncrs',
+  'na_hold_point_not_released',
+  // Wave C1's blocking sufficiency item — live at
+  // `evidenceReadiness/conformanceItems.ts` and absent from the pre-D1a-respec
+  // union. `[DR-B2]`'s named defect.
+  'insufficient_test_count',
+  // buildClaimItems — `severity: 'blocker'` ∧ `blocksAction: true`.
+  'not_conformed',
+  // Emitted `severity: 'blocker'` ∧ `blocksAction: FALSE` by the surfaces that
+  // ship today: `open_major_ncrs` by claimReview (an advisory review surface,
+  // which never hard-blocks), `unreleased_hold_points` by buildClaimItems
+  // (advisory on the claim card). D1a treats both as closeout blockers because
+  // an open major NCR or an unreleased hold point is not handed over — so
+  // AT-138(b) asserts membership-of-emitted, never emitted-equals-set.
+  'open_major_ncrs',
+  'unreleased_hold_points',
+] as const satisfies readonly ReadinessReasonCode[];
+
+/**
  * Provenance for every code: the predicate export in `../predicates.ts` that
  * computes the underlying signal, plus the emitting engine builder. `predicate:
  * 'engine'` means the code is a bucket-state short circuit or a count-only item

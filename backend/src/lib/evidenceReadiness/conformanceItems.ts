@@ -12,7 +12,7 @@
 // engine, which is their only consumer.
 
 import type { EvidenceReadinessItem, LotReadinessInput } from './core.js';
-import { item } from './core.js';
+import { blockingItem, item } from './core.js';
 import type { SufficiencyEvaluation } from '../readiness/sufficiency/evaluate.js';
 import type {
   QuantityUnit,
@@ -88,25 +88,21 @@ export function buildConformanceBlockerItems(
 
   if (!prerequisites.itpAssigned) {
     items.push(
-      item({
+      blockingItem({
         code: 'no_itp_assigned',
-        severity: 'blocker',
         area: 'itp',
         title: 'No ITP assigned',
         detail: 'Assign an ITP before this lot can be conformed.',
-        blocksAction: true,
         actionLabel: 'Assign ITP',
       }),
     );
   } else if (!prerequisites.itpCompleted) {
     items.push(
-      item({
+      blockingItem({
         code: 'itp_incomplete',
-        severity: 'blocker',
         area: 'itp',
         title: 'ITP checklist incomplete',
         detail: `${prerequisites.itpCompletedCount}/${prerequisites.itpTotalCount} checklist items are complete.`,
-        blocksAction: true,
         actionLabel: 'Complete ITP',
         count: prerequisites.itpTotalCount - prerequisites.itpCompletedCount,
         relatedIds: prerequisites.itpIncompleteItems.map((itpItem) => itpItem.id),
@@ -119,13 +115,11 @@ export function buildConformanceBlockerItems(
   // gate (which now uses testRequired) would never raise.
   if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
     items.push(
-      item({
+      blockingItem({
         code: 'no_passing_verified_test',
-        severity: 'blocker',
         area: 'test',
         title: 'Required tests outstanding',
         detail: buildOutstandingTestDetail(prerequisites.outstandingTestItems),
-        blocksAction: true,
         actionLabel: 'Review tests',
         outstandingTests: (prerequisites.outstandingTestItems ?? []).map((test) => ({
           itemId: test.itemId,
@@ -139,13 +133,11 @@ export function buildConformanceBlockerItems(
 
   if (!prerequisites.noOpenNcrs) {
     items.push(
-      item({
+      blockingItem({
         code: 'open_ncrs',
-        severity: 'blocker',
         area: 'ncr',
         title: 'Open NCRs must be closed',
         detail: `${prerequisites.openNcrs.length} NCR${prerequisites.openNcrs.length === 1 ? '' : 's'} ${prerequisites.openNcrs.length === 1 ? 'remains' : 'remain'} open for this lot.`,
-        blocksAction: true,
         actionLabel: 'Review NCRs',
         count: prerequisites.openNcrs.length,
         relatedIds: prerequisites.openNcrs.map((ncr) => ncr.id),
@@ -159,13 +151,11 @@ export function buildConformanceBlockerItems(
   const naHpBlockerCount = prerequisites.naHoldPointBlockerCount ?? 0;
   if (!(prerequisites.noNaHoldPointBypass ?? true) || naHpBlockerCount > 0) {
     items.push(
-      item({
+      blockingItem({
         code: 'na_hold_point_not_released',
-        severity: 'blocker',
         area: 'hold_point',
         title: 'Hold point items require release',
         detail: `${naHpBlockerCount} hold point item${naHpBlockerCount === 1 ? '' : 's'} marked N/A but the hold point has not been released. Release the hold point to satisfy conformance.`,
-        blocksAction: true,
         actionLabel: 'Review hold points',
         count: naHpBlockerCount,
       }),
@@ -181,13 +171,11 @@ export function buildConformanceBlockerItems(
   if (prerequisites.sufficiencyBlocks ?? false) {
     const short = shortfallRules(sufficiency);
     items.push(
-      item({
+      blockingItem({
         code: 'insufficient_test_count',
-        severity: 'blocker',
         area: 'test',
         title: 'Not enough tests for this lot',
         detail: short.length > 0 ? short.map(shortfallSentence).join(' ') : SUFFICIENCY_NO_DETAIL,
-        blocksAction: true,
         actionLabel: 'Review tests',
         count: short.length,
       }),

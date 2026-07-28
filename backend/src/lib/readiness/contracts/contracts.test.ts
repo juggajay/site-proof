@@ -12,19 +12,30 @@ import {
   type MyWorkView,
 } from './actionAssignment.js';
 import {
+  HANDOVER_BLOCKING_REASON_CODES,
   READINESS_REASON_CODES,
   REASON_CODE_PROVENANCE,
   isReadinessReasonCode,
   type ReadinessReasonCode,
 } from './reasonCodes.js';
 import type {
+  CloseoutReadinessResponse,
   HandoverReadinessVerdict,
   HandoverReasonCode,
   HoldPointPackageVerdict,
   HoldPointReasonCode,
+  LotCloseoutReadinessSnapshot,
   TestReasonCode,
   TestSufficiencyVerdict,
 } from './futureConsumers.js';
+// AT-138 runs the SHIPPED emitters. A test-only edge: the contracts themselves
+// still hold no runtime import of the engine (futureConsumers.ts header).
+import {
+  buildClaimEvidenceReviewFromInputs,
+  buildLotReadinessFromInputs,
+  type LotReadinessInput,
+} from '../../evidenceReadiness.js';
+import type { EvidenceReadinessItem } from '../../evidenceReadiness/core.js';
 
 // Base fixture — a valid "waiting on me" lot conformance action.
 function assignment(overrides: Partial<ActionAssignment> = {}): ActionAssignment {
@@ -183,11 +194,295 @@ describe('future consumer verdicts — reasonCodes stay within the vocabulary', 
     for (const c of v.reasonCodes) expect(isReadinessReasonCode(c)).toBe(true);
   });
 
+  it('the handover verdict carries every registered handover code (derived union, not a hand-list)', () => {
+    // Before D1a-respec this array would not have compiled as
+    // `HandoverReasonCode[]`: `insufficient_test_count` was absent from the
+    // hand-listed `Extract<>`. `[DR-B2]`'s named defect, asserted.
+    const codes: HandoverReasonCode[] = [...HANDOVER_BLOCKING_REASON_CODES];
+    for (const c of codes) expect(isReadinessReasonCode(c)).toBe(true);
+    expect(codes).toContain('insufficient_test_count');
+  });
+
   it('subset code unions cannot reference a non-vocabulary code (compile-time Extract guard)', () => {
     // If a subset union above listed a string not in the vocabulary, Extract<>
     // would resolve it to `never` and the fixtures above would fail to compile.
     // This runtime line documents that guard.
     const all: ReadinessReasonCode[] = [...READINESS_REASON_CODES];
     expect(all.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AT-138 — the handover registry cannot drift from the emitters.
+// Wave D `D1a-respec`, spec §4.1.1 / §14. `[DR2-B2]`.
+//
+// Rev 2 asserted a set equation between a runtime set and a TypeScript union,
+// which nothing can evaluate. This runs the SHIPPED emitters over a fixture
+// battery covering every hard-blocker branch and compares real sets.
+// ---------------------------------------------------------------------------
+
+/**
+ * Hard blockers the shipped emitters produce that are deliberately OUT of the
+ * quality-closeout scope (spec §4.2 / `[DR-A1]`: D1a is a QUALITY verdict). This
+ * is a CLASSIFICATION, not a second vocabulary — every hard blocker must land in
+ * exactly one of these two lists or AT-138(b) fails, which is the whole point.
+ */
+const COMMERCIAL_HARD_BLOCKERS_OUT_OF_SCOPE = [
+  'already_claimed',
+  'missing_budget',
+  'conformance_no_longer_current',
+] as const satisfies readonly ReadinessReasonCode[];
+
+function readinessInput(overrides: Partial<LotReadinessInput> = {}): LotReadinessInput {
+  return {
+    lot: {
+      id: 'lot-1',
+      lotNumber: 'LOT-001',
+      status: 'not_started',
+      budgetAmount: null,
+      claimedInId: null,
+    },
+    canViewCommercial: true,
+    conformStatus: {
+      canConform: false,
+      blockingReasons: [],
+      prerequisites: {
+        itpAssigned: false,
+        itpCompleted: false,
+        itpCompletedCount: 0,
+        itpTotalCount: 0,
+        itpIncompleteItems: [],
+        testRequired: false,
+        hasPassingTest: false,
+        testResults: [],
+        noOpenNcrs: true,
+        openNcrs: [],
+      },
+    },
+    evidenceCounts: {
+      unreleasedHoldPoints: 0,
+      releasedHoldPoints: 0,
+      approvedDockets: 0,
+      diaryEntries: 0,
+      documents: 0,
+      photos: 0,
+      pendingTests: 0,
+    },
+    ...overrides,
+  };
+}
+
+/** Every branch that can emit a `severity: 'blocker'` item, exercised. */
+function emitBatteryItems(): EvidenceReadinessItem[] {
+  const base = readinessInput();
+  const inputs: LotReadinessInput[] = [
+    // 1. No ITP, unreleased hold points, not conformed.
+    readinessInput({ evidenceCounts: { ...base.evidenceCounts, unreleasedHoldPoints: 3 } }),
+    // 2. Every remaining conformance blocker at once.
+    readinessInput({
+      conformStatus: {
+        canConform: false,
+        blockingReasons: [],
+        prerequisites: {
+          itpAssigned: true,
+          itpCompleted: false,
+          itpCompletedCount: 1,
+          itpTotalCount: 3,
+          itpIncompleteItems: [{ id: 'ci-1', description: 'Compaction', pointType: 'test' }],
+          testRequired: true,
+          hasPassingTest: false,
+          testResults: [],
+          noOpenNcrs: false,
+          openNcrs: [{ id: 'ncr-1', ncrNumber: 'NCR-1', description: 'x', status: 'open' }],
+          noNaHoldPointBypass: false,
+          naHoldPointBlockerCount: 2,
+          sufficiencyBlocks: true,
+        },
+      },
+    }),
+    // 3. Fully claimed — the commercial short circuit.
+    readinessInput({ lot: { ...base.lot, status: 'claimed', claimedInId: 'claim-1' } }),
+    // 4. Conformed with no budget.
+    readinessInput({
+      lot: { ...base.lot, status: 'conformed' },
+      conformStatus: {
+        canConform: true,
+        blockingReasons: [],
+        prerequisites: {
+          itpAssigned: true,
+          itpCompleted: true,
+          itpCompletedCount: 1,
+          itpTotalCount: 1,
+          itpIncompleteItems: [],
+          testRequired: false,
+          hasPassingTest: true,
+          testResults: [],
+          noOpenNcrs: true,
+          openNcrs: [],
+        },
+      },
+    }),
+    // 5. Conformed, then an NCR opened — the post-conformance regression.
+    readinessInput({
+      lot: { ...base.lot, status: 'conformed', budgetAmount: 1000 },
+      conformStatus: {
+        canConform: false,
+        blockingReasons: [],
+        prerequisites: {
+          itpAssigned: true,
+          itpCompleted: true,
+          itpCompletedCount: 1,
+          itpTotalCount: 1,
+          itpIncompleteItems: [],
+          testRequired: false,
+          hasPassingTest: true,
+          testResults: [],
+          noOpenNcrs: false,
+          openNcrs: [{ id: 'ncr-2', ncrNumber: 'NCR-2', description: 'y', status: 'open' }],
+        },
+      },
+    }),
+  ];
+
+  const items = inputs.flatMap((input) => {
+    const readiness = buildLotReadinessFromInputs(input);
+    return [
+      ...readiness.conformance.blockers,
+      ...readiness.conformance.warnings,
+      ...readiness.conformance.support,
+      ...readiness.claim.blockers,
+      ...readiness.claim.warnings,
+      ...readiness.claim.support,
+    ];
+  });
+
+  // The claim-evidence review surface — the sole emitter of `open_major_ncrs`.
+  const review = buildClaimEvidenceReviewFromInputs({
+    claim: {
+      id: 'claim-1',
+      claimNumber: 1,
+      totalClaimedAmount: 1000,
+      claimedLots: [
+        {
+          amountClaimed: 1000,
+          lot: {
+            id: 'lot-review',
+            lotNumber: 'LOT-REVIEW',
+            activityType: 'Earthworks',
+            testResults: [],
+            ncrLots: [{ ncr: { id: 'ncr-3', status: 'open', severity: 'major' } }],
+            documents: [],
+            itpInstance: null,
+            holdPoints: [{ id: 'hp-1', status: 'pending' }],
+          },
+        },
+      ],
+    },
+  });
+
+  return [
+    ...items,
+    ...review.lots.flatMap((lot) => [
+      ...lot.claim.blockers,
+      ...lot.claim.warnings,
+      ...lot.claim.support,
+    ]),
+  ];
+}
+
+describe('AT-138 — HANDOVER_BLOCKING_REASON_CODES cannot drift [DH-B5]', () => {
+  const battery = emitBatteryItems();
+  const emittedBlockerCodes = new Set(
+    battery.filter((i) => i.severity === 'blocker').map((i) => i.code),
+  );
+  const emittedHardBlockerCodes = new Set(
+    battery.filter((i) => i.severity === 'blocker' && i.blocksAction).map((i) => i.code),
+  );
+
+  it('(a) is a subset of the shipped registry — never a second vocabulary', () => {
+    for (const code of HANDOVER_BLOCKING_REASON_CODES) {
+      expect(READINESS_REASON_CODES).toContain(code);
+    }
+    expect(new Set(HANDOVER_BLOCKING_REASON_CODES).size).toBe(
+      HANDOVER_BLOCKING_REASON_CODES.length,
+    );
+  });
+
+  it('(b) every hard blocker a shipped emitter produces is classified — in scope or out', () => {
+    // PROOF OF CATCH. A new `severity: 'blocker'` ∧ `blocksAction: true` code
+    // that nobody registers fails here, named. Landing in neither list is the
+    // silent divergence `[DH-B5]` exists to forbid.
+    const classified = new Set<string>([
+      ...HANDOVER_BLOCKING_REASON_CODES,
+      ...COMMERCIAL_HARD_BLOCKERS_OUT_OF_SCOPE,
+    ]);
+    const unclassified = [...emittedHardBlockerCodes].filter((code) => !classified.has(code));
+    expect(unclassified).toEqual([]);
+
+    // The battery is only evidence if it actually fires: six conformance hard
+    // blockers, `not_conformed`, and the three commercial ones.
+    expect([...emittedHardBlockerCodes].sort()).toEqual([
+      'already_claimed',
+      'conformance_no_longer_current',
+      'insufficient_test_count',
+      'itp_incomplete',
+      'missing_budget',
+      'na_hold_point_not_released',
+      'no_itp_assigned',
+      'no_passing_verified_test',
+      'not_conformed',
+      'open_ncrs',
+    ]);
+  });
+
+  it('(c) every registered handover code is really emitted by a shipped emitter', () => {
+    // The other direction: no phantom code sits in the registry unemitted. Note
+    // `open_major_ncrs` and `unreleased_hold_points` ship `blocksAction: false`
+    // on their advisory surfaces, which is why this compares against
+    // `severity: 'blocker'` and reasonCodes.ts records the divergence.
+    const unemitted = HANDOVER_BLOCKING_REASON_CODES.filter(
+      (code) => !emittedBlockerCodes.has(code),
+    );
+    expect(unemitted).toEqual([]);
+  });
+
+  it("(d) the C1 blocking sufficiency code is in the set — `[DR-B2]`'s named omission", () => {
+    expect(emittedHardBlockerCodes.has('insufficient_test_count')).toBe(true);
+    expect([...HANDOVER_BLOCKING_REASON_CODES]).toContain('insufficient_test_count');
+  });
+});
+
+describe('D1a input snapshot + response envelope (spec §4.1.2–4.1.4)', () => {
+  it('the snapshot carries the four inputs the conformance batch does NOT supply', () => {
+    // A compile fixture, like the three verdict fixtures above. `[DR-B2]`: D1a
+    // is not a mapper over `checkConformancePrerequisitesBatch`, which fetches
+    // neither NCR severity nor the normal hold-point count.
+    const snapshot: LotCloseoutReadinessSnapshot = {
+      lotId: 'lot-1',
+      lotNumber: 'LOT-001',
+      status: 'in_progress',
+      chainageStart: null,
+      chainageEnd: null,
+      activitySlug: null,
+      prerequisites: readinessInput().conformStatus.prerequisites,
+      openMajorNcrCount: 1,
+      unreleasedHoldPoints: 2,
+      sufficiency: null,
+    };
+    expect(snapshot.openMajorNcrCount).toBe(1);
+    expect(snapshot.unreleasedHoldPoints).toBe(2);
+  });
+
+  it('the response reports what a filter could not place, rather than hiding it (AT-139)', () => {
+    const response: CloseoutReadinessResponse = {
+      verdicts: [
+        { subjectType: 'lot', subjectId: 'lot-1', ready: false, reasonCodes: ['open_ncrs'] },
+        { subjectType: 'project', subjectId: 'proj-1', ready: false, reasonCodes: ['open_ncrs'] },
+      ],
+      unplacedLots: 3,
+      unclassifiedLots: 4,
+    };
+    expect(response.verdicts.filter((v) => v.subjectType === 'project')).toHaveLength(1);
+    expect(response.unplacedLots + response.unclassifiedLots).toBe(7);
   });
 });
