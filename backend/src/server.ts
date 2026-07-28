@@ -21,6 +21,7 @@ import { chatRouter } from './routes/copilot/chatRoute.js';
 import { planSheetsRouter } from './routes/planSheets/index.js';
 import { projectCoverageRouter } from './routes/projectCoverage.js';
 import { projectLotGeometriesRouter } from './routes/projectLotGeometries.js';
+import { projectCloseoutReadinessRouter } from './routes/projectCloseoutReadiness.js';
 import { projectTestCoverageRouter } from './routes/projectTestCoverage.js';
 import { spatialSearchRouter } from './routes/spatialSearch.js';
 import { lotStatusTimelineRouter } from './routes/lotStatusTimeline.js';
@@ -154,6 +155,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/projects', projectCoverageRouter);
   app.use('/api/projects', projectLotGeometriesRouter);
   app.use('/api/projects', projectTestCoverageRouter);
+  app.use('/api/projects', projectCloseoutReadinessRouter);
   app.use('/api/projects', spatialSearchRouter);
   app.use('/api/projects', lotStatusTimelineRouter);
   app.use('/api/holdpoints', holdpointsRouter);

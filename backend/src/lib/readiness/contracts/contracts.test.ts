@@ -464,6 +464,8 @@ describe('D1a input snapshot + response envelope (spec §4.1.2–4.1.4)', () => 
       chainageStart: null,
       chainageEnd: null,
       activitySlug: null,
+      claimedInId: null,
+      conformanceOverriddenAt: null,
       prerequisites: readinessInput().conformStatus.prerequisites,
       openMajorNcrCount: 1,
       unreleasedHoldPoints: 2,

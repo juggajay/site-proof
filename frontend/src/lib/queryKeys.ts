@@ -14,6 +14,8 @@ export const queryKeys = {
   lotStatusTimeline: (projectId: string) => ['lot-status-timeline', projectId] as const,
   projectCoverage: (projectId: string) => ['project-coverage', projectId] as const,
   projectTestCoverage: (projectId: string) => ['project-test-coverage', projectId] as const,
+  projectCloseoutReadiness: (projectId: string) =>
+    ['project-closeout-readiness', projectId] as const,
   lotReadiness: (id: string) => ['lot-readiness', id] as const,
   lotQualityAccess: (projectId: string) => ['lot-quality-access', projectId] as const,
 
