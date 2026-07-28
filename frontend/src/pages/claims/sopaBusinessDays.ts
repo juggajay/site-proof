@@ -301,8 +301,13 @@ function inChristmasWindow(month: number, day: number, w: SopaChristmasWindow): 
 }
 
 /** Local YYYY-MM-DD key. Uses local date parts to stay consistent with
- *  addBusinessDays, which advances the date with local getDate()/setDate(). */
-function toLocalDateKey(date: Date): string {
+ *  addBusinessDays, which advances the date with local getDate()/setDate().
+ *
+ *  Exported for `utils.ts`, which anchors the walk on the PROJECT timezone's
+ *  calendar date and then reads the answer back out as a calendar date. Both
+ *  ends of the walk must read the same (local) parts the walk itself moves,
+ *  which is exactly what this does. */
+export function toLocalDateKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');

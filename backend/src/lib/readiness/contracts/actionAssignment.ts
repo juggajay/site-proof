@@ -65,6 +65,18 @@ export interface ActionAssignment {
   needsAction: boolean;
   /** Orthogonal to `status`. */
   isOverdue: boolean;
+  /**
+   * FULL days elapsed since `dueAt`, computed on the SERVER via the shared
+   * `daysOverdue()` floor (`../predicates.ts`) — 0 when not overdue or undated.
+   *
+   * It ships because `dueAt` alone is not enough: a consumer that ages it
+   * against its own clock renders a different number from the dashboard widget
+   * (which has always used the server's), so the same NCR read "2 days overdue"
+   * on the dashboard and "3 days overdue" on Needs Attention fifteen minutes
+   * later across midnight (M3, fable deep review 2026-07-28). One fact, one
+   * number, computed once — consumers RENDER this, they never re-derive it.
+   */
+  daysOverdue: number;
   /** ISO 8601 timestamp. */
   dueAt?: string;
   assignee: ActionAssignee;

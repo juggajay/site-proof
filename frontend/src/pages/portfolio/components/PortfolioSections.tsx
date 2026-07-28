@@ -205,7 +205,11 @@ export function PortfolioMetricsSection({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning" />
-                <span className="text-sm">At Risk (due within 30 days)</span>
+                {/* M2 — no parenthetical definition here: the number is the
+                    length of the "Projects at Risk" panel below, and that panel
+                    spells out each project's actual risk indicators. A second
+                    definition in this label is what let the two disagree. */}
+                <span className="text-sm">At Risk</span>
               </div>
               <span className="font-medium">{stats.projectsAtRisk}</span>
             </div>

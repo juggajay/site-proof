@@ -36,6 +36,7 @@ const NEEDS_YOU_HOLD_POINT: ActionAssignment = {
   status: 'waiting_on_me',
   needsAction: true,
   isOverdue: false,
+  daysOverdue: 0,
   assignee: { kind: 'role', role: 'quality_manager' },
   severity: 'warning',
   reasonCode: 'unreleased_hold_points',
@@ -60,6 +61,7 @@ const OVERDUE_WAITING_ON_OTHERS_NCR: ActionAssignment = {
   status: 'waiting_on_others',
   needsAction: false,
   isOverdue: true,
+  daysOverdue: 3,
   dueAt: new Date(Date.now() - 3 * 24 * HOUR - HOUR).toISOString(),
   assignee: { kind: 'company', id: 'sub-9' },
   severity: 'blocker',
@@ -200,5 +202,68 @@ describe('NeedsAttentionPage', () => {
     expect(screen.getByText('NCR NCR-0037')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Needs you' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Waiting on others' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * M3 (fable deep review 2026-07-28) — the payload shipped `dueAt` + `isOverdue`
+ * but no day count, so this screen re-derived the age against the BROWSER clock
+ * while the dashboard widget rendered a server-computed `daysOverdue` from the
+ * same cached payload. Load the dashboard at 23:55, click through at 00:10, and
+ * the same NCR read one number then another; a tablet with clock skew made the
+ * disagreement permanent near the boundary.
+ *
+ * The fixtures below deliberately set `daysOverdue` to something the browser
+ * clock could NOT arrive at from `dueAt`. That is the whole point: if the screen
+ * still computes, it prints the clock's number and these fail.
+ */
+describe('overdue age comes from the server, not the browser clock', () => {
+  it('renders the shipped daysOverdue even when the browser clock disagrees', async () => {
+    mockStatsApi({
+      items: [
+        {
+          ...OVERDUE_WAITING_ON_OTHERS_NCR,
+          // `dueAt` is ~3 days back on this machine's clock; the server says 9.
+          // The server number is the one both surfaces must show.
+          daysOverdue: 9,
+        },
+      ],
+    });
+
+    renderWithProviders(<NeedsAttentionPage />);
+
+    await screen.findByRole('heading', { name: 'Waiting on others' });
+    expect(screen.getByText('9 days overdue')).toBeInTheDocument();
+    expect(screen.queryByText('3 days overdue')).not.toBeInTheDocument();
+  });
+
+  it('singularises the shipped count', async () => {
+    mockStatsApi({
+      items: [{ ...OVERDUE_WAITING_ON_OTHERS_NCR, daysOverdue: 1 }],
+    });
+
+    renderWithProviders(<NeedsAttentionPage />);
+
+    await screen.findByRole('heading', { name: 'Waiting on others' });
+    expect(screen.getByText('1 day overdue')).toBeInTheDocument();
+  });
+
+  it('says "Overdue" without a number when the server says less than a full day', async () => {
+    // The floor's own boundary: an NCR due at midnight is in the feed a second
+    // later, and `daysOverdue` is 0 — "0 days overdue" would be a lie.
+    mockStatsApi({
+      items: [
+        {
+          ...OVERDUE_WAITING_ON_OTHERS_NCR,
+          dueAt: new Date(Date.now() - HOUR).toISOString(),
+          daysOverdue: 0,
+        },
+      ],
+    });
+
+    renderWithProviders(<NeedsAttentionPage />);
+
+    await screen.findByRole('heading', { name: 'Waiting on others' });
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
   });
 });

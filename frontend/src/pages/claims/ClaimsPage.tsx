@@ -19,7 +19,12 @@ import type {
   CompletenessData,
   SubmitMethod,
 } from './types';
-import { calculatePaymentDueDate, exportChartDataToCSV } from './utils';
+import {
+  calculatePaymentDueDate,
+  exportChartDataToCSV,
+  formatSopaDate,
+  toSopaDateKey,
+} from './utils';
 
 import { CreateClaimModal } from './components/CreateClaimModal';
 import { SubmitClaimModal } from './components/SubmitClaimModal';
@@ -171,11 +176,14 @@ export function ClaimsPage() {
       // Project jurisdiction drives SOPA timeframes; calculatePaymentDueDate
       // returns null for jurisdictions without computable timeframes (e.g. NT),
       // in which case we render '-' rather than an "Invalid Date".
-      const paymentDue =
+      // M4 — the server value is an instant and ours is a calendar date key;
+      // both normalise to the project timezone's date so the CSV prints one day.
+      const paymentDue = toSopaDateKey(
         c.paymentDueDate ??
-        (c.submittedAt
-          ? calculatePaymentDueDate(c.submittedAt, c.projectState ?? undefined)
-          : null);
+          (c.submittedAt
+            ? calculatePaymentDueDate(c.submittedAt, c.projectState ?? undefined)
+            : null),
+      );
       const disputed = c.status === 'disputed' || Boolean(c.disputedAt);
       return [
         `Claim ${c.claimNumber}`,
@@ -191,7 +199,7 @@ export function ClaimsPage() {
         c.paymentReference ?? '-',
         disputed ? 'Yes' : 'No',
         c.submittedAt ? new Date(c.submittedAt).toLocaleDateString('en-AU') : '-',
-        paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
+        paymentDue ? formatSopaDate(paymentDue) : '-',
       ];
     });
     downloadBrandedCsv(

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   addBusinessDays,
   calendarDaysUntil,
@@ -12,11 +12,12 @@ import {
   getPaymentDueStatus,
   parseClaimPercentageInput,
 } from './utils';
+import { toLocalDateKey } from './sopaBusinessDays';
 import type { Claim, ConformedLot } from './types';
 
 describe('calendarDaysUntil (M41 SOPA day-floor)', () => {
   it('counts whole calendar days and is stable across the time of day', () => {
-    const due = new Date(2026, 5, 13); // 13 June, local midnight
+    const due = '2026-06-13';
     // Same calendar day (10 June) at very different times => identical countdown.
     expect(calendarDaysUntil(due, new Date(2026, 5, 10, 0, 1))).toBe(3);
     expect(calendarDaysUntil(due, new Date(2026, 5, 10, 23, 59))).toBe(3);
@@ -24,6 +25,124 @@ describe('calendarDaysUntil (M41 SOPA day-floor)', () => {
     expect(calendarDaysUntil(due, new Date(2026, 5, 13, 15, 0))).toBe(0);
     // Past the due date => negative whole days.
     expect(calendarDaysUntil(due, new Date(2026, 5, 15, 9, 0))).toBe(-2);
+  });
+});
+
+/**
+ * M4 (fable deep review 2026-07-28) — a SOPA payment-schedule deadline is a
+ * statutory date in the project's jurisdiction. It used to be computed entirely
+ * in BROWSER-local time: `new Date(submittedAt)` anchored the business-day walk
+ * on the viewer's calendar date, `isSopaNonWorkingDay` read the weekday off the
+ * viewer's clock, and the countdown floored to the viewer's midnight. A Perth
+ * viewer and a Sydney viewer therefore read different legal due dates for the
+ * same claim.
+ *
+ * Every instant below is deliberately one that falls on DIFFERENT calendar days
+ * in Sydney and Perth (14:00Z = 00:00 next-day AEST, 22:00 same-day AWST), so
+ * the two viewers are genuinely disagreeing rather than trivially agreeing. The
+ * expected values are hard literals, worked from the NSW calendar, not a second
+ * call to the code under test.
+ */
+describe('SOPA due dates are anchored on the project timezone, not the viewer', () => {
+  /**
+   * Two viewers, one claim. `process.env.TZ` is what Node reads for local-time
+   * Date construction, so this is a real timezone swap, not a mock — restored
+   * even on failure so it cannot leak into another file in the pool.
+   */
+  function inTimeZone<T>(timeZone: string, fn: () => T): T {
+    const original = process.env.TZ;
+    process.env.TZ = timeZone;
+    try {
+      return fn();
+    } finally {
+      process.env.TZ = original;
+    }
+  }
+
+  it('sanity: the fixture instants really are different calendar days in Sydney and Perth', () => {
+    // Positive control. If this ever stops holding, the assertions below would
+    // pass for the wrong reason (two identical anchors agreeing trivially).
+    const instant = '2026-08-04T14:00:00.000Z';
+    expect(inTimeZone('Australia/Sydney', () => new Date(instant).getDate())).toBe(5);
+    expect(inTimeZone('Australia/Perth', () => new Date(instant).getDate())).toBe(4);
+  });
+
+  it('gives Sydney and Perth viewers the same due date for a claim submitted at the day boundary', () => {
+    // 2026-08-04T14:00Z = Wed 5 Aug 00:00 in Sydney, Tue 4 Aug 22:00 in Perth.
+    // The statutory anchor is the Sydney date, Wed 5 Aug.
+    const submittedAt = '2026-08-04T14:00:00.000Z';
+
+    // NSW: 10 business days to a payment schedule, 15 to payment. No NSW public
+    // holiday falls in the span (the Aug Bank Holiday is Mon 3 Aug, before it).
+    const expectedCert = '2026-08-19';
+    const expectedPayment = '2026-08-26';
+
+    for (const timeZone of ['Australia/Sydney', 'Australia/Perth', 'UTC', 'America/New_York']) {
+      expect(inTimeZone(timeZone, () => calculateCertificationDueDate(submittedAt, 'NSW'))).toBe(
+        expectedCert,
+      );
+      expect(inTimeZone(timeZone, () => calculatePaymentDueDate(submittedAt, 'NSW'))).toBe(
+        expectedPayment,
+      );
+    }
+  });
+
+  it('does not let the viewer flip the anchor across a weekend boundary', () => {
+    // The `isSopaNonWorkingDay` limb: 2026-08-09T14:00Z is Mon 10 Aug in Sydney
+    // but Sun 9 Aug in Perth. A Sunday anchor makes Mon 10 Aug the FIRST
+    // business day; a Monday anchor makes Tue 11 Aug the first. That one-day
+    // slip used to travel all the way through to the rendered deadline.
+    const submittedAt = '2026-08-09T14:00:00.000Z';
+    const expectedCert = '2026-08-24'; // Mon 10 Aug + 10 NSW business days
+
+    expect(
+      inTimeZone('Australia/Sydney', () => calculateCertificationDueDate(submittedAt, 'NSW')),
+    ).toBe(expectedCert);
+    expect(
+      inTimeZone('Australia/Perth', () => calculateCertificationDueDate(submittedAt, 'NSW')),
+    ).toBe(expectedCert);
+  });
+
+  it('counts the days remaining off the project timezone today, not the viewer today', () => {
+    // 2026-08-20T14:00Z is Fri 21 Aug in Sydney, Thu 20 Aug in Perth. One claim,
+    // one due date: both viewers have five days, not five and six.
+    const now = new Date('2026-08-20T14:00:00.000Z');
+
+    expect(inTimeZone('Australia/Sydney', () => calendarDaysUntil('2026-08-26', now))).toBe(5);
+    expect(inTimeZone('Australia/Perth', () => calendarDaysUntil('2026-08-26', now))).toBe(5);
+  });
+
+  it('renders one due-date chip for both viewers, end to end', () => {
+    const submittedAt = '2026-08-04T14:00:00.000Z';
+    const claim: Claim = {
+      id: 'claim-1',
+      claimNumber: 1,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+      status: 'submitted',
+      totalClaimedAmount: 1000,
+      certifiedAmount: null,
+      paidAmount: null,
+      submittedAt,
+      projectState: 'NSW',
+      disputeNotes: null,
+      disputedAt: null,
+      lotCount: 1,
+    };
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-08-20T14:00:00.000Z'));
+      const sydney = inTimeZone('Australia/Sydney', () => getPaymentDueStatus(claim));
+      const perth = inTimeZone('Australia/Perth', () => getPaymentDueStatus(claim));
+
+      // The date is printed from the statutory calendar date, so it is not the
+      // viewer's rendering of an instant.
+      expect(sydney?.text).toBe('Due 26/08/2026');
+      expect(perth?.text).toBe(sydney?.text);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -105,24 +224,22 @@ describe('SOPA due dates by project state', () => {
   // calculation must also use the state so holidays are counted consistently.
   const submittedAt = '2026-06-01T00:00:00.000Z';
 
+  // The reference calculation anchors on the LOCAL parts of Mon 1 Jun 2026 —
+  // which is the project-timezone calendar date of `submittedAt` — so the
+  // expectation is timezone-stable, like the code under test (M4).
+  const reference = (days: number, state?: string) =>
+    toLocalDateKey(addBusinessDays(new Date(2026, 5, 1), days, state));
+
   it('uses NSW timeframes (10 cert / 15 payment business days) for NSW projects', () => {
     // NSW King's Birthday (Mon 8 Jun) falls within both windows, so state-aware
     // addBusinessDays is used as the reference to match calculateCertificationDueDate.
-    expect(calculateCertificationDueDate(submittedAt, 'NSW')).toBe(
-      addBusinessDays(new Date(submittedAt), 10, 'NSW').toISOString(),
-    );
-    expect(calculatePaymentDueDate(submittedAt, 'NSW')).toBe(
-      addBusinessDays(new Date(submittedAt), 15, 'NSW').toISOString(),
-    );
+    expect(calculateCertificationDueDate(submittedAt, 'NSW')).toBe(reference(10, 'NSW'));
+    expect(calculatePaymentDueDate(submittedAt, 'NSW')).toBe(reference(15, 'NSW'));
   });
 
   it('uses WA timeframes (15 cert / 20 payment business days) for WA projects', () => {
-    expect(calculateCertificationDueDate(submittedAt, 'WA')).toBe(
-      addBusinessDays(new Date(submittedAt), 15, 'WA').toISOString(),
-    );
-    expect(calculatePaymentDueDate(submittedAt, 'WA')).toBe(
-      addBusinessDays(new Date(submittedAt), 20, 'WA').toISOString(),
-    );
+    expect(calculateCertificationDueDate(submittedAt, 'WA')).toBe(reference(15, 'WA'));
+    expect(calculatePaymentDueDate(submittedAt, 'WA')).toBe(reference(20, 'WA'));
   });
 
   it('WA payment due is later than NSW (the original NSW-for-all bug)', () => {
@@ -136,12 +253,8 @@ describe('SOPA due dates by project state', () => {
   it('uses QLD timeframes (15 schedule / 10 payment business days) for QLD projects', () => {
     // QLD BIF s76 (schedule 15 BD) / s73 (payment 10 BD default) — the previous
     // 10/15 had these reversed.
-    expect(calculateCertificationDueDate(submittedAt, 'QLD')).toBe(
-      addBusinessDays(new Date(submittedAt), 15).toISOString(),
-    );
-    expect(calculatePaymentDueDate(submittedAt, 'QLD')).toBe(
-      addBusinessDays(new Date(submittedAt), 10).toISOString(),
-    );
+    expect(calculateCertificationDueDate(submittedAt, 'QLD')).toBe(reference(15));
+    expect(calculatePaymentDueDate(submittedAt, 'QLD')).toBe(reference(10));
   });
 
   it('suppresses VIC due dates for claims submitted after the 15 Apr 2026 reforms', () => {

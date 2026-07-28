@@ -87,12 +87,15 @@ export function PortfolioPage() {
       if (project.status !== 'active' || !targetCompletion) return false;
       return targetCompletion > new Date();
     }).length,
-    projectsAtRisk: projects.filter((project) => {
-      const targetCompletion = getValidDate(project.targetCompletion);
-      if (project.status !== 'active' || !targetCompletion) return false;
-      const daysUntilTarget = (targetCompletion.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-      return daysUntilTarget < 30 && daysUntilTarget > 0;
-    }).length,
+    // M2 — ONE definition of "at risk", and it is the backend's: a project with
+    // ANY risk indicator (timeline, open major NCRs, overdue NCRs, stale hold
+    // points — `dashboard/portfolio.ts`). This counts the very list the
+    // "Projects at Risk" panel below renders, from the same response, so the
+    // headline and the panel cannot disagree. The old client-side
+    // `daysUntilTarget < 30` formula was a second, narrower definition that
+    // printed "At Risk: 0" directly above a panel listing that project — and
+    // disagreed again at exactly 30.0 days (backend `ceil`, frontend strict `<`).
+    projectsAtRisk: projectsAtRisk.length,
   };
 
   if (loading) {

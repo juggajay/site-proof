@@ -5,12 +5,36 @@
 
 import type { Claim, CertificationDueStatus, PaymentDueStatus, ConformedLot } from './types';
 import { SOPA_TIMEFRAMES } from './constants';
-import { isSopaNonWorkingDay, SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR } from './sopaBusinessDays';
+import {
+  isSopaNonWorkingDay,
+  SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR,
+  toLocalDateKey,
+} from './sopaBusinessDays';
 import { downloadBrandedCsv, type CsvBrandingContext } from '@/lib/csv';
-import { formatDateKey } from '@/lib/localDate';
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatDateInputValue,
+  formatDateKey,
+  getCalendarDaysSince,
+  parseDateKey,
+} from '@/lib/localDate';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 
 const VIC_SOPA_REFORM_EFFECTIVE_DATE = '2026-04-15';
+
+/**
+ * M4 — a SOPA deadline is a statutory calendar DATE in the project's
+ * jurisdiction, never an instant in the viewer's browser. Everything in this
+ * file therefore speaks `YYYY-MM-DD` keys resolved in the project timezone: the
+ * submission anchor, the computed due dates, the countdown, and the printed
+ * chip. A Perth viewer and a Sydney viewer read one date and one number.
+ *
+ * ponytail: the app-wide constant IS the project timezone — there is no
+ * per-project (or per-state) timezone column; `schema.prisma` carries `state`
+ * for the jurisdiction's business-day rules only. Swap this one constant for a
+ * project field the day one lands; nothing else here needs to change.
+ */
+const SOPA_TIME_ZONE = DEFAULT_APP_TIME_ZONE;
 
 /** Format a number as AUD currency, or return '-' for null */
 export function formatCurrency(amount: number | null): string {
@@ -51,25 +75,66 @@ export function addBusinessDays(startDate: Date, days: number, state?: string): 
  * the due date is the latest date in the counted span, checking its year alone
  * detects any span that reached an uncovered year.
  */
-function isBeyondSopaHolidayCoverage(dueDate: Date): boolean {
-  return dueDate.getFullYear() > SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR;
+function isBeyondSopaHolidayCoverage(dueDateKey: string): boolean {
+  return Number(dueDateKey.slice(0, 4)) > SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR;
 }
 
+/**
+ * The calendar date a claim was submitted, IN THE PROJECT TIMEZONE. This is the
+ * anchor for every SOPA computation, and the date the VIC reform cutover is
+ * compared against.
+ *
+ * It used to be read two different wrong ways in the same function: the UTC
+ * date prefix of the ISO string for the reform gate, and the viewer's local
+ * calendar date for the business-day walk. A claim submitted 15 Apr 2026
+ * 01:00 Sydney is `2026-04-14T15:00Z`, so the prefix said 14 Apr (pre-reform)
+ * for a claim that was legally lodged on the 15th.
+ */
 function getSubmittedDateKey(submittedAt: string): string | null {
-  const match = submittedAt.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match) {
-    return match[1];
-  }
+  return formatDateInputValue(submittedAt, SOPA_TIME_ZONE);
+}
 
-  const parsed = new Date(submittedAt);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
+/**
+ * The business-day walk moves LOCAL date parts (`addBusinessDays` /
+ * `isSopaNonWorkingDay`), so it is seeded with the local midnight of the
+ * project-timezone calendar date. From there the walk is pure calendar
+ * arithmetic and lands on the same date in every viewer's browser.
+ */
+function sopaAnchorDate(submittedAt: string): Date | null {
+  const key = getSubmittedDateKey(submittedAt);
+  const parts = key ? parseDateKey(key) : null;
+  return parts ? new Date(parts.year, parts.month - 1, parts.day) : null;
+}
 
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+/** Compute a SOPA due date as a `YYYY-MM-DD` key, or null when not computable. */
+function sopaDueDateKey(submittedAt: string, state: string, businessDays: number): string | null {
+  const anchor = sopaAnchorDate(submittedAt);
+  if (!anchor) return null;
+  const dueDateKey = toLocalDateKey(addBusinessDays(anchor, businessDays, state));
+  return isBeyondSopaHolidayCoverage(dueDateKey) ? null : dueDateKey;
+}
+
+/**
+ * A `YYYY-MM-DD` key as the en-AU short date. Deliberately string arithmetic
+ * rather than `new Date(key).toLocaleDateString()`: a bare date string parses
+ * as UTC midnight, which renders as the PREVIOUS day for any viewer west of
+ * Greenwich. A statutory date has no timezone to render in.
+ */
+export function formatSopaDate(dateKey: string): string {
+  const parts = parseDateKey(dateKey);
+  if (!parts) return dateKey;
+  const day = String(parts.day).padStart(2, '0');
+  const month = String(parts.month).padStart(2, '0');
+  return `${day}/${month}/${parts.year}`;
+}
+
+/**
+ * Normalise anything that claims to be a due date — a server ISO instant
+ * (`claim.paymentDueDate`) or one of our own computed keys — to a
+ * project-timezone calendar date key, so both print the same day.
+ */
+export function toSopaDateKey(value: string | null | undefined): string | null {
+  return formatDateInputValue(value, SOPA_TIME_ZONE);
 }
 
 function getSopaTimeframeForClaim(
@@ -94,6 +159,9 @@ function getSopaTimeframeForClaim(
 
 /**
  * Calculate payment-schedule response due date based on SOPA response timeframes.
+ * Returns a `YYYY-MM-DD` calendar date in the project timezone (M4), NOT an
+ * instant — a statutory deadline is a date, and an instant would render as a
+ * different day depending on where the laptop is.
  * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
  * defaults to NSW, but an *unrecognised* jurisdiction (e.g. 'NT', which has no
  * East-Coast payment-schedule mechanics) returns null rather than fabricating a
@@ -105,14 +173,12 @@ export function calculateCertificationDueDate(
 ): string | null {
   const timeframe = getSopaTimeframeForClaim(submittedAt, state);
   if (!timeframe) return null;
-  const submissionDate = new Date(submittedAt);
-  const dueDate = addBusinessDays(submissionDate, timeframe.responseTime, state);
-  if (isBeyondSopaHolidayCoverage(dueDate)) return null;
-  return dueDate.toISOString();
+  return sopaDueDateKey(submittedAt, state, timeframe.responseTime);
 }
 
 /**
- * Calculate payment due date based on SOPA timeframes.
+ * Calculate payment due date based on SOPA timeframes. Returns a `YYYY-MM-DD`
+ * calendar date in the project timezone (see calculateCertificationDueDate).
  * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
  * defaults to NSW; an *unrecognised* jurisdiction returns null (see
  * calculateCertificationDueDate).
@@ -120,21 +186,20 @@ export function calculateCertificationDueDate(
 export function calculatePaymentDueDate(submittedAt: string, state: string = 'NSW'): string | null {
   const timeframe = getSopaTimeframeForClaim(submittedAt, state);
   if (!timeframe) return null;
-  const submissionDate = new Date(submittedAt);
-  const dueDate = addBusinessDays(submissionDate, timeframe.paymentTime, state);
-  if (isBeyondSopaHolidayCoverage(dueDate)) return null;
-  return dueDate.toISOString();
+  return sopaDueDateKey(submittedAt, state, timeframe.paymentTime);
 }
 
 /**
- * Whole calendar days from `now` until `due`, flooring both to local midnight so
- * a SOPA countdown reads the same all day (no off-by-one between morning and
- * evening). Positive = days remaining, 0 = due today, negative = overdue (M41).
+ * Whole calendar days from today until `dueDateKey`, both resolved in the
+ * PROJECT timezone so a SOPA countdown reads the same all day (M41: no
+ * off-by-one between morning and evening) and the same in every viewer's
+ * browser (M4: no off-by-one between Perth and Sydney). Positive = days
+ * remaining, 0 = due today, negative = overdue.
  */
-export function calendarDaysUntil(due: Date, now: Date): number {
-  const startOfLocalDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const msPerDay = 1000 * 60 * 60 * 24;
-  return Math.round((startOfLocalDay(due).getTime() - startOfLocalDay(now).getTime()) / msPerDay);
+export function calendarDaysUntil(dueDateKey: string, now: Date = new Date()): number {
+  // The shared helper is (start, end) — read forwards, "calendar days from today
+  // to the due date" IS the countdown, so no negation (and no `-0`) is needed.
+  return getCalendarDaysSince(now, dueDateKey, SOPA_TIME_ZONE);
 }
 
 /** Get payment-schedule response due status - only for submitted claims awaiting response */
@@ -149,9 +214,7 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
   // due-date chip rather than a wrong one.
   const dueDate = calculateCertificationDueDate(claim.submittedAt, claim.projectState ?? undefined);
   if (!dueDate) return null;
-  const now = new Date();
-  const due = new Date(dueDate);
-  const daysUntilDue = calendarDaysUntil(due, now);
+  const daysUntilDue = calendarDaysUntil(dueDate);
 
   if (daysUntilDue < 0) {
     return {
@@ -167,7 +230,7 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
     };
   } else {
     return {
-      text: `Schedule due ${due.toLocaleDateString('en-AU')}`,
+      text: `Schedule due ${formatSopaDate(dueDate)}`,
       className: 'text-muted-foreground',
       isOverdue: false,
     };
@@ -192,16 +255,17 @@ export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
   // null = jurisdiction without computable SOPA timeframes (e.g. NT).
   const dueDate = calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined);
   if (!dueDate) return null;
-  const now = new Date();
-  const due = new Date(dueDate);
-  const daysUntilDue = calendarDaysUntil(due, now);
+  const daysUntilDue = calendarDaysUntil(dueDate);
 
   if (daysUntilDue < 0) {
     return { text: `Overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-destructive' };
   } else if (daysUntilDue <= 3) {
     return { text: `Due in ${daysUntilDue} days`, className: 'text-warning' };
   } else {
-    return { text: `Due ${due.toLocaleDateString('en-AU')}`, className: 'text-muted-foreground' };
+    return {
+      text: `Due ${formatSopaDate(dueDate)}`,
+      className: 'text-muted-foreground',
+    };
   }
 }
 
