@@ -397,8 +397,12 @@ How to apply:
   16/16 on a code-trace task; opus5 won depth on a defect hunt 4/4 vs ~3.5/4,
   so judgment-heavy work stays on opus5).
 - **Anything user-facing** (UI, copy, API design) needs taste ≥ 7.
-- **Reviews of plans / implementations:** fable-5 or opus5, optionally gpt-5.6-sol
-  as an extra independent perspective.
+- **Reviews of plans / implementations:** **gpt-5.6-sol is the standing
+  adversarial reviewer** (Jay directive 2026-07-28 — its reviews measured zero
+  behavioural false positives at flat cost). Run via codex read-only with the
+  prompt in a file and stdin closed (`< /dev/null` — codex hangs on non-TTY
+  stdin otherwise); it can't message back, read its output file. fable-5/opus5
+  remain available as an extra perspective on the highest-stakes calls.
 - **Never use Haiku.**
 - **Mechanics:** gpt-5.6-sol is reachable only through the Codex CLI (`codex exec
   -s read-only -m gpt-5.6-sol` with a self-contained prompt; add
