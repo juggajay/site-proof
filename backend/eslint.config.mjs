@@ -40,6 +40,7 @@ export default tseslint.config(
       'scripts/seed-e2e.mjs',
       'scripts/seeds/itp-templates/index.mjs',
       'scripts/smoke-production.mjs',
+      'scripts/bench-pdf-folio.mjs',
     ],
     languageOptions: {
       globals: {
@@ -49,6 +50,12 @@ export default tseslint.config(
         fetch: 'readonly',
         setTimeout: 'readonly',
         process: 'readonly',
+        // `--expose-gc` makes this a real global in the bench's child processes.
+        // The bench reads it defensively (`if (global.gc)`) and records whether it
+        // was present, so a run without the flag is honest rather than silently
+        // measuring post-GC noise.
+        global: 'readonly',
+        Buffer: 'readonly',
       },
     },
   },

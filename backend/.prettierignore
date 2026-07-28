@@ -8,3 +8,6 @@ logs/
 # Machine-generated readiness characterization snapshots — byte-identical to the
 # test's JSON.stringify output (the F0.2 gate). Prettier must not reformat them.
 src/lib/readiness/characterization/__fixtures__/
+# Machine-generated benchmark results, appended one file per run. Reformatting
+# them would edit a measurement record after the fact.
+scripts/bench-results/pdf-folio-*.json
