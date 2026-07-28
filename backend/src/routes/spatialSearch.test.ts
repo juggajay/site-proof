@@ -570,4 +570,151 @@ describe('POST /api/projects/:projectId/spatial-search', () => {
       });
     }
   });
+
+  // H4 — the portal module switch is enforced PER COLLECTION.
+  //
+  // `portalAccess` MERGES over defaults (`projectAccess.ts` readPortalAccess),
+  // so the company above (`{ lots: true }`) still has testResults + documents
+  // ON — which is why the gap went uncaught. This company turns both OFF
+  // explicitly, the way a head contractor does in the portal-access UI.
+  //
+  // Proof-of-catch: remove the per-collection gating from `spatialSearch.ts`
+  // and all three cases fail — the two 403s become 200s carrying test/photo
+  // payloads, and the full-mode call returns the forbidden collections.
+  describe('portal modules switched off (H4)', () => {
+    let restrictedToken: string;
+    let restrictedLotId: string;
+
+    beforeAll(async () => {
+      const stamp = Date.now();
+      const restrictedCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `SS Restricted ${stamp}`,
+          primaryContactName: 'SS Restricted',
+          primaryContactEmail: `ss-restricted-${stamp}@example.com`,
+          status: 'approved',
+          portalAccess: { lots: true, testResults: false, documents: false },
+        },
+      });
+
+      const restricted = await registerTestUser(app, {
+        emailPrefix: 'ss-restricted-user',
+        fullName: 'SS Restricted User',
+        companyId,
+        roleInCompany: 'subcontractor',
+      });
+      restrictedToken = restricted.token;
+      await prisma.user.update({
+        where: { id: restricted.userId },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: restricted.userId,
+          subcontractorCompanyId: restrictedCompany.id,
+          role: 'user',
+        },
+      });
+
+      // Their own lot, inside the box, with a photo and a located test on it —
+      // so anything withheld below is withheld by the MODULE switch, never by
+      // geometry or tenancy scoping.
+      const restrictedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `SS-RESTRICTED-${stamp}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          assignedSubcontractorId: restrictedCompany.id,
+        },
+      });
+      restrictedLotId = restrictedLot.id;
+
+      await prisma.lotGeometry.create({
+        data: {
+          lotId: restrictedLotId,
+          kind: 'drawn',
+          geometryWgs84: polygonAt(151.04, -33.84) as never,
+        },
+      });
+      await prisma.document.create({
+        data: {
+          projectId,
+          lotId: restrictedLotId,
+          documentType: 'photo',
+          filename: 'restricted-photo.jpg',
+          fileUrl: 'supabase://documents/restricted-photo.jpg',
+          gpsLatitude: -33.841,
+          gpsLongitude: 151.041,
+        },
+      });
+      await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: restrictedLotId,
+          testType: 'H4 Restricted Test',
+          status: 'requested',
+          passFail: 'pass',
+          sampleLatitude: -33.841,
+          sampleLongitude: 151.041,
+          sampleLocationSource: 'gps',
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.testResult.deleteMany({ where: { lotId: restrictedLotId } });
+      await prisma.document.deleteMany({ where: { lotId: restrictedLotId } });
+      await prisma.lotGeometry.deleteMany({ where: { lotId: restrictedLotId } });
+      await prisma.lot.deleteMany({ where: { id: restrictedLotId } });
+    });
+
+    const post = (body: object) =>
+      request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${restrictedToken}`)
+        .send(body);
+
+    it('refuses only=tests when the testResults module is off', async () => {
+      const res = await post({ bounds: BOUNDS, only: 'tests' });
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(res.body)).not.toContain('H4 Restricted Test');
+    });
+
+    it('refuses only=photos when the documents module is off', async () => {
+      const res = await post({ bounds: BOUNDS, only: 'photos' });
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(res.body)).not.toContain('restricted-photo.jpg');
+    });
+
+    it('still serves the lots layer in full mode, with the forbidden collections omitted', async () => {
+      const res = await post({ bounds: BOUNDS });
+      expect(res.status).toBe(200);
+      expect(res.body.lots.map((l: { lotId: string }) => l.lotId)).toEqual([restrictedLotId]);
+      expect(res.body.photos).toEqual([]);
+      expect(res.body.testResults).toEqual([]);
+      expect(res.body.photosTruncated).toBe(false);
+      expect(res.body.testResultsTruncated).toBe(false);
+    });
+
+    it('a subcontractor whose modules are ON is unaffected', async () => {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${subbieToken}`)
+        .send({ bounds: BOUNDS });
+      expect(res.status).toBe(200);
+      expect(res.body.photos.map((p: { filename: string }) => p.filename)).toEqual([
+        'inside-linked.jpg',
+      ]);
+      expect(res.body.testResults.map((t: { lotId: string }) => t.lotId)).toEqual([insideLotId]);
+
+      const tests = await request(app)
+        .post(`/api/projects/${projectId}/spatial-search`)
+        .set('Authorization', `Bearer ${subbieToken}`)
+        .send({ bounds: BOUNDS, only: 'tests' });
+      expect(tests.status).toBe(200);
+    });
+  });
 });
