@@ -92,6 +92,10 @@ describe('writeProductEvents (DB-backed, best-effort)', () => {
 describe('product-events retention (DB-backed)', () => {
   // Stub the non-telemetry tables so the shared test DB takes no collateral;
   // productEvent is the real client, so the 180-day cutoff + deleteMany run for real.
+  // Only `productEvent` is real; every other table is stubbed so this test
+  // measures the product-event window and nothing else. The `as never` cast is
+  // what lets it stay a partial — which also means TypeScript will NOT tell you
+  // when `applyRetentionPolicies` grows a table. Add its stub here when it does.
   function clientWithRealProductEvent() {
     const noop = { deleteMany: async () => ({ count: 0 }) };
     return {
@@ -102,6 +106,8 @@ describe('product-events retention (DB-backed)', () => {
       holdPointReleaseToken: noop,
       revokedAuthToken: noop,
       productEvent: prisma.productEvent,
+      // The abandoned-import-batch sweep CANCELS (updateMany), it does not delete.
+      importBatch: { updateMany: async () => ({ count: 0 }) },
     } as never;
   }
 

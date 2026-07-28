@@ -76,7 +76,18 @@ export interface SufficiencyEvaluation {
    * compaction" on NSW). Null = the pack declares no label and the shipped
    * default wording stands.
    */
-  ruleset: { id: string; status: RulesetStatus; scaleLabel?: string | null } | null;
+  ruleset: {
+    id: string;
+    status: RulesetStatus;
+    scaleLabel?: string | null;
+    /**
+     * External review M7 — `status` above is `draft` because the pack's
+     * `revalidateBy` has passed, not because the pack was shipped unconfirmed.
+     * Additive-optional, so it does NOT bump `resultSchemaVersion` (C1 §5.4.2);
+     * absent means "not degraded", which is every pack today.
+     */
+    revalidationLapsed?: boolean;
+  } | null;
   /** ALWAYS populated, even though the verdict's field is optional (§14 AT-2). */
   rules: RuleSufficiency[];
   /** Lot-level causes, set only when NO rule resolved (§7.1 rows 1-3). */
@@ -518,6 +529,9 @@ export function evaluateSufficiency(input: SufficiencyEvaluationInput): Sufficie
           id: resolved.ruleset.id,
           status: resolved.ruleset.status,
           scaleLabel: resolved.ruleset.scaleLabel ?? null,
+          // Only present when the degrade actually fired, so the CONTROL shape
+          // (every pack, today) stays byte-identical to what shipped.
+          ...(resolved.ruleset.revalidationLapsed ? { revalidationLapsed: true } : {}),
         }
       : null,
     rules,

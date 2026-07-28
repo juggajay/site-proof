@@ -130,6 +130,34 @@ describe('resetFailedSyncItems', () => {
     expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
     expect(offlineDb.syncQueue.delete).not.toHaveBeenCalled();
   });
+
+  // Review L9. #1686 made the four remaining kinds dead-letter a terminal 4xx
+  // with a reason, but Retry-failed still zeroed attempts on EVERY dead-lettered
+  // row — so the always-visible shell Retry button re-POSTed writes the server
+  // has permanently refused, each one re-failing, forever.
+  it('L9 — a terminally-rejected row stays dead; a 5xx-exhausted row revives', async () => {
+    const rejected404 = {
+      id: 1,
+      type: 'delivery_save',
+      attempts: MAX_SYNC_ATTEMPTS,
+      lastError: 'That item no longer exists on the server.',
+      terminal: true,
+    } as unknown as SyncQueueItem;
+    const exhausted503 = {
+      id: 2,
+      type: 'delivery_save',
+      attempts: MAX_SYNC_ATTEMPTS,
+      lastError: 'Service Unavailable',
+    } as unknown as SyncQueueItem;
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([rejected404, exhausted503]);
+
+    // Only the retryable one is counted as revived — the number the shell shows.
+    await expect(resetFailedSyncItems()).resolves.toBe(1);
+
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledTimes(1);
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(2, { attempts: 0 });
+    expect(offlineDb.syncQueue.update).not.toHaveBeenCalledWith(1, { attempts: 0 });
+  });
 });
 
 describe('sync queue mutations', () => {
@@ -173,6 +201,9 @@ describe('sync queue mutations', () => {
     expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(2, {
       attempts: MAX_SYNC_ATTEMPTS,
       lastError: 'Validation failed',
+      // L9: the classification is recorded on the row, so Retry-failed can read
+      // #1686's verdict instead of guessing from `attempts`.
+      terminal: true,
     });
   });
 });

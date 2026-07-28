@@ -320,6 +320,17 @@ export interface Ruleset {
   scaleLabel?: string;
   rules: readonly FrequencyRule[];
   provenance: RulesetProvenance;
+  /**
+   * External review M7 — set by `resolveRuleset`/`effectiveRulesets` on a pack
+   * whose `provenance.revalidateBy` has passed, at the same moment `status` is
+   * degraded from `confirmed` to `draft`. It is the REASON for that degrade, so
+   * a lapsed pack is distinguishable from one that was born `draft`.
+   *
+   * RUNTIME-ONLY: never declared in a pack file (a pack that shipped it would be
+   * asserting its own staleness), and never persisted — the immutable snapshot
+   * records the status that governed the decision, which is the honest fact.
+   */
+  revalidationLapsed?: boolean;
 }
 
 // ---------------------------------------------------------------------------

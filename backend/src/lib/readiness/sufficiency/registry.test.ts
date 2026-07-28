@@ -8,8 +8,10 @@ import { describe, expect, it } from 'vitest';
 import {
   RULE_LABEL_MAX_LENGTH,
   SUFFICIENCY_RULESETS,
+  effectiveRulesets,
   layerBucketFor,
   resolveRuleset,
+  revalidationLapsed,
   rulesForLot,
   validateRuleset,
 } from './registry.js';
@@ -67,16 +69,12 @@ describe('the shipped packs are registrable and honestly graded', () => {
   });
 
   it('AT-43 ships TWO authorities — and no TMR / DIT SA / MRWA numbers (§8.2)', () => {
-    // Three ids, two authorities, one LIVE pack each: D14.2 §6.5 minted `.v2`
-    // rather than editing `.v1` in place, because C1.2 (#1594) writes `ruleId`
-    // into immutable decision evidence. The VIC windows abut, so this is not the
-    // shadowing the spec warns about — `resolveRuleset` returns exactly one pack
-    // at any instant, and there is exactly ONE live NSW pack for the same reason.
-    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual([
-      'vicroads-204.v1',
-      'vicroads-204.v2',
-      'tfnsw-q6.v1',
-    ]);
+    // Two ids, two authorities, one LIVE pack each. `vicroads-204.v1` was DELETED
+    // by the 2026-07-28 external review §4b: §6.5 kept it so historical `ruleId`s
+    // would resolve, but `RequirementEvaluation` has no rows and nothing resolves
+    // a `ruleId` back to a pack, so it was unreachable code (see rulesets/index).
+    expect(SUFFICIENCY_RULESETS.map((set) => set.id)).toEqual(['vicroads-204.v2', 'tfnsw-q6.v1']);
+    expect(SUFFICIENCY_RULESETS.some((set) => set.id === 'vicroads-204.v1')).toBe(false);
     expect(resolveRuleset({ state: 'VIC', specSet: 'VicRoads', at: NOW })?.id).toBe(
       'vicroads-204.v2',
     );
@@ -103,23 +101,31 @@ describe('the shipped packs are registrable and honestly graded', () => {
     expect(floors).not.toContain(0);
   });
 
-  it('vicroads-204.v1 is FROZEN and closed — its content is decision evidence (§6.5)', () => {
-    const superseded = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v1');
-    // The window closes exactly where v2's opens: no gap (a VIC project would
-    // resolve no pack at all) and no overlap (two live packs, id tie-break).
-    expect(superseded?.effectiveTo).toBe('2026-07-27');
-    expect(superseded?.effectiveTo).toBe(
-      SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')?.effectiveFrom,
-    );
-    // Frozen means frozen: the upgrade landed in v2, not here.
-    expect(superseded?.materialTypes).toBeUndefined();
-    expect(superseded?.rules[0]?.maxLotSize).toBeUndefined();
-    expect(superseded?.rules[0]?.smallLot).toBeUndefined();
-    // A lookup dated inside v1's window still resolves it, which is what keeps a
-    // past decision's `ruleId` meaning what it meant.
-    expect(
-      resolveRuleset({ state: 'VIC', specSet: 'VicRoads', at: new Date('2026-01-01') })?.id,
-    ).toBe('vicroads-204.v1');
+  it('NEVER two live packs for one authority — the invariant the read route rests on', () => {
+    // This replaces the `vicroads-204.v1`-specific "windows abut" assertion the
+    // deleted pack carried, and states the general rule instead.
+    //
+    // It is what makes the CLIENT's ruleset lookup exact. `GET /rulesets` serves
+    // `effectiveRulesets()`, and `frontend/src/lib/testSufficiency.ts`
+    // `resolveProjectRuleset` then picks its project's pack with a plain
+    // `find(state && specSet)` — a FIRST match, where the backend's
+    // `resolveRuleset` picks the NEWEST effective edition. Those two agree only
+    // while at most one pack per authority is live at a time. Mint an overlapping
+    // edition and this test fails BEFORE the lot-edit form can offer a superseded
+    // authority's scale/material vocabulary against the new pack's whitelist.
+    const probes = [
+      ...SUFFICIENCY_RULESETS.map((set) => set.effectiveFrom),
+      ...SUFFICIENCY_RULESETS.flatMap((set) => (set.effectiveTo ? [set.effectiveTo] : [])),
+      '2026-01-01',
+      '2030-01-01',
+    ];
+    for (const probe of probes) {
+      const live = effectiveRulesets(new Date(probe));
+      const authorities = live.map((set) => `${set.state}/${set.specSet}`);
+      expect(new Set(authorities).size, `two live packs for one authority at ${probe}`).toBe(
+        authorities.length,
+      );
+    }
   });
 
   it('vicroads-204.v2 is CONFIRMED on primary-source provenance (§8.1.1 [C1C-1])', () => {
@@ -762,6 +768,64 @@ describe('resolveRuleset (§7.1 rows 1-2)', () => {
     expect(
       resolveRuleset({ state: 'vic', specSet: 'vicroads', at: new Date('2010-01-01') }),
     ).toBeNull();
+  });
+});
+
+describe('M7 — revalidation lapse is enforced at RESOLVE time, not only in CI', () => {
+  // Every shipped pack revalidates on 2027-07-27. `validateRuleset` fails an
+  // expired `confirmed` pack, but it runs only from this file — so on the day
+  // after, CI goes red on a repo nobody may be building while production keeps
+  // HARD-BLOCKING conformance on numbers the spec itself calls stale.
+  const AFTER_EXPIRY = new Date('2027-07-28T00:00:00.000Z');
+
+  it('degrades a lapsed pack to advisory instead of dropping or hard-blocking it', () => {
+    const lapsed = resolveRuleset({ state: 'vic', specSet: 'vicroads', at: AFTER_EXPIRY });
+    // Still resolves — a lapsed pack keeps evaluating, it just stops being
+    // `confirmed`, which is the shipped meaning of "real numbers, tagged
+    // unconfirmed, structurally cannot block" (types.ts:299, §5.1.2).
+    expect(lapsed?.id).toBe('vicroads-204.v2');
+    expect(lapsed?.status).toBe('draft');
+    expect(lapsed?.revalidationLapsed).toBe(true);
+    // The FIGURES are untouched — degrading changes gate strength, never a count.
+    const shipped = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')!;
+    expect(lapsed?.rules).toEqual(shipped.rules);
+    expect(lapsed?.scaleKeys).toEqual(shipped.scaleKeys);
+  });
+
+  it('CONTROL — before `revalidateBy` the shipped object is returned byte-identically', () => {
+    const shipped = SUFFICIENCY_RULESETS.find((set) => set.id === 'vicroads-204.v2')!;
+    // Reference identity, not deep equality: nothing is copied, spread or
+    // re-tagged on the unexpired path, so today's behaviour cannot have moved.
+    expect(resolveRuleset({ state: 'vic', specSet: 'vicroads', at: NOW })).toBe(shipped);
+    expect(shipped.revalidationLapsed).toBeUndefined();
+  });
+
+  it('the read route sees the same degrade — the form cannot claim a confirmed pack', () => {
+    const live = effectiveRulesets(AFTER_EXPIRY);
+    expect(live.length).toBeGreaterThan(0);
+    for (const ruleset of live) {
+      expect(ruleset.status).toBe('draft');
+      expect(ruleset.revalidationLapsed).toBe(true);
+    }
+    // CONTROL: unexpired, the route serves the shipped objects untouched.
+    for (const ruleset of effectiveRulesets(NOW)) {
+      expect(ruleset.revalidationLapsed).toBeUndefined();
+    }
+  });
+
+  it('a pack whose `revalidateBy` never parses is treated as lapsed, not as immortal', () => {
+    // The inverse of the F12 hole `validateRuleset` already closed: a malformed
+    // date must not buy a pack an unbounded confirmed life at runtime either.
+    expect(
+      revalidationLapsed(
+        { ...ruleset(), provenance: { ...CONFIRMABLE_PROVENANCE, revalidateBy: 'next year' } },
+        NOW,
+      ),
+    ).toBe(true);
+    // A `draft` pack has no confirmation to lapse.
+    expect(revalidationLapsed({ ...ruleset(), status: 'draft' }, new Date('2099-06-01'))).toBe(
+      false,
+    );
   });
 });
 

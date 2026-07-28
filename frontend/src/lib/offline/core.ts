@@ -89,6 +89,17 @@ interface SyncQueueBase<TType extends string, TAction extends 'create' | 'update
   createdAt: string;
   attempts: number;
   lastError?: string;
+  /**
+   * Review L9 — the server REJECTED this write and will reject the replay
+   * (`syncWorker.isTerminalSyncRejection`: any 4xx but 408/429). Set by
+   * `markSyncItemTerminalError`; read by `resetFailedSyncItems`, which skips
+   * these so Retry-failed cannot resurrect a permanently-refused mutation.
+   *
+   * Plain nested field, not a Dexie index, so it needs no schema version bump.
+   * Optional so rows dead-lettered before this shipped still load — absent reads
+   * as "retryable", which is exactly today's behaviour for them.
+   */
+  terminal?: boolean;
 }
 
 type SyncQueueIdData<TKey extends string> = Record<TKey, string>;

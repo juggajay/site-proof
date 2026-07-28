@@ -8,6 +8,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from './api';
+import { queryKeys } from './queryKeys';
 
 export interface SufficiencyRulesetRule {
   id: string;
@@ -132,7 +133,7 @@ export const QUANTITY_UNIT_OPTIONS = [
  */
 export function useSufficiencyRulesets() {
   return useQuery({
-    queryKey: ['test-sufficiency', 'rulesets'] as const,
+    queryKey: queryKeys.sufficiencyRulesets(),
     queryFn: () => apiFetch<{ rulesets: SufficiencyRuleset[] }>('/api/test-sufficiency/rulesets'),
     staleTime: 60 * 60 * 1000,
     cacheTime: 60 * 60 * 1000,
@@ -140,10 +141,20 @@ export function useSufficiencyRulesets() {
 }
 
 /**
- * The ruleset governing a project, resolved the same way the backend registry
- * does: case-insensitive state match plus the `rms` → `tfnsw` spec-set fold.
- * Returns null for every project whose authority has no shipped pack — which is
- * most of them, and is why the Testing fields are hidden rather than shown empty.
+ * The ruleset governing a project: case-insensitive state match plus the
+ * `rms` → `tfnsw` spec-set fold. Returns null for every project whose authority
+ * has no shipped pack — which is most of them, and is why the Testing fields are
+ * hidden rather than shown empty.
+ *
+ * This is NOT a mirror of the backend's `resolveRuleset`, and deliberately does
+ * not try to be. The EDITION choice — which of an authority's pack revisions
+ * governs today — is made server-side: `GET /api/test-sufficiency/rulesets`
+ * serves `effectiveRulesets()`, already filtered to the live window (D14.2
+ * §6.5), so at most one pack per authority ever reaches this list and the
+ * `find` below cannot pick a superseded one. The registry test
+ * "NEVER two live packs for one authority" is what holds that invariant up; if
+ * it ever fails, this function is one of the things that breaks, which is why
+ * the assertion names this call site.
  */
 export function resolveProjectRuleset(
   rulesets: SufficiencyRuleset[] | undefined,

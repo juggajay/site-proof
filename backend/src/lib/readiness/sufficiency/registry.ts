@@ -78,7 +78,47 @@ function withinEffectiveWindow(ruleset: Ruleset, at: number): boolean {
  */
 export function effectiveRulesets(at: Date = new Date()): Ruleset[] {
   const millis = at.getTime();
-  return SUFFICIENCY_RULESETS.filter((ruleset) => withinEffectiveWindow(ruleset, millis));
+  return SUFFICIENCY_RULESETS.filter((ruleset) => withinEffectiveWindow(ruleset, millis)).map(
+    (ruleset) => degradeIfLapsed(ruleset, millis),
+  );
+}
+
+/**
+ * §8.3 step 4 AT RUNTIME (external review M7).
+ *
+ * `validateRuleset` already fails a `confirmed` pack past its `revalidateBy`,
+ * but it is called only from `registry.test.ts` — so the day after a pack
+ * expires, CI goes red on a repo nobody may be building while PRODUCTION keeps
+ * hard-blocking conformance on numbers §8.3 itself calls stale. The expiry
+ * therefore has to bite where the pack is SELECTED, not only where it is
+ * shipped.
+ *
+ * A malformed `revalidateBy` reads as LAPSED, mirroring the F12 correction
+ * `validateProvenance` made for the same field: a date that never parses must
+ * not buy a pack an unbounded confirmed life on either side.
+ */
+export function revalidationLapsed(ruleset: Ruleset, at: Date | number): boolean {
+  if (ruleset.status !== 'confirmed') return false; // a draft has no confirmation to lapse
+  const revalidateBy = ruleset.provenance.revalidateBy;
+  if (!isIsoDate(revalidateBy)) return true;
+  return Date.parse(revalidateBy) <= (typeof at === 'number' ? at : at.getTime());
+}
+
+/**
+ * DEGRADE, never drop and never block: a lapsed pack keeps every rule and every
+ * count, it just stops being `confirmed`. That is already the shipped meaning of
+ * `draft` — "registered and EVALUATED NORMALLY, numbers shown, citation tagged
+ * unconfirmed; structurally cannot block" (types.ts:299, §5.1.2) — so the whole
+ * degrade is one status flip plus a marker saying WHY, and every existing
+ * consumer (the `sufficiencyBlocks` expression, `citation.confirmed`, the
+ * ", unconfirmed edition" tag in the readiness item text) already honours it.
+ *
+ * The unexpired path returns the shipped object by REFERENCE, so nothing about
+ * today's behaviour moves.
+ */
+function degradeIfLapsed(ruleset: Ruleset, at: number): Ruleset {
+  if (!revalidationLapsed(ruleset, at)) return ruleset;
+  return { ...ruleset, status: 'draft', revalidationLapsed: true };
 }
 
 export function resolveRuleset(lookup: RulesetLookup): Ruleset | null {
@@ -93,7 +133,11 @@ export function resolveRuleset(lookup: RulesetLookup): Ruleset | null {
       withinEffectiveWindow(ruleset, at),
   );
   if (candidates.length === 0) return null;
-  // Newest effective edition wins; `id` breaks a same-day tie deterministically.
+  return degradeIfLapsed(pickNewestEdition(candidates), at);
+}
+
+/** Newest effective edition wins; `id` breaks a same-day tie deterministically. */
+function pickNewestEdition(candidates: readonly Ruleset[]): Ruleset {
   return candidates.reduce((best, ruleset) => {
     const delta = Date.parse(ruleset.effectiveFrom) - Date.parse(best.effectiveFrom);
     if (delta > 0) return ruleset;

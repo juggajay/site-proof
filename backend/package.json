@@ -27,6 +27,7 @@
     "db:backfill-token-hashes": "tsx scripts/backfill-one-time-token-hashes.ts",
     "db:backfill-activity-slug": "tsx scripts/backfill-lot-activity-slug.ts",
     "db:backfill-sent-to-lab": "tsx scripts/backfill-sent-to-lab.ts",
+    "db:classify-test-types": "tsx scripts/classify-test-types.ts",
     "auth:password-hash-report": "tsx scripts/migrate-passwords.ts",
     "auth:password-hash-ready": "tsx scripts/migrate-passwords.ts --fail-on-non-bcrypt",
     "seed:itp": "node scripts/seeds/itp-templates/index.mjs",

@@ -10,6 +10,7 @@ import {
   type SufficiencyLotInput,
 } from './resolve.js';
 import type { RegimeStreamEntry, RegimeStreamFetcher, RegimeStreamQuery } from './regime.js';
+import { evaluateSufficiency } from './evaluate.js';
 
 function lotInput(overrides: Partial<SufficiencyLotInput> = {}): SufficiencyLotInput {
   return {
@@ -328,6 +329,44 @@ describe('resolveSufficiencyBatch', () => {
       regime: 'full',
       eligible: true,
     });
+  });
+
+  it('M7 — past `revalidateBy` a block-mode project ADVISES instead of hard-blocking', async () => {
+    // Both shipped packs revalidate on 2027-07-27. Before this fix the expiry
+    // was enforced only by `validateRuleset` in CI, so production would keep
+    // blocking conformance on numbers §8.3 step 4 itself calls stale.
+    const lot = lotInput({
+      project: { state: 'VIC', specificationSet: 'VicRoads', testSufficiencyMode: 'block' },
+    });
+    const input = { subjectId: 'lot-1', tests: [], checklistItems: [] };
+
+    const lapsed = evaluateSufficiency({
+      ...input,
+      resolved: await resolveSufficiency(lot, null, new Date('2027-07-28T00:00:00.000Z')),
+    });
+    expect(lapsed.state).toBe('insufficient'); // the NUMBER is unchanged
+    expect(lapsed.sufficiencyBlocks).toBe(false); // …the GATE is not
+    expect(lapsed.ruleset).toMatchObject({ status: 'draft', revalidationLapsed: true });
+    // The staleness rides the channel a `draft` pack already uses, which the
+    // readiness item text renders as ", unconfirmed edition".
+    expect(lapsed.rules[0]?.citation.confirmed).toBe(false);
+
+    // CONTROL — one day before the lapse, byte-identical to today's behaviour.
+    const current = evaluateSufficiency({
+      ...input,
+      resolved: await resolveSufficiency(lot, null, new Date('2027-07-26T00:00:00.000Z')),
+    });
+    expect(current.sufficiencyBlocks).toBe(true);
+    expect(current.ruleset).toEqual({
+      id: 'vicroads-204.v2',
+      status: 'confirmed',
+      scaleLabel: null,
+    });
+    expect(current.rules[0]?.citation.confirmed).toBe(true);
+    // Only the gate and the confirmation tag move — every count is the same.
+    expect(lapsed.rules.map((r) => r.requiredCount)).toEqual(
+      current.rules.map((r) => r.requiredCount),
+    );
   });
 
   it('passing NO fetcher resolves everything DB-free — the claim DECISION path', async () => {
