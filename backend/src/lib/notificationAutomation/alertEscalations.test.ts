@@ -1,12 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
-import { STALE_HOLD_POINT_ESCALATION_ROLES } from '../notificationAlertConfig.js';
+import { ALERT_ESCALATION_CONFIG } from '../notificationAlertConfig.js';
 import {
   processAlertEscalations,
   type AlertEscalationAutomationDependencies,
 } from './alertEscalations.js';
 
-describe('processAlertEscalations stale hold-point routing', () => {
-  it('escalates stale hold-point alerts to canonical site roles plus legacy superintendent', async () => {
+/**
+ * Wave E1 (spec §4.1.3, exit item 3). E1 is the first release in which a
+ * `stale_hold_point` alert can be created at all, so escalation — six roles,
+ * twice, at 4 h and 8 h — is held off until the canary population has stayed
+ * inside the per-pass caps for one full escalation window plus a reporting day.
+ *
+ * When the follow-up PR re-enables it, this suite is what flips back: assert
+ * `escalated: 1` and `findEscalationUsers` called with
+ * STALE_HOLD_POINT_ESCALATION_ROLES, which is what it asserted before E1.
+ */
+describe('processAlertEscalations stale hold-point hold-off', () => {
+  it('does not escalate a stale hold-point alert, even when explicitly targeted by id', async () => {
     const now = new Date('2026-06-20T12:00:00.000Z');
     const findEscalationUsers = vi
       .fn()
@@ -45,15 +55,21 @@ describe('processAlertEscalations stale hold-point routing', () => {
       notifyUsers,
     };
 
+    // The alert is 5 h old, past the 4 h first-escalation threshold, and is
+    // named directly in alertIds — the path that bypasses the type filter on
+    // the scan. It must still be skipped.
     const result = await processAlertEscalations({ now, alertIds: ['alert-1'] }, deps);
 
-    expect(result.escalated).toBe(1);
-    expect(findEscalationUsers).toHaveBeenCalledWith(
-      'project-1',
-      STALE_HOLD_POINT_ESCALATION_ROLES,
-      'assigned-1',
-    );
-    expect(notifyUsers).toHaveBeenCalledTimes(1);
-    expect(notifyUsers.mock.calls[0]?.[2]).toBe('holdPointReminder');
+    expect(result.escalated).toBe(0);
+    expect(result.skippedAlerts).toBe(1);
+    expect(findEscalationUsers).not.toHaveBeenCalled();
+    expect(notifyUsers).not.toHaveBeenCalled();
+  });
+
+  it('leaves the 4 h/8 h timing config in place so re-enabling is a one-line revert', () => {
+    expect(ALERT_ESCALATION_CONFIG.stale_hold_point).toMatchObject({
+      firstEscalationAfterHours: 4,
+      secondEscalationAfterHours: 8,
+    });
   });
 });

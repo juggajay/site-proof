@@ -51,6 +51,7 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
       staleHoldPointAlerts: 0,
       notificationsCreated: 0,
       skippedAlerts: 0,
+      staleHoldPointsDeferred: 0,
       createdAlerts: [],
     },
     alertEscalations: {

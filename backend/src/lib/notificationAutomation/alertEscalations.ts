@@ -11,9 +11,25 @@ import type { NotificationTypeWithTiming } from './preferences.js';
 
 type AlertEscalationPrisma = Pick<PrismaClient, 'notificationAlert'>;
 
+/**
+ * Wave E1 canary hold-off (spec §4.1.3, exit item 3). E1 makes the
+ * `stale_hold_point` alert reachable for the first time, and escalation would
+ * fan a brand-new population out to six roles twice (4 h and 8 h) before anyone
+ * has seen a single alert. Held off until the canary population has stayed
+ * inside the per-pass caps for one full escalation window (>= 8 h) plus one
+ * reporting day.
+ *
+ * TO RE-ENABLE: delete this constant and the `.filter` below — one line, one
+ * revert, no other change. The timing config itself is untouched
+ * (`notificationAlertConfig.ts`), so re-enabling restores 4 h/8 h exactly.
+ */
+const ESCALATION_HELD_OFF_TYPES = new Set<string>(['stale_hold_point']);
+
 // Types that have escalation timing configured; anything else can never escalate
 // and is excluded from the scan (rather than fetched-then-skipped).
-const ESCALATABLE_TYPES = Object.keys(ALERT_ESCALATION_CONFIG);
+const ESCALATABLE_TYPES = Object.keys(ALERT_ESCALATION_CONFIG).filter(
+  (type) => !ESCALATION_HELD_OFF_TYPES.has(type),
+);
 
 // Cursor page size for the eligible-alert scan (state reads/updates are
 // uncapped — the whole backlog is paged through).
@@ -254,11 +270,14 @@ export async function processAlertEscalations(
         continue;
       }
 
-      const config = ALERT_ESCALATION_CONFIG[alert.type];
+      const config = ESCALATION_HELD_OFF_TYPES.has(alert.type)
+        ? undefined
+        : ALERT_ESCALATION_CONFIG[alert.type];
       if (!config) {
-        // Type has no escalation config (e.g. retired pending_approval). The
-        // scan already excludes these via ESCALATABLE_TYPES; this guards the
-        // Partial index type.
+        // Type has no escalation config (e.g. retired pending_approval) or is
+        // held off (stale_hold_point, Wave E1). The scan already excludes both
+        // via ESCALATABLE_TYPES; this guards the Partial index type and the
+        // explicitly-scoped `alertIds` path, which bypasses the type filter.
         result.skippedAlerts += 1;
         continue;
       }

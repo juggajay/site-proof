@@ -69,7 +69,12 @@ describe('reasonCode vocabulary (spec §2/§4)', () => {
     // `hold_point_overdue` comes from the alert typed `stale_hold_point`, whose
     // query is the OVERDUE definition. Pinning the predicate name stops a later
     // change quietly re-pointing it at holdPointStagnant (createdAt, 7d).
-    expect(REASON_CODE_PROVENANCE.hold_point_overdue.predicate).toBe('holdPointOverdue');
+    //
+    // Wave E1 moved it from `holdPointOverdue` to `holdPointAwaitingRelease`:
+    // the alert engine's query is now keyed on the status the request-release
+    // paths actually write. Still scheduled-date semantics, still not the aging
+    // predicate — the D2 decision is unchanged, the status set is what moved.
+    expect(REASON_CODE_PROVENANCE.hold_point_overdue.predicate).toBe('holdPointAwaitingRelease');
     expect(REASON_CODE_PROVENANCE.ncr_overdue.predicate).toBe('ncrOverdue');
   });
 

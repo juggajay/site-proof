@@ -66,7 +66,8 @@ export interface TestSufficiencyVerdict {
 
 // ---------------------------------------------------------------------------
 // Hold-point packages (foundation map §3a, §5 A2). Predicates: holdPointReleased,
-// holdPointTerminal, holdPointOverdue, holdPointStagnant. A "package" today is the
+// holdPointTerminal, holdPointOverdue, holdPointStagnant, holdPointAwaitingRelease
+// (Wave E1 — the alert engine's, keyed on `notified`). A "package" today is the
 // partial HoldPointReleaseBatch "review room" concept (spec §3a).
 // ---------------------------------------------------------------------------
 

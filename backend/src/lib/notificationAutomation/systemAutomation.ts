@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
-import { daysOverdue } from '../readiness/predicates.js';
-import { buildProjectEntityLink } from './helpers.js';
+import { AWAITING_RELEASE_HOLD_POINT_STATUSES, daysOverdue } from '../readiness/predicates.js';
+import { logInfo } from '../serverLogger.js';
+import { buildProjectEntityLink, parseProjectIdAllowlist } from './helpers.js';
 import { resolveClearedSystemAlerts } from './systemAlertResolution.js';
 
 const ALERT_OWNER_ROLE_PRIORITY = [
@@ -14,6 +15,50 @@ const ALERT_OWNER_ROLE_PRIORITY = [
   'site_engineer',
   'foreman',
 ];
+
+// ---------------------------------------------------------------------------
+// Wave E1 storm control (spec §4.1.3). Sized against the production inventory
+// run on 2026-07-28 (spec §0.6, recorded on PR #1651): the repointed scan
+// matches 2 hold points all-time and 0 within the horizon, across all projects,
+// with a maximum alert-role fan-out of 4 users per project. Worst case for one
+// pass at these numbers is therefore 50 alert rows + 50x4 = 200 in-app
+// notification rows; the measured case is zero.
+// ---------------------------------------------------------------------------
+
+/** Per-project page size for the stale scan — previously an unbounded findMany. */
+const STALE_HOLD_POINT_SCAN_TAKE = 200;
+
+/**
+ * Global cap on alerts CREATED by the stale scan in one pass, decremented
+ * across projects. A per-project take multiplied by every active project is not
+ * a global bound, and the runner deliberately has no project cap
+ * (`notificationAutomation.ts:177-181`), so this is the bound that actually
+ * holds. Deliberately smaller than the per-project take so a pass can always
+ * page past hold points that already have an active alert.
+ */
+const STALE_HOLD_POINT_ALERTS_PER_PASS = 50;
+
+/**
+ * Only hold points scheduled within this many days of `now` are eligible. Bounds
+ * the first pass after E1 deploys: without it, a hold point scheduled two years
+ * ago would alert today as if it were news. Creation only — the resolver
+ * (`systemAlertResolution.ts`) deliberately has NO horizon, so an alert already
+ * open still closes when its condition clears, however old it gets.
+ */
+const STALE_HOLD_POINT_HORIZON_DAYS = 30;
+
+/**
+ * Wave E canary allowlist (spec §4.1.3, E.0 item 8c). Comma-separated project
+ * ids; read once per pass. FAILS CLOSED — unset, blank or separator-only means
+ * an EMPTY list, and an empty list means the stale-hold-point scan is skipped
+ * for every project, so the E1 deploy is inert until Jay names projects.
+ *
+ * Deliberately NOT plumbed through `options.projectIds`: that option scopes the
+ * whole system-alerts pass, and narrowing it here would also stop overdue-NCR
+ * alerts for every project outside the canary — a shipped feature this wave
+ * must not touch. It gates the stale scan and nothing else.
+ */
+const WAVE_E_CANARY_ENV = 'WAVE_E_STALE_ALERT_PROJECT_IDS';
 
 type SystemAlertType = 'overdue_ncr' | 'stale_hold_point';
 type SystemAlertSeverity = 'medium' | 'high' | 'critical';
@@ -60,6 +105,12 @@ export type SystemAlertAutomationResult = {
   staleHoldPointAlerts: number;
   notificationsCreated: number;
   skippedAlerts: number;
+  /**
+   * Upper bound on eligible hold points this pass did NOT alert on because the
+   * global per-pass cap was spent. Deliberate backpressure, never a silent
+   * drop: the next hourly pass picks them up (spec §4.1.3 item 3).
+   */
+  staleHoldPointsDeferred: number;
   createdAlerts: CreatedSystemAlert[];
 };
 
@@ -163,6 +214,149 @@ async function createAlertRecord(
   return id;
 }
 
+/**
+ * Mutable state the stale-hold-point scan carries ACROSS projects within one
+ * pass. The alert budget is global by design: a per-project take multiplied by
+ * every active project is not a bound.
+ */
+type StaleScanState = {
+  canaryProjectIds: Set<string>;
+  budget: number;
+  cursor: { projectId: string; scheduledDate: Date | null; id: string } | null;
+  projectsDeferred: number;
+  truncatedProjects: number;
+};
+
+/**
+ * The stale-hold-point half of one project's pass (Wave E1, spec §4.1.2/§4.1.3).
+ * Extracted from `processSystemAlerts` when E1's bounds pushed that function
+ * over the complexity threshold — behaviour-identical, just its own scope.
+ */
+async function createStaleHoldPointAlerts(
+  project: SystemProjectForAutomation,
+  alertOwnerId: string | null,
+  now: Date,
+  deps: SystemAutomationDependencies,
+  result: SystemAlertAutomationResult,
+  scan: StaleScanState,
+): Promise<void> {
+  // Canary gate. Scopes the stale scan only — the overdue-NCR pass runs for
+  // every project, as it always has.
+  if (!scan.canaryProjectIds.has(project.id)) return;
+
+  if (scan.budget <= 0) {
+    scan.projectsDeferred += 1;
+    return;
+  }
+
+  const staleThreshold = new Date(now.getTime() - deps.dayMs);
+  const horizonStart = new Date(now.getTime() - STALE_HOLD_POINT_HORIZON_DAYS * deps.dayMs);
+  const staleHoldPoints = await deps.prisma.holdPoint.findMany({
+    where: {
+      lot: { projectId: project.id },
+      // Wave E1 `[E-B1]`: the status the request-release paths actually write.
+      // The literal this replaced (['requested','scheduled']) had no producer
+      // that also sets scheduledDate, so this scan could not fire.
+      status: { in: [...AWAITING_RELEASE_HOLD_POINT_STATUSES] },
+      scheduledDate: { lt: staleThreshold, gte: horizonStart },
+    },
+    include: {
+      lot: { select: { id: true, lotNumber: true } },
+      itpChecklistItem: { select: { description: true } },
+    },
+    // Oldest first, stable. ponytail: the page includes hold points that
+    // already have an active alert and will be skipped below, so a backlog
+    // larger than the take could stall — the take is 4x the per-pass alert cap,
+    // and the deferred count logged at the end of the pass is what would show
+    // it if that ever stopped being true.
+    orderBy: [{ scheduledDate: 'asc' }, { id: 'asc' }],
+    take: STALE_HOLD_POINT_SCAN_TAKE,
+  });
+  if (staleHoldPoints.length === STALE_HOLD_POINT_SCAN_TAKE) {
+    scan.truncatedProjects += 1;
+  }
+
+  for (const [index, holdPoint] of staleHoldPoints.entries()) {
+    if (scan.budget <= 0) {
+      // Upper bound, same convention as the escalation engine: counts every row
+      // from the stop point on, including ones that already have an active
+      // alert and would have been skipped.
+      result.staleHoldPointsDeferred += staleHoldPoints.length - index;
+      scan.cursor ??= {
+        projectId: project.id,
+        scheduledDate: holdPoint.scheduledDate,
+        id: holdPoint.id,
+      };
+      return;
+    }
+
+    const existingAlert = await deps.prisma.notificationAlert.findFirst({
+      where: {
+        entityId: holdPoint.id,
+        type: 'stale_hold_point',
+        resolvedAt: null,
+      },
+    });
+
+    if (existingAlert || !alertOwnerId) {
+      result.skippedAlerts += 1;
+      continue;
+    }
+
+    const hoursStale = holdPoint.scheduledDate
+      ? Math.ceil((now.getTime() - holdPoint.scheduledDate.getTime()) / deps.hourMs)
+      : 0;
+    const severity: SystemAlertSeverity =
+      hoursStale > 48 ? 'critical' : hoursStale > 24 ? 'high' : 'medium';
+    const title = `Hold Point stale: Lot ${holdPoint.lot.lotNumber}`;
+    const message = `Hold Point for Lot ${holdPoint.lot.lotNumber} has been ${holdPoint.status} for ${hoursStale} hours. ${holdPoint.itpChecklistItem?.description?.substring(0, 80) || ''}`;
+    const alertId = await createAlertRecord(deps.prisma, {
+      type: 'stale_hold_point',
+      severity,
+      title,
+      message,
+      entityId: holdPoint.id,
+      entityType: 'holdpoint',
+      projectId: project.id,
+      assignedToId: alertOwnerId,
+      createdAt: now,
+    });
+    if (alertId === null) {
+      result.skippedAlerts += 1;
+      continue;
+    }
+
+    const users = await deps.findProjectUsersByRoles(project.id, STALE_HOLD_POINT_ALERT_ROLES);
+    if (users.length > 0) {
+      await deps.prisma.notification.createMany({
+        data: users.map((user) => ({
+          userId: user.id,
+          projectId: project.id,
+          type: 'alert_stale_hold_point',
+          title,
+          message,
+          linkUrl: buildProjectEntityLink('lot', holdPoint.lot.id, project.id, {
+            tab: 'holdpoints',
+          }),
+        })),
+      });
+    }
+
+    result.alertsCreated += 1;
+    result.staleHoldPointAlerts += 1;
+    result.notificationsCreated += users.length;
+    scan.budget -= 1;
+    result.createdAlerts.push({
+      type: 'stale_hold_point',
+      alertId,
+      entityId: holdPoint.id,
+      projectName: project.name,
+      severity,
+      message: title,
+    });
+  }
+}
+
 export async function processSystemAlerts(
   options: SystemAutomationJobOptions,
   deps: SystemAutomationDependencies,
@@ -186,7 +380,19 @@ export async function processSystemAlerts(
     staleHoldPointAlerts: 0,
     notificationsCreated: 0,
     skippedAlerts: 0,
+    staleHoldPointsDeferred: 0,
     createdAlerts: [],
+  };
+
+  const scan: StaleScanState = {
+    // Read once per pass, and always an array — see parseProjectIdAllowlist for
+    // why `undefined` here would be an estate-wide storm rather than an inert
+    // deploy (E.0 item 8c).
+    canaryProjectIds: new Set(parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV])),
+    budget: STALE_HOLD_POINT_ALERTS_PER_PASS,
+    cursor: null,
+    projectsDeferred: 0,
+    truncatedProjects: 0,
   };
 
   for (const project of projects) {
@@ -274,89 +480,22 @@ export async function processSystemAlerts(
       });
     }
 
-    const staleThreshold = new Date(now.getTime() - deps.dayMs);
-    const staleHoldPoints = await deps.prisma.holdPoint.findMany({
-      where: {
-        lot: { projectId: project.id },
-        status: { in: ['requested', 'scheduled'] },
-        scheduledDate: { lt: staleThreshold },
-      },
-      include: {
-        lot: { select: { id: true, lotNumber: true } },
-        itpChecklistItem: { select: { description: true } },
-      },
+    await createStaleHoldPointAlerts(project, alertOwnerId, now, deps, result, scan);
+  }
+
+  if (
+    result.staleHoldPointsDeferred > 0 ||
+    scan.projectsDeferred > 0 ||
+    scan.truncatedProjects > 0
+  ) {
+    logInfo('[Notification Automation] Stale hold-point scan bounded', {
+      alertsPerPassCap: STALE_HOLD_POINT_ALERTS_PER_PASS,
+      staleHoldPointAlerts: result.staleHoldPointAlerts,
+      deferredUpperBound: result.staleHoldPointsDeferred,
+      projectsDeferred: scan.projectsDeferred,
+      truncatedProjects: scan.truncatedProjects,
+      cursor: scan.cursor,
     });
-
-    for (const holdPoint of staleHoldPoints) {
-      const existingAlert = await deps.prisma.notificationAlert.findFirst({
-        where: {
-          entityId: holdPoint.id,
-          type: 'stale_hold_point',
-          resolvedAt: null,
-        },
-      });
-
-      if (existingAlert) {
-        result.skippedAlerts += 1;
-        continue;
-      }
-
-      if (!alertOwnerId) {
-        result.skippedAlerts += 1;
-        continue;
-      }
-
-      const hoursStale = holdPoint.scheduledDate
-        ? Math.ceil((now.getTime() - holdPoint.scheduledDate.getTime()) / deps.hourMs)
-        : 0;
-      const severity: SystemAlertSeverity =
-        hoursStale > 48 ? 'critical' : hoursStale > 24 ? 'high' : 'medium';
-      const title = `Hold Point stale: Lot ${holdPoint.lot.lotNumber}`;
-      const message = `Hold Point for Lot ${holdPoint.lot.lotNumber} has been ${holdPoint.status} for ${hoursStale} hours. ${holdPoint.itpChecklistItem?.description?.substring(0, 80) || ''}`;
-      const alertId = await createAlertRecord(deps.prisma, {
-        type: 'stale_hold_point',
-        severity,
-        title,
-        message,
-        entityId: holdPoint.id,
-        entityType: 'holdpoint',
-        projectId: project.id,
-        assignedToId: alertOwnerId,
-        createdAt: now,
-      });
-      if (alertId === null) {
-        result.skippedAlerts += 1;
-        continue;
-      }
-
-      const users = await deps.findProjectUsersByRoles(project.id, STALE_HOLD_POINT_ALERT_ROLES);
-      if (users.length > 0) {
-        await deps.prisma.notification.createMany({
-          data: users.map((user) => ({
-            userId: user.id,
-            projectId: project.id,
-            type: 'alert_stale_hold_point',
-            title,
-            message,
-            linkUrl: buildProjectEntityLink('lot', holdPoint.lot.id, project.id, {
-              tab: 'holdpoints',
-            }),
-          })),
-        });
-      }
-
-      result.alertsCreated += 1;
-      result.staleHoldPointAlerts += 1;
-      result.notificationsCreated += users.length;
-      result.createdAlerts.push({
-        type: 'stale_hold_point',
-        alertId,
-        entityId: holdPoint.id,
-        projectName: project.name,
-        severity,
-        message: title,
-      });
-    }
   }
 
   return result;
