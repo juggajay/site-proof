@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { BarChart3, ClipboardCheck, DollarSign, Layers } from 'lucide-react';
 import { getProjectRoute, type PMDashboardData } from './ProjectManagerDashboardHelpers';
+import { NeedsAttentionQuickLink } from './NeedsAttentionQuickLink';
 
 type PMProject = NonNullable<PMDashboardData['project']>;
 
@@ -57,6 +58,7 @@ export function ProjectManagerQuickActions({ projectId }: { projectId: string | 
           <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
           <span className="font-medium">Docket Approvals</span>
         </Link>
+        <NeedsAttentionQuickLink />
       </div>
     </div>
   );

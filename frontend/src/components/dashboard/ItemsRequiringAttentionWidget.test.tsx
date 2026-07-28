@@ -44,7 +44,10 @@ describe('ItemsRequiringAttentionWidget', () => {
                 id: 'hp-1',
                 type: 'holdpoint',
                 title: 'HP-009',
-                description: 'Awaiting inspection',
+                // What statsRoute actually puts in a hold-point row's
+                // `description` (statsRoute.ts: `Lot ${hp.lot.lotNumber}`) —
+                // a structured field, not the NCR limb's free text.
+                description: 'Lot LOT-014',
                 daysStale: 1,
               }),
             ],
@@ -62,11 +65,46 @@ describe('ItemsRequiringAttentionWidget', () => {
     expect(screen.getByText(/3 days overdue/)).toBeInTheDocument();
     expect(screen.getByText(/Stale Hold Points \(1\)/)).toBeInTheDocument();
     expect(screen.getByText(/1 day waiting/)).toBeInTheDocument();
-    // Rows keep the project name but drop the free-text description (A4 P1.3);
-    // the PDF still prints it.
-    expect(screen.getAllByText('Highway Upgrade')).toHaveLength(2);
+    // NCR rows keep the project name and drop the free text (A4 P1.3).
+    expect(screen.getByText('Highway Upgrade')).toBeInTheDocument();
     expect(screen.queryByText(/Cracked slab/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Awaiting inspection/)).not.toBeInTheDocument();
+  });
+
+  // M8 (deep review 2026-07-28) — #de9e25a5 dropped the hold-point lot number
+  // along with the NCR free text, so five "Subgrade proof roll" hold points
+  // rendered as five identical rows. The dashboard PDF still printed the lot,
+  // which made the PDF more useful than the screen.
+  it('keeps the lot number on hold-point rows so identical descriptions stay distinguishable', () => {
+    render(
+      <MemoryRouter>
+        <ItemsRequiringAttentionWidget
+          attentionItems={{
+            overdueNCRs: [],
+            staleHoldPoints: [
+              buildItem({
+                id: 'hp-1',
+                type: 'holdpoint',
+                title: 'Subgrade proof roll',
+                description: 'Lot LOT-014',
+                daysStale: 9,
+              }),
+              buildItem({
+                id: 'hp-2',
+                type: 'holdpoint',
+                title: 'Subgrade proof roll',
+                description: 'Lot LOT-015',
+                daysStale: 8,
+              }),
+            ],
+            total: 2,
+          }}
+          onNavigate={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Lot LOT-014/)).toBeInTheDocument();
+    expect(screen.getByText(/Lot LOT-015/)).toBeInTheDocument();
   });
 
   it('links the header through to the needs-attention screen', () => {

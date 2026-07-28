@@ -1,3 +1,4 @@
+import { INTERNAL_ROLES } from '@/appRouteRoles';
 import type { EvidenceReadinessItem, LotEvidenceReadiness } from '@/types/evidenceReadiness';
 import type { LotTab } from '../types';
 
@@ -59,11 +60,23 @@ export interface ReadinessPrimaryAction {
  * Only items the engine authored an action for are eligible: a label plus a
  * destination we can actually reach. An item with no action is never given one
  * — a fabricated urgency signal on a quality record is worse than no signal.
+ *
+ * "Reach" is per-viewer, which is why `viewerRole` is required. Every navigating
+ * readiness action the engine emits today lands on `/projects/:id/hold-points`
+ * (`qualityRoutes.ts:217`), which `App.tsx` guards with `INTERNAL_ROLES` — so
+ * offering it to a viewer was a solid primary button onto an access-denied
+ * screen, against this docstring. Tab actions stay: they switch a tab on a page
+ * the viewer is already reading, so no guard is involved.
+ *
+ * Pass the RoleSwitcher-aware `actualRole`, never `user.role`. An absent role
+ * fails closed.
  */
 export function pickPrimaryReadinessAction(
   readiness: LotEvidenceReadiness | null | undefined,
+  viewerRole: string | null | undefined,
 ): ReadinessPrimaryAction | null {
   if (!readiness) return null;
+  const canNavigate = INTERNAL_ROLES.includes(viewerRole ?? '');
 
   const buckets = [readiness.conformance, readiness.claim, readiness.managementPrep];
   const items = buckets.flatMap((bucket) =>
@@ -76,6 +89,7 @@ export function pickPrimaryReadinessAction(
   for (const item of items) {
     if (!item.actionLabel || seen.has(item.code)) continue;
     const href = externalActionHref(item);
+    if (href && !canNavigate) continue;
     const tab = href ? null : actionTab(item);
     if (!href && !tab) continue;
     seen.add(item.code);

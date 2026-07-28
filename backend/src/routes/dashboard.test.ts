@@ -777,7 +777,14 @@ describe('Dashboard Stats API', () => {
         expect(assignment).toBeDefined();
         expect(assignment.reasonCode).toBe('hold_point_overdue');
         expect(assignment.isOverdue).toBe(true);
-        expect(assignment.needsAction).toBe(true);
+        // M8 (review 2026-07-28): the hold point is assigned to the
+        // QUALITY_MANAGER role and this viewer is an `admin`. Admin CAN act on it
+        // (it is in `executableByRoles`) but does not hold the ball, so it lands
+        // in "Waiting on others" — visible, not falsely claimed. Before the fix
+        // every role in `executableByRoles` was told the ball was in their court.
+        expect(assignment.assignee).toEqual({ kind: 'role', role: 'quality_manager' });
+        expect(assignment.status).toBe('waiting_on_others');
+        expect(assignment.needsAction).toBe(false);
         expect(res.body.actionAssignments.totalCount).toBeGreaterThanOrEqual(
           res.body.actionAssignments.items.length,
         );

@@ -58,6 +58,16 @@ export const STATUS_LABELS: Record<string, string> = {
   paid: 'Paid',
   partially_paid: 'Partially Paid',
 
+  // Readiness reason codes (Needs Attention rows). These are `reasonCode` values
+  // from the backend's closed vocabulary
+  // (`lib/readiness/contracts/reasonCodes.ts`), not statuses — but they are the
+  // same problem: a raw enum reaching a user. Only the codes the shipped
+  // producers emit are listed; the Title Case fallback covers the rest safely,
+  // except acronyms like NCR, which is why `ncr_overdue` must be explicit.
+  ncr_overdue: 'NCR Overdue',
+  hold_point_overdue: 'Hold Point Overdue',
+  unreleased_hold_points: 'Hold Points Not Released',
+
   // Hold point / subcontractor admin statuses
   requested: 'Requested',
   released: 'Released',

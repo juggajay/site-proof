@@ -212,6 +212,14 @@ export const queryKeys = {
     projectId ? (['dashboard', projectId] as const) : (['dashboard'] as const),
   dashboardStats: (startDate: string, endDate: string) =>
     ['dashboard-stats', startDate, endDate] as const,
+  /**
+   * Prefix key covering EVERY parameterised `dashboardStats` entry. Use it to
+   * invalidate after a mutation: the caller does not know which date range the
+   * dashboard (or /dashboard/needs-attention, which reads the same entry) is
+   * sitting on, and `staleTime` is 5 min with no refetch-on-focus, so without
+   * this an actioned NCR or hold point stays listed for minutes.
+   */
+  dashboardStatsAll: ['dashboard-stats'] as const,
   pmDashboard: ['pm-dashboard'] as const,
   qmDashboard: ['qm-dashboard'] as const,
 

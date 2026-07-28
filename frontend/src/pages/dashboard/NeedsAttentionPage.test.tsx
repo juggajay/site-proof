@@ -135,8 +135,12 @@ describe('NeedsAttentionPage', () => {
     expect(within(needsYou).getByText('Release hold point')).toBeInTheDocument();
     expect(within(waiting).queryByText('Review NCR')).not.toBeInTheDocument();
 
-    // Second line is structured fields plus the code — never prose.
-    expect(within(needsYou).getByText('unreleased_hold_points')).toBeInTheDocument();
+    // Second line is structured fields plus the reason, in plain English —
+    // never the raw enum (L13), never prose.
+    expect(within(needsYou).getByText('Hold Points Not Released')).toBeInTheDocument();
+    expect(within(needsYou).queryByText('unreleased_hold_points')).not.toBeInTheDocument();
+    expect(within(waiting).getByText('NCR Overdue')).toBeInTheDocument();
+    expect(within(waiting).queryByText('ncr_overdue')).not.toBeInTheDocument();
     expect(within(needsYou).getByText(/Quality Manager \(you\)/)).toBeInTheDocument();
     expect(within(waiting).getByText(/Hunter Expressway/)).toBeInTheDocument();
   });
@@ -156,12 +160,16 @@ describe('NeedsAttentionPage', () => {
     expect(screen.queryByRole('heading', { name: 'Needs you' })).not.toBeInTheDocument();
   });
 
-  it('states the honest count when the capped feed hides items', async () => {
+  // M8 — the banner said "the N most overdue of M", but the hold-point limb is
+  // fetched `orderBy createdAt asc` and deliberately includes rows that are not
+  // overdue at all. The cap is real; the ordering claim was not.
+  it('states the honest count when the capped feed hides items, without claiming an overdue ranking', async () => {
     mockStatsApi({ items: [NEEDS_YOU_HOLD_POINT, OVERDUE_WAITING_ON_OTHERS_NCR], totalCount: 47 });
 
     renderWithProviders(<NeedsAttentionPage />);
 
-    expect(await screen.findByText('Showing the 2 most overdue of 47.')).toBeInTheDocument();
+    expect(await screen.findByText('Showing 2 of 47 items needing attention.')).toBeInTheDocument();
+    expect(screen.queryByText(/most overdue/)).not.toBeInTheDocument();
   });
 
   it('says nothing more than one line when there is nothing to do', async () => {

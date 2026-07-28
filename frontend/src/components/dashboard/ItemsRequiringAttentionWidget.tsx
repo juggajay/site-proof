@@ -6,10 +6,12 @@ export interface AttentionItem {
   type: 'ncr' | 'holdpoint';
   title: string;
   /**
-   * Free text, no longer rendered in this widget's rows (richer detail lives on
-   * /dashboard/needs-attention). Kept required so AttentionItem stays
-   * structurally assignable to DashboardPDFAttentionItem, which still prints it
-   * (src/lib/pdf/types.ts:86, src/lib/pdf/dashboardPdf.ts:103).
+   * NCR rows: free text, deliberately NOT rendered here (#de9e25a5 — richer
+   * detail lives on /dashboard/needs-attention). Hold-point rows: the structured
+   * `Lot ${lotNumber}` statsRoute puts here, which IS rendered — it is the only
+   * thing distinguishing rows that share a description. Required either way so
+   * AttentionItem stays structurally assignable to DashboardPDFAttentionItem,
+   * which prints it (src/lib/pdf/types.ts:86, src/lib/pdf/dashboardPdf.ts:103).
    */
   description: string;
   status: string;
@@ -139,8 +141,14 @@ export function ItemsRequiringAttentionWidget({
                           {item.daysStale} day{item.daysStale !== 1 ? 's' : ''} waiting
                         </span>
                       </div>
+                      {/* On a hold-point row `description` is the structured
+                          `Lot ${lotNumber}` (statsRoute.ts), not the NCR limb's
+                          free text — and it is the only thing that tells five
+                          "Subgrade proof roll" rows apart. #de9e25a5 dropped
+                          both; the PDF kept the lot and became more useful than
+                          the screen. */}
                       <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {item.project.name}
+                        {item.description} &middot; {item.project.name}
                       </p>
                     </div>
                   </div>

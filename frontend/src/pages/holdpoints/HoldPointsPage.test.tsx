@@ -1,8 +1,17 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import { renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import {
+  createTestQueryClient,
+  renderWithProviders,
+  screen,
+  waitFor,
+} from '@/test/renderWithProviders';
 import userEvent from '@testing-library/user-event';
+import type { QueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import type { HoldPoint } from './types';
+
+const DASHBOARD_STATS_KEY = queryKeys.dashboardStats('2026-07-01', '2026-07-28');
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 
@@ -225,7 +234,7 @@ function LocationProbe() {
   return <div data-testid="location-search">{location.search}</div>;
 }
 
-function renderPage(initialEntry = '/projects/p1/hold-points') {
+function renderPage(initialEntry = '/projects/p1/hold-points', queryClient?: QueryClient) {
   return renderWithProviders(
     <>
       <Routes>
@@ -233,7 +242,7 @@ function renderPage(initialEntry = '/projects/p1/hold-points') {
       </Routes>
       <LocationProbe />
     </>,
-    { initialEntries: [initialEntry] },
+    { initialEntries: [initialEntry], ...(queryClient ? { queryClient } : {}) },
   );
 }
 
@@ -454,5 +463,36 @@ describe('HoldPointsPage register data layer', () => {
       { itpChecklistItemId: 'item-ready' },
       { itpChecklistItemId: 'item-blocked' },
     ]);
+  });
+
+  // M8 (deep review 2026-07-28) — the register refreshed six cache entries after
+  // a release request, none of them the dashboard stats feed that /dashboard/
+  // needs-attention reads. staleTime is 5 min with no refetch-on-focus, so the
+  // hold point stayed listed after the very action that advanced it.
+  it('invalidates the dashboard/Needs Attention feed after a batch release request', async () => {
+    mockBatchHoldPointsApi(buildBatchRegister());
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+    // Positive control: a real cached feed carrying the hold point being actioned.
+    queryClient.setQueryData(DASHBOARD_STATS_KEY, {
+      actionAssignments: {
+        items: [{ subjectType: 'hold_point', subjectId: 'hp-batch-1' }],
+        totalCount: 1,
+      },
+    });
+    expect(queryClient.getQueryState(DASHBOARD_STATS_KEY)?.isInvalidated).toBe(false);
+
+    renderPage('/projects/p1/hold-points', queryClient);
+
+    await selectLotForBatch(user);
+    await user.click(
+      screen.getByRole('checkbox', { name: /Select Formation inspection for batch release/i }),
+    );
+    await sendBatchReleaseRequest(user, /Request selected/i, 'Site Reviewer');
+    await expectBatchRequestBody();
+
+    await waitFor(() => {
+      expect(queryClient.getQueryState(DASHBOARD_STATS_KEY)?.isInvalidated).toBe(true);
+    });
   });
 });
