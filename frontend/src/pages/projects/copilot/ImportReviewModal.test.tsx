@@ -42,7 +42,15 @@ vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
 
 function dryRun(overrides: Partial<DryRunResult> = {}): DryRunResult {
   return {
-    counts: { willCreate: 1, willUpdate: 0, willSkip: 0, needsReview: 0, ambiguous: 0, blocked: 0 },
+    counts: {
+      willCreate: 1,
+      willUpdate: 0,
+      willSkip: 0,
+      needsReview: 0,
+      ambiguous: 0,
+      blocked: 0,
+      willImport: 1,
+    },
     rows: [
       {
         key: 'ITP-01::ITP-01',
@@ -73,6 +81,7 @@ function milestoneDryRun(templateKeys: string[] = ['ITP-01::ITP-01']): DryRunRes
       needsReview: templateKeys.length,
       ambiguous: 0,
       blocked: 0,
+      willImport: 0,
     },
     canApply: false,
     rows: templateKeys.flatMap((key, index) => {
@@ -206,6 +215,7 @@ describe('ImportReviewModal', () => {
           needsReview: 0,
           ambiguous: 0,
           blocked: 1,
+          willImport: 0,
         },
         canApply: false,
         rows: [
@@ -235,6 +245,7 @@ describe('ImportReviewModal', () => {
         needsReview: 0,
         ambiguous: 0,
         blocked: 2,
+        willImport: 0,
       },
       canApply: false,
       rows: [
@@ -264,6 +275,7 @@ describe('ImportReviewModal', () => {
         needsReview: 0,
         ambiguous: 0,
         blocked: 1,
+        willImport: 0,
       },
       canApply: false,
       rows: [
@@ -304,6 +316,7 @@ describe('ImportReviewModal', () => {
         needsReview: 0,
         ambiguous: 0,
         blocked: 1,
+        willImport: 0,
       },
       canApply: false,
       fieldMap: pdfFieldMap,
@@ -341,6 +354,7 @@ describe('ImportReviewModal', () => {
         needsReview: 0,
         ambiguous: 0,
         blocked: 1,
+        willImport: 0,
       },
       canApply: false,
       rows: [
@@ -370,6 +384,7 @@ describe('ImportReviewModal', () => {
         needsReview: 0,
         ambiguous: 0,
         blocked: 1,
+        willImport: 0,
       },
       canApply: false,
       rows: [
@@ -403,6 +418,7 @@ describe('ImportReviewModal', () => {
           needsReview: 1,
           ambiguous: 0,
           blocked: 0,
+          willImport: 0,
         },
         canApply: false,
         rows: [
@@ -524,6 +540,121 @@ describe('ImportReviewModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Use this master' }));
     await vi.waitFor(() => expect(state.masterSpy).toHaveBeenCalledWith('master-1'));
+  });
+
+  /**
+   * M10: the CTA used to be re-derived here as `willCreate + ambiguous`, so a
+   * `template_not_found` row — which needs a look AND still creates its lot —
+   * was left out of the number while the lot was written anyway. The count is
+   * now the server's, derived from the payload.
+   */
+  it('promises the number of records the server says Apply will create', () => {
+    state.detail = detailFor(
+      dryRun({
+        counts: {
+          willCreate: 1,
+          willUpdate: 0,
+          willSkip: 0,
+          needsReview: 2,
+          ambiguous: 0,
+          blocked: 0,
+          willImport: 3,
+        },
+        rows: [
+          {
+            key: 'lot:Lot Register#2',
+            unit: 'lot',
+            rowRef: { sheet: 'Lot Register', rowIndex: 2 },
+            label: 'L-001',
+            outcome: 'create',
+            willImport: true,
+          },
+          ...[3, 4].map((rowIndex) => ({
+            key: `lot:Lot Register#${rowIndex}`,
+            unit: 'lot' as const,
+            rowRef: { sheet: 'Lot Register', rowIndex },
+            label: `L-00${rowIndex}`,
+            outcome: 'needs_review' as const,
+            reason: 'template_not_found',
+            willImport: true,
+          })),
+        ],
+      }),
+    );
+    renderModal('lot_register');
+
+    expect(screen.getByRole('button', { name: /^Import 3 lots$/ })).toBeEnabled();
+    // …and the counts bar agrees with the CTA rather than with the outcomes.
+    expect(screen.getByText('import').parentElement).toHaveTextContent('3 import');
+  });
+
+  /**
+   * M10: `skipRows` was accepted by the server and typed on the client, but no
+   * control ever wrote it — while the blocked row's own message told the
+   * reviewer to "skip the row", and one over-length cell blocked the whole ITP.
+   */
+  it('lets the reviewer leave a blocked checklist row out of its template', () => {
+    state.detail = detailFor(
+      dryRun({
+        counts: {
+          willCreate: 0,
+          willUpdate: 0,
+          willSkip: 0,
+          needsReview: 0,
+          ambiguous: 0,
+          blocked: 2,
+          willImport: 0,
+        },
+        canApply: false,
+        rows: [
+          {
+            key: 'row:ITP-01#4',
+            unit: 'checklist_row',
+            parentKey: 'ITP-01::ITP-01',
+            rowRef: { sheet: 'ITP-01', rowIndex: 4 },
+            label: 'A very long item',
+            outcome: 'blocked',
+            reason: 'over_length',
+            overLength: { field: 'description', length: 1200, max: 1000 },
+          },
+          {
+            key: 'ITP-01::ITP-01',
+            unit: 'template',
+            rowRef: { sheet: 'ITP-01', rowIndex: 2 },
+            label: 'ITP-01 Subgrade',
+            outcome: 'blocked',
+            reason: 'over_length',
+            overLength: { field: 'description', length: 1200, max: 1000 },
+          },
+        ],
+      }),
+    );
+    renderModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave this row out' }));
+
+    // Keyed on the TEMPLATE, carrying the source row index — the shape
+    // `TemplateResolution.skipRows` has always accepted.
+    expect(state.dryRunSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: 'batch-1',
+        resolutions: { 'ITP-01::ITP-01': { skipRows: [4] } },
+      }),
+    );
+  });
+
+  // M10: a read that could not account for its whole source says so, rather
+  // than importing a truncated one silently.
+  it('surfaces a read-level notice above the counts', () => {
+    const detail = detailFor(dryRun());
+    detail.grid = {
+      ...detail.grid!,
+      notice: 'The PDF reader could not confirm how many pages that document has',
+    };
+    state.detail = detail;
+    renderModal();
+
+    expect(screen.getByText(/could not confirm how many pages/)).toBeInTheDocument();
   });
 
   it('sends the batch to review and then accepts it, in that order', async () => {

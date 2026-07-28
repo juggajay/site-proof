@@ -57,6 +57,11 @@ export interface DryRunRow {
   declaredStateSpec?: string | null;
   specAffirmed?: boolean;
   checklistItemCount?: number;
+  /** This row is really in the payload Apply would write. */
+  willImport?: boolean;
+  /** For a `checklist_row`, the ledger key of the template it belongs to — the
+   *  key a `skipRows` resolution has to be written against. */
+  parentKey?: string;
 }
 
 export interface DryRunResult {
@@ -67,6 +72,10 @@ export interface DryRunResult {
     needsReview: number;
     ambiguous: number;
     blocked: number;
+    /** How many records Apply would create. Server-derived from the payload —
+     *  do NOT recompute it from the outcomes, which is what used to leave
+     *  `template_not_found` rows out of the CTA while still creating them. */
+    willImport: number;
   };
   rows: DryRunRow[];
   unmappedHeaders: { sheet: string; headers: string[] }[];
@@ -82,12 +91,19 @@ export interface ParsedSheet {
   rows: string[][];
 }
 
+export interface ParsedGrid {
+  sheets: ParsedSheet[];
+  /** Something about the READ itself the reviewer has to know — how much of a
+   *  PDF was actually read, merges too large to check. */
+  notice?: string;
+}
+
 export interface ImportBatchDetail {
   batch: ImportBatchSummary & {
     sourceAvailable: boolean;
     mappingProfileId: string | null;
   };
-  grid: { sheets: ParsedSheet[] } | null;
+  grid: ParsedGrid | null;
   dryRun: DryRunResult | null;
 }
 
