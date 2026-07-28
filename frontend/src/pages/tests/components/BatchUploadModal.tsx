@@ -10,7 +10,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
-import { recomputeReviewPassFail } from '../certificateReview';
+import { recomputeReviewPassFail, seedAttachReviewForm } from '../certificateReview';
 import type { FailedTestNcrInput } from '../failedTestNcr';
 import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
 
@@ -47,6 +47,9 @@ interface BatchUploadResult {
   testResult?: {
     id: string;
     testType: string;
+    // Review M6: the certificate landed on a test a human had already planned
+    // instead of minting a row, so the review form must seed from that row.
+    landedOnExistingTest?: boolean;
   };
   lotSuggestion?: {
     suggestedLots?: SuggestedLot[];
@@ -138,11 +141,35 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         setBatchResults(results);
         setBatchProgress(null);
 
+        // Refresh test results list. Fetched before the review data is built
+        // because a certificate that landed on a planned row (review M6) must
+        // seed from that row, not from the extraction alone.
+        const testsData = await apiFetch<{ testResults: TestResult[] }>(
+          `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
+        );
+        onTestResultsUpdated(testsData.testResults || []);
+
         // Initialize review data for each result
         const reviewData: Record<string, Record<string, string>> = {};
         for (const result of results) {
           if (result.success && result.testResult) {
             const extracted = result.extraction?.extractedFields || {};
+
+            // Review M6: same reason as the single-upload modal — confirm sends
+            // every key the form holds, so a field the certificate did not
+            // speak to would be nulled on a row that already had it.
+            const landedRow = result.testResult.landedOnExistingTest
+              ? testsData.testResults?.find((test) => test.id === result.testResult!.id)
+              : undefined;
+            if (landedRow) {
+              const seeded = seedAttachReviewForm(extracted, landedRow);
+              reviewData[result.testResult.id] = {
+                ...seeded,
+                lotId: seeded.lotId || result.lotSuggestion?.suggestedLots?.[0]?.id || '',
+              };
+              continue;
+            }
+
             // H13: seed pass/fail from the extracted value + spec for review.
             reviewData[result.testResult.id] = recomputeReviewPassFail({
               testType: extracted.testType?.value || '',
@@ -162,11 +189,6 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         }
         setBatchReviewData(reviewData);
 
-        // Refresh test results list
-        const testsData = await apiFetch<{ testResults: TestResult[] }>(
-          `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
-        );
-        onTestResultsUpdated(testsData.testResults || []);
         const successfulCount = results.filter((result) => result.success).length;
         toast({
           title:

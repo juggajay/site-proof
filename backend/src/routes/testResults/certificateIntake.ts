@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
@@ -15,8 +16,64 @@ import {
   getLowConfidenceFields,
 } from './certificateExtraction.js';
 import { buildCertificateDocumentResponse } from './certificateDocumentResponse.js';
-import { buildTestResultData, suggestLotsFromLocation } from './testResultMapping.js';
+import {
+  buildTestResultData,
+  findWaitingTestResultForCertificate,
+  suggestLotsFromLocation,
+} from './testResultMapping.js';
 import { MAX_UPLOAD_PROJECT_ID_LENGTH } from './validation.js';
+
+const CERTIFICATE_DOC_INCLUDE = {
+  certificateDoc: {
+    select: {
+      id: true,
+      filename: true,
+      mimeType: true,
+    },
+  },
+} as const;
+
+/**
+ * Review M6: attach this certificate to the planned test that was waiting for
+ * it, or create a row when nothing unambiguously matches.
+ *
+ * Landing writes exactly two facts, both true the moment the file arrives: the
+ * certificate is attached, and the results have been received. It writes NO
+ * extracted VALUE onto a row a human already owns — [C2R-B6], the rule #1634
+ * shipped: reviewed values reach the row through PATCH /:id/confirm-extraction
+ * and nowhere else. The create branch is untouched, so a certificate with no
+ * waiting row behaves exactly as it always has.
+ */
+async function landOrCreateTestResult(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  documentId: string,
+  extractedData: ExtractedCertificateFields,
+) {
+  const waiting = await findWaitingTestResultForCertificate(tx, projectId, extractedData);
+
+  if (waiting) {
+    // ponytail: the `certificateDocId: null` filter re-checks inside the
+    // transaction what the candidate query saw outside it, so a concurrent
+    // attach cannot have its evidence overwritten. If it ever loses that race
+    // the transaction rolls back, the upload is cleaned up, and a retry creates
+    // a row — refusing beats swapping a certificate under a result.
+    const landed = await tx.testResult.update({
+      where: { id: waiting.id, certificateDocId: null },
+      data: { certificateDocId: documentId, status: 'results_received' },
+      include: CERTIFICATE_DOC_INCLUDE,
+    });
+
+    return { testResult: landed, landedOnExistingTest: true };
+  }
+
+  const created = await tx.testResult.create({
+    data: buildTestResultData(projectId, documentId, extractedData),
+    include: CERTIFICATE_DOC_INCLUDE,
+  });
+
+  return { testResult: created, landedOnExistingTest: false };
+}
 
 type BatchUploadResult =
   | {
@@ -32,6 +89,7 @@ type BatchUploadResult =
           filename: string;
           mimeType: string | null;
         } | null;
+        landedOnExistingTest: boolean;
       };
       extraction: {
         extractedFields: ExtractedCertificateFields;
@@ -153,8 +211,9 @@ export async function processCertificateUpload({
   }
 
   let testResult;
+  let landedOnExistingTest: boolean;
   try {
-    testResult = await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
       const document = await tx.document.create({
         data: {
           projectId,
@@ -168,19 +227,10 @@ export async function processCertificateUpload({
         },
       });
 
-      return tx.testResult.create({
-        data: buildTestResultData(projectId, document.id, extractedData),
-        include: {
-          certificateDoc: {
-            select: {
-              id: true,
-              filename: true,
-              mimeType: true,
-            },
-          },
-        },
-      });
+      return landOrCreateTestResult(tx, projectId, document.id, extractedData);
     });
+    testResult = outcome.testResult;
+    landedOnExistingTest = outcome.landedOnExistingTest;
   } catch (error) {
     await cleanupStoredCertificateUpload(fileUrl, file, projectId);
     throw error;
@@ -203,6 +253,10 @@ export async function processCertificateUpload({
       status: testResult.status,
       aiExtracted: testResult.aiExtracted,
       certificateDoc: buildCertificateDocumentResponse(testResult.certificateDoc),
+      // Review M6: true when this certificate landed on a test a human had
+      // already planned. The review form seeds differently for that row — its
+      // stored values must survive a field the certificate did not speak to.
+      landedOnExistingTest,
     },
     extraction: {
       success: true,
@@ -284,7 +338,7 @@ export async function processBatchCertificateUpload({
         fileUrl = `/uploads/certificates/${file.filename}`;
       }
 
-      const testResult = await prisma.$transaction(async (tx) => {
+      const { testResult, landedOnExistingTest } = await prisma.$transaction(async (tx) => {
         const document = await tx.document.create({
           data: {
             projectId,
@@ -298,18 +352,7 @@ export async function processBatchCertificateUpload({
           },
         });
 
-        return tx.testResult.create({
-          data: buildTestResultData(projectId, document.id, extractedData),
-          include: {
-            certificateDoc: {
-              select: {
-                id: true,
-                filename: true,
-                mimeType: true,
-              },
-            },
-          },
-        });
+        return landOrCreateTestResult(tx, projectId, document.id, extractedData);
       });
 
       // Identify low confidence fields
@@ -328,6 +371,7 @@ export async function processBatchCertificateUpload({
           status: testResult.status,
           aiExtracted: testResult.aiExtracted,
           certificateDoc: buildCertificateDocumentResponse(testResult.certificateDoc),
+          landedOnExistingTest,
         },
         extraction: {
           extractedFields: extractedData,

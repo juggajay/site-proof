@@ -3,6 +3,7 @@ import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 import {
   type ExtractedCertificateFields,
+  LOW_CONFIDENCE_THRESHOLD,
   buildConfidenceObject,
   derivePassFail,
   parseDateField,
@@ -76,6 +77,66 @@ export function buildTestResultData(
     aiConfidence: JSON.stringify(confidenceObj),
     status: 'results_received',
   };
+}
+
+// Review M6: the states a row sits in while it waits for its certificate to come
+// back from the laboratory. `results_received` is deliberately absent — a row
+// there has already had a certificate land on it.
+const CERTIFICATE_LANDING_STATUSES = ['requested', 'at_lab'];
+
+/**
+ * Review M6: find the planned test an incoming certificate belongs to, or null.
+ *
+ * The AI intake routes used to create a row unconditionally, so a test that was
+ * planned and sent to the lab gained a SECOND row when its certificate arrived
+ * — the planned one pending forever, and one extra countable test per
+ * certificate on a lot with a resolved pack. #1634 fixed this for the
+ * register-row action ("Read with AI" attaches to the row a human picked); this
+ * is the same landing for the two routes where nobody picked a row.
+ *
+ * Nobody picked a row, so the match has to be earned, and a wrong match on an
+ * evidence surface is worse than a duplicate. All of these must hold:
+ *
+ *  - same project, and the row is still WAITING (`requested` / `at_lab`);
+ *  - the row holds no certificate — a stored certificate is never displaced;
+ *  - the certificate's test type matches the row's exactly (case aside);
+ *  - the AI actually READ that test type, at the same confidence bar the review
+ *    UI uses. Without a key (or on any failure) `extractCertificateFields`
+ *    degrades to a filename guess at 0.45, and guessing which planned test a
+ *    file belongs to from its NAME is precisely the wrong-match hazard;
+ *  - exactly ONE row qualifies. Two planned Field Density tests at different
+ *    chainages are indistinguishable from here, so we refuse and fall back to
+ *    creating a row, which is the shipped behaviour.
+ *
+ * ponytail: test type + uniqueness only. Sample date is the obvious next
+ * discriminator if real projects turn out to plan several same-type tests at
+ * once often enough for the refusal to be felt.
+ */
+export async function findWaitingTestResultForCertificate(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  extractedData: ExtractedCertificateFields,
+): Promise<{ id: string } | null> {
+  const testType = extractedData.testType.value.trim();
+
+  if (!testType || extractedData.testType.confidence < LOW_CONFIDENCE_THRESHOLD) {
+    return null;
+  }
+
+  // `take: 2` is all ambiguity detection needs: one row lands, two or more
+  // refuse.
+  const candidates = await tx.testResult.findMany({
+    where: {
+      projectId,
+      status: { in: CERTIFICATE_LANDING_STATUSES },
+      certificateDocId: null,
+      testType: { equals: testType, mode: 'insensitive' },
+    },
+    select: { id: true },
+    take: 2,
+  });
+
+  return candidates.length === 1 ? candidates[0]! : null;
 }
 
 /**

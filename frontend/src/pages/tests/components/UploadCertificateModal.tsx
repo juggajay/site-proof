@@ -10,7 +10,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
-import { recomputeReviewPassFail } from '../certificateReview';
+import { recomputeReviewPassFail, seedAttachReviewForm } from '../certificateReview';
 import type { FailedTestNcrInput } from '../failedTestNcr';
 import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
 
@@ -176,6 +176,22 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
           `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
         );
         onTestResultsUpdated(testsData.testResults || []);
+
+        // Review M6: this certificate landed on a test a human had already
+        // planned rather than minting a row. Confirm sends every key the form
+        // holds, so seeding purely from the extraction would null whatever the
+        // certificate did not speak to — the sample date, the lab, and the LOT
+        // LINK — on a row that already had them. `seedAttachReviewForm` is the
+        // shipped seeder for exactly this case: extracted value wins only where
+        // it is non-empty, otherwise the row's own value stands.
+        const landedRow = data.testResult?.landedOnExistingTest
+          ? testsData.testResults?.find((test) => test.id === data.testResult.id)
+          : undefined;
+        if (landedRow) {
+          const seeded = seedAttachReviewForm(extractedFields, landedRow);
+          setReviewFormData({ ...seeded, lotId: seeded.lotId || nextSuggestedLots[0]?.id || '' });
+        }
+
         toast({
           title: 'Certificate processed',
           description: 'Review the extracted fields before saving.',
