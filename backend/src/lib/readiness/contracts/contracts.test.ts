@@ -46,6 +46,7 @@ function assignment(overrides: Partial<ActionAssignment> = {}): ActionAssignment
     status: 'waiting_on_me',
     needsAction: false,
     isOverdue: false,
+    daysOverdue: 0,
     assignee: { kind: 'user', id: 'user-1' },
     severity: 'blocker',
     reasonCode: 'itp_incomplete',

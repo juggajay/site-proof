@@ -48,6 +48,12 @@ export interface ActionAssignment {
   status: ActionAssignmentStatus;
   needsAction: boolean;
   isOverdue: boolean;
+  /**
+   * FULL days elapsed since `dueAt`, computed on the SERVER (M3). Consumers
+   * RENDER it; re-deriving it from `dueAt` against the browser clock is what
+   * made the dashboard widget and Needs Attention disagree across midnight.
+   */
+  daysOverdue: number;
   dueAt?: string;
   assignee: ActionAssignee;
   severity: 'blocker' | 'warning' | 'support';

@@ -86,6 +86,15 @@ describe('buildXeroInvoiceExport', () => {
     expect(rows[1][col('*DueDate')]).toBe('2026-07-21');
   });
 
+  // M4 — the frontend owns the per-state SOPA tables and now sends the statutory
+  // date as a bare `YYYY-MM-DD` calendar date rather than an instant. That is
+  // the point: `formatDate` reads an instant in UTC, so the old Sydney-browser
+  // local-midnight ISO (`2026-07-20T14:00:00Z`) landed the invoice a day early.
+  it('accepts a bare calendar date from the SOPA calculator without shifting it', () => {
+    const { rows } = buildXeroInvoiceExport(base, { accountCode: '200', dueDate: '2026-07-21' });
+    expect(rows[1][col('*DueDate')]).toBe('2026-07-21');
+  });
+
   it('honours a custom payment-terms window', () => {
     const { rows } = buildXeroInvoiceExport(base, { accountCode: '200', paymentTermsDays: 14 });
     expect(rows[1][col('*DueDate')]).toBe('2026-07-14');

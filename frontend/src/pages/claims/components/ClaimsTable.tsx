@@ -17,6 +17,8 @@ import {
 import type { Claim } from '../types';
 import {
   calculatePaymentDueDate,
+  formatSopaDate,
+  toSopaDateKey,
   formatCurrency,
   getCertificationDueStatus,
   getPaymentDueStatus,
@@ -151,11 +153,14 @@ function DisputeReadBack({ claim }: { claim: Claim }) {
 }
 
 function downloadClaimCsv(claim: Claim, branding?: CsvBrandingContext) {
-  const paymentDue =
+  // M4 — the server value is an instant and ours is a calendar date key; both
+  // normalise to the project timezone's date so the CSV prints one day.
+  const paymentDue = toSopaDateKey(
     claim.paymentDueDate ??
-    (claim.submittedAt
-      ? calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined)
-      : null);
+      (claim.submittedAt
+        ? calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined)
+        : null),
+  );
 
   downloadBrandedCsv(`claim-${claim.claimNumber}.csv`, `Claim ${claim.claimNumber}`, branding, [
     [
@@ -180,7 +185,7 @@ function downloadClaimCsv(claim: Claim, branding?: CsvBrandingContext) {
       claim.certifiedAmount ?? '-',
       claim.paidAmount ?? '-',
       claim.submittedAt ? new Date(claim.submittedAt).toLocaleDateString('en-AU') : '-',
-      paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
+      paymentDue ? formatSopaDate(paymentDue) : '-',
     ],
   ]);
 }

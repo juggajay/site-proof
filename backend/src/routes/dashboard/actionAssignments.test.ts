@@ -236,28 +236,25 @@ describe('A4 §4.1 grouping invariant', () => {
  * dashboard attention widget and "41 days overdue" on /dashboard/needs-attention,
  * because the widget ceil'd and the screen floor'd the same `dueDate`.
  *
- * The two surfaces reach the user by different routes — the widget renders a
- * backend-computed `daysOverdue`, the screen derives its chip from the adapter's
- * `dueAt` client-side — so this feeds ONE fixture through BOTH and asserts the
- * ages agree. `needsAttentionAge` is character-for-character the frontend's
- * expression (`NeedsAttentionPage.tsx` `timeChip`); if either side drifts, this
- * fails.
+ * #1672 unified the FORMULA; M3 (fable deep review 2026-07-28) removed the
+ * second COMPUTATION. The screen no longer ages `dueAt` at all — it renders the
+ * `daysOverdue` the adapter ships, so this suite asserts the shipped field IS
+ * the widget's number rather than asserting that two re-implementations of the
+ * same expression happen to agree. Re-deriving on the client was itself the
+ * bug: the widget's number came off the server clock and the screen's off the
+ * browser's, so a payload cached across midnight showed two ages for one NCR.
  */
 describe('overdue age is one number across both surfaces', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
-
-  /** Verbatim `NeedsAttentionPage.tsx` `timeChip`: the Needs Attention path. */
-  const needsAttentionAge = (dueAt: string, now: Date) =>
-    Math.floor((now.getTime() - Date.parse(dueAt)) / DAY_MS);
 
   it('gives the widget and Needs Attention the same age for one NCR', () => {
     const ncr = overdueNcr({ dueDate: new Date(NOW.getTime() - 41 * DAY_MS - 30 * 60 * 1000) });
 
     // Path 1 — the attention widget's `daysOverdue` (statsRoute).
     const widgetAge = daysOverdue(ncr.dueDate, NOW);
-    // Path 2 — the adapter's `dueAt`, aged the way the screen ages it.
-    const { dueAt } = toNcrAssignment(ncr, viewerWithRole('quality_manager'), NOW);
-    const screenAge = needsAttentionAge(dueAt!, NOW);
+    // Path 2 — what the Needs Attention screen renders: the shipped field. No
+    // second formula lives on the client any more.
+    const screenAge = toNcrAssignment(ncr, viewerWithRole('quality_manager'), NOW).daysOverdue;
 
     expect(widgetAge).toBe(screenAge);
     // Full days elapsed, not rounded up: 41d30m is 41 days overdue, not 42.
@@ -274,9 +271,37 @@ describe('overdue age is one number across both surfaces', () => {
     expect(daysOverdue(justPast, NOW)).toBe(3);
 
     for (const dueDate of [exactly, justPast]) {
-      const { dueAt } = toNcrAssignment(overdueNcr({ dueDate }), viewerWithRole('admin'), NOW);
-      expect(needsAttentionAge(dueAt!, NOW)).toBe(daysOverdue(dueDate, NOW));
+      const assignment = toNcrAssignment(overdueNcr({ dueDate }), viewerWithRole('admin'), NOW);
+      expect(assignment.daysOverdue).toBe(daysOverdue(dueDate, NOW));
     }
+  });
+
+  it('ships a hold point age off the SAME scheduled date as isOverdue and dueAt', () => {
+    const scheduledDate = new Date(NOW.getTime() - 5 * DAY_MS - 60 * 1000);
+    const assignment = toHoldPointAssignment(
+      holdPoint({ scheduledDate }),
+      viewerWithRole('quality_manager'),
+      NOW,
+    );
+
+    expect(assignment.isOverdue).toBe(true);
+    expect(assignment.dueAt).toBe(scheduledDate.toISOString());
+    expect(assignment.daysOverdue).toBe(5);
+  });
+
+  it('reports 0 for rows that are not overdue, so no consumer prints a negative age', () => {
+    // Aging-but-not-yet-due hold point (no scheduled date at all) and an NCR
+    // still inside its window. Both are legitimately 0, never -3.
+    expect(
+      toHoldPointAssignment(holdPoint(), viewerWithRole('quality_manager'), NOW).daysOverdue,
+    ).toBe(0);
+    expect(
+      toNcrAssignment(
+        overdueNcr({ dueDate: new Date(NOW.getTime() + 5 * DAY_MS) }),
+        viewerWithRole('admin'),
+        NOW,
+      ).daysOverdue,
+    ).toBe(0);
   });
 
   it('reports 0 rather than 1 for an NCR that just went overdue', () => {

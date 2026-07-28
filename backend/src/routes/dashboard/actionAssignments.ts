@@ -15,7 +15,7 @@ import {
   type ActionAssignmentStatus,
   type PrimaryAction,
 } from '../../lib/readiness/contracts/actionAssignment.js';
-import { holdPointOverdue, ncrOverdue } from '../../lib/readiness/predicates.js';
+import { daysOverdue, holdPointOverdue, ncrOverdue } from '../../lib/readiness/predicates.js';
 import { ROLES, type Role } from '../../lib/roles.js';
 
 /** Spec §5.2 Class A: `ncr_overdue` → "Review NCR". */
@@ -117,6 +117,10 @@ export function toNcrAssignment(
     status,
     needsAction: deriveNeedsAction({ status, primaryAction }, viewerRole),
     isOverdue: ncrOverdue(ncr, now),
+    // M3 — the count ships with the row. The shared floor is the SAME helper
+    // `statsRoute` feeds the attention widget from, so the widget and the Needs
+    // Attention screen cannot print two ages for one NCR.
+    daysOverdue: daysOverdue(ncr.dueDate, now),
     dueAt: ncr.dueDate?.toISOString(),
     assignee,
     severity: 'blocker',
@@ -168,6 +172,10 @@ export function toHoldPointAssignment(
     status,
     needsAction: deriveNeedsAction({ status, primaryAction }, viewerRole),
     isOverdue: overdue,
+    // M3 — same floor, same source date as `isOverdue`/`dueAt` (the SCHEDULED
+    // date, D2 semantics), so an aging-but-not-yet-due row reports 0 rather
+    // than borrowing the widget's separate created-at "days waiting" number.
+    daysOverdue: daysOverdue(holdPoint.scheduledDate, now),
     dueAt: holdPoint.scheduledDate?.toISOString(),
     assignee,
     severity: overdue ? 'blocker' : 'warning',

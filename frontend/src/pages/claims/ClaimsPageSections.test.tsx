@@ -50,7 +50,7 @@ import { ClaimsPage } from './ClaimsPage';
 import { ClaimsTable } from './components/ClaimsTable';
 import { SubmitClaimModal } from './components/SubmitClaimModal';
 import type { Claim } from './types';
-import { calculatePaymentDueDate } from './utils';
+import { calculatePaymentDueDate, formatSopaDate } from './utils';
 
 beforeEach(() => {
   generateClaimEvidencePackagePDFMock.mockReset();
@@ -298,9 +298,9 @@ describe('ClaimsTable row CSV export', () => {
 
   it('falls back to calculated project-state payment due date when the claim omits one', async () => {
     const submittedAt = '2026-06-01T00:00:00.000Z';
-    const expectedDueDate = new Date(
-      calculatePaymentDueDate(submittedAt, 'WA') ?? '',
-    ).toLocaleDateString('en-AU');
+    // M4 — the due date is a calendar date key, printed without a Date
+    // instant, so this expectation holds in any viewer timezone.
+    const expectedDueDate = formatSopaDate(calculatePaymentDueDate(submittedAt, 'WA') ?? '');
 
     render(
       <ClaimsTable
