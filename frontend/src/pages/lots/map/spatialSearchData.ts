@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { toFiniteNumber } from '@/lib/samplePoint';
 
 import type { ProjectLotGeometry } from './lotMapData';
 import type { SearchBounds } from './lotMapHelpers';
@@ -22,14 +23,10 @@ export interface SpatialPhoto {
 }
 
 // Coerce one coordinate: Prisma Decimal arrives as a string, a number in tests,
-// or null/undefined when absent. Non-finite parses (e.g. '') become null.
-function toCoord(value: string | number | null | undefined): number | null {
-  if (value == null) return null;
-  // Number('') is 0, not NaN — a blank coord must not become (0, 0).
-  if (typeof value === 'string' && value.trim() === '') return null;
-  const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) ? n : null;
-}
+// or null/undefined when absent. Non-finite parses (e.g. '') become null, so a
+// blank coordinate never becomes (0, 0) in the Gulf of Guinea. Shared with the
+// test-card / pin-popup formatters in `lib/samplePoint`.
+const toCoord = toFiniteNumber;
 
 export function normaliseSpatialPhotoCoords(
   photo: Omit<SpatialPhoto, 'gpsLatitude' | 'gpsLongitude'> & {
@@ -51,6 +48,30 @@ export interface SpatialTestResult {
   lotNumber: string | null;
   testType: string;
   testRequestNumber: string | null;
+  // Wave C3 Phase B2. Present in `only=tests` mode (the map's pin layer) and on
+  // the default find-by-area query, where they distinguish a located test from an
+  // unlocated one for the panel's count. `passFail` rides with them for the pin
+  // popup. Normalised to number|null by `normaliseSpatialTestCoords`.
+  passFail?: string | null;
+  sampleLatitude?: number | null;
+  sampleLongitude?: number | null;
+  sampleLocationSource?: string | null;
+  sampleLocationAccuracyM?: number | null;
+}
+
+export function normaliseSpatialTestCoords(
+  test: SpatialTestResult & {
+    sampleLatitude?: string | number | null;
+    sampleLongitude?: string | number | null;
+    sampleLocationAccuracyM?: string | number | null;
+  },
+): SpatialTestResult {
+  return {
+    ...test,
+    sampleLatitude: toCoord(test.sampleLatitude),
+    sampleLongitude: toCoord(test.sampleLongitude),
+    sampleLocationAccuracyM: toCoord(test.sampleLocationAccuracyM),
+  };
 }
 
 export interface SpatialSearchResult {
@@ -63,11 +84,12 @@ export interface SpatialSearchResult {
 }
 
 // Draw-a-box search. A mutation (user-triggered, not cache-keyed by bounds).
-// `photosOnly` powers the map's Photos layer, which refetches on every pan and
-// reads only `.photos`; it tells the backend to skip the geometry + test-result
-// work (other collections come back empty).
-export function useSpatialSearch(projectId: string, options?: { photosOnly?: boolean }) {
-  const photosOnly = options?.photosOnly ?? false;
+// `only` powers the map's single-layer modes, each of which refetches on every pan
+// and reads only its own collection: 'photos' for the Photos layer, 'tests' (Wave
+// C3) for the test-pin layer. It tells the backend to skip the work the other
+// collections need (they come back empty; the response shape is unchanged).
+export function useSpatialSearch(projectId: string, options?: { only?: 'photos' | 'tests' }) {
+  const only = options?.only;
   return useMutation({
     mutationKey: queryKeys.spatialSearch(projectId),
     mutationFn: async (bounds: SearchBounds) => {
@@ -75,12 +97,16 @@ export function useSpatialSearch(projectId: string, options?: { photosOnly?: boo
         `/api/projects/${encodeURIComponent(projectId)}/spatial-search`,
         {
           method: 'POST',
-          body: JSON.stringify(photosOnly ? { bounds, only: 'photos' } : { bounds }),
+          body: JSON.stringify(only ? { bounds, only } : { bounds }),
         },
       );
-      // Normalise photo coords (Prisma Decimal → number|null) once, here, so both
-      // the find-by-area panel and the map photo layer read plain numbers.
-      return { ...result, photos: result.photos.map(normaliseSpatialPhotoCoords) };
+      // Normalise coords (Prisma Decimal → number|null) once, here, so the
+      // find-by-area panel and both map layers read plain numbers.
+      return {
+        ...result,
+        photos: result.photos.map(normaliseSpatialPhotoCoords),
+        testResults: result.testResults.map(normaliseSpatialTestCoords),
+      };
     },
   });
 }

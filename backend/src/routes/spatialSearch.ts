@@ -208,6 +208,9 @@ spatialSearchRouter.post(
         select: {
           id: true,
           status: true,
+          // Wave C3 Phase B2: the pin popup states the result alongside the
+          // provenance, so a reader is never left to guess either.
+          passFail: true,
           lotId: true,
           testType: true,
           testRequestNumber: true,
@@ -239,6 +242,17 @@ spatialSearchRouter.post(
                 lotId: true,
                 testType: true,
                 testRequestNumber: true,
+                // Wave C3 Phase B2. Additive, and the ONE place both halves of
+                // the located/unlocated split are knowable: this mode returns
+                // every test on the intersecting lots, located or not, so the
+                // find-by-area panel can say "9 with a captured location · 5
+                // without" without inventing a denominator. The pin layer's
+                // `only=tests` bbox cannot — an unlocated test has no position,
+                // so it is not "in view" of anything (spec §5.5).
+                sampleLatitude: true,
+                sampleLongitude: true,
+                sampleLocationSource: true,
+                sampleLocationAccuracyM: true,
               },
             });
       const lotNumberById = new Map(intersectingLots.map((l) => [l.lotId, l.lotNumber]));

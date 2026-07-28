@@ -5,6 +5,7 @@ import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { readSamplePoint } from '@/lib/samplePoint';
 import { cn } from '@/lib/utils';
 
 import { chainageLabel } from './lotMapData';
@@ -40,6 +41,10 @@ export function FindByAreaPanel({
   onClear,
   onRetry,
 }: FindByAreaPanelProps) {
+  const locatedTestCount = (result?.testResults ?? []).filter(
+    (tr) => readSamplePoint(tr) != null,
+  ).length;
+
   const containerClass = isMobile
     ? 'absolute inset-x-0 bottom-0 max-h-[70%] rounded-t-2xl border-t shadow-2xl'
     : 'absolute inset-y-0 right-0 w-80 max-w-[85%] border-l shadow-xl';
@@ -177,6 +182,20 @@ export function FindByAreaPanel({
                 Test results ({result.testResults.length})
               </header>
               <TruncatedNote show={result.testResultsTruncated} />
+              {/* Wave C3 Phase B2 §5.5. Unlocated tests are COUNTED, never drawn
+                  `[C3S-B1]`. This panel is the one surface that can say it
+                  truthfully: it holds every test on the intersecting lots, so
+                  both halves of the split are real numbers rather than a
+                  denominator inferred from a bbox that excludes NULLs. */}
+              {result.testResults.length > 0 && (
+                <p
+                  className="px-3 py-1.5 text-xs text-muted-foreground"
+                  data-testid="find-by-area-test-locations"
+                >
+                  {locatedTestCount} with a captured location ·{' '}
+                  {result.testResults.length - locatedTestCount} without
+                </p>
+              )}
               {result.testResults.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-muted-foreground">
                   No test results in this area.

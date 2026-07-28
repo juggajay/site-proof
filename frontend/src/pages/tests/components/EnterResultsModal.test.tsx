@@ -79,6 +79,23 @@ describe('EnterResultsModal — desktop', () => {
     expect(screen.getByLabelText(/Pass\/Fail Status/i)).toBeInTheDocument();
   });
 
+  // AT-97 `[C3R-B3]`. This form is filled DAYS LATER from a lab report, usually in
+  // the office. A location control here would stamp whoever is typing, wherever
+  // they are, as the sample point — a fabricated location with a provenance badge
+  // on it, which is exactly the failure `[C3S-B1]` exists to prevent. The surface
+  // is absent by design, not overlooked.
+  it('AT-97 has NO sample-point capture control — by design, not omission', () => {
+    render(
+      <EnterResultsModal isOpen={true} test={makeTest()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+    );
+
+    expect(screen.queryByTestId('sample-location-capture')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sample-pick-on-map')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sample-use-my-location')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pick on map/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/at the sample point now/i)).not.toBeInTheDocument();
+  });
+
   it('renders nothing when isOpen is false on desktop', () => {
     render(
       <EnterResultsModal isOpen={false} test={makeTest()} onClose={vi.fn()} onSubmit={vi.fn()} />,

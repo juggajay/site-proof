@@ -30,6 +30,7 @@ import {
   Image as ImageIcon,
   Layers,
   Map as MapIcon,
+  MapPin,
   Navigation,
   PencilRuler,
   Square,
@@ -39,6 +40,12 @@ import {
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import {
+  formatCoordinate,
+  formatProvenance,
+  readSamplePoint,
+  type SamplePoint,
+} from '@/lib/samplePoint';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import { formatDateKey } from '@/lib/localDate';
 import { authFetch } from '@/lib/api';
@@ -64,7 +71,7 @@ import {
   useTestCoverage,
   TEST_COVERAGE_LEGEND,
 } from './testCoverageData';
-import { useSpatialSearch, type SpatialPhoto } from './spatialSearchData';
+import { useSpatialSearch, type SpatialPhoto, type SpatialTestResult } from './spatialSearchData';
 import { historicalStatusByLot, useLotStatusTimeline } from './statusTimelineData';
 import {
   ALL_WORK_TYPES,
@@ -119,6 +126,22 @@ const PHOTO_PIN_ICON = L.divIcon({
     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>' +
     '<circle cx="12" cy="13" r="3"/></svg></div>',
+});
+
+// C3 Phase B2. A captured sample point: a MAGENTA flask badge. Deliberately
+// distinct from the violet photo pin, the amber control line, the blue search box,
+// the red coverage gap, and every Okabe-Ito status/testing fill — a reader must
+// never have to work out which layer a marker belongs to.
+const TEST_PIN_ICON = L.divIcon({
+  className: 'siteproof-test-pin',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -12],
+  html:
+    '<div style="width:24px;height:24px;border-radius:9999px;background:#db2777;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">' +
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M10 2v7.5L4.6 18A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-3L14 9.5V2"/>' +
+    '<path d="M8.5 2h7"/><path d="M7 15h10"/></svg></div>',
 });
 
 export interface MapLot {
@@ -362,6 +385,58 @@ function PhotoPin({ photo, onView }: { photo: SpatialPhoto; onView: (() => void)
   );
 }
 
+// C3 Phase B2 §5.5. One test whose sample point a human captured. Coords are
+// guaranteed non-null by the caller — there is no fallback position, because a
+// test with no captured location is counted, never drawn `[C3S-B1]`.
+//
+// The popup states PROVENANCE and ACCURACY alongside the result `[C3R-A5]`: a pin
+// whose accuracy is unstated invites a reader to trust it more than it deserves.
+function TestPin({
+  test,
+  point,
+  onView,
+}: {
+  test: SpatialTestResult;
+  point: SamplePoint;
+  onView: (() => void) | null;
+}) {
+  return (
+    <Marker position={[point.lat, point.lng]} icon={TEST_PIN_ICON}>
+      <Popup>
+        <div className="w-48 space-y-1" data-testid={`test-pin-${test.id}`}>
+          <div className="truncate text-sm font-medium" title={test.testType}>
+            {test.testType}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {[
+              formatStatusLabel(test.status),
+              test.passFail && test.passFail !== 'pending'
+                ? formatStatusLabel(test.passFail)
+                : null,
+              test.lotNumber ?? test.testRequestNumber,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+          <div className="text-xs text-muted-foreground" data-testid={`test-pin-point-${test.id}`}>
+            {formatCoordinate(point)} · {formatProvenance(point)}
+          </div>
+          {onView && (
+            <button
+              type="button"
+              onClick={onView}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              data-testid={`test-pin-view-${test.id}`}
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> View test
+            </button>
+          )}
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
+
 function StatusLegend({ testing }: { testing: boolean }) {
   if (testing) {
     return (
@@ -580,7 +655,7 @@ export function LotMapView({
   // Photo pins layer: an independent spatial-search instance (own data, so it
   // never clobbers find-by-area's results). Toggle persisted per project,
   // default OFF; when on we refetch the current viewport's photos (debounced).
-  const photoSearch = useSpatialSearch(projectId, { photosOnly: true });
+  const photoSearch = useSpatialSearch(projectId, { only: 'photos' });
   const { mutate: runPhotoSearch, reset: resetPhotoSearch } = photoSearch;
   const photosStorageKey = `siteproof.mapPhotos.${projectId}`;
   const [photosArmed, setPhotosArmed] = useState<boolean>(
@@ -595,6 +670,28 @@ export function LotMapView({
       return !on;
     });
   }, [resetPhotoSearch]);
+
+  // C3 Phase B2: the test-pin layer. Its own spatial-search instance in `tests`
+  // mode, modelled on the photo layer above — same toggle, same per-project
+  // localStorage key, same viewport-debounced refetch, and like Photos it is NOT
+  // in the mutually-exclusive tool set (a passive marker layer). It IS in
+  // `toggleHistory`'s disarm list `[C3R-B5]`: a sample point captured today has no
+  // place on a map showing last month.
+  const testPinSearch = useSpatialSearch(projectId, { only: 'tests' });
+  const { mutate: runTestPinSearch, reset: resetTestPinSearch } = testPinSearch;
+  const testPinsStorageKey = `siteproof.mapTests.${projectId}`;
+  const [testPinsArmed, setTestPinsArmed] = useState<boolean>(
+    () => readLocalStorageItem(testPinsStorageKey) === 'true',
+  );
+  useEffect(() => {
+    writeLocalStorageItem(testPinsStorageKey, String(testPinsArmed));
+  }, [testPinsStorageKey, testPinsArmed]);
+  const toggleTestPins = useCallback(() => {
+    setTestPinsArmed((on) => {
+      if (on) resetTestPinSearch();
+      return !on;
+    });
+  }, [resetTestPinSearch]);
 
   // C3 Phase A: the testing overlay. Lazy — nothing is fetched until it is
   // armed. Deliberately NOT in the mutually-exclusive tool set (it is a passive
@@ -730,6 +827,21 @@ export function LotMapView({
     return () => clearTimeout(timer);
   }, [photosArmed, mapBounds, runPhotoSearch]);
 
+  // Same shape for the test-pin layer. `only=tests` bboxes the test's OWN captured
+  // coordinate, so an unlocated test is never returned and never drawn.
+  useEffect(() => {
+    if (!testPinsArmed || !mapBounds) return;
+    const timer = setTimeout(() => {
+      runTestPinSearch({
+        west: mapBounds.getWest(),
+        south: mapBounds.getSouth(),
+        east: mapBounds.getEast(),
+        north: mapBounds.getNorth(),
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [testPinsArmed, mapBounds, runTestPinSearch]);
+
   const handleAreaComplete = useCallback(
     (bounds: SearchBounds) => {
       setSearchBounds(bounds);
@@ -816,10 +928,14 @@ export function LotMapView({
       // dates in one picture. The reverse is deliberately not wired: History is
       // the stricter mode and owns the map.
       setTestingArmed(false);
+      // Same reason, same list: a sample point captured today is not evidence
+      // about a past date. B2's pins join the overlay here `[C3R-B5]`.
+      setTestPinsArmed(false);
+      resetTestPinSearch();
       setHistoryDateKey(formatDateKey());
       return true;
     });
-  }, [clearSearch]);
+  }, [clearSearch, resetTestPinSearch]);
 
   const togglePlanShown = useCallback((id: string) => {
     setPlanShown((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -954,6 +1070,15 @@ export function LotMapView({
   // resolved. In flight or failed it stays empty, so every polygon keeps its
   // status colour: grey is a verdict ("CIVOS has no rule"), never a loading or
   // an error state `[C3S-B7]` `[C3R-A13]`.
+  // Armed marker layers whose viewport fetch failed. Named so the map never
+  // presents "fetch failed" as "nothing here" (AT-94).
+  const unavailablePinLayers = useMemo(() => {
+    const layers: string[] = [];
+    if (photosArmed && photoSearch.error) layers.push('Photos');
+    if (testPinsArmed && testPinSearch.error) layers.push('Test pins');
+    return layers;
+  }, [photosArmed, photoSearch.error, testPinsArmed, testPinSearch.error]);
+
   const testCoverageLots = useMemo(
     () => testCoverageByLot(testingArmed ? testCoverageQuery.data : undefined),
     [testingArmed, testCoverageQuery.data],
@@ -1165,6 +1290,18 @@ export function LotMapView({
                     testId="testing-button"
                   />
                 )}
+                {/* Tenth toolbar item (C3 Phase B2). Hidden in History for the
+                    same reason Testing is: these pins are today's captures. */}
+                {!historyArmed && (
+                  <ToolbarButton
+                    icon={MapPin}
+                    label="Test pins"
+                    onClick={toggleTestPins}
+                    pressed={testPinsArmed}
+                    compact={isMobile}
+                    testId="test-pins-button"
+                  />
+                )}
                 <ToolbarButton
                   icon={ImageIcon}
                   label="Photos"
@@ -1212,6 +1349,22 @@ export function LotMapView({
                   testId="history-button"
                 />
               </div>
+              {/* AT-94 `[C3S-d]`. Both marker layers ride `spatial-search`, a POST
+                  that is deliberately NOT in the offline runtime cache — nothing
+                  stale is ever shown. So when a fetch fails the layer must SAY it
+                  is unavailable: an empty map reads as "no pins here", which is a
+                  different statement and a false one. */}
+              {unavailablePinLayers.length > 0 && (
+                <p
+                  className="mt-1 max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow"
+                  role="status"
+                  data-testid="map-pin-layers-unavailable"
+                >
+                  {unavailablePinLayers.join(' and ')}{' '}
+                  {unavailablePinLayers.length > 1 ? 'are' : 'is'} unavailable
+                  {navigator.onLine ? ' right now' : ' offline'} — nothing stale is shown.
+                </p>
+              )}
               {drawArmed && (
                 <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
                   {isMobile
@@ -1330,6 +1483,25 @@ export function LotMapView({
                     <PhotoPin
                       key={photo.id}
                       photo={photo}
+                      onView={to ? () => navigate(to) : null}
+                    />
+                  );
+                })}
+
+              {/* C3 Phase B2. `readSamplePoint` returning null is the only gate:
+                  no captured pair, no marker. There is no fallback position — a
+                  centroid pin would assert a sample was taken in the middle of a
+                  lot, which is a claim CIVOS never received `[C3S-B1]`, AT-84. */}
+              {testPinsArmed &&
+                (testPinSearch.data?.testResults ?? []).map((test) => {
+                  const point = readSamplePoint(test);
+                  if (!point) return null;
+                  const to = linkPaths.test(test);
+                  return (
+                    <TestPin
+                      key={test.id}
+                      test={test}
+                      point={point}
                       onView={to ? () => navigate(to) : null}
                     />
                   );

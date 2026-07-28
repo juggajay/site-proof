@@ -88,9 +88,9 @@ describe('useSpatialSearch request body', () => {
     expect(bodyOf(0)).not.toHaveProperty('only');
   });
 
-  it('sends only: "photos" when photosOnly is set (map Photos layer)', async () => {
+  it('sends only: "photos" for the map Photos layer', async () => {
     apiFetchMock.mockResolvedValue(emptyResult);
-    const { result } = renderHook(() => useSpatialSearch('proj-1', { photosOnly: true }), {
+    const { result } = renderHook(() => useSpatialSearch('proj-1', { only: 'photos' }), {
       wrapper,
     });
 
@@ -100,5 +100,70 @@ describe('useSpatialSearch request body', () => {
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
 
     expect(bodyOf(0)).toEqual({ bounds: BOUNDS, only: 'photos' });
+  });
+
+  // C3 Phase B2: the test-pin layer's own single-layer mode.
+  it('sends only: "tests" for the map test-pin layer', async () => {
+    apiFetchMock.mockResolvedValue(emptyResult);
+    const { result } = renderHook(() => useSpatialSearch('proj-1', { only: 'tests' }), { wrapper });
+
+    await act(async () => {
+      result.current.mutate(BOUNDS);
+    });
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(1));
+
+    expect(bodyOf(0)).toEqual({ bounds: BOUNDS, only: 'tests' });
+  });
+
+  // AT-84 (data half). Prisma Decimal arrives as a string; a blank coordinate must
+  // become null, never 0 — and no coordinate is ever synthesised for a row that
+  // has none `[C3S-B1]`.
+  it('normalises test sample-point Decimals and leaves an unlocated test unlocated', async () => {
+    apiFetchMock.mockResolvedValue({
+      ...emptyResult,
+      testResults: [
+        {
+          id: 'tr-1',
+          status: 'verified',
+          lotId: 'lot-1',
+          lotNumber: 'L-001',
+          testType: 'Density Ratio',
+          testRequestNumber: null,
+          sampleLatitude: '-33.8688',
+          sampleLongitude: '151.2093',
+          sampleLocationSource: 'gps',
+          sampleLocationAccuracyM: '6.2',
+        },
+        {
+          id: 'tr-2',
+          status: 'entered',
+          lotId: 'lot-1',
+          lotNumber: 'L-001',
+          testType: 'CBR Laboratory',
+          testRequestNumber: null,
+          sampleLatitude: null,
+          sampleLongitude: '',
+          sampleLocationSource: null,
+          sampleLocationAccuracyM: null,
+        },
+      ],
+    });
+    const { result } = renderHook(() => useSpatialSearch('proj-1', { only: 'tests' }), { wrapper });
+
+    await act(async () => {
+      result.current.mutate(BOUNDS);
+    });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    expect(result.current.data!.testResults[0]).toMatchObject({
+      sampleLatitude: -33.8688,
+      sampleLongitude: 151.2093,
+      sampleLocationAccuracyM: 6.2,
+    });
+    expect(result.current.data!.testResults[1]).toMatchObject({
+      sampleLatitude: null,
+      sampleLongitude: null,
+      sampleLocationAccuracyM: null,
+    });
   });
 });
