@@ -9,6 +9,10 @@ import { authRouter } from './routes/auth.js';
 import { projectsRouter } from './routes/projects.js';
 import { lotsRouter } from './routes/lots.js';
 import { foliosRouter } from './routes/folio/index.js';
+import {
+  handoverExportsRouter,
+  projectHandoverExportsRouter,
+} from './routes/handoverExports/index.js';
 import { ncrsRouter } from './routes/ncrs/index.js';
 import { subcontractorsRouter } from './routes/subcontractors.js';
 import { reportsRouter } from './routes/reports.js';
@@ -146,6 +150,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   // Wave D `D1b` — folio issue and download. Mounts no multer and accepts no
   // bytes on any route (`[DH-i]`, AT-143).
   app.use('/api/folios', foliosRouter);
+  // Wave D `D1c.1` — handover export request, list and status. No download
+  // route: §4.7.4's streamed download ships with the worker in `D1c.2`.
+  app.use('/api/handover-exports', handoverExportsRouter);
   app.use('/api/ncrs', ncrsRouter);
   app.use('/api/subcontractors', subcontractorsRouter);
   app.use('/api/reports', reportsRouter);
@@ -160,6 +167,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/projects', projectLotGeometriesRouter);
   app.use('/api/projects', projectTestCoverageRouter);
   app.use('/api/projects', projectCloseoutReadinessRouter);
+  app.use('/api/projects', projectHandoverExportsRouter);
   app.use('/api/projects', spatialSearchRouter);
   app.use('/api/projects', lotStatusTimelineRouter);
   app.use('/api/holdpoints', holdpointsRouter);

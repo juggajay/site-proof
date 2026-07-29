@@ -186,17 +186,17 @@ function orderedSpan(row: ChainageBound): [number, number] | null {
  * hides every unchainaged lot is a filter that lies, and unchainaged lots are
  * ordinary here. AT-139.
  */
-function overlapsArea(lot: ChainageBound, area: [number, number]): boolean {
+export function overlapsArea(lot: ChainageBound, area: [number, number]): boolean {
   const span = orderedSpan(lot);
   if (!span) return false;
   return span[0] <= area[1] && span[1] >= area[0];
 }
 
 /** Null when no `areaId` filter was asked for; throws when the area cannot select. */
-async function resolveAreaWindow(
+export async function resolveAreaWindow(
   projectId: string,
   areaId: string | undefined,
-  client: typeof prisma,
+  client: typeof prisma = prisma,
 ): Promise<[number, number] | null> {
   if (!areaId) return null;
 

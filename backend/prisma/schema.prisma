@@ -112,6 +112,8 @@ model User {
   folioSnapshots              FolioSnapshot[]              @relation("FolioSnapshotCreatedBy")
   folioIssueReservations      FolioIssueReservation[]      @relation("FolioReservedBy")
   folioIssues                 FolioIssue[]                 @relation("FolioIssuedBy")
+  handoverExports             HandoverExport[]             @relation("HandoverExportRequestedBy")
+  artifactLegalHolds          ArtifactLegalHold[]          @relation("ArtifactLegalHoldActor")
 
   @@index([companyId])
   @@map("users")
@@ -426,6 +428,8 @@ model Project {
   folioSnapshots              FolioSnapshot[]
   folioIssueReservations      FolioIssueReservation[]
   folioIssues                 FolioIssue[]
+  handoverExports             HandoverExport[]
+  artifactLegalHolds          ArtifactLegalHold[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -2272,4 +2276,143 @@ model FolioIssue {
   @@unique([lotId, version])
   @@index([projectId, issuedAt])
   @@map("folio_issues")
+}
+
+// ============================================================================
+// Wave D `D1c.1` — the handover export job row, the frozen member ledger and
+// legal hold
+// (spec `docs/plans/wave-d-handover-spec-2026-07-28.md` Rev 3 §7.4–§7.6, §4.6.)
+//
+// Three tables, NO trigger and NO CHECK. That asymmetry with the folio tables
+// above is deliberate and is the whole difference between the two halves of
+// Wave D: a `FolioIssue` is a historical record, so `UPDATE` is rejected in the
+// database; a `HandoverExport` is a MUTABLE JOB ROW that a worker claims,
+// heartbeats, publishes and expires. Its correctness comes from the fencing
+// token (§4.6.2), not from immutability.
+// ============================================================================
+
+/// One archive generation request (§7.4). `D1c.1` creates it and freezes its
+/// ledger; `D1c.2` runs it.
+///
+/// The lease quartet — `leaseOwner`, `leaseToken`, `leaseExpiresAt`,
+/// `heartbeatAt` — is what an OUT-OF-PROCESS worker (`[DH-j]`) needs to claim,
+/// fence and renew a job it never received as a request. Every state write is
+/// conditional on `leaseToken` (`lib/handover/exportLease.ts`); the token also
+/// keys the storage object, so two workers physically cannot collide and the
+/// loser's object is simply unreachable (§4.6.2, **AT-135**).
+model HandoverExport {
+  id                String    @id @default(uuid())
+  projectId         String    @map("project_id")
+  /// `{kind:'project'|'area'|'lots', areaId?, lotIds?}` — §4.7.6 promotes this
+  /// from a convenience to the mechanism by which a project too large for the
+  /// 8 GiB cap is delivered at all.
+  scope             Json
+  /// `queued|snapshotting|processing|complete|failed|cancelled`. Zod-validated
+  /// at the route; no Prisma enum anywhere in this schema.
+  status            String    @default("queued")
+  requestedById     String?   @map("requested_by")
+  requestedAt       DateTime  @default(now()) @map("requested_at")
+  leaseOwner        String?   @map("lease_owner")
+  /// The FENCING token. Regenerated on every claim, so a worker resumed from a
+  /// stale lease holds a token no state write will match.
+  leaseToken        String?   @map("lease_token")
+  leaseExpiresAt    DateTime? @map("lease_expires_at")
+  heartbeatAt       DateTime? @map("heartbeat_at")
+  nextAttemptAt     DateTime? @map("next_attempt_at")
+  failureCount      Int       @default(0) @map("failure_count")
+  lastFailureReason String?   @map("last_failure_reason")
+  /// When the member ledger was frozen. Everything after it is out of this
+  /// archive by design, and the manifest says so (§4.6.1).
+  snapshotCutoffAt  DateTime? @map("snapshot_cutoff_at")
+  totalMembers      Int?      @map("total_members")
+  processedMembers  Int       @default(0) @map("processed_members")
+  /// BigInt, not Int: `fileSize Int` caps at 2,147,483,647 bytes and the cap is
+  /// 8 GiB (§4.5.5).
+  totalBytes        BigInt?   @map("total_bytes")
+  fileSize          BigInt?   @map("file_size")
+  fileUrl           String?   @map("file_url")
+  sha256            String?
+  /// S3 multipart state — upload id, part numbers, ETags (§4.5.3, §4.6.3). A
+  /// TRANSPORT-layer resume; the ZIP itself is always rebuilt from the ledger.
+  uploadState       Json?     @map("upload_state")
+  manifestSummary   Json?     @map("manifest_summary")
+  completedAt       DateTime? @map("completed_at")
+  /// The retention TTL (§10.5). When the artefact is swept the ROW SURVIVES
+  /// with a null `fileUrl` — an export that was generated and has expired is a
+  /// fact worth keeping (**AT-148**).
+  expiresAt         DateTime? @map("expires_at")
+
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy User?                  @relation("HandoverExportRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  members     HandoverExportMember[]
+
+  @@index([projectId, requestedAt])
+  @@index([status, leaseExpiresAt])
+  @@index([expiresAt])
+  @@map("handover_exports")
+}
+
+/// The FROZEN member ledger (§7.5, `[DR-B7]`). Rev 1's archive claimed to be
+/// "reproducible from immutable inputs" while selecting mutable, supersedable
+/// documents. A row here pins one source row AS IT WAS at the freeze: if a
+/// folio is reissued mid-archive, the archive continues from this row and
+/// records the cutoff. It never switches versions halfway through.
+model HandoverExportMember {
+  id             String  @id @default(uuid())
+  exportId       String  @map("export_id")
+  /// `folio|document|holdpoint_signature|holdpoint_evidence|itp_attachment|ncr_evidence`
+  sourceType     String  @map("source_type")
+  sourceId       String  @map("source_id")
+  /// The §7.7 revision token, stringified — `v:{n}` / `t:{iso}` / `d:{sha256}`.
+  /// Renamed from Rev 2's `sourceVersion Int?`, which assumed every source
+  /// model has an integer version and `[DR2-B3]` showed several do not.
+  sourceRevision String? @map("source_revision")
+  storageLocator String  @map("storage_locator")
+  archivePath    String  @map("archive_path")
+  /// NULLABLE — §4.5.4's unmeasured set. `HoldPoint.releaseSignatureUrl` and
+  /// `evidencePackageUrl` are bare strings with no stored size, so a preflight
+  /// is an ESTIMATE with a named unmeasured set, not a measurement.
+  byteSize       BigInt? @map("byte_size")
+  sourceChecksum String? @map("source_checksum")
+  /// `pending|verified|written|omitted`
+  state          String  @default("pending")
+  omissionReason String? @map("omission_reason")
+  /// The deterministic sort key (§4.7.3): lot, then category, then uploadedAt,
+  /// then id. Frozen with the row so two runs cannot order differently.
+  orderKey       String  @map("order_key")
+
+  export HandoverExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+
+  @@unique([exportId, archivePath])
+  @@index([exportId, state])
+  @@map("handover_export_members")
+}
+
+/// Legal hold, APPEND-ONLY (§7.6, `[DR2-B5]`). The naive fix — an
+/// `onLegalHold` boolean on `FolioIssue` — is self-contradictory: it is an
+/// `UPDATE` on a table whose trigger rejects `UPDATE`.
+///
+/// An artefact is on hold when its MOST RECENT ROW is `placed`. No update, no
+/// delete, no boolean — a hold and its release are both events, and the
+/// sequence is the only shape that survives being asked "who put this on hold,
+/// when, and why" two years later. **AT-148**.
+model ArtifactLegalHold {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  /// `folio_issue|handover_export`. Deliberately NOT a foreign key: one hold
+  /// table over two artefact tables, and a hold outliving a cascade is the
+  /// safer failure than a hold that vanishes with its target.
+  artifactType String   @map("artifact_type")
+  artifactId   String   @map("artifact_id")
+  /// `placed|released`
+  action       String
+  reason       String
+  actorId      String?  @map("actor_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation("ArtifactLegalHoldActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([artifactType, artifactId, createdAt])
+  @@map("artifact_legal_holds")
 }
