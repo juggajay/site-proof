@@ -18,6 +18,7 @@ import {
   AUDIT_LOG_PAGE_ROLES,
   COMPANY_ADMIN_ROLES,
   COMMERCIAL_ROLES,
+  HANDOVER_EXPORT_ROLES,
   INTERNAL_ROLES,
   LOT_EDITOR_ROLES,
   MANAGEMENT_ROLES,
@@ -48,6 +49,7 @@ import {
   DrawingsPage,
   ForemanMobileShell,
   ForgotPasswordPage,
+  HandoverExportPage,
   HoldPointsPage,
   ITPPage,
   LandingPage,
@@ -556,6 +558,19 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={REPORT_ROLES}>
                     <ReportsPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+
+              {/* Wave D `D1c.3` — handover export. `ProjectProtectedRoute`, not
+                  `RoleProtectedRoute`: the backend gates on the caller's role ON
+                  THIS PROJECT (`handoverExports/access.ts:46`), and only this
+                  guard resolves that same project-scoped role. */}
+              <Route
+                path="/projects/:projectId/handover-exports"
+                element={
+                  <ProjectProtectedRoute allowedRoles={HANDOVER_EXPORT_ROLES}>
+                    <HandoverExportPage />
                   </ProjectProtectedRoute>
                 }
               />

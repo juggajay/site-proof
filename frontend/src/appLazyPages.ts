@@ -240,3 +240,10 @@ export const SubcontractorDocumentsPage = lazy(() =>
     default: m.SubcontractorDocumentsPage,
   })),
 );
+
+// Wave D `D1c.3` — the project-level handover export screen.
+export const HandoverExportPage = lazy(() =>
+  import('@/pages/projects/handover/HandoverExportPage').then((m) => ({
+    default: m.HandoverExportPage,
+  })),
+);

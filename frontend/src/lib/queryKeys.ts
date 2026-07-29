@@ -213,6 +213,13 @@ export const queryKeys = {
       subcontractorCompanyId ?? 'default-company',
     ] as const,
 
+  // Wave D `D1c.3` — the project's handover export jobs, and the thin lot list
+  // that drives the lot-range scope picker (kept off the lot register's key so
+  // it cannot be invalidated by, or confused with, LotsPage's cache entry).
+  handoverExports: (projectId: string) => ['handover-exports', projectId] as const,
+  handoverExportLotOptions: (projectId: string) =>
+    ['handover-export-lot-options', projectId] as const,
+
   // Reports
   reports: (projectId: string) => ['reports', projectId] as const,
   reportSchedules: (projectId: string) => ['report-schedules', projectId] as const,

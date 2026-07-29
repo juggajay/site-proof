@@ -151,6 +151,55 @@ describe('Sidebar project navigation', () => {
     expect(screen.getByRole('link', { name: /Project Settings/i })).toBeInTheDocument();
   });
 
+  // Wave D `D1c.3`. A site manager is an internal role WITH project access, so
+  // a company-role gate or a hierarchy check would let them in — the backend's
+  // requester list does not (`handoverExports/access.ts:27`). The project-scoped
+  // PM below is the positive control: their company role is only `member`, so a
+  // gate that read `allowedRoles` instead would hide the link from the person
+  // the feature is for.
+  it('hides the handover export link from a site manager on the project', async () => {
+    mockProjectDetail('site_manager');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'site-manager-1',
+        email: 'sm@example.com',
+        role: 'site_manager',
+        roleInCompany: 'site_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /NCRs/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /Handover Export/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the handover export link to a project-scoped quality manager', async () => {
+    mockProjectDetail('quality_manager');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'project-qm-1',
+        email: 'project-qm@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'quality_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Handover Export/i })).toHaveAttribute(
+        'href',
+        '/projects/project-1/handover-exports',
+      );
+    });
+  });
+
   it('does not expose aggregate project-manager links while the project role is loading', () => {
     apiFetchMock.mockReturnValue(new Promise(() => {}) as ReturnType<typeof apiFetch>);
     useAuthMock.mockReturnValue({

@@ -188,6 +188,11 @@ export function Sidebar() {
     ) {
       return false;
     }
+    // Project-scoped role gate — for items whose backend guard reads the role on
+    // THIS project, not the company role.
+    if (item.allowedProjectRoles && !item.allowedProjectRoles.includes(projectScopedRole)) {
+      return false;
+    }
     // Check excluded roles
     if (
       item.excludeRoles &&

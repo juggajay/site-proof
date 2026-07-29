@@ -25,5 +25,12 @@ export const INTERNAL_ROLES = [
   'foreman',
 ];
 
+// Wave D `D1c.3` — mirrors the backend's route-local `HANDOVER_EXPORT_REQUESTERS`
+// (`backend/src/routes/handoverExports/access.ts:27`) exactly, and for the same
+// reason it is a literal list there rather than a hierarchy check: the set that
+// may spend the most expensive operation the product performs must not widen by
+// accident when a role is inserted into ROLE_HIERARCHY.
+export const HANDOVER_EXPORT_ROLES = ['owner', 'admin', 'project_manager', 'quality_manager'];
+
 export const REPORT_ROLES = [...INTERNAL_ROLES, 'viewer'];
 export const PROJECT_WORKSPACE_ROLES = [...INTERNAL_ROLES, 'viewer'];

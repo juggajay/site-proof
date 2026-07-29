@@ -68,6 +68,18 @@ export const STATUS_LABELS: Record<string, string> = {
   hold_point_overdue: 'Hold Point Overdue',
   unreleased_hold_points: 'Hold Points Not Released',
 
+  // Handover export job statuses (Wave D §7.4:
+  // `queued|snapshotting|processing|complete|failed|cancelled`). Only
+  // `snapshotting` differs from what the Title Case fallback would produce —
+  // the rest are listed so a reader can see the whole vocabulary in one place,
+  // and so a future rename cannot silently fall back to the raw enum.
+  queued: 'Queued',
+  snapshotting: 'Preparing',
+  processing: 'Processing',
+  complete: 'Complete',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+
   // Hold point / subcontractor admin statuses
   requested: 'Requested',
   released: 'Released',
