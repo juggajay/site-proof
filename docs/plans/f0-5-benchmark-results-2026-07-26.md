@@ -470,14 +470,31 @@ and the decision measured **p95 3,725ms** on the box used below.
 
 | #   | Target                                          | Budget          | Base (p95)                       | Branch (p95)      | Result                              |
 | --- | ----------------------------------------------- | --------------- | -------------------------------- | ----------------- | ----------------------------------- |
-| 1   | Claim inclusion decision, 5,000 members, flag ON | p95 < 3,000ms   | 2,987–4,563ms (**FAIL** 4 of 5)  | **2,654–2,722ms** | **PASS** (5 of 5, 88–91% of budget) |
+| 1   | Claim inclusion decision, 5,000 members, flag ON | p95 < 3,000ms   | 2,987–4,563ms (**FAIL** 4 of 5)  | **2,654–2,722ms** † | **PASS** (5 of 5, 88–91% of budget) † |
 | 2   | Single-entity decision overhead                 | p95 < 50ms      | 1.6ms                            | **3.0ms**         | PASS (6%) — noise on a 1–3ms figure |
 | 3   | Paginated claim-readiness, page of 100          | p95 < 1,000ms   | 69.4ms                           | **56.9ms**        | PASS (6%)                           |
 | 3   | Paginated claim-readiness, page of 500          | p95 < 1,000ms   | 205.8ms                          | **147.0ms**       | PASS (15%)                          |
 
+† **UNVERIFIED in-repo as of 2026-07-29.** Every number in this table was measured
+on an idle box and reported here, but **no harness output was ever committed**, so
+none of it is reproducible from the repository — the 2026-07-28 deep review
+classified the 2,654 ms figure as *aspirational* on exactly that ground.
+`bench-f05.ts` now writes `scripts/bench-results/f05-<stamp>.json` on **every** run,
+including runs that error out. The attempt to ground this table has **not** yet
+succeeded: **four attempts, four failures, no completed run.** Two records are committed
+(`f05-2026-07-28T23-05-31-920Z.json`, `f05-2026-07-28T23-27-07-094Z.json`), both taken on a
+saturated workstation (`machine.load.cpuBusyPercent: 100`), where the 5,000-member decision
+**exceeds the 15 s interactive-transaction timeout** — observed **16,815 / 15,149 / 15,299 /
+15,469 ms**, about **5.8× the 2,654 ms in row 1** — and the route 500s. The box could not be
+made idle to settle it: the last attempt ran with no competing suite of ours and still
+measured 100% CPU. Treat the table as **the last known idle-box reading, pending one
+re-run** — not as a measurement anyone can currently check.
+
 Snapshot verification at the ceiling is **unchanged and still all PASS**: 5,001
 rows (1 aggregate + 5,000 members) in 11 chunks, max member `result` 178 bytes,
-max aggregate `result` 215 bytes. The decision writes the same rows.
+max aggregate `result` 215 bytes. The decision writes the same rows. (The 178-byte
+figure carries the same † caveat — it is asserted nowhere in code; a completed
+`bench:f05` run now records it as `results.A.snapshotAudit.maxMemberBytes`.)
 
 ### A/B, interleaved, one otherwise-idle box
 

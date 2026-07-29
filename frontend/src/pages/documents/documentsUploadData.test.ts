@@ -30,6 +30,7 @@ import {
   getResponseErrorMessage,
   MIN_IMAGE_HEIGHT,
   MIN_IMAGE_WIDTH,
+  OM_MANUAL_DOCUMENT_TYPE,
   uploadDocuments,
   type UploadDocumentForm,
 } from './documentsUploadData';
@@ -351,6 +352,22 @@ describe('D1d handover document types', () => {
     expect(DOCUMENT_TYPES.map((type) => type.id)).toEqual(
       expect.arrayContaining([CCTV_DOCUMENT_TYPE, CONCEALED_WORKS_DOCUMENT_TYPE]),
     );
+  });
+
+  // D1d follow-up: `resolveOmManuals` read `om_manual` from the day the profile
+  // shipped, but no option wrote it, so pack item (h) resolved `not_assessable`
+  // for every lot no matter what the customer uploaded.
+  it('offers the O&M manual type item (h) resolves on', () => {
+    expect(OM_MANUAL_DOCUMENT_TYPE).toBe('om_manual');
+    expect(DOCUMENT_TYPES.map((type) => type.id)).toContain(OM_MANUAL_DOCUMENT_TYPE);
+  });
+
+  it('leaves the O&M manual on the ordinary upload path, unguided and lot-optional', () => {
+    // Only CCTV needs the video surface, and only the two D1d types are
+    // lot-gated — a bridge or GPT manual can legitimately span lots.
+    expect(resolveUploadPath(OM_MANUAL_DOCUMENT_TYPE)).toBe(DOCUMENTS_UPLOAD_PATH);
+    expect(requiresLotAssociation(OM_MANUAL_DOCUMENT_TYPE)).toBe(false);
+    expect(getUploadGuidance(OM_MANUAL_DOCUMENT_TYPE)).toBeNull();
   });
 
   it('routes only CCTV to the video-capable surface', () => {

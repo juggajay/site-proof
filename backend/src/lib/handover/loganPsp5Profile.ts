@@ -14,17 +14,24 @@
 // constructed documentation", clause (1)(a)–(h) and clause (2). Every
 // `clauseText` below is the clause's own wording, transcribed.
 //
-// `[LP5-DELTA]` THE PACK HAS EIGHT ITEMS, NOT SEVEN. Spec §2.2 tabulates seven
-// and scores them "one shipped-as-storage, three partial, three gaps". Read
+// `[LP5-DELTA]` THE PACK HAS EIGHT ITEMS, NOT SEVEN. Spec §2.2 tabulated seven
+// and scored them "one shipped-as-storage, three partial, three gaps". Read
 // against the source, §5.6.5(1) enumerates **(a) through (h)**, and the item the
 // prose rendering dropped is **(b), "a certification of foundation conditions
 // signed by the consultant where relevant"** — a third permanent, deliberate gap
-// of exactly the same species as (a). The honest score is therefore **of EIGHT
-// mandatory pack items, CIVOS ships one as storage, partially feeds three, and
-// does not feed four (three deliberate, one closable)**. This is recorded rather
-// than quietly absorbed, because a score derived from a rendering of a clause is
-// what `[DR2-B1]` was about, and the fix is to read the clause. §2.2 should be
-// regenerated from this file, which is the direction §2.3 asks for anyway.
+// of exactly the same species as (a). This is recorded rather than quietly
+// absorbed, because a score derived from a rendering of a clause is what
+// `[DR2-B1]` was about, and the fix is to read the clause. §2.2 is regenerated
+// from this file, which is the direction §2.3 asks for anyway.
+//
+// THE SCORE AT `logan-psp5.v1`, AFTER D1d. **Of EIGHT mandatory pack items,
+// CIVOS ships TWO as storage (e, h), partially feeds THREE (c, d, f), and does
+// not feed THREE (a, b, g) — all three deliberate and permanent.** D1b.0 shipped
+// this file scoring (e) `gap_closable`; **D1d closed it** (§4.8, AT-149), which
+// is the only coverage value this profile has ever changed. Nothing is closable
+// any more, because the one closable gap was closed rather than re-described.
+// `loganPsp5Profile.test.ts` pins the distribution, so this paragraph and the
+// data below cannot drift apart silently.
 //
 // THE HONESTY CONTRACT, which is the whole design (spec §0.2, `[DH-B1]`,
 // `[DH-B8]`):
@@ -72,10 +79,12 @@ export const LOGAN_PSP5_PROFILE_VERSION = 'logan-psp5.v1';
  * §2.2's verdict vocabulary, verbatim, so a reader can diff this file against the
  * spec without translating.
  *
- * At `logan-psp5.v1` the distribution is **one `storage_only`, three `partial`,
- * three `gap_deliberate`, one `gap_closable`**. Nothing is `shipped`; the value
+ * At `logan-psp5.v1`, after D1d, the distribution is **two `storage_only`, three
+ * `partial`, three `gap_deliberate`, and NO `gap_closable`** — D1d moved (e) out
+ * of `gap_closable` by shipping the capability. Nothing is `shipped`; that value
  * exists because a later profile version may earn it, not because anything holds
- * it today.
+ * it today. `gap_closable` likewise stays in the vocabulary because a future pack
+ * item may be closable, not because one is.
  */
 export type LoganPsp5Coverage =
   | 'shipped'
@@ -262,9 +271,15 @@ export const VERIFIED_TEST_STATUS = 'verified';
 /**
  * `Document.documentType` values the resolvers key off.
  *
- * The first two DO NOT EXIST YET — D1d creates them (spec §4.8). They are named
- * here, once, so D1d writes the same strings the resolvers already read instead
- * of picking new ones and silently leaving these resolvers blind.
+ * The first two were named here BEFORE the upload surface offered them, so D1d
+ * would write the same strings the resolvers already read instead of picking new
+ * ones and silently leaving these resolvers blind. All four now exist as options
+ * in `frontend/src/pages/documents/documentsUploadData.ts`.
+ *
+ * `om_manual` was the one that got away: item (h) has read it since D1b.0, but no
+ * option wrote it until the D1d follow-up, so (h) resolved `not_assessable` for
+ * every lot regardless of what the customer uploaded. A resolver keyed to a value
+ * no surface can produce is a gap that scores itself as customer fault.
  */
 export const CCTV_DOCUMENT_TYPE = 'cctv_stormwater';
 export const CONCEALED_WORKS_DOCUMENT_TYPE = 'concealed_works_photo';

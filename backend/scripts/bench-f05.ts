@@ -31,7 +31,12 @@
  *
  * Flags: --claim-iterations=N (default 20), --entity-iterations=N (default 50),
  *        --page-iterations=N (default 20), --lots=N (default 5000),
- *        --keep (skip teardown so the seeded dataset can be inspected).
+ *        --keep (skip teardown so the seeded dataset can be inspected),
+ *        --no-write (skip the committed JSON record).
+ *
+ * Every run writes `scripts/bench-results/f05-<stamp>.json`, including runs that
+ * error out — a blown transaction timeout is a result, and losing it was how
+ * this bench's numbers ended up living only in #1641's PR body.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -42,6 +47,8 @@ import { performance } from 'node:perf_hooks';
 import dotenv from 'dotenv';
 import express from 'express';
 import request from 'supertest';
+
+import { machineBlock, sampleMachineLoad, writeBenchResult } from './benchResults.js';
 
 dotenv.config();
 
@@ -208,6 +215,9 @@ function verdict(label: string, actual: number, budget: number): void {
 }
 
 const failures: string[] = [];
+
+/** Per-section measurements, serialised into the committed JSON record. */
+const sections: Record<string, unknown> = {};
 
 // ---------------------------------------------------------------------------
 // App under test — the real routers, mounted as `src/server.ts` mounts them.
@@ -599,6 +609,23 @@ async function benchClaimDecisions(project: SeededProject): Promise<void> {
   // #1578/#1580 measured the remaining time as a floor: ~60k completion rows
   // genuinely read + 5,001 snapshot inserts under one serializable tx.
   verdict(`Target 1: claim decision at ${LOT_COUNT} members`, total.p95, 3000);
+  sections.A = {
+    label: `claim inclusion decision, ${LOT_COUNT} members`,
+    route: 'POST /api/projects/:projectId/claims',
+    budgetMs: 3000,
+    flagOn: total,
+    flagOff: off,
+    samplesMs: samples,
+    snapshotCostMs: total.p95 - off.p95,
+    phaseP95Ms: {
+      evaluate: stats(phase.evaluate).p95,
+      mutate: stats(phase.mutate).p95,
+      audit: stats(phase.audit).p95,
+      snapshot: stats(phase.snapshot).p95,
+    },
+    snapshotAudit: audit,
+    pass: total.p95 <= 3000,
+  };
   await resetClaimState(project.projectId);
 }
 
@@ -931,7 +958,42 @@ async function shutdown(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const startedAt = Date.now();
+const STARTED_AT = new Date().toISOString();
 const projectIds: string[] = [];
+let machine: Record<string, unknown> | null = null;
+
+/**
+ * Writes the committed record. Called on BOTH the success and the error path:
+ * the failure mode this bench actually hits at the 5,000-member ceiling is the
+ * 15s interactive-transaction timeout, and a record that only exists when the
+ * run passes would silently hide exactly that.
+ */
+async function writeRecord(error?: unknown): Promise<void> {
+  if (process.argv.includes('--no-write')) return;
+  const out = writeBenchResult('f05', {
+    benchmark: 'F0.5 exit gate (execution spec §8, Rev 3.1)',
+    spec: 'docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md',
+    startedAt: STARTED_AT,
+    finishedAt: new Date().toISOString(),
+    machine: machine
+      ? { ...machine, loadAfterMeasurement: await sampleMachineLoad() }
+      : await machineBlock(),
+    options: {
+      only: ONLY,
+      lots: LOT_COUNT,
+      claimIterations: CLAIM_ITERATIONS,
+      entityIterations: ENTITY_ITERATIONS,
+      pageIterations: PAGE_ITERATIONS,
+    },
+    results: sections,
+    verdict: {
+      failures,
+      pass: !error && failures.length === 0,
+      ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
+    },
+  });
+  console.log(`  results: ${out}`);
+}
 
 try {
   console.log('F0.5 exit-gate benchmark (execution spec §8, Rev 3.1)');
@@ -957,6 +1019,9 @@ try {
     projectIds.push(conformProject.projectId);
   }
   console.log(`  seed complete in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+  // Sampled after the seed, so the record carries the contention the
+  // MEASUREMENTS ran under rather than the seed's own load.
+  machine = await machineBlock();
 
   if (claimProject && ONLY.includes('A')) await benchClaimDecisions(claimProject);
   if (conformProject) await benchSingleEntityDecision(conformProject);
@@ -972,11 +1037,13 @@ try {
   }
   console.log(`  total runtime ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
 
+  await writeRecord();
   await teardown(projectIds);
   await shutdown();
   process.exit(failures.length === 0 ? 0 : 1);
 } catch (error) {
   console.error('\nBENCHMARK ERROR:', error);
+  await writeRecord(error).catch(() => {});
   await teardown(projectIds).catch(() => {});
   await shutdown().catch(() => {});
   process.exit(2);

@@ -10,6 +10,7 @@ import {
   resolveDashboardProject,
 } from './access.js';
 import { parseOptionalDashboardString } from './operationalQuery.js';
+import { daysOverdue } from '../../lib/readiness/predicates.js';
 import {
   buildEmptyForemanDashboardResponse,
   buildForemanDashboardResponse,
@@ -102,6 +103,41 @@ export function buildItpInspectionItems(
     link: c.itpInstance.lot?.id
       ? `/projects/${projectId}/lots/${c.itpInstance.lot.id}?tab=itp`
       : `/projects/${projectId}/itp`,
+  }));
+}
+
+type OpenNcrSource = {
+  id: string;
+  ncrNumber: string;
+  description: string;
+  category: string;
+  status: string;
+  dueDate: Date | null;
+  createdAt: Date;
+};
+
+/**
+ * Quality-manager open-NCR rows. Extracted from the route so the day count has a
+ * characterization pin (same reason `buildItpInspectionItems` is out here).
+ *
+ * L11 — `daysOpen` was an inline `Math.floor((Date.now() - createdAt) / 86_400_000)`
+ * here AND, byte for byte, in `roleDashboardResponses.ts`. Both now route through
+ * the shared `daysOverdue()` floor, the same consolidation `#1672` made for
+ * hold-point ages: the anchor is `createdAt` because an NCR's age is not its
+ * lateness, and the helper is the repo's single definition of "N full days since".
+ * It also stops re-reading the clock per row — every row in one response now
+ * shares the route's `now`.
+ */
+export function buildOpenNcrItems(openNCRs: OpenNcrSource[], projectId: string, now: Date) {
+  return openNCRs.map((ncr) => ({
+    id: ncr.id,
+    ncrNumber: ncr.ncrNumber,
+    description: ncr.description,
+    category: ncr.category,
+    status: ncr.status,
+    dueDate: ncr.dueDate?.toISOString() || null,
+    daysOpen: daysOverdue(ncr.createdAt, now),
+    link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
   }));
 }
 
@@ -408,16 +444,7 @@ dashboardRoleDashboardsRouter.get(
     const conformingLots = totalLots - nonConformingLots;
     const conformanceRate = totalLots > 0 ? (conformingLots / totalLots) * 100 : 100;
 
-    const formattedNCRs = openNCRs.map((ncr) => ({
-      id: ncr.id,
-      ncrNumber: ncr.ncrNumber,
-      description: ncr.description,
-      category: ncr.category,
-      status: ncr.status,
-      dueDate: ncr.dueDate?.toISOString() || null,
-      daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
-      link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
-    }));
+    const formattedNCRs = buildOpenNcrItems(openNCRs, projectId, now);
 
     const pendingVerificationItems = pendingVerifications.map((pv) => ({
       id: pv.id,
