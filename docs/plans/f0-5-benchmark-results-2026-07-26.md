@@ -475,26 +475,35 @@ and the decision measured **p95 3,725ms** on the box used below.
 | 3   | Paginated claim-readiness, page of 100          | p95 < 1,000ms   | 69.4ms                           | **56.9ms**        | PASS (6%)                           |
 | 3   | Paginated claim-readiness, page of 500          | p95 < 1,000ms   | 205.8ms                          | **147.0ms**       | PASS (15%)                          |
 
-† **UNVERIFIED in-repo as of 2026-07-29.** Every number in this table was measured
-on an idle box and reported here, but **no harness output was ever committed**, so
-none of it is reproducible from the repository — the 2026-07-28 deep review
-classified the 2,654 ms figure as *aspirational* on exactly that ground.
-`bench-f05.ts` now writes `scripts/bench-results/f05-<stamp>.json` on **every** run,
-including runs that error out. The attempt to ground this table has **not** yet
-succeeded: **four attempts, four failures, no completed run.** Two records are committed
-(`f05-2026-07-28T23-05-31-920Z.json`, `f05-2026-07-28T23-27-07-094Z.json`), both taken on a
-saturated workstation (`machine.load.cpuBusyPercent: 100`), where the 5,000-member decision
-**exceeds the 15 s interactive-transaction timeout** — observed **16,815 / 15,149 / 15,299 /
-15,469 ms**, about **5.8× the 2,654 ms in row 1** — and the route 500s. The box could not be
-made idle to settle it: the last attempt ran with no competing suite of ours and still
-measured 100% CPU. Treat the table as **the last known idle-box reading, pending one
-re-run** — not as a measurement anyone can currently check.
+† **VERIFIED in-repo 2026-07-29 by an idle-box re-run.** The history is worth keeping,
+because it is the case for reading `machine.load` before any number: these figures were
+measured on an idle box and reported here with **no harness output committed**, so the
+2026-07-28 deep review classified 2,654 ms as *aspirational*; the first attempt to ground
+them ran on a **saturated** workstation (`cpuBusyPercent: 100`) and did not merely miss the
+budget — **four attempts, four failures**, the 5,000-member decision blowing the 15 s
+interactive-transaction timeout at **16,815 / 15,149 / 15,299 / 15,469 ms** and the route
+500ing (`f05-2026-07-28T23-05-31-920Z.json`, `f05-2026-07-28T23-27-07-094Z.json`).
+
+**That was contention, not a defect — now demonstrated rather than assumed.** Re-run on the
+same machine once quiet, two committed records, both carrying their own idle evidence:
+
+| record | shape | Target 1 p95 | p50 | flag OFF p95 | `cpuBusyPercent` |
+| --- | --- | --- | --- | --- | --- |
+| `f05-2026-07-29T08-59-39-160Z.json` | `--only=A --claim-iterations=5` (the failed runs' shape) | **2,507.4 ms PASS** | 2,368.6 ms | 1,640.9 ms | 14.1 → 14.6 |
+| `f05-2026-07-29T09-00-31-801Z.json` | default full gate, A–D, n=20 | **2,383.2 ms PASS** | 2,252.8 ms | 1,557.0 ms | 8.4 → 10.5 |
+
+Row 1's **2,654–2,722 ms** reproduces **within 6–10%, on the fast side** (2,383–2,507 ms),
+against the same 3,000 ms budget — 79–84% of budget, `verdict.pass: true`, no failures. The
+budget verdict is what the row claimed and it holds. Rows 2 and 3 re-measured on the same
+full run: single-entity overhead **p95 1.2 ms** (budget 50), claim-readiness **p95 46.7 ms**
+at page 100 and **136.2 ms** at page 500 (budget 1,000).
 
 Snapshot verification at the ceiling is **unchanged and still all PASS**: 5,001
 rows (1 aggregate + 5,000 members) in 11 chunks, max member `result` 178 bytes,
-max aggregate `result` 215 bytes. The decision writes the same rows. (The 178-byte
-figure carries the same † caveat — it is asserted nowhere in code; a completed
-`bench:f05` run now records it as `results.A.snapshotAudit.maxMemberBytes`.)
+max aggregate `result` 215 bytes. The decision writes the same rows. **The 178-byte figure
+is no longer prose either** — both idle-box records carry it as
+`results.A.snapshotAudit.maxMemberBytes: 178`, checked against the 1,024-byte budget by the
+harness itself.
 
 ### A/B, interleaved, one otherwise-idle box
 

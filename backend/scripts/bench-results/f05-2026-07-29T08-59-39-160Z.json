@@ -1,0 +1,81 @@
+{
+  "benchmark": "F0.5 exit gate (execution spec §8, Rev 3.1)",
+  "spec": "docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md",
+  "startedAt": "2026-07-29T08:59:39.160Z",
+  "finishedAt": "2026-07-29T09:00:08.084Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 14.1,
+      "sampleMs": 1000,
+      "freeMemMiB": 21877,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 14.6,
+      "sampleMs": 1000,
+      "freeMemMiB": 21292,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "only": "A",
+    "lots": 5000,
+    "claimIterations": 5,
+    "entityIterations": 50,
+    "pageIterations": 20
+  },
+  "results": {
+    "A": {
+      "label": "claim inclusion decision, 5000 members",
+      "route": "POST /api/projects/:projectId/claims",
+      "budgetMs": 3000,
+      "flagOn": {
+        "n": 5,
+        "min": 2308.0511000000006,
+        "p50": 2368.628700000001,
+        "p95": 2507.4444000000003,
+        "max": 2507.4444000000003,
+        "mean": 2378.88608
+      },
+      "flagOff": {
+        "n": 5,
+        "min": 1576.9609000000019,
+        "p50": 1595.8459999999977,
+        "p95": 1640.9061000000002,
+        "max": 1640.9061000000002,
+        "mean": 1603.2794600000002
+      },
+      "samplesMs": [
+        2507.4444000000003,
+        2368.628700000001,
+        2384.4729000000007,
+        2308.0511000000006,
+        2325.8332999999984
+      ],
+      "snapshotCostMs": 866.5383000000002,
+      "phaseP95Ms": {
+        "evaluate": 485.6718000000019,
+        "mutate": 635.4329999999991,
+        "audit": 10.808899999999994,
+        "snapshot": 710.0430000000015
+      },
+      "snapshotAudit": {
+        "totalRows": 5001,
+        "aggregateRows": 1,
+        "memberRows": 5000,
+        "chunkCalls": 11,
+        "maxMemberBytes": 178,
+        "maxAggregateBytes": 215
+      },
+      "pass": true
+    }
+  },
+  "verdict": {
+    "failures": [],
+    "pass": true
+  }
+}

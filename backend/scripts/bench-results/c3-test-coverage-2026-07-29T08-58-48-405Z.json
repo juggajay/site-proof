@@ -1,0 +1,80 @@
+{
+  "benchmark": "wave-c3/Phase A testing-overlay read",
+  "spec": "docs/plans/wave-c3-exit-evidence-2026-07-28.md (exit item 8); spec §12",
+  "startedAt": "2026-07-29T08:58:48.405Z",
+  "finishedAt": "2026-07-29T08:59:01.351Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 9.3,
+      "sampleMs": 1000,
+      "freeMemMiB": 21958,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 5.7,
+      "sampleMs": 1000,
+      "freeMemMiB": 21809,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "lots": 5000,
+    "drawn": 400,
+    "iterations": 12
+  },
+  "shape": "400 evaluated · 4600 counted off-map",
+  "results": {
+    "scopedRoute": {
+      "route": "GET /api/projects/:projectId/lots/test-coverage",
+      "n": 11,
+      "minMs": 119,
+      "medianMs": 133,
+      "p95Ms": 143,
+      "maxMs": 143,
+      "samplesMs": [
+        143,
+        133,
+        138,
+        131,
+        143,
+        128,
+        127,
+        138,
+        133,
+        119,
+        120
+      ]
+    },
+    "unscopedBatch": {
+      "call": "checkConformancePrerequisitesBatch(allLotIds)",
+      "n": 11,
+      "minMs": 470,
+      "medianMs": 513,
+      "p95Ms": 565,
+      "maxMs": 565,
+      "samplesMs": [
+        565,
+        552,
+        546,
+        530,
+        513,
+        516,
+        506,
+        507,
+        476,
+        470,
+        476
+      ]
+    },
+    "coldFirstCallMs": 197,
+    "scopeSpeedupMedian": 3.86
+  },
+  "verdict": {
+    "budget": null,
+    "note": "MEASURED, no inherited budget — see the header comment."
+  }
+}
