@@ -17,12 +17,18 @@ reported per leg."*
 
 ## THE HEADLINE, STATED FIRST
 
-> **SUPERSEDED IN PART — read §7 before acting on anything below.** Everything on this page was
-> measured at the **50 GB / 50,000-member** reference scale on a **loaded** box. §4.5.7's entry
-> gate re-ran the field at the decided **8 GiB / 8,334-member cap on a quiet box** on
-> 2026-07-29; **§7 carries that result and it is the one `D1c.1` is governed by.** The
-> conclusion is unchanged — **no candidate passes** — but *which rows fail, and why*, changed
-> materially, and two of this report's forward-looking claims did not survive the re-run.
+> **SUPERSEDED IN PART — read §7 AND §7.8 before acting on anything below.** Everything on this
+> page was measured at the **50 GB / 50,000-member** reference scale on a **loaded** box.
+> §4.5.7's entry gate re-ran the field at the decided **8 GiB / 8,334-member cap on a quiet box**
+> on 2026-07-29; **§7 carries that result** and *which rows fail, and why*, changed materially
+> against this page — two of its forward-looking claims did not survive the re-run.
+>
+> **Then the thresholds themselves moved, by Jay's dated approval.** §7.8 records it: two
+> §4.5.1 rows amended (spec §16.1 **J10**), both remaining candidates passing, and
+> **`archiver` 8.0.0 selected**. **§7.8 is the standing outcome `D1c.1` is governed by.**
+> Every "no candidate passes" statement on this page and in §7 is true of the thresholds as
+> predeclared, is left unedited on purpose, and is superseded as the standing conclusion by
+> §7.8.
 
 > **NO CANDIDATE PASSES.** All four writers miss at least one predeclared §4.5.1 row. §4.5.1
 > names this as a legitimate outcome — *"If nothing passes, `D1c.0`'s output is 'no candidate
@@ -265,6 +271,11 @@ was **not** built, per the phase boundary.
 ## 4. The four decisions
 
 ### 4.1 Decision 1 — the writer: **no candidate passes**
+
+> **SUPERSEDED — see §7 for the re-grade at the cap and §7.8 for the standing outcome.** This
+> section is the verdict at 50 GB scale under the thresholds as predeclared, and it is left
+> unedited. `archiver` 8.0.0 is selected in §7.8 after Jay amended two §4.5.1 rows
+> (spec §16.1 **J10**).
 
 **Selected: none.** Per §4.5.1 that is the output, and it is not softened here.
 
@@ -559,6 +570,11 @@ cap.
 
 ### 7.1 THE RESULT, STATED FIRST
 
+> **SUPERSEDED AS THE STANDING OUTCOME BY §7.8, and left unedited as the record of what the
+> predeclared bars said.** Jay amended two §4.5.1 rows on 2026-07-29 (spec §16.1 **J10**);
+> under the amended bars both candidates pass and **`archiver` 8.0.0 is selected**. No
+> measured value below changed.
+
 > **THE GATE FAILS. NO CANDIDATE PASSES AT THE CAP EITHER.** Per §4.5.7 item 6, **D1c re-scopes
 > to an object-tree package** — the named fallback, and the only one left now that split
 > archives are the shipped design rather than an alternative to it.
@@ -650,6 +666,12 @@ RSS flatness — which is precisely why the cap does not rescue the field.
 
 ### 7.6 The selection statement
 
+> **SUPERSEDED BY §7.8 — the selection statement that stands is there.** This section is left
+> unedited: it is what the un-amended thresholds produced, and its closing paragraph is the
+> input that went to Jay. **He acted on it** — both observations it names were converted into
+> the two amendments in §16.1 **J10**, and `archiver` 8.0.0 was then selected under §4.5.2's
+> axes. The sentence *"a build agent may not change one"* held: no build agent did.
+
 **No writer is selected.** Neither `archiver` nor `yazl` passes all six §4.5.1 fixtures at the
 8 GiB / 8,334-member cap on a quiet box. **The §4.5.7 entry gate FAILS, and per §4.5.7 item 6
 D1c re-scopes to an object-tree package.**
@@ -675,3 +697,99 @@ as an input to that decision, and explicitly **not acted on**.
 - **The 16 GiB leg** that would distinguish yazl's flatness miss (one-time V8 heap watermark vs
   size-proportional growth) was **still not run**. It is out of scope for a gate whose span
   §4.5.7 fixes at 1 → 8 GiB, and the row is scored FAIL on the span the spec names.
+
+---
+
+### 7.8 ADDENDUM, 2026-07-29 (later the same day) — Jay amended two §4.5.1 thresholds, and a writer IS selected
+
+> **This addendum carries the standing outcome. §7.1 and §7.6 record the outcome *under the
+> thresholds as they were predeclared*, and they are left EXACTLY as measured — not edited,
+> not softened, not withdrawn.** Read them as the record of what the un-amended bars said.
+> What follows changed the bars, not a number.
+>
+> **Not one measured value in §7.2, §7.3 or §7.4 moved.** The results file is the same file:
+> `backend/scripts/bench-results/d1c1-writer-regrade-2026-07-29T09-00-00-000Z.json`.
+
+### 7.8.1 What Jay amended, and why it is his signature and not an engineering edit
+
+**Recorded in the spec as `§16.1 J10`** (`docs/plans/wave-d-handover-spec-2026-07-28.md`), a new
+dated row in the register, following J9's precedent. Two rows of §4.5.1, and only two:
+
+1. **F3 (max single-tick stall ≤50 ms, p99 ≤20 ms) binds the API process only.** F3's own
+   stated rationale is *"The API process serves user traffic during archive jobs; a 500 ms
+   stall is a user-visible outage."* `[DH-j]` — decided **before** this re-grade, on this
+   spike's own 50,000-member stall measurements — moved the archive worker out of the API
+   process. A stall inside a worker that answers no requests has no user behind it. For the
+   worker's own loop the operative bars are **F4** (cancellation observed ≤5 s, cleanup ≤30 s)
+   and the §7.4 lease/heartbeat cadence, both of which archiver passes with three orders of
+   magnitude of headroom (0.001 s / 0.002 s).
+2. **F1's ±15% flatness band governs only where peak RSS exceeds a 128 MiB floor.** Below the
+   floor the absolute **≤256 MiB** cap governs alone. The band operationalised "memory flat" to
+   catch *unbounded growth*; at yazl's 19.86 → 38.67 MiB it is instead flagging fixed startup
+   overhead against scale overhead at **15% of the cap** — a ratio artefact, not a leak.
+
+**These amendments were made AFTER the measurement, which is exactly what predeclaration exists
+to prevent.** That is stated here without softening, and it is precisely why they carry **Jay's
+dated approval in §16** rather than an engineer's edit to a threshold table. **Untouched and
+still predeclared:** F5 integrity (zero mismatches, three readers), F4 cancellation, F6
+byte-identical resume, F1's absolute ≤256 MiB cap, F2 in full, and ZIP-standard compatibility.
+
+### 7.8.2 Under the amended bars, both candidates pass — so §4.5.2's tie-break decides
+
+| Candidate | F1 | F2 | F3 | F4 | F5 | F6 | Verdict under the amended bars |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **archiver** 8.0.0 | ✅ 3.6%, **on the band itself** | ✅ 93.05 MiB | ✅ **out of scope** — worker, not the API process | ✅ | ✅ | ✅ | **PASS** |
+| **yazl** 3.3.1 | ✅ **via the 128 MiB floor** (38.67 MiB peak) | ✅ 54.59 MiB | ✅ 16.91 ms | ✅ | ✅ | ✅ | **PASS** |
+
+**Worth stating, because it cuts against the selection made below:** archiver's F1 pass does not
+depend on the amendment at all — 3.6% clears the band as originally written. yazl's F1 pass
+exists **only** because of the floor. Conversely archiver only reaches the tie-break because of
+the F3 amendment. Each candidate is here on one amendment; neither is here on both.
+
+### 7.8.3 The five §4.5.2 axes, applied in order, to the measured evidence
+
+§4.5.2 fixes the axes and their order: **ZIP64 support, Node stream backpressure, large-member
+support, event-loop behaviour, resumable-upload composability.**
+
+| # | Axis | **archiver** 8.0.0 | **yazl** 3.3.1 | Axis result |
+| --- | --- | --- | --- | --- |
+| 1 | **ZIP64 support** | 8,592,561,410 B total limb + 4,833,313,097 B single-member limb, both correct; 8,334-entry central directory, offsets valid, names unique; accepted by **yauzl**, **Info-ZIP `unzip -t` exit 0** and the **Windows Explorer shell handler** | 8,592,561,826 B + 4,833,313,106 B, same three readers, same result | **tie** |
+| 2 | **Node stream backpressure** | the archive object **is** a `Readable`; native backpressure through `.pipe()` | `zip.outputStream` is a `Readable`; native backpressure | **tie** |
+| 3 | **Large-member support** | peak RSS **37.48 → 38.82 MiB** across 1 → 8 GiB output (**3.6%**), single >4 GiB limb 38.10 MiB — measurably flat | **19.86 → 38.67 MiB** (**94.7%**), single limb 20.32 MiB — roughly doubles across the span | **archiver** |
+| 4 | **Event-loop behaviour** | max stall **69.99 ms**, and it is confined to the 8,334-member central-directory leg (every other leg ≤16.43 ms); **p99 4.38 ms** | max stall **16.91 ms**; **p99 15.50 ms** | **yazl on the maximum (4.1×); archiver on p99 (3.5×)** |
+| 5 | **Resumable-upload composability** | `Readable` straight in as `@aws-sdk/lib-storage` `Upload`'s `Body` — the §4.5.3 delivery path | `outputStream` likewise; identical shape | **tie** |
+
+### 7.8.4 The selection: **`archiver` 8.0.0**
+
+**Three axes are ties on measured evidence. The first axis that separates the candidates is
+axis 3, large-member support, and archiver wins it by 26×** — 3.6% against 94.7% across exactly
+the 1 → 8 GiB span the cap sets. Axis 4 goes to yazl on maximum stall, and **the axis list ranks
+it below axis 3**, which is the whole function of an ordered list: it is applied as written, not
+re-ordered after the numbers arrive.
+
+**The honest statement of what that costs, and the argument for the other answer.** yazl wins
+axis 4's headline number decisively — 16.91 ms against 69.99 ms — and **if §4.5.2's axes were
+ordered event-loop-first, yazl would be selected.** They are not. Three things weigh against
+re-reading the order in yazl's favour, all measured:
+
+- **F3's demotion applies here too.** The 69.99 ms tick lands in the archive worker's own loop,
+  outside the API process (`[DH-j]`), where no request is queued behind it. Axis 4 still counts —
+  it is a real cost to the worker's own responsiveness, including its lease heartbeat — but it
+  is not the user-visible cost the axis was written to catch.
+- **On the statistic the worker's heartbeat actually depends on, archiver is better.** p99
+  4.38 ms against yazl's 15.50 ms. §7.4's lease renewal is a repeated operation, not a
+  single-tick one.
+- **archiver's stall is bounded and understood**: five ungraded probe samples at 65.9–72.7 ms
+  (§7.4), confined to the central-directory write at 8,334 entries — a stable per-entry cost at
+  a member count the cap fixes, not a tail that grows with archive size.
+
+**`[DH-j]` is NOT flipped by this selection, and its flip condition is not met.** That condition
+required *"the selected writer holds ≤50 ms at the per-archive member ceiling"*. archiver holds
+69.99 ms. The worker stays out of the API process, and §15 item 11's assertion — ≤50 ms measured
+**against the API process** during a generation run — remains the gate.
+
+**What this addendum does NOT do.** It does not install anything. Both candidates remain
+dev-installed in the gitignored `backend/scripts/bench-zip-deps/` tree; **no shipping
+`package.json` is touched by this record**. `D1c.1` installs `archiver` 8.0.0 as a production
+dependency, under `[DH-c]`. **The object-tree package remains in the spec as D1c's fallback** —
+it is not taken, and §4.5.1's naming of it stands unchanged for the day it is needed.
