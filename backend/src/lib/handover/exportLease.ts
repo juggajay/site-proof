@@ -236,6 +236,71 @@ export function failExport(params: {
 }
 
 /**
+ * `D1c.2` — move a claimed job to `processing`, fenced.
+ *
+ * Separate from the claim because a claim may pick up a job left `processing`
+ * by a worker that died, and the status write has to be the SAME conditional
+ * shape as every other state write in this file rather than an unconditional
+ * `update` bolted on at the worker.
+ */
+export function setExportStatus(params: {
+  exportId: string;
+  leaseToken: string;
+  status: HandoverExportStatus;
+  client?: PrismaClientLike;
+}): Promise<boolean> {
+  return fencedUpdate(params.client ?? prisma, params.exportId, params.leaseToken, {
+    status: params.status,
+  });
+}
+
+/**
+ * `D1c.2` — persist S3 multipart state (§4.6.3, §7.4), fenced.
+ *
+ * TRANSPORT-layer resume only. §4.6.3 is explicit: the ZIP is always rebuilt
+ * from the frozen ledger, and `uploadState` never stands in for that. It exists
+ * so a restarted worker can see what the dead one had in flight — and so the
+ * sweeper can find an abandoned multipart to abort.
+ */
+export function recordUploadState(params: {
+  exportId: string;
+  leaseToken: string;
+  uploadState: unknown;
+  client?: PrismaClientLike;
+}): Promise<boolean> {
+  return fencedUpdate(params.client ?? prisma, params.exportId, params.leaseToken, {
+    uploadState: params.uploadState as never,
+  });
+}
+
+/**
+ * `D1c.2` — THE USER-FACING CANCEL, and why it cannot be {@link cancelExport}.
+ *
+ * `cancelExport` is fenced on `leaseToken`, which is exactly right for a worker
+ * cancelling its own job and exactly wrong for a person: the requester holds no
+ * token, and handing one to a browser would hand it the ability to publish. So
+ * the user's cancel is a compare-and-swap on STATUS instead — it lands only
+ * while the job is still claimable, so a completed job cannot be un-completed.
+ *
+ * It RELEASES THE LEASE in the same statement, and that is the whole mechanism
+ * by which a running worker finds out: its next heartbeat's token predicate no
+ * longer matches, `heartbeatExport` returns `false`, and the assembly aborts
+ * and removes its lease-keyed object. One `UPDATE` cancels a job on another
+ * host with no channel between them.
+ */
+export async function requestExportCancellation(params: {
+  exportId: string;
+  reason: string;
+  client?: PrismaClientLike;
+}): Promise<boolean> {
+  const { count } = await (params.client ?? prisma).handoverExport.updateMany({
+    where: { id: params.exportId, status: { in: [...CLAIMABLE_STATUSES] } },
+    data: { status: 'cancelled', lastFailureReason: params.reason, ...RELEASE_LEASE },
+  });
+  return count === 1;
+}
+
+/**
  * Cancel, fenced by the same CAS (§4.6.2: "Cancellation is fenced by the same
  * compare-and-swap"). A superseded worker cannot cancel the job the live worker
  * is running — that is the third clause of **AT-135**.

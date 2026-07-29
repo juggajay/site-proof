@@ -267,6 +267,10 @@ export const AuditAction = {
   // Wave D `D1c.1`. §10.5 requires an audit event on export request; the
   // download event arrives with the download route in `D1c.2`.
   HANDOVER_EXPORT_REQUESTED: 'handover_export_requested',
+  // Wave D `D1c.2`. §10.5: "export request, export download … emit audit
+  // events." The archive is the highest-value object CIVOS emits (§10.2), so
+  // every read of one is recorded.
+  HANDOVER_EXPORT_DOWNLOADED: 'handover_export_downloaded',
 } as const;
 
 export type AuditActionType = (typeof AuditAction)[keyof typeof AuditAction];
