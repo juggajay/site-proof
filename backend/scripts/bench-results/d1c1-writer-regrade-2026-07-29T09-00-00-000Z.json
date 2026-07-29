@@ -1,0 +1,1103 @@
+{
+  "benchmark": "wave-d/D1c.0 streaming ZIP writer + storage spike",
+  "spec": "docs/plans/wave-d-handover-spec-2026-07-28.md Rev 3 §4.5",
+  "acceptanceTest": "AT-150",
+  "complete": true,
+  "startedAt": "2026-07-29T07:48:09.005Z",
+  "finishedAt": "2026-07-29T08:03:44.384Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "cpuCount": 16,
+    "totalMemMiB": 32692
+  },
+  "options": {
+    "scratch": "C:\\Users\\jayso\\AppData\\Local\\Temp\\civos-d1c0-zip-spike",
+    "scale": 1,
+    "keep": false,
+    "candidates": [
+      "archiver",
+      "yazl"
+    ],
+    "fixtures": "all"
+  },
+  "regrade": {
+    "spec": "docs/plans/wave-d-handover-spec-2026-07-28.md §4.5.7",
+    "fixture2MemberCount": 8334,
+    "fixture2Derivation": "50,000 reference-dataset members / 6 archives at the 8 GiB cap = 8,333.3 -> 8,334 (§4.5.7 item 2)",
+    "quietnessGateOtherCpuPct": 30,
+    "idleLoadBeforeRun": {
+      "windowMs": 5000,
+      "systemCpuBusyPct": 11.5,
+      "cpuCount": 16,
+      "freeMemMiB": 22585,
+      "measuredBefore": "the first candidate leg, with no benchmark child running"
+    },
+    "contendedLegs": [],
+    "thresholdsMoved": "NONE. Every number in fixtureThresholds is §4.5.1 verbatim (§4.5.7 item 5). Only fixture 2 scale moved."
+  },
+  "fixtureThresholds": {
+    "1": {
+      "name": ">4 GiB archive (single member >4 GiB AND total >4 GiB, tested separately)",
+      "pass": "Archive completes; peak RSS delta <= 256 MiB and flat, i.e. peak RSS at 8 GiB output is within +/-15% of peak RSS at 1 GiB output.",
+      "peakRssDeltaMiB": 256,
+      "flatnessTolerancePct": 15
+    },
+    "2": {
+      "name": "50,000-member archive",
+      "pass": "Completes; peak RSS delta <= 256 MiB; central directory correct — every member listed, offsets valid.",
+      "peakRssDeltaMiB": 256,
+      "memberCount": 50000
+    },
+    "3": {
+      "name": "Event loop under load",
+      "pass": "Maximum single-tick stall <= 50 ms, p99 <= 20 ms, measured continuously for the whole run.",
+      "maxStallMs": 50,
+      "p99StallMs": 20
+    },
+    "4": {
+      "name": "Cancellation mid-write",
+      "pass": "Cancellation observed within <= 5 s; all partial objects and temp files removed within <= 30 s; no orphaned handle, no partial object left addressable.",
+      "observedWithinS": 5,
+      "removedWithinS": 30
+    },
+    "5": {
+      "name": "Integrity",
+      "pass": "Archive opens in Windows Explorer, macOS Archive Utility and `unzip`; every member's extracted SHA-256 equals its recorded sourceChecksum; zero mismatches — not a rate.",
+      "mismatchesAllowed": 0,
+      "note": "This box is Windows. Windows Explorer (the shell Zip folder handler, via Shell.Application COM) and Info-ZIP `unzip` are tested. macOS Archive Utility is UNTESTED ON THIS BOX and is recorded as such — no claim is made about it."
+    },
+    "6": {
+      "name": "Resume after process kill",
+      "pass": "Kill mid-archive, restart: the job resumes from the frozen ledger, completes, and its final archive is byte-identical to an uninterrupted run over the same frozen members.",
+      "note": "The D1c.1 ledger does not exist yet. It is SIMULATED here as a fixed JSON member list (scripts/bench-results/d1c0-frozen-members.json). Per spec §4.6.3 the honest default is that ZIP assembly RESTARTS from the frozen member ledger, so the assertion this fixture actually makes is: the writer produces byte-identical output for the same frozen member list, across processes, after a SIGKILL."
+    }
+  },
+  "costCeilingAudExGst": 12,
+  "memberMix": [
+    {
+      "class": "photo",
+      "share": 0.78,
+      "minBytes": 12288,
+      "maxBytes": 28672,
+      "compressible": 0
+    },
+    {
+      "class": "pdf",
+      "share": 0.15,
+      "minBytes": 24576,
+      "maxBytes": 57344,
+      "compressible": 0.2
+    },
+    {
+      "class": "text",
+      "share": 0.07,
+      "minBytes": 2048,
+      "maxBytes": 8192,
+      "compressible": 1
+    }
+  ],
+  "deflateLevel": 6,
+  "pinnedMtime": "2026-01-01T00:00:00.000Z",
+  "frozenLedger": "scripts/bench-results/d1c0-frozen-members.json",
+  "compressionRatioOnFixture2Mix": [
+    {
+      "candidate": "archiver",
+      "ratio": 0.940676
+    },
+    {
+      "candidate": "yazl",
+      "ratio": 0.941076
+    }
+  ],
+  "worstOutputInputRatioAcrossAllLegs": 1.000306,
+  "results": [
+    {
+      "candidate": "archiver",
+      "version": "8.0.0",
+      "fixtures": {
+        "fixture1": {
+          "pass": true,
+          "measured": {
+            "peakRssDeltaMiB": {
+              "1GiB": 37.48,
+              "8GiB": 38.82,
+              "single>4GiB": 38.1
+            },
+            "flatnessDeviationPct": 3.6,
+            "outputBytes": {
+              "8GiB-leg": 8592561410,
+              "single-member-leg": 4833313097
+            },
+            "withinCap": true,
+            "flat": true,
+            "bothLimbsOver4GiB": true
+          }
+        },
+        "fixture2": {
+          "pass": true,
+          "measured": {
+            "memberCount": 8334,
+            "entriesInCentralDirectory": 8334,
+            "everyMemberListed": true,
+            "offsetsValid": true,
+            "namesUnique": true,
+            "peakRssDeltaMiB": 93.05,
+            "readbackError": null
+          }
+        },
+        "fixture3": {
+          "pass": false,
+          "measured": {
+            "worstMaxStallMs": 69.992,
+            "worstP99StallMs": 4.375,
+            "perLeg": {
+              "flat-1gib": {
+                "max": 5.087,
+                "p99": 1.293,
+                "p50": 1.022
+              },
+              "total-8gib": {
+                "max": 16.04,
+                "p99": 1.295,
+                "p50": 1.008
+              },
+              "single-4.5gib": {
+                "max": 16.425,
+                "p99": 1.276,
+                "p50": 1.009
+              },
+              "members-8334": {
+                "max": 69.992,
+                "p99": 4.375,
+                "p50": 1
+              },
+              "cancel": {
+                "max": 15.778,
+                "p99": 1.278,
+                "p50": 1.017
+              }
+            }
+          }
+        },
+        "fixture4": {
+          "pass": true,
+          "measured": {
+            "cancelObservedS": 0.001,
+            "partialRemovedS": 0.002,
+            "partialBytesAtCancel": 899449123,
+            "partialStillPresent": false,
+            "openFileHandlesAfter": 1,
+            "error": null
+          }
+        },
+        "fixture5": {
+          "pass": true,
+          "measured": {
+            "archivesChecked": [
+              "total-8gib",
+              "single-4.5gib",
+              "members-8334"
+            ],
+            "membersShaVerified": 8367,
+            "mismatches": 0,
+            "unzipOpensAll": true,
+            "explorerOpensAll": true,
+            "macosArchiveUtility": "untested on this box",
+            "perArchive": {
+              "total-8gib": {
+                "entries": 32,
+                "shaChecked": 32,
+                "mismatches": 0,
+                "readbackError": null,
+                "unzip": true,
+                "unzipExit": 0,
+                "explorer": true,
+                "explorerItems": 8
+              },
+              "single-4.5gib": {
+                "entries": 1,
+                "shaChecked": 1,
+                "mismatches": 0,
+                "readbackError": null,
+                "unzip": true,
+                "unzipExit": 0,
+                "explorer": true,
+                "explorerItems": 1
+              },
+              "members-8334": {
+                "entries": 8334,
+                "shaChecked": 8334,
+                "mismatches": 0,
+                "readbackError": null,
+                "unzip": true,
+                "unzipExit": 0,
+                "explorer": true,
+                "explorerItems": 334
+              }
+            }
+          }
+        },
+        "fixture6": {
+          "pass": true,
+          "measured": {
+            "byteIdentical": true,
+            "shaUninterrupted": "ab36521b8466db822f44ef85a1b7fc61dc7898a4b496d0cbde10f2c7bc846a37",
+            "shaAfterKillAndRestart": "ab36521b8466db822f44ef85a1b7fc61dc7898a4b496d0cbde10f2c7bc846a37",
+            "killedAfterBytes": 4228024,
+            "killSignal": "SIGKILL",
+            "error": null
+          }
+        }
+      },
+      "failedFixtures": [
+        "fixture3"
+      ],
+      "selectable": false,
+      "uploadComposability": {
+        "sink": "Node Readable (archive.pipe(dest)) — the archive object IS a Readable",
+        "backpressure": "native Node stream backpressure; pipe() to any Writable, including a TUS/S3 uploader",
+        "verdict": "direct"
+      },
+      "raw": {
+        "legs": {
+          "flat-1gib": {
+            "candidate": "archiver",
+            "leg": "flat-1gib",
+            "pid": 14796,
+            "error": null,
+            "wallClockMs": 23922.2,
+            "bytesOut": 1074070130,
+            "cancelled": false,
+            "systemCpuBusyPct": 30.6,
+            "ownCpuBusyPct": 7.7,
+            "otherCpuBusyPct": 22.9,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 23817,
+              "min": 0.037,
+              "p50": 1.022,
+              "p99": 1.293,
+              "max": 5.087,
+              "mean": 1,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 239,
+              "baseline": 45.84,
+              "min": 0,
+              "p50": 73.58,
+              "p99": 83.06,
+              "max": 83.32,
+              "peakDelta": 37.48,
+              "peakDeltaMaxRss": 39.34
+            },
+            "memberCount": 4,
+            "inputBytes": 1073741824,
+            "compressionRatio": 1.000306,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 24
+          },
+          "total-8gib": {
+            "candidate": "archiver",
+            "leg": "total-8gib",
+            "pid": 10984,
+            "error": null,
+            "wallClockMs": 195030.4,
+            "bytesOut": 8592561410,
+            "cancelled": false,
+            "systemCpuBusyPct": 23.5,
+            "ownCpuBusyPct": 7.4,
+            "otherCpuBusyPct": 16.1,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 183731,
+              "min": 0.006,
+              "p50": 1.008,
+              "p99": 1.295,
+              "max": 16.04,
+              "mean": 1.061,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 1941,
+              "baseline": 45.84,
+              "min": 0,
+              "p50": 72.99,
+              "p99": 84.07,
+              "max": 84.65,
+              "peakDelta": 38.82,
+              "peakDeltaMaxRss": 38.81
+            },
+            "memberCount": 32,
+            "inputBytes": 8589934592,
+            "compressionRatio": 1.000306,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 195
+          },
+          "single-4.5gib": {
+            "candidate": "archiver",
+            "leg": "single-4.5gib",
+            "pid": 2152,
+            "error": null,
+            "wallClockMs": 103458.9,
+            "bytesOut": 4833313097,
+            "cancelled": false,
+            "systemCpuBusyPct": 18.4,
+            "ownCpuBusyPct": 7.4,
+            "otherCpuBusyPct": 11,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 101727,
+              "min": 0.017,
+              "p50": 1.009,
+              "p99": 1.276,
+              "max": 16.425,
+              "mean": 1.016,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 1032,
+              "baseline": 45.86,
+              "min": 0,
+              "p50": 80.11,
+              "p99": 83.53,
+              "max": 83.96,
+              "peakDelta": 38.1,
+              "peakDeltaMaxRss": 38.74
+            },
+            "memberCount": 1,
+            "inputBytes": 4831838208,
+            "compressionRatio": 1.000305,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 104
+          },
+          "members-8334": {
+            "candidate": "archiver",
+            "leg": "members-8334",
+            "pid": 15240,
+            "error": null,
+            "wallClockMs": 5064.5,
+            "bytesOut": 176187046,
+            "cancelled": false,
+            "systemCpuBusyPct": 19.7,
+            "ownCpuBusyPct": 8.7,
+            "otherCpuBusyPct": 11,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 4579,
+              "min": 0.005,
+              "p50": 1,
+              "p99": 4.375,
+              "max": 69.992,
+              "mean": 1.085,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 50,
+              "baseline": 52.35,
+              "min": 0,
+              "p50": 94.02,
+              "p99": 145.4,
+              "max": 145.4,
+              "peakDelta": 93.05,
+              "peakDeltaMaxRss": 93.07
+            },
+            "memberCount": 8334,
+            "inputBytes": 187298408,
+            "compressionRatio": 0.940676,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 5
+          },
+          "cancel": {
+            "candidate": "archiver",
+            "leg": "cancel",
+            "pid": 6524,
+            "error": null,
+            "cancelRequestedAt": 20028.8039,
+            "bytesAtCancelRequest": 899465507,
+            "wallClockMs": 19999,
+            "bytesOut": 899449123,
+            "cancelled": true,
+            "cancelObservedMs": 0.7,
+            "systemCpuBusyPct": 17.1,
+            "ownCpuBusyPct": 7.3,
+            "otherCpuBusyPct": 9.8,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 19450,
+              "min": 0.052,
+              "p50": 1.017,
+              "p99": 1.278,
+              "max": 15.778,
+              "mean": 1.023,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 199,
+              "baseline": 45.92,
+              "min": 0,
+              "p50": 72.91,
+              "p99": 82.94,
+              "max": 83,
+              "peakDelta": 37.08,
+              "peakDeltaMaxRss": 37.75
+            },
+            "memberCount": 32,
+            "inputBytes": 8589934592,
+            "compressionRatio": 0.10471,
+            "cleanup": {
+              "partialExisted": true,
+              "partialBytes": 899449123,
+              "removedMs": 0.8,
+              "stillPresent": false,
+              "openHandlesAfter": 1
+            },
+            "exitCode": 1,
+            "killedBy": null,
+            "durationS": 20
+          }
+        },
+        "integrity": {
+          "total-8gib": {
+            "readback": {
+              "entryCount": 32,
+              "namesUnique": true,
+              "offsetsValid": true,
+              "badOffsets": [],
+              "sizeMismatches": [],
+              "shaChecked": 32,
+              "shaMismatches": [],
+              "error": null,
+              "everyMemberListed": true,
+              "mismatches": 0
+            },
+            "readers": [
+              {
+                "tool": "Info-ZIP unzip",
+                "version": "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send",
+                "exitCode": 0,
+                "opens": true,
+                "stderr": ""
+              },
+              {
+                "tool": "Windows Explorer shell Zip handler (Shell.Application COM)",
+                "tested": true,
+                "exitCode": 0,
+                "topLevelItemCount": 8,
+                "opens": true,
+                "stderr": "",
+                "note": "Items() lists the archive ROOT only; a nested-path archive reports its top-level folder count, not its member count. Opening at all is the assertion."
+              },
+              {
+                "tool": "macOS Archive Utility",
+                "tested": false,
+                "reason": "This spike ran on Windows 11. No macOS machine was available, so no claim is made. §4.5.1 fixture 5 names three readers; two were tested and the third is recorded as untested-on-this-box rather than assumed."
+              }
+            ]
+          },
+          "single-4.5gib": {
+            "readback": {
+              "entryCount": 1,
+              "namesUnique": true,
+              "offsetsValid": true,
+              "badOffsets": [],
+              "sizeMismatches": [],
+              "shaChecked": 1,
+              "shaMismatches": [],
+              "error": null,
+              "everyMemberListed": true,
+              "mismatches": 0
+            },
+            "readers": [
+              {
+                "tool": "Info-ZIP unzip",
+                "version": "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send",
+                "exitCode": 0,
+                "opens": true,
+                "stderr": ""
+              },
+              {
+                "tool": "Windows Explorer shell Zip handler (Shell.Application COM)",
+                "tested": true,
+                "exitCode": 0,
+                "topLevelItemCount": 1,
+                "opens": true,
+                "stderr": "",
+                "note": "Items() lists the archive ROOT only; a nested-path archive reports its top-level folder count, not its member count. Opening at all is the assertion."
+              },
+              {
+                "tool": "macOS Archive Utility",
+                "tested": false,
+                "reason": "This spike ran on Windows 11. No macOS machine was available, so no claim is made. §4.5.1 fixture 5 names three readers; two were tested and the third is recorded as untested-on-this-box rather than assumed."
+              }
+            ]
+          },
+          "members-8334": {
+            "readback": {
+              "entryCount": 8334,
+              "namesUnique": true,
+              "offsetsValid": true,
+              "badOffsets": [],
+              "sizeMismatches": [],
+              "shaChecked": 8334,
+              "shaMismatches": [],
+              "error": null,
+              "everyMemberListed": true,
+              "mismatches": 0
+            },
+            "readers": [
+              {
+                "tool": "Info-ZIP unzip",
+                "version": "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send",
+                "exitCode": 0,
+                "opens": true,
+                "stderr": ""
+              },
+              {
+                "tool": "Windows Explorer shell Zip handler (Shell.Application COM)",
+                "tested": true,
+                "exitCode": 0,
+                "topLevelItemCount": 334,
+                "opens": true,
+                "stderr": "",
+                "note": "Items() lists the archive ROOT only; a nested-path archive reports its top-level folder count, not its member count. Opening at all is the assertion."
+              },
+              {
+                "tool": "macOS Archive Utility",
+                "tested": false,
+                "reason": "This spike ran on Windows 11. No macOS machine was available, so no claim is made. §4.5.1 fixture 5 names three readers; two were tested and the third is recorded as untested-on-this-box rather than assumed."
+              }
+            ]
+          }
+        },
+        "resume": {
+          "ledger": "scripts/bench-results/d1c0-frozen-members.json",
+          "ledgerMembers": 400,
+          "runA": {
+            "bytesOut": 8370107,
+            "sha256": "ab36521b8466db822f44ef85a1b7fc61dc7898a4b496d0cbde10f2c7bc846a37",
+            "wallClockMs": 408.3
+          },
+          "killedRun": {
+            "killedBy": "SIGKILL",
+            "partialBytes": 4228024
+          },
+          "restart": {
+            "bytesOut": 8370107,
+            "sha256": "ab36521b8466db822f44ef85a1b7fc61dc7898a4b496d0cbde10f2c7bc846a37",
+            "wallClockMs": 416.8
+          },
+          "byteIdentical": true,
+          "verdict": "pass"
+        }
+      }
+    },
+    {
+      "candidate": "yazl",
+      "version": "3.3.1",
+      "fixtures": {
+        "fixture1": {
+          "pass": false,
+          "measured": {
+            "peakRssDeltaMiB": {
+              "1GiB": 19.86,
+              "8GiB": 38.67,
+              "single>4GiB": 20.32
+            },
+            "flatnessDeviationPct": 94.7,
+            "outputBytes": {
+              "8GiB-leg": 8592561826,
+              "single-member-leg": 4833313106
+            },
+            "withinCap": true,
+            "flat": false,
+            "bothLimbsOver4GiB": true
+          }
+        },
+        "fixture2": {
+          "pass": true,
+          "measured": {
+            "memberCount": 8334,
+            "entriesInCentralDirectory": 8334,
+            "everyMemberListed": true,
+            "offsetsValid": true,
+            "namesUnique": true,
+            "peakRssDeltaMiB": 54.59,
+            "readbackError": null
+          }
+        },
+        "fixture3": {
+          "pass": true,
+          "measured": {
+            "worstMaxStallMs": 16.908,
+            "worstP99StallMs": 15.499,
+            "perLeg": {
+              "flat-1gib": {
+                "max": 16.908,
+                "p99": 15.499,
+                "p50": 0.993
+              },
+              "total-8gib": {
+                "max": 16.032,
+                "p99": 1.284,
+                "p50": 0.987
+              },
+              "single-4.5gib": {
+                "max": 15.598,
+                "p99": 1.323,
+                "p50": 0.992
+              },
+              "members-8334": {
+                "max": 9.282,
+                "p99": 1.358,
+                "p50": 1
+              },
+              "cancel": {
+                "max": 14.377,
+                "p99": 1.312,
+                "p50": 0.996
+              }
+            }
+          }
+        },
+        "fixture4": {
+          "pass": true,
+          "measured": {
+            "cancelObservedS": 0,
+            "partialRemovedS": 0.001,
+            "partialBytesAtCancel": 952697123,
+            "partialStillPresent": false,
+            "openFileHandlesAfter": 2,
+            "error": null
+          }
+        },
+        "fixture5": {
+          "pass": true,
+          "measured": {
+            "archivesChecked": [
+              "total-8gib",
+              "single-4.5gib",
+              "members-8334"
+            ],
+            "membersShaVerified": 8367,
+            "mismatches": 0,
+            "unzipOpensAll": true,
+            "explorerOpensAll": true,
+            "macosArchiveUtility": "untested on this box",
+            "perArchive": {
+              "total-8gib": {
+                "entries": 32,
+                "shaChecked": 32,
+                "mismatches": 0,
+                "readbackError": null,
+                "unzip": true,
+                "unzipExit": 0,
+                "explorer": true,
+                "explorerItems": 8
+              },
+              "single-4.5gib": {
+                "entries": 1,
+                "shaChecked": 1,
+                "mismatches": 0,
+                "readbackError": null,
+                "unzip": true,
+                "unzipExit": 0,
+                "explorer": true,
+                "explorerItems": 1
+              },
+              "members-8334": {
+                "entries": 8334,
+                "shaChecked": 8334,
+                "mismatches": 0,
+                "readbackError": null,
+                "unzip": true,
+                "unzipExit": 0,
+                "explorer": true,
+                "explorerItems": 334
+              }
+            }
+          }
+        },
+        "fixture6": {
+          "pass": true,
+          "measured": {
+            "byteIdentical": true,
+            "shaUninterrupted": "c9c67449791c83eb409af57ca005844d148865f3bf7172c89701d52f4bfdf55c",
+            "shaAfterKillAndRestart": "c9c67449791c83eb409af57ca005844d148865f3bf7172c89701d52f4bfdf55c",
+            "killedAfterBytes": 4228024,
+            "killSignal": "SIGKILL",
+            "error": null
+          }
+        }
+      },
+      "failedFixtures": [
+        "fixture1"
+      ],
+      "selectable": false,
+      "uploadComposability": {
+        "sink": "Node Readable (zip.outputStream)",
+        "backpressure": "native Node stream backpressure on outputStream",
+        "verdict": "direct"
+      },
+      "raw": {
+        "legs": {
+          "flat-1gib": {
+            "candidate": "yazl",
+            "leg": "flat-1gib",
+            "pid": 24656,
+            "error": null,
+            "wallClockMs": 32003.6,
+            "bytesOut": 1074070166,
+            "cancelled": false,
+            "systemCpuBusyPct": 12,
+            "ownCpuBusyPct": 5.6,
+            "otherCpuBusyPct": 6.4,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 22999,
+              "min": 0.004,
+              "p50": 0.993,
+              "p99": 15.499,
+              "max": 16.908,
+              "mean": 1.391,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 313,
+              "baseline": 46.09,
+              "min": 0,
+              "p50": 59.55,
+              "p99": 65.95,
+              "max": 65.95,
+              "peakDelta": 19.86,
+              "peakDeltaMaxRss": 19.99
+            },
+            "memberCount": 4,
+            "inputBytes": 1073741824,
+            "compressionRatio": 1.000306,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 32
+          },
+          "total-8gib": {
+            "candidate": "yazl",
+            "leg": "total-8gib",
+            "pid": 25444,
+            "error": null,
+            "wallClockMs": 174601.2,
+            "bytesOut": 8592561826,
+            "cancelled": false,
+            "systemCpuBusyPct": 15.7,
+            "ownCpuBusyPct": 7.9,
+            "otherCpuBusyPct": 7.8,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 173298,
+              "min": 0.007,
+              "p50": 0.987,
+              "p99": 1.284,
+              "max": 16.032,
+              "mean": 1.007,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 1745,
+              "baseline": 46.12,
+              "min": 0,
+              "p50": 66.93,
+              "p99": 84.41,
+              "max": 84.79,
+              "peakDelta": 38.67,
+              "peakDeltaMaxRss": 38.67
+            },
+            "memberCount": 32,
+            "inputBytes": 8589934592,
+            "compressionRatio": 1.000306,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 175
+          },
+          "single-4.5gib": {
+            "candidate": "yazl",
+            "leg": "single-4.5gib",
+            "pid": 29160,
+            "error": null,
+            "wallClockMs": 100570.2,
+            "bytesOut": 4833313106,
+            "cancelled": false,
+            "systemCpuBusyPct": 20.1,
+            "ownCpuBusyPct": 7.8,
+            "otherCpuBusyPct": 12.3,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 99722,
+              "min": 0.004,
+              "p50": 0.992,
+              "p99": 1.323,
+              "max": 15.598,
+              "mean": 1.008,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 1005,
+              "baseline": 46.13,
+              "min": 0,
+              "p50": 65.81,
+              "p99": 66.32,
+              "max": 66.45,
+              "peakDelta": 20.32,
+              "peakDeltaMaxRss": 20.71
+            },
+            "memberCount": 1,
+            "inputBytes": 4831838208,
+            "compressionRatio": 1.000305,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 101
+          },
+          "members-8334": {
+            "candidate": "yazl",
+            "leg": "members-8334",
+            "pid": 15640,
+            "error": null,
+            "wallClockMs": 4338.1,
+            "bytesOut": 176262052,
+            "cancelled": false,
+            "systemCpuBusyPct": 20.5,
+            "ownCpuBusyPct": 9,
+            "otherCpuBusyPct": 11.5,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 4305,
+              "min": 0.036,
+              "p50": 1,
+              "p99": 1.358,
+              "max": 9.282,
+              "mean": 1.005,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 43,
+              "baseline": 52.52,
+              "min": 0,
+              "p50": 92.35,
+              "p99": 107.11,
+              "max": 107.11,
+              "peakDelta": 54.59,
+              "peakDeltaMaxRss": 54.78
+            },
+            "memberCount": 8334,
+            "inputBytes": 187298408,
+            "compressionRatio": 0.941076,
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 5
+          },
+          "cancel": {
+            "candidate": "yazl",
+            "leg": "cancel",
+            "pid": 7524,
+            "error": null,
+            "cancelRequestedAt": 20032.7406,
+            "bytesAtCancelRequest": 952713507,
+            "wallClockMs": 19998.9,
+            "bytesOut": 952697123,
+            "cancelled": true,
+            "cancelObservedMs": 0.4,
+            "systemCpuBusyPct": 18,
+            "ownCpuBusyPct": 7.9,
+            "otherCpuBusyPct": 10.1,
+            "cpuCount": 16,
+            "eventLoopDelayMs": {
+              "samples": 19888,
+              "min": 0.043,
+              "p50": 0.996,
+              "p99": 1.312,
+              "max": 14.377,
+              "mean": 1.005,
+              "resolutionMs": 1,
+              "note": "perf_hooks.monitorEventLoopDelay at 1 ms resolution; values include the 1 ms sampling interval as a floor."
+            },
+            "rssMiB": {
+              "samples": 199,
+              "baseline": 46.23,
+              "min": 0,
+              "p50": 58.61,
+              "p99": 66.49,
+              "max": 66.49,
+              "peakDelta": 20.26,
+              "peakDeltaMaxRss": 20.37
+            },
+            "memberCount": 32,
+            "inputBytes": 8589934592,
+            "compressionRatio": 0.110909,
+            "cleanup": {
+              "partialExisted": true,
+              "partialBytes": 952697123,
+              "removedMs": 0.5,
+              "stillPresent": false,
+              "openHandlesAfter": 2
+            },
+            "exitCode": 0,
+            "killedBy": null,
+            "durationS": 20
+          }
+        },
+        "integrity": {
+          "total-8gib": {
+            "readback": {
+              "entryCount": 32,
+              "namesUnique": true,
+              "offsetsValid": true,
+              "badOffsets": [],
+              "sizeMismatches": [],
+              "shaChecked": 32,
+              "shaMismatches": [],
+              "error": null,
+              "everyMemberListed": true,
+              "mismatches": 0
+            },
+            "readers": [
+              {
+                "tool": "Info-ZIP unzip",
+                "version": "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send",
+                "exitCode": 0,
+                "opens": true,
+                "stderr": ""
+              },
+              {
+                "tool": "Windows Explorer shell Zip handler (Shell.Application COM)",
+                "tested": true,
+                "exitCode": 0,
+                "topLevelItemCount": 8,
+                "opens": true,
+                "stderr": "",
+                "note": "Items() lists the archive ROOT only; a nested-path archive reports its top-level folder count, not its member count. Opening at all is the assertion."
+              },
+              {
+                "tool": "macOS Archive Utility",
+                "tested": false,
+                "reason": "This spike ran on Windows 11. No macOS machine was available, so no claim is made. §4.5.1 fixture 5 names three readers; two were tested and the third is recorded as untested-on-this-box rather than assumed."
+              }
+            ]
+          },
+          "single-4.5gib": {
+            "readback": {
+              "entryCount": 1,
+              "namesUnique": true,
+              "offsetsValid": true,
+              "badOffsets": [],
+              "sizeMismatches": [],
+              "shaChecked": 1,
+              "shaMismatches": [],
+              "error": null,
+              "everyMemberListed": true,
+              "mismatches": 0
+            },
+            "readers": [
+              {
+                "tool": "Info-ZIP unzip",
+                "version": "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send",
+                "exitCode": 0,
+                "opens": true,
+                "stderr": ""
+              },
+              {
+                "tool": "Windows Explorer shell Zip handler (Shell.Application COM)",
+                "tested": true,
+                "exitCode": 0,
+                "topLevelItemCount": 1,
+                "opens": true,
+                "stderr": "",
+                "note": "Items() lists the archive ROOT only; a nested-path archive reports its top-level folder count, not its member count. Opening at all is the assertion."
+              },
+              {
+                "tool": "macOS Archive Utility",
+                "tested": false,
+                "reason": "This spike ran on Windows 11. No macOS machine was available, so no claim is made. §4.5.1 fixture 5 names three readers; two were tested and the third is recorded as untested-on-this-box rather than assumed."
+              }
+            ]
+          },
+          "members-8334": {
+            "readback": {
+              "entryCount": 8334,
+              "namesUnique": true,
+              "offsetsValid": true,
+              "badOffsets": [],
+              "sizeMismatches": [],
+              "shaChecked": 8334,
+              "shaMismatches": [],
+              "error": null,
+              "everyMemberListed": true,
+              "mismatches": 0
+            },
+            "readers": [
+              {
+                "tool": "Info-ZIP unzip",
+                "version": "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send",
+                "exitCode": 0,
+                "opens": true,
+                "stderr": ""
+              },
+              {
+                "tool": "Windows Explorer shell Zip handler (Shell.Application COM)",
+                "tested": true,
+                "exitCode": 0,
+                "topLevelItemCount": 334,
+                "opens": true,
+                "stderr": "",
+                "note": "Items() lists the archive ROOT only; a nested-path archive reports its top-level folder count, not its member count. Opening at all is the assertion."
+              },
+              {
+                "tool": "macOS Archive Utility",
+                "tested": false,
+                "reason": "This spike ran on Windows 11. No macOS machine was available, so no claim is made. §4.5.1 fixture 5 names three readers; two were tested and the third is recorded as untested-on-this-box rather than assumed."
+              }
+            ]
+          }
+        },
+        "resume": {
+          "ledger": "scripts/bench-results/d1c0-frozen-members.json",
+          "ledgerMembers": 400,
+          "runA": {
+            "bytesOut": 8373707,
+            "sha256": "c9c67449791c83eb409af57ca005844d148865f3bf7172c89701d52f4bfdf55c",
+            "wallClockMs": 258.7
+          },
+          "killedRun": {
+            "killedBy": "SIGKILL",
+            "partialBytes": 4228024
+          },
+          "restart": {
+            "bytesOut": 8373707,
+            "sha256": "c9c67449791c83eb409af57ca005844d148865f3bf7172c89701d52f4bfdf55c",
+            "wallClockMs": 260.2
+          },
+          "byteIdentical": true,
+          "verdict": "pass"
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "selected": null,
+    "passing": [],
+    "at150": "measured",
+    "outcome": "NO CANDIDATE PASSES — §4.5.1 names this as a legitimate spike outcome. D1c is re-scoped: split archives, an object-tree package, or a lower cap."
+  }
+}

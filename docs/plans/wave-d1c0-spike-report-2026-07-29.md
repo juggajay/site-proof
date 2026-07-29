@@ -17,6 +17,13 @@ reported per leg."*
 
 ## THE HEADLINE, STATED FIRST
 
+> **SUPERSEDED IN PART — read §7 before acting on anything below.** Everything on this page was
+> measured at the **50 GB / 50,000-member** reference scale on a **loaded** box. §4.5.7's entry
+> gate re-ran the field at the decided **8 GiB / 8,334-member cap on a quiet box** on
+> 2026-07-29; **§7 carries that result and it is the one `D1c.1` is governed by.** The
+> conclusion is unchanged — **no candidate passes** — but *which rows fail, and why*, changed
+> materially, and two of this report's forward-looking claims did not survive the re-run.
+
 > **NO CANDIDATE PASSES.** All four writers miss at least one predeclared §4.5.1 row. §4.5.1
 > names this as a legitimate outcome — *"If nothing passes, `D1c.0`'s output is 'no candidate
 > passes' and D1c is re-scoped"* — and that is what this spike returns. **No threshold was
@@ -538,3 +545,133 @@ have forced split archives does not hold** (§4.2).
 - **`--smoke` mode** exists for exercising the harness in a minute. It cannot cross 4 GiB, so
   fixture 1 is meaningless under it; every smoke report is stamped `smoke: true`. **All results
   in this report are full-size runs.**
+
+---
+
+## 7. §4.5.7 re-grade — at the 8 GiB cap, on a quiet box (2026-07-29)
+
+**Spec source:** `docs/plans/wave-d-handover-spec-2026-07-28.md` **§4.5.7**, `D1c.1`'s entry
+gate. Thresholds are **§4.5.1 verbatim and unchanged** (§4.5.7 item 5).
+**Committed results:** `backend/scripts/bench-results/d1c1-writer-regrade-2026-07-29T09-00-00-000Z.json`
+(`complete: true`, not a smoke run). Harness: `backend/scripts/bench-zip-spike.mjs`, re-used and
+extended — not rewritten. **Recorded against AT-150**, the same assertion re-run at the decided
+cap.
+
+### 7.1 THE RESULT, STATED FIRST
+
+> **THE GATE FAILS. NO CANDIDATE PASSES AT THE CAP EITHER.** Per §4.5.7 item 6, **D1c re-scopes
+> to an object-tree package** — the named fallback, and the only one left now that split
+> archives are the shipped design rather than an alternative to it.
+>
+> **archiver 8.0.0** passes five rows and misses **F3** (max single-tick stall **69.99 ms**
+> against 50 ms). **yazl 3.3.1** passes five rows and misses **F1** (RSS flatness **94.7%**
+> against ±15%). **Each fails exactly one row, and it is a different row.**
+>
+> **No threshold was relaxed, and no row was softened.** Both misses were re-confirmed rather
+> than taken on a single sample (§7.4).
+
+### 7.2 The fixture table
+
+Two candidates, per §4.5.7: `fflate` is permanently rejected (silent >4 GiB corruption) and
+`@zip.js/zip.js` missed two structural bars and does not return.
+
+| | **F1** >4 GiB, RSS ≤256 MiB **and flat ±15%** | **F2** 8,334 members, RSS ≤256 MiB, CD correct | **F3** max stall ≤50 ms, p99 ≤20 ms | **F4** cancel ≤5 s, cleanup ≤30 s | **F5** integrity, **zero** mismatches | **F6** resume byte-identical | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **archiver** 8.0.0 | ✅ **3.6%** (37.48 → 38.82 MiB; single-limb 38.10) | ✅ **93.05 MiB**, 8,334 entries, offsets valid, names unique | ❌ max **69.99 ms** (p99 **4.38** ✓) | ✅ 0.001 s / 0.002 s | ✅ 8,367 members SHA-verified, 0 mismatches | ✅ identical | **reject: F3** |
+| **yazl** 3.3.1 | ❌ **94.7%** (19.86 → 38.67 MiB; single-limb 20.32) | ✅ **54.59 MiB**, 8,334 entries, offsets valid, names unique | ✅ max **16.91 ms**, p99 **15.50** | ✅ 0.000 s / 0.001 s | ✅ 8,367 members SHA-verified, 0 mismatches | ✅ identical | **reject: F1** |
+
+Both limbs of F1 were genuinely oversized — 8,592,561,410 / 8,592,561,826 bytes on the total
+limb and 4,833,313,097 / 4,833,313,106 on the single-member limb — so neither pass nor fail is
+vacuous. F5 covers three archives per candidate under **yauzl** (independent parser), **Info-ZIP
+`unzip -t`** and the **Windows Explorer** shell handler; **macOS Archive Utility remains
+untested on this box** and is recorded as such, not assumed.
+
+### 7.3 Quietness, which §4.5.7 makes a precondition rather than a hope
+
+- **Idle load before the first leg: 11.5% system CPU busy**, 16 logical CPUs, 22,585 MiB free —
+  measured by the harness over a 5 s window with no benchmark child running, and recorded in
+  the results file at `regrade.idleLoadBeforeRun`. Against the spike's 72–78%.
+- **Every leg records the CPU consumed by processes *other than the benchmark*.** The harness now
+  subtracts its own `process.cpuUsage()` (threadpool included, which is where zlib runs) from the
+  system-wide busy fraction. Without that subtraction a quietness gate fires on the very work it
+  is measuring.
+- **`regrade.contendedLegs` is empty.** No leg exceeded the 30% other-process gate, so no leg
+  needed the re-run §4.5.7 item 3 mandates. The measurement is admissible on the spec's own terms.
+- Sequential throughout: one candidate, one leg, one child process at a time. No sibling agents.
+
+### 7.4 Both misses were re-confirmed, because one sample would not have been enough
+
+§6.1 warns that max single-tick stall is an extreme-value statistic that swung 4× on identical
+input under load. archiver's miss is only 1.4× over the bar, so a single sample could not carry
+a decision that re-scopes a phase. An **ungraded** attribution probe re-ran the 8,334-member leg
+five times per candidate:
+
+| | 1 | 2 | 3 | 4 | 5 | graded run | bar |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **archiver** max stall | 72.42 | 71.04 | 67.44 | 72.68 | 65.90 | **69.99** | ≤50 ms |
+| **yazl** max stall | 7.41 | 7.11 | 15.56 | 16.38 | 15.51 | **16.91** | ≤50 ms |
+
+**All five archiver samples exceed 50 ms, by 32–45%**, and the graded value sits mid-range.
+The FAIL is a stable property of archiver's per-entry cost, not a tail sample. yazl's stalls are
+robustly inside.
+
+**yazl's F1 miss needed no probe — it had already been measured twice.** 20.00 → 39.05 MiB
+(95.2%) on a loaded box, 19.86 → 38.67 MiB (**94.7%**) on a quiet one. Two runs, two machine
+states, the same answer to within 0.5 points. §4.5.7 item 1 anticipated exactly this and
+pre-committed the ruling: *"If the quiet figure still misses ±15%, the row stays FAIL."* It
+misses. The row stays FAIL.
+
+### 7.5 What the re-run changed — including two claims of this report that did not survive
+
+**§4.5.7's stated expectation was wrong, and the measurement is what counts.** The spec
+predicted *"yazl clears and archiver does not"*. **Neither cleared, and the reasoning behind the
+prediction inverted:**
+
+1. **archiver was expected to fail F2. It passes F2 comfortably** — **93.05 MiB** at 8,334
+   members, against **475.73 MiB** at 50,000. Its per-entry memory cost was never the structural
+   defect it looked like at the reference scale; it was a member-count artefact, and the cap
+   removes it.
+2. **yazl was expected to clear. It does not** — its F1 flatness miss is the one miss in the
+   whole field that was never explained by member count, and §4.5.7 item 1 correctly refused it
+   a "fresh chance on the arithmetic".
+3. **§6.1's caveat is vindicated in both directions.** Quietness mattered enormously where the
+   report said it would: archiver's worst stall fell **523.2 → 69.99 ms** and yazl's
+   **113.4 → 16.91 ms**, and yazl now *passes* F3, a row it failed at the reference scale. It
+   did not rescue anything the report said it would not.
+4. **§3.3's conclusion that "archiver's two failures are one failure" is now half-right.** The
+   memory half resolved at the cap; the stall half did not. archiver exceeds 50 ms at 5,000
+   members and still exceeds it at 8,334 on an idle box — its central-directory write is simply
+   expensive per entry.
+
+**What no longer holds:** this report's §1 framing that *"every miss except one is confined to
+the 50,000-member leg"* is superseded. At the cap, the member-count misses are gone and what
+remains is **two independent, scale-invariant defects** — archiver's per-entry stall and yazl's
+RSS flatness — which is precisely why the cap does not rescue the field.
+
+### 7.6 The selection statement
+
+**No writer is selected.** Neither `archiver` nor `yazl` passes all six §4.5.1 fixtures at the
+8 GiB / 8,334-member cap on a quiet box. **The §4.5.7 entry gate FAILS, and per §4.5.7 item 6
+D1c re-scopes to an object-tree package.**
+
+**This is a named, legitimate outcome, not an accident** — §4.5.1 wrote it down in advance
+precisely so it would not read as failure on the day it happened. **The honest thing to record
+alongside it:** yazl now misses on a **relative** band while sitting at trivial absolute values
+(38.67 MiB is **15% of the 256 MiB cap**), and archiver misses a stall row whose user-facing
+rationale `[DH-j]` already removed by moving the worker out of the API process (§16.2). **Both
+observations are arguments for changing a threshold, and a build agent may not change one.**
+Whether either row should be re-specified is a decision for whoever owns §4.5.1 — recorded here
+as an input to that decision, and explicitly **not acted on**.
+
+### 7.7 What was not tested, and is not claimed
+
+- **macOS Archive Utility** — this box is Windows; unchanged from §6.2.
+- **No live upload.** Nothing touched Supabase or any network. §3.5's composability verdicts
+  are unchanged code-level analysis and were not re-measured.
+- **Neither candidate is a product dependency.** Both were dev-installed into the gitignored
+  throwaway tree `backend/scripts/bench-zip-deps/` and resolved through a `createRequire` rooted
+  there. **No shipping `package.json` was touched** — the winner installs as a prod dep in
+  `D1c.1`, and there is no winner to install.
+- **The 16 GiB leg** that would distinguish yazl's flatness miss (one-time V8 heap watermark vs
+  size-proportional growth) was **still not run**. It is out of scope for a gate whose span
+  §4.5.7 fixes at 1 → 8 GiB, and the row is scored FAIL on the span the spec names.
