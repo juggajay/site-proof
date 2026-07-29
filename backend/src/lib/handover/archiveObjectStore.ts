@@ -306,20 +306,35 @@ class LocalArchiveObjectStore implements ArchiveObjectStore {
 /**
  * The store this process should use, or a refusal.
  *
- * Called once at worker start (so an unconfigured production worker refuses to
- * claim rather than failing per job) and per request on the download path.
+ * Called once at worker start — so an unconfigured production worker refuses to
+ * claim rather than failing job by job — and once per download request.
+ *
+ * MEMOIZED on the resolved configuration, because the download path calls it
+ * per request and an `S3Client` per download would build a fresh connection
+ * pool for every archive served. Keyed on the config itself rather than on
+ * "have I run before", so a process whose credentials change picks up the new
+ * ones without a restart.
  */
+let cachedStore: { key: string; store: ArchiveObjectStore } | null = null;
+
 export function resolveArchiveObjectStore(
   env: NodeJS.ProcessEnv = process.env,
 ): ArchiveObjectStore {
   const config = readS3Config(env);
   assertDurableArchiveStorage({ s3Configured: config !== null, nodeEnv: env.NODE_ENV });
 
+  // The secret is NOT in the key — a cache key gets logged eventually.
+  const key = config ? `s3:${config.endpoint}:${config.region}:${config.accessKeyId}` : 'local';
+  if (cachedStore?.key === key) return cachedStore.store;
+
   if (!config) {
     logInfo('[Handover Export] No S3 configuration; using local archive storage (non-production)');
-    return new LocalArchiveObjectStore();
+    cachedStore = { key, store: new LocalArchiveObjectStore() };
+    return cachedStore.store;
   }
-  return new S3ArchiveObjectStore(createS3Client(config));
+
+  cachedStore = { key, store: new S3ArchiveObjectStore(createS3Client(config)) };
+  return cachedStore.store;
 }
 
 /** Exposed for tests and for the sweeper, which needs a store without the
