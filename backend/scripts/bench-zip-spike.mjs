@@ -84,6 +84,12 @@ const GiB = 1024 * MiB;
 
 const CANDIDATES = ['fflate', 'archiver', 'yazl', '@zip.js/zip.js'];
 
+/** Defined here rather than at the CLI because the §4.5.7 constants below read it. */
+const arg = (name, fallback) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : fallback;
+};
+
 /**
  * The clock every entry is stamped with. ZIP stores a DOS date/time per member;
  * unpinned, fixture 6's byte-identity assertion is untestable for reasons that
@@ -91,6 +97,28 @@ const CANDIDATES = ['fflate', 'archiver', 'yazl', '@zip.js/zip.js'];
  */
 const PINNED_MTIME = new Date('2026-01-01T00:00:00.000Z');
 const DEFLATE_LEVEL = 6;
+
+/**
+ * §4.5.7 — the D1c.1 entry gate. Two knobs, and NEITHER is a threshold.
+ *
+ * `--members=N` moves fixture 2's SCALE, not its bar. §4.5.7 item 2 derives the
+ * per-archive member ceiling the decided 8 GiB cap implies: the reference dataset
+ * (§12) is 50,000 members, it delivers as 6 archives at the cap, and
+ * 50,000 / 6 = 8,333.3 -> 8,334. The predeclared pass conditions (peak RSS delta
+ * <= 256 MiB, central directory correct) are untouched, and `FIXTURES` below is
+ * NOT edited — §4.5.7 item 5: predeclared numbers do not move because the scale
+ * did. The central-directory check grades against the count actually offered to
+ * the writer, so a smaller run is not a weaker one.
+ *
+ * `--quiet-max-other-cpu=N` implements §4.5.7 item 3: quietness is a
+ * PRECONDITION, not a hope. A leg that ran with more than N% of the box's CPU
+ * consumed by processes OTHER than this benchmark is re-run rather than
+ * reported. It gates nothing about the writer — it gates whether a measurement
+ * is admissible at all.
+ */
+const F2_MEMBERS = Number(arg('members', 50000));
+const F2_LEG_ID = `members-${F2_MEMBERS}`;
+const QUIET_MAX_OTHER_CPU_PCT = Number(arg('quiet-max-other-cpu', 30));
 
 // ---------------------------------------------------------------------------
 // The predeclared thresholds — spec §4.5.1, transcribed verbatim.
@@ -674,6 +702,12 @@ function startMonitors() {
   // under. A stall number without its concurrent load is not reproducible, and
   // saying so is cheaper than pretending the box was quiet.
   const cpu0 = cpuSnapshot();
+  // §4.5.7 item 3 needs "busy because of OTHER processes", not "busy". This
+  // benchmark deflates at level 6 and legitimately burns a core or more of its
+  // own; subtracting its own usage is the difference between a quietness gate
+  // and a gate that fires on the thing it is measuring.
+  const own0 = process.cpuUsage();
+  const wall0 = performance.now();
   const timer = setInterval(() => rss.push(process.memoryUsage().rss), 100);
   timer.unref();
   return {
@@ -682,6 +716,20 @@ function startMonitors() {
       const dBusy = cpu1.busy - cpu0.busy;
       const dIdle = cpu1.idle - cpu0.idle;
       const systemCpuBusyPct = dBusy + dIdle > 0 ? Number(((100 * dBusy) / (dBusy + dIdle)).toFixed(1)) : null;
+      const own = process.cpuUsage(own0);
+      const wallMs = performance.now() - wall0;
+      const cores = os.cpus().length;
+      // Own CPU as a fraction of the whole box, so it is on the same scale as
+      // systemCpuBusyPct. cpuUsage() is microseconds and covers the libuv
+      // threadpool, which is where zlib actually runs.
+      const ownCpuBusyPct =
+        wallMs > 0 && cores > 0
+          ? Number((((own.user + own.system) / 1000 / (wallMs * cores)) * 100).toFixed(1))
+          : null;
+      const otherCpuBusyPct =
+        systemCpuBusyPct == null || ownCpuBusyPct == null
+          ? null
+          : Number(Math.max(0, systemCpuBusyPct - ownCpuBusyPct).toFixed(1));
       clearInterval(timer);
       loop.disable();
       const maxRss = process.resourceUsage().maxRSS;
@@ -690,6 +738,8 @@ function startMonitors() {
       const ms = (ns) => Number((ns / 1e6).toFixed(3));
       return {
         systemCpuBusyPct,
+        ownCpuBusyPct,
+        otherCpuBusyPct,
         cpuCount: os.cpus().length,
         eventLoopDelayMs: {
           samples: loop.count,
@@ -714,6 +764,27 @@ function startMonitors() {
         },
       };
     },
+  };
+}
+
+/**
+ * §4.5.7 item 3's precondition, measured rather than asserted: the box's
+ * system-wide CPU busy fraction over `ms` with nothing of ours running. Recorded
+ * in the report so "the box was quiet" is a number a reader can check, not a
+ * claim the author made about their own machine.
+ */
+async function measureIdle(ms = 5000) {
+  const a = cpuSnapshot();
+  await new Promise((r) => setTimeout(r, ms));
+  const b = cpuSnapshot();
+  const dBusy = b.busy - a.busy;
+  const dIdle = b.idle - a.idle;
+  return {
+    windowMs: ms,
+    systemCpuBusyPct: dBusy + dIdle > 0 ? Number(((100 * dBusy) / (dBusy + dIdle)).toFixed(1)) : null,
+    cpuCount: os.cpus().length,
+    freeMemMiB: Math.round(os.freemem() / MiB),
+    measuredBefore: 'the first candidate leg, with no benchmark child running',
   };
 }
 
@@ -1029,11 +1100,11 @@ const LEGS = (scratch, scale) => [
     verify: 'full',
   },
   {
-    id: 'members-50k',
+    id: F2_LEG_ID,
     fixture: 2,
     kind: 'many',
-    count: FIXTURES[2].memberCount,
-    label: '50,000 members, §4.5.3 mix',
+    count: F2_MEMBERS,
+    label: `${F2_MEMBERS.toLocaleString('en-AU')} members, §4.5.3 mix`,
     verify: 'full',
   },
   {
@@ -1055,8 +1126,27 @@ async function runCandidate(candidate, scratch, opts, ledger) {
     fs.rmSync(outPath, { force: true });
     process.stdout.write(`  ${candidate} / ${leg.id} ... `);
     const started = Date.now();
-    const res = await spawnLeg({ candidate, leg, scratch, outPath });
+    let res = await spawnLeg({ candidate, leg, scratch, outPath });
     res.durationS = Math.round((Date.now() - started) / 1000);
+    // §4.5.7 item 3: "a leg that records a busy fraction consistent with
+    // contention is RE-RUN, not reported." One re-run, and the discarded
+    // attempt is kept in the artefact so the discard is auditable rather than
+    // silent. If the re-run is contended too, the leg is reported WITH the flag
+    // — the harness does not get to invent a quiet box that does not exist.
+    if (res.otherCpuBusyPct != null && res.otherCpuBusyPct > QUIET_MAX_OTHER_CPU_PCT) {
+      process.stdout.write(`CONTENDED (${res.otherCpuBusyPct}% other-process CPU) — re-running\n`);
+      const discarded = res;
+      fs.rmSync(outPath, { force: true });
+      const retryStarted = Date.now();
+      res = await spawnLeg({ candidate, leg, scratch, outPath });
+      res.durationS = Math.round((Date.now() - retryStarted) / 1000);
+      res.quietnessRerun = {
+        reason: `first attempt ran under ${discarded.otherCpuBusyPct}% other-process CPU, over the ${QUIET_MAX_OTHER_CPU_PCT}% admissibility gate`,
+        discardedAttempt: discarded,
+      };
+      res.stillContended = res.otherCpuBusyPct != null && res.otherCpuBusyPct > QUIET_MAX_OTHER_CPU_PCT;
+      process.stdout.write(`  ${candidate} / ${leg.id} (re-run) ... `);
+    }
     legs[leg.id] = res;
     process.stdout.write(
       res.error
@@ -1210,15 +1300,18 @@ function gradeCandidate(candidate, data) {
   }
 
   // ---- Fixture 2 ----
-  const many = legs['members-50k'];
-  const manyCheck = integrity['members-50k']?.readback;
+  const many = legs[F2_LEG_ID];
+  const manyCheck = integrity[F2_LEG_ID]?.readback;
   if (!many) v.fixture2 = say(false, 'not run');
   else if (many.error) v.fixture2 = say(false, `did not complete: ${many.error.message}`);
   else {
+    // Graded against the count actually offered to the writer (§4.5.7 item 2
+    // moves the scale to 8,334; the bar — every member listed, offsets valid,
+    // <= 256 MiB — is FIXTURES[2]'s, unchanged).
     const cdOk = Boolean(
       manyCheck &&
         !manyCheck.error &&
-        manyCheck.entryCount === FIXTURES[2].memberCount &&
+        manyCheck.entryCount === many.memberCount &&
         manyCheck.everyMemberListed &&
         manyCheck.namesUnique &&
         manyCheck.offsetsValid,
@@ -1363,11 +1456,6 @@ function writeLedger(count) {
 // CLI
 // ---------------------------------------------------------------------------
 
-const arg = (name, fallback) => {
-  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
-  return hit ? hit.slice(name.length + 3) : fallback;
-};
-
 const childJob = arg('child', null);
 if (childJob) {
   await runChild(JSON.parse(fs.readFileSync(childJob, 'utf8')));
@@ -1444,7 +1532,11 @@ if (childJob) {
   const started = new Date();
   const ledger = writeLedger(400);
   process.stdout.write(`\nWave D D1c.0 — streaming ZIP writer + storage spike\n`);
-  process.stdout.write(`scratch: ${scratch}   node ${process.version}   ${process.platform} ${process.arch}\n\n`);
+  process.stdout.write(`scratch: ${scratch}   node ${process.version}   ${process.platform} ${process.arch}\n`);
+  process.stdout.write(`fixture 2 member count: ${F2_MEMBERS.toLocaleString('en-AU')}   quietness gate: <= ${QUIET_MAX_OTHER_CPU_PCT}% other-process CPU\n`);
+  process.stdout.write('measuring idle load ... ');
+  const idleLoad = await measureIdle();
+  process.stdout.write(`${idleLoad.systemCpuBusyPct}% system CPU busy, ${idleLoad.freeMemMiB} MiB free\n\n`);
 
   // Results are written after EVERY candidate, not once at the end. A full pass
   // is ~80 minutes and the first attempt at this was killed on the fourth
@@ -1473,12 +1565,12 @@ if (childJob) {
     if (!process.argv.includes('--no-write'))
       fs.writeFileSync(
         outPath,
-        `${JSON.stringify(buildReport(results, { started, opts, scratch, ledger, complete: false }), null, 2)}\n`,
+        `${JSON.stringify(buildReport(results, { started, opts, scratch, ledger, idleLoad, complete: false }), null, 2)}\n`,
         'utf8',
       );
   }
 
-  const report = buildReport(results, { started, opts, scratch, ledger, complete: true });
+  const report = buildReport(results, { started, opts, scratch, ledger, idleLoad, complete: true });
   const ratios = report.compressionRatioOnFixture2Mix;
 
   const line = (s) => process.stdout.write(`${s}\n`);
@@ -1515,10 +1607,10 @@ if (childJob) {
  * one. `complete: false` marks a partial file so a killed run's artefact can
  * never be mistaken for a whole pass.
  */
-function buildReport(results, { started, opts, ledger, complete }) {
+function buildReport(results, { started, opts, ledger, idleLoad, complete }) {
   // Compression ratio for the §4.5.3 headroom margin, measured on fixture 2's mix.
   const ratios = results
-    .map((r) => ({ candidate: r.candidate, ratio: r.raw.legs['members-50k']?.compressionRatio }))
+    .map((r) => ({ candidate: r.candidate, ratio: r.raw.legs[F2_LEG_ID]?.compressionRatio }))
     .filter((r) => r.ratio);
   // Worst-case (highest) output/input ratio across EVERY completed leg. The
   // fixture-2 mix ratio is favourable because the mix carries text; a
@@ -1547,6 +1639,29 @@ function buildReport(results, { started, opts, ledger, complete }) {
       totalMemMiB: Math.round(os.totalmem() / MiB),
     },
     options: { ...opts, fixtures: opts.fixtures ? [...opts.fixtures] : 'all' },
+    // §4.5.7 — what this invocation changed about the RUN, and the explicit
+    // record that it changed nothing about the BARS.
+    regrade: {
+      spec: 'docs/plans/wave-d-handover-spec-2026-07-28.md §4.5.7',
+      fixture2MemberCount: F2_MEMBERS,
+      fixture2Derivation:
+        '50,000 reference-dataset members / 6 archives at the 8 GiB cap = 8,333.3 -> 8,334 (§4.5.7 item 2)',
+      quietnessGateOtherCpuPct: QUIET_MAX_OTHER_CPU_PCT,
+      idleLoadBeforeRun: idleLoad ?? null,
+      contendedLegs: results.flatMap((r) =>
+        Object.entries(r.raw.legs)
+          .filter(([, l]) => l.quietnessRerun || l.stillContended)
+          .map(([id, l]) => ({
+            candidate: r.candidate,
+            leg: id,
+            rerun: Boolean(l.quietnessRerun),
+            stillContendedAfterRerun: Boolean(l.stillContended),
+            otherCpuBusyPct: l.otherCpuBusyPct ?? null,
+          })),
+      ),
+      thresholdsMoved:
+        'NONE. Every number in fixtureThresholds is §4.5.1 verbatim (§4.5.7 item 5). Only fixture 2 scale moved.',
+    },
     fixtureThresholds: FIXTURES,
     costCeilingAudExGst: COST_CEILING_AUD_EX_GST,
     memberMix: MEMBER_MIX,
