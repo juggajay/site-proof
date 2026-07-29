@@ -248,7 +248,10 @@ export async function assembleArchive(params: AssemblyParams): Promise<AssemblyR
 
       const sha256 = crypto.createHash('sha256').update(content).digest('hex');
       await race(appendEntry(archive, content, member.archivePath, params.entryDate));
-      contentHash.update(`${member.archivePath} ${sha256}\n`);
+      // NUL separates path from hash: an archive path may contain spaces and
+      // newlines (customer filenames), so any printable separator could be
+      // forged into a different (path, hash) pair with the same digest input.
+      contentHash.update(`${member.archivePath}\0${sha256}\n`);
       written += 1;
 
       const facts = params.metadata.get(member.id);
@@ -274,11 +277,11 @@ export async function assembleArchive(params: AssemblyParams): Promise<AssemblyR
     const manifestJson = Buffer.from(buildManifestJson(rows), 'utf8');
     await race(appendEntry(archive, manifestCsv, MANIFEST_CSV_PATH, params.entryDate));
     contentHash.update(
-      `${MANIFEST_CSV_PATH} ${crypto.createHash('sha256').update(manifestCsv).digest('hex')}\n`,
+      `${MANIFEST_CSV_PATH}\0${crypto.createHash('sha256').update(manifestCsv).digest('hex')}\n`,
     );
     await race(appendEntry(archive, manifestJson, MANIFEST_JSON_PATH, params.entryDate));
     contentHash.update(
-      `${MANIFEST_JSON_PATH} ${crypto.createHash('sha256').update(manifestJson).digest('hex')}\n`,
+      `${MANIFEST_JSON_PATH}\0${crypto.createHash('sha256').update(manifestJson).digest('hex')}\n`,
     );
 
     const summary = Buffer.from(
