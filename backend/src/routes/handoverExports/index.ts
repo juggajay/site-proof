@@ -5,11 +5,12 @@
 //   POST /api/projects/:projectId/handover-exports   preflight, then FREEZE
 //   GET  /api/projects/:projectId/handover-exports   list
 //   GET  /api/handover-exports/:id                   status + progress
+//   GET  /api/handover-exports/:id/download          `D1c.2`, streamed
+//   POST /api/handover-exports/:id/cancel            `D1c.2`
 //
-// NOT HERE, and deliberately: `GET /api/handover-exports/:id/download`. §4.7.4
-// makes the download a STREAMED, SHA-verified path and §9 lists it beside the
-// worker — it is `D1c.2`'s, and a download route over a `fileUrl` no worker has
-// written yet would be a 404 generator with a permission check on it.
+// The last two live in `download.ts` — §4.7.4's streamed, SHA-verifying path
+// and §4.7.5's cancel are a different concern from the freeze, and this file
+// was already at its useful size.
 //
 // NO PAYWALL — `[DH-k]`. See `access.ts`.
 
@@ -21,6 +22,7 @@ import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { requireHandoverProjectAccess, requireHandoverRequesterAccess } from './access.js';
+import { registerHandoverExportDownloadRoutes } from './download.js';
 import { createFrozenExport } from './snapshot.js';
 import { parseCreateHandoverExportBody } from './validation.js';
 
@@ -195,3 +197,9 @@ handoverExportsRouter.get(
     });
   }),
 );
+
+// `D1c.2` — registered after `/:id` above. `/:id/download` and `/:id/cancel`
+// carry one more path segment than `/:id`, so Express's segment matching keeps
+// them distinct; the specific-before-`/:id` rule bites on same-arity routes,
+// which these are not.
+registerHandoverExportDownloadRoutes(handoverExportsRouter);

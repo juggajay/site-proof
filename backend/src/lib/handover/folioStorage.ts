@@ -157,6 +157,45 @@ export async function storeFolioArtifact(params: {
 }
 
 /**
+ * `D1c.2` — remove the object an abandoned reservation left behind (§4.4.2,
+ * §10.5).
+ *
+ * This is NOT a folio deletion path. §10.4 owns that, it is `owner`-only and
+ * audited, and §10.5 is explicit that "`FolioIssue` rows and bytes are NOT
+ * swept — a folio is the record." What this removes is bytes with no
+ * `FolioIssue` row: the issuance wrote the object and then failed before the
+ * row landed, so nothing points at it and nobody can download it. The caller
+ * (the sweeper) is responsible for having established that the reservation has
+ * expired with no issue against it.
+ *
+ * Best-effort: a delete that fails logs and moves on, exactly as
+ * `deleteScheduledReportArtifactFile` does — a stuck object costs storage, a
+ * throwing sweeper costs the whole pass.
+ */
+export async function deleteOrphanedFolioObject(params: {
+  projectId: string;
+  lotId: string;
+  folioIssueId: string;
+}): Promise<void> {
+  const storagePath = getFolioStoragePath(params.projectId, params.lotId, params.folioIssueId);
+
+  try {
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()
+        .storage.from(DOCUMENTS_BUCKET)
+        .remove([storagePath]);
+      if (error) logError('[Folio] Orphaned artifact delete failed:', error);
+      return;
+    }
+    await fs.promises.rm(resolveUploadPath(`uploads/${storagePath}`, FOLIO_STORAGE_ROOT), {
+      force: true,
+    });
+  } catch (error) {
+    logError('[Folio] Orphaned artifact delete failed:', error);
+  }
+}
+
+/**
  * Read the bytes back and VERIFY them against the row's `sha256` (**AT-125**).
  *
  * An object mutated out of band errors rather than serving: the folio's whole

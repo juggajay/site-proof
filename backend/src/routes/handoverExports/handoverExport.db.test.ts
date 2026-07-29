@@ -453,16 +453,22 @@ describe('the list and detail shapes (§9)', () => {
   });
 });
 
-describe('no D1c.2 surface leaks into this phase', () => {
-  it('has no download route — §4.7.4 ships it with the worker', async () => {
+describe('the freeze does not advance a job', () => {
+  // The "has no download route" assertion was `D1c.1`'s and is RETIRED by
+  // `D1c.2`, which ships §4.7.4's streamed route. Its replacement asserts the
+  // property that still holds and that a regression could break: a queued
+  // export has nothing to download, and the route says so with a stated code
+  // rather than serving a partial. Covered in `exportWorker.db.test.ts`.
+  it('leaves a freshly frozen export with no archive to download', async () => {
     const created = await createExport(projectId, ownerToken, { kind: 'project' });
     const response = await request(app)
       .get(`/api/handover-exports/${created.body.id}/download`)
       .set('Authorization', `Bearer ${ownerToken}`);
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('HANDOVER_EXPORT_NOT_READY');
   });
 
-  it('never advances a job — `D1c.1` builds the ledger, not the worker', async () => {
+  it('never advances a job — the FREEZE builds the ledger, the worker runs it', async () => {
     const rows = await prisma.handoverExport.findMany({ where: { projectId } });
     expect(rows.every((r) => r.status === 'queued')).toBe(true);
     expect(rows.every((r) => r.leaseToken === null)).toBe(true);

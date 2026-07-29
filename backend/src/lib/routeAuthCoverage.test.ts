@@ -33,6 +33,11 @@ const parentProtectedRoutePrefixes = new Set([
   'dockets/',
   'documents/fileAccessRoutes.ts',
   'documents/classificationRoutes.ts',
+  // Wave D `D1c.2`. Registered onto `handoverExportsRouter`, which applies
+  // `requireAuth` router-wide in `handoverExports/index.ts` before this module
+  // attaches anything. Asserted rather than assumed: `exportWorker.db.test.ts`
+  // has an unauthenticated download returning 401.
+  'handoverExports/download.ts',
   'drawings/',
   'notifications/',
   'lots/',
