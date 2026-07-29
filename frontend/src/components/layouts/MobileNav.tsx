@@ -148,6 +148,10 @@ export function MobileNav() {
     ) {
       return false;
     }
+    // Project-scoped role gate — see `NavigationItem.allowedProjectRoles`.
+    if (item.allowedProjectRoles && !item.allowedProjectRoles.includes(projectScopedRole)) {
+      return false;
+    }
     if (
       item.excludeRoles &&
       (item.excludeRoles.includes(userRole) ||

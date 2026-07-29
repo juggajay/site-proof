@@ -2048,8 +2048,8 @@ test.describe('production readiness guardrails', () => {
     const offenders: string[] = [];
 
     expect(apiSource).toContain('export async function authFetch');
-    expect(apiSource).toContain(
-      'const response = await fetchWithTimeout(resolveApiRequestUrl(path)',
+    expect(apiSource).toMatch(
+      /const response = await fetchWithTimeout\(\s*resolveApiRequestUrl\(path\),/,
     );
     expect(apiSource).toContain('function assertAllowedApiRequestUrl');
     expect(apiSource).toContain('url.origin !== apiRoot.origin');
@@ -2127,7 +2127,7 @@ test.describe('production readiness guardrails', () => {
     expect(frontendFetchSource).toContain('DEFAULT_FETCH_TIMEOUT_MS = 30000');
     expect(frontendFetchSource).toContain('new AbortController()');
     expect(frontendFetchSource).toContain('RequestTimeoutError');
-    expect(frontendApiSource).toContain('fetchWithTimeout(resolveApiRequestUrl(path)');
+    expect(frontendApiSource).toMatch(/fetchWithTimeout\(\s*resolveApiRequestUrl\(path\),/);
     expect(frontendAuthSource).toContain('fetchWithTimeout(apiUrl');
 
     expect(backendFetchSource).toContain('DEFAULT_FETCH_TIMEOUT_MS = 15000');

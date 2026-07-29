@@ -96,6 +96,7 @@ vi.mock('./appLazyPages', () => ({
   SubcontractorsPage: () => <div>Subcontractors</div>,
   MyCompanyPage: () => <div>My company</div>,
   ReportsPage: () => <div>Reports</div>,
+  HandoverExportPage: () => <div>Handover export</div>,
   ScheduledReportArtifactPage: () => <div>Scheduled report artifact</div>,
   SettingsPage: () => <div>Settings</div>,
   ProfilePage: () => <div>Profile</div>,

@@ -7,7 +7,11 @@
 import { getAuthToken as getAuthTokenFromAuth } from './auth';
 import { notifySessionExpired } from './authStorage';
 import { API_URL, apiUrl } from './config';
-import { fetchWithTimeout, RequestTimeoutError } from './fetchWithTimeout';
+import {
+  DEFAULT_FETCH_TIMEOUT_MS,
+  fetchWithTimeout,
+  RequestTimeoutError,
+} from './fetchWithTimeout';
 
 export { API_URL, apiUrl };
 
@@ -120,8 +124,18 @@ export function getAuthToken(): string | null {
 /**
  * Make an authenticated fetch request while preserving caller-controlled
  * headers and body types such as FormData, Blob, and ArrayBuffer.
+ *
+ * `timeoutMs` defaults to the shared 30 s budget. Pass `0` ONLY for a route
+ * whose response body is a long stream — the timeout aborts the whole transfer,
+ * not just the handshake, so a multi-gigabyte download dies at 30 s otherwise
+ * (Wave D §4.7.4's handover archive is the case that needs it). A request with
+ * no timeout still aborts through `options.signal`.
  */
-export async function authFetch(path: string, options?: RequestInit): Promise<Response> {
+export async function authFetch(
+  path: string,
+  options?: RequestInit,
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<Response> {
   const token = getAuthToken();
   const headers = new Headers(options?.headers);
 
@@ -129,10 +143,14 @@ export async function authFetch(path: string, options?: RequestInit): Promise<Re
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetchWithTimeout(resolveApiRequestUrl(path), {
-    ...options,
-    headers,
-  });
+  const response = await fetchWithTimeout(
+    resolveApiRequestUrl(path),
+    {
+      ...options,
+      headers,
+    },
+    timeoutMs,
+  );
 
   if (response.status === 401) {
     notifySessionExpired();

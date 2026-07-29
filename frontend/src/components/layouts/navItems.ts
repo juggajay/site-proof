@@ -27,7 +27,10 @@ import {
   Settings,
   FileCheck,
   GitPullRequest,
+  Package,
 } from 'lucide-react';
+
+import { HANDOVER_EXPORT_ROLES } from '@/appRouteRoles';
 
 // Office roles (owner/admin/PM/QM = ROLE_GROUPS.QUALITY) get a grouped project
 // menu with these section labels, in this order. Field roles keep the flat list.
@@ -48,6 +51,13 @@ export interface NavigationItem {
   requiresManagement?: boolean;
   requiresProjectSettingsAccess?: boolean;
   allowedRoles?: readonly string[];
+  /**
+   * Like `allowedRoles`, but matched against the caller's role ON THE CURRENT
+   * PROJECT rather than their company role. Use it whenever the backend gate is
+   * a project-role gate — a project manager whose company role is only `member`
+   * must still see the link (Wave D `D1c.3`).
+   */
+  allowedProjectRoles?: readonly string[];
   excludeRoles?: readonly string[];
   section?: NavSection;
 }
@@ -104,6 +114,14 @@ export const projectNavigation: NavigationItem[] = [
     section: 'Records',
   },
   { name: 'Reports', href: 'reports', icon: BarChart3, section: 'Records' },
+  {
+    name: 'Handover Export',
+    href: 'handover-exports',
+    icon: Package,
+    // Mirrors `HANDOVER_EXPORT_ROLES` / the backend's `HANDOVER_EXPORT_REQUESTERS`.
+    allowedProjectRoles: HANDOVER_EXPORT_ROLES,
+    section: 'Records',
+  },
   {
     name: 'Project Settings',
     href: 'settings',
