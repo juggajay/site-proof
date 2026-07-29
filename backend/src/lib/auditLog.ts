@@ -264,6 +264,9 @@ export const AuditAction = {
   // T-1): an issuance whose audit row can vanish is an un-audited issuance.
   FOLIO_ISSUED: 'folio_issued',
   FOLIO_DOWNLOADED: 'folio_downloaded',
+  // Wave D `D1c.1`. §10.5 requires an audit event on export request; the
+  // download event arrives with the download route in `D1c.2`.
+  HANDOVER_EXPORT_REQUESTED: 'handover_export_requested',
 } as const;
 
 export type AuditActionType = (typeof AuditAction)[keyof typeof AuditAction];
