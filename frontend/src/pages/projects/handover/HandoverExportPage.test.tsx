@@ -99,6 +99,20 @@ function exportRow(overrides: Partial<HandoverExportRow> = {}): HandoverExportRo
   };
 }
 
+/** A job mid-assembly: 142 of 320 members written, nothing published yet. */
+function runningExport(): HandoverExportRow {
+  return exportRow({
+    id: 'exp-run',
+    status: 'processing',
+    processedMembers: 142,
+    totalMembers: 320,
+    fileSize: null,
+    sha256: null,
+    completedAt: null,
+    expiresAt: null,
+  });
+}
+
 /** Route `apiFetch` by path + method, the way the page actually calls it. */
 function mockApi(options: {
   exports?: HandoverExportRow[];
@@ -277,20 +291,7 @@ describe('handover export job states', () => {
   });
 
   it('shows progress and a cancel action while a job is running', async () => {
-    mockApi({
-      exports: [
-        exportRow({
-          id: 'exp-run',
-          status: 'processing',
-          processedMembers: 142,
-          totalMembers: 320,
-          fileSize: null,
-          sha256: null,
-          completedAt: null,
-          expiresAt: null,
-        }),
-      ],
-    });
+    mockApi({ exports: [runningExport()] });
 
     renderGuardedPage();
 
@@ -300,20 +301,7 @@ describe('handover export job states', () => {
 
   it('keeps the same job facts on the mobile card layout', async () => {
     viewportState.isMobile = true;
-    mockApi({
-      exports: [
-        exportRow({
-          id: 'exp-run',
-          status: 'processing',
-          processedMembers: 142,
-          totalMembers: 320,
-          fileSize: null,
-          sha256: null,
-          completedAt: null,
-          expiresAt: null,
-        }),
-      ],
-    });
+    mockApi({ exports: [runningExport()] });
 
     renderGuardedPage();
 
