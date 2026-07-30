@@ -39,6 +39,35 @@ export interface HoldPointChaseDigestTemplateData {
    */
   requesterIsFallback: boolean;
   holdPoints: HoldPointChaseDigestItem[];
+  /**
+   * Wave E2.1. Present on every AUTOMATED reminder (Jay's 2026-07-31 decision).
+   * Optional only so the manual chase — which a human sends, one at a time, and
+   * which does not route through this module today — is not silently changed.
+   */
+  unsubscribeUrl?: string;
+}
+
+/**
+ * Appends the unsubscribe line AFTER rendering, so the N = 1 branch below can
+ * keep delegating to the shipped single-item template byte-for-byte (AT-100)
+ * and still carry the line. Adding it inside `renderHoldPointChaseEmail` would
+ * have changed the manual chase email too.
+ */
+function withUnsubscribeFooter(
+  rendered: RenderedHoldPointEmail,
+  unsubscribeUrl: string | undefined,
+): RenderedHoldPointEmail {
+  if (!unsubscribeUrl) return rendered;
+
+  const safeUrl = escapeEmailHtml(unsubscribeUrl);
+  const htmlLine = `<div style="text-align: center; padding: 0 20px 20px 20px; color: #6b7280; font-size: 12px; background: #f3f4f6;">You are receiving this because you were asked to release a hold point on this project. <a href="${safeUrl}" style="color: #6b7280;">Unsubscribe from these reminders</a>.</div>`;
+  const textLine = `\nYou are receiving this because you were asked to release a hold point on this project.\nUnsubscribe from these reminders: ${unsubscribeUrl}\n`;
+
+  const html = rendered.html?.includes('</body>')
+    ? rendered.html.replace(/<\/body>/, `${htmlLine}\n</body>`)
+    : `${rendered.html ?? ''}${htmlLine}`;
+
+  return { ...rendered, html, text: `${rendered.text ?? ''}${textLine}` };
 }
 
 function requesterLine(data: HoldPointChaseDigestTemplateData): string {
@@ -95,18 +124,21 @@ export function renderHoldPointChaseDigestEmail(
 
   if (items.length === 1) {
     const item = items[0]!;
-    return renderHoldPointChaseEmail({
-      superintendentName: data.superintendentName,
-      projectName: data.projectName,
-      lotNumber: item.lotNumber,
-      holdPointDescription: item.holdPointDescription,
-      originalRequestDate: item.originalRequestDate,
-      chaseCount: item.chaseCount,
-      daysSinceRequest: item.daysSinceRequest,
-      evidencePackageUrl: item.evidencePackageUrl,
-      releaseUrl: item.releaseUrl,
-      requestedBy: requesterLine(data),
-    });
+    return withUnsubscribeFooter(
+      renderHoldPointChaseEmail({
+        superintendentName: data.superintendentName,
+        projectName: data.projectName,
+        lotNumber: item.lotNumber,
+        holdPointDescription: item.holdPointDescription,
+        originalRequestDate: item.originalRequestDate,
+        chaseCount: item.chaseCount,
+        daysSinceRequest: item.daysSinceRequest,
+        evidencePackageUrl: item.evidencePackageUrl,
+        releaseUrl: item.releaseUrl,
+        requestedBy: requesterLine(data),
+      }),
+      data.unsubscribeUrl,
+    );
   }
 
   const safeProjectName = escapeEmailHtml(data.projectName);
@@ -184,5 +216,5 @@ Please review and release each hold point, or reply to this email if you require
 This is an automated reminder from CIVOS. Project: ${data.projectName}
   `;
 
-  return { subject, html, text };
+  return withUnsubscribeFooter({ subject, html, text }, data.unsubscribeUrl);
 }

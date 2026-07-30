@@ -68,6 +68,8 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
       digestsSent: 0,
       holdPointsReminded: 0,
       dailyLimitSkipped: 0,
+      noConsentSkipped: 0,
+      unsubscribedSkipped: 0,
       suppressedRecipients: 0,
       sendFailures: 0,
       deferred: 0,

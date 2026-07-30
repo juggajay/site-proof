@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
+import { recordHoldPointLinkOpen } from '../../lib/holdPointMailConsent.js';
 import { parseDocumentContentDisposition, sendDocumentFile } from '../documents/fileHelpers.js';
 import { hashHoldPointReleaseToken } from './tokens.js';
 import {
@@ -129,6 +130,22 @@ holdPointPublicBatchRouter.get(
       });
     }
     holdPoints.sort((a, b) => (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0));
+
+    // Wave E2.1 — the implied-consent signal for the review-room door. GET only
+    // (Express routes HEAD here too, and a scanner's probe is not a human), and
+    // first open only. See the single-token route for why this is not a
+    // violation of AT-112's GET purity.
+    if (req.method === 'GET' && !batch.openedAt) {
+      await recordHoldPointLinkOpen({
+        projectId: batch.lot.projectId,
+        recipientEmail: batch.recipientEmail,
+        stampOpenedAt: () =>
+          prisma.holdPointReleaseBatch.updateMany({
+            where: { id: batch.id, openedAt: null },
+            data: { openedAt: new Date() },
+          }),
+      });
+    }
 
     res.json({
       isPublicAccess: true,

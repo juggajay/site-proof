@@ -37,6 +37,12 @@ import type { PrismaClient } from '@prisma/client';
 
 import { sendEmail } from '../email.js';
 import { isEmailSuppressed, normalizeRecipientEmail } from '../emailSuppression.js';
+import {
+  createHoldPointUnsubscribeToken,
+  hasOpenedHoldPointLink,
+  isHoldPointMailUnsubscribed,
+} from '../holdPointMailConsent.js';
+import { buildBackendUrl } from '../runtimeConfig.js';
 import { AWAITING_RELEASE_HOLD_POINT_STATUSES } from '../readiness/predicates.js';
 import { logInfo } from '../serverLogger.js';
 import { MAX_CHASES_PER_REQUEST } from '../../routes/holdpoints/chaseCore.js';
@@ -89,6 +95,10 @@ export type HoldPointChaseAutomationResult = {
   digestsSent: number;
   holdPointsReminded: number;
   dailyLimitSkipped: number;
+  /** Wave E2.1 — no proof this recipient ever opened a CIVOS link. */
+  noConsentSkipped: number;
+  /** Wave E2.1 — this recipient used the unsubscribe link. */
+  unsubscribedSkipped: number;
   suppressedRecipients: number;
   sendFailures: number;
   deferred: number;
@@ -98,12 +108,21 @@ export type HoldPointChaseAutomationDependencies = {
   prisma: ChasePrisma;
   sendEmail: typeof sendEmail;
   isSuppressed: (email: string) => boolean;
+  /** Wave E2.1 consent gate. Async because both are database reads. */
+  hasOpened: (projectId: string, email: string) => Promise<boolean>;
+  isUnsubscribed: (email: string) => Promise<boolean>;
 };
 
 export function buildHoldPointChaseAutomationDependencies(
   prisma: ChasePrisma,
 ): HoldPointChaseAutomationDependencies {
-  return { prisma, sendEmail, isSuppressed: isEmailSuppressed };
+  return {
+    prisma,
+    sendEmail,
+    isSuppressed: isEmailSuppressed,
+    hasOpened: hasOpenedHoldPointLink,
+    isUnsubscribed: isHoldPointMailUnsubscribed,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +305,43 @@ function isWithinDailyLimit(group: RecipientGroup, now: Date): boolean {
   );
 }
 
+/**
+ * Wave E2.1, the consent gate. Jay's decision of 2026-07-31, in his own name: an
+ * automated reminder goes only to someone who has opened a CIVOS hold-point link
+ * at least once, and an unsubscribe is honoured everywhere.
+ *
+ * It FAILS CLOSED — no proof, no email — and the caller runs it BEFORE
+ * `reserveGroupItems`, so an ineligible recipient consumes no attempt and mints
+ * no token. That is what separates it from the suppression skip: suppression is
+ * a delivery DECISION about an address that was legitimately mailed, so it
+ * consumes the attempt (`[E-j]`); this is the absence of permission to have
+ * mailed at all.
+ *
+ * Returns the result counter to increment, or null when the recipient is
+ * eligible. The skip is audited the way the suppression skip is — a reason, a
+ * count, and never the address (spec §7.5, `[E-B7]`).
+ */
+async function resolveConsentSkip(
+  group: RecipientGroup,
+  holdPointsWithheld: number,
+  deps: HoldPointChaseAutomationDependencies,
+): Promise<'unsubscribedSkipped' | 'noConsentSkipped' | null> {
+  const reason = (await deps.isUnsubscribed(group.email))
+    ? 'recipient_unsubscribed'
+    : (await deps.hasOpened(group.projectId, group.email))
+      ? null
+      : 'no_recorded_link_open';
+
+  if (!reason) return null;
+
+  logInfo('[HP Chase Automation] Reminder skipped', {
+    reason,
+    projectId: group.projectId,
+    holdPointsWithheld,
+  });
+  return reason === 'recipient_unsubscribed' ? 'unsubscribedSkipped' : 'noConsentSkipped';
+}
+
 export async function processHoldPointChaseReminders(
   options: HoldPointChaseJobOptions,
   deps: HoldPointChaseAutomationDependencies,
@@ -299,6 +355,8 @@ export async function processHoldPointChaseReminders(
     digestsSent: 0,
     holdPointsReminded: 0,
     dailyLimitSkipped: 0,
+    noConsentSkipped: 0,
+    unsubscribedSkipped: 0,
     suppressedRecipients: 0,
     sendFailures: 0,
     deferred: 0,
@@ -340,6 +398,12 @@ export async function processHoldPointChaseReminders(
     );
     if (dueHoldPoints.length === 0) continue;
 
+    const consentSkip = await resolveConsentSkip(group, dueHoldPoints.length, deps);
+    if (consentSkip) {
+      result[consentSkip] += 1;
+      continue;
+    }
+
     const suppressed = deps.isSuppressed(group.email);
     const reserved = await reserveGroupItems(group, dueHoldPoints, now, suppressed);
 
@@ -349,7 +413,10 @@ export async function processHoldPointChaseReminders(
     }
     if (reserved.length === 0) continue;
 
-    const sendResult = await sendGroupDigest(group, reserved, now, deps.sendEmail);
+    const unsubscribeUrl = buildBackendUrl(
+      `/api/holdpoints/public/unsubscribe/${createHoldPointUnsubscribeToken(group.projectId, group.normalizedEmail)}`,
+    );
+    const sendResult = await sendGroupDigest(group, reserved, now, unsubscribeUrl, deps.sendEmail);
 
     if (sendResult === 'suppressed') {
       result.suppressedRecipients += 1;
@@ -371,6 +438,8 @@ export async function processHoldPointChaseReminders(
       digestsSent: result.digestsSent,
       holdPointsReminded: result.holdPointsReminded,
       dailyLimitSkipped: result.dailyLimitSkipped,
+      noConsentSkipped: result.noConsentSkipped,
+      unsubscribedSkipped: result.unsubscribedSkipped,
       deferred: result.deferred,
     });
   }
