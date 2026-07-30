@@ -53,7 +53,7 @@ import {
   type ManifestSummaryInput,
 } from './exportManifest.js';
 
-export const README_PATH = 'README.txt';
+export const README_PATH = 'README.html';
 export const MANIFEST_CSV_PATH = 'manifest.csv';
 export const MANIFEST_JSON_PATH = 'manifest.json';
 /** THE excluded entry — named once, used by both the assembler and the tests. */
@@ -168,7 +168,7 @@ function appendEntry(archive: Archiver, content: Buffer, name: string, date: Dat
 /**
  * Assemble the archive.
  *
- * ENTRY ORDER: `README.txt` first (static text — the entry a stranger opens
+ * ENTRY ORDER: `README.html` first (static branded page — the entry a stranger opens
  * before anything else), then members in `orderKey` order, then `manifest.csv`,
  * `manifest.json`, and `manifest-summary.json` LAST. The manifests carry every
  * member's SHA-256, so they cannot be written until the members have been read;
