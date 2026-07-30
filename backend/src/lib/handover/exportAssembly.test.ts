@@ -20,6 +20,7 @@ import {
   MANIFEST_JSON_PATH,
   MANIFEST_SUMMARY_PATH,
   OutputCapExceededError,
+  README_PATH,
 } from './exportAssembly.js';
 import type { LedgerMember, MemberMetadata } from './exportMemberSources.js';
 import { MemberObjectMissingError } from './exportMemberSources.js';
@@ -124,16 +125,36 @@ function localHeaderNames(zip: Buffer): string[] {
 }
 
 describe('assembleArchive — entry order and the manifest set (§4.7.2)', () => {
-  it('writes members in ledger order, then csv, json, and the summary LAST', async () => {
+  it('writes the README, members in ledger order, then csv, json, and the summary LAST', async () => {
     const { collected } = await run({});
 
     expect(localHeaderNames(collected.bytes!)).toEqual([
+      README_PATH,
       'LOT-001/documents/CH1250-1310_a.jpg',
       'LOT-001/documents/CH1250-1310_b.jpg',
       MANIFEST_CSV_PATH,
       MANIFEST_JSON_PATH,
       MANIFEST_SUMMARY_PATH,
     ]);
+  });
+
+  it('the README is plain English that points the reader at manifest.csv', async () => {
+    const { collected } = await run({});
+    const zip = collected.bytes!.toString('latin1');
+
+    // Stored README bytes are findable in the raw zip only if deflate left the
+    // phrases intact — assert via a fresh single-entry read instead: the text
+    // is static, so the builder IS the content.
+    const { buildArchiveReadme } = await import('./exportManifest.js');
+    const readme = buildArchiveReadme();
+    expect(readme).toContain('manifest.csv');
+    expect(readme).toContain('THE ONE TO OPEN');
+    expect(readme).toContain('does not certify');
+    // Folder names must match the shipped category folders, not aspiration.
+    for (const folder of ['folio/', 'documents/', 'itp/', 'hold-points/', 'ncr/']) {
+      expect(readme).toContain(folder);
+    }
+    expect(zip).toContain(README_PATH);
   });
 
   it('records the filename rule per member, which **AT-140** requires', async () => {
