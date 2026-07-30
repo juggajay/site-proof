@@ -29,6 +29,7 @@ import {
   parseHandoverExportRefusal,
   useCancelHandoverExport,
   useCreateHandoverExport,
+  useFolioCoverage,
   useHandoverExports,
   type CreateHandoverExportResponse,
   type HandoverExportRefusal,
@@ -46,6 +47,7 @@ export function HandoverExportPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const exportsQuery = useHandoverExports(projectId);
+  const coverage = useFolioCoverage(projectId).data;
   const createExport = useCreateHandoverExport(projectId);
   const cancelExport = useCancelHandoverExport(projectId);
 
@@ -134,8 +136,16 @@ export function HandoverExportPage() {
           disabled={createExport.isLoading}
         />
 
-        {/* §4.7.1 — a nudge, never a gate. */}
+        {/* §4.7.1 — a nudge, never a gate. The count is an extra sentence in
+            front of it, so a loading or failed coverage read simply leaves the
+            copy as it was rather than blanking the nudge. */}
         <p className="text-xs text-muted-foreground">
+          {coverage && coverage.lotCount > 0 && (
+            <>
+              {coverage.lotsWithIssuedFolio} of {coverage.lotCount}{' '}
+              {coverage.lotCount === 1 ? 'lot has' : 'lots have'} an issued folio.{' '}
+            </>
+          )}
           Lots with no issued folio still export: their original records are collected and the
           manifest records the folio as none.{' '}
           <Link

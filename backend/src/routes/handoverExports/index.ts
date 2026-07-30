@@ -4,6 +4,7 @@
 //
 //   POST /api/projects/:projectId/handover-exports   preflight, then FREEZE
 //   GET  /api/projects/:projectId/handover-exports   list
+//   GET  /api/projects/:projectId/folio-coverage     the §4.7.1 nudge's number
 //   GET  /api/handover-exports/:id                   status + progress
 //   GET  /api/handover-exports/:id/download          `D1c.2`, streamed
 //   POST /api/handover-exports/:id/cancel            `D1c.2`
@@ -163,6 +164,31 @@ projectHandoverExportsRouter.get(
     });
 
     res.json({ exports: rows.map(serializeExport) });
+  }),
+);
+
+// GET /api/projects/:projectId/folio-coverage
+//
+// The number behind §4.7.1's nudge: how many of the project's lots have a folio
+// at all. A NUDGE, never a gate — a lot with no folio still exports (`[DH-B2]`),
+// so this counts lots with at least one `FolioIssue` of ANY version rather than
+// asking whether the latest issue is current.
+projectHandoverExportsRouter.get(
+  '/:projectId/folio-coverage',
+  asyncHandler(async (req, res) => {
+    const { projectId } = req.params;
+    if (!projectId) throw AppError.badRequest('projectId is required');
+
+    await requireHandoverProjectAccess(projectId, req.user!);
+
+    const [lotCount, lotsWithFolio] = await Promise.all([
+      prisma.lot.count({ where: { projectId } }),
+      // `groupBy` collapses a lot's reissues to one row — a lot at version 3 is
+      // one covered lot, not three.
+      prisma.folioIssue.groupBy({ by: ['lotId'], where: { projectId } }),
+    ]);
+
+    res.json({ lotCount, lotsWithIssuedFolio: lotsWithFolio.length });
   }),
 );
 
