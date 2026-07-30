@@ -47,6 +47,19 @@ export const RETENTION_POLICIES = {
 
   // Product/UX telemetry (privacy-conscious: short window, not a compliance record)
   productEvents: 180,
+
+  // Wave E2.1 — external hold-point recipients' mail state. E.0 item 16 blocked
+  // a suppression table until a recipient asked CIVOS directly to stop, and
+  // required that when it shipped it shipped WITH a policy. This is the policy.
+  //
+  // Two years of inactivity, measured on `updatedAt`, and ONLY for rows that
+  // record consent alone. An UNSUBSCRIBED row is never swept: deleting an
+  // opt-out is how a company resumes emailing someone who told it to stop, and
+  // "retained until the person asks us to forget them" is the honest policy for
+  // a record whose only purpose is to withhold mail. Sweeping a consent-only
+  // row is safe in the other direction — the gate fails closed, so the worst
+  // case is a reminder not sent.
+  holdPointMailConsent: 2 * 365,
 };
 
 export const DAYS_TO_MS = 24 * 60 * 60 * 1000;
@@ -71,6 +84,14 @@ export function buildExpiredOrOldUsedHoldPointReleaseTokenWhere(
   };
 }
 
+export function buildStaleHoldPointMailConsentWhere(
+  now: Date,
+): Prisma.HoldPointMailConsentWhereInput {
+  const cutoff = new Date(now.getTime() - RETENTION_POLICIES.holdPointMailConsent * DAYS_TO_MS);
+
+  return { unsubscribedAt: null, updatedAt: { lt: cutoff } };
+}
+
 export interface RetentionApplyResult {
   passwordResetTokens: number;
   emailVerificationTokens: number;
@@ -79,6 +100,8 @@ export interface RetentionApplyResult {
   holdPointReleaseTokens: number;
   revokedAuthTokens: number;
   productEvents: number;
+  /** Wave E2.1 — consent-only rows past their inactivity window. */
+  holdPointMailConsents: number;
   /**
    * Wave B `[WBR2-3]` §3.1.2. Reported SEPARATELY and deliberately outside
    * `totalDeleted`: an abandoned batch is CANCELLED, not deleted — the row and
@@ -100,6 +123,7 @@ type RetentionPrismaClient = Pick<
   | 'revokedAuthToken'
   | 'productEvent'
   | 'importBatch'
+  | 'holdPointMailConsent'
 >;
 
 /**
@@ -152,6 +176,12 @@ export async function applyRetentionPolicies(
     await client.productEvent.deleteMany({ where: { createdAt: { lt: productEventsCutoff } } })
   ).count;
 
+  const holdPointMailConsents = (
+    await client.holdPointMailConsent.deleteMany({
+      where: buildStaleHoldPointMailConsentWhere(now),
+    })
+  ).count;
+
   // Wave B `[WBR2-3]` §3.1.2 — the abandoned-import-batch sweep. It shipped with
   // its own index and its own tests and NO invoker (external review §4b), which
   // made the retention claim in its own header false. This is that invoker: the
@@ -167,6 +197,7 @@ export async function applyRetentionPolicies(
     holdPointReleaseTokens,
     revokedAuthTokens,
     productEvents,
+    holdPointMailConsents,
     abandonedImportBatches,
     totalDeleted:
       passwordResetTokens +
@@ -175,6 +206,7 @@ export async function applyRetentionPolicies(
       documentSignedUrlTokens +
       holdPointReleaseTokens +
       revokedAuthTokens +
-      productEvents,
+      productEvents +
+      holdPointMailConsents,
   };
 }

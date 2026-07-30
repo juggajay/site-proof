@@ -17,6 +17,8 @@ import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
 import { holdPointPublicBatchRouter } from './holdpoints/publicBatchRoutes.js';
+import { holdPointUnsubscribeRouter } from './holdpoints/unsubscribeRoutes.js';
+import { recordHoldPointLinkOpen } from '../lib/holdPointMailConsent.js';
 import { parseDocumentContentDisposition, sendDocumentFile } from './documents/fileHelpers.js';
 import {
   assertPublicHoldPointTokenAvailable,
@@ -65,6 +67,12 @@ holdpointsRouter.use(holdPointActionRouter);
 // These endpoints use secure time-limited tokens for superintendent access
 // ============================================================================
 
+// Wave E2.1 — the unsubscribe door for an external recipient with no CIVOS
+// account. Mounted at the head of the public section so its two-segment
+// /public/unsubscribe/:token path can never be shadowed by the single-token
+// routes below.
+holdpointsRouter.use(holdPointUnsubscribeRouter);
+
 // Download one file from the token-scoped evidence package (no auth required)
 holdpointsRouter.get(
   '/public/:token/documents/:documentId',
@@ -110,6 +118,24 @@ holdpointsRouter.get(
     const releaseToken = await loadPublicHoldPointReleaseToken(token);
     assertPublicHoldPointTokenAvailable(releaseToken);
     const { evidencePackage, tokenInfo } = await buildPublicHoldPointReleasePayload(releaseToken);
+
+    // Wave E2.1 — the implied-consent signal. Only on a real GET: Express hands
+    // HEAD to this handler too, and a mail scanner's HEAD probe is not a human
+    // opening a link. AT-112's HEAD purity therefore stays literally true, and
+    // its GET assertions are unaffected — they pin `usedAt`, the release
+    // columns, `expiresAt`, the audit count and the notification count, none of
+    // which this touches. Recording an open is not a decision.
+    if (req.method === 'GET' && !releaseToken.openedAt) {
+      await recordHoldPointLinkOpen({
+        projectId: releaseToken.holdPoint.lot.projectId,
+        recipientEmail: releaseToken.recipientEmail,
+        stampOpenedAt: () =>
+          prisma.holdPointReleaseToken.updateMany({
+            where: { id: releaseToken.id, openedAt: null },
+            data: { openedAt: new Date() },
+          }),
+      });
+    }
 
     res.json(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo));
   }),

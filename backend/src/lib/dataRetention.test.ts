@@ -11,6 +11,8 @@ function makeClient() {
     holdPointReleaseToken: { deleteMany: vi.fn().mockResolvedValue({ count: 4 }) },
     revokedAuthToken: { deleteMany: vi.fn().mockResolvedValue({ count: 5 }) },
     productEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 6 }) },
+    // Wave E2.1 — the consent/unsubscribe sweep (E.0 item 16's required policy).
+    holdPointMailConsent: { deleteMany: vi.fn().mockResolvedValue({ count: 8 }) },
     importBatch: { updateMany: vi.fn().mockResolvedValue({ count: 7 }) },
   };
 }
@@ -58,9 +60,18 @@ describe('applyRetentionPolicies (GAP-B/C)', () => {
       },
       data: { status: 'cancelled', parseResult: Prisma.DbNull, dryRun: Prisma.DbNull },
     });
+    // Wave E2.1 — E.0 item 16 allowed the mail-consent table only if it shipped
+    // WITH a retention policy. This is the invoker for that policy, and the
+    // shape of the predicate is the policy: an UNSUBSCRIBED row is never swept,
+    // because deleting an opt-out is how mail to someone who said stop resumes.
+    expect(client.holdPointMailConsent.deleteMany).toHaveBeenCalledWith({
+      where: { unsubscribedAt: null, updatedAt: { lt: expect.any(Date) } },
+    });
+    expect(result.holdPointMailConsents).toBe(8);
+
     expect(result.abandonedImportBatches).toBe(7);
     // …and it stays OUT of `totalDeleted`: a swept batch is cancelled, not deleted.
-    expect(result.totalDeleted).toBe(2 + 1 + 3 + 0 + 4 + 5 + 6);
+    expect(result.totalDeleted).toBe(2 + 1 + 3 + 0 + 4 + 5 + 6 + 8);
     expect(result.holdPointReleaseTokens).toBe(4);
     expect(result.passwordResetTokens).toBe(2);
     expect(result.revokedAuthTokens).toBe(5);

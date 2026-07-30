@@ -430,6 +430,7 @@ model Project {
   folioIssues                 FolioIssue[]
   handoverExports             HandoverExport[]
   artifactLegalHolds          ArtifactLegalHold[]
+  holdPointMailConsents       HoldPointMailConsent[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -824,6 +825,11 @@ model HoldPointReleaseToken {
   /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
   token               String    @unique
   expiresAt           DateTime  @map("expires_at")
+  /// Wave E2.1. First successful view of the public release page, never
+  /// re-stamped. Read as one of the implied-consent proofs for the automated
+  /// chase; see HoldPointMailConsent for the durable record, because this row
+  /// is swept ~48 h after creation by the retention worker.
+  openedAt            DateTime? @map("opened_at")
   usedAt              DateTime? @map("used_at")
   releasedByName      String?   @map("released_by_name")
   releasedByOrg       String?   @map("released_by_org")
@@ -856,6 +862,8 @@ model HoldPointReleaseBatch {
   /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
   token             String    @unique
   expiresAt         DateTime  @map("expires_at")
+  /// Wave E2.1. First successful view of the review room, never re-stamped.
+  openedAt          DateTime? @map("opened_at")
   scheduledDate     DateTime? @map("scheduled_date")
   scheduledTime     String?   @map("scheduled_time")
   requestedByUserId String?   @map("requested_by_user_id")
@@ -866,6 +874,43 @@ model HoldPointReleaseBatch {
 
   @@index([lotId])
   @@map("hold_point_release_batches")
+}
+
+/// Wave E2.1 — what CIVOS knows about mailing ONE external hold-point recipient
+/// on ONE project: whether they have ever opened a CIVOS link (the implied-
+/// consent proof the automated chase is gated on) and whether they have asked
+/// CIVOS to stop.
+///
+/// E.0 threat-model item 16 blocked a suppression TABLE and named the flip
+/// condition that unblocks it: *"a recipient asking CIVOS directly to stop,
+/// rather than bouncing — then a table becomes necessary, and it ships WITH a
+/// retention policy in the same PR, not after."* The unsubscribe link this wave
+/// adds is exactly that request, so the table ships, and its retention policy
+/// ships with it (`RETENTION_POLICIES.holdPointMailConsent`).
+///
+/// It is a separate row and not a column on the token because the token is a
+/// 48-hour capability that the retention sweep deletes
+/// (`buildExpiredOrOldUsedHoldPointReleaseTokenWhere`) and the chase's own
+/// `revokeSupersededChaseReleaseTokens` deletes sooner still. Consent evidence
+/// on a row with that lifetime is evidence that is gone before it is read.
+model HoldPointMailConsent {
+  id             String    @id @default(uuid())
+  projectId      String    @map("project_id")
+  /// Normalized (trimmed, lowercased) per `normalizeRecipientEmail`, so casing
+  /// variants of one human are one row (E.0 item 12a).
+  email          String
+  firstOpenedAt  DateTime? @map("first_opened_at")
+  unsubscribedAt DateTime? @map("unsubscribed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, email])
+  /// An unsubscribe is honoured GLOBALLY, so the read that enforces it is keyed
+  /// on the address alone across every project.
+  @@index([email])
+  @@map("hold_point_mail_consents")
 }
 
 // ============================================================================

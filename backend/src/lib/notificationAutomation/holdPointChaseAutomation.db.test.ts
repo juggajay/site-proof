@@ -31,6 +31,12 @@ import {
   reserveHoldPointChase,
 } from '../../routes/holdpoints/chaseCore.js';
 import { hashHoldPointReleaseToken } from '../../routes/holdpoints/tokens.js';
+import { parseNotificationEmailList } from '../../routes/holdpoints/validation.js';
+import { normalizeRecipientEmail } from '../emailSuppression.js';
+import {
+  parseHoldPointUnsubscribeToken,
+  recordHoldPointMailUnsubscribe,
+} from '../holdPointMailConsent.js';
 import { processHoldPointChaseReminders } from '../notificationAutomation.js';
 // The failed-send arm needs a transport that rejects, so it calls the job with
 // injected deps rather than the default-deps wrapper above. Same function.
@@ -125,7 +131,7 @@ async function createAwaitingHoldPoint(options: {
   status?: string;
 }) {
   const item = await createChecklistItem(options.templateId ?? templateId, options.suffix);
-  return prisma.holdPoint.create({
+  const holdPoint = await prisma.holdPoint.create({
     data: {
       lotId: options.lotId ?? lotId,
       itpChecklistItemId: item.id,
@@ -140,6 +146,31 @@ async function createAwaitingHoldPoint(options: {
       lastChasedAt: options.lastChasedAt ?? null,
     },
   });
+
+  // Wave E2.1. Every test in this file predates the consent gate and asserts
+  // some control OTHER than consent, so the fixture grants it: without a
+  // recorded link open the gate withholds the digest and every one of those
+  // assertions would be measuring the new gate instead of the control it names.
+  // The gate itself is tested in `holdPointMailConsent.db.test.ts`, including
+  // the case this helper deliberately never produces — no consent at all.
+  await grantConsent(
+    holdPoint.lotId === otherLotId ? otherProjectId : projectId,
+    holdPoint.notificationSentTo,
+  );
+
+  return holdPoint;
+}
+
+async function grantConsent(targetProjectId: string, notificationSentTo: string | null) {
+  for (const email of parseNotificationEmailList(notificationSentTo)) {
+    const normalized = normalizeRecipientEmail(email);
+    if (!normalized) continue;
+    await prisma.holdPointMailConsent.upsert({
+      where: { projectId_email: { projectId: targetProjectId, email: normalized } },
+      update: {},
+      create: { projectId: targetProjectId, email: normalized, firstOpenedAt: new Date() },
+    });
+  }
 }
 
 async function chaseAudits(holdPointId: string) {
@@ -187,6 +218,9 @@ afterEach(async () => {
     where: { holdPoint: { lotId: { in: [lotId, otherLotId] } } },
   });
   await prisma.holdPointReleaseBatch.deleteMany({ where: { lotId: { in: [lotId, otherLotId] } } });
+  await prisma.holdPointMailConsent.deleteMany({
+    where: { projectId: { in: [projectId, otherProjectId] } },
+  });
   await prisma.holdPoint.deleteMany({ where: { lotId: { in: [lotId, otherLotId] } } });
   await prisma.iTPCompletion.deleteMany({
     where: { itpInstance: { lotId: { in: [lotId, otherLotId] } } },
@@ -205,6 +239,7 @@ afterAll(async () => {
   await prisma.holdPointReleaseBatch.deleteMany({
     where: { lot: { projectId: { in: projectIds } } },
   });
+  await prisma.holdPointMailConsent.deleteMany({ where: { projectId: { in: projectIds } } });
   await prisma.holdPoint.deleteMany({ where: { lot: { projectId: { in: projectIds } } } });
   await prisma.iTPCompletion.deleteMany({
     where: { itpInstance: { lot: { projectId: { in: projectIds } } } },
@@ -378,6 +413,75 @@ describe('AT-116 mail is bounded — the digest, the daily limit, casing, suppre
     expect(result.recipientGroups).toBe(1);
     expect(result.digestsSent).toBe(1);
     expect(getQueuedEmails()).toHaveLength(1);
+  });
+
+  // Wave E2.1 — Jay's decision of 2026-07-31, at the level that matters: the
+  // JOB, not the helper. The unit coverage lives in
+  // `src/lib/holdPointMailConsent.db.test.ts`; these two prove the job consults
+  // it before it reaches for the transport.
+  it('sends nothing to a recipient with no recorded link open, and mints no token', async () => {
+    const holdPoint = await createAwaitingHoldPoint({
+      suffix: 'no-consent',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+    // Undo the fixture's grant — this is the one test that wants the gate shut.
+    await prisma.holdPointMailConsent.deleteMany({ where: { projectId } });
+
+    const result = await processHoldPointChaseReminders({ now: new Date() });
+
+    expect(result.noConsentSkipped).toBe(1);
+    expect(result.digestsSent).toBe(0);
+    expect(getQueuedEmails()).toHaveLength(0);
+    // Unlike a suppressed send, an ineligible one consumes NOTHING: no attempt,
+    // no fresh capability token nobody holds.
+    const after = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPoint.id } });
+    expect(after.chaseCount).toBe(0);
+    expect(after.lastChasedAt).toBeNull();
+    expect(await prisma.holdPointReleaseToken.count({ where: { holdPointId: holdPoint.id } })).toBe(
+      0,
+    );
+
+    // PROOF OF CATCH: grant consent and the same row DOES produce a digest, so
+    // the zero above is the gate and not an inert fixture.
+    await grantConsent(projectId, SUPER_EMAIL);
+    const granted = await processHoldPointChaseReminders({ now: new Date() });
+    expect(granted.digestsSent).toBe(1);
+  });
+
+  it('sends nothing to a recipient who unsubscribed, even with consent on file', async () => {
+    await createAwaitingHoldPoint({
+      suffix: 'unsubscribed',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+    // Unsubscribed on ANOTHER project: the opt-out is honoured globally.
+    await recordHoldPointMailUnsubscribe(otherProjectId, SUPER_EMAIL.toUpperCase());
+
+    const result = await processHoldPointChaseReminders({ now: new Date() });
+
+    expect(result.unsubscribedSkipped).toBe(1);
+    expect(result.noConsentSkipped).toBe(0);
+    expect(result.digestsSent).toBe(0);
+    expect(getQueuedEmails()).toHaveLength(0);
+  });
+
+  it('every automated digest carries an unsubscribe link', async () => {
+    await createAwaitingHoldPoint({
+      suffix: 'unsub-line',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    const result = await processHoldPointChaseReminders({ now: new Date() });
+    expect(result.digestsSent).toBe(1);
+
+    const queued = getQueuedEmails()[0]!;
+    expect(queued.text).toContain('/api/holdpoints/public/unsubscribe/');
+    expect(queued.html).toContain('/api/holdpoints/public/unsubscribe/');
+    // The link must actually work, and must resolve to THIS recipient.
+    const token = /public\/unsubscribe\/([^\s"'<]+)/.exec(queued.text!)![1]!;
+    expect(parseHoldPointUnsubscribeToken(token)).toEqual({
+      projectId,
+      email: SUPER_EMAIL,
+    });
   });
 
   it('sends nothing to a suppressed address, and audits the skip', async () => {
@@ -959,6 +1063,11 @@ describe('AT-101 / AT-115 / AT-117 — reach, attribution and audit', () => {
       where: { lotId, itpChecklistItemId: item.id },
     });
     expect(await prisma.holdPointReleaseBatch.findFirst({ where: { lotId } })).toBeNull();
+
+    // Wave E2.1: this hold point came through the ROUTE, not the fixture
+    // helper, so nothing granted consent. This test is about requester
+    // attribution, not the gate.
+    await grantConsent(projectId, SUPER_EMAIL);
 
     clearEmailQueue();
     const result = await processHoldPointChaseReminders({ now: new Date() });

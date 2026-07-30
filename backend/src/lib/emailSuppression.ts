@@ -22,6 +22,14 @@
  * suppressions read, if and when the SDK exposes one; a TABLE stays blocked
  * until the item's flip condition (a recipient asking CIVOS directly to stop)
  * is met, and then it ships WITH a retention policy in the same PR.
+ *
+ * **Wave E2.1: that flip condition has been met and the durable arm now exists,
+ * elsewhere.** The unsubscribe link on every chase digest IS a recipient asking
+ * CIVOS directly to stop, and an opt-out that a Railway redeploy erases is not
+ * an opt-out. It lives in `holdPointMailConsent.ts` with the retention policy
+ * item 16 demanded (`RETENTION_POLICIES.holdPointMailConsent`), and NOT here,
+ * because this module stays what item 16 wanted it to be: the provider's
+ * bounce/complaint truth, in memory, synchronous, storing nothing.
  */
 
 import { logInfo } from './serverLogger.js';

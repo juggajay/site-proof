@@ -106,6 +106,7 @@ describe('product-events retention (DB-backed)', () => {
       holdPointReleaseToken: noop,
       revokedAuthToken: noop,
       productEvent: prisma.productEvent,
+      holdPointMailConsent: noop,
       // The abandoned-import-batch sweep CANCELS (updateMany), it does not delete.
       importBatch: { updateMany: async () => ({ count: 0 }) },
     } as never;

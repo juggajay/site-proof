@@ -137,6 +137,7 @@ export async function sendGroupDigest(
   group: RecipientGroup,
   reserved: ReservedItem[],
   now: Date,
+  unsubscribeUrl: string,
   sendEmailFn: (options: {
     to: string;
     subject: string;
@@ -151,6 +152,8 @@ export async function sendGroupDigest(
     projectName: group.projectName,
     requestedBy: envelope.requester.name,
     requesterIsFallback: envelope.requester.isFallback,
+    // Wave E2.1 — never absent on an automated reminder.
+    unsubscribeUrl,
     holdPoints: reserved.map((item) => {
       const secureReleaseUrl = buildFrontendUrl(`/hp-release/${item.target.secureToken}`);
       const requestedAt = item.holdPoint.notificationSentAt ?? item.holdPoint.createdAt;
