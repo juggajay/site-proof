@@ -126,6 +126,63 @@ export function buildManifestJson(rows: readonly ManifestRow[]): string {
   return `${JSON.stringify({ members: ordered }, null, 2)}\n`;
 }
 
+/**
+ * `README.txt` — the first thing a receiving engineer who has never seen CIVOS
+ * opens. Plain English, static text: no per-export data, so it is byte-stable
+ * and sits INSIDE the determinism boundary. Anything per-export belongs in
+ * `manifest-summary.json`, which is excluded from that boundary — keeping this
+ * file static is what lets it be included.
+ *
+ * The closing paragraph repeats the `[DH-B8]` no-submission-claim disclaimer;
+ * like the summary's, it is product-owned template text.
+ */
+export function buildArchiveReadme(): string {
+  return [
+    'CIVOS HANDOVER ARCHIVE',
+    '======================',
+    '',
+    'This archive is a compilation of the quality records held in CIVOS for the',
+    'exported scope at the time of export.',
+    '',
+    "What's inside",
+    '-------------',
+    "One folder per lot (e.g. LOT-001/), containing that lot's records grouped",
+    'by type:',
+    '',
+    '  folio/        the issued lot folio PDF, if one has been issued',
+    '  documents/    lot documents',
+    '  itp/          inspection & test plan attachments',
+    '  hold-points/  hold point release records and evidence',
+    '  ncr/          non-conformance evidence',
+    '',
+    'File names beginning "CH<start>-<end>_" carry the chainage span the record',
+    'relates to (e.g. CH120-180_compaction.jpg).',
+    '',
+    'The three manifest files',
+    '------------------------',
+    'manifest.csv          THE ONE TO OPEN. A register of every file in this',
+    '                      archive - open it in Excel. One row per file with its',
+    '                      lot, type, original filename, who uploaded it and',
+    '                      when, and its SHA-256 fingerprint.',
+    'manifest.json         The same register in machine-readable form, for',
+    '                      software and integrity tooling. Not intended to be',
+    '                      read by hand.',
+    'manifest-summary.json What was exported: the scope, when it was generated,',
+    '                      the software version, per-lot folio status, and',
+    '                      anything that could not be included.',
+    '',
+    'Verifying a file',
+    '----------------',
+    'To check a file has not been altered, compute its SHA-256 fingerprint',
+    "(PowerShell: Get-FileHash <file>) and compare it to that file's row in the",
+    'manifest.',
+    '',
+    'This archive was compiled by CIVOS (civos.com.au). CIVOS does not certify,',
+    'submit or lodge it, and makes no claim that any authority has accepted it.',
+    '',
+  ].join('\r\n');
+}
+
 export function buildManifestSummaryJson(input: ManifestSummaryInput): string {
   const summary = {
     exportId: input.exportId,

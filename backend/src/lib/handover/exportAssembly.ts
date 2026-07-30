@@ -44,6 +44,7 @@ import { logWarn } from '../serverLogger.js';
 import type { LedgerMember, MemberMetadata } from './exportMemberSources.js';
 import { MemberObjectMissingError } from './exportMemberSources.js';
 import {
+  buildArchiveReadme,
   buildManifestCsv,
   buildManifestJson,
   buildManifestSummaryJson,
@@ -52,6 +53,7 @@ import {
   type ManifestSummaryInput,
 } from './exportManifest.js';
 
+export const README_PATH = 'README.txt';
 export const MANIFEST_CSV_PATH = 'manifest.csv';
 export const MANIFEST_JSON_PATH = 'manifest.json';
 /** THE excluded entry — named once, used by both the assembler and the tests. */
@@ -166,7 +168,8 @@ function appendEntry(archive: Archiver, content: Buffer, name: string, date: Dat
 /**
  * Assemble the archive.
  *
- * ENTRY ORDER: members in `orderKey` order, then `manifest.csv`,
+ * ENTRY ORDER: `README.txt` first (static text — the entry a stranger opens
+ * before anything else), then members in `orderKey` order, then `manifest.csv`,
  * `manifest.json`, and `manifest-summary.json` LAST. The manifests carry every
  * member's SHA-256, so they cannot be written until the members have been read;
  * the summary is last so the excluded-from-determinism entry is also the final
@@ -222,6 +225,14 @@ export async function assembleArchive(params: AssemblyParams): Promise<AssemblyR
   let written = 0;
 
   try {
+    // Static text, so it sits INSIDE the determinism boundary and folds into
+    // `contentHash` like any member.
+    const readme = Buffer.from(buildArchiveReadme(), 'utf8');
+    await race(appendEntry(archive, readme, README_PATH, params.entryDate));
+    contentHash.update(
+      `${README_PATH}\0${crypto.createHash('sha256').update(readme).digest('hex')}\n`,
+    );
+
     for (const [index, member] of params.members.entries()) {
       let content: Buffer;
       try {
