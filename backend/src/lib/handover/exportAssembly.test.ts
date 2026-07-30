@@ -138,7 +138,7 @@ describe('assembleArchive — entry order and the manifest set (§4.7.2)', () =>
     ]);
   });
 
-  it('the README is plain English that points the reader at manifest.csv', async () => {
+  it('the README is a self-contained branded page that points the reader at manifest.csv', async () => {
     const { collected } = await run({});
     const zip = collected.bytes!.toString('latin1');
 
@@ -147,6 +147,7 @@ describe('assembleArchive — entry order and the manifest set (§4.7.2)', () =>
     // is static, so the builder IS the content.
     const { buildArchiveReadme } = await import('./exportManifest.js');
     const readme = buildArchiveReadme();
+    expect(readme).toContain('<!doctype html>');
     expect(readme).toContain('manifest.csv');
     expect(readme).toContain('THE ONE TO OPEN');
     expect(readme).toContain('does not certify');
@@ -154,6 +155,10 @@ describe('assembleArchive — entry order and the manifest set (§4.7.2)', () =>
     for (const folder of ['folio/', 'documents/', 'itp/', 'hold-points/', 'ncr/']) {
       expect(readme).toContain(folder);
     }
+    // Self-contained: the page renders on an air-gapped machine, so no
+    // scripts and no external resource loads (an <a href> is fine — it is
+    // optional navigation, not a render dependency).
+    expect(readme).not.toMatch(/<script|<link|src=|@import|url\(/i);
     expect(zip).toContain(README_PATH);
   });
 
