@@ -65,10 +65,10 @@ async function createLot(suffix: string, project: string, chainage: [number, num
 /** A `FolioIssue` row and the snapshot + reservation its foreign keys need.
  * Inserted directly: `D1b`'s issuance route is exercised by its own suite, and
  * what this file needs is a versioned row to freeze against. */
-async function issueFolio(lot: string, version: number): Promise<string> {
+async function issueFolio(lot: string, version: number, project = projectId): Promise<string> {
   const snapshot = await prisma.folioSnapshot.create({
     data: {
-      projectId,
+      projectId: project,
       lotId: lot,
       payload: {},
       payloadSchemaVersion: 1,
@@ -80,7 +80,7 @@ async function issueFolio(lot: string, version: number): Promise<string> {
   const reservation = await prisma.folioIssueReservation.create({
     data: {
       issueId: crypto.randomUUID(),
-      projectId,
+      projectId: project,
       lotId: lot,
       snapshotId: snapshot.id,
       version,
@@ -90,12 +90,12 @@ async function issueFolio(lot: string, version: number): Promise<string> {
   const issue = await prisma.folioIssue.create({
     data: {
       id: reservation.issueId,
-      projectId,
+      projectId: project,
       lotId: lot,
       snapshotId: snapshot.id,
       reservationId: reservation.issueId,
       version,
-      fileUrl: `supabase://documents/folios/${projectId}/${lot}/${reservation.issueId}.pdf`,
+      fileUrl: `supabase://documents/folios/${project}/${lot}/${reservation.issueId}.pdf`,
       fileSize: 1024n,
       sha256: String(version).repeat(64).slice(0, 64),
       compiledFrom: [],
@@ -450,6 +450,62 @@ describe('the list and detail shapes (§9)', () => {
       .get(`/api/handover-exports/${crypto.randomUUID()}`)
       .set('Authorization', `Bearer ${ownerToken}`);
     expect(response.status).toBe(404);
+  });
+});
+
+describe("folio coverage (§4.7.1 — the nudge's number)", () => {
+  function coverage(project: string, token?: string) {
+    const req = request(app).get(`/api/projects/${project}/folio-coverage`);
+    return token ? req.set('Authorization', `Bearer ${token}`) : req;
+  }
+
+  /** Its own project, so the count cannot drift with what the other blocks
+   * create on the shared one. */
+  async function projectWithLots(suffix: string, lots: number): Promise<[string, string[]]> {
+    const project = await prisma.project.create({
+      data: {
+        name: `Cov ${suffix} ${tag}`,
+        projectNumber: `${tag}-${suffix}`,
+        companyId,
+        state: 'QLD',
+        specificationSet: 'TMR',
+      },
+    });
+    const created: string[] = [];
+    for (let i = 0; i < lots; i += 1) {
+      created.push((await createLot(`${suffix}-${i}`, project.id, null)).id);
+    }
+    return [project.id, created];
+  }
+
+  it('counts a lot with any folio once, however many versions it has', async () => {
+    const [project, lots] = await projectWithLots('COV1', 2);
+    await issueFolio(lots[0]!, 1, project);
+    await issueFolio(lots[0]!, 2, project);
+
+    const response = await coverage(project, ownerToken);
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ lotCount: 2, lotsWithIssuedFolio: 1 });
+  });
+
+  it('reports zeroes for a project with no lots rather than failing', async () => {
+    const [project] = await projectWithLots('COV2', 0);
+
+    const response = await coverage(project, ownerToken);
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ lotCount: 0, lotsWithIssuedFolio: 0 });
+  });
+
+  it('is READ access, not requester access — a viewer sees the number', async () => {
+    const response = await coverage(projectId, viewerToken);
+    expect(response.status).toBe(200);
+    expect(response.body.lotsWithIssuedFolio).toBeGreaterThan(0);
+  });
+
+  it('refuses a cross-tenant project id, and an anonymous caller', async () => {
+    expect((await coverage(projectId, outsiderToken)).status).toBe(403);
+    expect((await coverage(outsiderProjectId, ownerToken)).status).toBe(403);
+    expect((await coverage(projectId)).status).toBe(401);
   });
 });
 

@@ -193,6 +193,27 @@ export function useHandoverExports(projectId: string | undefined) {
   });
 }
 
+export interface FolioCoverage {
+  lotCount: number;
+  lotsWithIssuedFolio: number;
+}
+
+/**
+ * The number behind the folio nudge (§4.7.1).
+ *
+ * Cheap and near-static, so it is read once per mount rather than polled — a
+ * folio issued in another tab moves this by one, and the nudge is not a gate.
+ */
+export function useFolioCoverage(projectId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.folioCoverage(projectId ?? ''),
+    queryFn: () =>
+      apiFetch<FolioCoverage>(`/api/projects/${encodeURIComponent(projectId!)}/folio-coverage`),
+    enabled: Boolean(projectId),
+    staleTime: 60_000,
+  });
+}
+
 export function useProjectAreaOptions(projectId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.projectAreas(projectId ?? ''),

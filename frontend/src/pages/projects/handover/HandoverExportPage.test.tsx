@@ -64,7 +64,7 @@ import { ApiError } from '@/lib/api';
 import { HANDOVER_EXPORT_ROLES } from '@/appRouteRoles';
 import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { HandoverExportPage } from './HandoverExportPage';
-import type { HandoverExportRow } from './handoverExportData';
+import type { FolioCoverage, HandoverExportRow } from './handoverExportData';
 
 const ASSUMPTION =
   '6 member(s) have no stored byte size — hold-point signature and evidence pointers are bare ' +
@@ -113,10 +113,17 @@ function runningExport(): HandoverExportRow {
   });
 }
 
+function coverageResponse(coverage: FolioCoverage | 'error' | undefined) {
+  if (coverage === 'error') return Promise.reject(new ApiError(500, 'coverage unavailable'));
+  return Promise.resolve(coverage ?? { lotCount: 0, lotsWithIssuedFolio: 0 });
+}
+
 /** Route `apiFetch` by path + method, the way the page actually calls it. */
 function mockApi(options: {
   exports?: HandoverExportRow[];
   onCreate?: () => Promise<unknown>;
+  /** `'error'` stands in for a failed coverage read; omitted means "no lots". */
+  coverage?: FolioCoverage | 'error';
 }): void {
   apiFetchMock.mockImplementation((path: string, init?: RequestInit) => {
     if (path.includes('/handover-exports') && init?.method === 'POST') {
@@ -125,6 +132,7 @@ function mockApi(options: {
     if (path.includes('/handover-exports')) {
       return Promise.resolve({ exports: options.exports ?? [] });
     }
+    if (path.includes('/folio-coverage')) return coverageResponse(options.coverage);
     if (path.includes('/areas')) {
       return Promise.resolve({ areas: [{ id: 'area-1', name: 'Stage 1' }] });
     }
@@ -249,6 +257,26 @@ describe('handover export preflight', () => {
     expect(
       await screen.findByRole('link', { name: /issue folios from the lot list/i }),
     ).toHaveAttribute('href', '/projects/p1/lots');
+  });
+
+  it('states how many lots have a folio, and still says the rest export anyway', async () => {
+    mockApi({ coverage: { lotCount: 2, lotsWithIssuedFolio: 1 } });
+
+    renderGuardedPage();
+
+    expect(await screen.findByText(/1 of 2 lots have an issued folio/i)).toBeVisible();
+    // Still a nudge: the count must not turn into a warning about exclusion.
+    expect(screen.getByText(/lots with no issued folio still export/i)).toBeVisible();
+    expect(screen.getByRole('link', { name: /issue folios from the lot list/i })).toBeVisible();
+  });
+
+  it('falls back to the numberless nudge when the coverage read fails', async () => {
+    mockApi({ coverage: 'error' });
+
+    renderGuardedPage();
+
+    expect(await screen.findByText(/lots with no issued folio still export/i)).toBeVisible();
+    expect(screen.queryByText(/an issued folio\./i)).not.toBeInTheDocument();
   });
 });
 

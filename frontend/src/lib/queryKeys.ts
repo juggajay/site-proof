@@ -219,6 +219,7 @@ export const queryKeys = {
   handoverExports: (projectId: string) => ['handover-exports', projectId] as const,
   handoverExportLotOptions: (projectId: string) =>
     ['handover-export-lot-options', projectId] as const,
+  folioCoverage: (projectId: string) => ['folio-coverage', projectId] as const,
 
   // Reports
   reports: (projectId: string) => ['reports', projectId] as const,
