@@ -1260,6 +1260,15 @@ model DiaryDelivery {
   unit         String?
   lotId        String?  @map("lot_id")
   notes        String?
+  // C5.1 evidence fields (spec §4.4). Written ONLY by
+  // `PATCH /api/deliveries/:deliveryId/evidence`, which deliberately does not
+  // take the diary-editable lock: the supplier's docket arrives the morning
+  // after the diary was submitted (§4.4a). The foreman's account of the day —
+  // description/quantity/unit/supplier/notes — stays locked with the diary.
+  docketDocumentId String? @map("docket_document_id")
+  // Transcribed from the docket. Free text, never parsed and never validated
+  // against a vocabulary — structuring it is C5.4, behind RG-6.
+  batchRef         String? @map("batch_ref")
   // Client idempotency key (H5) — see NCR.requestKey.
   requestKey   String?  @map("request_key")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -1267,8 +1276,14 @@ model DiaryDelivery {
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
   lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  // Restrict, not SetNull like TestResult.certificateDoc: a delivery whose
+  // docket silently detached is worse evidence than a document that refuses to
+  // delete. Follows Drawing.document. The usable error message comes from the
+  // `delivery_docket` EVIDENCE_LINK_GUARDS entry, not from this FK.
+  docketDocument Document? @relation(fields: [docketDocumentId], references: [id], onDelete: Restrict)
 
   @@unique([diaryId, requestKey])
+  @@index([lotId])
   @@map("diary_deliveries")
 }
 
@@ -1720,6 +1735,7 @@ model Document {
   signedUrlTokens          DocumentSignedUrlToken[]
   planSheets               PlanSheet[]
   importBatches            ImportBatch[]
+  deliveryDockets          DiaryDelivery[]
 
   @@unique([projectId, requestKey])
   @@index([projectId, documentType])

@@ -66,6 +66,29 @@ const EVIDENCE_LINK_GUARDS: EvidenceLinkGuard[] = [
     metadataLockedMessage:
       'Variation evidence cannot be modified once the variation has been claimed.',
   },
+  {
+    // Wave C5.1 §4.3 `[C5R-B3]`. `diary_deliveries.docket_document_id` is
+    // `onDelete: Restrict`, so without this entry the generic delete returns a
+    // bare 422 INVALID_REFERENCE from the FK (errorHandler's P2003 branch) —
+    // no code the UI can branch on and no guidance.
+    evidenceType: 'delivery_docket',
+    async findLink(prisma, documentId) {
+      const link = await prisma.diaryDelivery.findFirst({
+        where: { docketDocumentId: documentId },
+        select: { id: true },
+      });
+      if (!link) {
+        return null;
+      }
+      // `metadataLocked` is deliberately FALSE. §4.4a exists precisely to keep
+      // delivery evidence editable after the diary is submitted; locking the
+      // document's caption while the link itself stays editable would be
+      // incoherent. Flip it only if a pilot shows docket metadata being churned.
+      return { metadataLocked: false };
+    },
+    deleteBlockedMessage: 'Delivery docket documents must be removed from the delivery.',
+    metadataLockedMessage: 'Delivery docket documents cannot be modified.',
+  },
 ];
 
 /**

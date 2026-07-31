@@ -57,7 +57,13 @@ async function assertDocumentCanUseGenericVersioning(
   prisma: PrismaClient,
   documentId: string,
 ): Promise<void> {
-  const [itpAttachment, ncrEvidence] = await Promise.all([
+  // NOTE: this is a HAND-WRITTEN check that does not read
+  // `EVIDENCE_LINK_GUARDS`. So "adding the next evidence table is a single
+  // entry" (evidenceLinkGuards.ts) is true for delete and metadata and FALSE
+  // for versioning — a new evidence link owes an entry in BOTH places.
+  // Unifying the two is a real cleanup and it belongs to whoever owns the ITP
+  // and NCR refusal behaviour, not to the wave adding the next link.
+  const [itpAttachment, ncrEvidence, deliveryDocket] = await Promise.all([
     prisma.iTPCompletionAttachment.findFirst({
       where: { documentId },
       select: { id: true },
@@ -66,10 +72,32 @@ async function assertDocumentCanUseGenericVersioning(
       where: { documentId },
       select: { id: true },
     }),
+    // Wave C5.1 §4.3 `[C5R-B3]`, and this is the sharp one. Generic versioning
+    // creates a NEW `Document` row with a new id and flips the old row to
+    // `isLatestVersion: false`. A C5 FK still points at the OLD row, so the
+    // folio and the release package would render the SUPERSEDED file while the
+    // document register shows the current one — stale evidence inside a signed
+    // folio, the exact inverse of "originals preserved, replacements
+    // supersede". C5 replaces a docket by re-pointing its FK to a newly
+    // uploaded document, audited, never by versioning underneath it.
+    prisma.diaryDelivery.findFirst({
+      where: { docketDocumentId: documentId },
+      select: { id: true },
+    }),
   ]);
 
-  if (!itpAttachment && !ncrEvidence) {
+  if (!itpAttachment && !ncrEvidence && !deliveryDocket) {
     return;
+  }
+
+  if (deliveryDocket && !itpAttachment && !ncrEvidence) {
+    throw AppError.conflict(
+      'Delivery docket documents must be replaced from the delivery, not versioned here.',
+      {
+        code: 'WORKFLOW_EVIDENCE_VERSION_BLOCKED',
+        evidenceType: 'delivery_docket',
+      },
+    );
   }
 
   throw AppError.conflict(

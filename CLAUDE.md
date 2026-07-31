@@ -159,6 +159,22 @@ Core models (see `backend/prisma/schema.prisma`):
 - **Lot** → ITPCompletions, TestResults, HoldPointCompletions
 - **User** → ProjectUser (role per project)
 
+### Dockets and claims never cross (Wave C5 **DC5-4**)
+
+`DailyDocket` is a **subcontractor labour-and-plant timesheet** — hours, rates
+and approval amounts, with lots attached one level down on hour allocations. It
+is a **commercial** record, and it must never become an input to a **quality**
+verdict: no docket-sourced signal may feed lot conformance, a readiness blocker,
+a hold-point release or a folio. The wire that exists today is deliberately
+inert — `evidenceCounts.approvedDockets` is emitted as a `severity: 'support'`,
+`blocksAction: false` item and **every producer feeds it a hard-coded `0`**
+(`claims/readRoutes.ts`, `lots/qualityRoutes.ts`, `projectCloseoutReadiness.ts`).
+Leave those zeros alone. Separately, a **supplier's delivery docket** ("the
+concrete docket") is **not** a `Docket`: it is a `Document` attached to a
+`DiaryDelivery` via `docketDocumentId`. A task that says "link dockets to lots"
+almost always means the delivery record, not the timesheet — check which before
+touching either.
+
 ## Testing
 
 ```bash
