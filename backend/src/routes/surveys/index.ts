@@ -158,7 +158,15 @@ const registerQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).max(100_000).optional(),
 });
 
-/** Fail-closed: with the flag off, no C5.2 route exists at all. */
+/**
+ * Fail-closed: with the flag off, no C5.2 route exists at all.
+ *
+ * PER-ROUTE, never `router.use(...)`. A router-level `use` runs for EVERY
+ * request routed into the mount path, not only the paths this router declares —
+ * so mounting it at `/api/lots` and refusing router-wide would 404 the entire
+ * lots API whenever the flag is off. Caught by the E2E suite, and pinned by the
+ * `createServerApp` test in `surveyFlagMounting.db.test.ts`.
+ */
 function requireSurveyFlag(_req: Request, _res: Response, next: (err?: unknown) => void) {
   if (!surveyRecordsEnabled()) {
     next(AppError.notFound('Survey records'));
@@ -342,10 +350,10 @@ async function auditSurvey(
 
 export const lotSurveysRouter = Router();
 lotSurveysRouter.use(requireAuth);
-lotSurveysRouter.use(requireSurveyFlag);
 
 lotSurveysRouter.post(
   '/:lotId/surveys',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const lotId = parseDiaryRouteParam(req.params.lotId, 'lotId');
@@ -408,6 +416,7 @@ lotSurveysRouter.post(
 
 lotSurveysRouter.get(
   '/:lotId/surveys',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const lotId = parseDiaryRouteParam(req.params.lotId, 'lotId');
 
@@ -441,10 +450,10 @@ lotSurveysRouter.get(
 
 export const projectSurveysRouter = Router();
 projectSurveysRouter.use(requireAuth);
-projectSurveysRouter.use(requireSurveyFlag);
 
 projectSurveysRouter.get(
   '/:projectId/surveys',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = parseDiaryRouteParam(req.params.projectId, 'projectId');
     await requireInternalProjectAccess(req.user!, projectId);
@@ -488,7 +497,6 @@ projectSurveysRouter.get(
 
 export const surveysRouter = Router();
 surveysRouter.use(requireAuth);
-surveysRouter.use(requireSurveyFlag);
 
 async function assertDocumentInProject(
   tx: SurveyMutationTx,
@@ -514,6 +522,7 @@ async function assertDocumentInProject(
  */
 surveysRouter.get(
   '/:surveyId',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
     const record = await prisma.surveyRecord.findUnique({
@@ -530,6 +539,7 @@ surveysRouter.get(
 
 surveysRouter.patch(
   '/:surveyId',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
@@ -583,6 +593,7 @@ surveysRouter.patch(
 
 surveysRouter.post(
   '/:surveyId/report',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
@@ -620,6 +631,7 @@ surveysRouter.post(
 
 surveysRouter.post(
   '/:surveyId/status',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
@@ -674,6 +686,7 @@ surveysRouter.post(
 
 surveysRouter.post(
   '/:surveyId/supersede',
+  requireSurveyFlag,
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
