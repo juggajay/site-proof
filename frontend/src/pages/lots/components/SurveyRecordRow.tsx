@@ -50,25 +50,54 @@ function surveyorLine(record: SurveyRecord): string {
 }
 
 /**
+ * How each CIVOS workflow state is drawn — badge tone, icon tint and icon.
+ *
+ * ONE table, because the badge and the row icon must never disagree about what
+ * state a record is in, and two parallel ternary chains are how they start to.
+ * This is also the complete list of colour a survey row is allowed to use: the
+ * surveyor's verdict is not in it, and must not be added to it.
+ */
+const STATUS_PRESENTATION: Readonly<
+  Record<string, { badge: string; tint: string; Icon: typeof Check }>
+> = {
+  accepted: {
+    badge: 'border-success/30 bg-success/10 text-success',
+    tint: 'bg-success/10 text-success',
+    Icon: Check,
+  },
+  rejected: {
+    badge: 'border-destructive/30 bg-destructive/10 text-destructive',
+    tint: 'bg-destructive/10 text-destructive',
+    Icon: AlertTriangle,
+  },
+  received: {
+    badge: 'border-warning/30 bg-warning/10 text-warning',
+    tint: 'bg-warning/10 text-warning',
+    Icon: AlertTriangle,
+  },
+};
+
+const NEUTRAL_PRESENTATION = {
+  badge: 'border-border bg-muted text-muted-foreground',
+  tint: 'bg-secondary text-muted-foreground',
+  Icon: Ruler,
+};
+
+function presentationFor(status: string) {
+  return STATUS_PRESENTATION[status] ?? NEUTRAL_PRESENTATION;
+}
+
+/**
  * Status badge — CIVOS's own state, and the ONLY place a survey row is
  * coloured. `accepted` is green because CIVOS did accept the record; that green
  * says nothing about whether the lot conforms.
  */
 function SurveyStatusBadge({ status }: { status: string }) {
-  const tone =
-    status === 'accepted'
-      ? 'border-success/30 bg-success/10 text-success'
-      : status === 'rejected'
-        ? 'border-destructive/30 bg-destructive/10 text-destructive'
-        : status === 'received'
-          ? 'border-warning/30 bg-warning/10 text-warning'
-          : 'border-border bg-muted text-muted-foreground';
-
   return (
     <span
       className={cn(
         'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold',
-        tone,
+        presentationFor(status).badge,
       )}
     >
       {surveyStatusLabel(status)}
@@ -194,28 +223,16 @@ export function SurveyRecordRow({ group, canDecide, deciding, onDecide }: Survey
   const acceptable = canAcceptSurvey(record);
   const showDecision = canDecide && record.status === 'received';
   const verdictLabel = surveyVerdictLabel(record.surveyorVerdict);
+  const { tint, Icon } = presentationFor(record.status);
 
   return (
     <li className="border-t border-border p-4">
       <div className="flex gap-3">
         <span
           aria-hidden="true"
-          className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-            record.status === 'accepted'
-              ? 'bg-success/10 text-success'
-              : record.status === 'received'
-                ? 'bg-warning/10 text-warning'
-                : 'bg-secondary text-muted-foreground',
-          )}
+          className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', tint)}
         >
-          {record.status === 'accepted' ? (
-            <Check className="h-4 w-4" />
-          ) : record.status === 'received' ? (
-            <AlertTriangle className="h-4 w-4" />
-          ) : (
-            <Ruler className="h-4 w-4" />
-          )}
+          <Icon className="h-4 w-4" />
         </span>
 
         <div className="min-w-0 flex-1">

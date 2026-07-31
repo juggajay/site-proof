@@ -66,19 +66,64 @@ function SectionCard({
 }
 
 /**
- * An empty card is NOT collapsed away.
+ * The four states a card body can be in, written once for both cards.
  *
- * A lot with no survey records and a lot whose survey section is hidden look
- * identical to a reader, and only one of them is a gap somebody should close.
- * The empty state says which, and offers the action that closes it.
+ * The empty branch is the one with an opinion: an empty card is NOT collapsed
+ * away. A lot with no survey records and a lot whose survey section is hidden
+ * look identical to a reader, and only one of them is a gap somebody should
+ * close — so the card stays and says which.
  */
-function EmptyState({ message, children }: { message: string; children?: React.ReactNode }) {
-  return (
-    <div className="border-t border-border px-4 py-6 text-center">
-      <p className="text-sm text-muted-foreground">{message}</p>
-      {children ? <div className="mt-3">{children}</div> : null}
-    </div>
-  );
+function AsyncSectionBody({
+  isLoading,
+  hasError,
+  onRetry,
+  loadingLabel,
+  errorLabel,
+  emptyMessage,
+  isEmpty,
+  children,
+}: {
+  isLoading: boolean;
+  hasError: boolean;
+  onRetry: () => void;
+  loadingLabel: string;
+  errorLabel: string;
+  emptyMessage: string;
+  isEmpty: boolean;
+  children: React.ReactNode;
+}) {
+  if (isLoading) {
+    return (
+      <p className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
+        {loadingLabel}
+      </p>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="border-t border-border px-4 py-6 text-center">
+        <p className="text-sm text-muted-foreground">{errorLabel}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 text-sm font-medium text-primary hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (isEmpty) {
+    return (
+      <div className="border-t border-border px-4 py-6 text-center">
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
 
 export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterialsSectionProps) {
@@ -138,27 +183,15 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
             ) : null
           }
         >
-          {surveysQuery.isLoading ? (
-            <p className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
-              Loading survey records…
-            </p>
-          ) : surveysQuery.error ? (
-            <div className="border-t border-border px-4 py-6 text-center">
-              <p className="text-sm text-muted-foreground">Could not load survey records.</p>
-              <button
-                type="button"
-                onClick={() => void surveysQuery.refetch()}
-                className="mt-2 text-sm font-medium text-primary hover:underline"
-              >
-                Retry
-              </button>
-            </div>
-          ) : groups.length === 0 ? (
-            // Stated, not collapsed. "No survey records filed" and "the survey
-            // section is hidden" look identical to a reader, and only one of
-            // them is a gap somebody should close.
-            <EmptyState message="No survey records filed against this lot." />
-          ) : (
+          <AsyncSectionBody
+            isLoading={surveysQuery.isLoading}
+            hasError={Boolean(surveysQuery.error)}
+            onRetry={() => void surveysQuery.refetch()}
+            loadingLabel="Loading survey records…"
+            errorLabel="Could not load survey records."
+            emptyMessage="No survey records filed against this lot."
+            isEmpty={groups.length === 0}
+          >
             <ul>
               {groups.map((group) => (
                 <SurveyRecordRow
@@ -170,7 +203,7 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
                 />
               ))}
             </ul>
-          )}
+          </AsyncSectionBody>
         </SectionCard>
       )}
 
@@ -179,26 +212,17 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
         title="Deliveries linked to this lot"
         blurb="Recorded in the daily diary — what went into this lot, and the docket that proves it."
       >
-        {deliveriesQuery.isLoading ? (
-          <p className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
-            Loading deliveries…
-          </p>
-        ) : deliveriesQuery.error ? (
-          <div className="border-t border-border px-4 py-6 text-center">
-            <p className="text-sm text-muted-foreground">Could not load deliveries.</p>
-            <button
-              type="button"
-              onClick={() => void deliveriesQuery.refetch()}
-              className="mt-2 text-sm font-medium text-primary hover:underline"
-            >
-              Retry
-            </button>
-          </div>
-        ) : deliveries.length === 0 ? (
-          <EmptyState message="No deliveries linked to this lot. Deliveries are recorded in the daily diary and linked to a lot from there." />
-        ) : (
+        <AsyncSectionBody
+          isLoading={deliveriesQuery.isLoading}
+          hasError={Boolean(deliveriesQuery.error)}
+          onRetry={() => void deliveriesQuery.refetch()}
+          loadingLabel="Loading deliveries…"
+          errorLabel="Could not load deliveries."
+          emptyMessage="No deliveries linked to this lot. Deliveries are recorded in the daily diary and linked to a lot from there."
+          isEmpty={deliveries.length === 0}
+        >
           <LotDeliveriesTable deliveries={deliveries} />
-        )}
+        </AsyncSectionBody>
       </SectionCard>
 
       {/*
