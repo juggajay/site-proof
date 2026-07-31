@@ -561,6 +561,75 @@ describe('Company API', () => {
       expect(res.body.company.logoUrl).toBe('https://example.com/logo.png');
     });
 
+    // Wave F / F2 — the Xero CSV export's account code and GST rate name moved
+    // off one user's localStorage onto the company, so everyone at the company
+    // exports the same codes.
+    it('stores and clears the Xero export settings', async () => {
+      const saved = await request(app)
+        .patch('/api/company')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ xeroAccountCode: '260', xeroTaxType: 'GST Free Income' });
+
+      expect(saved.status).toBe(200);
+      expect(saved.body.company.xeroAccountCode).toBe('260');
+      expect(saved.body.company.xeroTaxType).toBe('GST Free Income');
+
+      // Blank clears the override so the export falls back to its own defaults.
+      const cleared = await request(app)
+        .patch('/api/company')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ xeroAccountCode: '', xeroTaxType: '  ' });
+
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.company.xeroAccountCode).toBeNull();
+      expect(cleared.body.company.xeroTaxType).toBeNull();
+    });
+
+    it('rejects an over-long Xero account code', async () => {
+      const res = await request(app)
+        .patch('/api/company')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ xeroAccountCode: '2'.repeat(21) });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Xero account code');
+    });
+
+    it('refuses to let a non-admin change the Xero export settings', async () => {
+      const memberRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `xero-non-admin-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Non Admin User',
+          tosAccepted: true,
+        });
+      await prisma.user.update({
+        where: { id: memberRes.body.user.id },
+        data: { companyId, roleInCompany: 'project_manager' },
+      });
+
+      try {
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${memberRes.body.token}`)
+          .send({ xeroAccountCode: '999' });
+
+        expect(res.status).toBe(403);
+        await expect(
+          prisma.company.findUnique({
+            where: { id: companyId },
+            select: { xeroAccountCode: true },
+          }),
+        ).resolves.not.toMatchObject({ xeroAccountCode: '999' });
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: memberRes.body.user.id },
+        });
+        await prisma.user.delete({ where: { id: memberRes.body.user.id } });
+      }
+    });
+
     it('should reject inline company logo data URLs', async () => {
       const res = await request(app)
         .patch('/api/company')

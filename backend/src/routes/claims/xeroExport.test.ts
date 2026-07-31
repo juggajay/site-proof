@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  XERO_DEFAULT_ACCOUNT_CODE,
+  XERO_DEFAULT_TAX_TYPE,
   XERO_INVOICE_CSV_HEADER,
   buildXeroInvoiceExport,
+  resolveXeroExportConfig,
   type XeroClaimExportInput,
 } from './xeroExport.js';
 
@@ -12,6 +15,7 @@ const col = (name: string) => H.indexOf(name);
 const base: XeroClaimExportInput = {
   claimNumber: 5,
   projectName: 'Northern Interchange',
+  projectNumber: 'PRJ-0042',
   clientName: 'Acme Civil Pty Ltd',
   periodEnd: '2026-06-30T00:00:00.000Z',
   totalClaimedAmount: 61500,
@@ -43,6 +47,89 @@ const base: XeroClaimExportInput = {
 const config = { accountCode: '200' };
 
 describe('buildXeroInvoiceExport', () => {
+  // F2 exit gate (a) — characterization. This pins the MAPPING: every cell of
+  // every row for a company on the defaults, with the due date supplied by the
+  // caller exactly as the frontend supplies it today. It deliberately does NOT
+  // pin the due date's PROVENANCE — whether a CIVOS-derived SOPA date belongs
+  // on an accounting document at all is decision D8 and is untouched by F2.
+  // A change to any cell here is a change a customer sees in their ledger.
+  it('produces the frozen CSV for a company on the defaults (characterization)', () => {
+    const { filename, rows } = buildXeroInvoiceExport(
+      {
+        ...base,
+        totalClaimedAmount: 63750,
+        variations: [
+          {
+            variationNumber: 'VAR-0007',
+            title: 'Additional rock excavation',
+            approvedAmount: 2250,
+          },
+        ],
+      },
+      // What the route now builds from a company with no stored settings.
+      resolveXeroExportConfig(null, { dueDate: '2026-07-21' }),
+    );
+
+    expect(filename).toBe('xero-claim-5.csv');
+    expect(rows).toEqual([
+      [
+        '*ContactName',
+        '*InvoiceNumber',
+        '*InvoiceDate',
+        '*DueDate',
+        '*Description',
+        '*Quantity',
+        '*UnitAmount',
+        '*AccountCode',
+        '*TaxType',
+      ],
+      [
+        'Acme Civil Pty Ltd',
+        'Claim 5 — PRJ-0042',
+        '2026-06-30',
+        '2026-07-21',
+        'Lot 12 — Bulk Earthworks — this claim 40% (cumulative 100%)',
+        1,
+        40000,
+        '200',
+        'GST on Income',
+      ],
+      [
+        'Acme Civil Pty Ltd',
+        'Claim 5 — PRJ-0042',
+        '2026-06-30',
+        '2026-07-21',
+        'Lot 18 — Drainage Ch0-200 — this claim 25% (cumulative 25%)',
+        1,
+        12500,
+        '200',
+        'GST on Income',
+      ],
+      [
+        'Acme Civil Pty Ltd',
+        'Claim 5 — PRJ-0042',
+        '2026-06-30',
+        '2026-07-21',
+        'Lot 23 — Kerb & Channel — this claim 60% (cumulative 85%)',
+        1,
+        9000,
+        '200',
+        'GST on Income',
+      ],
+      [
+        'Acme Civil Pty Ltd',
+        'Claim 5 — PRJ-0042',
+        '2026-06-30',
+        '2026-07-21',
+        'Variation VAR-0007 — Additional rock excavation',
+        1,
+        2250,
+        '200',
+        'GST on Income',
+      ],
+    ]);
+  });
+
   it('emits one data row per lot plus a header row', () => {
     const { rows } = buildXeroInvoiceExport(base, config);
     expect(rows).toHaveLength(1 + 3);
@@ -64,9 +151,9 @@ describe('buildXeroInvoiceExport', () => {
     expect(row18[col('*AccountCode')]).toBe('200');
   });
 
-  it('sets invoice number from claim + project and invoice date as ISO periodEnd', () => {
+  it('sets invoice number from claim + project NUMBER and invoice date as ISO periodEnd', () => {
     const { rows } = buildXeroInvoiceExport(base, config);
-    expect(rows[1][col('*InvoiceNumber')]).toBe('Claim 5 — Northern Interchange');
+    expect(rows[1][col('*InvoiceNumber')]).toBe('Claim 5 — PRJ-0042');
     // ISO YYYY-MM-DD is locale-safe (Xero cannot misread it as US M/D/Y).
     expect(rows[1][col('*InvoiceDate')]).toBe('2026-06-30');
   });
@@ -122,6 +209,20 @@ describe('buildXeroInvoiceExport', () => {
     expect(custom.rows[1][col('*TaxType')]).toBe('GST Free Income');
   });
 
+  // FR-B8. `Project.name` has no uniqueness constraint — the only unique key on
+  // the model is @@unique([companyId, projectNumber]) — so two same-named
+  // projects in one company would otherwise both emit "Claim 1 — Site Works"
+  // and collide on Xero's per-org invoice-number uniqueness.
+  it('gives two same-named projects distinct invoice numbers', () => {
+    const shared = { ...base, claimNumber: 1, projectName: 'Site Works' };
+    const first = buildXeroInvoiceExport({ ...shared, projectNumber: 'PRJ-0100' }, config);
+    const second = buildXeroInvoiceExport({ ...shared, projectNumber: 'PRJ-0101' }, config);
+
+    expect(first.rows[1][col('*InvoiceNumber')]).toBe('Claim 1 — PRJ-0100');
+    expect(second.rows[1][col('*InvoiceNumber')]).toBe('Claim 1 — PRJ-0101');
+    expect(first.rows[1][col('*InvoiceNumber')]).not.toBe(second.rows[1][col('*InvoiceNumber')]);
+  });
+
   it('blocks export when line total does not match claim total', () => {
     expect(() =>
       buildXeroInvoiceExport({ ...base, totalClaimedAmount: 99999 }, config),
@@ -154,6 +255,16 @@ describe('buildXeroInvoiceExport', () => {
     expect(variationRow[col('*Quantity')]).toBe(1);
     expect(variationRow[col('*UnitAmount')]).toBe(2250);
     expect(variationRow[col('*AccountCode')]).toBe('200');
+    // The variation line has to land on the SAME invoice as the lot lines —
+    // Xero groups rows by *InvoiceNumber. Dropping or splitting variation rows
+    // also trips the total-matches-lines invariant, because the claim total
+    // includes them, which would make every claim with a variation unexportable.
+    const lotRow = rows.find((r) => String(r[col('*Description')]).includes('Lot 12'))!;
+    expect(variationRow[col('*InvoiceNumber')]).toBe(lotRow[col('*InvoiceNumber')]);
+    expect(variationRow[col('*ContactName')]).toBe(lotRow[col('*ContactName')]);
+    expect(variationRow[col('*InvoiceDate')]).toBe(lotRow[col('*InvoiceDate')]);
+    expect(variationRow[col('*DueDate')]).toBe(lotRow[col('*DueDate')]);
+    expect(variationRow[col('*TaxType')]).toBe(lotRow[col('*TaxType')]);
   });
 
   it('reconciles cent-level rounding without false-blocking', () => {
@@ -212,5 +323,61 @@ describe('buildXeroInvoiceExport', () => {
     expect(frac.rows[1][col('*Description')]).toBe(
       'Lot L1 — A — this claim 12.5% (cumulative 37.5%)',
     );
+  });
+});
+
+describe('resolveXeroExportConfig', () => {
+  it('falls back to the export defaults when the company has set nothing', () => {
+    expect(resolveXeroExportConfig({ xeroAccountCode: null, xeroTaxType: null })).toEqual({
+      accountCode: XERO_DEFAULT_ACCOUNT_CODE,
+      taxType: undefined,
+      dueDate: undefined,
+    });
+    // Same for a company row that could not be loaded at all.
+    expect(resolveXeroExportConfig(null).accountCode).toBe(XERO_DEFAULT_ACCOUNT_CODE);
+  });
+
+  it('uses the company values when they are set', () => {
+    const config = resolveXeroExportConfig({
+      xeroAccountCode: '260',
+      xeroTaxType: 'GST Free Income',
+    });
+    expect(config.accountCode).toBe('260');
+    expect(config.taxType).toBe('GST Free Income');
+    expect(buildXeroInvoiceExport(base, config).rows[1]).toEqual(
+      expect.arrayContaining(['260', 'GST Free Income']),
+    );
+  });
+
+  it('treats a blank stored value as unset rather than emitting blank', () => {
+    // A blank *TaxType imports as untaxed in Xero (it does NOT inherit the
+    // account default), which silently under-bills GST.
+    const config = resolveXeroExportConfig({ xeroAccountCode: '  ', xeroTaxType: '   ' });
+    expect(config.accountCode).toBe(XERO_DEFAULT_ACCOUNT_CODE);
+    expect(config.taxType).toBeUndefined();
+    expect(buildXeroInvoiceExport(base, config).rows[1][col('*TaxType')]).toBe(
+      XERO_DEFAULT_TAX_TYPE,
+    );
+  });
+
+  it("keeps one company's settings out of another company's export", () => {
+    const companyA = { xeroAccountCode: '201', xeroTaxType: 'GST on Income' };
+    const companyB = { xeroAccountCode: '910', xeroTaxType: 'BAS Excluded' };
+    const rowsA = buildXeroInvoiceExport(base, resolveXeroExportConfig(companyA)).rows;
+    const rowsB = buildXeroInvoiceExport(base, resolveXeroExportConfig(companyB)).rows;
+
+    expect(rowsA[1][col('*AccountCode')]).toBe('201');
+    expect(rowsA[1][col('*TaxType')]).toBe('GST on Income');
+    expect(rowsB[1][col('*AccountCode')]).toBe('910');
+    expect(rowsB[1][col('*TaxType')]).toBe('BAS Excluded');
+  });
+
+  it('passes the caller due date through untouched (D8 — F2 does not move it)', () => {
+    const config = resolveXeroExportConfig(
+      { xeroAccountCode: '200', xeroTaxType: null },
+      { dueDate: '2026-07-21' },
+    );
+    expect(config.dueDate).toBe('2026-07-21');
+    expect(buildXeroInvoiceExport(base, config).rows[1][col('*DueDate')]).toBe('2026-07-21');
   });
 });

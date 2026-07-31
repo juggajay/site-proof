@@ -5,7 +5,7 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { buildScopedCsvFilename, downloadCsv, downloadBrandedCsv } from '@/lib/csv';
 import { useCsvBranding } from '@/hooks/useCsvBranding';
-import { readLocalStorageItem } from '@/lib/storagePreferences';
+import { readLocalStorageItem, removeLocalStorageItem } from '@/lib/storagePreferences';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
@@ -49,6 +49,12 @@ import {
   ClaimsMainContent,
   ClaimsPageHeader,
 } from './ClaimsPageSections';
+
+/**
+ * The pre-F2 per-browser Xero account code override. Read only to tell the one
+ * user who set it that the setting moved to Company Settings, then deleted.
+ */
+const LEGACY_XERO_ACCOUNT_CODE_KEY = 'xeroExport.accountCode';
 
 export function ClaimsPage() {
   const { projectId } = useParams();
@@ -518,20 +524,26 @@ export function ClaimsPage() {
   const handleExportXero = useCallback(
     async (claim: Claim) => {
       if (!projectId) return;
-      // Account code is a per-Xero-org constant (their income/Sales account),
-      // not per-claim. Default to Xero's standard Sales code; a localStorage
-      // override is the v0 escape hatch. ponytail: no dialog in v0 — the invoice
-      // imports as an editable Xero draft, and the readiness guardrail forbids
-      // blocking prompts. Moves to a per-company setting with the live Xero
-      // integration (see docs/plans/2026-07-02-xero-export-v0-design.md).
-      const accountCode = (readLocalStorageItem('xeroExport.accountCode') ?? '').trim() || '200';
+      // F2: the account code and GST rate name are now company settings read
+      // server-side, so two people at the same company cannot export the same
+      // claim under different codes. Anyone who set the old per-browser override
+      // is told once that it moved, rather than silently ignored.
+      if (readLocalStorageItem(LEGACY_XERO_ACCOUNT_CODE_KEY) !== null) {
+        removeLocalStorageItem(LEGACY_XERO_ACCOUNT_CODE_KEY);
+        toast({
+          title: 'Xero account code moved',
+          description:
+            'The account code is now a company setting (Company Settings > Xero invoice export). Your old per-browser value is no longer used.',
+          variant: 'warning',
+        });
+      }
       // The backend defaults DueDate to invoice date + terms, but we own the
       // per-state SOPA business-day tables — pass the statutory payment due date
       // so Xero shows the real due date, not a generic +30 days.
       const dueDate = claim.submittedAt
         ? calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined)
         : null;
-      const dueDateParam = dueDate ? `&dueDate=${encodeURIComponent(dueDate)}` : '';
+      const dueDateParam = dueDate ? `?dueDate=${encodeURIComponent(dueDate)}` : '';
       try {
         const { filename, rows } = await apiFetch<{
           filename: string;
@@ -539,8 +551,12 @@ export function ClaimsPage() {
         }>(
           `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(
             claim.id,
-          )}/xero-export?accountCode=${encodeURIComponent(accountCode)}${dueDateParam}`,
+          )}/xero-export${dueDateParam}`,
         );
+        // Plain downloadCsv, NOT downloadBrandedCsv: this is the one CSV in the
+        // product a machine reads. Xero's importer treats row 1 as the header,
+        // so the two `#` provenance rows every human-facing register carries
+        // would break the import outright. Do not "make it consistent".
         downloadCsv(filename, rows);
         toast({
           title: 'Xero invoice CSV downloaded',

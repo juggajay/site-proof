@@ -26,6 +26,7 @@ import {
 import { CompanyTeamMembersSection } from './components/CompanyTeamMembersSection';
 import { CompanyApiKeysSection } from './components/CompanyApiKeysSection';
 import { CompanyWebhooksSection } from './components/CompanyWebhooksSection';
+import { CompanyXeroExportSection } from './components/CompanyXeroExportSection';
 import { OwnershipTransferModal } from './components/OwnershipTransferModal';
 
 interface LogoUploadResponse {
@@ -386,6 +387,10 @@ export function CompanySettingsPage() {
       {canManageCompanyTeam && <CompanyApiKeysSection currentUserId={user?.id} />}
 
       {canManageCompanyTeam && <CompanyWebhooksSection />}
+
+      {canManageCompanyTeam && (
+        <CompanyXeroExportSection company={company} onCompanyUpdated={setCompany} />
+      )}
 
       {/* Billing & Subscription - Only visible to owners (Feature #703) */}
       {isCompanyOwner && <CompanyBillingSection company={company} supportEmail={supportEmail} />}

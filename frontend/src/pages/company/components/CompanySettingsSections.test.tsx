@@ -16,6 +16,8 @@ const company: Company = {
   address: '1 Test Road',
   logoUrl: 'https://example.com/logo.png',
   subscriptionTier: 'professional',
+  xeroAccountCode: null,
+  xeroTaxType: null,
   projectCount: 2,
   projectLimit: 3,
   userCount: 4,
