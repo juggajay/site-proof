@@ -24,7 +24,9 @@
 // caller-supplied so route adoption (F0.4b) does not need to teach this file
 // about lots, hold points, NCRs or claims. F0.4a ships it with NO call sites.
 //
-// Flag: `READINESS_SNAPSHOTS_ENABLED` (default FALSE — spec §9 rollout step 2).
+// Flag: `READINESS_SNAPSHOTS_ENABLED` (code default FALSE; the §9 rollout
+// completed 2026-07-26 and PRODUCTION RUNS TRUE PERMANENTLY — disabling it is
+// an incident action with a logged reason, §9 step 4, not a tuning knob).
 // Disabled, decisions behave exactly as today and the audit row carries
 // `changes.snapshotSkipped: true` so the evidence gap is itself countable.
 // Enabled, a snapshot failure blocks the decision (spec §9 step 4).

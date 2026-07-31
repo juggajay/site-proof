@@ -102,9 +102,11 @@ function lostTheRequestKeyRace(error: unknown): boolean {
 /**
  * Claim create's idempotency mechanism, unchanged by F0.4b: the
  * `(projectId, requestKey)` unique index. `recordDecision`'s own
- * snapshot-backed replay is deliberately NOT used — it is inert while
- * `READINESS_SNAPSHOTS_ENABLED` is off, so migrating onto it would silently
- * reopen the F-03 double-billing hole (`[R3.1-B2]`, spec §9 step 2).
+ * snapshot-backed replay is deliberately NOT used — the unique index is the
+ * proven mechanism, and migrating onto replay (even now that
+ * `READINESS_SNAPSHOTS_ENABLED` is ON in prod, since 2026-07-26) would need
+ * its own reviewed slice to avoid reopening the F-03 double-billing hole
+ * (`[R3.1-B2]`, spec §9 step 2).
  */
 async function findClaimByRequestKey(
   projectId: string,
@@ -237,9 +239,9 @@ export function createClaimWorkflowRouter({
       // `(projectId, requestKey)` pre-check runs BEFORE the decision opens, and
       // the unique index behind it is what makes concurrent same-key creates
       // converge (see `lostTheRequestKeyRace`). `requestKey` is deliberately NOT
-      // passed to `recordDecision`: its snapshot-backed replay is inert while
-      // `READINESS_SNAPSHOTS_ENABLED` is off, so migrating onto it would
-      // silently reopen the F-03 double-billing hole.
+      // passed to `recordDecision`: the unique index is the proven idempotency
+      // mechanism, and moving onto snapshot replay would need its own reviewed
+      // slice to avoid reopening the F-03 double-billing hole.
       let claim = requestKey ? await findClaimByRequestKey(projectId, requestKey) : null;
 
       if (!claim) {
