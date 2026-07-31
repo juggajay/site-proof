@@ -21,21 +21,7 @@ import {
 import L from 'leaflet';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import {
-  Camera,
-  Crosshair,
-  ExternalLink,
-  FlaskConical,
-  History,
-  Image as ImageIcon,
-  Layers,
-  Map as MapIcon,
-  MapPin,
-  Navigation,
-  PencilRuler,
-  Square,
-  type LucideIcon,
-} from 'lucide-react';
+import { ExternalLink, Navigation } from 'lucide-react';
 
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
@@ -51,7 +37,6 @@ import { formatDateKey } from '@/lib/localDate';
 import { authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
-import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
@@ -65,6 +50,8 @@ import { DrawLotLayer } from './DrawLotLayer';
 import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
 import { HistoryPanel } from './HistoryPanel';
 import { TestCoveragePanel } from './TestCoveragePanel';
+import { MapToolbar } from './MapToolbar';
+import { buildMapLayerRows, type MapPanelId, type MapPinLayerId } from './mapLayerRows';
 import {
   getTestCoverageColor,
   testCoverageByLot,
@@ -113,35 +100,51 @@ const POLYGON_STROKE_COLOR = '#1f2937';
 const GAP_COLOR = '#dc2626';
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
 
-// GPS photo pin: a violet camera badge — distinct from the status-coloured lot
-// fills, the amber control line, and the blue search box. Built once (divIcon is
-// immutable) and shared by every marker.
+// DG-4b. Both marker layers wear the SAME neutral shell — a white face with the
+// constant POLYGON_STROKE_COLOR casing already used for every lot boundary — and
+// are told apart by SHAPE and glyph, not hue: a circle is a photo, a diamond is a
+// test. The shipped violet (#7c3aed) and magenta (#db2777) discs read as two more
+// categories on a map whose fills already carry eight Okabe-Ito status colours,
+// and they were the only two marks whose identity died in greyscale, in direct
+// sunlight, or for a colour-blind reader.
+const PIN_GLYPH_STROKE = POLYGON_STROKE_COLOR;
+const PHOTO_GLYPH =
+  '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>' +
+  '<circle cx="12" cy="13" r="3"/>';
+const TEST_GLYPH =
+  '<path d="M10 2v7.5L4.6 18A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-3L14 9.5V2"/>' +
+  '<path d="M8.5 2h7"/><path d="M7 15h10"/>';
+
+function pinGlyph(paths: string, size: number): string {
+  return (
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${PIN_GLYPH_STROKE}" ` +
+    `stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
+  );
+}
+
+// GPS photo pin: a CIRCLE.
 const PHOTO_PIN_ICON = L.divIcon({
   className: 'siteproof-photo-pin',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -12],
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  popupAnchor: [0, -13],
   html:
-    '<div style="width:24px;height:24px;border-radius:9999px;background:#7c3aed;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">' +
-    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>' +
-    '<circle cx="12" cy="13" r="3"/></svg></div>',
+    `<div style="width:26px;height:26px;border-radius:9999px;background:#ffffff;border:2px solid ${POLYGON_STROKE_COLOR};box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">` +
+    `${pinGlyph(PHOTO_GLYPH, 14)}</div>`,
 });
 
-// C3 Phase B2. A captured sample point: a MAGENTA flask badge. Deliberately
-// distinct from the violet photo pin, the amber control line, the blue search box,
-// the red coverage gap, and every Okabe-Ito status/testing fill — a reader must
-// never have to work out which layer a marker belongs to.
+// C3 Phase B2. A captured sample point: a DIAMOND. The face is a square rotated
+// 45°; the glyph rides above it unrotated so it stays readable.
 const TEST_PIN_ICON = L.divIcon({
   className: 'siteproof-test-pin',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -12],
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  popupAnchor: [0, -13],
   html:
-    '<div style="width:24px;height:24px;border-radius:9999px;background:#db2777;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">' +
-    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M10 2v7.5L4.6 18A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-3L14 9.5V2"/>' +
-    '<path d="M8.5 2h7"/><path d="M7 15h10"/></svg></div>',
+    '<div style="position:relative;width:26px;height:26px">' +
+    `<div style="position:absolute;left:4px;top:4px;width:18px;height:18px;background:#ffffff;border:2px solid ${POLYGON_STROKE_COLOR};box-shadow:0 1px 3px rgba(0,0,0,.4);transform:rotate(45deg)"></div>` +
+    `<div style="position:absolute;left:6px;top:6px;width:14px;height:14px">${pinGlyph(TEST_GLYPH, 14)}</div>` +
+    '</div>',
 });
 
 export interface MapLot {
@@ -583,50 +586,6 @@ function EmptyStateCallout({
   );
 }
 
-// Map toolbar control. On mobile it collapses to an icon-only button with a
-// ≥44px hit area (label carried by aria-label + title); on desktop it shows the
-// icon alongside text. `label` is the stable accessible name; `text` is the
-// dynamic desktop caption (e.g. "Cancel" while armed).
-function ToolbarButton({
-  icon: Icon,
-  label,
-  text,
-  onClick,
-  pressed,
-  disabled,
-  compact,
-  testId,
-}: {
-  icon: LucideIcon;
-  label: string;
-  text?: string;
-  onClick: () => void;
-  pressed?: boolean;
-  disabled?: boolean;
-  compact: boolean;
-  testId: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-pressed={pressed}
-      aria-label={label}
-      title={label}
-      className={cn(
-        'inline-flex items-center justify-center gap-1.5 rounded-md border text-sm font-medium shadow-sm disabled:opacity-50',
-        compact ? 'h-11 w-11' : 'px-3 py-1.5',
-        pressed ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted',
-      )}
-      data-testid={testId}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {!compact && <span>{text ?? label}</span>}
-    </button>
-  );
-}
-
 export function LotMapView({
   projectId,
   filteredLotIds,
@@ -703,6 +662,9 @@ export function LotMapView({
   const [coverageSelection, setCoverageSelection] = useState<Record<string, string>>({});
   const [gapFocusBounds, setGapFocusBounds] = useState<[LatLng, LatLng] | null>(null);
   const coverageQuery = useProjectCoverage(projectId, coverageArmed);
+
+  // DG-4b. The Layers chooser (DropdownMenu on desktop, BottomSheet on mobile).
+  const [layersOpen, setLayersOpen] = useState(false);
 
   // Plan overlays.
   const [plansOpen, setPlansOpen] = useState(false);
@@ -937,6 +899,40 @@ export function LotMapView({
     });
   }, [clearSearch, resetTestPinSearch]);
 
+  // DG-4b. The chooser's two kinds of row land on two different verbs.
+  //
+  // A PIN row toggles its layer and leaves the chooser open — arming Photo pins
+  // and Test pins is one errand. A PANEL row is navigation: it closes the
+  // chooser and hands the map to a panel that owns its own state (and its own
+  // close), which is why panels never carry a checkbox here.
+  const handleTogglePin = useCallback(
+    (id: MapPinLayerId) => {
+      if (id === 'photos') togglePhotos();
+      else toggleTestPins();
+    },
+    [togglePhotos, toggleTestPins],
+  );
+
+  const handleOpenPanel = useCallback(
+    (id: MapPanelId) => {
+      setLayersOpen(false);
+      if (id === 'plans') {
+        setPlansOpen(true);
+        return;
+      }
+      // Coverage and Testing keep their shipped mutual-exclusion rules — going
+      // through their existing toggles is what preserves them. Already open is
+      // not a reason to close: the row is a way BACK to the panel, and each
+      // panel has its own close.
+      if (id === 'coverage') {
+        if (!coverageArmed) toggleCoverage();
+      } else if (!testingArmed) {
+        toggleTesting();
+      }
+    },
+    [coverageArmed, testingArmed, toggleCoverage, toggleTesting],
+  );
+
   const togglePlanShown = useCallback((id: string) => {
     setPlanShown((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
@@ -1078,6 +1074,61 @@ export function LotMapView({
     if (testPinsArmed && testPinSearch.error) layers.push('Test pins');
     return layers;
   }, [photosArmed, photoSearch.error, testPinsArmed, testPinSearch.error]);
+
+  // Pins actually DRAWN in the current viewport — what the chooser counts, and
+  // what the truncation notice is about. For tests this is the located subset:
+  // an unlocated test is counted by the register, never by the map `[C3S-B1]`.
+  const drawnPhotos = useMemo(
+    () =>
+      photosArmed
+        ? (photoSearch.data?.photos ?? []).filter(
+            (p) => p.gpsLatitude != null && p.gpsLongitude != null,
+          )
+        : [],
+    [photosArmed, photoSearch.data],
+  );
+  const drawnTestPins = useMemo(
+    () =>
+      testPinsArmed
+        ? (testPinSearch.data?.testResults ?? []).filter((t) => readSamplePoint(t) !== null)
+        : [],
+    [testPinsArmed, testPinSearch.data],
+  );
+
+  // The backend capped this viewport's answer. The flag has been on the wire
+  // since spatialSearch shipped and the map has never rendered it.
+  const truncatedPinLayers = useMemo(() => {
+    const layers: string[] = [];
+    if (photosArmed && photoSearch.data?.photosTruncated) layers.push('photo pins');
+    if (testPinsArmed && testPinSearch.data?.testResultsTruncated) layers.push('test pins');
+    return layers;
+  }, [photosArmed, photoSearch.data, testPinsArmed, testPinSearch.data]);
+
+  const layerMenuModel = useMemo(
+    () =>
+      buildMapLayerRows({
+        historyArmed,
+        photosArmed,
+        photoCount: drawnPhotos.length,
+        testPinsArmed,
+        testPinCount: drawnTestPins.length,
+        registeredSheetCount: registeredSheets.length,
+        plansOpen,
+        coverageArmed,
+        testingArmed,
+      }),
+    [
+      historyArmed,
+      photosArmed,
+      drawnPhotos.length,
+      testPinsArmed,
+      drawnTestPins.length,
+      registeredSheets.length,
+      plansOpen,
+      coverageArmed,
+      testingArmed,
+    ],
+  );
 
   const testCoverageLots = useMemo(
     () => testCoverageByLot(testingArmed ? testCoverageQuery.data : undefined),
@@ -1251,158 +1302,73 @@ export function LotMapView({
               map from painting over fixed page-level UI — the offline pill was
               80% hidden behind the map before this. */}
           <div className="relative isolate" data-testid="lot-map-stacking-root">
-            <div className="absolute left-3 top-3 z-[1000] pointer-events-auto">
-              <div className="flex flex-wrap items-center gap-2">
-                <ToolbarButton
-                  icon={Square}
-                  label="Find by area"
-                  text={drawArmed ? 'Cancel' : 'Find by area'}
-                  onClick={armFindByArea}
-                  pressed={drawArmed}
-                  compact={isMobile}
-                  testId="find-by-area-button"
-                />
-                <ToolbarButton
-                  icon={Layers}
-                  label="Coverage"
-                  onClick={toggleCoverage}
-                  pressed={coverageArmed}
-                  compact={isMobile}
-                  testId="coverage-button"
-                />
-                <ToolbarButton
-                  icon={MapIcon}
-                  label="Plans"
-                  onClick={() => setPlansOpen((open) => !open)}
-                  pressed={plansOpen}
-                  compact={isMobile}
-                  testId="plans-button"
-                />
-                {/* Ninth toolbar item (C3 Phase A). Unavailable in History —
-                    a live verdict has no meaning against a past date. */}
-                {!historyArmed && (
-                  <ToolbarButton
-                    icon={FlaskConical}
-                    label="Testing"
-                    onClick={toggleTesting}
-                    pressed={testingArmed}
-                    compact={isMobile}
-                    testId="testing-button"
-                  />
-                )}
-                {/* Tenth toolbar item (C3 Phase B2). Hidden in History for the
-                    same reason Testing is: these pins are today's captures. */}
-                {!historyArmed && (
-                  <ToolbarButton
-                    icon={MapPin}
-                    label="Test pins"
-                    onClick={toggleTestPins}
-                    pressed={testPinsArmed}
-                    compact={isMobile}
-                    testId="test-pins-button"
-                  />
-                )}
-                <ToolbarButton
-                  icon={ImageIcon}
-                  label="Photos"
-                  onClick={togglePhotos}
-                  pressed={photosArmed}
-                  compact={isMobile}
-                  testId="photos-button"
-                />
-                {canManageSettings && (
-                  <ToolbarButton
-                    icon={PencilRuler}
-                    label="Draw lot"
-                    text={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
-                    onClick={armDrawLot}
-                    pressed={drawLotArmed}
-                    compact={isMobile}
-                    testId="draw-lot-button"
-                  />
-                )}
-                <ToolbarButton
-                  icon={Camera}
-                  label="Snapshot"
-                  text={snapshotting ? 'Saving…' : 'Snapshot'}
-                  onClick={handleSnapshot}
-                  disabled={snapshotting}
-                  compact={isMobile}
-                  testId="snapshot-button"
-                />
-                <ToolbarButton
-                  icon={Crosshair}
-                  label="My location"
-                  text={locating ? 'Locating…' : 'My location'}
-                  onClick={handleLocate}
-                  disabled={locating || !map}
-                  compact={isMobile}
-                  testId="locate-me-button"
-                />
-                <ToolbarButton
-                  icon={History}
-                  label="History"
-                  text={historyArmed ? 'Exit history' : 'History'}
-                  onClick={toggleHistory}
-                  pressed={historyArmed}
-                  compact={isMobile}
-                  testId="history-button"
-                />
-              </div>
-              {/* AT-94 `[C3S-d]`. Both marker layers ride `spatial-search`, a POST
-                  that is deliberately NOT in the offline runtime cache — nothing
-                  stale is ever shown. So when a fetch fails the layer must SAY it
-                  is unavailable: an empty map reads as "no pins here", which is a
-                  different statement and a false one. */}
-              {unavailablePinLayers.length > 0 && (
-                <p
-                  className="mt-1 max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow"
-                  role="status"
-                  data-testid="map-pin-layers-unavailable"
-                >
-                  {unavailablePinLayers.join(' and ')}{' '}
-                  {unavailablePinLayers.length > 1 ? 'are' : 'is'} unavailable
-                  {navigator.onLine ? ' right now' : ' offline'} — nothing stale is shown.
-                </p>
-              )}
-              {drawArmed && (
-                <p className="mt-1 max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                  {isMobile
-                    ? 'Drag a box on the map. Tap the button again to cancel.'
-                    : 'Drag a box on the map. Press Esc to cancel.'}
-                </p>
-              )}
-              {drawLotArmed && (
-                <p className="mt-1 max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                  {isMobile
-                    ? 'Tap to place polygon corners; double-tap to finish. Tap the button again to cancel.'
-                    : 'Click to place polygon corners; double-click to finish. Press Esc to cancel.'}
-                </p>
-              )}
-              {plansOpen && (
-                <PlansPanel
-                  settingsHref={linkPaths.settings}
-                  sheets={registeredSheets}
-                  shown={planShown}
-                  opacity={planOpacity}
-                  blend={planBlend}
-                  offscreenIds={offscreenSheetIds}
-                  onToggle={togglePlanShown}
-                  onOpacityChange={setPlanOpacity}
-                  onBlendChange={setPlanBlend}
-                  onZoom={zoomToSheet}
-                />
-              )}
+            {/* DG-4b. One column: the Past bar (when armed) above the control
+                row above the notices. `pointer-events-none` on the column with
+                `auto` on each control is what keeps the transparent gaps between
+                controls draggable — the map has to stay usable underneath its
+                own toolbar. */}
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-[1000] flex flex-col gap-2">
+              {/* Past view is not an action, it is a MODE: it changes the date
+                  the whole map is about. So it gets a permanent bar stating that
+                  date, not a popover that closes and leaves you unable to tell
+                  what you are looking at. */}
               {historyArmed && (
-                <HistoryPanel
-                  earliestKey={earliestKey}
-                  todayKey={formatDateKey()}
-                  valueKey={historyDateKey}
-                  onChange={setHistoryDateKey}
-                  isLoading={timelineQuery.isLoading}
-                  error={timelineQuery.error}
-                  onRetry={() => timelineQuery.refetch()}
-                />
+                <div className="pointer-events-auto">
+                  <HistoryPanel
+                    earliestKey={earliestKey}
+                    todayKey={formatDateKey()}
+                    valueKey={historyDateKey}
+                    onChange={setHistoryDateKey}
+                    onExit={toggleHistory}
+                    isLoading={timelineQuery.isLoading}
+                    error={timelineQuery.error}
+                    onRetry={() => timelineQuery.refetch()}
+                  />
+                </div>
+              )}
+
+              <MapToolbar
+                isMobile={isMobile}
+                drawArmed={drawArmed}
+                onFindByArea={armFindByArea}
+                locating={locating}
+                canLocate={Boolean(map)}
+                onLocate={handleLocate}
+                photosArmed={photosArmed}
+                onTogglePhotos={togglePhotos}
+                layersOpen={layersOpen}
+                onLayersOpenChange={setLayersOpen}
+                layerModel={layerMenuModel}
+                onTogglePin={handleTogglePin}
+                onOpenPanel={handleOpenPanel}
+                unavailablePinLayers={unavailablePinLayers}
+                truncatedPinLayers={truncatedPinLayers}
+                canManageSettings={canManageSettings}
+                drawLotArmed={drawLotArmed}
+                onDrawLot={armDrawLot}
+                snapshotting={snapshotting}
+                onSnapshot={handleSnapshot}
+                historyArmed={historyArmed}
+                onToggleHistory={toggleHistory}
+              />
+              {/* `w-fit` so the panel's wrapper does not stretch across the
+                  column and swallow map drags either side of it. */}
+              {plansOpen && (
+                <div className="pointer-events-auto w-fit">
+                  <PlansPanel
+                    settingsHref={linkPaths.settings}
+                    sheets={registeredSheets}
+                    shown={planShown}
+                    opacity={planOpacity}
+                    blend={planBlend}
+                    offscreenIds={offscreenSheetIds}
+                    onToggle={togglePlanShown}
+                    onOpacityChange={setPlanOpacity}
+                    onBlendChange={setPlanBlend}
+                    onZoom={zoomToSheet}
+                    onClose={() => setPlansOpen(false)}
+                  />
+                </div>
               )}
             </div>
 
@@ -1475,37 +1441,33 @@ export function LotMapView({
                 );
               })}
 
-              {photosArmed &&
-                (photoSearch.data?.photos ?? []).map((photo) => {
-                  if (photo.gpsLatitude == null || photo.gpsLongitude == null) return null;
-                  const to = linkPaths.photo(photo);
-                  return (
-                    <PhotoPin
-                      key={photo.id}
-                      photo={photo}
-                      onView={to ? () => navigate(to) : null}
-                    />
-                  );
-                })}
+              {/* `drawnPhotos` is already the located subset — the same array the
+                  chooser counts, so "51 in view" can never disagree with what is
+                  on the map. */}
+              {drawnPhotos.map((photo) => {
+                const to = linkPaths.photo(photo);
+                return (
+                  <PhotoPin key={photo.id} photo={photo} onView={to ? () => navigate(to) : null} />
+                );
+              })}
 
               {/* C3 Phase B2. `readSamplePoint` returning null is the only gate:
                   no captured pair, no marker. There is no fallback position — a
                   centroid pin would assert a sample was taken in the middle of a
                   lot, which is a claim CIVOS never received `[C3S-B1]`, AT-84. */}
-              {testPinsArmed &&
-                (testPinSearch.data?.testResults ?? []).map((test) => {
-                  const point = readSamplePoint(test);
-                  if (!point) return null;
-                  const to = linkPaths.test(test);
-                  return (
-                    <TestPin
-                      key={test.id}
-                      test={test}
-                      point={point}
-                      onView={to ? () => navigate(to) : null}
-                    />
-                  );
-                })}
+              {drawnTestPins.map((test) => {
+                const point = readSamplePoint(test);
+                if (!point) return null;
+                const to = linkPaths.test(test);
+                return (
+                  <TestPin
+                    key={test.id}
+                    test={test}
+                    point={point}
+                    onView={to ? () => navigate(to) : null}
+                  />
+                );
+              })}
 
               {coverageArmed &&
                 coverageGaps.map(({ key, shape }) =>
