@@ -263,7 +263,10 @@ function WorkEntry({ entry, isSubmitted, docketStatusKey, onOpen, onDelete }: Wo
   // A submitted delivery row stays TAPPABLE — not to edit it, but to file its
   // docket. Every other type is genuinely finished once the diary is in.
   const canOpen = !isSubmitted || entry.type === 'delivery';
-  const actionLabel = isSubmitted ? 'File docket for' : `Edit ${typeLabel}:`;
+  // Only the row that can actually file a docket says so. A locked activity row
+  // keeps its Edit label (and its disabled button) — announcing "File docket
+  // for" on it would be a screen reader promising an action that does not exist.
+  const actionLabel = isSubmitted && canOpen ? 'File docket for' : `Edit ${typeLabel}:`;
 
   return (
     <div

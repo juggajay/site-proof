@@ -30,10 +30,8 @@ import { SheetDraftRestoredHint } from '@/components/foreman/sheets/SheetDraftRe
 import { SheetErrorBanner } from '@/components/foreman/sheets/SheetErrorBanner';
 import { DictationMicButton } from '@/components/ui/DictationMicButton';
 import { DeliveryDocketCapture } from '@/components/deliveries/DeliveryDocketCapture';
-import { queueDeliveryDocket } from '@/components/deliveries/queueDeliveryDocket';
+import { fileDocketAfterSave } from '@/components/deliveries/fileDocketAfterSave';
 import { useAuth } from '@/lib/auth';
-import { toast } from '@/components/ui/toaster';
-import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 
 export function DeliveryFormScreen() {
@@ -134,27 +132,14 @@ export function DeliveryFormScreen() {
         });
 
         // Step 1 of the filing chain has landed, so the docket now has
-        // something to be filed against. A failure HERE must not fail the save:
-        // the delivery is recorded either way, and the row will read "Not filed
-        // in CIVOS" — which is true — rather than losing the whole entry.
-        if (docketFile && deliveryId && projectId) {
-          try {
-            await queueDeliveryDocket({
-              projectId,
-              deliveryId,
-              file: docketFile,
-              lotId: lotId || undefined,
-              capturedBy: user?.id ?? 'unknown',
-            });
-          } catch (err) {
-            logError('Delivery docket could not be queued', err);
-            toast({
-              title: 'Delivery saved, docket was not',
-              description: 'Open the delivery and add its docket again.',
-              variant: 'warning',
-            });
-          }
-        }
+        // something to be filed against. Never fails the save — see the helper.
+        await fileDocketAfterSave({
+          file: docketFile,
+          deliveryId,
+          projectId,
+          lotId: lotId || undefined,
+          capturedBy: user?.id ?? 'unknown',
+        });
       },
       () => {
         draft.clearDraft();

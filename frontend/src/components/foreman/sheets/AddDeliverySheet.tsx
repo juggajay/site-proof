@@ -8,10 +8,8 @@ import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 import { DictationMicButton } from '@/components/ui/DictationMicButton';
 import { DeliveryDocketCapture } from '@/components/deliveries/DeliveryDocketCapture';
-import { queueDeliveryDocket } from '@/components/deliveries/queueDeliveryDocket';
-import { toast } from '@/components/ui/toaster';
+import { fileDocketAfterSave } from '@/components/deliveries/fileDocketAfterSave';
 import { useAuth } from '@/lib/auth';
-import { logError } from '@/lib/logger';
 import {
   getOptionalDiaryQuantityError,
   parseOptionalDiaryQuantityInput,
@@ -136,26 +134,15 @@ export function AddDeliverySheet({
           notes: notes || undefined,
         });
 
-        // A docket that cannot be queued must not fail the delivery: the entry
-        // is recorded either way and the row honestly reads "Not filed in CIVOS".
-        if (docketFile && deliveryId && projectId) {
-          try {
-            await queueDeliveryDocket({
-              projectId,
-              deliveryId,
-              file: docketFile,
-              lotId: lotId || undefined,
-              capturedBy: user?.id ?? 'unknown',
-            });
-          } catch (err) {
-            logError('Delivery docket could not be queued', err);
-            toast({
-              title: 'Delivery saved, docket was not',
-              description: 'Open the delivery and add its docket again.',
-              variant: 'warning',
-            });
-          }
-        }
+        // Same helper as the shell mount, so a docket failure behaves
+        // identically on both surfaces and never fails the delivery.
+        await fileDocketAfterSave({
+          file: docketFile,
+          deliveryId,
+          projectId,
+          lotId: lotId || undefined,
+          capturedBy: user?.id ?? 'unknown',
+        });
       },
       () => {
         // The entry is recorded (online or queued offline) — drop the draft.

@@ -1940,3 +1940,181 @@ describe('syncSingleItem — H5 offline-retry idempotency keys', () => {
     expect(formDataKeys).toEqual(['ph-stable', 'ph-stable']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// C5-a — the delivery docket filing chain.
+//
+// Filing a docket from a phone is four dependent steps, not an upload:
+//   1. create the delivery                POST /api/diary/:diaryId/deliveries
+//   2. relink the queued photo to the server delivery id   (syncDelivery)
+//   3. upload the file                    POST /api/documents/upload
+//   4. link it as evidence                PATCH /api/deliveries/:id/evidence
+//
+// These assert the order and, more importantly, that every partial failure
+// leaves the item queued and the photo un-synced. A photo marked synced is what
+// the UI reads as "Docket filed", and claiming that before step 4 tells a
+// foreman to stop carrying the paper docket he still needs.
+// ---------------------------------------------------------------------------
+describe('syncSingleItem — delivery docket filing chain (C5-a)', () => {
+  const docketPhoto = {
+    dataUrl: 'data:image/jpeg;base64,abc',
+    fileName: 'docket.jpg',
+    projectId: 'proj-1',
+    lotId: 'lot-1',
+    documentType: 'delivery_docket',
+    category: 'delivery_docket',
+    entityType: 'delivery',
+    entityId: 'srv-del-1',
+    attachAs: 'delivery_evidence',
+    capturedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  const queuedDelivery = {
+    id: 'delivery-local-uuid',
+    diaryId: 'server-d-1',
+    description: '32 MPa concrete',
+    syncStatus: 'pending',
+    localUpdatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  // Step 2. Before C5-a the create response was discarded, so a docket queued
+  // against an offline-created delivery could never find the row it belonged to.
+  it('step 2: relinks the queued docket from the local delivery id to the server id', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(queuedDelivery);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(okJson({ id: 'srv-del-1', description: '32 MPa concrete' }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 90, type: 'delivery_save', data: { deliveryId: 'delivery-local-uuid' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(relinkOfflinePhotoEntityMock).toHaveBeenCalledWith('delivery-local-uuid', 'srv-del-1');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(90);
+  });
+
+  it('step 2: does not relink when the create response carries no id', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(queuedDelivery);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(okJson({ ok: true }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 91, type: 'delivery_save', data: { deliveryId: 'delivery-local-uuid' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(relinkOfflinePhotoEntityMock).not.toHaveBeenCalled();
+  });
+
+  // Step 1 has not landed. Uploading now would create a Document carrying a
+  // meaningless entityId and the PATCH would 404, so the executor waits.
+  it('waits — uploading nothing — while the delivery is still a local placeholder', async () => {
+    getOfflinePhotoMock.mockResolvedValue({ ...docketPhoto, entityId: 'delivery-local-uuid' });
+
+    const result = await syncSingleItem(
+      queueItem({ id: 92, type: 'photo_upload', data: { photoId: 'ph-d1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(globalFetchMock).not.toHaveBeenCalled();
+    expect(authFetchMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(
+      92,
+      'Waiting for the delivery to sync before filing its docket',
+    );
+    // The assertion that matters: no false "Docket filed".
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
+  it('steps 3 + 4: uploads, then PATCHes the evidence link, then marks the photo synced', async () => {
+    getOfflinePhotoMock.mockResolvedValue(docketPhoto);
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ id: 'doc-77' }))
+      .mockResolvedValueOnce(okJson({ id: 'srv-del-1', docketDocumentId: 'doc-77' }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 93, type: 'photo_upload', data: { photoId: 'ph-d1' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock.mock.calls[0][0]).toBe('/api/documents/upload');
+    const [attachUrl, attachOptions] = authFetchMock.mock.calls[1];
+    expect(attachUrl).toBe('/api/deliveries/srv-del-1/evidence');
+    expect(attachOptions.method).toBe('PATCH');
+    // ONLY the evidence key. The route is `.strict()`, and that narrowness is
+    // what lets it bypass the diary lock — a stray diary field here is a 400.
+    expect(JSON.parse(attachOptions.body)).toEqual({ docketDocumentId: 'doc-77' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(93);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-d1', 'doc-77');
+  });
+
+  // Step 3 succeeded, step 4 did not. The file is safe on the server; the
+  // evidence link was not made, so the docket is NOT filed.
+  it('step 4 failure: keeps the item queued, records the document, never marks it filed', async () => {
+    getOfflinePhotoMock.mockResolvedValue(docketPhoto);
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ id: 'doc-77' }))
+      .mockResolvedValueOnce(errorResponse(500, 'evidence patch failed'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 94, type: 'photo_upload', data: { photoId: 'ph-d1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markPhotoUploadedAwaitingAttachMock).toHaveBeenCalledWith('ph-d1', 'doc-77');
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(94, 'evidence patch failed');
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
+  it('step 4 thrown failure (connection dropped) stays retryable after the upload', async () => {
+    getOfflinePhotoMock.mockResolvedValue(docketPhoto);
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ id: 'doc-77' }))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 95, type: 'photo_upload', data: { photoId: 'ph-d1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markPhotoUploadedAwaitingAttachMock).toHaveBeenCalledWith('ph-d1', 'doc-77');
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(95, 'Failed to fetch');
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+  });
+
+  // "Try filing again" must not cost the foreman a second upload of a 4 MB
+  // photo over site 4G — serverDocumentId makes the retry attach-only.
+  it('retry after a failed PATCH re-runs the PATCH ONLY — the file is never re-uploaded', async () => {
+    getOfflinePhotoMock.mockResolvedValue({ ...docketPhoto, serverDocumentId: 'doc-77' });
+    authFetchMock.mockResolvedValueOnce(okJson({ id: 'srv-del-1' }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 96, type: 'photo_upload', data: { photoId: 'ph-d1' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(globalFetchMock).not.toHaveBeenCalled();
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(authFetchMock.mock.calls[0][0]).toBe('/api/deliveries/srv-del-1/evidence');
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-d1', 'doc-77');
+  });
+
+  // Step 3 itself failing must not leave a half-state a retry reads as
+  // "already uploaded".
+  it('step 3 failure: marks the photo errored and files nothing', async () => {
+    getOfflinePhotoMock.mockResolvedValue(docketPhoto);
+    authFetchMock.mockResolvedValueOnce(errorResponse(500, 'upload failed'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 97, type: 'photo_upload', data: { photoId: 'ph-d1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markPhotoSyncErrorMock).toHaveBeenCalledWith('ph-d1');
+    expect(markPhotoUploadedAwaitingAttachMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+  });
+});

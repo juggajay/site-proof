@@ -330,7 +330,10 @@ export function useDiaryMobileHandlers({
             : { projectId: currentProjectId, date: selectedDate },
           payload,
         );
-        createdDeliveryId = queued.id;
+        // Optional-chained deliberately: a docket is an add-on, and no shape
+        // surprise from the queue may take the foreman's typed delivery down
+        // with it. No id simply means no docket can be filed yet.
+        createdDeliveryId = queued?.id;
         return queued;
       },
     );
