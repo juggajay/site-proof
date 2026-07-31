@@ -1,9 +1,12 @@
 import { createRef } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
+import { Tabs } from '@/components/ui/tabs';
 import { LotDetailTabPanel } from './LotDetailTabPanel';
+import { workspaceTabFor } from '../lotWorkspaceTabs';
 import type { Lot } from '../types';
 
 // Wiring tests for the tab panel moved out of LotDetailPage. The per-tab
@@ -42,7 +45,6 @@ function renderPanel(overrides: Partial<Parameters<typeof LotDetailTabPanel>[0]>
   const props: Parameters<typeof LotDetailTabPanel>[0] = {
     tabSectionRef: createRef<HTMLDivElement>(),
     currentTab: 'itp',
-    currentTabLabel: 'ITP Checklist',
     highlightedReadinessTab: null,
     lot,
     projectId: 'project-1',
@@ -86,7 +88,14 @@ function renderPanel(overrides: Partial<Parameters<typeof LotDetailTabPanel>[0]>
     loadingHistory: false,
     ...overrides,
   };
-  const result = renderWithProviders(<LotDetailTabPanel {...props} />);
+  // The page renders the panel inside the Radix root that also holds the tab
+  // strip — that root is what supplies the panel's tabpanel role and its
+  // aria-labelledby pairing.
+  const result = renderWithProviders(
+    <Tabs value={workspaceTabFor(props.currentTab)}>
+      <LotDetailTabPanel {...props} />
+    </Tabs>,
+  );
   return { props, ...result };
 }
 
@@ -102,7 +111,8 @@ describe('LotDetailTabPanel', () => {
 
     const panel = screen.getByTestId('lot-tab-panel');
     expect(panel).toHaveAttribute('role', 'tabpanel');
-    expect(panel).toHaveAttribute('aria-label', 'ITP Checklist section');
+    // Radix names the panel from its trigger rather than a hand-written label.
+    expect(panel).toHaveAttribute('aria-labelledby');
     expect(panel).toHaveAttribute('data-readiness-highlighted', 'false');
     // The readiness hook scrolls/focuses this exact element via the page ref.
     expect(tabSectionRef.current).toBe(panel);
@@ -116,11 +126,48 @@ describe('LotDetailTabPanel', () => {
     expect(panel.className).toContain('ring-2');
   });
 
-  it('renders the comments tab with the Lot entity type', () => {
-    renderPanel({ currentTab: 'comments', currentTabLabel: 'Comments' });
+  it('opens Activity directly on the full comments experience', () => {
+    renderPanel({ currentTab: 'comments' });
 
     expect(screen.getByTestId('comments-section-mock')).toBeInTheDocument();
     expect(captured.comments).toMatchObject({ entityType: 'Lot', entityId: 'lot-1' });
+
+    // Comments and Changes are subviews, not a merged feed: only the selected
+    // one renders, and the history list is not fetched or concatenated in.
+    const subviews = screen.getByRole('tablist', { name: 'Activity views' });
+    expect(
+      within(subviews)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual(['Comments', 'Changes']);
+    expect(screen.queryByTestId('history-tab-content')).not.toBeInTheDocument();
+  });
+
+  it('switches to the Changes subview by content tab id', async () => {
+    const user = userEvent.setup();
+    const handleTabChange = vi.fn();
+    renderPanel({ currentTab: 'comments', handleTabChange });
+
+    await user.click(screen.getByRole('tab', { name: 'Changes' }));
+
+    // 'history' is the shipped content id behind the "Changes" label.
+    expect(handleTabChange).toHaveBeenCalledWith('history');
+  });
+
+  it('offers Photos and Documents as Evidence subviews with no aggregate view', () => {
+    renderPanel({ currentTab: 'documents' });
+
+    const subviews = screen.getByRole('tablist', { name: 'Evidence views' });
+    expect(
+      within(subviews)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual(['Photos', 'Documents']);
+    expect(within(subviews).queryByRole('tab', { name: /all/i })).not.toBeInTheDocument();
+    // Every subview trigger clears the 48px tap-target minimum.
+    for (const tab of within(subviews).getAllByRole('tab')) {
+      expect(tab).toHaveClass('min-h-[48px]');
+    }
   });
 
   it('forwards the assign-itp readiness wiring to ITPChecklistTab', () => {
@@ -139,13 +186,19 @@ describe('LotDetailTabPanel', () => {
   it('opens the project documents page with the current lot selected for uploads', () => {
     const { props } = renderPanel({
       currentTab: 'documents',
-      currentTabLabel: 'Documents',
     });
     cleanup();
 
     renderWithProviders(
       <Routes>
-        <Route path="/" element={<LotDetailTabPanel {...props} />} />
+        <Route
+          path="/"
+          element={
+            <Tabs value="evidence">
+              <LotDetailTabPanel {...props} />
+            </Tabs>
+          }
+        />
         <Route path="/projects/:projectId/documents" element={<LocationProbe />} />
       </Routes>,
       { initialEntries: ['/'] },

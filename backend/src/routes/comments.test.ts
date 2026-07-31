@@ -2402,7 +2402,11 @@ describe('Comments API', () => {
 
         const queryString = linkUrl.split('?')[1] || '';
         const params = new URLSearchParams(queryString);
-        expect(params.get('tab')).toBe('comments');
+        // DG-4a: comments are the Activity tab's default subview on the lot
+        // workspace. Notifications stored before that still say ?tab=comments;
+        // the lot page canonicalizes those to this same pair on arrival.
+        expect(params.get('tab')).toBe('activity');
+        expect(params.get('view')).toBe('comments');
         expect(params.get('commentId')).toBe(res.body.comment.id);
       } finally {
         await prisma.notification.deleteMany({ where: { userId: mentionedUserId } });

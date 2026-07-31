@@ -62,32 +62,79 @@ afterEach(() => {
 
 describe('URL-derived state', () => {
   it('defaults to the itp tab with no assign action', () => {
-    const { result } = renderNavigation();
+    const { result, setSearchParams } = renderNavigation();
 
     expect(result.current.currentTab).toBe('itp');
+    expect(result.current.currentWorkspaceTab).toBe('itp');
     expect(result.current.shouldOpenAssignItp).toBe(false);
-    expect(result.current.currentTabLabel).toBe('ITP Checklist');
     expect(result.current.readinessFocusTarget).toBeNull();
     expect(result.current.highlightedReadinessTab).toBeNull();
+    // A bare lot URL already means the checklist; don't churn history to say so.
+    expect(setSearchParams).not.toHaveBeenCalled();
   });
 
-  it('reads the tab and assign-itp action from the URL', () => {
-    const { result } = renderNavigation({ search: 'tab=photos&action=assign-itp' });
+  it('reads the workspace tab, subview and assign-itp action from the URL', () => {
+    const { result } = renderNavigation({
+      search: 'tab=evidence&view=photos&action=assign-itp',
+    });
 
     expect(result.current.currentTab).toBe('photos');
-    expect(result.current.currentTabLabel).toBe('Photos');
+    expect(result.current.currentWorkspaceTab).toBe('evidence');
     expect(result.current.shouldOpenAssignItp).toBe(true);
   });
 
-  it('falls back to the generic label for unknown tabs', () => {
+  it('resolves an unknown tab to the checklist instead of an empty panel', () => {
     const { result } = renderNavigation({ search: 'tab=not-a-tab' });
 
-    expect(result.current.currentTabLabel).toBe('Lot detail');
+    expect(result.current.currentTab).toBe('itp');
+  });
+});
+
+describe('legacy URL canonicalization', () => {
+  it.each([
+    ['tab=photos', 'evidence', 'photos'],
+    ['tab=documents', 'evidence', 'documents'],
+    ['tab=comments', 'activity', 'comments'],
+    ['tab=history', 'activity', 'changes'],
+    // The dashboard hold-point alert deep link.
+    ['tab=holdpoints', 'itp', null],
+    ['tab=nonsense', 'itp', null],
+  ])('rewrites ?%s in place with replace semantics', (search, tab, view) => {
+    const { setSearchParams, lastParams } = renderNavigation({ search });
+
+    expect(setSearchParams).toHaveBeenCalledWith(expect.any(URLSearchParams), { replace: true });
+    expect(lastParams()?.get('tab')).toBe(tab);
+    expect(lastParams()?.get('view')).toBe(view);
+  });
+
+  it('preserves every other param on a stored mention deep link', () => {
+    const { lastParams } = renderNavigation({ search: 'tab=comments&commentId=c-42&foo=bar' });
+
+    const params = lastParams();
+    expect(params?.get('tab')).toBe('activity');
+    expect(params?.get('view')).toBe('comments');
+    expect(params?.get('commentId')).toBe('c-42');
+    expect(params?.get('foo')).toBe('bar');
+  });
+
+  it('clears a stale view left over from a merged tab', () => {
+    const { lastParams } = renderNavigation({ search: 'tab=tests&view=photos' });
+
+    expect(lastParams()?.get('tab')).toBe('tests');
+    expect(lastParams()?.has('view')).toBe(false);
+  });
+
+  it('leaves an already-canonical URL alone', () => {
+    for (const search of ['tab=itp', 'tab=evidence&view=documents', 'tab=activity&view=changes']) {
+      const { setSearchParams } = renderNavigation({ search });
+      expect(setSearchParams).not.toHaveBeenCalled();
+      vi.clearAllMocks();
+    }
   });
 });
 
 describe('handleTabChange', () => {
-  it('sets the tab, drops the action param, and clears readiness focus/highlight', () => {
+  it('writes canonical params, drops the action, and clears readiness focus/highlight', () => {
     const { result, setSearchParams, lastParams } = renderNavigation({
       search: 'tab=itp&action=assign-itp',
     });
@@ -103,12 +150,42 @@ describe('handleTabChange', () => {
     });
 
     const params = lastParams();
-    expect(params?.get('tab')).toBe('photos');
+    expect(params?.get('tab')).toBe('evidence');
+    expect(params?.get('view')).toBe('photos');
     expect(params?.has('action')).toBe(false);
     // Plain navigation pushes (no replace option), matching the inline code.
     expect(setSearchParams.mock.calls.at(-1)).toHaveLength(1);
     expect(result.current.readinessFocusTarget).toBeNull();
     expect(result.current.highlightedReadinessTab).toBeNull();
+  });
+});
+
+describe('handleWorkspaceTabChange', () => {
+  it('opens Evidence on Photos and Activity on Comments', () => {
+    const { result, lastParams } = renderNavigation({ search: 'tab=itp' });
+
+    act(() => {
+      result.current.handleWorkspaceTabChange('evidence');
+    });
+    expect(lastParams()?.get('tab')).toBe('evidence');
+    expect(lastParams()?.get('view')).toBe('photos');
+
+    act(() => {
+      result.current.handleWorkspaceTabChange('activity');
+    });
+    expect(lastParams()?.get('tab')).toBe('activity');
+    expect(lastParams()?.get('view')).toBe('comments');
+  });
+
+  it('drops the view param for the three single tabs', () => {
+    const { result, lastParams } = renderNavigation({ search: 'tab=evidence&view=documents' });
+
+    act(() => {
+      result.current.handleWorkspaceTabChange('ncrs');
+    });
+
+    expect(lastParams()?.get('tab')).toBe('ncrs');
+    expect(lastParams()?.has('view')).toBe(false);
   });
 });
 
@@ -249,7 +326,7 @@ describe('focus and highlight effect', () => {
 
     // Simulate the router applying the pushed params.
     rerender({
-      searchParams: new URLSearchParams('tab=photos'),
+      searchParams: new URLSearchParams('tab=evidence&view=photos'),
       setSearchParams,
       tabSectionRef,
     });

@@ -88,8 +88,13 @@ export async function createMentionNotifications(
         type: 'mention',
         title: `${authorName} mentioned you in a comment`,
         message: content.length > 100 ? content.substring(0, 100) + '...' : content,
+        // DG-4a: comments are a subview of the lot workspace's Activity tab.
+        // Links already stored on older notifications still say ?tab=comments;
+        // the lot page canonicalizes those on arrival (frontend/src/pages/lots/
+        // lotWorkspaceTabs.ts), so both forms land on the comment thread.
         linkUrl: buildProjectEntityLink(entityType, entityId, projectId, {
-          tab: 'comments',
+          tab: 'activity',
+          view: 'comments',
           commentId,
         }),
       });
