@@ -1,5 +1,5 @@
 {
-  "lots": [
+  "items": [
     {
       "lotId": "<id:0>",
       "lotNumber": "L01-no-itp",
@@ -546,5 +546,7 @@
         "remainingPercentage": 100
       }
     }
-  ]
+  ],
+  "nextCursor": null,
+  "total": 20
 }

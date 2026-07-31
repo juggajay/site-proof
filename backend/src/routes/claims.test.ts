@@ -274,11 +274,11 @@ describe('Progress Claims API', () => {
       });
 
       const readinessRes = await request(app)
-        .get(`/api/projects/${projectId}/claim-readiness`)
+        .get(`/api/projects/${projectId}/claim-readiness?limit=500`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(readinessRes.status).toBe(200);
-      const readinessLot = readinessRes.body.lots.find(
+      const readinessLot = readinessRes.body.items.find(
         (lot: { lotId: string }) => lot.lotId === lotWithoutBudget.id,
       );
       expect(readinessLot.claim.blockers).toEqual(
@@ -331,11 +331,11 @@ describe('Progress Claims API', () => {
       });
 
       const res = await request(app)
-        .get(`/api/projects/${projectId}/claim-readiness`)
+        .get(`/api/projects/${projectId}/claim-readiness?limit=500`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
-      const readinessLot = res.body.lots.find((item: { lotId: string }) => item.lotId === lot.id);
+      const readinessLot = res.body.items.find((item: { lotId: string }) => item.lotId === lot.id);
       expect(readinessLot.claim.blockers).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -365,11 +365,11 @@ describe('Progress Claims API', () => {
       });
 
       const res = await request(app)
-        .get(`/api/projects/${projectId}/claim-readiness`)
+        .get(`/api/projects/${projectId}/claim-readiness?limit=500`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
-      const readinessLot = res.body.lots.find((item: { lotId: string }) => item.lotId === lot.id);
+      const readinessLot = res.body.items.find((item: { lotId: string }) => item.lotId === lot.id);
       expect(readinessLot.claim.warnings).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -383,15 +383,21 @@ describe('Progress Claims API', () => {
   });
 
   describe('GET /api/projects/:projectId/claim-readiness pagination (F0.2a §4)', () => {
-    it('returns the legacy full-list shape { lots } when no cursor/limit params are given', async () => {
+    // F0.2a exit item, closed: the unpaginated full-list default is gone. A
+    // request with no cursor/limit is the first page at the 500 cap, and the
+    // legacy `{ lots }` envelope is no longer served by any claim-readiness path.
+    it('returns a capped first page (not the legacy { lots } full list) when no cursor/limit params are given', async () => {
       const res = await request(app)
         .get(`/api/projects/${projectId}/claim-readiness`)
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.lots)).toBe(true);
-      expect(res.body.nextCursor).toBeUndefined();
-      expect(res.body.total).toBeUndefined();
+      expect(res.body.lots).toBeUndefined();
+      expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.body.items.length).toBeLessThanOrEqual(500);
+      expect(res.body.nextCursor === null || typeof res.body.nextCursor === 'string').toBe(true);
+      // `total` is the first-page-only convenience, and this IS the first page.
+      expect(typeof res.body.total).toBe('number');
     });
 
     it('paginates by (lotNumber, id) with a stable order, exposing total on the first page only', async () => {
@@ -1554,11 +1560,11 @@ describe('Progress Claims API', () => {
       expect((await claimLot(lot.id, 25)).status).toBe(201);
 
       const readiness = await request(app)
-        .get(`/api/projects/${projectId}/claim-readiness`)
+        .get(`/api/projects/${projectId}/claim-readiness?limit=500`)
         .set('Authorization', `Bearer ${authToken}`);
       expect(readiness.status).toBe(200);
 
-      const readinessLot = readiness.body.lots.find(
+      const readinessLot = readiness.body.items.find(
         (item: { lotId: string }) => item.lotId === lot.id,
       );
       expect(readinessLot).toBeDefined();
