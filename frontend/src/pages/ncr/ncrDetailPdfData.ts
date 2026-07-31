@@ -120,6 +120,7 @@ export function buildNcrDetailPdfData(ncr: NCR): NCRDetailData {
       verifiedAt: ncr.verifiedAt,
       verifiedBy: ncr.verifiedBy,
       linkedTestResult: ncr.linkedTestResult,
+      linkedDelivery: ncr.linkedDelivery,
       raisedBy: ncr.raisedBy,
       responsibleUser: buildResponsibleUser(ncr),
       responsibleSubcontractor: buildResponsibleSubcontractor(ncr),

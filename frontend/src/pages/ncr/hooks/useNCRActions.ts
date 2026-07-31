@@ -35,6 +35,7 @@ interface UseNCRActionsReturn {
     dueDate?: string;
     responsibleUserId?: string;
     responsibleSubcontractorId?: string;
+    linkedDeliveryId?: string;
   }) => Promise<void>;
   handleAssignNcr: (
     ncrId: string,
@@ -146,6 +147,7 @@ export function useNCRActions({
       dueDate?: string;
       responsibleUserId?: string;
       responsibleSubcontractorId?: string;
+      linkedDeliveryId?: string;
     }) => {
       if (!projectId || actionLoadingRef.current) return;
       actionLoadingRef.current = true;

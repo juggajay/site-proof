@@ -8,6 +8,7 @@
 import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { getStatusBadgeColor } from '../constants';
+import { formatDeliveryLabel } from '@/lib/linkedDelivery';
 import { getAvailableNcrActions } from '../ncrActions';
 import type { NCR, UserRole } from '../types';
 import { NCREvidenceList } from './NCREvidenceList';
@@ -122,6 +123,12 @@ export function NCRMobileDetailSheet({
             <div>
               <dt className="inline font-medium">Lots: </dt>
               <dd className="inline">{ncr.ncrLots.map((nl) => nl.lot.lotNumber).join(', ')}</dd>
+            </div>
+          )}
+          {ncr.linkedDelivery && (
+            <div>
+              <dt className="inline font-medium">Delivery: </dt>
+              <dd className="inline">{formatDeliveryLabel(ncr.linkedDelivery)}</dd>
             </div>
           )}
           {ncr.dueDate && (

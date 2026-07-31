@@ -23,6 +23,18 @@ export interface NCR {
     testRequestNumber: string | null;
     laboratoryReportNumber?: string | null;
   } | null;
+  // C5.4a — the delivery that supplied the material this NCR is about. The date
+  // comes from the diary; a delivery has none of its own.
+  linkedDeliveryId?: string | null;
+  linkedDelivery?: {
+    id: string;
+    description: string;
+    supplier: string | null;
+    docketNumber: string | null;
+    batchRef?: string | null;
+    lotId?: string | null;
+    diary: { id: string; date: string };
+  } | null;
   qmApprovalRequired: boolean;
   qmApprovedAt: string | null;
   qmApprovedBy?: { id?: string; fullName: string; email: string } | null;
