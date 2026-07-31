@@ -1,3 +1,5 @@
+import { withProvenanceVisibility } from '../../lib/itpProvenance.js';
+
 export function buildEmptyCrossProjectTemplatesResponse() {
   return { projects: [], templates: [] };
 }
@@ -9,18 +11,20 @@ export function buildCrossProjectTemplatesResponse(projects: unknown[], totalTem
   };
 }
 
+// Wave G G2 (spec §2.4): every template surface already routes through these
+// two builders, so the flag-off projection lives here and nowhere else.
 export function buildTemplateListResponse(
   templates: unknown[],
   projectSpecificationSet: string | null,
 ) {
   return {
-    templates,
+    templates: templates.map(withProvenanceVisibility),
     projectSpecificationSet,
   };
 }
 
 export function buildTemplateResponse(template: unknown) {
-  return { template };
+  return { template: withProvenanceVisibility(template) };
 }
 
 export function buildTemplateUsageResponse(lots: unknown[]) {

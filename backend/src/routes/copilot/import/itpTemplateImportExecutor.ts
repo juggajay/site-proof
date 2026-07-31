@@ -162,6 +162,13 @@ applyHandlers[IMPORT_ITP_TEMPLATES_STAGE] = async (
         // `[WBR2-6]`: only rows the reviewer affirmed reach Tier-A auto-fill.
         specAffirmedAt: template.specAffirmed ? affirmedAt : null,
         specAffirmedById: template.specAffirmed ? context.userId : null,
+        // Wave G G2 (spec §2.2(c)): an imported template is now traceable to the
+        // batch — and through `ImportBatch.sourceDocumentId`, to the uploaded
+        // file — in one join. Before G2 the only path back was a JSON-contains
+        // scan of `AiProposal.appliedRecordIds`, which is unindexed. The id
+        // comes from the proposal, never from the payload, for the same reason
+        // the batch transition below does.
+        importBatchId: proposal.importBatchId,
         checklistItems: {
           create: (validated.data.checklistItems ?? []).map((item, index) => ({
             description: item.description,
@@ -171,6 +178,14 @@ applyHandlers[IMPORT_ITP_TEMPLATES_STAGE] = async (
             evidenceRequired: item.evidenceRequired || 'none',
             acceptanceCriteria: item.acceptanceCriteria || null,
             testType: item.testType || null,
+            // No source template and no source checklist item exist on this
+            // path — an import's rows come from a spreadsheet, not from another
+            // template — so `sourceTemplateId` / `sourceChecklistItemId` stay
+            // null here and the row aggregates as its own root. `notes` is
+            // carried because the shared item schema can now express it; today
+            // no mapping profile targets a notes column, so it is null in
+            // practice. Deferred, not silently dropped.
+            notes: item.notes || null,
           })),
         },
       },

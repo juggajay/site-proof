@@ -50,6 +50,8 @@ export const queryKeys = {
     ['itp-template-match', projectId, activity] as const,
   itpTemplateRank: (projectId: string, activity: string) =>
     ['itp-template-rank', projectId, activity] as const,
+  itpTemplateCompare: (projectId: string, baseId: string, againstId: string) =>
+    ['itp-template-compare', projectId, baseId, againstId] as const,
   itpInstanceByLot: (lotId: string) => ['itp', 'instance', 'lot', lotId] as const,
 
   // Diary

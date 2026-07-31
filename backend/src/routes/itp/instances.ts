@@ -57,6 +57,19 @@ interface TransformedChecklistItem extends Omit<ChecklistItem, 'sequenceNumber'>
 // Type for transformed template data
 interface TransformedTemplateData extends Omit<TemplateSnapshot, 'checklistItems'> {
   checklistItems: TransformedChecklistItem[];
+  /**
+   * Wave G G2 §2.2(b). Read from the LIVE template, not the snapshot: the
+   * annexure caveat is a statement about the specification a project holds a
+   * contract annexure for, not about the frozen checklist content, so it is
+   * equally true whichever edition governed the work.
+   *
+   * Everything else provenance-related (`authority`, `specEdition`,
+   * `specificationReference`, `stateSpec`, `snapshotAt`) arrives through the
+   * `...templateSource` spread below and therefore comes from the SNAPSHOT —
+   * which is the whole point: a lot reports the edition it was inspected
+   * against, not today's.
+   */
+  annexureWarning?: boolean;
 }
 
 // POST /instances - Create ITP instance (assign to lot)
@@ -380,6 +393,7 @@ instancesRouter.get(
     const templateSource = snapshot ?? instance.template;
     const templateData: TransformedTemplateData = {
       ...templateSource,
+      annexureWarning: instance.template.annexureWarning,
       checklistItems: (snapshot?.checklistItems ?? instance.template.checklistItems).map(
         (item) => ({
           id: item.id,

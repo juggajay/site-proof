@@ -33,6 +33,11 @@ export const checklistItemSchema = z.object({
   evidenceRequired: requiredText('evidenceRequired', MAX_SHORT_TEXT_LENGTH).optional(),
   acceptanceCriteria: optionalText('acceptanceCriteria', MAX_TEMPLATE_DESCRIPTION_LENGTH),
   testType: optionalText('testType', MAX_SHORT_TEXT_LENGTH),
+  // Wave G G2 (spec §2.2(c)): `notes` is where every seeder parks its clause
+  // citation, and it had no write path outside the seeders — so a template
+  // created or edited through the API could never carry one, and a payload that
+  // did carry one had it silently dropped. Optional, so no existing caller moves.
+  notes: optionalText('notes', MAX_TEMPLATE_DESCRIPTION_LENGTH),
 });
 
 export const createTemplateSchema = z.object({

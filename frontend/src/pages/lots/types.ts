@@ -153,6 +153,17 @@ export interface ITPInstance {
     // here, so optional keeps existing HC usage unaffected.
     activityType?: string;
     checklistItems: ITPChecklistItem[];
+    /**
+     * Wave G G2 (spec §2.2(a),(b)) — served from the ASSIGNMENT SNAPSHOT, so
+     * these state the specification edition this lot was inspected against, not
+     * whatever the library holds now. `annexureWarning` is the one field read
+     * from the live template (see `backend/src/routes/itp/instances.ts`).
+     */
+    specificationReference?: string | null;
+    authority?: string | null;
+    specEdition?: string | null;
+    specIssuedOn?: string | null;
+    annexureWarning?: boolean;
   };
   completions: ITPCompletion[];
 }
@@ -194,6 +205,18 @@ export interface ITPTemplate {
   activityType: string;
   isActive?: boolean;
   checklistItems: ITPChecklistItem[];
+  /**
+   * Wave G G2 (spec §2.2(a)) — provenance as served by the ITP instance route.
+   * On an assigned instance these come from the ASSIGNMENT SNAPSHOT, so they
+   * state the specification edition the lot was inspected against rather than
+   * whatever the library holds now. `annexureWarning` is the one exception and
+   * is read from the live template (see `instances.ts`).
+   */
+  specificationReference?: string | null;
+  authority?: string | null;
+  specEdition?: string | null;
+  specIssuedOn?: string | null;
+  annexureWarning?: boolean;
 }
 
 export interface ConformStatus {

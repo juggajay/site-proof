@@ -32,6 +32,21 @@ export interface ITPTemplate {
   isGlobalTemplate?: boolean;
   stateSpec?: string | null;
   isActive?: boolean;
+  /**
+   * Wave G G2 (spec §2.2) — library provenance. Absent entirely while
+   * `ITP_PROVENANCE_ENABLED` is off: the backend strips these fields in
+   * `buildTemplateResponse`, so there is no second flag to plumb through here
+   * and the UI simply has nothing to render.
+   */
+  specificationReference?: string | null;
+  authority?: string | null;
+  specEdition?: string | null;
+  specIssuedOn?: string | null;
+  effectiveFrom?: string | null;
+  changeSummary?: string | null;
+  annexureWarning?: boolean;
+  /** Non-null means a newer edition of this template exists in the library. */
+  supersededById?: string | null;
 }
 
 export interface CrossProjectTemplate {
