@@ -34,8 +34,8 @@ type LayoutGolden = (typeof goldens)['largeItp'];
 
 describe('pinned jsPDF identity', () => {
   it('uses a file id jsPDF will accept verbatim', () => {
-    // `setFileId` (jspdf.node.js:1400-1402) silently reverts to
-    // `Math.random()` on anything failing this regex, and uppercases what it
+    // `setFileId` (jspdf.node.js:1400-1402) silently reverts to a randomly
+    // generated id on anything failing this regex, and uppercases what it
     // stores — so a lowercase or non-hex literal degrades without throwing.
     expect(PINNED_PDF_FILE_ID).toMatch(/^[A-F0-9]{32}$/);
   });
@@ -62,7 +62,7 @@ describe('pdf byte determinism (**AT-G20**)', () => {
     expect(first.equals(second)).toBe(true);
     expect(first.subarray(0, 5).toString()).toBe('%PDF-');
     // The pinning is what makes the above possible: without it the trailer
-    // `/ID` is rebuilt from `Math.random()` on every construction
+    // `/ID` is randomly regenerated on every construction
     // (jspdf.node.js:1399-1409, written at :3765).
     const raw = first.toString('latin1');
     expect(raw).toContain(`/ID [ <${PINNED_PDF_FILE_ID}>`);

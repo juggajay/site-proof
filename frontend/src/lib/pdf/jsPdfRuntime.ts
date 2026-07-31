@@ -11,12 +11,12 @@ export async function getJsPDF(): Promise<typeof import('jspdf').jsPDF> {
 
 /**
  * jsPDF's constructor calls `setFileId()` and `setCreationDate()` with no
- * argument (`dist/jspdf.node.js:4113-4114`), so every document gets a
- * `Math.random()` trailer `/ID` (`:1399-1409`) and a wall-clock
- * `/CreationDate` (`:1489-1494`) before a single generator line runs. Two
- * renders of byte-identical input therefore differ every time, with no clock
- * involved. Both setters are public (`:1431`, `:1523`), so pinning them is the
- * whole fix — see `pinPdfIdentity`.
+ * argument (`dist/jspdf.node.js:4113-4114`), so every document gets a randomly
+ * generated trailer `/ID` (`:1399-1409` picks each character at random) and a
+ * wall-clock `/CreationDate` (`:1489-1494`) before a single generator line
+ * runs. Two renders of byte-identical input therefore differ every time, with
+ * no clock involved. Both setters are public (`:1431`, `:1523`), so pinning
+ * them is the whole fix — see `pinPdfIdentity`.
  */
 type PdfIdentityTarget = {
   setFileId: (value: string) => unknown;
