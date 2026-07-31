@@ -23,7 +23,6 @@ interface LotDetailTabPanelProps {
   /** Page-owned: useLotReadinessNavigation scrolls/focuses this element. */
   tabSectionRef: RefObject<HTMLDivElement>;
   currentTab: LotTab;
-  currentTabLabel: string;
   highlightedReadinessTab: LotTab | null;
   lot: Lot;
   projectId: string | undefined;
@@ -77,7 +76,6 @@ interface LotDetailTabPanelProps {
 export function LotDetailTabPanel({
   tabSectionRef,
   currentTab,
-  currentTabLabel,
   highlightedReadinessTab,
   lot,
   projectId,
@@ -150,7 +148,6 @@ export function LotDetailTabPanel({
           : ''
       }`}
       data-testid="lot-tab-panel"
-      data-tab-label={currentTabLabel}
       data-readiness-highlighted={highlightedReadinessTab === currentTab ? 'true' : 'false'}
     >
       {/* ITP Checklist Tab */}

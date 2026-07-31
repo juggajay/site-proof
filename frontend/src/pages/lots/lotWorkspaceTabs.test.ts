@@ -5,7 +5,6 @@ import {
   defaultContentTab,
   getLotWorkspaceTabsForRole,
   isCanonicalLotTabUrl,
-  lotTabLabel,
   lotTabParams,
   resolveLotTab,
   workspaceTabFor,
@@ -65,7 +64,6 @@ describe('the five workspace tabs', () => {
   });
 
   it('labels the former History view "Changes"', () => {
-    expect(lotTabLabel('history')).toBe('Changes');
     expect(LOT_SUBVIEWS.activity.find((v) => v.id === 'history')?.label).toBe('Changes');
   });
 });

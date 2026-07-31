@@ -45,7 +45,6 @@ function renderPanel(overrides: Partial<Parameters<typeof LotDetailTabPanel>[0]>
   const props: Parameters<typeof LotDetailTabPanel>[0] = {
     tabSectionRef: createRef<HTMLDivElement>(),
     currentTab: 'itp',
-    currentTabLabel: 'ITP Checklist',
     highlightedReadinessTab: null,
     lot,
     projectId: 'project-1',
@@ -114,7 +113,6 @@ describe('LotDetailTabPanel', () => {
     expect(panel).toHaveAttribute('role', 'tabpanel');
     // Radix names the panel from its trigger rather than a hand-written label.
     expect(panel).toHaveAttribute('aria-labelledby');
-    expect(panel).toHaveAttribute('data-tab-label', 'ITP Checklist');
     expect(panel).toHaveAttribute('data-readiness-highlighted', 'false');
     // The readiness hook scrolls/focuses this exact element via the page ref.
     expect(tabSectionRef.current).toBe(panel);
@@ -129,7 +127,7 @@ describe('LotDetailTabPanel', () => {
   });
 
   it('opens Activity directly on the full comments experience', () => {
-    renderPanel({ currentTab: 'comments', currentTabLabel: 'Comments' });
+    renderPanel({ currentTab: 'comments' });
 
     expect(screen.getByTestId('comments-section-mock')).toBeInTheDocument();
     expect(captured.comments).toMatchObject({ entityType: 'Lot', entityId: 'lot-1' });
@@ -148,7 +146,7 @@ describe('LotDetailTabPanel', () => {
   it('switches to the Changes subview by content tab id', async () => {
     const user = userEvent.setup();
     const handleTabChange = vi.fn();
-    renderPanel({ currentTab: 'comments', currentTabLabel: 'Comments', handleTabChange });
+    renderPanel({ currentTab: 'comments', handleTabChange });
 
     await user.click(screen.getByRole('tab', { name: 'Changes' }));
 
@@ -157,7 +155,7 @@ describe('LotDetailTabPanel', () => {
   });
 
   it('offers Photos and Documents as Evidence subviews with no aggregate view', () => {
-    renderPanel({ currentTab: 'documents', currentTabLabel: 'Documents' });
+    renderPanel({ currentTab: 'documents' });
 
     const subviews = screen.getByRole('tablist', { name: 'Evidence views' });
     expect(
@@ -188,7 +186,6 @@ describe('LotDetailTabPanel', () => {
   it('opens the project documents page with the current lot selected for uploads', () => {
     const { props } = renderPanel({
       currentTab: 'documents',
-      currentTabLabel: 'Documents',
     });
     cleanup();
 

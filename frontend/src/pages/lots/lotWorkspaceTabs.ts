@@ -158,18 +158,3 @@ export function isCanonicalLotTabUrl(
   const canonical = CONTENT_TO_PARAMS[tab];
   return tabParam === canonical.tab && (viewParam ?? null) === canonical.view;
 }
-
-const CONTENT_LABEL: Record<LotTab, string> = {
-  itp: 'ITP Checklist',
-  tests: 'Test Results',
-  ncrs: 'NCRs',
-  photos: 'Photos',
-  documents: 'Documents',
-  comments: 'Comments',
-  history: 'Changes',
-};
-
-/** Panel heading / aria label for a content view. */
-export function lotTabLabel(tab: LotTab): string {
-  return CONTENT_LABEL[tab];
-}

@@ -83,7 +83,6 @@ export function LotDetailPage() {
     currentTab,
     currentWorkspaceTab,
     shouldOpenAssignItp,
-    currentTabLabel,
     highlightedReadinessTab,
     handleTabChange,
     handleWorkspaceTabChange,
@@ -466,7 +465,6 @@ export function LotDetailPage() {
         <LotDetailTabPanel
           tabSectionRef={tabSectionRef}
           currentTab={currentTab}
-          currentTabLabel={currentTabLabel}
           highlightedReadinessTab={highlightedReadinessTab}
           lot={lot}
           projectId={projectId}

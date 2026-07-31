@@ -67,7 +67,6 @@ describe('URL-derived state', () => {
     expect(result.current.currentTab).toBe('itp');
     expect(result.current.currentWorkspaceTab).toBe('itp');
     expect(result.current.shouldOpenAssignItp).toBe(false);
-    expect(result.current.currentTabLabel).toBe('ITP Checklist');
     expect(result.current.readinessFocusTarget).toBeNull();
     expect(result.current.highlightedReadinessTab).toBeNull();
     // A bare lot URL already means the checklist; don't churn history to say so.
@@ -81,7 +80,6 @@ describe('URL-derived state', () => {
 
     expect(result.current.currentTab).toBe('photos');
     expect(result.current.currentWorkspaceTab).toBe('evidence');
-    expect(result.current.currentTabLabel).toBe('Photos');
     expect(result.current.shouldOpenAssignItp).toBe(true);
   });
 
@@ -89,7 +87,6 @@ describe('URL-derived state', () => {
     const { result } = renderNavigation({ search: 'tab=not-a-tab' });
 
     expect(result.current.currentTab).toBe('itp');
-    expect(result.current.currentTabLabel).toBe('ITP Checklist');
   });
 });
 

@@ -31,7 +31,6 @@ import type { SetURLSearchParams } from 'react-router-dom';
 import {
   defaultContentTab,
   isCanonicalLotTabUrl,
-  lotTabLabel,
   lotTabParams,
   resolveLotTab,
   workspaceTabFor,
@@ -64,7 +63,6 @@ export function useLotReadinessNavigation({
   const currentTab = resolveLotTab(tabParam, viewParam);
   const currentWorkspaceTab = workspaceTabFor(currentTab);
   const shouldOpenAssignItp = searchParams.get('action') === 'assign-itp';
-  const currentTabLabel = lotTabLabel(currentTab);
   const [readinessFocusTarget, setReadinessFocusTarget] = useState<ReadinessFocusTarget | null>(
     null,
   );
@@ -153,7 +151,6 @@ export function useLotReadinessNavigation({
     currentTab,
     currentWorkspaceTab,
     shouldOpenAssignItp,
-    currentTabLabel,
     readinessFocusTarget,
     highlightedReadinessTab,
     handleTabChange,
