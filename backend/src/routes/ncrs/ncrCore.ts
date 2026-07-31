@@ -200,7 +200,7 @@ async function requireFailedTestResultForNcr(
  * delivery hang off this project's NCR and render in its folio.
  *
  * There is no `passFail`-equivalent gate, because a delivery has no such field
- * and inventing one would be the quarantine state under another name
+ * and inventing one would be the held-material state under another name
  * (`[C54S-B3]`).
  */
 async function requireDeliveryForNcr(

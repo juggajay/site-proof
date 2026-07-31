@@ -1148,7 +1148,7 @@ model NCR {
   itpChecklistItemId String? @map("itp_checklist_item_id")
 
   // Wave C5.4a §4.4 — which delivery this NCR is about. There is no
-  // "quarantined material" state: AU civil handles nonconforming material with
+  // held-material state (RG-8): AU civil handles nonconforming material with
   // an NCR plus the prohibition on incorporating it, and CIVOS already enforces
   // that through `lotConformable`'s `noOpenNcrs` limb. All that was missing was
   // the pointer at the delivery.
