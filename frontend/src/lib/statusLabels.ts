@@ -148,6 +148,32 @@ export const STATUS_LABELS: Record<string, string> = {
   survey_verdict_does_not_conform: 'Does not conform',
   survey_verdict_qualified: 'Qualified',
   survey_verdict_not_stated: 'The report states no verdict',
+
+  // ---------------------------------------------------------------------
+  // Wave G G1 — revision governance. Prefixed for the same reason the survey
+  // block is: a bare `acknowledged` or `current` key would be claimed by the
+  // first other vocabulary that wants it.
+  //
+  // The first four are derived from the four distinct `RevisionAcknowledgement`
+  // timestamps, which the model keeps separate because "we sent it", "they
+  // opened it" and "they said yes" are three different contractual facts. All
+  // four need explicit entries: the Title Case fallback renders the first as
+  // "Revision Acknowledged" and cannot produce a comma at all.
+  //
+  // "Opened, Not Acknowledged" is spelled out and never abbreviated — the whole
+  // point of the state is that it is NOT an acknowledgement, and a shortened
+  // chip is exactly where that distinction would be lost.
+  // ---------------------------------------------------------------------
+  revision_acknowledged: 'Acknowledged',
+  revision_opened_not_acknowledged: 'Opened, Not Acknowledged',
+  revision_notified_not_opened: 'Notified, Not Opened',
+  revision_recipient_recorded: 'Recorded as a Recipient',
+
+  // The revision-state pill on a governed record (the drawing register card and
+  // the doc sheet). `superseded` is not a stored status — it is
+  // `supersededById !== null` — but it is rendered as one.
+  revision_current: 'Current',
+  revision_superseded: 'Superseded',
 };
 
 export interface FormatStatusLabelOptions {

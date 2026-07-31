@@ -29,6 +29,7 @@
  * The drawing FILE is opened via the existing signed-URL idiom in useDocFileOpen
  * (openDocumentAccessUrl), NOT here — this module never touches the network.
  */
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 // ── Source row (the subset of the Drawing register shape we project from) ─────
 
@@ -168,8 +169,14 @@ export function searchDocs(items: DocItem[], query: string): DocItem[] {
 /**
  * The green "REV X — CURRENT" / muted "REV X — SUPERSEDED" pill label. When the
  * revision is unknown, drops the "REV X" prefix and shows just the state.
+ *
+ * The state words come from `statusLabels` rather than being spelled here: this
+ * is the same vocabulary the doc sheet's revision chip renders, and one map is
+ * how the two stay identical.
  */
 export function revisionPillLabel(item: Pick<DocItem, 'revision' | 'current'>): string {
-  const state = item.current ? 'CURRENT' : 'SUPERSEDED';
+  const state = formatStatusLabel(
+    item.current ? 'revision_current' : 'revision_superseded',
+  ).toUpperCase();
   return item.revision ? `REV ${item.revision} — ${state}` : state;
 }

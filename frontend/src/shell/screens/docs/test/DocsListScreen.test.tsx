@@ -11,7 +11,7 @@
  * can assert taps invoke it with the document id + url.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { DocsShellData } from '../useDocsShellData';
 import type { DocItem } from '../docsShellState';
@@ -29,6 +29,16 @@ vi.mock('@/hooks/useEffectiveProjectId', () => ({
 const openDoc = vi.fn();
 vi.mock('../useDocFileOpen', () => ({
   useDocFileOpen: () => ({ opening: false, openDoc }),
+}));
+
+// The sheet is the card's destination and has its own test file; here we only
+// care THAT a tap opens it, and with which document.
+const docSheetProps = vi.fn();
+vi.mock('../DocSheet', () => ({
+  DocSheet: (props: { item: DocItem }) => {
+    docSheetProps(props);
+    return <div data-testid="doc-sheet">{props.item.number}</div>;
+  },
 }));
 
 let _data: DocsShellData;
@@ -89,17 +99,44 @@ describe('DocsListScreen', () => {
     expect(screen.getByText('REV C — CURRENT')).toBeInTheDocument();
   });
 
-  it('shows the PROJECT-WIDE pill when the drawing has no lot link', () => {
-    _data = makeData([makeItem({ lotLabel: null, lotId: null })]);
-    renderScreen();
-    expect(screen.getByText('PROJECT-WIDE')).toBeInTheDocument();
+  // ── Card rules (G1): icon + one label + ONE chip + chevron ────────────────
+
+  it('carries a leading icon and a chevron, with the whole card as one target', () => {
+    _data = makeData([makeItem()]);
+    const { container } = renderScreen();
+
+    const card = screen.getByRole('button', { name: /DRG-1204/ });
+    expect(card.querySelector('.shell-hub-ico')).not.toBeNull();
+    expect(card.querySelectorAll('svg').length).toBe(2); // leading icon + chevron
+    // No nested action: the card itself is the only button on the card.
+    expect(card.querySelectorAll('button').length).toBe(0);
+    expect(container.querySelectorAll('.shell-card').length).toBe(1);
   });
 
-  it('shows a lot chip instead of PROJECT-WIDE when the drawing is lot-linked', () => {
+  it('renders exactly ONE chip per card — the second pill is gone', () => {
     _data = makeData([makeItem({ lotLabel: 'LOT-001', lotId: 'lot-1' })]);
     renderScreen();
-    expect(screen.getByText('LOT-001')).toBeInTheDocument();
+
+    const card = screen.getByRole('button', { name: /DRG-1204/ });
+    expect(card.querySelectorAll('.shell-pill').length).toBe(1);
     expect(screen.queryByText('PROJECT-WIDE')).toBeNull();
+    expect(screen.queryByText('LOT-001')).toBeNull();
+  });
+
+  it('drops the lot pill even when the drawing has no lot link at all', () => {
+    _data = makeData([makeItem({ lotLabel: null, lotId: null })]);
+    renderScreen();
+    const card = screen.getByRole('button', { name: /DRG-1204/ });
+    expect(card.querySelectorAll('.shell-pill').length).toBe(1);
+    expect(screen.queryByText('PROJECT-WIDE')).toBeNull();
+  });
+
+  it('keeps the card tappable while a signed URL is being minted', () => {
+    // Regression guard: minting used to disable EVERY card on the list. The
+    // spinner now belongs to one button inside the sheet.
+    _data = makeData([makeItem()]);
+    renderScreen();
+    expect(screen.getByRole('button', { name: /DRG-1204/ })).not.toBeDisabled();
   });
 
   it('renders a muted SUPERSEDED pill for a superseded revision', () => {
@@ -108,11 +145,32 @@ describe('DocsListScreen', () => {
     expect(screen.getByText('REV A — SUPERSEDED')).toBeInTheDocument();
   });
 
-  it('opens the file via the existing signed-URL idiom on tap', () => {
+  it('opens the document sheet on tap — not the file directly', () => {
+    _data = makeData([makeItem()]);
+    renderScreen();
+
+    expect(screen.queryByTestId('doc-sheet')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /DRG-1204/ }));
+
+    expect(screen.getByTestId('doc-sheet')).toBeInTheDocument();
+    expect(docSheetProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({ id: 'd1', documentId: 'doc-1' }),
+        projectId: 'proj-1',
+      }),
+    );
+    // The list itself never mints the signed URL any more.
+    expect(openDoc).not.toHaveBeenCalled();
+  });
+
+  it('closes the sheet again', () => {
     _data = makeData([makeItem()]);
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: /DRG-1204/ }));
-    expect(openDoc).toHaveBeenCalledWith('doc-1', 'https://store/doc-1.pdf');
+
+    const { onClose } = docSheetProps.mock.calls.at(-1)![0];
+    act(() => onClose());
+    expect(screen.queryByTestId('doc-sheet')).toBeNull();
   });
 
   it('shows a loading skeleton', () => {
@@ -142,7 +200,7 @@ describe('DocsListScreen', () => {
     _data = makeData([makeItem({ lotId: null })]);
     renderScreen('/m/docs?lotId=lot-77');
     expect(screen.getByText('DRG-1204')).toBeInTheDocument();
-    expect(screen.getByText('PROJECT-WIDE')).toBeInTheDocument();
+    expect(screen.getByText('REV C — CURRENT')).toBeInTheDocument();
   });
 
   it('shows matching lot drawings and project-wide drawings when lot-linked', () => {

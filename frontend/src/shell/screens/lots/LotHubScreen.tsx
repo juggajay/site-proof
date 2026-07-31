@@ -8,6 +8,12 @@
  * Foreman-truth (doc 14): read + inspect only — NO edit affordances, no conform
  * button, no budget. The Details tile is read-only.
  *
+ * The one thing above the tiles is the governing-revision warning (Wave G G1):
+ * a record this lot is linked to has been superseded. It sits first because it
+ * changes what the drawings behind those tiles mean, and it is a WARNING — it
+ * never blocks conforming. The fact comes from the links route, not the
+ * commercial readiness endpoint, which is role-gated away from the foreman.
+ *
  * Reuse: the Inspections summary comes from `useShellItpRun` (the same ITP
  * instance fetch + offline cache the run screen uses). Photos/Drawings counts
  * come from the lot register (`documentCount`) — the register has no
@@ -18,12 +24,19 @@
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, Camera, Ruler, Info } from 'lucide-react';
+import { ClipboardCheck, Camera, Ruler, Info, AlertTriangle } from 'lucide-react';
 import { ShellScreen } from '../../components/ShellScreen';
 import { HubTile } from '../../components/HubTile';
 import { useLotsShellContext } from './lotsShellContext';
 import { useShellItpRun } from './useShellItpRun';
-import { formatItpOutcomeSummary, itpHubSummary, lotStatusTone } from './lotsShellState';
+import { useLotGoverningRevisions } from './useLotGoverningRevisions';
+import {
+  formatItpOutcomeSummary,
+  governingRevisionWarning,
+  itpHubSummary,
+  lotStatusTone,
+  GOVERNING_REVISION_WARNING_NOTE,
+} from './lotsShellState';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { useShellLotParam } from './useShellLotParam';
 
@@ -37,6 +50,9 @@ export function LotHubScreen() {
 
   const run = useShellItpRun(projectId ?? undefined, lotId);
   const summary = useMemo(() => itpHubSummary(run.instance, due), [run.instance, due]);
+
+  const governingLinks = useLotGoverningRevisions(lotId);
+  const revisionWarning = useMemo(() => governingRevisionWarning(governingLinks), [governingLinks]);
 
   const withProject = (path: string, params: Record<string, string | undefined> = {}) => {
     const query = new URLSearchParams();
@@ -99,6 +115,27 @@ export function LotHubScreen() {
         ) : undefined
       }
     >
+      {/*
+        Above the tiles because it changes what the drawings behind them mean.
+        A warning, never a gate: G1 records that a governing record moved on, and
+        the office decides what that costs.
+      */}
+      {revisionWarning && (
+        <div className="shell-notice shell-notice-warn" role="status">
+          <AlertTriangle
+            size={19}
+            strokeWidth={1.9}
+            className="mt-px flex-none text-warning"
+            aria-hidden
+          />
+          <span className="min-w-0">
+            <b className="block">{revisionWarning.title}</b>
+            <span className="block">{revisionWarning.detail}</span>
+            <span className="mt-[7px] block">{GOVERNING_REVISION_WARNING_NOTE}</span>
+          </span>
+        </div>
+      )}
+
       <HubTile
         icon={ClipboardCheck}
         title="Inspections"

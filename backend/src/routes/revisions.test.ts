@@ -626,4 +626,145 @@ describe('Wave G G1 — revision governance', () => {
       process.env.REVISION_GOVERNANCE_ENABLED = 'true';
     }
   });
+
+  // -------------------------------------------------------------------------
+  // G1 mobile — the two reads the foreman shell needs
+  // -------------------------------------------------------------------------
+
+  it('GET /api/revisions names internal recipients, not just their (null) email', async () => {
+    const spec = await createDocument('specification', `g1-recip-${stamp}.pdf`);
+    const issued = await request(app)
+      .post('/api/revisions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        entityType: 'specification',
+        entityId: spec.id,
+        revisionLabel: 'Ed. 1',
+        recipients: [{ userId }, { email: 'external@sub.example.com' }],
+      });
+    expect(issued.status).toBe(201);
+
+    const res = await request(app)
+      .get('/api/revisions')
+      .query({ projectId, entityType: 'specification', entityId: spec.id })
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+
+    const recipients = res.body.issues[0].recipients as Array<{
+      userId: string | null;
+      recipientEmail: string | null;
+      user: { id: string; fullName: string | null; email: string } | null;
+    }>;
+
+    const internal = recipients.find((r) => r.userId === userId);
+    // The whole point: recipientEmail is null for an internal recipient, so
+    // without the relation this row could only ever read "Project member".
+    expect(internal?.recipientEmail).toBeNull();
+    expect(internal?.user?.id).toBe(userId);
+    expect(internal?.user?.fullName).toBe('G1 Admin');
+    expect(internal?.user?.email).toBeTruthy();
+
+    const external = recipients.find((r) => r.recipientEmail === 'external@sub.example.com');
+    expect(external?.userId).toBeNull();
+    expect(external?.user ?? null).toBeNull();
+  });
+
+  it('GET governing-revisions reports `superseded` per link so a foreman surface can warn', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `G1-SUPCHK-${stamp}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+
+    const staleSpec = await createDocument('specification', `g1-stale-${stamp}.pdf`);
+    const freshSpec = await createDocument('specification', `g1-fresh-${stamp}.pdf`);
+    const currentSpec = await createDocument('specification', `g1-current-${stamp}.pdf`);
+
+    for (const [doc, label] of [
+      [staleSpec, 'Ed. 1'],
+      [currentSpec, 'Ed. 9'],
+    ] as const) {
+      const linked = await request(app)
+        .post(`/api/revisions/lots/${lot.id}/governing-revisions`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ entityType: 'specification', entityId: doc.id, revisionLabel: label });
+      expect(linked.status).toBe(201);
+    }
+
+    // Only the first record moves on.
+    await prisma.document.update({
+      where: { id: staleSpec.id },
+      data: { supersededById: freshSpec.id },
+    });
+
+    const res = await request(app)
+      .get(`/api/revisions/lots/${lot.id}/governing-revisions`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+
+    const links = res.body.links as Array<{ entityId: string; superseded: boolean }>;
+    expect(links.find((l) => l.entityId === staleSpec.id)?.superseded).toBe(true);
+    expect(links.find((l) => l.entityId === currentSpec.id)?.superseded).toBe(false);
+  });
+
+  it('an UNLINKED governing revision never reports superseded, even for a superseded record', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `G1-SUPUNL-${stamp}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const spec = await createDocument('specification', `g1-unlinked-${stamp}.pdf`);
+    const replacement = await createDocument('specification', `g1-unlinked-new-${stamp}.pdf`);
+
+    const linked = await request(app)
+      .post(`/api/revisions/lots/${lot.id}/governing-revisions`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ entityType: 'specification', entityId: spec.id, revisionLabel: 'Ed. 1' });
+    expect(linked.status).toBe(201);
+
+    await request(app)
+      .delete(`/api/revisions/lots/${lot.id}/governing-revisions/${linked.body.link.id}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
+    await prisma.document.update({
+      where: { id: spec.id },
+      data: { supersededById: replacement.id },
+    });
+
+    const res = await request(app)
+      .get(`/api/revisions/lots/${lot.id}/governing-revisions`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+    // The lot is no longer governed by it, so it is history — not a live warning.
+    expect(res.body.links).toHaveLength(1);
+    expect(res.body.links[0].superseded).toBe(false);
+  });
+
+  it('a lot with no governing-revision links reports no superseded links', async () => {
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `G1-SUPNONE-${stamp}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+
+    const res = await request(app)
+      .get(`/api/revisions/lots/${lot.id}/governing-revisions`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.links).toEqual([]);
+  });
 });

@@ -1,13 +1,17 @@
 /**
  * DocsListScreen — /m/docs — the foreman's Drawings & Docs surface.
  *
- * Design spec: docs/design-foreman-shell-mock-v4.html #docs. Cards show a mono
- * document number (DRG-1204 / SPEC-R44) + a plain-English title, then a pill row:
- * a green "REV X — CURRENT" pill (or a muted "REV X — SUPERSEDED" pill for older
- * revisions, sorted below the current ones) and a lot chip when the drawing is
- * lot-linked, else a "PROJECT-WIDE" pill. Tapping a card opens the file full
- * screen in the phone's native viewer (zoom/pan) via the existing signed-URL
- * idiom — see useDocFileOpen.
+ * Design spec: docs/design-foreman-shell-mock-v4.html #docs, revised by the G1
+ * mobile revision-history mock (Jay-approved 2026-07-31). Cards follow the hub
+ * card rules — leading icon + one label (mono document number + plain-English
+ * title) + ONE chip (a green "REV X — CURRENT", or a muted "REV X — SUPERSEDED"
+ * for older revisions, sorted below the current ones) + chevron.
+ *
+ * Tapping a card opens the DocSheet, which holds the prominent "Open drawing"
+ * button and the revision history. The file itself still opens full screen in
+ * the phone's native viewer via the existing signed-URL idiom (useDocFileOpen);
+ * it is now invoked from the sheet, so minting a signed URL spins ONE button
+ * instead of disabling every card on the list.
  *
  * Foreman-truth (research doc 13/14): pull up the current drawing/spec fast, with
  * the current revision obvious — VIEW only. There is deliberately NO upload / new
@@ -20,12 +24,12 @@
  * because the drawing register is project-scoped today.
  */
 import { useMemo, useState } from 'react';
-import { ChevronRight, FileSpreadsheet, Search } from 'lucide-react';
+import { ChevronRight, FileSpreadsheet, Ruler, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { useDocsShellContext } from './docsShellContext';
 import { useShellDocLotParam } from './useShellDocLotParam';
-import { useDocFileOpen } from './useDocFileOpen';
+import { DocSheet } from './DocSheet';
 import {
   currentDocCount,
   filterDocsByLot,
@@ -37,21 +41,25 @@ import {
 /** Show the search box once the register is long enough to scroll past. */
 const SEARCH_THRESHOLD = 8;
 
-function DocCard({
-  item,
-  disabled,
-  onPress,
-}: {
-  item: DocItem;
-  disabled: boolean;
-  onPress: () => void;
-}) {
+/**
+ * One card anatomy, the same as every hub tile: leading icon + one label + ONE
+ * chip + chevron, and the WHOLE card is the tap target. No nested action.
+ *
+ * The lot / PROJECT-WIDE pill that used to sit beside the revision pill is gone.
+ * `DocItem.lotLabel` is derived from a lot relation the Drawing model does not
+ * have (see this module's header), so that pill read PROJECT-WIDE on every card
+ * in production — deleting it removed a constant, not information.
+ *
+ * ONE icon for every row, deliberately: the register holds drawings AND specs
+ * with no type column to split on, so a drawing-vs-spec icon would be inventing
+ * data. It is the same `Ruler` the lot hub's Drawings tile uses.
+ */
+function DocCard({ item, onPress }: { item: DocItem; onPress: () => void }) {
   const ariaLabel = [
     item.number,
     item.title ? `— ${item.title}` : '',
     item.revision ? `, revision ${item.revision}` : '',
     item.current ? ', current' : ', superseded',
-    item.lotLabel ? `, ${item.lotLabel}` : ', project-wide',
   ]
     .filter(Boolean)
     .join(' ');
@@ -59,13 +67,19 @@ function DocCard({
   return (
     <button
       type="button"
-      className={cn('shell-card', !item.current && 'opacity-60', disabled && 'opacity-50')}
+      className={cn(
+        'shell-card flex min-h-[76px] items-center gap-[14px]',
+        !item.current && 'opacity-60',
+      )}
       onClick={onPress}
-      disabled={disabled}
       aria-label={ariaLabel}
     >
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1">
+      <span className="shell-hub-ico" aria-hidden="true">
+        <Ruler size={22} strokeWidth={1.8} />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold leading-[1.35]">
           <span className="shell-mono text-[15px] font-semibold text-foreground">
             {item.number}
           </span>
@@ -73,42 +87,28 @@ function DocCard({
             <span className="text-[15px] font-semibold text-muted-foreground"> — {item.title}</span>
           )}
         </span>
-        <ChevronRight size={16} className="flex-shrink-0 text-muted-foreground/50" aria-hidden />
-      </div>
-
-      <div className="mt-[10px] flex flex-wrap items-center gap-[7px]">
-        <span
-          className={cn(
-            'shell-pill',
-            item.current ? 'shell-pill-good' : 'text-muted-foreground/70',
-          )}
-        >
-          {revisionPillLabel(item)}
+        <span className="mt-2 block">
+          <span className={cn('shell-pill', item.current && 'shell-pill-good')}>
+            {revisionPillLabel(item)}
+          </span>
         </span>
-        {item.lotLabel ? (
-          <span className="shell-pill">{item.lotLabel}</span>
-        ) : (
-          <span className="shell-pill">PROJECT-WIDE</span>
-        )}
-      </div>
+      </span>
+
+      <ChevronRight size={16} className="flex-shrink-0 text-muted-foreground/50" aria-hidden />
     </button>
   );
 }
 
 export function DocsListScreen() {
-  const { items, loading, loadError, refetch } = useDocsShellContext();
+  const { projectId, items, loading, loadError, refetch } = useDocsShellContext();
   const lotId = useShellDocLotParam();
-  const { opening, openDoc } = useDocFileOpen();
 
   const [search, setSearch] = useState('');
+  const [openItem, setOpenItem] = useState<DocItem | null>(null);
 
   const scoped = useMemo(() => filterDocsByLot(items, lotId), [items, lotId]);
   const visible = useMemo(() => searchDocs(scoped, search), [scoped, search]);
   const currentInScope = useMemo(() => currentDocCount(scoped), [scoped]);
-
-  const handleOpen = (item: DocItem) => {
-    void openDoc(item.documentId, item.fileUrl);
-  };
 
   const sub = (
     <span className="flex items-center gap-2">
@@ -195,8 +195,12 @@ export function DocsListScreen() {
       )}
 
       {visible.map((item) => (
-        <DocCard key={item.id} item={item} disabled={opening} onPress={() => handleOpen(item)} />
+        <DocCard key={item.id} item={item} onPress={() => setOpenItem(item)} />
       ))}
+
+      {openItem && (
+        <DocSheet item={openItem} projectId={projectId} onClose={() => setOpenItem(null)} />
+      )}
     </ShellScreen>
   );
 }
