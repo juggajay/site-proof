@@ -1,6 +1,7 @@
 import { ClipboardCheck, Download, FileText, Loader2, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
+import { surveyKindLabel, surveyStatusLabel } from '@/pages/lots/lib/surveyRecords';
 
 interface HoldPointEvidencePackageCardProps {
   evidencePackage: HPEvidencePackageData;
@@ -144,8 +145,12 @@ export function HoldPointEvidencePackageCard({
             <div className="space-y-3">
               {surveys.map((survey) => (
                 <div key={survey.id} className="border-b pb-3 last:border-0 last:pb-0">
+                  {/* Through the shared vocabulary, not raw: the stored strings
+                      are `set_out` and `returned_for_correction`, and a
+                      superintendent reading this package should see the same
+                      words the lot page uses. */}
                   <div className="font-medium">
-                    {survey.kind} · {survey.status}
+                    {surveyKindLabel(survey.kind)} · {surveyStatusLabel(survey.status)}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     Surveyor&rsquo;s verdict: {survey.surveyorVerdict ?? 'not recorded'}

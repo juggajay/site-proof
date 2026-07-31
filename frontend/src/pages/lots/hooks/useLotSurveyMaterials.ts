@@ -51,28 +51,27 @@ export function useLotDeliveries(lotId: string | undefined) {
 }
 
 /**
- * Move a survey record's CIVOS workflow state. Not the surveyor's verdict —
- * that is transcribed, never decided here, and this route cannot change it.
+ * Refer a survey deliverable back to the surveyor for correction.
  *
- * Invalidates lot readiness too: `survey_not_accepted` is a readiness warning,
- * so accepting a record must clear it from the panel above without a reload.
+ * The ONLY write this section offers, and deliberately so: CIVOS records that a
+ * report arrived, and whether it is good enough is decided at the hold point by
+ * the party who releases it. There is no accept mutation because there is no
+ * accept act (`docs/research/c5-surveyor-workflow-practice-2026-07-31.md` §4).
+ * The surveyor's verdict is transcribed, never decided here, and this route
+ * cannot change it.
+ *
+ * Invalidates lot readiness too: `survey_not_received` is a readiness warning,
+ * and a returned record still counts as outstanding, so the panel above must
+ * re-read rather than keep a stale count.
  */
-export function useSurveyStatusChange(lotId: string | undefined) {
+export function useSurveyReturn(lotId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      surveyId,
-      status,
-      rejectionReason,
-    }: {
-      surveyId: string;
-      status: 'accepted' | 'rejected';
-      rejectionReason?: string;
-    }) =>
+    mutationFn: ({ surveyId, returnReason }: { surveyId: string; returnReason: string }) =>
       apiFetch<SurveyRecord>(`/api/surveys/${encodeURIComponent(surveyId)}/status`, {
         method: 'POST',
-        body: JSON.stringify({ status, ...(rejectionReason ? { rejectionReason } : {}) }),
+        body: JSON.stringify({ status: 'returned_for_correction', returnReason }),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries(queryKeys.lotSurveys(lotId ?? ''));

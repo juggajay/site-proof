@@ -7,8 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { STATUS_LABELS } from '@/lib/statusLabels';
 import {
   SURVEY_STATUSES,
-  acceptBlockedReason,
-  canAcceptSurvey,
+  canReturnSurvey,
   countOutstandingSurveys,
   groupSurveyRevisions,
   isQuotableVerdict,
@@ -31,17 +30,15 @@ function makeSurvey(overrides: Partial<SurveyRecord> = {}): SurveyRecord {
     surveyedAt: '2026-07-26T00:00:00.000Z',
     surveyorVerdict: 'conforms',
     verdictSourceNote: 'MRTS04 Cl. 8.3.2',
-    reviewedAt: null,
-    acceptedAt: null,
-    rejectionReason: null,
+    receivedAt: null,
+    returnReason: null,
     supersededById: null,
     supersessionReason: null,
     notes: null,
     createdAt: '2026-07-20T00:00:00.000Z',
     reportDocument: { id: 'doc-1', filename: 'CONF-D-014-RevC.pdf', mimeType: 'application/pdf' },
     requestedBy: { id: 'u1', fullName: 'A. Whitton' },
-    reviewedBy: null,
-    acceptedBy: null,
+    receivedBy: null,
     ...overrides,
   };
 }
@@ -73,9 +70,14 @@ describe('the surveyor verdict is not a CIVOS status', () => {
     expect(STATUS_LABELS.superseded).toBeUndefined();
   });
 
-  it('labels CIVOS acceptance as being about the record, not the lot', () => {
-    expect(surveyStatusLabel('accepted')).toBe('Evidence record accepted');
+  it('labels CIVOS state as ARRIVAL, and never as acceptance', () => {
     expect(surveyStatusLabel('received')).toBe('Report received');
+    expect(surveyStatusLabel('returned_for_correction')).toBe('Returned for correction');
+    // The retired keys are GONE, not left as harmless spares: a label for a
+    // state the backend cannot store is one that gets rendered by mistake.
+    expect(STATUS_LABELS.survey_accepted).toBeUndefined();
+    expect(STATUS_LABELS.survey_rejected).toBeUndefined();
+    expect(STATUS_LABELS.survey_in_progress).toBeUndefined();
   });
 
   it('quotes stated verdicts and refuses to quote a verdict that was never stated', () => {
@@ -162,74 +164,66 @@ describe('groupSurveyRevisions', () => {
 });
 
 describe('countOutstandingSurveys', () => {
-  it('counts only current, non-terminal records', () => {
+  it('counts current records whose report has not arrived', () => {
     const groups = groupSurveyRevisions([
-      makeSurvey({ id: 'awaiting', status: 'received' }),
-      makeSurvey({ id: 'done', status: 'accepted' }),
-      // Terminal: closed, nothing to chase.
-      makeSurvey({ id: 'knocked-back', status: 'rejected' }),
+      makeSurvey({ id: 'awaiting', status: 'requested' }),
+      makeSurvey({ id: 'in-hand', status: 'received' }),
       // Superseded: replaced precisely so it would stop counting.
-      makeSurvey({ id: 'old', status: 'received', supersededById: 'done' }),
+      makeSurvey({ id: 'old', status: 'requested', supersededById: 'in-hand' }),
     ]);
 
     expect(countOutstandingSurveys(groups)).toBe(1);
   });
 
-  it('is zero when every current record is closed', () => {
-    const groups = groupSurveyRevisions([makeSurvey({ status: 'accepted' })]);
+  // The substantive change from `rejected`, which was terminal and stopped
+  // counting. A return is a loop: the lot is still waiting on the fixed report.
+  it('still counts a returned record - it is not closed', () => {
+    const groups = groupSurveyRevisions([
+      makeSurvey({ id: 'sent-back', status: 'returned_for_correction' }),
+    ]);
+    expect(countOutstandingSurveys(groups)).toBe(1);
+  });
+
+  it('is zero when every current report has arrived', () => {
+    const groups = groupSurveyRevisions([makeSurvey({ status: 'received' })]);
     expect(countOutstandingSurveys(groups)).toBe(0);
   });
 });
 
-describe('canAcceptSurvey mirrors the backend assertAcceptable', () => {
-  it('accepts when a surveyor and a transcribed verdict are both present', () => {
-    expect(canAcceptSurvey(makeSurvey())).toBe(true);
-    expect(acceptBlockedReason(makeSurvey())).toBeNull();
+describe('canReturnSurvey mirrors the backend transition map', () => {
+  it('offers the return only from `received`', () => {
+    expect(canReturnSurvey(makeSurvey({ status: 'received' }))).toBe(true);
+    // Nothing has arrived to refer back.
+    expect(canReturnSurvey(makeSurvey({ status: 'requested' }))).toBe(false);
+    // Already returned: the corrected report is a NEW record, not this one.
+    expect(canReturnSurvey(makeSurvey({ status: 'returned_for_correction' }))).toBe(false);
   });
 
-  // "A human looked" is the requirement, so a report that gave no verdict is a
-  // recordable answer rather than a gap that blocks acceptance.
-  it("treats 'not_stated' as a real verdict", () => {
-    expect(canAcceptSurvey(makeSurvey({ surveyorVerdict: 'not_stated' }))).toBe(true);
+  it('never offers it on a superseded record - history does not change state', () => {
+    expect(canReturnSurvey(makeSurvey({ status: 'received', supersededById: 'rev-2' }))).toBe(
+      false,
+    );
   });
 
-  it('refuses without a surveyor or without a verdict, and says which', () => {
-    expect(canAcceptSurvey(makeSurvey({ surveyorName: null }))).toBe(false);
-    expect(acceptBlockedReason(makeSurvey({ surveyorName: null }))).toMatch(/who performed/i);
-
-    expect(canAcceptSurvey(makeSurvey({ surveyorVerdict: null }))).toBe(false);
-    expect(acceptBlockedReason(makeSurvey({ surveyorVerdict: null }))).toMatch(/verdict/i);
-  });
-
-  it('offers acceptance only from `received`', () => {
-    expect(canAcceptSurvey(makeSurvey({ status: 'requested' }))).toBe(false);
-    expect(canAcceptSurvey(makeSurvey({ status: 'accepted' }))).toBe(false);
+  it('does not depend on the verdict - receipt is not a judgement about one', () => {
+    // The old accept gate required a transcribed verdict. Returning a report
+    // because it is unopenable or computed against the wrong surface does not.
+    expect(canReturnSurvey(makeSurvey({ surveyorVerdict: null }))).toBe(true);
   });
 });
 
 describe('surveyTranscribedBy', () => {
   // Mirrors `surveyRecordedBy` in routes/folio/assemble.ts: most recent actor
   // wins, so the lot page and the issued folio name the same person.
-  it('prefers the acceptor, then the reviewer, then whoever opened the record', () => {
+  it('prefers whoever recorded receipt, then whoever filed the record', () => {
     expect(
       surveyTranscribedBy(
         makeSurvey({
-          acceptedBy: { id: 'u3', fullName: 'D. Harding' },
-          acceptedAt: '2026-07-27T08:14:00.000Z',
-          reviewedBy: { id: 'u2', fullName: 'B. Reviewer' },
-          reviewedAt: '2026-07-26T00:00:00.000Z',
+          receivedBy: { id: 'u2', fullName: 'B. Receiver' },
+          receivedAt: '2026-07-26T00:00:00.000Z',
         }),
       ).name,
-    ).toBe('D. Harding');
-
-    expect(
-      surveyTranscribedBy(
-        makeSurvey({
-          reviewedBy: { id: 'u2', fullName: 'B. Reviewer' },
-          reviewedAt: '2026-07-26T00:00:00.000Z',
-        }),
-      ).name,
-    ).toBe('B. Reviewer');
+    ).toBe('B. Receiver');
 
     expect(surveyTranscribedBy(makeSurvey()).name).toBe('A. Whitton');
   });

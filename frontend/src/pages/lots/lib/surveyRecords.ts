@@ -7,7 +7,11 @@
  * **The one rule this file exists to hold.** A survey record carries two
  * different judgements and they belong to two different parties:
  *
- * - `status` is CIVOS's — *we received the report, we accepted it as evidence*.
+ * - `status` is CIVOS's — *we asked for it, the report arrived, we sent it back
+ *   for correction*. It is a lifecycle of ARRIVAL and nothing more: CIVOS does
+ *   not accept a survey, because in AU civil the acceptance act is the
+ *   hold-point release and the lot conformance
+ *   (`docs/research/c5-surveyor-workflow-practice-2026-07-31.md` §4).
  * - `surveyorVerdict` is a licensed third party's, transcribed off their report
  *   by a named CIVOS user.
  *
@@ -23,31 +27,34 @@
 import { formatStatusLabel } from '@/lib/statusLabels';
 
 /** The backend's closed status vocabulary (`surveys/statusWorkflow.ts`). */
-export const SURVEY_STATUSES = [
-  'requested',
-  'in_progress',
-  'received',
-  'accepted',
-  'rejected',
-] as const;
+export const SURVEY_STATUSES = ['requested', 'received', 'returned_for_correction'] as const;
 export type SurveyStatus = (typeof SURVEY_STATUSES)[number];
 
 /**
- * The four steps a survey walks, in order, for the progress indicator.
+ * The two steps a survey walks, in order, for the progress indicator.
  *
- * `rejected` is absent on purpose: it is a terminal branch off `received`, not
- * a fifth step, and drawing it as one would imply every survey passes through
- * it. A rejected record renders its state as a label instead of a stepper.
+ * `returned_for_correction` is absent on purpose: it is a branch off `received`,
+ * not a third step, and drawing it as one would imply every survey passes
+ * through it. A returned record renders its state as a label instead.
  */
 export const SURVEY_PROGRESS_STEPS = [
   'requested',
-  'in_progress',
   'received',
-  'accepted',
 ] as const satisfies readonly SurveyStatus[];
 
-/** Terminal states — the record is done and nothing is outstanding on it. */
-export const SURVEY_TERMINAL_STATUSES: readonly SurveyStatus[] = ['accepted', 'rejected'];
+/**
+ * States where the lot is still waiting on something.
+ *
+ * `returned_for_correction` is IN this set, which is the substantive change from
+ * the `rejected` it replaced: a rejected record was terminal and stopped
+ * counting, but a returned one is a loop — the surveyor has one business day to
+ * fix it (TMR Surveying Standards Part 1 §7.6.4) and the corrected report is
+ * still outstanding until it arrives as a new revision.
+ */
+export const SURVEY_OPEN_STATUSES: readonly SurveyStatus[] = [
+  'requested',
+  'returned_for_correction',
+];
 
 export const SURVEY_KIND_LABELS: Readonly<Record<string, string>> = {
   set_out: 'Set-out',
@@ -56,10 +63,10 @@ export const SURVEY_KIND_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Mirrors the backend `SURVEY_ACCEPTORS` (`routes/surveys/index.ts`). A client
+ * Mirrors the backend `SURVEY_DECIDERS` (`routes/surveys/index.ts`). A client
  * gate is an affordance; the route re-checks it on every call.
  */
-export const SURVEY_ACCEPTOR_ROLES = ['owner', 'admin', 'project_manager', 'quality_manager'];
+export const SURVEY_DECIDER_ROLES = ['owner', 'admin', 'project_manager', 'quality_manager'];
 
 export interface SurveyRecord {
   id: string;
@@ -73,17 +80,15 @@ export interface SurveyRecord {
   surveyedAt: string | null;
   surveyorVerdict: string | null;
   verdictSourceNote: string | null;
-  reviewedAt: string | null;
-  acceptedAt: string | null;
-  rejectionReason: string | null;
+  receivedAt: string | null;
+  returnReason: string | null;
   supersededById: string | null;
   supersessionReason: string | null;
   notes: string | null;
   createdAt: string;
   reportDocument: { id: string; filename: string; mimeType: string | null } | null;
   requestedBy: { id: string; fullName: string | null } | null;
-  reviewedBy: { id: string; fullName: string | null } | null;
-  acceptedBy: { id: string; fullName: string | null } | null;
+  receivedBy: { id: string; fullName: string | null } | null;
 }
 
 export interface LotDelivery {
@@ -129,8 +134,8 @@ export function surveyKindLabel(kind: string): string {
   return SURVEY_KIND_LABELS[kind] ?? formatStatusLabel(kind);
 }
 
-export function isTerminalSurvey(status: string): boolean {
-  return (SURVEY_TERMINAL_STATUSES as readonly string[]).includes(status);
+export function isSurveyOutstanding(status: string): boolean {
+  return (SURVEY_OPEN_STATUSES as readonly string[]).includes(status);
 }
 
 /**
@@ -142,11 +147,8 @@ export function isTerminalSurvey(status: string): boolean {
  * surveyor is only checkable if the reader also knows who typed it in.
  */
 export function surveyTranscribedBy(record: SurveyRecord): { name: string | null; at: string } {
-  if (record.acceptedBy && record.acceptedAt) {
-    return { name: record.acceptedBy.fullName, at: record.acceptedAt };
-  }
-  if (record.reviewedBy && record.reviewedAt) {
-    return { name: record.reviewedBy.fullName, at: record.reviewedAt };
+  if (record.receivedBy && record.receivedAt) {
+    return { name: record.receivedBy.fullName, at: record.receivedAt };
   }
   return { name: record.requestedBy?.fullName ?? null, at: record.createdAt };
 }
@@ -233,34 +235,25 @@ export function groupSurveyRevisions(surveys: readonly SurveyRecord[]): SurveyRe
 /**
  * How many surveys this lot is still waiting on.
  *
- * CURRENT records only, and NON-TERMINAL only. A superseded record was replaced
- * precisely so it would stop counting, and a rejected one is closed — counting
- * either would make the badge a number nobody can act on.
+ * CURRENT records only, and OPEN only. A superseded record was replaced
+ * precisely so it would stop counting; a returned one has NOT been replaced yet
+ * and still counts, because the lot is waiting on the corrected report.
  */
 export function countOutstandingSurveys(groups: readonly SurveyRevisionGroup[]): number {
-  return groups.filter((group) => !isTerminalSurvey(group.current.status)).length;
+  return groups.filter((group) => isSurveyOutstanding(group.current.status)).length;
 }
 
 /**
- * Whether "Accept evidence record" can be offered.
+ * Whether "Return for correction" can be offered on this record.
  *
- * Mirrors the backend's `assertAcceptable` (`routes/surveys/index.ts`): a
- * surveyor AND a transcribed verdict. `not_stated` satisfies the second — the
- * requirement is that a human read the report and recorded what it said, and
- * "it said nothing" is a real answer to that.
+ * Mirrors the backend's transition map: only a `received` record can be referred
+ * back, because you cannot return a deliverable that never arrived. A superseded
+ * record is history and cannot change state at all.
+ *
+ * There is deliberately no "accept" counterpart. CIVOS records that the report
+ * arrived; whether it is good enough is decided at the hold point, by the party
+ * who releases it (research §4.2).
  */
-export function canAcceptSurvey(record: SurveyRecord): boolean {
-  return (
-    record.status === 'received' && Boolean(record.surveyorName) && Boolean(record.surveyorVerdict)
-  );
-}
-
-/** Why the Accept button is disabled, in the reader's words. */
-export function acceptBlockedReason(record: SurveyRecord): string | null {
-  if (record.status !== 'received') return null;
-  if (!record.surveyorName) return 'Record who performed the survey before accepting.';
-  if (!record.surveyorVerdict) {
-    return "Transcribe the surveyor's stated verdict before accepting (use “the report states no verdict” if it gave none).";
-  }
-  return null;
+export function canReturnSurvey(record: SurveyRecord): boolean {
+  return record.status === 'received' && record.supersededById === null;
 }

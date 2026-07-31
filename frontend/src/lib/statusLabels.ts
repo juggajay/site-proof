@@ -120,18 +120,26 @@ export const STATUS_LABELS: Record<string, string> = {
   // ---------------------------------------------------------------------
 
   // CIVOS's OWN workflow state — what the business did with the record. The
-  // backend's closed vocabulary is `requested|in_progress|received|accepted|
-  // rejected` (`backend/src/routes/surveys/statusWorkflow.ts`). These are the
-  // only survey strings entitled to a status colour.
+  // backend's closed vocabulary is `requested|received|returned_for_correction`
+  // (`backend/src/routes/surveys/statusWorkflow.ts`). These are the only survey
+  // strings entitled to a status colour.
+  //
+  // The `in_progress`, `accepted` and `rejected` keys were REMOVED in the
+  // 2026-07-31 restructure rather than left as harmless spares: they were
+  // reached only through `surveyStatusLabel()`, which builds `survey_${status}`
+  // from a vocabulary that no longer contains them, and a label for a state the
+  // backend cannot store is a label that will one day get rendered by mistake.
+  //
+  // "Report received" says what CIVOS did: it received a report. It does NOT say
+  // the report was accepted — acceptance is the hold-point release and the lot
+  // conformance, and the wording is load-bearing on that point.
   //
   // `superseded` is not a stored status — it is `supersededById !== null` — but
   // it is rendered as one, so it is spelled out here rather than title-cased by
   // accident.
   survey_requested: 'Requested',
-  survey_in_progress: 'Survey in progress',
   survey_received: 'Report received',
-  survey_accepted: 'Evidence record accepted',
-  survey_rejected: 'Evidence record rejected',
+  survey_returned_for_correction: 'Returned for correction',
   survey_superseded: 'Superseded',
 
   // The SURVEYOR'S stated verdict (`surveyorVerdict`), NOT a CIVOS status —

@@ -339,8 +339,8 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     surveyorVerdict: string | null;
     verdictSourceNote: string | null;
     reportFilename: string | null;
-    isAccepted: boolean;
-    acceptedAt: string | null;
+    isReceived: boolean;
+    receivedAt: string | null;
     verdictAttribution: string;
   }[];
   summary: {
@@ -353,8 +353,12 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     totalAttachments: number;
     /** Wave `C5.3`. Optional for the same reason `surveys` is. */
     totalSurveys?: number;
-    /** Records a named CIVOS user ACCEPTED — not a count of conforming surveys. */
-    acceptedSurveys?: number;
+    /**
+     * Records whose report has ARRIVED — not a count of conforming surveys, and
+     * not a count of anything CIVOS accepted. The reader of this package is the
+     * one who accepts, by releasing the hold point.
+     */
+    receivedSurveys?: number;
   };
   generatedAt: string;
 }
