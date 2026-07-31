@@ -82,6 +82,10 @@ export const READINESS_REASON_CODES = [
   // than re-deriving the threshold. Added WITH provenance in the same change.
   'ncr_overdue',
   'hold_point_overdue',
+  // Wave C5.1 — delivery traceability (lib/evidenceReadiness/deliveryItems.ts).
+  // Support severity, `blocksAction: false`, and deliberately NOT a member of
+  // `HANDOVER_BLOCKING_REASON_CODES` (`[C5S-B5]`).
+  'delivery_not_lot_linked',
 ] as const;
 
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
@@ -288,6 +292,12 @@ export const REASON_CODE_PROVENANCE: Record<
     predicate: 'holdPointAwaitingRelease',
     source:
       'systemAutomation stale_hold_point pass (systemAutomation.ts — status in AWAITING_RELEASE_HOLD_POINT_STATUSES ∧ scheduledDate past, within the 30-day horizon)',
+  },
+  delivery_not_lot_linked: {
+    // Engine-owned count-only item: a plain `lotId IS NULL` count over the
+    // project's deliveries, with no dedicated predicate behind it.
+    predicate: 'engine',
+    source: 'buildUnlinkedDeliveryItem (delivery register, C5.1)',
   },
 };
 

@@ -73,6 +73,12 @@ function buildApp(
         variationEvidenceLink ? { variation: { status: 'claimed', claimedInId: 'claim-1' } } : null,
       ),
     },
+    // Wave C5.1: `delivery_docket` is the third EVIDENCE_LINK_GUARDS entry. No
+    // link here — the linked case has its own DB-backed suite
+    // (deliveries/evidence.db.test.ts, AT-186).
+    diaryDelivery: {
+      findFirst: vi.fn(async () => null),
+    },
     // Wave B: deleting a document also checks it is not the source of a live or
     // applied import. No batch here — the import-source guard has its own suite
     // (documents/importSourceHygiene.test.ts).
