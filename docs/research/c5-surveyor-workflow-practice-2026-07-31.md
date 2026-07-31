@@ -919,114 +919,241 @@ widens the applicability of the spec pass's §4.1 finding beyond NSW.
 
 ## 10. Practitioner delta — post-draft
 
-A late sub-researcher pass landed after §1–§9 were drafted. **It changes no verdict in the table at the
-top**; it strengthens two of them and closes part of the §9.1 gap. Recorded here rather than woven in, so
-the delta stays auditable.
+A dedicated practitioner-voice pass landed after §1–§9 were drafted, closing the §9.1/§9.2 gaps as far as
+the tooling allowed. **It changes no verdict in the table at the top**; it strengthens two, adds one scope
+boundary, and supplies one correction to §1.6. Recorded as its own section rather than woven in, so the
+delta stays auditable against its source report.
 
-**Context warning that governs this whole section:** r/Surveying is **US-dominated**. Rows below are
-**AU-identified only where marked `[AU]`**; the rest describe US practice and are included because they are
-the only first-person accounts of the *mechanism* available. They are grade **D/D+** — anonymous or
-pseudonymous — and nothing structural rests on them.
+### 10.0 How to read this section
 
-### 10.1 GAP1 (request channel) — partially closed: the named channel is a project-start meeting
+**Numbering.** Rows are carried at their **source numbers, prefixed `D`** (`D38`–`D77`), because §1–§5 of
+this document already use claims 1–70. `D`-numbers are traceable one-to-one to the delta report; nothing
+was renumbered.
 
-The §9.1 gap was "no day-to-day request channel at any grade". The delta supplies a **project-start**
-channel, not a day-to-day one:
+**Context warning that governs the whole section.** r/Surveying is **US-dominated**. Rows are marked
+**`[AU]`** only where the account self-identifies as Australian consistently across the thread; unmarked
+rows describe US, UK/IE or NZ practice and are included because they are the only first-person accounts of
+the *mechanism* available. All are grade **D** (pseudonymous) or **D+** (pseudonymous but role- and
+location-consistent). **Nothing structural in §1–§9 rests on any of them** — they corroborate or texture
+findings already carried by A/B/C sources.
 
-| # | Claim | Source | Grade | Date |
-|---|---|---|---|---|
-| 71 | The named channel is a **Pre-Construction meeting** with an **attendance sheet** and a **one-page Utility Requirements Checklist** handed out | r/Surveying `189gsyf` comment `kbrjjik` | **D** (US) | 3 Dec 2023 |
-| 72 | Same shape independently: a **Day-1 meeting** at which **cheat sheets** are distributed | r/Surveying `1gjf792` comment `lvcsaos` | **D** (US) | 2024 |
-| 73 | Day-to-day, the channel **collapses to phone, text, or the foreman walking up** | same two threads | **D** (US) | 2023–2024 |
-| 74 | **Two further independent self-scheduling accounts** — the surveyor works the next thing off the sequence rather than waiting to be asked | r/Surveying, delta pass | **D** | 2023–2024 |
+**Provenance.** All quotes are **verbatim full comment bodies** pulled from the archive (nine threads
+pulled in full, ~300 comments read), not search snippets — with two explicitly marked exceptions carried
+forward in §10.7.
 
-**Two independent accounts converge on "requirements are agreed once, at a meeting, on paper; after that
-it is verbal."** That is a genuinely useful shape and it is consistent with everything in §1: the
-*standing* requirement is established up front (which is what MRWA's C154_13 engagement brief and TMR's
-survey brief are, at authority level), and the *per-event* ask is untracked.
-
-**Correction to §9.1, stated plainly:** the delta found **zero** evidence for a whiteboard, WhatsApp
-group, look-ahead-program integration, or a request form — but those terms were **NOT SEARCHED** in this
-delta pass. §9.1 should be read as *"not established"*, **not** as *"searched and absent"*. The earlier
-streams did search them and came back empty; the delta neither confirms nor extends that.
-
-### 10.2 GAP2 (turnaround) — a real scope boundary, and the overnight assumption dies
-
-The most useful thing in the delta is a distinction §3 did not draw:
+### 10.1 The full delta table (D38–D77)
 
 | # | Claim | Source | Grade | Date |
 |---|---|---|---|---|
-| 75 | **For set-out, the deliverable never reaches an office**: the **cut sheet is handed to the contractor before leaving site** | r/Surveying `12m31cx` comment `jgbfsfk` | **D** (US) | 2023 |
-| 76 | Same, independently: a **marked printout dropped at the job trailer** | r/Surveying `1gjf792` comment `lvcnj9l` | **D** (US) | 2024 |
-| 77 | Clock: the **site engineer responds in ~2 weeks** | r/Surveying `1gjf792` comment `lvg9vob` | **D** (US) | 2024 |
-| 78 | Clock: **disputes surface ~2 weeks later**, not on the day | r/Surveying `12m31cx` comment `jgdpvsk` | **D** (US) | 2023 |
-| 79 | **Batched as-built ≈ 8 h vs ≈ 2 h incremental** — batching costs 4× | r/Surveying `tgdrqc` comment `i12z5db` | **D** (US) | 2022 |
-| 80 | **No overnight / next-morning turnaround evidence anywhere** in the delta corpus; **no AU-specific turnaround number exists** in the corpus at all | delta pass, negative | **D** (negative) | 2026-07-31 |
+| D38 | **Named channel — Pre-Con meeting + one-page checklist:** *"The Project Manager needs to attend the Pre-Con for each new project… have an attence sheet, with numbers and emails of attendees. Hand out a single page Utility Requirements Checklist. Go over this in detail. Reiterate the need to contact you for asbuilts while exposed."* | [189gsyf/kbrjjik](https://www.reddit.com/r/Surveying/comments/189gsyf/as_built_drawingsnotes/kbrjjik/) | D (US) | 3 Dec 2023 |
+| D39 | **A dedicated in-progress ROLE** (not a state): *"having a deicated Asbuilt Technician who is similar to a CI, but is simply onsite during the installation process and collects in real time. They may juggle 3 or so jobs in a day, but they are there with a rover, or robot, while the install is taking place. Its heavy on the budget but makes for a seemless hand off."* | [189gsyf/kbrjjik](https://www.reddit.com/r/Surveying/comments/189gsyf/as_built_drawingsnotes/kbrjjik/) | D (US) | 3 Dec 2023 |
+| D40 | **Named channel — Day-1 meeting + cheat sheet:** *"Meet with the contractor on Day 1, pull out the plan, and specify what you're staking to. Hell, I have cheat sheets I give them."* | [1gjf792/lvcsaos](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvcsaos/) | D | 4 Nov 2024 |
+| D41 | **Named channel — daily progress email**, surveyor-initiated: *"I send out site progress emails with photos and bullet points almost daily on fairly big projects."* | [189gsyf/kbseqkf](https://www.reddit.com/r/Surveying/comments/189gsyf/as_built_drawingsnotes/kbseqkf/) | D (NZ) | 3 Dec 2023 |
+| D42 | **Named channel — morning laser round**, surveyor-initiated: *"every single morning when I got to work my first job was to go around all the different crews setting their lasers."* | [1ivkcvo/me7ece1](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/me7ece1/) | D (UK/IE) | 22 Feb 2025 |
+| D43 | Channel = phone, same-day, no notice: *"My favorite is when they call for staking day of the pour. You pull up and everyone is waiting for you."* | [1ivkcvo/mebmix3](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/mebmix3/) | D | 23 Feb 2025 |
+| D44 | Foreman asks **verbally, ad hoc, mid-task**: *"the amount of times a foreman will ask me to do a quick line check, grade check or lay out a box chamber in their +25ft hole…"* | [1ivkcvo/mefjrg6](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/mefjrg6/) | D | 23 Feb 2025 |
+| D45 | **Self-scheduling, second independent source** (GPS tech, paving contractor): *"…if nobody needs help ASAP I find an upcoming job, calibrate a new site, topo, and then I design it right in my tuck. Always something to do, I get to make my own schedule but I'm married to jobs."* | [1ivkcvo/me7iprd](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/me7iprd/) | D (US) | 22 Feb 2025 |
+| D46 | Office↔field channel is phone/text, not documents: *"most of the questions I have can be answered with a 3 minute phone call or a text."* | [189gsyf/kbrqv00](https://www.reddit.com/r/Surveying/comments/189gsyf/as_built_drawingsnotes/kbrqv00/) | D | 3 Dec 2023 |
+| D47 | PM schedules **by guessing**: *"it helps if the PM has a good understanding of how a construction site works and should be able to gauge how long a company might take to complete certain tasks, that way they can send a crew by, to check on the status of things."* | [189gsyf/kbup343](https://www.reddit.com/r/Surveying/comments/189gsyf/as_built_drawingsnotes/kbup343/) | D (US) | 3 Dec 2023 |
+| D48 | Pre-layout inputs named: *"field should review point exhibit, marked up plan sheet, and the latest plan set prior to layout."* | [1gjf792/lvcqb33](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvcqb33/) | D | 4 Nov 2024 |
+| D49 | **Set-out deliverable handed over before leaving site:** *"I always shoot and store every nail, spike, or hub I set… then write out a cut sheet for the contractor before I leave the job site. Then at the office, I print out the coordinates of the new points."* | [12m31cx/jgbfsfk](https://www.reddit.com/r/Surveying/comments/12m31cx/construction_stakeout/jgbfsfk/) | D | 15 Apr 2023 |
+| D50 | **Set-out deliverable = paper at the job trailer:** *"I'd leave a printout of the plans (more of a diagram than a cut sheet) with the points I staked at the job trailer on the way out so that way is was completely clear what I staked."* | [1gjf792/lvcnj9l](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvcnj9l/) | D | 4 Nov 2024 |
+| D51 | **The only hard response-time number found:** *"No one asked. Site engineer responds in 2 weeks. Town approvals take longer if they care to do shit right."* | [1gjf792/lvg9vob](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvg9vob/) | D (US) | 5 Nov 2024 |
+| D52 | **Batch vs incremental, real numbers:** *"I spent 8 hours asbuilting all the manholes on site yesterday when it could have been completed with about 2 hours of time over the course of several weeks of construction."* | [tgdrqc/i12z5db](https://www.reddit.com/r/Surveying/comments/tgdrqc/postconstruction_utility_asbuilts/i12z5db/) | D | 17 Mar 2022 |
+| D53 | **Receiving council dictates the format and the pipe:** *"we require the surveyors to import their data into ArcGIS Pro… and submit the features and map as an online web map. That means it's straight in our system and inspectors can see it from their devices in the field… Roading is a bit different."* | [tk4kse/i1w4xhv](https://www.reddit.com/r/Surveying/comments/tk4kse/asbuilts/i1w4xhv/) | D (NZ council) | 24 Mar 2022 |
+| D54 | Contractor-side deliverable: *"Usually ASCII text P,N,E,Elev With preset codes that automatically draw lines for specific features like 'backs of walk' or 'lip of gutter'"* + *"We also submit the .job file from Trimble."* | [tk4kse/i1slh38](https://www.reddit.com/r/Surveying/comments/tk4kse/asbuilts/i1slh38/) | D | 23 Mar 2022 |
+| D55 | **Client wants different columns, verbatim:** *"One client wants 'cut sheets' and another says 'I don't need no cuts I need measure downs' and yet another wants no measurement because he needs 'blue tops'. It's just part of the gig and why chatting up clients before putting anything in the ground almost always pays off."* | [1gjf792/lvia9yf](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvia9yf/) | D | 5 Nov 2024 |
+| D56 | Same, second source: *"My stakes are different per client. Some want cuts and fills on the farthest offset, some want it on the closest. Some want specific flagging colors…"* | [1gjf792/lvdm41s](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvdm41s/) | D | 4 Nov 2024 |
+| D57 | Format expectation is **habitual/regional, not spec-driven**: *"What matters is what has been traditionally provided to the contractors you're working for/with, and what makes them comfortable. This results in regional wants/needs/requirements, and also regional terms."* | [1gjf792/lvcx3oq](https://www.reddit.com/r/Surveying/comments/1gjf792/standards_for_construction_staking/lvcx3oq/) | D | 4 Nov 2024 |
+| D58 | **`[AU]` The conformance report feeds NCRs, and the engineer pushes back:** *"Yeah, engineers are useless. Had one complain to me about ncr's. Had to tell him, **i just setout and report on the wae, i dont build it**."* (WAE = work-as-executed) | [1aj86s7/kozgvos](https://www.reddit.com/r/Surveying/comments/1aj86s7/engineers/kozgvos/) | **D+ (AU)** | 5 Feb 2024 |
+| D59 | **`[AU]`** Request cadence: *"…constant need for data, sometimes on a daily basis. A lot of power point engineering goes on these days and it's left for everyone else to sort it out."* | [1aj86s7/kozgwyw](https://www.reddit.com/r/Surveying/comments/1aj86s7/engineers/kozgwyw/) | D+ (QLD) | 5 Feb 2024 |
+| D60 | **`[AU]`** Escalation path: *"A lot of 'Site Engineers' are little more than Project Managers with a fancy title. There should be an actual Civil Engineer that you can pass that buck right back too."* | [1aj86s7/kp01kqc](https://www.reddit.com/r/Surveying/comments/1aj86s7/engineers/kp01kqc/) | D+ (Brisbane) | 5 Feb 2024 |
+| D61 | **`[AU]` COUNTERWEIGHT to §1.6's "skip the engineers" line:** *"I feel like the leading hands know what they can get away with and wont know the spec like the engineers should. I had an engineer today come and ask what type of steel was supposed to go into a footing that we just dug."* | [1aj86s7/kozugop](https://www.reddit.com/r/Surveying/comments/1aj86s7/engineers/kozugop/) | **D+ (AU/QLD)** | 5 Feb 2024 |
+| D62 | **`[AU]`** Partial pickup is a scheduling conflict, not a status: *"Services are tough to asbuilt. No foreman wants to wait for a surveyor to pick them up, but then will ask you to mark were said asbuilt is."* | [tk4kse/i1qytqr](https://www.reddit.com/r/Surveying/comments/tk4kse/asbuilts/i1qytqr/) | D+ (AU) | 23 Mar 2022 |
+| D63 | **The receiving party says the acceptance step is hollow:** *"As the person who receives W/WW as-builts, **some firms will stamp anything. They'll happily stamp the design plans, ignoring every field change made** (manhole elevations, fire hydrant locations, you name it)"* | [1ppzdrr/nuszpla](https://www.reddit.com/r/civilengineering/comments/1ppzdrr/as_built_record_accuracy/nuszpla/) | D (US) | 19 Dec 2025 |
+| D64 | What a strict owner requires: *"We often require contractors to survey in each fitting on W/WW projects. Most of our clients require **signed and sealed** asbuilt surveys."* | [1ppzdrr/nuskdv8](https://www.reddit.com/r/civilengineering/comments/1ppzdrr/as_built_record_accuracy/nuskdv8/) | D | 19 Dec 2025 |
+| D65 | Enforcement is the variable; the cheap path is a markup: *"it really comes down to the respective owner enforcing the rules. Lots of times the contractor will save money on additional survey by saying everything was built per plan or just providing a top plan with their markups e.g. MH-01 moved 5 feet east."* | [1ppzdrr/nus4a47](https://www.reddit.com/r/civilengineering/comments/1ppzdrr/as_built_record_accuracy/nus4a47/) | D | 19 Dec 2025 |
+| D66 | Junior engineer told the artifact doesn't matter: *"One of my first tasks as a junior engineer was to make sure as-builts were getting done by the contractor. The next thing I was told was: 'Don't put a ton of effort into them, no one will build to as-builts anyways.'"* | [1ppzdrr/nuyk8ax](https://www.reddit.com/r/civilengineering/comments/1ppzdrr/as_built_record_accuracy/nuyk8ax/) | D | 20 Dec 2025 |
+| D67 | Quality tracks **the inspector**, not the spec: *"you will find a large variance of asbuilts depending on who was the inspector on-site. I also find it intolerable."* | [1ppzdrr/nuqecrm](https://www.reddit.com/r/civilengineering/comments/1ppzdrr/as_built_record_accuracy/nuqecrm/) | D | 18 Dec 2025 |
+| D68 | Employment pressure on sign-off: *"Every licensed surveyor that went to work for a construction company in our area has not lasted more than 6 months. They seem to think that if they employ you, you have to stamp and sign anything they want."* | [1ivkcvo/medofgr](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/medofgr/) | D | 23 Feb 2025 |
+| D69 | Pressure to *"make it check"*: *"Fuck that noise. I shoot everything as is. It's up to the contractor to make sure it's built properly. Surveyors that 'make it check' are the reason for so many design conflicts…"* | [1ivkcvo/me79y1o](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/me79y1o/) | D | 22 Feb 2025 |
+| D70 | **ALLEGED FALSIFICATION of conformance records. SINGLE ANONYMOUS SOURCE, UNCORROBORATED — see §10.7. Do not build on it.** | [1ivkcvo/mecil6q](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/mecil6q/) | D — **flag hard** | 23 Feb 2025 |
+| D71 | Stale plan set, blame in both directions: *"Nobody told me yall had an update to the plans"* / *"always being blamed for not having the current version of plans too"* | [1ivkcvo/me7lxu4](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/me7lxu4/) · [me7f539](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/me7f539/) | D | 22 Feb 2025 |
+| D72 | Surveyor finds **the design** is wrong: *"I noticed the slopes were 3:1, but had been labeled 2:1 on the worksheet. After I showed the foreman and super that they'd made a mistake, they basically had me go check everything they'd done before I got hired."* | [1ivkcvo/mecy20u](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/mecy20u/) | D | 23 Feb 2025 |
+| D73 | **Dispute lands ~2 weeks later, and the stored data did NOT settle it — a photo did:** *"Two weeks forward, we get an angry call saying that we'd fucked up and one nail was set wrong… Now, we did have all the data stored but **data means nothing to most people. They think it can be faked easily, they don't understand how it was produced**… But luckily we had a **picture** where it was clearly visible that something disturbed/bent the string board between when we set the nail and now."* | [12m31cx/jgdpvsk](https://www.reddit.com/r/Surveying/comments/12m31cx/construction_stakeout/jgdpvsk/) | D | 15 Apr 2023 |
+| D74 | As-con done too late forces demolition: *"having to dig up an entire length of mains line because the survey done too late shows it falling the wrong way"* | [tgdrqc/i1302md](https://www.reddit.com/r/Surveying/comments/tgdrqc/postconstruction_utility_asbuilts/i1302md/) | D | 17 Mar 2022 |
+| D75 | **Commercial root cause of missing points:** *"Lot of info that city's and such is asking for is practically impossible to get unless you are there holding hands with the people putting the utilities. City isn't going to pay for that. No company would win that contract if they put in the budget of being there everyday…"* | [tk4kse/i1on73g](https://www.reddit.com/r/Surveying/comments/tk4kse/asbuilts/i1on73g/) | D | 22 Mar 2022 |
+| D76 | Contractor-supplied data is a check, never a source: *"I never use invert info from the people installing it. I'll take it to use as a check."* | [tk4kse/i1tbgda](https://www.reddit.com/r/Surveying/comments/tk4kse/asbuilts/i1tbgda/) | D | 23 Mar 2022 |
+| D77 | Scope creep **within one job**: *"Mission creep is real… Started as grade stakes at the end of the rows, turned into 1 stake and an offset stake, turned into nail and stake for end post with and offset and finally at the end they just had me layout every fucking post In the field."* | [1ivkcvo/me7nib2](https://www.reddit.com/r/Surveying/comments/1ivkcvo/whats_life_as_a_surveyor_for_construction/me7nib2/) | D | 22 Feb 2025 |
 
-**Scope boundary this creates:** `received` is a **conformance-record** concept, not a **set-out** one. For
-set-out there is no office artifact to receive — the deliverable is a cut sheet handed over on site. If the
-C5 record is ever pointed at set-out as well as conformance, `received` has no counterpart event to fire on.
+### 10.2 GAP1 (request channel) — answered, with a caveat that matters
 
-Claim 80 is consistent with §3.4, which already declined to assert same-day and put the published range at
-1–4 business days. **The delta removes any remaining temptation to assume overnight.** Claim 79 is the one
-with product relevance: incremental pickup is 4× cheaper than batched, which is an argument *for* a record
-that tolerates partial coverage (§2.4) rather than one that waits for a complete job.
+**The named channel is a meeting at project start, not a per-task request queue.** Two independent
+accounts: the **Pre-Con** with an attendance sheet and a one-page **Utility Requirements Checklist**
+(D38), and a **Day-1 meeting with cheat sheets** (D40). Both establish the *standing* requirement once, on
+paper, and then rely on it.
 
-### 10.3 The AU finding that matters most: the report's real destination is an NCR
+**Day-to-day, the channel collapses to phone, text, or the foreman walking up** (D43, D44, D46) — including
+*"they call for staking day of the pour"* with no notice at all.
 
-| # | Claim | Source | Grade | Date |
-|---|---|---|---|---|
-| 81 | **`[AU]`** *"i just setout and report on the wae, i dont build it"* (WAE = work-as-executed). The described flow is **conformance report → NCR**, with **the engineer pushing back on it** | r/Surveying `1aj86s7` comment `kozgvos` | **D+** (AU) | 5 Feb 2024 |
-| 82 | On the receiving side: *"some firms will stamp anything. They'll happily stamp the design plans, ignoring every field change"* | r/civilengineering `1ppzdrr` comment `nuszpla` | **D** | 19 Dec 2025 |
+**Two structured recurring rhythms surfaced, and both are initiated BY the surveyor, not by a requester:**
+a **morning laser round** (D42) and **near-daily progress emails with photos and bullet points** (D41).
+Neither is a request channel; both are the surveyor pushing status outward — the same direction CPB's
+Survey Manager ad describes in §1.4.
 
-**Claim 81 is the single most on-point practitioner line found in the entire study for Q4.** The surveyor's
-self-description is explicitly *"I report, I don't build"* — the report is a **finding handed to someone
-else to act on**, and what it feeds is an **NCR**, which is contested rather than approved. That is the
-survey-record-as-evidence framing arriving from the practitioner's own mouth, and it independently
-corroborates §4.6 (*"remove `accepted` from the survey record"*) and §4.5 claim 57 (*"I never tell them to
-move the formwork… it will show up in the as-constructed report"*).
+**Self-scheduling is now corroborated by a second independent account** (D45), and the pattern is
+consistent and useful: **it happens when the surveyor is in-house to the builder rather than a contracted
+firm.** That reconciles the §1.4 tension directly — the contracted-firm case needs a request; the in-house
+case does not, because there is no handoff. It also matches §1.6's AU-specific structural fact that in AU,
+surveying is a *different company's* job, so AU skews toward the case that needs a request.
 
-**It also strengthens §5.6:** if the downstream artifact is an NCR that the engineer argues with, then a
-terminal `rejected` on the survey record is modelling the wrong object. The thing that gets disputed is the
-*finding*, and the disposition lives on the NCR — which CIVOS already has.
+**One further shape worth noting:** the PM schedules **by guessing** how long a task will take and sending
+a crew to check (D47), and scope grows *within* a single job once the surveyor is on site (D77).
 
-Claim 82 is a caution about the acceptance side, not evidence of a workflow step: it says stamping can be
-perfunctory. Single anonymous source; noted, not relied on.
+**Correction to §1.6.** This document cited an AU practitioner advising *"Skip the engineers and go straight
+to the guys building it."* The delta supplies an **AU counterweight from the same thread**: *"I feel like
+the leading hands know what they can get away with and wont know the spec like the engineers should"*
+(D61). **Both are AU, both are D+, and they disagree.** §1.6's line should be read as one practitioner's
+view, not a consensus — and it never carried a verdict, which is why the verdict is unaffected.
 
-### 10.4 Flagged, uncorroborated — do NOT build on this
+### 10.3 GAP2 (turnaround) — reframed: set-out and conformance have different delivery physics
 
-> A **single anonymous allegation of falsified density tests** (r/Surveying `1ivkcvo` comment `mecil6q`).
->
-> **One source, anonymous, uncorroborated, and an allegation of misconduct.** It is recorded here only so
-> that a future pass does not "rediscover" it and mistake it for a finding. **It supports no claim in this
-> document and must not be cited as evidence of AU industry practice.** Per the pass's own rule: never
-> assert from a single D source.
+The most useful thing in the delta is a distinction §3 did not draw.
 
-### 10.5 Honest negatives and one correction
+**For set-out, the deliverable never reaches an office.** The cut sheet is written and **handed to the
+contractor before leaving site** (D49), or a marked-up printout is **dropped at the job trailer on the way
+out** (D50). There is no receipt event to model, because there is no transfer to an office.
 
-- **r/AusEngineering title search for "survey" returns a clean empty result.** This is a **genuine
-  negative**, not a rate limit — worth recording because §0.1 listed AU subreddits as unreached, and at
-  least this one is now known to be genuinely empty rather than blocked.
-- **pullpush now refuses agents outright**; **arctic-shift body-search times out** on r/Surveying. The
-  Reddit archive route described in §0.1 is now closed, not merely slow. Anyone extending this work needs a
-  different channel (LinkedIn `/posts/`, per §9.2).
+**Clock numbers found**, all indirect and none of them a turnaround SLA:
+
+| Number | What it measures | Row |
+|---|---|---|
+| **~2 weeks** | site engineer's response time | D51 |
+| **~2 weeks** | how long after the work a dispute surfaces | D73 |
+| **8 h batched vs 2 h incremental** | cost of deferring as-built capture | D52 |
+| same-session | NZ council wants data in ArcGIS Pro so field inspectors see it immediately | D53 |
+
+**No "overnight" or "back next morning" evidence exists anywhere across nine full threads (~300
+comments).** Combined with §3.4's finding that no AU source states a contractual turnaround SLA, and the
+firms' published 1–4 business days, **the overnight assumption is now affirmatively unsupported rather than
+merely unevidenced.** And **no AU-specific turnaround number exists in the corpus at all** — the AU
+per-layer conformance report still has no stated delivery time from any source.
+
+**D52 is the row with product relevance:** deferring capture costs 4×, and D75 gives the commercial reason
+incremental capture doesn't happen (*"City isn't going to pay for that"*). Together they argue for a record
+that **tolerates partial coverage** (§2.4) rather than one that waits for a complete job — and D74 shows
+the downside of waiting: *"having to dig up an entire length of mains line because the survey done too late
+shows it falling the wrong way."*
+
+### 10.4 Q3 — format is per-client and habitual, not spec-driven
+
+Three independent rows say the same thing at the field level (D55, D56, D57), and the third names the
+mechanism: *"What matters is what has been traditionally provided to the contractors you're working
+for/with… This results in regional wants/needs/requirements, and also regional terms."*
+
+This **independently corroborates §3.2 from the practitioner side**. §3.2 established format variance from
+two directions — TMR stating outright that no representation is prescribed (A), and five software vendors
+shipping reloadable format templates (B). The delta adds a third: practitioners describing per-client
+column preferences as an unremarkable daily fact. **Three independent evidence types, one conclusion:
+store what arrived; do not hard-code a report shape.**
+
+D53 adds a shape §3.4 did not have: a receiving authority that dictates **the pipe as well as the format**
+(push into our ArcGIS Pro, submit as a web map, so inspectors see it in the field).
+
+### 10.5 Q4 — the acceptance-is-hollow cluster
+
+Seven rows (D63–D69) converge on an uncomfortable but consistent picture, and it **strengthens §4.6**
+rather than complicating it.
+
+The single most on-point row is D63, from **the person who receives the as-builts**: *"some firms will
+stamp anything. They'll happily stamp the design plans, ignoring every field change made."* Around it:
+enforcement is the variable, not the rule (D65); the cheap path is a plan markup rather than a survey
+(D65); quality tracks **which inspector** was on site (D67); a junior engineer was told outright *"Don't
+put a ton of effort into them, no one will build to as-builts anyways"* (D66); and there is real employment
+pressure on the signing surveyor (D68, D69).
+
+**Read against §4:** the acceptance act, where it exists at all, is a **stamp of variable rigour applied by
+a party outside the contractor**. That is precisely why §4.6 concluded acceptance should not be a state on
+the CIVOS survey record — CIVOS would be modelling an act it cannot observe, cannot verify, and whose
+rigour the receiving parties themselves describe as inconsistent. D64 marks the other end of the range
+(*"signed and sealed asbuilt surveys"*), confirming the variance is real rather than uniformly lax.
+
+**The strongest AU row in the delta is D58**, and it is the clearest practitioner statement found anywhere
+for Q4: *"i just setout and report on the wae, i dont build it"* — said while describing an engineer
+complaining to the surveyor **about NCRs**. The flow is **conformance report → NCR → the engineer argues
+with it**. The report is a *finding handed to someone else to act on*, and what it feeds is an artifact
+that is **contested, not approved**. That is the survey-record-as-evidence framing arriving from the
+practitioner's own mouth, and it corroborates both §4.6 and §4.5 claim 57.
+
+**It also sharpens §5.6:** if the downstream artifact is an NCR the engineer disputes, a terminal
+`rejected` on the survey record is modelling the wrong object entirely. The thing that gets disputed is
+the **finding**, and its disposition belongs on the NCR — which CIVOS already models.
+
+D76 adds a provenance rule worth carrying: **contractor-supplied data is a check, never a source**
+(*"I never use invert info from the people installing it"*).
+
+### 10.6 Q5 — new rejection triggers, and one design note
+
+Beyond the six triggers already in §5.3, the delta adds:
+
+- **Stale plan set** (D71) — blame runs in both directions, and neither party can prove which revision was
+  current. This is §4.8/§5.4's design-revision gap showing up as a lived dispute.
+- **The design itself is wrong** (D72) — the surveyor finds the error, and the consequence is a re-check of
+  everything already built.
+- **Timing, not accuracy** (D74) — a survey done too late is worth less than no survey, because the remedy
+  becomes demolition.
+- **Missing points for commercial reasons** (D75) — nobody bids the cost of continuous presence, so gaps
+  are structural rather than negligent.
+
+**One design note worth flagging, from D73.** A dispute surfaced two weeks after the work. The surveyor
+**had all the data stored, and it did not settle the argument**: *"data means nothing to most people. They
+think it can be faked easily, they don't understand how it was produced."* What settled it was **a
+photo** showing the string board had been disturbed after the nail was set.
+
+That is a direct, if uncomfortable, argument about what makes survey evidence persuasive in a dispute:
+**a timestamped photo outperformed a stored coordinate.** CIVOS already has photo pins and photo capture on
+lots — attaching them to survey records is cheap, and D73 is the evidence that it is not decoration. Noted
+as an observation, not a build instruction; it rests on one D-grade source.
+
+### 10.7 Honest negatives, carried forward exactly
+
+These must not be softened on re-read:
+
+- **Term search was IMPOSSIBLE, so absence here is not evidence of absence.** arctic-shift `body=` search
+  **times out on every window** tried on r/Surveying (3-month through 6-year, at `limit=10`, after pauses up
+  to 7 minutes), and adding `subreddit=Surveying` is exactly what triggers the timeout. **pullpush now
+  refuses agents outright** (*"This website does not provide free scraping resources for agents"*) and did
+  not reset. GAP1 and GAP2 were answered by pulling **full comment sets of candidate threads**, not by
+  searching terms.
+- Consequently: **zero evidence for whiteboard, WhatsApp, look-ahead program, work order, job sheet or
+  request form — but those terms were NEVER SEARCHED.** Treat as **not-searched, not absent.** This
+  supersedes the wording in the previous revision of this section.
+- **r/AusEngineering is a GENUINE negative**, not a rate limit: `posts/search?subreddit=AusEngineering&title=survey`
+  returned a clean, valid `{"data":[]}`. No threads exist under that title term.
+- **r/australia, r/perth, r/melbourne, r/brisbane, r/Construction — still zero coverage**, not tested by
+  title search.
+- **The Trimble stakeout-report quote stays SNIPPET ONLY.** 60 comments were pulled from thread `12m31cx`
+  and that exact comment was **not among them** (the thread is larger than 60). **Do not upgrade its
+  grade.** It is not relied on anywhere in §1–§9.
+- **D70 (alleged falsified density/lift records) stays flagged.** One anonymous comment, **no corroboration
+  anywhere in ~300 comments read**. It is the single most damaging claim in the corpus and the least
+  supported. It is recorded **only** so a future pass does not rediscover it and mistake it for a finding.
+  **It supports no claim in this document and must never be cited as evidence of AU industry practice.**
 - **Correction to §3.1(c).** The narrative clause *"Leica marks out-of-tolerance deltas red"* rests on a
-  **snippet-only** capture of a third-party copy of the Leica Infinity help — the underlying page body was
-  never retrieved. **Treat it as unconfirmed.** It appears in narrative only and is **not** in any claim
-  table row, so no graded claim is affected; the TBC `Pass`/red-highlight facts in claim 35 are from
-  Trimble's own help pages and stand.
+  snippet-only capture of a third-party copy of the Leica Infinity help; the page body was never retrieved.
+  **Treat as unconfirmed.** It appears in narrative only and is not in any claim table row, so no graded
+  claim is affected; the TBC `Pass`/red-highlight facts in claim 35 come from Trimble's own help pages and
+  stand.
 
-### 10.6 Net effect on the verdict table
+### 10.8 Net effect on the verdict table
 
-**None of the five verdicts changes.** Two are strengthened:
+**None of the five verdicts changes.** Two are strengthened, one boundary is added, one prior line is
+qualified:
 
-- **`requested` (KEEP, optional)** — strengthened. Requirements are agreed once at a project-start meeting
-  (claims 71–72); the per-event ask is phone/text/foreman (claim 73) with two more self-scheduling accounts
-  (claim 74). Exactly the "standing requirement up front, untracked ask per event" picture §1.9 concluded
-  from B/C sources, now visible in D-grade first-person accounts.
-- **`accepted` (RESTRUCTURE, remove from the survey record)** — strengthened by claim 81, the clearest
-  practitioner statement found: the report is a finding that feeds an **NCR**, contested by the engineer,
-  never "accepted" on the document.
-
-One boundary added rather than a verdict changed: **`received` applies to conformance records, not set-out**
-(§10.2).
+| Verdict | Effect | Rows |
+|---|---|---|
+| `requested` — **KEEP, optional** | **Strengthened.** Requirements are agreed once at a project-start meeting; the per-event ask is phone/text/foreman; self-scheduling is corroborated and correlates with **in-house vs contracted**, which is exactly why AU (where survey is a separate company) skews toward needing a request | D38, D40, D43–D47, D77 |
+| `in_progress` — **DELETE the state** | **Unchanged, and tested.** The closest thing found is a **staffing model** — a dedicated on-site As-built Technician capturing in real time, *"heavy on the budget"* — **not a tracked state**. Nobody records progress; they either staff continuously or accept gaps | D39, D52, D62, D75 |
+| `received` — **KEEP** | **Boundary added:** `received` is a **conformance-record** concept. For **set-out** the deliverable is handed over on site and never reaches an office, so there is no receipt event to fire on | D49, D50 |
+| `accepted` — **REMOVE from the survey record** | **Strengthened, from two directions.** The receiving party describes stamping as hollow and variable; and the AU practitioner line *"i just setout and report on the wae, i dont build it"* shows the report feeds an **NCR that is contested**, never an acceptance | D58, D63–D69 |
+| `rejected` — **RENAME, non-terminal** | **Strengthened.** The disputed object is the **finding**, whose disposition belongs on the NCR. Four new triggers added (stale plan set, wrong design, too-late timing, commercially structural gaps) | D58, D71, D72, D74, D75 |
