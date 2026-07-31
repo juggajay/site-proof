@@ -68,6 +68,36 @@ export type EvidenceTestResultInput = {
   createdAt: Date;
 };
 
+/**
+ * Wave `C5.3` — a survey record in a hold-point release package.
+ *
+ * `[C5S-B1]`: `surveyorVerdict` is a TRANSCRIPTION of the surveyor's own
+ * report. Nothing here or downstream derives a verdict, and the mapper below
+ * emits `verdictAttribution` so a superintendent reading the release page sees
+ * whose finding it is and which CIVOS user typed it in.
+ *
+ * DELIBERATELY CARRIES NO `fileUrl` AND NO DOCUMENT ID. The package is served
+ * to unauthenticated token bearers, and `getPublicEvidenceDocumentIds`
+ * (`publicReleasePayload.ts`) builds the public download allow-list out of the
+ * checklist attachments and photos. Naming a survey report's document here
+ * would widen that allow-list; the report filename is enough for a reader to
+ * ask for the file through the people who sent the link.
+ */
+export type EvidenceSurveyInput = {
+  id: string;
+  kind: string;
+  status: string;
+  surveyorName: string | null;
+  surveyorCompany: string | null;
+  surveyorRegistration: string | null;
+  surveyedAt: Date | null;
+  surveyorVerdict: string | null;
+  verdictSourceNote: string | null;
+  acceptedAt: Date | null;
+  acceptedBy: EvidenceNamedUser;
+  reportDocument?: { filename: string } | null;
+};
+
 export type EvidenceDocumentInput = {
   id: string;
   itpChecklistItemId?: string | null;
@@ -194,6 +224,44 @@ export function mapHoldPointEvidenceTestResults(
     }));
 }
 
+/**
+ * Wave `C5.3`. Pure, like every other mapper here — the flag gate and the query
+ * live in `surveyEvidence.ts`, so a caller that never loads surveys gets `[]`
+ * and this function is never the thing deciding what a tenant may see.
+ *
+ * Surveys are NOT filtered by the hold point's checklist sequence the way tests
+ * and photos are: a survey record carries no `itpChecklistItemId`, so there is
+ * no sequence to compare against. What scopes them is the lot — the same thing
+ * that scopes the package itself.
+ */
+export function mapHoldPointEvidenceSurveys(surveys: EvidenceSurveyInput[]) {
+  return surveys.map((survey) => ({
+    id: survey.id,
+    kind: survey.kind,
+    status: survey.status,
+    surveyorName: survey.surveyorName,
+    surveyorCompany: survey.surveyorCompany,
+    surveyorRegistration: survey.surveyorRegistration,
+    surveyedAt: survey.surveyedAt,
+    surveyorVerdict: survey.surveyorVerdict,
+    verdictSourceNote: survey.verdictSourceNote,
+    reportFilename: survey.reportDocument?.filename ?? null,
+    isAccepted: survey.status === 'accepted',
+    acceptedAt: survey.acceptedAt,
+    // `[C5S-B1]` as a string the reader cannot miss: whose finding this is, and
+    // who in CIVOS transcribed it.
+    verdictAttribution: buildSurveyVerdictAttribution(survey),
+  }));
+}
+
+function buildSurveyVerdictAttribution(survey: EvidenceSurveyInput): string {
+  const surveyor = survey.surveyorName ?? 'the surveyor';
+  const recorder = survey.acceptedBy?.fullName;
+  return (
+    `Verdict stated by ${surveyor}` + (recorder ? `, recorded in CIVOS by ${recorder}` : '') + '.'
+  );
+}
+
 export function buildHoldPointEvidencePhotoDocuments(
   completions: EvidenceCompletionInput[],
 ): EvidenceDocumentInput[] {
@@ -238,12 +306,17 @@ export function mapHoldPointEvidencePhotos(
 type EvidenceChecklistEntry = ReturnType<typeof buildHoldPointEvidenceChecklist>[number];
 type EvidenceTestResultEntry = ReturnType<typeof mapHoldPointEvidenceTestResults>[number];
 type EvidencePhotoEntry = ReturnType<typeof mapHoldPointEvidencePhotos>[number];
+type EvidenceSurveyEntry = ReturnType<typeof mapHoldPointEvidenceSurveys>[number];
 type JsonRecord = Record<string, unknown>;
 
 export function buildHoldPointEvidenceSummary(
   checklist: EvidenceChecklistEntry[],
   testResults: EvidenceTestResultEntry[],
   photos: EvidencePhotoEntry[],
+  // Wave `C5.3`. Defaulted rather than required so the existing callers and
+  // their characterization tests keep their exact shape; a package with no
+  // surveys reports zero, which is what it has always effectively said.
+  surveys: EvidenceSurveyEntry[] = [],
 ) {
   return {
     totalChecklistItems: checklist.length,
@@ -253,6 +326,10 @@ export function buildHoldPointEvidenceSummary(
     passingTests: testResults.filter((t) => t.passFail === 'pass').length,
     totalPhotos: photos.length,
     totalAttachments: checklist.reduce((sum, i) => sum + i.attachments.length, 0),
+    totalSurveys: surveys.length,
+    // NOT "conforming surveys". The count is of records a named CIVOS user
+    // accepted; whether the works conform is nobody's statement here.
+    acceptedSurveys: surveys.filter((s) => s.isAccepted).length,
   };
 }
 
@@ -312,6 +389,8 @@ type BuildHoldPointEvidencePackageParams<THoldPoint extends Record<string, unkno
   checklistItems: EvidenceChecklistItemInput[];
   completions: EvidenceCompletionInput[];
   holdPointSequenceNumber: number;
+  /** Wave `C5.3`. Already flag-gated by the caller — see `surveyEvidence.ts`. */
+  surveys?: EvidenceSurveyInput[];
   extraFields?: Record<string, unknown>;
 };
 
@@ -322,6 +401,7 @@ export async function buildHoldPointEvidencePackage<THoldPoint extends Record<st
   checklistItems,
   completions,
   holdPointSequenceNumber,
+  surveys,
   extraFields,
 }: BuildHoldPointEvidencePackageParams<THoldPoint>) {
   const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
@@ -339,6 +419,7 @@ export async function buildHoldPointEvidencePackage<THoldPoint extends Record<st
     buildHoldPointEvidencePhotoDocuments(completions),
     scope,
   );
+  const surveyRecords = mapHoldPointEvidenceSurveys(surveys ?? []);
 
   return {
     holdPoint,
@@ -348,7 +429,8 @@ export async function buildHoldPointEvidencePackage<THoldPoint extends Record<st
     checklist,
     testResults,
     photos,
-    summary: buildHoldPointEvidenceSummary(checklist, testResults, photos),
+    surveys: surveyRecords,
+    summary: buildHoldPointEvidenceSummary(checklist, testResults, photos, surveyRecords),
     ...extraFields,
     generatedAt: new Date().toISOString(),
   };

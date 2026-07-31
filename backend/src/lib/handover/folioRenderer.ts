@@ -36,6 +36,8 @@ import {
   FOLIO_LEGAL_WORDING,
   type FolioSnapshotPayload,
   type FolioEvidencePayload,
+  type FolioSurveyPayload,
+  type FolioDeliveryPayload,
 } from './folioPayload.js';
 import type { LoganPsp5ItemResult, Logan18CategoryCoverage } from './loganPsp5Profile.js';
 
@@ -363,6 +365,27 @@ function renderEvidence(layout: FolioLayout, evidence: FolioEvidencePayload): vo
     'No non-conformances are recorded against this lot.',
   );
 
+  // Wave `C5.3`. BOTH SECTIONS ARE OMITTED WHEN THEIR COLLECTION IS EMPTY,
+  // which the five sections above are not, and the reason is not layout:
+  //
+  //   * `evidence.surveys` is empty for every tenant without
+  //     `C5_SURVEY_RECORDS_ENABLED`. Printing "no surveys are recorded for this
+  //     lot" on those folios would assert CIVOS holds a survey register that
+  //     the tenant has not been given, which is a claim about the product
+  //     rather than about the lot.
+  //   * It also keeps the promise the flag is worth having: with the flag off
+  //     and no lot-linked delivery, this build renders the SAME BYTES it
+  //     rendered before C5.3 existed — pinned by hash in `folioRenderer.test.ts`.
+  //
+  // Nothing is omitted silently: when rows exist, every one of them prints
+  // (`[DH-B1]`), and `evidenceRowCount` in the page footer counts them.
+  if (evidence.surveys.length > 0) {
+    renderSurveys(layout, evidence.surveys);
+  }
+  if (evidence.deliveries.length > 0) {
+    renderDeliveries(layout, evidence.deliveries);
+  }
+
   layout.heading('Documents and imagery held');
   layout.table(
     [
@@ -376,6 +399,97 @@ function renderEvidence(layout: FolioLayout, evidence: FolioEvidencePayload): vo
     ],
     evidence.documents,
     'No documents are held for this lot.',
+  );
+}
+
+/**
+ * Wave `C5.3` — `[C5S-B1]` on the page.
+ *
+ * The verdict column is the SURVEYOR'S, said so in the header, and the last
+ * column names the CIVOS user who transcribed it. That pairing is the whole
+ * point: a reader can tell a transcription from a signature (spec §8,
+ * **AT-181**). CIVOS makes no statement of its own about a survey anywhere in
+ * this section, and `[C5S-B2]` keeps it that way.
+ */
+function renderSurveys(layout: FolioLayout, surveys: readonly FolioSurveyPayload[]): void {
+  layout.heading('Survey records held');
+  layout.text(
+    "Every verdict below is the surveyor's own, transcribed from their report by the CIVOS " +
+      'user named in the last column. CIVOS states who recorded it and when; it states no ' +
+      'finding of its own about any survey. A record shown here is the current one — a ' +
+      're-survey is a new record, and the one it replaced stays retrievable.',
+    { size: 8 },
+  );
+  layout.gap(4);
+  layout.table<FolioSurveyPayload>(
+    [
+      { header: 'Survey', width: 92, value: (row) => `${row.kind} · ${row.status}` },
+      {
+        header: 'Surveyor',
+        width: 118,
+        value: (row) =>
+          [row.surveyorName, row.surveyorCompany, row.surveyorRegistration]
+            .filter(Boolean)
+            .join(' · ') || 'not recorded',
+      },
+      { header: "Surveyor's verdict", width: 96, value: (row) => row.verdict },
+      {
+        header: 'Report / basis stated',
+        width: 110,
+        value: (row) =>
+          [row.verdictSourceNote, row.reportFilename].filter(Boolean).join(' · ') || '—',
+      },
+      {
+        header: 'Recorded in CIVOS by',
+        width: CONTENT_WIDTH - 416,
+        value: (row) =>
+          row.recordedByName
+            ? `${row.recordedByName}${row.recordedAt ? ` on ${row.recordedAt}` : ''}`
+            : '—',
+      },
+    ],
+    surveys,
+    'No survey records are held for this lot.',
+  );
+}
+
+/**
+ * Wave `C5.3` — the answer to "what material went into this lot, from which
+ * supplier, on which docket?" Every value is transcribed from the supplier's
+ * paperwork; none of it is a CIVOS statement about the material.
+ */
+function renderDeliveries(layout: FolioLayout, deliveries: readonly FolioDeliveryPayload[]): void {
+  layout.heading('Material deliveries linked to this lot');
+  layout.text(
+    'Each row is a delivery a site user recorded against this lot. Supplier, docket number ' +
+      "and batch reference are transcribed from the supplier's paperwork as received.",
+    { size: 8 },
+  );
+  layout.gap(4);
+  layout.table<FolioDeliveryPayload>(
+    [
+      { header: 'Date', width: 60, value: (row) => row.deliveredOn ?? '—' },
+      { header: 'Material', width: 138, value: (row) => row.description },
+      { header: 'Supplier', width: 96, value: (row) => row.supplier ?? 'not recorded' },
+      {
+        header: 'Docket / batch',
+        width: 100,
+        value: (row) => [row.docketNumber, row.batchRef].filter(Boolean).join(' · ') || '—',
+      },
+      {
+        header: 'Quantity',
+        width: 50,
+        value: (row) =>
+          row.quantity === null ? '—' : `${row.quantity}${row.unit ? ` ${row.unit}` : ''}`,
+      },
+      {
+        header: 'Docket filed',
+        width: CONTENT_WIDTH - 444,
+        value: (row) => row.docketFilename ?? 'not filed',
+      },
+    ],
+    deliveries,
+    'No material deliveries are linked to this lot.',
   );
 }
 

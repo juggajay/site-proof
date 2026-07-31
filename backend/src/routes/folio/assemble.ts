@@ -36,6 +36,7 @@ import {
   resolveLoganPsp5Profile,
   type LoganPsp5ResolverInput,
 } from '../../lib/handover/loganPsp5Profile.js';
+import { surveyRecordsEnabled } from '../surveys/statusWorkflow.js';
 
 /**
  * The T-6 evidence-row ceiling, DECLARED BEFORE MEASURING (`[DR2-B6]`).
@@ -68,6 +69,48 @@ function testVerdict(test: { status: string; passFail: string }): string {
   return test.passFail.toUpperCase();
 }
 
+/**
+ * Wave `C5.3`, `[C5S-B1]`. The rendered label for the SURVEYOR'S verdict —
+ * decided here, server-side, in the {@link testVerdict} shape, so the renderer
+ * prints a string and never derives one. Nothing in this function looks at a
+ * measurement, a tolerance or a design value, because CIVOS holds none: the
+ * only input is what somebody transcribed off the surveyor's own report.
+ */
+const SURVEY_VERDICT_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  conforms: 'Conforms',
+  does_not_conform: 'Does not conform',
+  qualified: 'Qualified',
+  not_stated: 'The report states no verdict',
+});
+
+function surveyorVerdictLabel(verdict: string | null): string {
+  if (verdict === null) return 'Not yet recorded';
+  return SURVEY_VERDICT_LABEL[verdict] ?? verdict;
+}
+
+/**
+ * Which CIVOS user's name goes beside the surveyor's, and when they put it
+ * there (spec §8). The most recent actor wins: whoever accepted the record
+ * stands behind the transcription, and before anyone has, whoever reviewed or
+ * opened it does.
+ */
+function surveyRecordedBy(survey: {
+  createdAt: Date;
+  reviewedAt: Date | null;
+  acceptedAt: Date | null;
+  requestedBy: { fullName: string | null } | null;
+  reviewedBy: { fullName: string | null } | null;
+  acceptedBy: { fullName: string | null } | null;
+}): { name: string | null; at: Date } {
+  if (survey.acceptedBy && survey.acceptedAt) {
+    return { name: survey.acceptedBy.fullName, at: survey.acceptedAt };
+  }
+  if (survey.reviewedBy && survey.reviewedAt) {
+    return { name: survey.reviewedBy.fullName, at: survey.reviewedAt };
+  }
+  return { name: survey.requestedBy?.fullName ?? null, at: survey.createdAt };
+}
+
 function iso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
@@ -98,103 +141,166 @@ async function readEvidenceRows(
   lot: { id: string; itpInstance: { id: string } | null },
   take: number,
 ) {
-  const [tests, ncrLots, documents, completions, holdPoints] = await Promise.all([
-    tx.testResult.findMany({
-      where: { lotId: lot.id },
-      orderBy: [{ testDate: 'asc' }, { id: 'asc' }],
-      take,
-      select: {
-        id: true,
-        testType: true,
-        status: true,
-        passFail: true,
-        testDate: true,
-        laboratoryName: true,
-        resultValue: true,
-        resultUnit: true,
-        updatedAt: true,
-        itpChecklistItem: { select: { testType: true } },
-      },
-    }),
-    tx.nCRLot.findMany({
-      where: { lotId: lot.id },
-      orderBy: { id: 'asc' },
-      take,
-      select: {
-        ncr: {
-          select: {
-            id: true,
-            ncrNumber: true,
-            severity: true,
-            status: true,
-            linkedTestResultId: true,
-            rectificationNotes: true,
-            rectificationSubmittedAt: true,
-            updatedAt: true,
-            _count: { select: { ncrEvidence: true } },
+  const [tests, ncrLots, documents, completions, holdPoints, surveys, deliveries] =
+    await Promise.all([
+      tx.testResult.findMany({
+        where: { lotId: lot.id },
+        orderBy: [{ testDate: 'asc' }, { id: 'asc' }],
+        take,
+        select: {
+          id: true,
+          testType: true,
+          status: true,
+          passFail: true,
+          testDate: true,
+          laboratoryName: true,
+          resultValue: true,
+          resultUnit: true,
+          updatedAt: true,
+          itpChecklistItem: { select: { testType: true } },
+        },
+      }),
+      tx.nCRLot.findMany({
+        where: { lotId: lot.id },
+        orderBy: { id: 'asc' },
+        take,
+        select: {
+          ncr: {
+            select: {
+              id: true,
+              ncrNumber: true,
+              severity: true,
+              status: true,
+              linkedTestResultId: true,
+              rectificationNotes: true,
+              rectificationSubmittedAt: true,
+              updatedAt: true,
+              _count: { select: { ncrEvidence: true } },
+            },
           },
         },
-      },
-    }),
-    tx.document.findMany({
-      where: { lotId: lot.id, isLatestVersion: true },
-      orderBy: { id: 'asc' },
-      take,
-      select: {
-        id: true,
-        filename: true,
-        documentType: true,
-        mimeType: true,
-        fileSize: true,
-        captureTimestamp: true,
-        version: true,
-      },
-    }),
-    lot.itpInstance
-      ? tx.iTPCompletion.findMany({
-          where: { itpInstanceId: lot.itpInstance.id },
-          orderBy: { id: 'asc' },
-          take,
-          select: {
-            id: true,
-            status: true,
-            completedAt: true,
-            verificationStatus: true,
-            verifiedAt: true,
-            notes: true,
-            signatureUrl: true,
-            checklistItem: { select: { description: true } },
-            attachments: { select: { documentId: true } },
-          },
-        })
-      : Promise.resolve([]),
-    tx.holdPoint.findMany({
-      where: { lotId: lot.id },
-      orderBy: { id: 'asc' },
-      take,
-      select: {
-        id: true,
-        description: true,
-        pointType: true,
-        status: true,
-        releasedAt: true,
-        releasedByName: true,
-        releasedByOrg: true,
-        releaseMethod: true,
-        releaseSignatureUrl: true,
-        evidencePackageUrl: true,
-      },
-    }),
-  ]);
+      }),
+      tx.document.findMany({
+        where: { lotId: lot.id, isLatestVersion: true },
+        orderBy: { id: 'asc' },
+        take,
+        select: {
+          id: true,
+          filename: true,
+          documentType: true,
+          mimeType: true,
+          fileSize: true,
+          captureTimestamp: true,
+          version: true,
+        },
+      }),
+      lot.itpInstance
+        ? tx.iTPCompletion.findMany({
+            where: { itpInstanceId: lot.itpInstance.id },
+            orderBy: { id: 'asc' },
+            take,
+            select: {
+              id: true,
+              status: true,
+              completedAt: true,
+              verificationStatus: true,
+              verifiedAt: true,
+              notes: true,
+              signatureUrl: true,
+              checklistItem: { select: { description: true } },
+              attachments: { select: { documentId: true } },
+            },
+          })
+        : Promise.resolve([]),
+      tx.holdPoint.findMany({
+        where: { lotId: lot.id },
+        orderBy: { id: 'asc' },
+        take,
+        select: {
+          id: true,
+          description: true,
+          pointType: true,
+          status: true,
+          releasedAt: true,
+          releasedByName: true,
+          releasedByOrg: true,
+          releaseMethod: true,
+          releaseSignatureUrl: true,
+          evidencePackageUrl: true,
+        },
+      }),
+      // Wave `C5.3`, FAIL-CLOSED. With `C5_SURVEY_RECORDS_ENABLED` off there is
+      // no query at all, so a tenant that has not been switched on cannot get a
+      // survey into a folio even if rows exist in its database — and its folio
+      // bytes are identical to the ones this build produced before C5.
+      //
+      // `supersededById: null` is the `Drawing` read rule (§2.3a): a re-survey is
+      // a new row, and the folio shows the current one. The superseded row and
+      // its file stay retrievable through the chain.
+      surveyRecordsEnabled()
+        ? tx.surveyRecord.findMany({
+            where: { lotId: lot.id, supersededById: null },
+            orderBy: [{ surveyedAt: 'asc' }, { id: 'asc' }],
+            take,
+            select: {
+              id: true,
+              kind: true,
+              status: true,
+              surveyorName: true,
+              surveyorCompany: true,
+              surveyorRegistration: true,
+              surveyedAt: true,
+              surveyorVerdict: true,
+              verdictSourceNote: true,
+              createdAt: true,
+              updatedAt: true,
+              reviewedAt: true,
+              acceptedAt: true,
+              reportDocument: { select: { filename: true } },
+              requestedBy: { select: { fullName: true } },
+              reviewedBy: { select: { fullName: true } },
+              acceptedBy: { select: { fullName: true } },
+            },
+          })
+        : Promise.resolve([]),
+      // Deliveries are unflagged (`[C5S-f]`): C5.1 shipped unflagged, and the
+      // delivery half carries no research exposure. Lot-linked only, which is
+      // structural rather than a filter — the folio is one lot's.
+      tx.diaryDelivery.findMany({
+        where: { lotId: lot.id },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take,
+        select: {
+          id: true,
+          description: true,
+          supplier: true,
+          docketNumber: true,
+          batchRef: true,
+          quantity: true,
+          unit: true,
+          updatedAt: true,
+          diary: { select: { date: true } },
+          docketDocument: { select: { filename: true } },
+        },
+      }),
+    ]);
 
-  return { tests, ncrs: ncrLots.map((link) => link.ncr), documents, completions, holdPoints };
+  return {
+    tests,
+    ncrs: ncrLots.map((link) => link.ncr),
+    documents,
+    completions,
+    holdPoints,
+    surveys,
+    deliveries,
+  };
 }
 
 type EvidenceRows = Awaited<ReturnType<typeof readEvidenceRows>>;
 
 /** Rows -> the frozen, already-serialised payload shape. Pure. */
 function toEvidencePayload(rows: EvidenceRows): FolioEvidencePayload {
-  const { tests, ncrs, documents, completions, holdPoints } = rows;
+  const { tests, ncrs, documents, completions, holdPoints, surveys, deliveries } = rows;
   return {
     tests: tests.map((test) => ({
       id: test.id,
@@ -239,6 +345,35 @@ function toEvidencePayload(rows: EvidenceRows): FolioEvidencePayload {
       releasedAt: iso(holdPoint.releasedAt),
       releasedByOrg: holdPoint.releasedByOrg,
     })),
+    surveys: surveys.map((survey) => {
+      const recorded = surveyRecordedBy(survey);
+      return {
+        id: survey.id,
+        kind: survey.kind,
+        status: survey.status,
+        surveyorName: survey.surveyorName,
+        surveyorCompany: survey.surveyorCompany,
+        surveyorRegistration: survey.surveyorRegistration,
+        surveyedAt: iso(survey.surveyedAt),
+        surveyorVerdict: survey.surveyorVerdict,
+        verdict: surveyorVerdictLabel(survey.surveyorVerdict),
+        verdictSourceNote: survey.verdictSourceNote,
+        reportFilename: survey.reportDocument?.filename ?? null,
+        recordedByName: recorded.name,
+        recordedAt: iso(recorded.at),
+      };
+    }),
+    deliveries: deliveries.map((delivery) => ({
+      id: delivery.id,
+      deliveredOn: iso(delivery.diary.date),
+      description: delivery.description,
+      supplier: delivery.supplier,
+      docketNumber: delivery.docketNumber,
+      batchRef: delivery.batchRef,
+      quantity: decimal(delivery.quantity),
+      unit: delivery.unit,
+      docketFilename: delivery.docketDocument?.filename ?? null,
+    })),
   };
 }
 
@@ -276,7 +411,7 @@ function toResolverInput(lotId: string, rows: EvidenceRows): LoganPsp5ResolverIn
 
 /** Rows -> one §7.7 revision token each, of the kind DECLARED for its type. */
 function toSourceRowRefs(rows: EvidenceRows): SourceRowRef[] {
-  const { tests, ncrs, documents, completions, holdPoints } = rows;
+  const { tests, ncrs, documents, completions, holdPoints, surveys, deliveries } = rows;
   return [
     ...tests.map((test) =>
       sourceRowRef('test_result', test.id, { kind: 'updated_at', updatedAt: test.updatedAt }),
@@ -308,6 +443,18 @@ function toSourceRowRefs(rows: EvidenceRows): SourceRowRef[] {
       sourceRowRef('hold_point', holdPoint.id, {
         kind: 'row_digest',
         fields: pickDigestFields(holdPoint, HOLD_POINT_DIGEST_FIELDS),
+      }),
+    ),
+    ...surveys.map((survey) =>
+      sourceRowRef('survey_record', survey.id, {
+        kind: 'updated_at',
+        updatedAt: survey.updatedAt,
+      }),
+    ),
+    ...deliveries.map((delivery) =>
+      sourceRowRef('diary_delivery', delivery.id, {
+        kind: 'updated_at',
+        updatedAt: delivery.updatedAt,
       }),
     ),
   ];

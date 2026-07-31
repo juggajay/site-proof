@@ -21,6 +21,9 @@ const ALL_SOURCE_TYPES: readonly FolioSourceType[] = [
   'test_result',
   'itp_completion',
   'hold_point',
+  // Wave `C5.3`.
+  'survey_record',
+  'diary_delivery',
 ];
 
 describe('revision tokens (§7.7)', () => {
@@ -43,6 +46,10 @@ describe('revision tokens (§7.7)', () => {
     // that produced this module.
     expect(REVISION_TOKEN_KINDS.itp_completion).toBe('row_digest');
     expect(REVISION_TOKEN_KINDS.hold_point).toBe('row_digest');
+    // Wave `C5.3`: both tables carry `updatedAt` and neither carries a version,
+    // so neither needs the digest machinery.
+    expect(REVISION_TOKEN_KINDS.survey_record).toBe('updated_at');
+    expect(REVISION_TOKEN_KINDS.diary_delivery).toBe('updated_at');
   });
 
   it('prefixes every token with its kind', () => {
@@ -116,7 +123,10 @@ describe('revision tokens (§7.7)', () => {
       'releaseSignatureUrl',
       'evidencePackageUrl',
     ]);
-    expect(FOLIO_PAYLOAD_SCHEMA_VERSION).toBe(1);
+    // Wave `C5.3` bumped this 1 -> 2 for a payload SHAPE change (two new
+    // evidence collections), not a digest-list change — the digest lists above
+    // are unchanged, which is why they still read exactly as they did.
+    expect(FOLIO_PAYLOAD_SCHEMA_VERSION).toBe(2);
   });
 
   it('builds a source ref carrying type, id and token', () => {

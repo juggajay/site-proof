@@ -134,6 +134,14 @@ export function buildFolioPayloadFixture(
         releasedByOrg: 'Consulting Engineers Pty Ltd',
       },
     ],
+    // Wave `C5.3` — EMPTY BY DESIGN, and adding rows here would break a real
+    // assertion. This fixture's rendered bytes are hash-pinned in
+    // `folioRenderer.test.ts` against the value measured before C5.3 existed:
+    // that pin is what proves a tenant without `C5_SURVEY_RECORDS_ENABLED` and
+    // without lot-linked deliveries gets the folio it got yesterday. Tests that
+    // want populated collections pass an `evidence` override.
+    surveys: [],
+    deliveries: [],
   };
 
   return {

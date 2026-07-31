@@ -35,7 +35,9 @@ export type FolioSourceType =
   | 'ncr'
   | 'test_result'
   | 'itp_completion'
-  | 'hold_point';
+  | 'hold_point'
+  | 'survey_record'
+  | 'diary_delivery';
 
 export type RevisionTokenKind = 'version' | 'updated_at' | 'row_digest';
 
@@ -58,6 +60,11 @@ export const REVISION_TOKEN_KINDS: Readonly<Record<FolioSourceType, RevisionToke
     // Has neither, and its file pointers are bare strings with no size or
     // checksum (`schema.prisma:777-779`).
     hold_point: 'row_digest',
+    // Wave `C5.3`. Both carry `updatedAt` and neither carries a version, so
+    // neither needs a digest — the timestamp is the available discriminator,
+    // exactly as for `ncr` and `test_result`.
+    survey_record: 'updated_at',
+    diary_delivery: 'updated_at',
   });
 
 /**
@@ -103,8 +110,15 @@ export const HOLD_POINT_DIGEST_FIELDS = [
 /**
  * `payload` shape version for `FolioSnapshot`. Bump on any change to the
  * payload shape OR to either digest field list above.
+ *
+ * `2` — Wave `C5.3` added `evidence.surveys` and `evidence.deliveries`, which
+ * is a shape change, so the rule above applies. A snapshot written at `1` does
+ * NOT carry those keys, and the renderer would read `undefined` where it
+ * expects an array; `isFolioPayloadSchemaCurrent` (`folioPayload.ts`) is what
+ * turns that into a refusal with a reason instead of a `TypeError` or, worse,
+ * a folio rendered as if the collections were empty. **AT-180**.
  */
-export const FOLIO_PAYLOAD_SCHEMA_VERSION = 1;
+export const FOLIO_PAYLOAD_SCHEMA_VERSION = 2;
 
 export type RevisionTokenInput =
   | { readonly kind: 'version'; readonly version: number }
