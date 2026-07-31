@@ -22,6 +22,8 @@ const baseCompany: Company = {
   address: '1 Test Street, Sydney NSW',
   logoUrl: 'https://cdn.example.com/logo.png',
   subscriptionTier: 'professional',
+  xeroAccountCode: null,
+  xeroTaxType: null,
   projectCount: 8,
   projectLimit: 10,
   userCount: 20,

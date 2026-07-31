@@ -4,6 +4,10 @@ export const COMPANY_NAME_MAX_LENGTH = 120;
 export const COMPANY_ABN_MAX_LENGTH = 32;
 export const COMPANY_ADDRESS_MAX_LENGTH = 300;
 export const COMPANY_LOGO_URL_MAX_LENGTH = 2048;
+/** Xero account codes are short chart-of-accounts codes (e.g. "200"). */
+export const COMPANY_XERO_ACCOUNT_CODE_MAX_LENGTH = 20;
+/** Xero tax-rate display name, e.g. "GST on Income". */
+export const COMPANY_XERO_TAX_TYPE_MAX_LENGTH = 100;
 export const COMPANY_MEMBER_FULL_NAME_MAX_LENGTH = 120;
 export const COMPANY_MEMBER_EMAIL_MAX_LENGTH = 254;
 export const COMPANY_LOGO_PATH_PREFIX = '/uploads/company-logos/';

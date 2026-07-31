@@ -35,6 +35,8 @@ import {
   COMPANY_ABN_MAX_LENGTH,
   COMPANY_ADDRESS_MAX_LENGTH,
   COMPANY_NAME_MAX_LENGTH,
+  COMPANY_XERO_ACCOUNT_CODE_MAX_LENGTH,
+  COMPANY_XERO_TAX_TYPE_MAX_LENGTH,
   normalizeCompanyLogoUrl,
   normalizeCompanyString,
 } from './company/validation.js';
@@ -54,6 +56,8 @@ type CompanySettingsUpdateData = {
   abn?: string | null;
   address?: string | null;
   logoUrl?: string | null;
+  xeroAccountCode?: string | null;
+  xeroTaxType?: string | null;
 };
 
 type CompanyLogoUpdateResolution = {
@@ -306,6 +310,8 @@ companyRouter.get(
         address: true,
         logoUrl: true,
         subscriptionTier: true,
+        xeroAccountCode: true,
+        xeroTaxType: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -401,6 +407,8 @@ companyRouter.post(
             address: true,
             logoUrl: true,
             subscriptionTier: true,
+            xeroAccountCode: true,
+            xeroTaxType: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -446,6 +454,18 @@ companyRouter.patch(
     const abn = normalizeCompanyString(req.body.abn, 'ABN', COMPANY_ABN_MAX_LENGTH);
     const address = normalizeCompanyString(req.body.address, 'Address', COMPANY_ADDRESS_MAX_LENGTH);
     const requestedLogoUrl = normalizeCompanyLogoUrl(req.body.logoUrl);
+    // F2 — Xero CSV export config. Blank/null clears the override so the export
+    // falls back to its own defaults (account code 200, "GST on Income").
+    const xeroAccountCode = normalizeCompanyString(
+      req.body.xeroAccountCode,
+      'Xero account code',
+      COMPANY_XERO_ACCOUNT_CODE_MAX_LENGTH,
+    );
+    const xeroTaxType = normalizeCompanyString(
+      req.body.xeroTaxType,
+      'Xero tax rate name',
+      COMPANY_XERO_TAX_TYPE_MAX_LENGTH,
+    );
 
     const companyId = requireCompanyAdmin(user);
 
@@ -459,6 +479,8 @@ companyRouter.patch(
     }
     if (abn !== undefined) updateData.abn = abn;
     if (address !== undefined) updateData.address = address;
+    if (xeroAccountCode !== undefined) updateData.xeroAccountCode = xeroAccountCode;
+    if (xeroTaxType !== undefined) updateData.xeroTaxType = xeroTaxType;
 
     const logoUpdate = await resolveCompanyLogoUpdate(companyId, requestedLogoUrl);
     if (logoUpdate.logoUrl !== undefined) {
@@ -477,6 +499,8 @@ companyRouter.patch(
           address: true,
           logoUrl: true,
           subscriptionTier: true,
+          xeroAccountCode: true,
+          xeroTaxType: true,
           createdAt: true,
           updatedAt: true,
         },

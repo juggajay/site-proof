@@ -9,6 +9,10 @@ type CompanyRecord = {
   subscriptionTier: string | null;
   createdAt: Date;
   updatedAt: Date;
+  // F2 Xero export config. Optional on the type so the response builders that
+  // do not select them (company create, logo upload) are unaffected.
+  xeroAccountCode?: string | null;
+  xeroTaxType?: string | null;
 };
 
 type CompanyUserRecord = {

@@ -15,6 +15,9 @@ export interface Company {
   address: string | null;
   logoUrl: string | null;
   subscriptionTier: string;
+  /** Xero CSV export config; null means the export's own defaults apply. */
+  xeroAccountCode: string | null;
+  xeroTaxType: string | null;
   projectCount: number;
   projectLimit: number | null;
   userCount: number;

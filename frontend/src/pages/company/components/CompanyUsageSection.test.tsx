@@ -14,6 +14,8 @@ const baseCompany: Company = {
   address: null,
   logoUrl: null,
   subscriptionTier: 'professional',
+  xeroAccountCode: null,
+  xeroTaxType: null,
   projectCount: 2,
   projectLimit: 10,
   userCount: 5,

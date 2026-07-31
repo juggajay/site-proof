@@ -19,6 +19,16 @@ import { roundClaimAmountToCents } from './workflowValidation.js';
  * match exactly. Before a real head contractor relies on this, confirm the
  * header row + the tax-rate display name against a template downloaded from
  * their own Xero org (Sales > Invoices > Import > Download template file).
+ *
+ * Re-checked 2026-07-31 (F2 exit gate). No drift found: these nine names are
+ * still the sales-invoice import columns, still asterisked in Xero's own
+ * template, and AccountCode/TaxType still have to match the org's chart
+ * exactly. HONEST LIMIT — central.xero.com did not load from the build
+ * environment on that pass (two 60s timeouts), so the re-check is secondary:
+ * an independent guide last verified against live Xero in June 2026
+ * (https://entryrocket.com/guides/xero-csv-import-guide) plus search snippets
+ * of the Xero Central article above. The download-your-own-template step
+ * remains the definitive check and is still an operator action.
  */
 export const XERO_INVOICE_CSV_HEADER = [
   '*ContactName',
@@ -53,6 +63,14 @@ export interface XeroVariationExportInput {
 export interface XeroClaimExportInput {
   claimNumber: number;
   projectName: string;
+  /**
+   * The project's business identifier, used for the invoice number. NOT
+   * `projectName`: Xero requires invoice numbers unique per org and
+   * `Project.name` carries no uniqueness constraint, so two same-named projects
+   * in one company would each push their "Claim 1" under the same number.
+   * `@@unique([companyId, projectNumber])` (schema.prisma) makes this unique.
+   */
+  projectNumber: string;
   clientName: string | null;
   /** ISO date string; used as the invoice date unless config overrides it. */
   periodEnd: string;
@@ -72,6 +90,9 @@ export const XERO_DEFAULT_TAX_TYPE = 'GST on Income';
 
 /** Calendar days added to the invoice date when no explicit due date is given. */
 export const XERO_DEFAULT_PAYMENT_TERMS_DAYS = 30;
+
+/** Xero's standard income account code, used when a company has not set one. */
+export const XERO_DEFAULT_ACCOUNT_CODE = '200';
 
 export interface XeroExportConfig {
   /** Xero income account code (e.g. "200"). Must exist in the org's chart. */
@@ -93,6 +114,36 @@ export interface XeroExportConfig {
   dueDate?: string;
   /** Calendar days added to the invoice date for DueDate. Default 30. */
   paymentTermsDays?: number;
+}
+
+/** The company-scoped half of the export config (Company.xero* columns). */
+export interface XeroCompanyExportSettings {
+  xeroAccountCode: string | null;
+  xeroTaxType: string | null;
+}
+
+/**
+ * Resolve the export config from the company that owns the claim's project.
+ *
+ * Both values are company-scoped rather than per-browser: the account code used
+ * to live in one user's `localStorage`, so two people at the same company could
+ * silently export the same claim under different codes and only find out in
+ * their ledger. A blank or unset value falls back to the export default, so a
+ * company that never configured anything exports exactly as it did before.
+ *
+ * `dueDate` is deliberately NOT company config — it is the caller's
+ * SOPA-derived date, passed through unchanged (spec §2.2 / decision D8).
+ */
+export function resolveXeroExportConfig(
+  company: XeroCompanyExportSettings | null | undefined,
+  overrides: { dueDate?: string } = {},
+): XeroExportConfig {
+  return {
+    accountCode: company?.xeroAccountCode?.trim() || XERO_DEFAULT_ACCOUNT_CODE,
+    // Blank -> undefined so the mapper's own "never emit blank" default applies.
+    taxType: company?.xeroTaxType?.trim() || undefined,
+    dueDate: overrides.dueDate,
+  };
 }
 
 type CsvCell = string | number;
@@ -135,7 +186,7 @@ export function buildXeroInvoiceExport(
     throw AppError.badRequest('Cannot export a claim with no claimed lines to Xero');
   }
 
-  const invoiceNumber = `Claim ${claim.claimNumber} — ${claim.projectName}`;
+  const invoiceNumber = `Claim ${claim.claimNumber} — ${claim.projectNumber}`;
   const invoiceDateIso = config.invoiceDate ?? claim.periodEnd;
   const invoiceDate = formatDate(invoiceDateIso);
   // DueDate must never equal InvoiceDate (Xero takes it literally → overdue on
@@ -236,11 +287,13 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
       const claimId = deps.parseClaimRouteParam(req.params.claimId, 'claimId');
       await deps.requireCommercialProjectAccess(req.user!, projectId);
 
-      const accountCode = parseOptionalQueryString(req.query.accountCode, 'accountCode') ?? '200';
-      const taxType = parseOptionalQueryString(req.query.taxType, 'taxType');
+      // Account code and tax type are read from the claim's own company below —
+      // never from a query parameter, so every user at a company exports the
+      // same codes and a caller cannot pick another company's settings.
+      //
       // The frontend computes the SOPA-derived payment due date (it owns the
       // per-state business-day tables) and passes it here; falls back to invoice
-      // date + default terms when absent.
+      // date + default terms when absent. Unchanged by F2 (decision D8).
       const dueDate = parseOptionalQueryString(req.query.dueDate, 'dueDate');
 
       const claim = await prisma.progressClaim.findFirst({
@@ -253,7 +306,14 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
               },
             },
           },
-          project: { select: { name: true, clientName: true } },
+          project: {
+            select: {
+              name: true,
+              projectNumber: true,
+              clientName: true,
+              company: { select: { xeroAccountCode: true, xeroTaxType: true } },
+            },
+          },
           variations: {
             select: {
               variationNumber: true,
@@ -276,6 +336,7 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
         {
           claimNumber: claim.claimNumber,
           projectName: claim.project.name,
+          projectNumber: claim.project.projectNumber,
           clientName: claim.project.clientName,
           periodEnd: claim.claimPeriodEnd.toISOString(),
           totalClaimedAmount: toNumber(claim.totalClaimedAmount),
@@ -293,7 +354,7 @@ export function createClaimXeroExportRouter(deps: XeroExportRouterDependencies):
             approvedAmount: toNumber(variation.approvedAmount),
           })),
         },
-        { accountCode, taxType, dueDate },
+        resolveXeroExportConfig(claim.project.company, { dueDate }),
       );
 
       res.json(result);

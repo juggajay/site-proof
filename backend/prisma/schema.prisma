@@ -24,6 +24,16 @@ model Company {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
+  // Wave F / F2 — Xero sales-invoice CSV export config, company-scoped so two
+  // people exporting the same claim from different browsers cannot produce
+  // different account codes (the localStorage version could). Columns, not a
+  // table: two scalars with no independent lifecycle, no history requirement
+  // and one row per company either way. Null = use the export's own defaults
+  // (`200` / `GST on Income`), so behaviour is unchanged for anyone who never
+  // set one. See docs/plans/wave-f-claim-readiness-spec-2026-07-31.md §2.2.
+  xeroAccountCode String? @map("xero_account_code")
+  xeroTaxType     String? @map("xero_tax_type")
+
   users                 User[]
   projects              Project[]
   globalSubcontractors  GlobalSubcontractor[]
