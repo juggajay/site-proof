@@ -6,7 +6,7 @@ Construction quality management platform for tracking inspections, hold points, 
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22 (see `.nvmrc`)
 - PostgreSQL 15+
 - PostgreSQL client tools (`pg_dump` and `pg_restore`) for production backups
 

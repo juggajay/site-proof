@@ -101,7 +101,7 @@ Run this before paying customers and then at least monthly.
 
 Prerequisites:
 
-- Node 20+ and the repo checked out (`cd backend && npm ci`).
+- Node 22 (see `.nvmrc`) and the repo checked out (`cd backend && npm ci`).
 - `gpg` and `tar` available locally.
 - The `STORAGE_BACKUP_ENCRYPTION_KEY` value from the password manager.
 - A downloaded backup artifact containing one `.tar.gpg` and one
