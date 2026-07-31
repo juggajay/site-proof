@@ -1001,7 +1001,9 @@ test.describe('Lot detail ITP workflow', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
     await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
 
-    await page.getByRole('tab', { name: 'Photos' }).click();
+    // DG-4a: Photos is the Evidence tab's default subview.
+    await page.getByRole('tab', { name: 'Evidence' }).click();
+    await expect(page).toHaveURL(/tab=evidence&view=photos/);
 
     await expect(page.getByText('1 photo on this lot')).toBeVisible();
     await expect(page.getByText('Existing Supabase evidence photo')).toBeVisible();
