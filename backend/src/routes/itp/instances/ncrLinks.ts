@@ -47,6 +47,34 @@ export function rectificationNotesReferencesChecklistItem(
   );
 }
 
+/**
+ * Reads the checklist-item id back OUT of `rectificationNotes`.
+ *
+ * Wave G G5 (spec §5.3): `NCR.itpChecklistItemId` is now written at creation
+ * time, but every row raised before that carries the id only in free text. This
+ * is what `scripts/backfill-ncr-checklist-items.ts` parses. Returns null when
+ * neither form is present — the backfill then leaves the column null rather
+ * than guessing, which is the whole rule.
+ *
+ * Both forms carry a full UUID, so a partial or malformed id does not match.
+ * The structured marker wins when both are present (it is the newer form and
+ * the two always agree when both were written by the same create).
+ */
+const STRUCTURED_MARKER_PATTERN =
+  /\[itp-item:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\]/;
+const LEGACY_MARKER_PATTERN =
+  /\(Item ID: ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)/;
+
+export function parseChecklistItemIdFromRectificationNotes(
+  rectificationNotes: string | null | undefined,
+): string | null {
+  if (!rectificationNotes) return null;
+  const structured = STRUCTURED_MARKER_PATTERN.exec(rectificationNotes);
+  if (structured) return structured[1];
+  const legacy = LEGACY_MARKER_PATTERN.exec(rectificationNotes);
+  return legacy ? legacy[1] : null;
+}
+
 /** Minimal NCR shape needed to render the "View NCR" breadcrumb. */
 export interface LinkedNcr {
   id: string;

@@ -1,0 +1,74 @@
+{
+  "benchmark": "wave-g/G5 NCR analytics read",
+  "spec": "docs/plans/wave-g-execution-spec-2026-07-31.md §8 P4 (p95 < 2s at 5,000 NCRs/project)",
+  "startedAt": "2026-07-31T08:46:36.183Z",
+  "finishedAt": "2026-07-31T08:46:41.998Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 35.9,
+      "sampleMs": 1000,
+      "freeMemMiB": 10376,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 34.8,
+      "sampleMs": 1000,
+      "freeMemMiB": 10336,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "ncrs": 5000,
+    "subcontractors": 40,
+    "iterations": 8
+  },
+  "shape": "5000 NCRs · 10 offenders · 10 recurring items · 2 activity buckets",
+  "results": {
+    "shippedRoute": {
+      "route": "GET /api/ncrs/analytics/:projectId",
+      "n": 7,
+      "minMs": 55,
+      "medianMs": 62,
+      "p95Ms": 68,
+      "maxMs": 68,
+      "samplesMs": [
+        68,
+        57,
+        62,
+        64,
+        56,
+        55,
+        66
+      ]
+    },
+    "legacyInMemory": {
+      "call": "pre-G5 findMany + JS aggregation (reproduced)",
+      "n": 7,
+      "minMs": 74,
+      "medianMs": 76,
+      "p95Ms": 88,
+      "maxMs": 88,
+      "samplesMs": [
+        76,
+        74,
+        85,
+        76,
+        74,
+        79,
+        88
+      ]
+    },
+    "coldFirstCallMs": 86,
+    "responseBytes": 11027,
+    "legacyDrilldownBytes": 590003
+  },
+  "verdict": {
+    "budgetMs": 2000,
+    "p95Ms": 68,
+    "pass": true
+  }
+}

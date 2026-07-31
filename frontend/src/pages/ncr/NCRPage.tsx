@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth, getAuthToken } from '../../lib/auth';
-import { AlertTriangle, Plus } from 'lucide-react';
+import { AlertTriangle, Plus, TrendingUp } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { ContextFAB } from '@/components/mobile/ContextFAB';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -172,6 +172,18 @@ export function NCRPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Wave G G5: the trends surface. Shown to the same office roles the
+              backend gates the analytics route to, so the link never leads to a
+              403. `isQualityManager` IS that set — check-role computes it from
+              NCR_QUALITY_MANAGEMENT_ROLES. */}
+          {projectId && !isMobile && userRole?.isQualityManager && (
+            <Button variant="outline" asChild>
+              <Link to={`/projects/${projectId}/ncr/analytics`}>
+                <TrendingUp className="h-4 w-4" />
+                Trends
+              </Link>
+            </Button>
+          )}
           {!isMobile && displayedNcrs.length > 0 && (
             <Button variant="outline" onClick={() => handleExportCSV(displayedNcrs)}>
               Export CSV

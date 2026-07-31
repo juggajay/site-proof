@@ -130,6 +130,8 @@ model User {
   revisionIssues              RevisionIssue[]              @relation("RevisionIssuedBy")
   revisionAcknowledgements    RevisionAcknowledgement[]    @relation("RevisionAcknowledgedBy")
   governingRevisionLinks      LotGoverningRevision[]       @relation("GoverningRevisionLinkedBy")
+  templateRevisionsProposed   TemplateRevisionProposal[]   @relation("TemplateRevisionProposedBy")
+  templateRevisionsDecided    TemplateRevisionProposal[]   @relation("TemplateRevisionDecidedBy")
 
   @@index([companyId])
   @@map("users")
@@ -449,6 +451,7 @@ model Project {
   holdPointMailConsents       HoldPointMailConsent[]
   revisionIssues              RevisionIssue[]
   surveyRecords               SurveyRecord[]
+  templateRevisionProposals   TemplateRevisionProposal[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -736,6 +739,11 @@ model ITPTemplate {
   supersedes     ITPTemplate[]      @relation("ITPTemplateSupersedes")
   importBatch    ImportBatch?       @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
+  // Wave G G5 (spec §5.3): proposals raised AGAINST this template, and the
+  // proposals this template was created as the resolution OF.
+  revisionProposals         TemplateRevisionProposal[] @relation("ProposalTemplate")
+  resolvedRevisionProposals TemplateRevisionProposal[] @relation("ProposalResultingTemplate")
+
   @@unique([projectId, name, specEdition])
   @@index([projectId])
   @@index([projectId, supersededById])
@@ -765,10 +773,12 @@ model ITPChecklistItem {
   // No FK, for the same reason as ITPTemplate.sourceTemplateId.
   sourceChecklistItemId String? @map("source_checklist_item_id")
 
-  template       ITPTemplate     @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  itpCompletions ITPCompletion[]
-  holdPoints     HoldPoint[]
-  testResults    TestResult[]
+  template          ITPTemplate                @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  itpCompletions    ITPCompletion[]
+  holdPoints        HoldPoint[]
+  testResults       TestResult[]
+  ncrs              NCR[]
+  revisionProposals TemplateRevisionProposal[] @relation("ProposalChecklistItem")
 
   @@index([templateId])
   @@index([sourceChecklistItemId])
@@ -1123,10 +1133,25 @@ model NCR {
   // instead of raising a second NCR. Null for every online create.
   requestKey String? @map("request_key")
 
+  // Wave G G5 (spec §5.3) — the failed-ITP-item link, first class.
+  //
+  // Before G5 the only artefact was a free-text marker `[itp-item:<id>]` inside
+  // `rectificationNotes` (`routes/itp/instances/ncrLinks.ts`): regex-parsed,
+  // unindexed, absent on legacy rows and absent entirely for NCRs raised
+  // outside the failed-ITP path. Recurrence by checklist item is the whole
+  // learning loop, and it cannot be built on a substring search.
+  //
+  // `SetNull`, not `Cascade`: deleting a checklist item must not delete the
+  // record that work against it did not conform. The marker stays written too —
+  // it is what the backfill reads, and removing it would break the shipped
+  // "View NCR" breadcrumb reconstruction.
+  itpChecklistItemId String? @map("itp_checklist_item_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   project                  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itpChecklistItem         ITPChecklistItem?     @relation(fields: [itpChecklistItemId], references: [id], onDelete: SetNull)
   respondedBy              User?                 @relation("RespondedByUser", fields: [respondedById], references: [id], onDelete: SetNull)
   qmReviewedBy             User?                 @relation("QMReviewedByUser", fields: [qmReviewedById], references: [id], onDelete: SetNull)
   escalatedBy              User?                 @relation("EscalatedByUser", fields: [escalatedById], references: [id], onDelete: SetNull)
@@ -1148,6 +1173,7 @@ model NCR {
   @@index([projectId, status])
   @@index([projectId, dueDate])
   @@index([projectId, category, status])
+  @@index([projectId, itpChecklistItemId])
   @@index([linkedTestResultId])
   @@index([raisedById, raisedAt], map: "ncrs_raised_by_raised_at_idx")
   @@index([responsibleUserId, raisedAt], map: "ncrs_responsible_user_raised_at_idx")
@@ -1966,6 +1992,67 @@ model LotGoverningRevision {
   @@index([lotId, unlinkedAt])
   @@index([projectId, entityType, entityId])
   @@map("lot_governing_revisions")
+}
+
+/// Wave G G5 — the management learning loop's closing half
+/// (`docs/plans/wave-g-execution-spec-2026-07-31.md` §5.3, boundary §0.3.5).
+///
+/// A recurring failure surfaced by the analytics is a fact; what to do about it
+/// is a judgement. A reviewer writes the proposed change here, and ACCEPTING it
+/// opens a NEW revision of the template — it never edits the template in place.
+/// That is the whole point of sequencing G5 after G1/G2: the loop closes into
+/// revision governance, so a lot conformed last month still says what it was
+/// inspected against.
+///
+/// **No AI writes a proposal and nothing here auto-edits anything.** The row
+/// records a human's words; the evidence columns are frozen counts of what the
+/// data said at the moment they wrote them, so a proposal reviewed six weeks
+/// later is judged against the trend that prompted it rather than a re-query.
+model TemplateRevisionProposal {
+  id         String @id @default(uuid())
+  projectId  String @map("project_id")
+  templateId String @map("template_id")
+  // The checklist item the trend is about. Nullable: a proposal may be about a
+  // template as a whole (an item that should EXIST has no id yet).
+  checklistItemId String? @map("checklist_item_id")
+
+  // Frozen evidence — what the trend said when the proposal was written.
+  ncrCount           Int     @map("ncr_count")
+  subcontractorCount Int     @map("subcontractor_count")
+  // Lot activity the trend was observed on. Null is honest: `Lot.activitySlug`
+  // is nullable when the activity fold resolved only to family level.
+  activitySlug       String? @map("activity_slug")
+
+  proposedChange String @map("proposed_change")
+  // 'open' | 'accepted' | 'rejected'
+  status         String @default("open")
+
+  proposedById String?   @map("proposed_by_id")
+  proposedAt   DateTime  @default(now()) @map("proposed_at")
+  decidedById  String?   @map("decided_by_id")
+  decidedAt    DateTime? @map("decided_at")
+  decisionNote String?   @map("decision_note")
+  // The revision the acceptance created. Null while open, and null on reject.
+  resultingTemplateId String? @map("resulting_template_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template          ITPTemplate       @relation("ProposalTemplate", fields: [templateId], references: [id], onDelete: Cascade)
+  checklistItem     ITPChecklistItem? @relation("ProposalChecklistItem", fields: [checklistItemId], references: [id], onDelete: SetNull)
+  resultingTemplate ITPTemplate?      @relation("ProposalResultingTemplate", fields: [resultingTemplateId], references: [id], onDelete: SetNull)
+  // SetNull on both actors, matching `LotGoverningRevision.linkedBy`: a
+  // proposal is an administrative act, and an account deletion must not delete
+  // the decision. `proposedAt` / `decidedAt` survive intact.
+  proposedBy User? @relation("TemplateRevisionProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
+  decidedBy  User? @relation("TemplateRevisionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status, proposedAt])
+  @@index([templateId])
+  @@index([checklistItemId])
+  @@index([resultingTemplateId])
+  @@map("template_revision_proposals")
 }
 
 // ============================================================================

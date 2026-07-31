@@ -24,6 +24,10 @@ export const queryKeys = {
   // NCRs
   ncrs: (projectId?: string) => (projectId ? (['ncrs', projectId] as const) : (['ncrs'] as const)),
   ncrRole: (projectId: string) => ['ncr-role', projectId] as const,
+  // Wave G G5 — the analytics surface and its template-revision proposals.
+  ncrAnalytics: (projectId: string) => ['ncr-analytics', projectId] as const,
+  templateRevisionProposals: (projectId: string) =>
+    ['template-revision-proposals', projectId] as const,
   ncrEvidence: (ncrId: string) => ['ncr-evidence', ncrId] as const,
 
   // Hold Points

@@ -20,6 +20,7 @@ import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
 } from '../../lib/projectAccess.js';
+import { assertCanonicalNcrVocabulary } from '../../lib/ncrVocabulary.js';
 import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js';
 import {
   createNcrSchema,
@@ -264,6 +265,10 @@ ncrCoreRouter.post(
       lotIds,
       requestKey,
     } = validation.data;
+
+    // Wave G G5 (spec §5.2 gap 1, AT-G27). No-op while
+    // NCR_LEARNING_LOOP_ENABLED is unset — see `lib/ncrVocabulary.ts`.
+    assertCanonicalNcrVocabulary({ category });
 
     await requireActiveProjectUser(
       projectId,
