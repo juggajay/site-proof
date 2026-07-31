@@ -28,6 +28,8 @@ app.use('/api/lots', lotDeliveriesRouter);
 app.use(errorHandler);
 
 const SEEDED_ROWS = DELIVERY_REGISTER_MAX_LIMIT + 5;
+/** C5-b — how many of the seeded rows get a docket document attached. */
+const FILED_ROWS = 4;
 
 describe('C5.1 — delivery read surfaces', () => {
   let adminToken: string;
@@ -37,6 +39,9 @@ describe('C5.1 — delivery read surfaces', () => {
   let lotId: string;
   let otherTenantProjectId: string;
   let otherTenantLotId: string;
+  let docketDocumentId: string;
+  let filedDeliveryIds: string[];
+  let latestDiaryDeliveryId: string;
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -79,6 +84,39 @@ describe('C5.1 — delivery read surfaces', () => {
         supplier: index % 2 === 0 ? 'Boral' : 'Hanson',
         lotId: index % 2 === 0 ? lot.id : null,
       })),
+    });
+
+    // C5-b. `createMany` inside one statement gives every row the same
+    // transaction timestamp, so "ordered by diary date" cannot be proven by
+    // createdAt alone: move one row onto a LATER-dated diary and it must climb
+    // to the top of the register.
+    const laterDiary = await prisma.dailyDiary.create({
+      data: { projectId, date: new Date('2026-07-20T00:00:00Z') },
+    });
+    const seeded = await prisma.diaryDelivery.findMany({
+      where: { diaryId: diary.id },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    latestDiaryDeliveryId = seeded[0].id;
+    await prisma.diaryDelivery.update({
+      where: { id: latestDiaryDeliveryId },
+      data: { diaryId: laterDiary.id },
+    });
+
+    const docketDocument = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'delivery_docket',
+        filename: 'docket-4471.pdf',
+        fileUrl: 'supabase://documents/test/docket-4471.pdf',
+      },
+    });
+    docketDocumentId = docketDocument.id;
+    filedDeliveryIds = seeded.slice(1, 1 + FILED_ROWS).map((row) => row.id);
+    await prisma.diaryDelivery.updateMany({
+      where: { id: { in: filedDeliveryIds } },
+      data: { docketDocumentId },
     });
 
     const subbie = await registerTestUser(app, {
@@ -182,6 +220,115 @@ describe('C5.1 — delivery read surfaces', () => {
         true,
       );
       expect(boral.body.total).toBeGreaterThan(0);
+    });
+  });
+
+  describe('C5-b — the docket filter is server-side, and the count is not', () => {
+    it('filters to the deliveries whose docket evidence is filed', async () => {
+      const res = await request(app)
+        .get(
+          `/api/projects/${projectId}/deliveries?docket=filed&limit=${DELIVERY_REGISTER_MAX_LIMIT}`,
+        )
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.total).toBe(FILED_ROWS);
+      expect(res.body.deliveries.map((d: { id: string }) => d.id).sort()).toEqual(
+        [...filedDeliveryIds].sort(),
+      );
+      expect(
+        res.body.deliveries.every(
+          (d: { docketDocumentId: string }) => d.docketDocumentId === docketDocumentId,
+        ),
+      ).toBe(true);
+    });
+
+    it('filters to the deliveries with no docket filed, across the whole project not the page', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/deliveries?docket=not_filed`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      // The point of the server-side filter: `total` is every unfiled delivery
+      // in the project, not the handful that happened to land on page 1.
+      expect(res.body.total).toBe(SEEDED_ROWS - FILED_ROWS);
+      expect(res.body.deliveries.length).toBe(50);
+      expect(
+        res.body.deliveries.every(
+          (d: { docketDocumentId: string | null }) => d.docketDocumentId === null,
+        ),
+      ).toBe(true);
+    });
+
+    it('combines with the lot filter instead of replacing it', async () => {
+      const res = await request(app)
+        .get(
+          `/api/projects/${projectId}/deliveries?docket=not_filed&linked=unlinked&limit=${DELIVERY_REGISTER_MAX_LIMIT}`,
+        )
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.total).toBeGreaterThan(0);
+      expect(
+        res.body.deliveries.every(
+          (d: { docketDocumentId: string | null; lotId: string | null }) =>
+            d.docketDocumentId === null && d.lotId === null,
+        ),
+      ).toBe(true);
+    });
+
+    it('reports the missing-docket count project-wide, unchanged by the active filter', async () => {
+      const unfiltered = await request(app)
+        .get(`/api/projects/${projectId}/deliveries`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      expect(unfiltered.body.missingDocketCount).toBe(SEEDED_ROWS - FILED_ROWS);
+
+      const filed = await request(app)
+        .get(`/api/projects/${projectId}/deliveries?docket=filed`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      expect(filed.body.missingDocketCount).toBe(SEEDED_ROWS - FILED_ROWS);
+    });
+
+    it('rejects a docket value outside the vocabulary', async () => {
+      await request(app)
+        .get(`/api/projects/${projectId}/deliveries?docket=maybe`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(400);
+    });
+  });
+
+  describe('C5-b — the register reads as a chronology', () => {
+    it('orders by diary date, newest first, with a stable id tiebreak', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/deliveries?limit=100`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(res.body.deliveries[0].id).toBe(latestDiaryDeliveryId);
+
+      const dates = res.body.deliveries.map((d: { diary: { date: string } }) =>
+        new Date(d.diary.date).getTime(),
+      );
+      expect(dates).toEqual([...dates].sort((a: number, b: number) => b - a));
+    });
+
+    it('pages deterministically — no row appears on two pages', async () => {
+      const first = await request(app)
+        .get(`/api/projects/${projectId}/deliveries?limit=100`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      const second = await request(app)
+        .get(`/api/projects/${projectId}/deliveries?limit=100&offset=100`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const ids = [
+        ...first.body.deliveries.map((d: { id: string }) => d.id),
+        ...second.body.deliveries.map((d: { id: string }) => d.id),
+      ];
+      expect(new Set(ids).size).toBe(ids.length);
     });
   });
 

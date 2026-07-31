@@ -42,6 +42,7 @@ import {
   DashboardPage,
   NeedsAttentionPage,
   DelayRegisterPage,
+  DeliveryRegisterPage,
   DocketApprovalsPage,
   DocketEditPage,
   DocketsListPage,
@@ -477,6 +478,14 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DailyDiaryPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/deliveries"
+                element={
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <DeliveryRegisterPage />
                   </ProjectProtectedRoute>
                 }
               />

@@ -114,6 +114,7 @@ vi.mock('./appLazyPages', () => ({
   NCRAnalyticsPage: () => <div>NCR trends</div>,
   DailyDiaryPage: () => <div>Daily diary</div>,
   DelayRegisterPage: () => <div>Delays</div>,
+  DeliveryRegisterPage: () => <div>Deliveries</div>,
   DocketApprovalsPage: () => <div>Docket approvals</div>,
   ClaimsPage: () => <div>Claims route reached</div>,
   VariationsPage: () => <div>Variations route reached</div>,

@@ -145,6 +145,20 @@ export const ROLE_GROUPS = {
   // Can delete lots.
   LOT_DELETERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
 
+  // Can attach docket/batch/lot evidence to a delivery after the diary is
+  // locked. MUST mirror the backend DELIVERY_EVIDENCE_EDITORS in
+  // backend/src/routes/deliveries/index.ts — read is wide (every internal
+  // role), write is this set, and viewers/subcontractors are in neither.
+  DELIVERY_EVIDENCE_EDITORS: [
+    ROLES.OWNER,
+    ROLES.ADMIN,
+    ROLES.PROJECT_MANAGER,
+    ROLES.QUALITY_MANAGER,
+    ROLES.SITE_MANAGER,
+    ROLES.SITE_ENGINEER,
+    ROLES.FOREMAN,
+  ] as const,
+
   // Can perform quality actions (conformance, ITP verification)
   QUALITY: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.QUALITY_MANAGER] as const,
 
