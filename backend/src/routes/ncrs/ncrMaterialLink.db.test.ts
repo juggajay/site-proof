@@ -13,9 +13,11 @@
  *        with an open delivery-linked NCR is not conformable and emits
  *        `open_ncrs` at blocking severity; closing the NCR clears it
  *
- * Plus the coexistence obligation the gating review added: one NCR carrying
- * BOTH `itpChecklistItemId` (Wave G G5) and `linkedDeliveryId`, with the two
- * `SET NULL`s firing independently.
+ * AT-208(a) coexistence with Wave G G5, a FIRM merge condition in spec Rev 2
+ *        (`[C54S-B11]`): one NCR carrying BOTH `itpChecklistItemId` and
+ *        `linkedDeliveryId` persists and returns both, both indexes exist,
+ *        deleting either referent nulls only that link and never the NCR, and
+ *        each wave's own read still returns it
  *
  * DB-backed on purpose. The same-project check is a JOIN through
  * `daily_diaries` — `diary_deliveries` has no `project_id` (`[C5R-A9]`) — and a
@@ -347,7 +349,7 @@ describe('AT-191 — the prohibition on incorporation is unchanged (characterisa
   });
 });
 
-describe('coexistence with the G5 learning loop', () => {
+describe('AT-208(a) — C5.4a coexists with the G5 learning loop', () => {
   it('carries itpChecklistItemId and linkedDeliveryId at once, with independent SET NULLs', async () => {
     const diary = await prisma.dailyDiary.create({
       data: { projectId, date: new Date('2026-08-14T00:00:00Z') },
@@ -358,8 +360,9 @@ describe('coexistence with the G5 learning loop', () => {
     expect(created.status).toBe(201);
     const ncrId = created.body.ncr.id;
 
-    // `itpChecklistItemId` has no create-route input (G5 writes it from the
-    // failed-ITP path), so the coexistence is asserted at the column.
+    // `itpChecklistItemId` has no create-route input — G5 writes it from the
+    // failed-ITP path and deliberately did not touch `createNcrSchema` — so the
+    // NCR is brought to carrying both at the column.
     await prisma.nCR.update({
       where: { id: ncrId },
       data: { itpChecklistItemId: checklistItemId },
@@ -371,7 +374,42 @@ describe('coexistence with the G5 learning loop', () => {
     });
     expect(both).toEqual({ itpChecklistItemId: checklistItemId, linkedDeliveryId: deliveryId });
 
-    // Deleting the delivery NULLs only its own FK.
+    // ...and the API returns both, not just the columns.
+    const fetched = await request(app)
+      .get(`/api/ncrs/${ncrId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.ncr).toMatchObject({
+      itpChecklistItemId: checklistItemId,
+      linkedDeliveryId: deliveryId,
+    });
+    expect(fetched.body.ncr.linkedDelivery).toMatchObject({ id: deliveryId });
+
+    // Both indexes exist — G5's and C5.4a's.
+    const indexes = await prisma.$queryRaw<Array<{ indexname: string }>>`
+      SELECT indexname FROM pg_indexes
+      WHERE tablename = 'ncrs'
+        AND indexname IN ('ncrs_linked_delivery_id_idx',
+                          'ncrs_project_id_itp_checklist_item_id_idx')
+    `;
+    expect(indexes.map((row) => row.indexname).sort()).toEqual([
+      'ncrs_linked_delivery_id_idx',
+      'ncrs_project_id_itp_checklist_item_id_idx',
+    ]);
+
+    // Each wave's own read still returns it: G5's checklist-item recurrence
+    // grouping (`ncrLearning.ts:120-121`) and C5.4a's delivery link.
+    const recurrence = await prisma.nCR.groupBy({
+      by: ['itpChecklistItemId', 'responsibleSubcontractorId'],
+      where: { projectId, itpChecklistItemId: { not: null } },
+      _count: { _all: true },
+    });
+    expect(recurrence.map((group) => group.itpChecklistItemId)).toContain(checklistItemId);
+    expect(
+      await prisma.nCR.findMany({ where: { linkedDeliveryId: deliveryId }, select: { id: true } }),
+    ).toEqual([{ id: ncrId }]);
+
+    // Deleting the delivery NULLs only its own FK, and never the NCR.
     await prisma.diaryDelivery.delete({ where: { id: deliveryId } });
     expect(
       await prisma.nCR.findUnique({
