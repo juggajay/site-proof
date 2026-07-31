@@ -152,6 +152,55 @@ describe('Wave E canary allowlist gates the stale scan', () => {
     expect(alertCreate).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['the bare sentinel', '*'],
+    ['a padded sentinel', ' * '],
+  ])(
+    '%s scans a project the allowlist never named — the only widening value',
+    async (_label, value) => {
+      process.env[CANARY_ENV] = value;
+      const deps = buildDeps({
+        findActiveProjects: vi.fn().mockResolvedValue([
+          {
+            id: 'project-never-listed',
+            name: 'Northern Interchange',
+            companyId: 'company-1',
+            workingHoursEnd: '17:00',
+            workingDays: '1,2,3,4,5',
+          },
+        ]),
+      });
+
+      const result = await processSystemAlerts({ now }, deps);
+
+      expect(result.staleHoldPointAlerts).toBe(1);
+    },
+  );
+
+  it('a sentinel mixed into a list does not widen — only the named ids scan', async () => {
+    process.env[CANARY_ENV] = 'project-1,*';
+    const holdPointFindMany = vi.fn().mockResolvedValue([]);
+    const deps = withPrisma(
+      buildDeps({
+        findActiveProjects: vi.fn().mockResolvedValue([
+          {
+            id: 'project-never-listed',
+            name: 'Northern Interchange',
+            companyId: 'company-1',
+            workingHoursEnd: '17:00',
+            workingDays: '1,2,3,4,5',
+          },
+        ]),
+      }),
+      { holdPoint: { findMany: holdPointFindMany } },
+    );
+
+    const result = await processSystemAlerts({ now }, deps);
+
+    expect(result.staleHoldPointAlerts).toBe(0);
+    expect(holdPointFindMany).not.toHaveBeenCalled();
+  });
+
   it('does NOT stop overdue-NCR alerts for projects outside the allowlist', async () => {
     // The canary scopes the stale scan only. Narrowing options.projectIds
     // instead would have taken a shipped feature down with it.

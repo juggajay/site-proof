@@ -52,6 +52,18 @@ describe('parseProjectIdAllowlist FAILS CLOSED', () => {
   it('parses, trims and de-duplicates a real allowlist', () => {
     expect(parseProjectIdAllowlist(' proj-a , proj-b,proj-a ,, ')).toEqual(['proj-a', 'proj-b']);
   });
+
+  it.each([
+    ['the bare sentinel', '*'],
+    ['a padded sentinel', ' * '],
+  ])('%s -> "all" (the only widening value, never an empty list)', (_label, value) => {
+    expect(parseProjectIdAllowlist(value)).toBe('all');
+  });
+
+  it('ignores a sentinel mixed into a list — a stray * must never widen scope', () => {
+    expect(parseProjectIdAllowlist('proj-a,*')).toEqual(['proj-a']);
+    expect(parseProjectIdAllowlist('*,*')).toEqual([]);
+  });
 });
 
 describe('getZonedMinutesOfDay (Australia/Sydney wall-clock)', () => {
