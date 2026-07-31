@@ -1,7 +1,17 @@
 # syntax=docker/dockerfile:1.7
 
 # Stage 0: Shared runtime dependencies
-FROM node:20-slim AS base
+#
+# THIS LINE is the Node major for every Railway service built from `backend/`
+# — the API (`node dist/index.js`) and the handover worker
+# (`node dist/worker/handoverExportWorker.js`), which override the CMD but
+# share this image. There is no railway.json/nixpacks/railpack config and no
+# Railway-side runtime setting in play; pin it here or it is not pinned.
+#
+# 22 (Jod) is the current LTS, supported to April 2027. Node 20 went
+# end-of-life 2026-04-30, which is what `@aws-sdk/client-s3` was warning about
+# in the worker's boot logs.
+FROM node:22-slim AS base
 WORKDIR /app
 RUN apt-get update -y \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
