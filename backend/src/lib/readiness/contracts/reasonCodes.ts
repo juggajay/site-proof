@@ -94,7 +94,11 @@ export const READINESS_REASON_CODES = [
   'delivery_not_lot_linked',
   // Wave C5.2 — survey lifecycle (lib/evidenceReadiness/surveyItems.ts).
   // `warning`, `blocksAction: false`, and NOT a handover blocker (`[C5S-B5]`).
-  'survey_not_accepted',
+  // Replaced `survey_not_accepted` in the 2026-07-31 restructure: the record has
+  // no acceptance act to be missing, so the signal is whether the report has
+  // ARRIVED. Renamed rather than kept as an alias — the flag has never been on,
+  // so no stored snapshot, alert or consumer carries the old string.
+  'survey_not_received',
 ] as const;
 
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
@@ -318,11 +322,13 @@ export const REASON_CODE_PROVENANCE: Record<
     predicate: 'engine',
     source: 'buildUnlinkedDeliveryItem (delivery register, C5.1)',
   },
-  survey_not_accepted: {
-    // Engine-owned count-only item: a count of survey records on the lot whose
-    // status is not `accepted`. No predicate; C5 computes no verdict.
+  survey_not_received: {
+    // Engine-owned count-only item: a count of CURRENT survey records on the lot
+    // whose status is not `received` — i.e. still requested, or returned to the
+    // surveyor for correction. No predicate; C5 computes no verdict, and it does
+    // not reason about acceptance, which lives on the hold point and the lot.
     predicate: 'engine',
-    source: 'buildSurveyNotAcceptedItem (lot survey list, C5.2)',
+    source: 'buildSurveyNotReceivedItem (lot survey list, C5.2)',
   },
 };
 

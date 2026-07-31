@@ -26,7 +26,7 @@ let userId: string;
 let lotId: string;
 let otherLotId: string;
 let diaryId: string;
-let acceptedSurveyId: string;
+let receivedSurveyId: string;
 let requestedSurveyId: string;
 let supersededSurveyId: string;
 let linkedDeliveryId: string;
@@ -118,13 +118,13 @@ beforeAll(async () => {
     },
   });
 
-  acceptedSurveyId = (
+  receivedSurveyId = (
     await prisma.surveyRecord.create({
       data: {
         projectId,
         lotId,
         kind: 'conformance',
-        status: 'accepted',
+        status: 'received',
         surveyorName: 'J. Smith',
         surveyorCompany: 'Smith Surveys Pty Ltd',
         surveyorRegistration: 'Registered Surveyor 4471',
@@ -132,8 +132,8 @@ beforeAll(async () => {
         surveyorVerdict: 'conforms',
         verdictSourceNote: 'report rev B',
         reportDocumentId: reportDocument.id,
-        acceptedById: userId,
-        acceptedAt: new Date('2026-07-20T00:00:00.000Z'),
+        receivedById: userId,
+        receivedAt: new Date('2026-07-20T00:00:00.000Z'),
       },
     })
   ).id;
@@ -160,10 +160,11 @@ beforeAll(async () => {
         projectId,
         lotId,
         kind: 'conformance',
-        status: 'rejected',
+        status: 'returned_for_correction',
+        returnReason: 'Levels computed against the superseded design surface',
         surveyorName: 'J. Smith',
         surveyedAt: new Date('2026-07-10T00:00:00.000Z'),
-        supersededById: acceptedSurveyId,
+        supersededById: receivedSurveyId,
       },
     })
   ).id;
@@ -248,11 +249,11 @@ describe('the survey flag is fail-closed in the folio (`[C5S-B4]`)', () => {
 describe('the survey projection is attributed, never computed (`[C5S-B1]`)', () => {
   it("carries the SURVEYOR'S verdict resolved server-side, with who recorded it", async () => {
     const assembled = await withSurveyFlag('true', () => assemble());
-    const survey = assembled.payload.evidence.surveys.find((row) => row.id === acceptedSurveyId);
+    const survey = assembled.payload.evidence.surveys.find((row) => row.id === receivedSurveyId);
 
     expect(survey).toMatchObject({
       kind: 'conformance',
-      status: 'accepted',
+      status: 'received',
       surveyorName: 'J. Smith',
       surveyorCompany: 'Smith Surveys Pty Ltd',
       surveyorRegistration: 'Registered Surveyor 4471',
@@ -281,13 +282,13 @@ describe('the survey projection is attributed, never computed (`[C5S-B1]`)', () 
     const assembled = await withSurveyFlag('true', () => assemble());
     const ids = assembled.payload.evidence.surveys.map((row) => row.id);
 
-    expect(ids).toContain(acceptedSurveyId);
+    expect(ids).toContain(receivedSurveyId);
     expect(ids).toContain(requestedSurveyId);
     expect(ids).not.toContain(supersededSurveyId);
     expect(ids).toHaveLength(2);
 
     const otherLot = await withSurveyFlag('true', () => assemble(otherLotId));
-    expect(otherLot.payload.evidence.surveys.map((row) => row.id)).not.toContain(acceptedSurveyId);
+    expect(otherLot.payload.evidence.surveys.map((row) => row.id)).not.toContain(receivedSurveyId);
   });
 
   it('carries a §7.7 `updated_at` revision token for every survey it compiled from', async () => {

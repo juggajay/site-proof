@@ -7,33 +7,68 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   NON_SUBSTANTIVE_SURVEY_EDIT_FIELDS,
   SURVEY_KINDS,
+  SURVEY_OPEN_STATUSES,
   SURVEY_STATUSES,
-  SURVEY_TERMINAL_STATUSES,
+  SURVEY_STATUSES_REQUIRING_REPORT,
+  SURVEY_STATUSES_REQUIRING_SURVEYOR,
   SURVEY_VERDICTS,
   VALID_SURVEY_TRANSITIONS,
   surveyRecordsEnabled,
 } from './statusWorkflow.js';
 
-describe('VALID_SURVEY_TRANSITIONS', () => {
-  it('carries the short paths from day one — retrospective filing is the dominant case', () => {
-    // C2 shipped without these and had to widen its map additively later. A user
-    // filing one PDF must not click three buttons.
-    expect(VALID_SURVEY_TRANSITIONS.requested).toContain('received');
-    expect(VALID_SURVEY_TRANSITIONS.requested).toContain('accepted');
-    expect(VALID_SURVEY_TRANSITIONS.in_progress).toContain('accepted');
+describe('VALID_SURVEY_TRANSITIONS — the evidence-of-arrival machine', () => {
+  it('is three states, not five: no in_progress, no accepted', () => {
+    // research §2.4 — five independent source types, none with an in-progress
+    // state; §4.6 — nothing anywhere accepts a survey record itself.
+    expect(SURVEY_STATUSES.sort()).toEqual(['received', 'requested', 'returned_for_correction']);
+    expect(VALID_SURVEY_TRANSITIONS).not.toHaveProperty('in_progress');
+    expect(VALID_SURVEY_TRANSITIONS).not.toHaveProperty('accepted');
+    expect(VALID_SURVEY_TRANSITIONS).not.toHaveProperty('rejected');
   });
 
-  it('makes accepted and rejected terminal', () => {
-    expect(VALID_SURVEY_TRANSITIONS.accepted).toEqual([]);
-    expect(VALID_SURVEY_TRANSITIONS.rejected).toEqual([]);
-    expect([...SURVEY_TERMINAL_STATUSES].sort()).toEqual(['accepted', 'rejected']);
+  it('carries the short path from day one — retrospective filing is the dominant case', () => {
+    // A user filing one arrived PDF must not click through a request first, and
+    // `requested` is optional because the contractual trigger is a lot state
+    // (AUS-SPEC C02 cl. 2.7.1), not a person.
+    expect(VALID_SURVEY_TRANSITIONS.requested).toEqual(['received']);
   });
 
-  it('reaches rejected only from received', () => {
-    const reachRejected = SURVEY_STATUSES.filter((from) =>
-      VALID_SURVEY_TRANSITIONS[from].includes('rejected'),
+  it('reaches returned_for_correction only from received', () => {
+    // You can only refer back a deliverable that arrived.
+    const reachReturn = SURVEY_STATUSES.filter((from) =>
+      VALID_SURVEY_TRANSITIONS[from].includes('returned_for_correction'),
     );
-    expect(reachRejected).toEqual(['received']);
+    expect(reachReturn).toEqual(['received']);
+  });
+
+  it('gives returned_for_correction no way back — the loop is a NEW record', () => {
+    // NOT terminal in the workflow: the AU idiom for a redo is a new,
+    // cross-referenced artifact (MRTS50 cl. 7.2), so the corrected report
+    // supersedes this record rather than overwriting its state. Flipping the row
+    // back to `received` would erase the evidence that the first result was bad.
+    expect(VALID_SURVEY_TRANSITIONS.returned_for_correction).toEqual([]);
+  });
+
+  it('counts a returned record as still outstanding, unlike the rejected it replaced', () => {
+    // `rejected` used to be terminal, so a bad survey stopped counting. A return
+    // is a loop with a one-business-day clock (TMR Part 1 §7.6.4), so it does
+    // not: the lot is still waiting on a report.
+    expect([...SURVEY_OPEN_STATUSES].sort()).toEqual(['requested', 'returned_for_correction']);
+    expect(SURVEY_OPEN_STATUSES.has('received')).toBe(false);
+  });
+
+  it('requires the report and a named surveyor at arrival, and at the return', () => {
+    expect([...SURVEY_STATUSES_REQUIRING_REPORT].sort()).toEqual([
+      'received',
+      'returned_for_correction',
+    ]);
+    // The certifying party on an AU conformance report is the surveyor, full
+    // stop (research §4.1) — evidence attributed to nobody is not evidence.
+    expect([...SURVEY_STATUSES_REQUIRING_SURVEYOR].sort()).toEqual([
+      'received',
+      'returned_for_correction',
+    ]);
+    expect(SURVEY_STATUSES_REQUIRING_REPORT.has('requested')).toBe(false);
   });
 
   it('never names a status outside the CHECK-constrained vocabulary', () => {
@@ -51,15 +86,7 @@ describe('VALID_SURVEY_TRANSITIONS', () => {
   });
 
   it('is the ONLY path — every other pair in the cross product is absent', () => {
-    const expected = new Set([
-      'requested>in_progress',
-      'requested>received',
-      'requested>accepted',
-      'in_progress>received',
-      'in_progress>accepted',
-      'received>accepted',
-      'received>rejected',
-    ]);
+    const expected = new Set(['requested>received', 'received>returned_for_correction']);
     const actual = new Set(
       SURVEY_STATUSES.flatMap((from) =>
         VALID_SURVEY_TRANSITIONS[from].map((to) => `${from}>${to}`),

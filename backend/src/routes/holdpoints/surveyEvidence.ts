@@ -38,8 +38,8 @@ const SURVEY_EVIDENCE_SELECT = {
   surveyedAt: true,
   surveyorVerdict: true,
   verdictSourceNote: true,
-  acceptedAt: true,
-  acceptedBy: { select: { fullName: true } },
+  receivedAt: true,
+  receivedBy: { select: { fullName: true } },
   reportDocument: { select: { filename: true } },
 } as const;
 
