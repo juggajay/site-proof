@@ -154,29 +154,20 @@ export function hasFiniteLimit(limit: number | null | undefined): limit is numbe
   return typeof limit === 'number' && Number.isFinite(limit);
 }
 
-export function getPlanBillingLabel(subscriptionTier: string | null | undefined): string {
-  switch ((subscriptionTier || 'basic').toLowerCase()) {
-    case 'professional':
-      return '$99/month';
-    case 'enterprise':
-    case 'unlimited':
-      return 'Custom pricing';
-    default:
-      return 'Contact billing';
-  }
-}
-
-export function getPlanStorageLabel(subscriptionTier: string | null | undefined): string {
-  switch ((subscriptionTier || 'basic').toLowerCase()) {
-    case 'professional':
-      return '100 GB';
-    case 'enterprise':
-    case 'unlimited':
-      return 'Unlimited';
-    default:
-      return '1 GB';
-  }
-}
+/**
+ * Deliberately no per-tier price or storage-quota label.
+ *
+ * `getPlanBillingLabel` used to return a per-month dollar figure for
+ * `professional` and `getPlanStorageLabel` a gigabyte quota. Neither was
+ * true, and both rendered in Company Settings for any customer: there is
+ * no billing path, tier quota enforcement is off
+ * (`backend/src/lib/tierLimits.ts` TIER_QUOTA_ENFORCEMENT_ENABLED), and no
+ * storage quota code exists at all. A displayed price nothing can charge and a
+ * quota nothing meters are the same class of untruth the landing page
+ * deliberately avoids. Restore per-tier labels when billing ships, not before —
+ * the production-readiness suite asserts no price string renders until then.
+ */
+export const PLAN_BILLING_LABEL = 'No published price yet — talk to us about capacity';
 
 // ---------------------------------------------------------------------------
 // Load-error mapping — preserves the page's 404-vs-generic messaging.

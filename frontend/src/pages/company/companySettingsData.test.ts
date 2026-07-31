@@ -6,9 +6,8 @@ import {
   formatLimit,
   getCompanyLoadErrorMessage,
   getCompanyMemberRoleOptionsForActor,
-  getPlanBillingLabel,
-  getPlanStorageLabel,
   hasFiniteLimit,
+  PLAN_BILLING_LABEL,
   isOwnershipTransferEligibleMember,
   normalizeCompanyResponse,
   toCompanyFormData,
@@ -94,28 +93,10 @@ describe('company settings data helpers', () => {
     });
   });
 
-  describe('getPlanBillingLabel', () => {
-    it('maps each tier to its billing label', () => {
-      expect(getPlanBillingLabel('professional')).toBe('$99/month');
-      expect(getPlanBillingLabel('enterprise')).toBe('Custom pricing');
-      expect(getPlanBillingLabel('unlimited')).toBe('Custom pricing');
-      expect(getPlanBillingLabel('basic')).toBe('Contact billing');
-    });
-
-    it('is case-insensitive and defaults blank tiers to the basic label', () => {
-      expect(getPlanBillingLabel('PROFESSIONAL')).toBe('$99/month');
-      expect(getPlanBillingLabel(null)).toBe('Contact billing');
-      expect(getPlanBillingLabel(undefined)).toBe('Contact billing');
-    });
-  });
-
-  describe('getPlanStorageLabel', () => {
-    it('maps each tier to its storage label', () => {
-      expect(getPlanStorageLabel('professional')).toBe('100 GB');
-      expect(getPlanStorageLabel('enterprise')).toBe('Unlimited');
-      expect(getPlanStorageLabel('unlimited')).toBe('Unlimited');
-      expect(getPlanStorageLabel('basic')).toBe('1 GB');
-      expect(getPlanStorageLabel(null)).toBe('1 GB');
+  describe('PLAN_BILLING_LABEL', () => {
+    it('quotes no price and no storage quota, because neither is enforced', () => {
+      expect(PLAN_BILLING_LABEL).not.toMatch(/\$\s?\d/);
+      expect(PLAN_BILLING_LABEL).not.toMatch(/\d+\s?(?:GB|TB|MB)/i);
     });
   });
 

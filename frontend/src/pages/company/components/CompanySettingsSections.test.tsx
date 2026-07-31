@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Company, CompanyFormData } from '../companySettingsData';
+import { PLAN_BILLING_LABEL, type Company, type CompanyFormData } from '../companySettingsData';
 import {
   CompanyAccountInformationCard,
   CompanyBillingSection,
@@ -124,9 +124,12 @@ describe('CompanyBillingSection', () => {
     render(<CompanyBillingSection company={company} supportEmail="billing@example.com" />);
 
     expect(screen.getByText('professional')).toBeInTheDocument();
-    expect(screen.getByText('$99/month')).toBeInTheDocument();
+    expect(screen.getByText(PLAN_BILLING_LABEL)).toBeInTheDocument();
     expect(screen.getByText('2 / 3')).toBeInTheDocument();
     expect(screen.getByText('4 / 5')).toBeInTheDocument();
+    // No price and no storage quota until billing and metering exist.
+    expect(screen.queryByText(/\$\s?\d/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Storage')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Contact Us to Add Capacity' })).toHaveAttribute(
       'href',
       expect.stringContaining('billing@example.com'),

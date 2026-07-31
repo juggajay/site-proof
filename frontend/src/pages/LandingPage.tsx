@@ -15,12 +15,18 @@ import './landing.css';
 const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mzdqayao';
 const FOUNDER_EMAIL = 'jayson@civos.com.au';
 
+/* Every number in this block and in the two claim strings below is computed
+   from the shipped ITP template seeders by
+   backend/scripts/verify-marketing-claims.mjs, which fails CI when they drift.
+   Do not hand-edit them — rerun `npm run verify:claims` and copy its table. */
 const TEMPLATE_CELLS = [
   { auth: 'AUSTROADS', region: 'National baseline', n: '6' },
-  { auth: 'TfNSW', region: 'New South Wales', n: '14' },
-  { auth: 'TMR', region: 'Queensland', n: '32' },
-  { auth: 'DIT', region: 'South Australia', n: '32' },
-  { auth: 'VicRoads', region: 'Victoria', n: '32' },
+  { auth: 'TfNSW', region: 'New South Wales', n: '25' },
+  { auth: 'TMR', region: 'Queensland', n: '37' },
+  { auth: 'DIT', region: 'South Australia', n: '34' },
+  { auth: 'VicRoads', region: 'Victoria', n: '37' },
+  { auth: 'MRWA', region: 'Western Australia', n: '10' },
+  { auth: 'WSA / AUS-SPEC', region: 'National standards', n: '3' },
 ];
 
 const PROBLEM_ROWS = [
@@ -517,7 +523,15 @@ export function LandingPage() {
             <b>VicRoads</b> Victoria
           </span>
           <span>·</span>
-          <span>116 ITP templates · 3,070 checklist points · adapted per project</span>
+          <span>
+            <b>MRWA</b> Western Australia
+          </span>
+          <span>·</span>
+          <span>
+            <b>WSA / AUS-SPEC</b> national standards
+          </span>
+          <span>·</span>
+          <span>152 ITP templates · 3,501 checklist points · adapted per project</span>
           <span>·</span>
         </div>
       </div>
@@ -717,7 +731,7 @@ export function LandingPage() {
           </div>
           <p className="tfoot rv">
             <span className="mono" style={{ color: 'var(--ink)', fontWeight: 600 }}>
-              116 templates · 3,070 checklist points · 813 hold points
+              152 templates · 3,501 checklist points · 939 hold points
             </span>{' '}
             across earthworks, pavements, asphalt, drainage, structures, road furniture and
             environmental work. Templates reference the relevant Australian Standards inside the
