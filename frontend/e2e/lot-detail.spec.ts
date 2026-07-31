@@ -810,6 +810,77 @@ test.describe('Lot detail ITP workflow', () => {
     await expect(page.getByRole('button', { name: /E2E Earthworks ITP/ })).toBeVisible();
   });
 
+  test('shows all five workspace tabs on-screen at 390px with 48px targets', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockLotDetailApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    const tabs = page.getByRole('tablist', { name: 'Lot detail tabs' }).getByRole('tab');
+    await expect(tabs).toHaveCount(5);
+
+    await tabs.first().scrollIntoViewIfNeeded();
+
+    // Gate: no tab hides off-canvas horizontally (the seven-tab strip pushed
+    // three past the right edge), and every one clears the 48px tap target.
+    // Vertical scrolling is expected and not part of the gate.
+    for (const tab of await tabs.all()) {
+      await expect(tab).toBeVisible();
+      const box = await tab.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(48);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    }
+
+    // The body must not scroll sideways to reach them.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('opens Evidence on Photos and Activity on Comments, each with subviews', async ({
+    page,
+  }) => {
+    await mockLotDetailApi(page, { withPhotoEvidence: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Evidence' }).click();
+    await expect(page).toHaveURL(/tab=evidence&view=photos/);
+    const evidenceViews = page.getByRole('tablist', { name: 'Evidence views' });
+    await expect(evidenceViews.getByRole('tab')).toHaveText(['Photos', 'Documents']);
+
+    await evidenceViews.getByRole('tab', { name: 'Documents' }).click();
+    await expect(page).toHaveURL(/tab=evidence&view=documents/);
+    await expect(page.getByRole('heading', { name: 'Lot Documents' })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Activity' }).click();
+    await expect(page).toHaveURL(/tab=activity&view=comments/);
+    const activityViews = page.getByRole('tablist', { name: 'Activity views' });
+    await expect(activityViews.getByRole('tab')).toHaveText(['Comments', 'Changes']);
+  });
+
+  test('canonicalizes legacy tab links and keeps commentId', async ({ page }) => {
+    await mockLotDetailApi(page);
+
+    // The shape stored on mention notifications before DG-4a.
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}?tab=comments&commentId=c-42`);
+
+    await expect(page).toHaveURL(/tab=activity/);
+    await expect(page).toHaveURL(/view=comments/);
+    await expect(page).toHaveURL(/commentId=c-42/);
+
+    // ?tab=holdpoints rendered an empty panel before DG-4a.
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}?tab=holdpoints&hp=hp-1`);
+    await expect(page).toHaveURL(/tab=itp/);
+    await expect(page).toHaveURL(/hp=hp-1/);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+  });
+
   test('focuses and highlights the target tab after a readiness action', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockLotDetailApi(page, { noItpAssigned: true });
