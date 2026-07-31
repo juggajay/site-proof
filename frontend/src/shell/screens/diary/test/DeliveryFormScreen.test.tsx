@@ -53,15 +53,8 @@ vi.mock('../useDiaryShellData', () => ({
   }),
 }));
 
-vi.mock('../../components/ShellScreen', () => ({
-  ShellScreen: ({ children, bottom }: { children: React.ReactNode; bottom?: React.ReactNode }) => (
-    <div>
-      <main>{children}</main>
-      {bottom}
-    </div>
-  ),
-}));
-
+// ShellScreen renders for real — see the note in WorkScreen.test.tsx about the
+// mock path that never resolved.
 vi.mock('@/components/foreman/sheets/useSheetDraft', () => ({
   useSheetDraft: () => ({
     draftHintVisible: false,

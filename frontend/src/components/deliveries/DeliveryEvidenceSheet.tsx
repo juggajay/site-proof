@@ -46,6 +46,39 @@ export interface DeliveryEvidenceSheetProps {
   queuedPhoto?: OfflinePhoto | null;
 }
 
+const ACTION_BUTTON_CLASS =
+  'flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-primary text-[16px] font-semibold text-primary-foreground touch-manipulation disabled:opacity-50';
+
+/**
+ * Why the docket is not filed, in the terms the foreman experienced it. The
+ * failed case names what survived — the photo is still on his phone — because
+ * the instinct after a failure is to re-photograph a docket he may no longer
+ * have.
+ */
+function FilingNotice({ hasFailed }: { hasFailed: boolean }) {
+  if (hasFailed) {
+    return (
+      <div className="flex gap-2.5 rounded-2xl bg-destructive/[.07] px-4 py-3.5 text-[14px] leading-[1.5] text-destructive">
+        <AlertTriangle size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <span>
+          The photo uploaded but wouldn&rsquo;t attach to this delivery. It&rsquo;s still on your
+          phone — nothing is lost.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2.5 rounded-2xl bg-warning/[.09] px-4 py-3.5 text-[14px] leading-[1.5] text-warning">
+      <AlertTriangle size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <span>
+        {formatStatusLabel('delivery_docket_not_filed')}. The delivery is recorded; its docket
+        isn&rsquo;t.
+      </span>
+    </div>
+  );
+}
+
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline gap-2 text-[14px] leading-[1.5]">
@@ -78,6 +111,7 @@ export function DeliveryEvidenceSheet({
     photo: queuedPhoto,
     isOnline,
   });
+  const isFiled = statusKey === 'delivery_docket_filed';
   const hasFailed = statusKey === 'delivery_docket_filing_failed';
 
   const meta: Array<[string, string | null | undefined]> = [
@@ -167,31 +201,13 @@ export function DeliveryEvidenceSheet({
             ))}
         </div>
 
-        {hasFailed ? (
-          <div className="flex gap-2.5 rounded-2xl bg-destructive/[.07] px-4 py-3.5 text-[14px] leading-[1.5] text-destructive">
-            <AlertTriangle size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span>
-              The photo uploaded but wouldn&rsquo;t attach to this delivery. It&rsquo;s still on
-              your phone — nothing is lost.
-            </span>
-          </div>
-        ) : (
-          statusKey !== 'delivery_docket_filed' && (
-            <div className="flex gap-2.5 rounded-2xl bg-warning/[.09] px-4 py-3.5 text-[14px] leading-[1.5] text-warning">
-              <AlertTriangle size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
-              <span>
-                {formatStatusLabel('delivery_docket_not_filed')}. The delivery is recorded; its
-                docket isn&rsquo;t.
-              </span>
-            </div>
-          )
-        )}
+        {!isFiled && <FilingNotice hasFailed={hasFailed} />}
 
-        {statusKey !== 'delivery_docket_filed' && (
+        {!isFiled && (
           <DeliveryDocketCapture
             file={file}
             queuedDataUrl={file ? null : queuedPhoto?.dataUrl}
-            statusKey={file ? null : queuedPhoto ? statusKey : null}
+            statusKey={!file && queuedPhoto ? statusKey : null}
             onSelect={setFile}
             onRemove={() => void handleRemoveQueued()}
             allowGallery
@@ -199,12 +215,14 @@ export function DeliveryEvidenceSheet({
           />
         )}
 
-        {hasFailed ? (
+        {/* Retry is attach-only and always available once a filing has failed;
+            File docket needs a photo first. Both are the same button chrome. */}
+        {hasFailed && (
           <button
             type="button"
             onClick={() => void handleRetry()}
             disabled={filing}
-            className="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-primary text-[16px] font-semibold text-primary-foreground touch-manipulation disabled:opacity-50"
+            className={ACTION_BUTTON_CLASS}
           >
             {filing ? (
               <Loader2 size={20} className="animate-spin" aria-hidden="true" />
@@ -213,18 +231,18 @@ export function DeliveryEvidenceSheet({
             )}
             Try filing again
           </button>
-        ) : (
-          statusKey !== 'delivery_docket_filed' && (
-            <button
-              type="button"
-              onClick={() => void handleFile()}
-              disabled={!file || filing}
-              className="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-primary text-[16px] font-semibold text-primary-foreground touch-manipulation disabled:opacity-50"
-            >
-              {filing && <Loader2 size={20} className="animate-spin" aria-hidden="true" />}
-              File docket
-            </button>
-          )
+        )}
+
+        {!isFiled && !hasFailed && (
+          <button
+            type="button"
+            onClick={() => void handleFile()}
+            disabled={!file || filing}
+            className={ACTION_BUTTON_CLASS}
+          >
+            {filing && <Loader2 size={20} className="animate-spin" aria-hidden="true" />}
+            File docket
+          </button>
         )}
       </div>
     </BottomSheet>

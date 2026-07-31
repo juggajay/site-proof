@@ -19,13 +19,12 @@ import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import { DeliveryEvidenceSheet } from '@/components/deliveries/DeliveryEvidenceSheet';
+import { DocketChip } from '@/components/deliveries/DocketChip';
 import {
-  docketChipTone,
   docketFilingStatusKey,
   type DocketFilingStatusKey,
 } from '@/components/deliveries/docketFilingState';
 import { useDeliveryDocketPhotos } from '@/components/deliveries/useDeliveryDocketPhotos';
-import { formatStatusLabel } from '@/lib/statusLabels';
 
 const ADD_ITEMS = [
   { type: 'activity' as const, icon: Wrench, label: 'Activity' },
@@ -210,15 +209,6 @@ const TYPE_LABELS: Record<string, string> = {
   event: 'Event',
 };
 
-/** One chip, one tone. Mirrors the shell's existing pill vocabulary. */
-const CHIP_TONE: Record<ReturnType<typeof docketChipTone>, string> = {
-  neutral: 'bg-secondary text-muted-foreground',
-  warning: 'bg-warning/[.13] text-warning',
-  danger: 'bg-destructive/10 text-destructive',
-  success: 'bg-success/10 text-success',
-  info: 'bg-info/10 text-info',
-};
-
 interface WorkEntryProps {
   entry: TimelineEntry;
   isSubmitted: boolean;
@@ -299,16 +289,7 @@ function WorkEntry({ entry, isSubmitted, docketStatusKey, onOpen, onDelete }: Wo
           </span>
           {meta && <span className="mt-0.5 block text-[13px] text-muted-foreground">{meta}</span>}
         </span>
-        {docketStatusKey && (
-          <span
-            className={cn(
-              'shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold',
-              CHIP_TONE[docketChipTone(docketStatusKey)],
-            )}
-          >
-            {formatStatusLabel(docketStatusKey)}
-          </span>
-        )}
+        {docketStatusKey && <DocketChip statusKey={docketStatusKey} />}
         {canOpen && (
           <ChevronRight
             size={16}

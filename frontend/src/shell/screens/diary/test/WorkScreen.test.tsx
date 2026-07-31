@@ -51,15 +51,11 @@ vi.mock('@/components/deliveries/DeliveryEvidenceSheet', () => ({
   ),
 }));
 
-vi.mock('../../components/ShellScreen', () => ({
-  ShellScreen: ({ children, bottom }: { children: React.ReactNode; bottom?: React.ReactNode }) => (
-    <div>
-      <main>{children}</main>
-      {bottom}
-    </div>
-  ),
-}));
-
+// ShellScreen is deliberately NOT mocked: it renders for real (its only
+// external dependency, useOfflineStatus, is mocked above). A `vi.mock` used to
+// sit here pointing at '../../components/ShellScreen', which resolves to
+// src/shell/screens/components/ — a directory that does not exist — so it never
+// applied. A mock that silently does nothing is worse than no mock.
 import { WorkScreen } from '../WorkScreen';
 
 function LocationProbe() {
