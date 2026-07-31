@@ -18,13 +18,9 @@ import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
 import { LotDeliveriesTable } from './LotDeliveriesTable';
 import { SurveyRecordRow } from './SurveyRecordRow';
+import { useLotDeliveries, useLotSurveys, useSurveyReturn } from '../hooks/useLotSurveyMaterials';
 import {
-  useLotDeliveries,
-  useLotSurveys,
-  useSurveyStatusChange,
-} from '../hooks/useLotSurveyMaterials';
-import {
-  SURVEY_ACCEPTOR_ROLES,
+  SURVEY_DECIDER_ROLES,
   countOutstandingSurveys,
   groupSurveyRevisions,
 } from '../lib/surveyRecords';
@@ -129,9 +125,9 @@ function AsyncSectionBody({
 export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterialsSectionProps) {
   const surveysQuery = useLotSurveys(lotId);
   const deliveriesQuery = useLotDeliveries(lotId);
-  const decide = useSurveyStatusChange(lotId);
+  const decide = useSurveyReturn(lotId);
 
-  const canDecide = SURVEY_ACCEPTOR_ROLES.includes(effectiveRole);
+  const canDecide = SURVEY_DECIDER_ROLES.includes(effectiveRole);
 
   // A 404 is the feature flag being off for this tenant, not a failure.
   const surveysDisabled =
@@ -141,21 +137,19 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
   const outstanding = countOutstandingSurveys(groups);
   const deliveries = deliveriesQuery.data?.deliveries ?? [];
 
-  const handleDecide = (surveyId: string, status: 'accepted' | 'rejected') => {
+  const handleReturn = (surveyId: string, returnReason: string) => {
     decide.mutate(
-      { surveyId, status },
+      { surveyId, returnReason },
       {
         onSuccess: () => {
           toast({
-            title: status === 'accepted' ? 'Evidence record accepted' : 'Evidence record rejected',
+            title: 'Returned to the surveyor',
             description:
-              status === 'accepted'
-                ? "The surveyor's report is now filed as evidence on this lot."
-                : 'The record stays on the lot and is not counted as evidence.',
+              'The record stays on this lot with your reason against it, and still counts as outstanding until a corrected report is filed.',
           });
         },
         onError: (error: unknown) => {
-          logError('Error changing survey status:', error);
+          logError('Error returning survey for correction:', error);
           toast({
             title: 'Could not update this survey record',
             description: error instanceof Error ? error.message : 'Please try again.',
@@ -174,7 +168,7 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
         <SectionCard
           icon={<Ruler className="h-5 w-5" />}
           title="Survey records"
-          blurb="Set-out, conformance and as-built — who surveyed it, what they stated, and who accepted the record."
+          blurb="Set-out, conformance and as-built — who surveyed it, what they stated, and whether their report has arrived."
           actions={
             outstanding > 0 ? (
               <span className="inline-flex items-center rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
@@ -199,7 +193,7 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
                   group={group}
                   canDecide={canDecide}
                   deciding={decide.isLoading}
-                  onDecide={handleDecide}
+                  onReturn={handleReturn}
                 />
               ))}
             </ul>
@@ -239,8 +233,9 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
       */}
       <p className="text-xs text-muted-foreground">
         Surveys and deliveries enter the lot folio; only surveys enter the hold-point evidence
-        package. A survey record that has not been accepted raises a warning on this lot — it never
-        blocks a conform.
+        package. A survey whose report has not arrived raises a warning on this lot — it never
+        blocks a conform. CIVOS records that a report arrived; whether it is accepted is decided
+        when the hold point is released.
       </p>
     </div>
   );

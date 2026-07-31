@@ -41,13 +41,13 @@ type SurveyRow = {
   surveyorVerdict: string | null;
   verdictAttribution: string;
   reportFilename: string | null;
-  isAccepted: boolean;
+  isReceived: boolean;
 };
 
 type EvidencePackageBody = {
   evidencePackage: {
     surveys: SurveyRow[];
-    summary: { totalSurveys: number; acceptedSurveys: number };
+    summary: { totalSurveys: number; receivedSurveys: number };
   };
 };
 
@@ -64,8 +64,8 @@ let otherLotHoldPointId: string;
 let batchId: string;
 let batchRawToken: string;
 let singleRawToken: string;
-let acceptedSurveyId: string;
-let receivedSurveyId: string;
+let conformanceSurveyId: string;
+let requestedSurveyId: string;
 let supersededSurveyId: string;
 let otherLotSurveyId: string;
 
@@ -213,13 +213,13 @@ beforeAll(async () => {
     },
   });
 
-  acceptedSurveyId = (
+  conformanceSurveyId = (
     await prisma.surveyRecord.create({
       data: {
         projectId,
         lotId,
         kind: 'conformance',
-        status: 'accepted',
+        status: 'received',
         surveyorName: 'J. Smith',
         surveyorCompany: 'Smith Surveys Pty Ltd',
         surveyorRegistration: 'Registered Surveyor 4471',
@@ -227,22 +227,22 @@ beforeAll(async () => {
         surveyorVerdict: 'conforms',
         verdictSourceNote: 'report rev B',
         reportDocumentId: reportDocument.id,
-        acceptedById: userId,
-        acceptedAt: new Date('2026-07-20T00:00:00.000Z'),
+        receivedById: userId,
+        receivedAt: new Date('2026-07-20T00:00:00.000Z'),
       },
     })
   ).id;
 
-  receivedSurveyId = (
+  requestedSurveyId = (
     await prisma.surveyRecord.create({
       data: {
         projectId,
         lotId,
+        // Still outstanding: the package carries it so the reader can see what
+        // the lot is waiting on, and the summary does not count it as arrived.
         kind: 'set_out',
-        status: 'received',
-        surveyorName: 'A. Patel',
+        status: 'requested',
         surveyedAt: new Date('2026-07-21T00:00:00.000Z'),
-        surveyorVerdict: 'not_stated',
       },
     })
   ).id;
@@ -253,10 +253,11 @@ beforeAll(async () => {
         projectId,
         lotId,
         kind: 'conformance',
-        status: 'rejected',
+        status: 'returned_for_correction',
+        returnReason: 'Levels computed against the superseded design surface',
         surveyorName: 'J. Smith',
         surveyedAt: new Date('2026-07-10T00:00:00.000Z'),
-        supersededById: acceptedSurveyId,
+        supersededById: conformanceSurveyId,
       },
     })
   ).id;
@@ -346,8 +347,8 @@ describe('**AT-182** — surveys reach all three evidence-package consumers', ()
       const { surveys, summary } = body.evidencePackage;
 
       const ids = surveys.map((survey) => survey.id);
-      expect(ids).toContain(acceptedSurveyId);
-      expect(ids).toContain(receivedSurveyId);
+      expect(ids).toContain(conformanceSurveyId);
+      expect(ids).toContain(requestedSurveyId);
       // A re-survey is a new record; the superseded one stays retrievable through
       // the chain rather than appearing beside its own replacement.
       expect(ids).not.toContain(supersededSurveyId);
@@ -356,8 +357,10 @@ describe('**AT-182** — surveys reach all three evidence-package consumers', ()
       expect(ids).not.toContain(otherLotSurveyId);
 
       expect(summary.totalSurveys).toBe(2);
-      // Records a named CIVOS user accepted — NOT a count of conforming surveys.
-      expect(summary.acceptedSurveys).toBe(1);
+      // Records whose report has ARRIVED — not a count of conforming surveys,
+      // and no longer a count of anything CIVOS accepted. The superintendent
+      // reading this package is the one who accepts.
+      expect(summary.receivedSurveys).toBe(1);
     },
   );
 
@@ -365,14 +368,14 @@ describe('**AT-182** — surveys reach all three evidence-package consumers', ()
     '$label attributes the verdict to the surveyor (`[C5S-B1]`)',
     async ({ fetch }) => {
       const body = await withSurveyFlag('true', fetch);
-      const accepted = body.evidencePackage.surveys.find((s) => s.id === acceptedSurveyId);
+      const received = body.evidencePackage.surveys.find((s) => s.id === conformanceSurveyId);
 
-      expect(accepted?.surveyorVerdict).toBe('conforms');
-      expect(accepted?.verdictAttribution).toBe(
+      expect(received?.surveyorVerdict).toBe('conforms');
+      expect(received?.verdictAttribution).toBe(
         'Verdict stated by J. Smith, recorded in CIVOS by Quinn Manager.',
       );
-      expect(accepted?.reportFilename).toBe('conformance-survey-rev-b.pdf');
-      expect(accepted?.isAccepted).toBe(true);
+      expect(received?.reportFilename).toBe('conformance-survey-rev-b.pdf');
+      expect(received?.isReceived).toBe(true);
     },
   );
 
@@ -412,7 +415,7 @@ describe('**AT-182** — surveys reach all three evidence-package consumers', ()
       expect(await prisma.surveyRecord.count({ where: { lotId } })).toBe(3);
       expect(body.evidencePackage.surveys).toEqual([]);
       expect(body.evidencePackage.summary.totalSurveys).toBe(0);
-      expect(body.evidencePackage.summary.acceptedSurveys).toBe(0);
+      expect(body.evidencePackage.summary.receivedSurveys).toBe(0);
     },
   );
 });
@@ -428,7 +431,7 @@ describe('**AT-182** — the batch route stays inside its own batch', () => {
 
     const ids = (res.body as EvidencePackageBody).evidencePackage.surveys.map((s) => s.id);
     expect(ids).toEqual([otherLotSurveyId]);
-    expect(ids).not.toContain(acceptedSurveyId);
+    expect(ids).not.toContain(conformanceSurveyId);
   });
 
   it('refuses a hold point that is not in the batch, so the survey never loads', async () => {

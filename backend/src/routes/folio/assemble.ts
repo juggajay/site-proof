@@ -90,23 +90,18 @@ function surveyorVerdictLabel(verdict: string | null): string {
 
 /**
  * Which CIVOS user's name goes beside the surveyor's, and when they put it
- * there (spec §8). The most recent actor wins: whoever accepted the record
- * stands behind the transcription, and before anyone has, whoever reviewed or
- * opened it does.
+ * there (spec §8). The most recent actor wins: whoever recorded the report as
+ * received stands behind the transcription, and before anyone has, whoever
+ * filed the record does.
  */
 function surveyRecordedBy(survey: {
   createdAt: Date;
-  reviewedAt: Date | null;
-  acceptedAt: Date | null;
+  receivedAt: Date | null;
   requestedBy: { fullName: string | null } | null;
-  reviewedBy: { fullName: string | null } | null;
-  acceptedBy: { fullName: string | null } | null;
+  receivedBy: { fullName: string | null } | null;
 }): { name: string | null; at: Date } {
-  if (survey.acceptedBy && survey.acceptedAt) {
-    return { name: survey.acceptedBy.fullName, at: survey.acceptedAt };
-  }
-  if (survey.reviewedBy && survey.reviewedAt) {
-    return { name: survey.reviewedBy.fullName, at: survey.reviewedAt };
+  if (survey.receivedBy && survey.receivedAt) {
+    return { name: survey.receivedBy.fullName, at: survey.receivedAt };
   }
   return { name: survey.requestedBy?.fullName ?? null, at: survey.createdAt };
 }
@@ -254,12 +249,10 @@ async function readEvidenceRows(
               verdictSourceNote: true,
               createdAt: true,
               updatedAt: true,
-              reviewedAt: true,
-              acceptedAt: true,
+              receivedAt: true,
               reportDocument: { select: { filename: true } },
               requestedBy: { select: { fullName: true } },
-              reviewedBy: { select: { fullName: true } },
-              acceptedBy: { select: { fullName: true } },
+              receivedBy: { select: { fullName: true } },
             },
           })
         : Promise.resolve([]),

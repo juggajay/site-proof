@@ -39,17 +39,15 @@ function makeSurvey(overrides: Partial<SurveyRecord> = {}): SurveyRecord {
     surveyedAt: '2026-07-26T00:00:00.000Z',
     surveyorVerdict: 'conforms',
     verdictSourceNote: 'levels within ±25 mm of design, MRTS04 Cl. 8.3.2',
-    reviewedAt: null,
-    acceptedAt: null,
-    rejectionReason: null,
+    receivedAt: null,
+    returnReason: null,
     supersededById: null,
     supersessionReason: null,
     notes: null,
     createdAt: '2026-07-20T00:00:00.000Z',
     reportDocument: { id: 'doc-1', filename: 'CONF-D-014-RevC.pdf', mimeType: 'application/pdf' },
     requestedBy: { id: 'u1', fullName: 'A. Whitton' },
-    reviewedBy: null,
-    acceptedBy: null,
+    receivedBy: null,
     ...overrides,
   };
 }
@@ -111,13 +109,13 @@ describe('the surveyor verdict never reads as a CIVOS judgement', () => {
   });
 
   it('reserves the status colour for the CIVOS workflow state', async () => {
-    renderSection({ surveys: [makeSurvey({ status: 'accepted', surveyorVerdict: 'conforms' })] });
+    renderSection({ surveys: [makeSurvey({ status: 'received', surveyorVerdict: 'conforms' })] });
 
-    // CIVOS accepted the RECORD. It did not find the lot conformant.
-    // The same label appears twice by design — once as the badge, once as the
-    // final step of the progress list — because both are the same CIVOS state
-    // and one vocabulary is the point. The badge is the one outside the `<ol>`.
-    const labels = await screen.findAllByText('Evidence record accepted');
+    // CIVOS received the REPORT. It did not accept it and did not find the lot
+    // conformant. The same label appears twice by design — once as the badge,
+    // once as the final step of the progress list — because both are the same
+    // CIVOS state and one vocabulary is the point. The badge is outside the `<ol>`.
+    const labels = await screen.findAllByText('Report received');
     const badge = labels.find((node) => !node.closest('ol'));
     expect(badge).toBeDefined();
     expect(badge!.className).toMatch(/success/);
@@ -141,46 +139,92 @@ describe('the surveyor verdict never reads as a CIVOS judgement', () => {
   });
 });
 
-describe('accepting an evidence record', () => {
-  it('confirms with the surveyor, the report and the stated verdict, and disclaims verification', async () => {
+describe('returning a survey for correction', () => {
+  // There is no accept action, and its absence is the point: acceptance in AU
+  // civil is the hold-point release and the lot conformance, not an act on this
+  // record (research §4). The one write here refers a defective deliverable
+  // back to the surveyor.
+  it('offers no acceptance anywhere on the surface', async () => {
+    renderSection();
+    await screen.findByText('Surveyor-stated verdict');
+
+    expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Reject$/ })).not.toBeInTheDocument();
+  });
+
+  it('names the surveyor and the report, and refuses to send without a reason', async () => {
     const user = userEvent.setup();
     renderSection();
 
-    await user.click(await screen.findByRole('button', { name: 'Accept evidence record' }));
+    await user.click(await screen.findByRole('button', { name: 'Return for correction' }));
 
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(/R\. Tanaka/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Veris Ltd/)).toBeInTheDocument();
     expect(within(dialog).getByText('CONF-D-014-RevC.pdf')).toBeInTheDocument();
-    expect(within(dialog).getByText(/“Conforms”/)).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(/recording the surveyor’s conclusion, not independently verifying/i),
-    ).toBeInTheDocument();
+
+    // The reason is the whole value of the state: six distinct return triggers
+    // are evidenced and each demands a different fix from the surveyor.
+    const confirm = within(dialog).getByRole('button', { name: 'Return for correction' });
+    expect(confirm).toBeDisabled();
+
+    await user.type(
+      within(dialog).getByLabelText('What has to be corrected?'),
+      'Chainage gaps exceed 50 m',
+    );
+    expect(confirm).toBeEnabled();
+
+    await user.click(confirm);
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/surveys/survey-current/status',
+      expect.objectContaining({
+        body: JSON.stringify({
+          status: 'returned_for_correction',
+          returnReason: 'Chainage gaps exceed 50 m',
+        }),
+      }),
+    );
   });
 
-  it('is offered only to acceptor roles', async () => {
+  it('is offered only to the decider roles', async () => {
     renderSection({ role: 'site_engineer' });
 
     await screen.findByText('Surveyor-stated verdict');
-    expect(
-      screen.queryByRole('button', { name: 'Accept evidence record' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Return for correction' })).not.toBeInTheDocument();
   });
 
-  it('is disabled with a reason until a verdict has been transcribed', async () => {
-    renderSection({ surveys: [makeSurvey({ surveyorVerdict: null })] });
+  it('is not offered on a record whose report has not arrived', async () => {
+    renderSection({ surveys: [makeSurvey({ status: 'requested' })] });
 
-    const button = await screen.findByRole('button', { name: 'Accept evidence record' });
-    expect(button).toBeDisabled();
-    expect(screen.getByText(/Transcribe the surveyor's stated verdict/i)).toBeInTheDocument();
+    await screen.findByText('Surveyor-stated verdict');
+    expect(screen.queryByRole('button', { name: 'Return for correction' })).not.toBeInTheDocument();
+  });
+
+  it('shows a returned record its reason and where the workflow goes next', async () => {
+    renderSection({
+      surveys: [
+        makeSurvey({
+          status: 'returned_for_correction',
+          returnReason: 'RTK GNSS used for vertical compliance on subgrade',
+        }),
+      ],
+    });
+
+    expect(
+      await screen.findByText(/RTK GNSS used for vertical compliance on subgrade/),
+    ).toBeInTheDocument();
+    // NOT a dead end: the corrected report is a new, cross-referenced record.
+    expect(
+      screen.getByText(/File the corrected report as a new survey record/),
+    ).toBeInTheDocument();
   });
 });
 
 describe('supersession', () => {
-  const CURRENT = makeSurvey({ id: 'rev-2', status: 'accepted', surveyedAt: '2026-07-26' });
+  const CURRENT = makeSurvey({ id: 'rev-2', status: 'received', surveyedAt: '2026-07-26' });
   const EARLIER = makeSurvey({
     id: 'rev-1',
-    status: 'received',
+    status: 'returned_for_correction',
+    returnReason: 'CH1310–CH1330 high by 40 mm, outside the stated tolerance',
     surveyorVerdict: 'does_not_conform',
     verdictSourceNote: 'CH1310–CH1330 high by 40 mm',
     surveyedAt: '2026-07-22',
@@ -207,16 +251,16 @@ describe('supersession', () => {
   });
 
   it('does not count a superseded record as outstanding', async () => {
-    // The current record is accepted; the record it replaced is still
-    // `received`. A superseded record was replaced precisely so it would stop
-    // being chased, so nothing is outstanding.
+    // The current record's report is in; the record it replaced was returned
+    // for correction. A superseded record was replaced precisely so it would
+    // stop being chased, so nothing is outstanding.
     renderSection({ surveys: [CURRENT, EARLIER] });
     await screen.findByText('Current');
     expect(screen.queryByText(/outstanding/)).not.toBeInTheDocument();
   });
 
-  it('counts a current non-terminal record as outstanding', async () => {
-    renderSection({ surveys: [makeSurvey({ id: 'rev-2', status: 'received' }), EARLIER] });
+  it('counts a current record still waiting on its report as outstanding', async () => {
+    renderSection({ surveys: [makeSurvey({ id: 'rev-2', status: 'requested' }), EARLIER] });
     expect(await screen.findByText('1 outstanding')).toBeInTheDocument();
   });
 

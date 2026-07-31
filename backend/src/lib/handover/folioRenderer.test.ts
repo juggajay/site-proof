@@ -204,7 +204,7 @@ describe('folio renderer — the §4.3.2 content contract', () => {
 const SURVEY: FolioSurveyPayload = {
   id: 'survey-1',
   kind: 'conformance',
-  status: 'accepted',
+  status: 'received',
   surveyorName: 'J. Smith',
   surveyorCompany: 'Smith Surveys Pty Ltd',
   surveyorRegistration: 'Registered Surveyor 4471',

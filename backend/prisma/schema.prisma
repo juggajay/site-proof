@@ -94,8 +94,7 @@ model User {
   testVerifications           TestResult[]                 @relation("VerifiedByTestUser")
   testRejections              TestResult[]                 @relation("RejectedByTestUser")
   surveyRequests              SurveyRecord[]               @relation("SurveyRequestedByUser")
-  surveyReviews               SurveyRecord[]               @relation("SurveyReviewedByUser")
-  surveyAcceptances           SurveyRecord[]               @relation("SurveyAcceptedByUser")
+  surveyReceipts              SurveyRecord[]               @relation("SurveyReceivedByUser")
   uploadedDocs                Document[]
   documentSignedUrlTokens     DocumentSignedUrlToken[]
   notifications               Notification[]
@@ -2797,13 +2796,19 @@ model SurveyRecord {
   /// `set_out|conformance|as_built`, CHECK-constrained. Three, because they are
   /// three different contractual acts. No fourth is added speculatively.
   kind      String
-  /// `requested|in_progress|received|accepted|rejected`, CHECK-constrained.
-  /// PILOT-GATED `[C5S-B4]`: the names encode a claim about how a real job runs
-  /// and stay behind C5_SURVEY_RECORDS_ENABLED until one real conformance
-  /// survey has round-tripped. The CHECK is what makes correcting them a
-  /// reviewed migration instead of a silent data drift.
+  /// `requested|received|returned_for_correction`, CHECK-constrained.
+  /// The record's lifecycle is ARRIVAL, not approval — `in_progress` and
+  /// `accepted` were deleted and `rejected` renamed by the 2026-07-31
+  /// restructure (`docs/research/c5-surveyor-workflow-practice-2026-07-31.md`);
+  /// the reasoning lives in `routes/surveys/statusWorkflow.ts`. The CHECK is
+  /// what made correcting them a reviewed migration rather than silent drift,
+  /// which is exactly what happened.
   status    String  @default("requested")
 
+  /// Who filed the record. `requestedAt` is stamped ONLY when the record starts
+  /// at `requested`: a record filed retrospectively off an arrived report was
+  /// never requested, and dating a request that did not happen is a lie the
+  /// folio would print.
   requestedById String?   @map("requested_by")
   requestedAt   DateTime? @map("requested_at")
 
@@ -2823,12 +2828,18 @@ model SurveyRecord {
   /// Where in the report the verdict was read from, so a reader can check it.
   verdictSourceNote String? @map("verdict_source_note")
 
-  reviewedById String?   @map("reviewed_by")
-  reviewedAt   DateTime? @map("reviewed_at")
-  acceptedById String?   @map("accepted_by")
-  acceptedAt   DateTime? @map("accepted_at")
+  /// Who recorded that the report arrived, and when. NOT an approval: CIVOS
+  /// records receipt, and acceptance happens at the hold point and on the lot.
+  receivedById String?   @map("received_by")
+  receivedAt   DateTime? @map("received_at")
 
-  rejectionReason String? @map("rejection_reason")
+  /// Why the deliverable was referred back to the surveyor. REQUIRED whenever
+  /// `status = 'returned_for_correction'` (CHECK-constrained): six distinct
+  /// return triggers are evidenced — format, wrong method for the specified
+  /// accuracy, missing coverage, wrong datum, wrong design surface, content
+  /// mismatch — and they demand different fixes, so a return with no reason is
+  /// a state with no value (research §5.6).
+  returnReason    String? @map("return_reason")
   supersededById  String? @map("superseded_by_id")
   /// Wave C5-c. Why this record was replaced, written by whoever superseded it.
   /// Free text, not a vocabulary — the chain says *that* it was replaced, this
@@ -2844,8 +2855,7 @@ model SurveyRecord {
   lot            Lot?           @relation(fields: [lotId], references: [id], onDelete: SetNull)
   reportDocument Document?      @relation(fields: [reportDocumentId], references: [id], onDelete: Restrict)
   requestedBy    User?          @relation("SurveyRequestedByUser", fields: [requestedById], references: [id], onDelete: SetNull)
-  reviewedBy     User?          @relation("SurveyReviewedByUser", fields: [reviewedById], references: [id], onDelete: SetNull)
-  acceptedBy     User?          @relation("SurveyAcceptedByUser", fields: [acceptedById], references: [id], onDelete: SetNull)
+  receivedBy     User?          @relation("SurveyReceivedByUser", fields: [receivedById], references: [id], onDelete: SetNull)
   supersededBy   SurveyRecord?  @relation("SurveyRecordSupersedes", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes     SurveyRecord[] @relation("SurveyRecordSupersedes")
 

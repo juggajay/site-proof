@@ -97,17 +97,19 @@ const EVIDENCE_LINK_GUARDS: EvidenceLinkGuard[] = [
     async findLink(prisma, documentId) {
       const link = await prisma.surveyRecord.findFirst({
         where: { reportDocumentId: documentId },
-        select: { status: true },
+        select: { supersededById: true },
       });
       if (!link) {
         return null;
       }
-      // An accepted survey is closed: renaming or re-categorising the report
-      // behind it would change evidence the acceptance was made against.
-      return { metadataLocked: link.status === 'accepted' };
+      // A superseded survey record is history: renaming or re-categorising the
+      // report behind it would change the evidence its successor was written
+      // against. The current record's report stays editable — it is live filing.
+      return { metadataLocked: link.supersededById !== null };
     },
     deleteBlockedMessage: 'Survey report documents must be removed from the survey record.',
-    metadataLockedMessage: 'A survey report cannot be modified once the survey has been accepted.',
+    metadataLockedMessage:
+      'A survey report cannot be modified once the survey record has been superseded.',
   },
 ];
 

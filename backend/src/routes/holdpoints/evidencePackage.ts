@@ -93,8 +93,8 @@ export type EvidenceSurveyInput = {
   surveyedAt: Date | null;
   surveyorVerdict: string | null;
   verdictSourceNote: string | null;
-  acceptedAt: Date | null;
-  acceptedBy: EvidenceNamedUser;
+  receivedAt: Date | null;
+  receivedBy: EvidenceNamedUser;
   reportDocument?: { filename: string } | null;
 };
 
@@ -246,8 +246,12 @@ export function mapHoldPointEvidenceSurveys(surveys: EvidenceSurveyInput[]) {
     surveyorVerdict: survey.surveyorVerdict,
     verdictSourceNote: survey.verdictSourceNote,
     reportFilename: survey.reportDocument?.filename ?? null,
-    isAccepted: survey.status === 'accepted',
-    acceptedAt: survey.acceptedAt,
+    // Receipt, not acceptance. The superintendent reading this package IS the
+    // acceptance act — releasing the hold point against the report below — so a
+    // CIVOS "accepted" flag here would be the contractor pre-answering the
+    // question the package exists to ask (research §4.2).
+    isReceived: survey.status === 'received',
+    receivedAt: survey.receivedAt,
     // `[C5S-B1]` as a string the reader cannot miss: whose finding this is, and
     // who in CIVOS transcribed it.
     verdictAttribution: buildSurveyVerdictAttribution(survey),
@@ -256,7 +260,7 @@ export function mapHoldPointEvidenceSurveys(surveys: EvidenceSurveyInput[]) {
 
 function buildSurveyVerdictAttribution(survey: EvidenceSurveyInput): string {
   const surveyor = survey.surveyorName ?? 'the surveyor';
-  const recorder = survey.acceptedBy?.fullName;
+  const recorder = survey.receivedBy?.fullName;
   return (
     `Verdict stated by ${surveyor}` + (recorder ? `, recorded in CIVOS by ${recorder}` : '') + '.'
   );
@@ -327,9 +331,10 @@ export function buildHoldPointEvidenceSummary(
     totalPhotos: photos.length,
     totalAttachments: checklist.reduce((sum, i) => sum + i.attachments.length, 0),
     totalSurveys: surveys.length,
-    // NOT "conforming surveys". The count is of records a named CIVOS user
-    // accepted; whether the works conform is nobody's statement here.
-    acceptedSurveys: surveys.filter((s) => s.isAccepted).length,
+    // NOT "conforming surveys", and no longer "accepted" ones. The count is of
+    // records whose report has ARRIVED; whether the works conform is the
+    // surveyor's statement, and whether that is good enough is the reader's.
+    receivedSurveys: surveys.filter((s) => s.isReceived).length,
   };
 }
 

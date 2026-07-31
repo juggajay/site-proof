@@ -9,18 +9,23 @@
  * attributed — *"Surveyor's verdict: conforms — J. Smith, per report rev B"* —
  * never as a bare status chip that reads like CIVOS's own finding.
  *
+ * **CIVOS records RECEIPT; it never accepts** (2026-07-31 restructure,
+ * `docs/research/c5-surveyor-workflow-practice-2026-07-31.md` §4). There is no
+ * accept route here and there is no accepted state, because acceptance in AU
+ * civil is the hold-point release and the lot conformance — machinery CIVOS
+ * already ships, which consumes this record as its evidence. A survey deemed
+ * defective is `returned_for_correction` with a reason, and the corrected report
+ * is a NEW record that supersedes it.
+ *
  * The DB carries the invariants a route cannot be trusted with: the three
- * vocabularies, acceptance-requires-an-actor, acceptance-requires-a-verdict and
- * no self-supersession are all `CHECK` constraints (§5.2), asserted by raw SQL
+ * vocabularies, return-requires-a-reason, the receipt-actor pairing and no
+ * self-supersession are all `CHECK` constraints (§5.2), asserted by raw SQL
  * in AT-172 because a route-level test of a `CHECK` proves nothing about the
  * `CHECK`. What lives here is what a constraint cannot see: the previous row
- * (the transition map), a join (the supersession identity checks) and the
- * report gate.
+ * (the transition map), a join (the supersession identity checks), the report
+ * gate and the surveyor gate.
  *
  * Everything is behind `C5_SURVEY_RECORDS_ENABLED`, fail-closed: absent ⇒ off.
- * The five state names encode a claim about how a real job runs that no pilot
- * has confirmed, so they stay dark until one real conformance survey has
- * round-tripped `[C5S-B4]`.
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -29,7 +34,7 @@ import { z } from 'zod';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
-import { buildSurveyNotAcceptedItem } from '../../lib/evidenceReadiness/surveyItems.js';
+import { buildSurveyNotReceivedItem } from '../../lib/evidenceReadiness/surveyItems.js';
 import { prisma } from '../../lib/prisma.js';
 import { parseOrBadRequest } from '../../lib/zodParse.js';
 import {
@@ -43,7 +48,7 @@ import {
   SURVEY_KINDS,
   SURVEY_STATUSES,
   SURVEY_STATUSES_REQUIRING_REPORT,
-  SURVEY_TERMINAL_STATUSES,
+  SURVEY_STATUSES_REQUIRING_SURVEYOR,
   SURVEY_VERDICTS,
   VALID_SURVEY_TRANSITIONS,
   surveyRecordsEnabled,
@@ -68,7 +73,24 @@ export const SURVEY_CREATORS = [
   'site_engineer',
   'quality_manager',
 ];
-export const SURVEY_ACCEPTORS = ['owner', 'admin', 'project_manager', 'quality_manager'];
+
+/**
+ * The narrower set, for the two acts that judge a third party's deliverable:
+ * returning it for correction, and superseding a record with a new revision.
+ *
+ * Named for what it does now that nothing here accepts. Recording RECEIPT is
+ * not in this set — it is a filing act, and the party who does it is the
+ * site/project engineer who requested the survey: MRWA routes the result back to
+ * *"the Main Roads officer that requested the survey"*, and six independent AU
+ * job ads put survey coordination in the site engineer's duty list while zero of
+ * ~40 put it in a foreman's (research §1.3, §1.9).
+ *
+ * The return is the Project Manager's act in the published text — *"Any errors,
+ * deficiencies or ambiguities identified by the Project Manager shall be
+ * referred back to the Surveyor responsible for correction"* (TMR Surveying
+ * Standards Part 1 §7.6.4).
+ */
+export const SURVEY_DECIDERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
 
 export const SURVEY_REGISTER_MAX_LIMIT = 200;
 const SURVEY_REGISTER_DEFAULT_LIMIT = 50;
@@ -88,11 +110,9 @@ const SURVEY_SELECT = {
   reportDocumentId: true,
   surveyorVerdict: true,
   verdictSourceNote: true,
-  reviewedById: true,
-  reviewedAt: true,
-  acceptedById: true,
-  acceptedAt: true,
-  rejectionReason: true,
+  receivedById: true,
+  receivedAt: true,
+  returnReason: true,
   supersededById: true,
   supersessionReason: true,
   notes: true,
@@ -101,8 +121,7 @@ const SURVEY_SELECT = {
   lot: { select: { id: true, lotNumber: true } },
   reportDocument: { select: { id: true, filename: true, mimeType: true } },
   requestedBy: { select: { id: true, fullName: true } },
-  reviewedBy: { select: { id: true, fullName: true } },
-  acceptedBy: { select: { id: true, fullName: true } },
+  receivedBy: { select: { id: true, fullName: true } },
 } as const;
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
@@ -129,6 +148,9 @@ const createSurveySchema = z
     // same gates. A user filing one PDF must not click three buttons.
     status: z.enum(SURVEY_STATUSES as [string, ...string[]]).optional(),
     reportDocumentId: z.string().uuid().nullable().optional(),
+    // Filing a record that already came back from the surveyor is a real
+    // retrospective case, and the state is worthless without its reason.
+    returnReason: optionalText(1000),
     ...surveyBodyShape,
   })
   .strict();
@@ -143,7 +165,7 @@ const patchSurveySchema = z
 const statusSchema = z
   .object({
     status: z.enum(SURVEY_STATUSES as [string, ...string[]]),
-    rejectionReason: optionalText(1000),
+    returnReason: optionalText(1000),
   })
   .strict();
 
@@ -194,28 +216,89 @@ function assertReportPresentFor(status: string, reportDocumentId: string | null)
   if (SURVEY_STATUSES_REQUIRING_REPORT.has(status) && !reportDocumentId) {
     throw new AppError(
       400,
-      'A survey report must be attached before the survey can be recorded as received.',
+      'A survey report must be attached before the survey can be recorded as received or returned for correction.',
       'SURVEY_REPORT_REQUIRED',
     );
   }
 }
 
 /**
- * `[C5S-B1]`, at the route. The DB refuses an accepted row without an actor and
- * a verdict; this refuses it earlier and says why. "A human looked" is the
- * requirement — `'not_stated'` is a legitimate verdict.
+ * The surveyor gate, inherited from the deleted `accepted` gate.
+ *
+ * The certifying party on an AU conformance report is the surveyor and nobody
+ * else — the real artifact's signature block is `Surveyor / Date / Signature`,
+ * and certification is registration-gated in every AU jurisdiction captured
+ * (research §4.1). A report filed as arrived under nobody's name is not
+ * evidence, so the name is required at `received`.
+ *
+ * The VERDICT is deliberately not required with it. `accepted` demanded one
+ * because acceptance was a judgement that needed something to be a judgement
+ * ABOUT; receipt is not. The one real conformance report in the corpus was 20%
+ * within tolerance and 70% too high — a trim instruction, not a verdict
+ * (research §3.3) — so demanding a verdict at arrival would push a transcriber
+ * to invent one.
  */
-function assertAcceptable(record: { surveyorName: string | null; surveyorVerdict: string | null }) {
-  if (!record.surveyorName) {
+function assertAttributable(status: string, surveyorName: string | null): void {
+  if (SURVEY_STATUSES_REQUIRING_SURVEYOR.has(status) && !surveyorName) {
     throw AppError.badRequest(
-      'A survey cannot be accepted without the surveyor who performed it.',
+      'Record the surveyor who performed the survey before filing their report.',
       { code: 'SURVEYOR_REQUIRED' },
     );
   }
-  if (!record.surveyorVerdict) {
+}
+
+/**
+ * The return reason, at the route. The DB refuses a reasonless return; this
+ * refuses it earlier and says why.
+ *
+ * Six distinct return triggers are evidenced — format, wrong method for the
+ * specified accuracy, missing coverage, wrong datum, wrong design surface,
+ * content mismatch — and each demands a different fix from the surveyor, who
+ * has one business day to action it (research §5.3, §5.6). "Returned" with no
+ * reason is a message that cannot be acted on.
+ */
+/**
+ * The transition map, plus the two things it cannot say on its own.
+ *
+ * A superseded record is history: its state is what it was when it was
+ * replaced, and moving it would rewrite what the successor was written against.
+ *
+ * And the map's one dead end is not a dead end in the WORKFLOW. The AU idiom for
+ * a redo is a new, cross-referenced artifact (MRTS50 cl. 7.2), so the corrected
+ * report is a new record that supersedes this one. A bare "no transitions
+ * allowed" would read as "this record is finished", which it is not — hence the
+ * hint.
+ */
+function assertTransitionAllowed(
+  record: { status: string; supersededById: string | null },
+  status: string,
+): void {
+  if (record.supersededById) {
+    throw AppError.badRequest('A superseded survey record cannot change state.', {
+      code: 'SURVEY_SUPERSEDED_IMMUTABLE',
+    });
+  }
+
+  const allowed = VALID_SURVEY_TRANSITIONS[record.status] ?? [];
+  if (allowed.includes(status)) {
+    return;
+  }
+
+  throw AppError.badRequest(`Cannot move a survey from ${record.status} to ${status}`, {
+    code: 'INVALID_SURVEY_TRANSITION',
+    from: record.status,
+    allowedTransitions: allowed,
+    ...(record.status === 'returned_for_correction'
+      ? { hint: 'File the corrected report as a new survey record and supersede this one.' }
+      : {}),
+  });
+}
+
+function assertReturnReason(status: string, returnReason: string | null): void {
+  if (status === 'returned_for_correction' && !returnReason?.trim()) {
     throw AppError.badRequest(
-      "A survey cannot be accepted without the surveyor's stated verdict (use 'not_stated' if the report gave none).",
-      { code: 'SURVEYOR_VERDICT_REQUIRED' },
+      'Say what has to be corrected — the surveyor is being asked to fix something specific.',
+      { code: 'SURVEY_RETURN_REASON_REQUIRED' },
     );
   }
 }
@@ -231,14 +314,14 @@ async function assertCreationGates(
   projectId: string,
   status: string,
   reportDocumentId: string | null,
-  body: { surveyorName?: string | null; surveyorVerdict?: string | null },
+  body: { surveyorName?: string | null; returnReason?: string | null },
 ): Promise<void> {
-  if (SURVEY_TERMINAL_STATUSES.has(status)) {
+  if (status === 'returned_for_correction') {
     await requireEffectiveProjectRole(
       user,
       projectId,
-      SURVEY_ACCEPTORS,
-      'You do not have permission to accept or reject surveys',
+      SURVEY_DECIDERS,
+      'You do not have permission to return surveys for correction',
       { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
     );
   }
@@ -246,42 +329,49 @@ async function assertCreationGates(
     await assertDocumentInProject(tx, reportDocumentId, projectId);
   }
   assertReportPresentFor(status, reportDocumentId);
-  if (status === 'accepted') {
-    assertAcceptable({
-      surveyorName: body.surveyorName ?? null,
-      surveyorVerdict: body.surveyorVerdict ?? null,
-    });
-  }
+  assertAttributable(status, body.surveyorName ?? null);
+  assertReturnReason(status, body.returnReason ?? null);
 }
 
 /**
- * Who did it and when, stamped by the state being entered. `accepted_by` and
- * `accepted_at` are not decoration: the DB refuses an accepted row without both
- * (`survey_records_accepted_requires_actor_check`).
+ * Who did it and when, stamped by the state being entered. `received_by` and
+ * `received_at` move together or not at all
+ * (`survey_records_received_actor_check`), and a return carries its reason.
  */
 function statusStamp(
   status: string,
   userId: string,
-  rejectionReason: string | null,
+  returnReason: string | null,
 ): Record<string, unknown> {
   const now = new Date();
-  if (status === 'received') return { reviewedById: userId, reviewedAt: now };
-  if (status === 'accepted') return { acceptedById: userId, acceptedAt: now };
-  if (status === 'rejected') return { rejectionReason };
+  if (status === 'received') return { receivedById: userId, receivedAt: now };
+  if (status === 'returned_for_correction') return { returnReason };
   return {};
 }
 
-/** An accepted record is closed to everything but the non-substantive list. */
-function assertEditableWhenAccepted(status: string, providedKeys: string[]): void {
-  if (status !== 'accepted') {
+/**
+ * A SUPERSEDED record is closed to everything but the non-substantive list.
+ *
+ * This is where the immutability rule lives now that nothing is accepted, and
+ * it is aimed at the right row: a superseded record is the evidence that the
+ * first result was wrong, and the record that replaced it was written against
+ * exactly what this one says. C5.2 froze `accepted` records and left superseded
+ * ones editable, which had it backwards — the history was the mutable half.
+ *
+ * The CURRENT record stays editable in every state. Correcting a mistyped
+ * surveyor name on a live record is filing hygiene; changing what a record said
+ * after another record replaced it is rewriting history.
+ */
+function assertEditableWhenSuperseded(supersededById: string | null, providedKeys: string[]): void {
+  if (!supersededById) {
     return;
   }
   const substantive = providedKeys.filter(
     (key) => !NON_SUBSTANTIVE_SURVEY_EDIT_FIELDS.includes(key),
   );
   if (substantive.length > 0) {
-    throw AppError.badRequest('An accepted survey record cannot be edited.', {
-      code: 'SURVEY_ACCEPTED_IMMUTABLE',
+    throw AppError.badRequest('A superseded survey record cannot be edited.', {
+      code: 'SURVEY_SUPERSEDED_IMMUTABLE',
       fields: substantive,
     });
   }
@@ -402,10 +492,15 @@ lotSurveysRouter.post(
           lotId: lot.id,
           kind: body.kind,
           status,
+          // Who filed it, always — it is what the folio's attribution falls back
+          // to. WHEN it was requested, only if it was: a record created straight
+          // at `received` is the retrospective case the short path exists for
+          // (research §1.5 — the contractual trigger is a lot state, not a
+          // person), and stamping a request date on it invents a request.
           requestedById: user.id,
-          requestedAt: new Date(),
+          requestedAt: status === 'requested' ? new Date() : null,
           reportDocumentId,
-          ...statusStamp(status, user.id, null),
+          ...statusStamp(status, user.id, body.returnReason ?? null),
         },
         select: SURVEY_SELECT,
       });
@@ -460,10 +555,15 @@ lotSurveysRouter.get(
     // Without the `supersededById === null` filter, opting into the history
     // would inflate the lot's own warning with records that were replaced
     // precisely so they would stop counting.
-    const notAccepted = surveys.filter(
-      (survey) => survey.supersededById === null && survey.status !== 'accepted',
+    //
+    // The signal is ARRIVAL: a record that is not `received` is a report the lot
+    // is still waiting on, whether nobody has done it yet (`requested`) or it
+    // came back wrong (`returned_for_correction`). What happens to a received
+    // report afterwards is the hold point's business, not this warning's.
+    const notReceived = surveys.filter(
+      (survey) => survey.supersededById === null && survey.status !== 'received',
     ).length;
-    const item = buildSurveyNotAcceptedItem(notAccepted);
+    const item = buildSurveyNotReceivedItem(notReceived);
 
     res.json({ surveys, readiness: item ? [item] : [] });
   }),
@@ -584,7 +684,14 @@ surveysRouter.patch(
         { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
       );
 
-      assertEditableWhenAccepted(record.status, providedKeys);
+      assertEditableWhenSuperseded(record.supersededById, providedKeys);
+
+      // The surveyor cannot be erased off a record that has already been filed
+      // as arrived — that would leave evidence attributed to nobody, which the
+      // status gate refused on the way in.
+      if (providedKeys.includes('surveyorName')) {
+        assertAttributable(record.status, body.surveyorName ?? null);
+      }
 
       // `[C5R-A4]`, write side: a changed lot is re-validated against the
       // record's own project.
@@ -636,7 +743,7 @@ surveysRouter.post(
         'You do not have permission to edit surveys for this project',
         { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
       );
-      assertEditableWhenAccepted(record.status, ['reportDocumentId']);
+      assertEditableWhenSuperseded(record.supersededById, ['reportDocumentId']);
       await assertDocumentInProject(tx, documentId, record.projectId);
 
       const next = await tx.surveyRecord.update({
@@ -660,47 +767,39 @@ surveysRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
-    const { status, rejectionReason } = parseOrBadRequest(statusSchema, req.body);
+    const { status, returnReason } = parseOrBadRequest(statusSchema, req.body);
 
     const updated = await prisma.$transaction(async (tx) => {
       const record = await loadSurveyOr404(tx, surveyId);
 
-      // The split at `testResults/workflowRoutes.ts`: acceptance and rejection
-      // need the higher set, everything else the creator set.
-      const decisive = status === 'accepted' || status === 'rejected';
+      // The split at `testResults/workflowRoutes.ts`: judging a third party's
+      // deliverable defective needs the higher set, filing its arrival does not.
+      const decisive = status === 'returned_for_correction';
       await requireEffectiveProjectRole(
         user,
         record.projectId,
-        decisive ? SURVEY_ACCEPTORS : SURVEY_CREATORS,
+        decisive ? SURVEY_DECIDERS : SURVEY_CREATORS,
         decisive
-          ? 'You do not have permission to accept or reject surveys'
+          ? 'You do not have permission to return surveys for correction'
           : 'You do not have permission to update survey status',
         { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
       );
 
-      const allowed = VALID_SURVEY_TRANSITIONS[record.status] ?? [];
-      if (!allowed.includes(status)) {
-        throw AppError.badRequest(`Cannot move a survey from ${record.status} to ${status}`, {
-          code: 'INVALID_SURVEY_TRANSITION',
-          from: record.status,
-          allowedTransitions: allowed,
-        });
-      }
+      assertTransitionAllowed(record, status);
 
       assertReportPresentFor(status, record.reportDocumentId);
-      if (status === 'accepted') {
-        assertAcceptable(record);
-      }
+      assertAttributable(status, record.surveyorName);
+      assertReturnReason(status, returnReason ?? null);
 
       const next = await tx.surveyRecord.update({
         where: { id: surveyId },
-        data: { status, ...statusStamp(status, user.id, rejectionReason ?? null) },
+        data: { status, ...statusStamp(status, user.id, returnReason ?? null) },
         select: SURVEY_SELECT,
       });
 
       await auditSurvey(tx, record, user.id, AuditAction.SURVEY_RECORD_STATUS_CHANGED, {
         status: { from: record.status, to: status },
-        rejectionReason: rejectionReason ?? null,
+        returnReason: returnReason ?? null,
       });
       return next;
     });
@@ -722,7 +821,7 @@ surveysRouter.post(
       await requireEffectiveProjectRole(
         user,
         record.projectId,
-        SURVEY_ACCEPTORS,
+        SURVEY_DECIDERS,
         'You do not have permission to supersede surveys for this project',
         { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
       );

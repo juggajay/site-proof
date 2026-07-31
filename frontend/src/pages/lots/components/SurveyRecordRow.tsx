@@ -19,8 +19,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import {
   SURVEY_PROGRESS_STEPS,
-  acceptBlockedReason,
-  canAcceptSurvey,
+  canReturnSurvey,
   isQuotableVerdict,
   surveyKindLabel,
   surveyStatusLabel,
@@ -60,19 +59,17 @@ function surveyorLine(record: SurveyRecord): string {
 const STATUS_PRESENTATION: Readonly<
   Record<string, { badge: string; tint: string; Icon: typeof Check }>
 > = {
-  accepted: {
+  // Green for ARRIVAL, and green only here. It says the report is in and the
+  // lot is not waiting — never that the works conform, and never that CIVOS
+  // accepted anything: acceptance happens at the hold point.
+  received: {
     badge: 'border-success/30 bg-success/10 text-success',
     tint: 'bg-success/10 text-success',
     Icon: Check,
   },
-  rejected: {
+  returned_for_correction: {
     badge: 'border-destructive/30 bg-destructive/10 text-destructive',
     tint: 'bg-destructive/10 text-destructive',
-    Icon: AlertTriangle,
-  },
-  received: {
-    badge: 'border-warning/30 bg-warning/10 text-warning',
-    tint: 'bg-warning/10 text-warning',
     Icon: AlertTriangle,
   },
 };
@@ -89,8 +86,9 @@ function presentationFor(status: string) {
 
 /**
  * Status badge — CIVOS's own state, and the ONLY place a survey row is
- * coloured. `accepted` is green because CIVOS did accept the record; that green
- * says nothing about whether the lot conforms.
+ * coloured. `received` is green because the report arrived; that green says
+ * nothing about whether the lot conforms, and nothing about whether anyone has
+ * accepted it.
  */
 function SurveyStatusBadge({ status }: { status: string }) {
   return (
@@ -160,7 +158,7 @@ export function SurveyVerdictBlock({ record }: { record: SurveyRecord }) {
 }
 
 /**
- * The four workflow steps as an ordered list, not a generic stepper component.
+ * The workflow steps as an ordered list, not a generic stepper component.
  *
  * An `<ol>` is what this is — a fixed sequence with a position in it — and it
  * reads correctly with CSS off and in a screen reader without a single ARIA
@@ -211,18 +209,16 @@ interface SurveyRecordRowProps {
   group: SurveyRevisionGroup;
   canDecide: boolean;
   deciding: boolean;
-  onDecide: (surveyId: string, status: 'accepted' | 'rejected') => void;
+  onReturn: (surveyId: string, returnReason: string) => void;
 }
 
-export function SurveyRecordRow({ group, canDecide, deciding, onDecide }: SurveyRecordRowProps) {
+export function SurveyRecordRow({ group, canDecide, deciding, onReturn }: SurveyRecordRowProps) {
   const [showEarlier, setShowEarlier] = useState(false);
-  const [confirmAccept, setConfirmAccept] = useState(false);
+  const [confirmReturn, setConfirmReturn] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
   const record = group.current;
 
-  const blockedReason = acceptBlockedReason(record);
-  const acceptable = canAcceptSurvey(record);
-  const showDecision = canDecide && record.status === 'received';
-  const verdictLabel = surveyVerdictLabel(record.surveyorVerdict);
+  const showDecision = canDecide && canReturnSurvey(record);
   const { tint, Icon } = presentationFor(record.status);
 
   return (
@@ -257,11 +253,21 @@ export function SurveyRecordRow({ group, canDecide, deciding, onDecide }: Survey
 
           <SurveyVerdictBlock record={record} />
 
-          {record.status === 'rejected' && record.rejectionReason && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Rejected by CIVOS:</span>{' '}
-              {record.rejectionReason}
-            </p>
+          {record.status === 'returned_for_correction' && (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Returned to the surveyor:</span>{' '}
+                {record.returnReason ?? 'no reason was recorded.'}
+              </p>
+              {/* Not a dead end. The corrected report is a NEW record that
+                  supersedes this one, so the reader is told where to look
+                  rather than left with a record that reads as finished. */}
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {group.earlier.length > 0 || record.supersededById
+                  ? 'The corrected report was filed as a new record.'
+                  : 'File the corrected report as a new survey record on this lot — this one stays as the record of what came back.'}
+              </p>
+            </div>
           )}
 
           {record.reportDocument && (
@@ -271,37 +277,22 @@ export function SurveyRecordRow({ group, canDecide, deciding, onDecide }: Survey
             </p>
           )}
 
-          {/* Progress + decision, in one control. Rejected records show no
-              stepper: rejection is a branch off `received`, not a fifth step. */}
-          {record.status !== 'rejected' && (
+          {/* Progress + the one decision. Returned records show no stepper: the
+              return is a branch off `received`, not a third step. */}
+          {record.status !== 'returned_for_correction' && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
               <SurveyStatusProgress status={record.status} />
               {showDecision && (
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onDecide(record.id, 'rejected')}
-                    disabled={deciding}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmAccept(true)}
-                    disabled={deciding || !acceptable}
-                    title={blockedReason ?? undefined}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Accept evidence record
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReturn(true)}
+                  disabled={deciding}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  Return for correction
+                </button>
               )}
             </div>
-          )}
-
-          {showDecision && blockedReason && (
-            <p className="mt-2 text-xs text-muted-foreground">{blockedReason}</p>
           )}
 
           {group.earlier.length > 0 && (
@@ -337,36 +328,56 @@ export function SurveyRecordRow({ group, canDecide, deciding, onDecide }: Survey
         </div>
       </div>
 
-      {/* The confirmation repeats the three facts the acceptor is standing
-          behind, and says in plain words what accepting does and does not
-          mean. `[C5S-B1]` is only true if the person clicking believes it. */}
+      {/* The reason is REQUIRED, and the confirm button stays disabled until it
+          is written — six distinct return triggers are evidenced and each
+          demands a different fix from the surveyor, who has one business day to
+          action it. "Returned" with no reason is a message nobody can act on. */}
       <ConfirmDialog
-        open={confirmAccept}
-        title="Accept this evidence record?"
-        confirmLabel="Accept evidence record"
-        onCancel={() => setConfirmAccept(false)}
+        open={confirmReturn}
+        title="Return this survey to the surveyor?"
+        confirmLabel="Return for correction"
+        variant="destructive"
+        confirmDisabled={returnReason.trim().length === 0}
+        onCancel={() => {
+          setConfirmReturn(false);
+          setReturnReason('');
+        }}
         onConfirm={() => {
-          setConfirmAccept(false);
-          onDecide(record.id, 'accepted');
+          setConfirmReturn(false);
+          onReturn(record.id, returnReason.trim());
+          setReturnReason('');
         }}
         description={
           <>
             <p>
-              <span className="font-medium text-foreground">{surveyorLine(record)}</span> stated on{' '}
+              This refers{' '}
               <span className="font-mono text-foreground">
-                {record.reportDocument?.filename ?? 'a report with no file attached'}
-              </span>
-              :
+                {record.reportDocument?.filename ?? 'the report'}
+              </span>{' '}
+              back to <span className="font-medium text-foreground">{surveyorLine(record)}</span>{' '}
+              for correction. It is not a rejection of the works — it says the deliverable itself
+              needs fixing.
             </p>
-            <p className="border-l-2 border-border pl-3 text-foreground">
-              {isQuotableVerdict(record.surveyorVerdict) ? `“${verdictLabel}”` : verdictLabel}
-            </p>
+            <label
+              htmlFor="survey-return-reason"
+              className="block text-xs font-medium text-foreground"
+            >
+              What has to be corrected?
+            </label>
+            <textarea
+              id="survey-return-reason"
+              value={returnReason}
+              onChange={(event) => setReturnReason(event.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="e.g. RTK GNSS used for vertical compliance on subgrade; chainage gaps exceed 50 m; computed against the superseded design surface"
+              className="w-full rounded-lg border border-border bg-background p-2 text-sm text-foreground"
+            />
             <p>
-              Accepting files this as evidence on the lot. CIVOS is recording the surveyor&rsquo;s
-              conclusion, not independently verifying it — it holds no levels, deviations or
-              tolerances for this lot and makes no conformance finding of its own.
+              The record stays on the lot with this reason against it, and keeps counting as
+              outstanding. When the corrected report arrives, file it as a new survey record and
+              supersede this one.
             </p>
-            <p>Your name and the time are recorded against the acceptance.</p>
           </>
         }
       />

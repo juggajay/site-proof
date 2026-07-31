@@ -18,7 +18,7 @@ import { HoldPointEvidencePackageCard } from './HoldPointEvidencePackageCard';
 const SURVEY: NonNullable<HPEvidencePackageData['surveys']>[number] = {
   id: 'survey-1',
   kind: 'conformance',
-  status: 'accepted',
+  status: 'received',
   surveyorName: 'J. Smith',
   surveyorCompany: 'Smith Surveys Pty Ltd',
   surveyorRegistration: 'Registered Surveyor 4471',
@@ -26,8 +26,8 @@ const SURVEY: NonNullable<HPEvidencePackageData['surveys']>[number] = {
   surveyorVerdict: 'conforms',
   verdictSourceNote: 'report rev B',
   reportFilename: 'conformance-survey-rev-b.pdf',
-  isAccepted: true,
-  acceptedAt: '2026-07-20T00:00:00.000Z',
+  isReceived: true,
+  receivedAt: '2026-07-20T00:00:00.000Z',
   verdictAttribution: 'Verdict stated by J. Smith, recorded in CIVOS by Quinn Manager.',
 };
 
@@ -56,7 +56,7 @@ describe('HoldPointEvidencePackageCard — survey records (Wave `C5.3`)', () => 
   });
 
   it('says "not recorded" rather than leaving a verdict blank', () => {
-    renderCard([{ ...SURVEY, surveyorVerdict: null, verdictSourceNote: null, isAccepted: false }]);
+    renderCard([{ ...SURVEY, surveyorVerdict: null, verdictSourceNote: null, isReceived: false }]);
 
     expect(screen.getByText(/Surveyor.s verdict: not recorded/)).toBeInTheDocument();
   });

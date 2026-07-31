@@ -152,64 +152,92 @@ describe('C5.2 — the survey record', () => {
   // -------------------------------------------------------------------------
   // AT-172 — proven at the DB, by raw SQL that bypasses the routes.
   // -------------------------------------------------------------------------
-  describe('AT-172 — CIVOS never accepts on its own', () => {
+  describe('AT-172 — the constraints, after the evidence-of-arrival restructure', () => {
     async function rawInsert(columns: Prisma.Sql) {
       await prisma.$executeRaw(columns);
     }
 
-    it('(a) refuses accepted with no actor — the row Rev 1 permitted', async () => {
-      await expect(
-        rawInsert(Prisma.sql`
-          INSERT INTO survey_records
-            (id, project_id, lot_id, kind, status, surveyor_verdict, updated_at)
-          VALUES
-            (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance', 'accepted',
-             'conforms', NOW())
-        `),
-      ).rejects.toThrow(/survey_records_accepted_requires_actor_check/);
+    it('(a) has no acceptance left to constrain — the three accepted CHECKs are gone', async () => {
+      // Acceptance is the hold-point release and the lot conformance, not an act
+      // on this record (research §4.6). The columns went with the act.
+      const columns = await prisma.$queryRaw<{ column_name: string }[]>(Prisma.sql`
+        SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'survey_records' AND column_name IN ('accepted_by','accepted_at')
+      `);
+      expect(columns).toEqual([]);
+
+      const checks = await prisma.$queryRaw<{ conname: string }[]>(Prisma.sql`
+        SELECT conname FROM pg_constraint
+         WHERE conrelid = 'survey_records'::regclass AND conname LIKE '%accepted%'
+      `);
+      expect(checks).toEqual([]);
     });
 
-    it('(b) refuses accepted_at without accepted_by', async () => {
+    it('(b) refuses a return with no reason — the state is worthless without it', async () => {
+      // Six distinct return triggers are evidenced and each demands a different
+      // fix (research §5.3). At the DB, so a future route cannot skip it.
       await expect(
         rawInsert(Prisma.sql`
           INSERT INTO survey_records
-            (id, project_id, lot_id, kind, status, accepted_at, updated_at)
+            (id, project_id, lot_id, kind, status, surveyor_name, updated_at)
+          VALUES
+            (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance',
+             'returned_for_correction', 'J. Smith', NOW())
+        `),
+      ).rejects.toThrow(/survey_records_returned_requires_reason_check/);
+
+      // Whitespace is not a reason either.
+      await expect(
+        rawInsert(Prisma.sql`
+          INSERT INTO survey_records
+            (id, project_id, lot_id, kind, status, return_reason, updated_at)
+          VALUES
+            (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance',
+             'returned_for_correction', '   ', NOW())
+        `),
+      ).rejects.toThrow(/survey_records_returned_requires_reason_check/);
+    });
+
+    it('(c) refuses received_at without received_by', async () => {
+      await expect(
+        rawInsert(Prisma.sql`
+          INSERT INTO survey_records
+            (id, project_id, lot_id, kind, status, received_at, updated_at)
           VALUES
             (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance', 'received',
              NOW(), NOW())
         `),
-      ).rejects.toThrow(/survey_records_accepted_actor_check/);
+      ).rejects.toThrow(/survey_records_received_actor_check/);
     });
 
-    it('(c) refuses accepted with a NULL verdict', async () => {
-      await expect(
-        rawInsert(Prisma.sql`
-          INSERT INTO survey_records
-            (id, project_id, lot_id, kind, status, accepted_by, accepted_at, updated_at)
-          VALUES
-            (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance', 'accepted',
-             ${adminUserId}, NOW(), NOW())
-        `),
-      ).rejects.toThrow(/survey_records_accepted_requires_verdict_check/);
-    });
-
-    it('accepts a fully attributed accepted row', async () => {
+    it('accepts a fully attributed received row', async () => {
       await rawInsert(Prisma.sql`
         INSERT INTO survey_records
           (id, project_id, lot_id, kind, status, surveyor_name, surveyor_verdict,
-           accepted_by, accepted_at, updated_at)
+           received_by, received_at, updated_at)
         VALUES
-          (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance', 'accepted',
+          (gen_random_uuid()::text, ${projectId}, ${lotId}, 'conformance', 'received',
            'J. Smith', 'conforms', ${adminUserId}, NOW(), NOW())
       `);
       expect(
         await prisma.surveyRecord.count({
-          where: { projectId, status: 'accepted', surveyorName: 'J. Smith' },
+          where: { projectId, status: 'received', surveyorName: 'J. Smith' },
         }),
       ).toBe(1);
     });
 
     it('refuses a status, kind or verdict outside the CHECK vocabularies', async () => {
+      // The retired states are refused BY NAME, which is what makes the rename a
+      // reviewed migration rather than silent drift.
+      for (const retired of ['in_progress', 'accepted', 'rejected']) {
+        await expect(
+          rawInsert(Prisma.sql`
+            INSERT INTO survey_records (id, project_id, kind, status, updated_at)
+            VALUES (gen_random_uuid()::text, ${projectId}, 'conformance', ${retired}, NOW())
+          `),
+        ).rejects.toThrow(/survey_records_status_check/);
+      }
+
       await expect(
         rawInsert(Prisma.sql`
           INSERT INTO survey_records (id, project_id, kind, status, updated_at)
@@ -260,70 +288,81 @@ describe('C5.2 — the survey record', () => {
       expect(res.body).toMatchObject({ status: 'requested', projectId, lotId });
     });
 
-    it('takes the short path requested -> received when the report is attached', async () => {
-      const created = await createSurvey({ reportDocumentId }).expect(201);
+    it('stamps requested_at only when the record actually starts at requested', async () => {
+      const requested = await createSurvey().expect(201);
+      expect(requested.body.requestedAt).toBeTruthy();
+
+      // The retrospective case: nobody requested this, the report just arrived.
+      // Dating a request that never happened is a lie the folio would print.
+      const retrospective = await createSurvey({
+        status: 'received',
+        reportDocumentId,
+        surveyorName: 'J. Smith',
+      }).expect(201);
+      expect(retrospective.body.requestedAt).toBeNull();
+      // Who FILED it is still recorded — the folio's attribution depends on it.
+      expect(retrospective.body.requestedBy.id).toBe(adminUserId);
+    });
+
+    it('takes the short path requested -> received when the report and surveyor are in', async () => {
+      const created = await createSurvey({ reportDocumentId, surveyorName: 'J. Smith' }).expect(
+        201,
+      );
       const res = await request(app)
         .post(`/api/surveys/${created.body.id}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'received' })
         .expect(200);
-      expect(res.body.status).toBe('received');
-      expect(res.body.reviewedById).toBeTruthy();
+      expect(res.body).toMatchObject({ status: 'received', receivedById: adminUserId });
+      expect(res.body.receivedAt).toBeTruthy();
     });
 
-    it('takes the short path requested -> accepted with report, surveyor and verdict', async () => {
-      const created = await createSurvey({
+    it('files a received record with NO verdict — arrival is not a judgement', async () => {
+      // `accepted` demanded a verdict because it was a judgement about one.
+      // Receipt is not: the one real AU conformance report in the corpus was 20%
+      // within tolerance and 70% too high — a trim instruction (research §3.3).
+      const res = await createSurvey({
+        status: 'received',
         reportDocumentId,
         surveyorName: 'J. Smith',
-        surveyorVerdict: 'conforms',
       }).expect(201);
-
-      const res = await request(app)
-        .post(`/api/surveys/${created.body.id}/status`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ status: 'accepted' })
-        .expect(200);
-      expect(res.body).toMatchObject({ status: 'accepted', acceptedById: adminUserId });
-      expect(res.body.acceptedAt).toBeTruthy();
+      expect(res.body).toMatchObject({ status: 'received', surveyorVerdict: null });
+      expect(res.body.receivedById).toBe(adminUserId);
     });
 
     it('creates directly at a non-default status, subject to the same gates', async () => {
-      const straightToAccepted = await createSurvey({
-        status: 'accepted',
-        reportDocumentId,
-        surveyorName: 'J. Smith',
-        surveyorVerdict: 'not_stated',
-      }).expect(201);
-      expect(straightToAccepted.body).toMatchObject({
-        status: 'accepted',
-        surveyorVerdict: 'not_stated',
-        acceptedById: adminUserId,
-      });
-
       // The gates still apply on creation: no report, no `received`.
-      const noReport = await createSurvey({ status: 'received' });
+      const noReport = await createSurvey({ status: 'received', surveyorName: 'J. Smith' });
       expect(noReport.status).toBe(400);
       expect(noReport.body.error.code).toBe('SURVEY_REPORT_REQUIRED');
 
-      // No verdict, no acceptance — `'not_stated'` is a verdict, absence is not.
-      const noVerdict = await createSurvey({
-        status: 'accepted',
+      // No surveyor, no arrival — evidence attributed to nobody is not evidence.
+      const noSurveyor = await createSurvey({ status: 'received', reportDocumentId });
+      expect(noSurveyor.status).toBe(400);
+      expect(noSurveyor.body.error.details.code).toBe('SURVEYOR_REQUIRED');
+
+      // Filing a return retrospectively still has to say what was wrong.
+      const noReason = await createSurvey({
+        status: 'returned_for_correction',
         reportDocumentId,
         surveyorName: 'J. Smith',
       });
-      expect(noVerdict.status).toBe(400);
-      expect(noVerdict.body.error.details.code).toBe('SURVEYOR_VERDICT_REQUIRED');
+      expect(noReason.status).toBe(400);
+      expect(noReason.body.error.details.code).toBe('SURVEY_RETURN_REASON_REQUIRED');
     });
 
-    it('refuses every pair outside the map, and treats accepted/rejected as terminal', async () => {
-      const created = await createSurvey({ reportDocumentId }).expect(201);
+    it('refuses every pair outside the map, and points a returned record at a new revision', async () => {
+      const created = await createSurvey({
+        reportDocumentId,
+        surveyorName: 'J. Smith',
+      }).expect(201);
       const id = created.body.id as string;
 
-      // requested -> rejected is not an edge.
+      // requested -> returned_for_correction is not an edge: nothing arrived yet.
       const badEdge = await request(app)
         .post(`/api/surveys/${id}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ status: 'rejected' });
+        .send({ status: 'returned_for_correction', returnReason: 'Wrong datum' });
       expect(badEdge.status).toBe(400);
       expect(badEdge.body.error.details.code).toBe('INVALID_SURVEY_TRANSITION');
 
@@ -332,99 +371,203 @@ describe('C5.2 — the survey record', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'received' })
         .expect(200);
-      await request(app)
-        .post(`/api/surveys/${id}/status`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ status: 'rejected', rejectionReason: 'Levels do not match the design surface' })
-        .expect(200);
 
-      // rejected is terminal.
-      const fromTerminal = await request(app)
+      const noReason = await request(app)
         .post(`/api/surveys/${id}/status`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ status: 'accepted' });
-      expect(fromTerminal.status).toBe(400);
-      expect(fromTerminal.body.error.details.allowedTransitions).toEqual([]);
+        .send({ status: 'returned_for_correction' });
+      expect(noReason.status).toBe(400);
+      expect(noReason.body.error.details.code).toBe('SURVEY_RETURN_REASON_REQUIRED');
+
+      const returned = await request(app)
+        .post(`/api/surveys/${id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          status: 'returned_for_correction',
+          returnReason: 'RTK GNSS used for vertical compliance on subgrade',
+        })
+        .expect(200);
+      expect(returned.body).toMatchObject({
+        status: 'returned_for_correction',
+        returnReason: 'RTK GNSS used for vertical compliance on subgrade',
+      });
+
+      // No edge out — and the refusal says where the workflow actually goes.
+      const fromReturned = await request(app)
+        .post(`/api/surveys/${id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'received' });
+      expect(fromReturned.status).toBe(400);
+      expect(fromReturned.body.error.details.allowedTransitions).toEqual([]);
+      expect(fromReturned.body.error.details.hint).toContain('supersede');
     });
 
-    it('lets a site engineer move a survey along but not accept it', async () => {
+    it('loops a returned record to a NEW revision through the supersession chain', async () => {
+      // The AU idiom for a redo: a new, renumbered artifact cross-referenced to
+      // its predecessor (MRTS50 cl. 7.2), never the same row flipped back.
+      const first = await createSurvey({
+        status: 'received',
+        reportDocumentId,
+        surveyorName: 'J. Smith',
+        surveyorVerdict: 'does_not_conform',
+      }).expect(201);
+
+      await request(app)
+        .post(`/api/surveys/${first.body.id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'returned_for_correction', returnReason: 'Chainage gaps exceed 50 m' })
+        .expect(200);
+
+      const corrected = await createSurvey({
+        status: 'received',
+        reportDocumentId,
+        surveyorName: 'J. Smith',
+        surveyorVerdict: 'conforms',
+      }).expect(201);
+
+      const superseded = await request(app)
+        .post(`/api/surveys/${first.body.id}/supersede`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ supersededById: corrected.body.id, reason: 'Re-survey after correction' })
+        .expect(200);
+      expect(superseded.body.supersededById).toBe(corrected.body.id);
+
+      // The returned record keeps its state and its reason — it is the evidence
+      // that the first result was bad — and stops counting as outstanding.
+      expect(superseded.body.status).toBe('returned_for_correction');
+      expect(superseded.body.returnReason).toBe('Chainage gaps exceed 50 m');
+    });
+
+    it('lets a site engineer record receipt but not return a survey for correction', async () => {
       const created = await createSurvey(
         { reportDocumentId, surveyorName: 'J. Smith', surveyorVerdict: 'conforms' },
         engineerToken,
       ).expect(201);
 
+      // Recording arrival is the site engineer's filing act — MRWA routes the
+      // result back to "the officer that requested the survey" (research §1.9).
       await request(app)
         .post(`/api/surveys/${created.body.id}/status`)
         .set('Authorization', `Bearer ${engineerToken}`)
         .send({ status: 'received' })
         .expect(200);
 
+      // Referring the deliverable back is the Project Manager's act in the
+      // published text (TMR Surveying Standards Part 1 §7.6.4).
       await request(app)
         .post(`/api/surveys/${created.body.id}/status`)
         .set('Authorization', `Bearer ${engineerToken}`)
-        .send({ status: 'accepted' })
+        .send({ status: 'returned_for_correction', returnReason: 'Wrong design surface' })
         .expect(403);
     });
   });
 
   // -------------------------------------------------------------------------
-  // AT-174 — an accepted survey resists substantive edits, field by field.
+  // AT-174 — a SUPERSEDED survey resists substantive edits, field by field.
+  //
+  // C5.2 froze accepted records and left superseded ones editable, which had it
+  // backwards: with acceptance gone, the frozen half is the history, and the
+  // current record stays editable because correcting a live record is filing
+  // hygiene rather than rewriting what a successor was written against.
   // -------------------------------------------------------------------------
-  describe('AT-174 — accepted records are closed', () => {
-    let acceptedId: string;
+  describe('AT-174 — superseded records are closed, current ones are not', () => {
+    let supersededId: string;
 
-    beforeAll(async () => {
-      const created = await request(app)
+    async function fileSurvey(body: Record<string, unknown> = {}) {
+      const res = await request(app)
         .post(`/api/lots/${lotId}/surveys`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           kind: 'as_built',
-          status: 'accepted',
+          status: 'received',
           reportDocumentId,
           surveyorName: 'J. Smith',
           surveyorVerdict: 'qualified',
           verdictSourceNote: 'Report rev B, section 4',
+          ...body,
         })
         .expect(201);
-      acceptedId = created.body.id;
+      return res.body.id as string;
+    }
+
+    beforeAll(async () => {
+      supersededId = await fileSurvey();
+      const replacementId = await fileSurvey({ surveyorVerdict: 'conforms' });
+      await request(app)
+        .post(`/api/surveys/${supersededId}/supersede`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ supersededById: replacementId, reason: 'Re-survey after correction' })
+        .expect(200);
     });
 
-    it.each([['notes']])('leaves the record accepted when only %s is edited', async (field) => {
+    it('lets the CURRENT record be corrected — a typo is not a rewrite of history', async () => {
+      const currentId = await fileSurvey();
       const res = await request(app)
-        .patch(`/api/surveys/${acceptedId}`)
+        .patch(`/api/surveys/${currentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ [field]: 'a working note added after acceptance' })
+        .send({ surveyorName: 'J. Smith (RPEQ 12345)' })
         .expect(200);
-      expect(res.body.status).toBe('accepted');
+      expect(res.body.surveyorName).toBe('J. Smith (RPEQ 12345)');
     });
+
+    it('refuses to erase the surveyor off a record already filed as received', async () => {
+      const currentId = await fileSurvey();
+      const res = await request(app)
+        .patch(`/api/surveys/${currentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ surveyorName: null });
+      expect(res.status).toBe(400);
+      expect(res.body.error.details.code).toBe('SURVEYOR_REQUIRED');
+    });
+
+    it.each([['notes']])(
+      'leaves a superseded record alone when only %s is edited',
+      async (field) => {
+        const res = await request(app)
+          .patch(`/api/surveys/${supersededId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ [field]: 'a working note added after supersession' })
+          .expect(200);
+        expect(res.body.supersededById).toBeTruthy();
+      },
+    );
 
     it.each([
       ['surveyorVerdict', 'conforms'],
       ['verdictSourceNote', 'Report rev C'],
       ['surveyorName', 'Somebody Else'],
-    ])('refuses a substantive edit to %s', async (field, value) => {
+    ])('refuses a substantive edit to %s on a superseded record', async (field, value) => {
       const res = await request(app)
-        .patch(`/api/surveys/${acceptedId}`)
+        .patch(`/api/surveys/${supersededId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ [field]: value });
       expect(res.status).toBe(400);
-      expect(res.body.error.details.code).toBe('SURVEY_ACCEPTED_IMMUTABLE');
+      expect(res.body.error.details.code).toBe('SURVEY_SUPERSEDED_IMMUTABLE');
       expect(res.body.error.details.fields).toContain(field);
     });
 
-    it('refuses re-pointing the report of an accepted survey', async () => {
+    it('refuses re-pointing the report of a superseded survey', async () => {
       const replacement = await createDocument(projectId, 'survey-report-rev-c.pdf');
       const res = await request(app)
-        .post(`/api/surveys/${acceptedId}/report`)
+        .post(`/api/surveys/${supersededId}/report`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ documentId: replacement.id });
       expect(res.status).toBe(400);
-      expect(res.body.error.details.code).toBe('SURVEY_ACCEPTED_IMMUTABLE');
+      expect(res.body.error.details.code).toBe('SURVEY_SUPERSEDED_IMMUTABLE');
+    });
+
+    it('refuses to move a superseded record to another state', async () => {
+      const res = await request(app)
+        .post(`/api/surveys/${supersededId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'returned_for_correction', returnReason: 'Too late' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.details.code).toBe('SURVEY_SUPERSEDED_IMMUTABLE');
     });
 
     it('rejects an unknown key outright rather than ignoring it', async () => {
       await request(app)
-        .patch(`/api/surveys/${acceptedId}`)
+        .patch(`/api/surveys/${supersededId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ toleranceResult: 'within' })
         .expect(400);
@@ -539,7 +682,7 @@ describe('C5.2 — the survey record', () => {
   // -------------------------------------------------------------------------
   // AT-178 — the warning never blocks.
   // -------------------------------------------------------------------------
-  it('AT-178 — an unaccepted survey warns and never blocks', async () => {
+  it('AT-178 — a survey whose report has not arrived warns and never blocks', async () => {
     const res = await request(app)
       .get(`/api/lots/${lotId}/surveys`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -547,11 +690,52 @@ describe('C5.2 — the survey record', () => {
 
     const item = res.body.readiness[0];
     expect(item).toMatchObject({
-      code: 'survey_not_accepted',
+      code: 'survey_not_received',
       severity: 'warning',
       area: 'survey',
       blocksAction: false,
     });
+  });
+
+  it('AT-178 — a returned record still counts as outstanding; a received one does not', async () => {
+    const lot = await createLot(projectId, `SUR-READINESS-${Date.now()}`);
+    const file = async (body: Record<string, unknown>) =>
+      (
+        await request(app)
+          .post(`/api/lots/${lot.id}/surveys`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ kind: 'conformance', surveyorName: 'J. Smith', ...body })
+          .expect(201)
+      ).body.id as string;
+
+    const readinessCount = async () =>
+      (
+        await request(app)
+          .get(`/api/lots/${lot.id}/surveys`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .expect(200)
+      ).body.readiness[0]?.count ?? 0;
+
+    await file({ status: 'received', reportDocumentId });
+    expect(await readinessCount()).toBe(0);
+
+    // Returned is NOT closed the way `rejected` was: the lot is still waiting on
+    // a corrected report, on a one-business-day clock (research §5.6).
+    const returned = await file({
+      status: 'returned_for_correction',
+      reportDocumentId,
+      returnReason: 'Missing points either side of CH 940',
+    });
+    expect(await readinessCount()).toBe(1);
+
+    // Superseding it by the corrected report clears the warning.
+    const corrected = await file({ status: 'received', reportDocumentId });
+    await request(app)
+      .post(`/api/surveys/${returned}/supersede`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ supersededById: corrected, reason: 'Corrected report' })
+      .expect(200);
+    expect(await readinessCount()).toBe(0);
   });
 
   // -------------------------------------------------------------------------
@@ -601,7 +785,7 @@ describe('C5.2 — the survey record', () => {
       expect(after?.reportDocument).toMatchObject({ id: document.id, isLatestVersion: true });
     });
 
-    it('locks the report metadata once the survey is accepted, and not before', async () => {
+    it('locks the report metadata once the survey record is superseded, and not before', async () => {
       const document = await createDocument(projectId, 'metadata-survey-report.pdf');
       const record = await prisma.surveyRecord.create({
         data: {
@@ -609,26 +793,26 @@ describe('C5.2 — the survey record', () => {
           lotId,
           kind: 'conformance',
           status: 'received',
+          surveyorName: 'J. Smith',
+          receivedById: adminUserId,
+          receivedAt: new Date(),
           reportDocumentId: document.id,
         },
       });
 
-      // `received` — a metadata edit is allowed.
+      // Current — a metadata edit is allowed.
       await request(app)
         .patch(`/api/documents/${document.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ caption: 'Conformance survey, rev A' })
         .expect(200);
 
+      const replacement = await prisma.surveyRecord.create({
+        data: { projectId, lotId, kind: 'conformance', status: 'requested' },
+      });
       await prisma.surveyRecord.update({
         where: { id: record.id },
-        data: {
-          status: 'accepted',
-          surveyorName: 'J. Smith',
-          surveyorVerdict: 'conforms',
-          acceptedById: adminUserId,
-          acceptedAt: new Date(),
-        },
+        data: { supersededById: replacement.id },
       });
 
       const locked = await request(app)
