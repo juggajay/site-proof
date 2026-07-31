@@ -18,6 +18,7 @@ import {
 } from '../../lib/readiness/requirements/lotConformance.v1.js';
 import { prisma } from '../../lib/prisma.js';
 import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
+import { loadSupersededGoverningRevisions } from '../../lib/revisionGovernance.js';
 import { PENDING_TEST_RESULT_STATUSES } from '../../lib/testResultStatus.js';
 import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 import {
@@ -306,6 +307,9 @@ lotQualityRouter.get(
       photos,
       pendingTests,
       fallbackRecipientCount,
+      // Wave G G1 (spec §1.3(d)). Empty map while REVISION_GOVERNANCE_ENABLED
+      // is off, so this costs one no-op call until the rollout step.
+      supersededGoverningRevisions,
     ] = await Promise.all([
       // Wave C1 (§3.4.3 [C1R-B7]). The readiness read runs outside any
       // transaction, so this is where the frequency-stream history read is
@@ -325,6 +329,7 @@ lotQualityRouter.get(
           role: { in: RELEASE_RECIPIENT_FALLBACK_PROJECT_ROLES },
         },
       }),
+      loadSupersededGoverningRevisions([id]),
     ]);
 
     if (!conformStatus.prerequisites) {
@@ -359,6 +364,7 @@ lotQualityRouter.get(
         pendingTests,
       },
       managementPrep: buildManagementPrepSnapshot(lot, fallbackRecipientCount),
+      supersededGoverningRevisions: supersededGoverningRevisions.get(id),
     });
 
     res.json(buildLotReadinessResponse(readiness));

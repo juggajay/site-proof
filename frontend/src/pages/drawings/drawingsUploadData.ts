@@ -48,6 +48,12 @@ export interface DrawingRevisionForm {
   title: string;
   issueDate: string;
   status: string;
+  /**
+   * Why the previous revision is being replaced. Wave G G1 (spec 1.7 E3): the
+   * backend rejects a supersession without one while REVISION_GOVERNANCE_ENABLED
+   * is on, and ignores it while the flag is off.
+   */
+  reason: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +81,7 @@ export const DEFAULT_REVISION_FORM: DrawingRevisionForm = {
   title: '',
   issueDate: '',
   status: 'for_construction',
+  reason: '',
 };
 
 // ---------------------------------------------------------------------------
@@ -126,6 +133,7 @@ export function normalizeRevisionForm(form: DrawingRevisionForm): DrawingRevisio
     ...form,
     revision: form.revision.trim(),
     title: form.title.trim(),
+    reason: form.reason.trim(),
   };
 }
 
@@ -166,6 +174,7 @@ export function buildDrawingRevisionFormData(file: File, form: DrawingRevisionFo
   formData.append('revision', form.revision);
   if (form.issueDate) formData.append('issueDate', form.issueDate);
   formData.append('status', form.status);
+  if (form.reason.trim()) formData.append('reason', form.reason.trim());
   return formData;
 }
 

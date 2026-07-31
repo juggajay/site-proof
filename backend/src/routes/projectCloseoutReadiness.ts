@@ -86,6 +86,13 @@ function sortHandoverCodes(codes: Iterable<HandoverReasonCode>): HandoverReasonC
  * scope, so the commercial builder's budget items must not enter the fold at
  * all — which makes AT-134's redaction a property of the code rather than a
  * filter that a later change could forget to apply.
+ *
+ * Wave G G1 names three readiness callers to teach about superseded governing
+ * revisions (spec §1.3(d)); this is the one deliberately left alone.
+ * `governing_revision_superseded` is a WARNING, and this fold reads
+ * `.blockers` and then filters to `HANDOVER_BLOCKING_REASON_CODES` — the item
+ * is excluded twice over, so fetching it here would be pure cost. That matches
+ * §1.7 E4: the warning never appears on the folio as a defect.
  */
 export function closeoutVerdict(snapshot: LotCloseoutReadinessSnapshot): HandoverReadinessVerdict {
   const readiness = buildLotReadinessFromInputs({

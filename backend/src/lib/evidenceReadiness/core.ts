@@ -188,6 +188,21 @@ export interface LotReadinessInput {
     pendingTests: number;
   };
   managementPrep?: ManagementPrepInput;
+  /**
+   * Wave G G1 (spec §1.3(d)). The lot's ACTIVE governing-revision links whose
+   * target record has since been superseded, as loaded by
+   * `lib/revisionGovernance.ts`. The engine stays pure and Prisma-free: the
+   * caller fetches, the engine decides.
+   *
+   * Absent (or empty) on every caller not taught to fetch it, and on every
+   * caller at all while `REVISION_GOVERNANCE_ENABLED` is off — and then no item
+   * is emitted, exactly as the flag-off contract requires.
+   */
+  supersededGoverningRevisions?: {
+    entityType: string;
+    entityId: string;
+    revisionLabel: string;
+  }[];
 }
 
 export interface ClaimEvidenceReviewInput {

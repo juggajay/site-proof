@@ -103,6 +103,41 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
   return items;
 }
 
+/**
+ * Wave G G1 (spec §1.3(d), §1.7 E1/E4, AT-G3). ONE item however many links are
+ * superseded — the count and the ids carry the rest — and never a blocker.
+ *
+ * Appended in `buildLotReadinessFromInputs` rather than inside
+ * `buildConformanceItems` because that builder short-circuits on `claimed` and
+ * `conformed`, and E4 requires the warning to show on an already-conformed lot:
+ * conformance already happened, and the record states what governed it.
+ */
+function buildGoverningRevisionItems(input: LotReadinessInput): EvidenceReadinessItem[] {
+  const superseded = input.supersededGoverningRevisions ?? [];
+  if (superseded.length === 0) return [];
+
+  const labels = superseded.map((revision) => revision.revisionLabel).join(', ');
+
+  return [
+    item({
+      code: 'governing_revision_superseded',
+      severity: 'warning',
+      area: 'document',
+      title:
+        superseded.length === 1
+          ? 'Governing revision superseded'
+          : `${superseded.length} governing revisions superseded`,
+      detail:
+        `This lot is linked to ${superseded.length === 1 ? 'a record' : 'records'} that ` +
+        `${superseded.length === 1 ? 'has' : 'have'} since been superseded (${labels}). ` +
+        'Check the current revision — work already performed is not invalidated.',
+      blocksAction: false,
+      count: superseded.length,
+      relatedIds: superseded.map((revision) => revision.entityId),
+    }),
+  ];
+}
+
 // Round a percentage for display without exposing floating-point noise.
 function roundReadinessPercentage(value: number): number {
   return Number(Math.max(0, Math.min(100, value)).toFixed(2));
@@ -395,7 +430,7 @@ function managementPrepCounts(input: LotReadinessInput): ManagementPrepCounts {
 }
 
 export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEvidenceReadiness {
-  const conformanceItems = buildConformanceItems(input);
+  const conformanceItems = [...buildConformanceItems(input), ...buildGoverningRevisionItems(input)];
   const claimItems = buildClaimItems(input);
   const managementPrepItems = buildManagementPrepItems(input);
 

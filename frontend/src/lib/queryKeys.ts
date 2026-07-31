@@ -60,6 +60,10 @@ export const queryKeys = {
   documents: (projectId: string) => ['documents', projectId] as const,
   drawings: (projectId: string) => ['drawings', projectId] as const,
 
+  // Revision governance (Wave G G1)
+  revisionIssues: (projectId: string, entityType: string, entityId: string) =>
+    ['revision-issues', projectId, entityType, entityId] as const,
+
   // Claims & Costs
   claims: (projectId: string) => ['claims', projectId] as const,
   variations: (projectId: string) => ['variations', projectId] as const,
