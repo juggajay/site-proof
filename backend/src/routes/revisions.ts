@@ -26,6 +26,7 @@ import { prisma } from '../lib/prisma.js';
 import {
   GOVERNED_ENTITY_TYPES,
   DOCUMENT_BACKED_ENTITY_TYPES,
+  loadSupersededGoverningRevisions,
   revisionGovernanceEnabled,
   type GovernedEntityType,
 } from '../lib/revisionGovernance.js';
@@ -173,6 +174,10 @@ router.get(
             notifiedAt: true,
             openedAt: true,
             acknowledgedAt: true,
+            // `recipientEmail` is null for every INTERNAL recipient (the schema
+            // permits exactly one of the two), so without this the timeline can
+            // only say "Project member" for the people it most needs to name.
+            user: { select: { id: true, fullName: true, email: true } },
           },
         },
       },
@@ -392,7 +397,29 @@ router.get(
       include: { linkedBy: { select: { id: true, fullName: true, email: true } } },
     });
 
-    res.json({ links });
+    // `superseded` per link, so a surface that cannot reach the readiness
+    // endpoint can still state the fact. The foreman shell is exactly that: the
+    // readiness engine emits `governing_revision_superseded` from the COMMERCIAL
+    // endpoint, which is role-gated away from him.
+    //
+    // Same helper the readiness engine uses — one definition of "superseded",
+    // including its limit: `itp_template` has no supersession column until G2
+    // §2.2(a), so a template link always reads false here.
+    const supersededHere = await loadSupersededGoverningRevisions([lot.id]);
+    const supersededKeys = new Set(
+      (supersededHere.get(lot.id) ?? []).map((row) => `${row.entityType}:${row.entityId}`),
+    );
+
+    res.json({
+      links: links.map((link) => ({
+        ...link,
+        // Only ACTIVE links are computed above. An unlinked row is history, and
+        // the active-only unique constraint means it can share an entity with a
+        // live link — so it must not inherit that link's answer.
+        superseded:
+          link.unlinkedAt === null && supersededKeys.has(`${link.entityType}:${link.entityId}`),
+      })),
+    });
   }),
 );
 

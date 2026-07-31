@@ -97,6 +97,40 @@ describe('formatStatusLabel', () => {
     });
   });
 
+  describe('revision governance labels (Wave G G1)', () => {
+    it('spells out every recipient acknowledgement state', () => {
+      expect(formatStatusLabel('revision_acknowledged')).toBe('Acknowledged');
+      expect(formatStatusLabel('revision_opened_not_acknowledged')).toBe(
+        'Opened, Not Acknowledged',
+      );
+      expect(formatStatusLabel('revision_notified_not_opened')).toBe('Notified, Not Opened');
+      expect(formatStatusLabel('revision_recipient_recorded')).toBe('Recorded as a Recipient');
+    });
+
+    it('labels the revision state on a governed record', () => {
+      expect(formatStatusLabel('revision_current')).toBe('Current');
+      expect(formatStatusLabel('revision_superseded')).toBe('Superseded');
+    });
+
+    it('needs the explicit entries — the Title Case fallback cannot produce them', () => {
+      // Without a map entry these render as "Revision Acknowledged" and, worse,
+      // "Revision Opened Not Acknowledged": no comma, and the leading noun makes
+      // an acknowledgement state read as the record's own status.
+      expect(formatStatusLabel('revision_acknowledged')).not.toBe('Revision Acknowledged');
+      expect(formatStatusLabel('revision_opened_not_acknowledged')).toContain(',');
+    });
+
+    it('keeps the ack state distinct from the record state', () => {
+      expect(formatStatusLabel('revision_acknowledged')).not.toBe(
+        formatStatusLabel('revision_current'),
+      );
+      // The chips are rendered uppercased; the distinction must survive that.
+      expect(formatStatusLabel('revision_opened_not_acknowledged').toUpperCase()).toBe(
+        'OPENED, NOT ACKNOWLEDGED',
+      );
+    });
+  });
+
   describe('STATUS_LABELS map', () => {
     it('never contains an underscore in any human label', () => {
       for (const label of Object.values(STATUS_LABELS)) {

@@ -564,6 +564,21 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
+    // Wave G G1: the lot hub asks whether any record governing the lot has been
+    // superseded. No links is the honest fixture — this lot has none — and it
+    // keeps the hub free of the warning banner.
+    if (/^\/api\/revisions\/lots\/[^/]+\/governing-revisions$/.test(path)) {
+      await fulfillJson(route, { links: [] });
+      return;
+    }
+
+    // The doc sheet's revision timeline. No issues is the pre-adoption case,
+    // which the timeline states in words rather than treating as an error.
+    if (path === '/api/revisions') {
+      await fulfillJson(route, { issues: [] });
+      return;
+    }
+
     await fulfillJson(route, { message: `Unhandled E2E API route: ${path}` }, 404);
   });
 
@@ -711,7 +726,10 @@ test.describe('Foreman mobile shell', () => {
     await expect(page.getByRole('heading', { name: 'Drawings & Docs' })).toBeVisible();
     await expect(page.getByRole('button', { name: /DRG-001/i })).toBeVisible();
     expect(api.drawingProjectIds).toContain(PROJECT_ID);
+    // G1: the card opens the doc sheet (card rules — one tap target, no nested
+    // action); the file is opened from the sheet's one prominent button.
     await page.getByRole('button', { name: /DRG-001/i }).click();
+    await page.getByRole('button', { name: /Open drawing DRG-001/i }).click();
     await expect.poll(() => api.signedUrlDocumentIds).toContain('drawing-doc-1');
     await expect
       .poll(() =>

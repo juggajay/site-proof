@@ -6,6 +6,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   advanceToNextIncomplete,
+  governingRevisionWarning,
+  GOVERNING_REVISION_WARNING_NOTE,
+  type GoverningRevisionLink,
   canCompleteItem,
   deriveLotReadinessLine,
   deriveLotShellMeta,
@@ -565,5 +568,74 @@ describe('deriveLotReadinessLine', () => {
     expect(r.summary).toMatch(/1 check left/);
     expect(r.summary).toMatch(/1 open issue/);
     expect(r.summary).not.toMatch(/checks left/);
+  });
+});
+
+describe('governingRevisionWarning', () => {
+  const link = (over: Partial<GoverningRevisionLink> = {}): GoverningRevisionLink => ({
+    id: 'link-1',
+    entityType: 'drawing',
+    entityId: 'drg-1',
+    revisionLabel: 'REV B',
+    superseded: false,
+    ...over,
+  });
+
+  it('returns null when there are no links at all', () => {
+    expect(governingRevisionWarning([])).toBeNull();
+  });
+
+  it('returns null when every link is still current', () => {
+    expect(governingRevisionWarning([link(), link({ id: 'l2', entityId: 'drg-2' })])).toBeNull();
+  });
+
+  it('treats a missing superseded flag as NOT superseded', () => {
+    // An older backend (or the flag being off) omits the field. Absence of
+    // evidence is not a warning.
+    expect(governingRevisionWarning([{ ...link(), superseded: undefined }])).toBeNull();
+  });
+
+  it('uses the shipped readiness copy for a single superseded link', () => {
+    const warning = governingRevisionWarning([link({ superseded: true })]);
+    expect(warning).toEqual({
+      title: 'Governing revision superseded',
+      detail:
+        'This lot is linked to a record that has since been superseded (REV B). ' +
+        'Check the current revision — work already performed is not invalidated.',
+    });
+  });
+
+  it('pluralises the title, the verb and the label list', () => {
+    const warning = governingRevisionWarning([
+      link({ superseded: true }),
+      link({ id: 'l2', entityId: 'drg-2', revisionLabel: 'REV 3', superseded: true }),
+    ]);
+    expect(warning?.title).toBe('2 governing revisions superseded');
+    expect(warning?.detail).toContain('linked to records that have since been superseded');
+    expect(warning?.detail).toContain('(REV B, REV 3)');
+  });
+
+  it('counts only the superseded links, not every link on the lot', () => {
+    const warning = governingRevisionWarning([
+      link({ superseded: true }),
+      link({ id: 'l2', entityId: 'drg-2' }),
+      link({ id: 'l3', entityId: 'drg-3' }),
+    ]);
+    expect(warning?.title).toBe('Governing revision superseded');
+    expect(warning?.detail).toContain('(REV B)');
+  });
+
+  it('never claims work is invalidated, and never claims a block', () => {
+    const warning = governingRevisionWarning([link({ superseded: true })]);
+    expect(warning?.detail).toContain('work already performed is not invalidated');
+    expect(GOVERNING_REVISION_WARNING_NOTE).toBe(
+      'This is a warning. It does not block conforming the lot.',
+    );
+  });
+
+  it('says nothing about itp_template links, which cannot report superseded yet', () => {
+    // G2 §2.2(a) adds ITPTemplate.supersededById; until then the backend leaves
+    // the flag false for template links and this must not invent a verdict.
+    expect(governingRevisionWarning([link({ entityType: 'itp_template' })])).toBeNull();
   });
 });

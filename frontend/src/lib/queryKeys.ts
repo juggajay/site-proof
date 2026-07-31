@@ -72,6 +72,7 @@ export const queryKeys = {
   // Revision governance (Wave G G1)
   revisionIssues: (projectId: string, entityType: string, entityId: string) =>
     ['revision-issues', projectId, entityType, entityId] as const,
+  lotGoverningRevisions: (lotId: string) => ['lot-governing-revisions', lotId] as const,
 
   // Claims & Costs
   claims: (projectId: string) => ['claims', projectId] as const,

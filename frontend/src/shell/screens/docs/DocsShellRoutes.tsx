@@ -12,10 +12,13 @@
  * signed-URL idiom (openDocumentAccessUrl) the desktop Drawing Register already
  * uses — it opens the file full-screen in the phone's native PDF/image viewer
  * (zoom/pan for free). There is no DocumentViewerModal in the codebase to reuse,
- * so this is the strongest existing path. Because the file opens in a new tab,
- * there is NO /m/docs/:drawingId detail route — the list invokes the opener
- * directly (see DocsListScreen + useDocFileOpen). VIEW only (research 14): no
- * upload / new revision / supersede / delete affordances anywhere.
+ * so this is the strongest existing path.
+ *
+ * Still NO /m/docs/:drawingId route: a card opens the DocSheet as local state
+ * (G1), and the sheet invokes the opener. A route would put the drawing's
+ * revision history behind a back-stack entry a foreman did not ask for.
+ * VIEW + acknowledge only (research 14): no upload / new revision / supersede /
+ * delete / status-change affordance anywhere.
  *
  * Specs live in the same drawing register, so they appear here too; the separate
  * project Documents table is intentionally NOT merged in (scope: register only).

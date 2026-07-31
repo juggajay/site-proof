@@ -531,3 +531,63 @@ export function deriveLotReadinessLine(summary: ItpHubSummary, openNcrs: number)
 
   return { conformable, remainingItp, openNcrs, summary: line };
 }
+
+// ── Governing revision warning (Wave G G1) ────────────────────────────────────
+
+/** One `LotGoverningRevision` link as the shell reads it. */
+export interface GoverningRevisionLink {
+  id: string;
+  entityType: string;
+  entityId: string;
+  revisionLabel: string;
+  /** Computed server-side by the same helper the readiness engine uses. */
+  superseded?: boolean;
+}
+
+export interface GoverningRevisionWarning {
+  title: string;
+  detail: string;
+}
+
+/**
+ * The "a record governing this lot has been superseded" warning, or null.
+ *
+ * The title and detail are the SHIPPED readiness copy
+ * (`buildGoverningRevisionItems`, backend `lib/evidenceReadiness.ts`) word for
+ * word. They are reproduced rather than fetched because that item is emitted by
+ * the COMMERCIAL readiness endpoint, which is role-gated away from the foreman —
+ * the same trap `deriveLotReadinessLine` exists to avoid. The shell derives the
+ * fact from the links route instead, and says it in the office's words so the
+ * two surfaces cannot drift into describing one event differently.
+ *
+ * Known limit, deliberately not papered over: only `drawing` and the
+ * Document-backed classes can ever report `superseded`. `itp_template` has no
+ * supersession column until G2 §2.2(a), so this says nothing about template
+ * links rather than implying an all-clear it cannot support.
+ */
+export function governingRevisionWarning(
+  links: GoverningRevisionLink[],
+): GoverningRevisionWarning | null {
+  const superseded = links.filter((link) => link.superseded);
+  if (superseded.length === 0) return null;
+
+  const labels = superseded.map((link) => link.revisionLabel).join(', ');
+  const one = superseded.length === 1;
+
+  return {
+    title: one
+      ? 'Governing revision superseded'
+      : `${superseded.length} governing revisions superseded`,
+    detail:
+      `This lot is linked to ${one ? 'a record' : 'records'} that ` +
+      `${one ? 'has' : 'have'} since been superseded (${labels}). ` +
+      'Check the current revision — work already performed is not invalidated.',
+  };
+}
+
+/**
+ * `blocksAction: false` in the readiness item, said in words a foreman can act
+ * on. It is a constant because the answer is a constant: G1 warns, never gates.
+ */
+export const GOVERNING_REVISION_WARNING_NOTE =
+  'This is a warning. It does not block conforming the lot.';

@@ -43,7 +43,13 @@ vi.mock('../useShellItpRun', () => ({
   }),
 }));
 
+let _governingLinks: GoverningRevisionLink[] = [];
+vi.mock('../useLotGoverningRevisions', () => ({
+  useLotGoverningRevisions: () => _governingLinks,
+}));
+
 import { LotHubScreen } from '../LotHubScreen';
+import type { GoverningRevisionLink } from '../lotsShellState';
 
 function makeLot(over: Partial<Lot>): Lot {
   return {
@@ -111,6 +117,65 @@ describe('LotHubScreen', () => {
     vi.clearAllMocks();
     _data = makeData();
     _instance = null;
+    _governingLinks = [];
+  });
+
+  // ── Governing-revision warning (Wave G G1) ────────────────────────────────
+
+  function link(over: Partial<GoverningRevisionLink> = {}): GoverningRevisionLink {
+    return {
+      id: 'link-1',
+      entityType: 'drawing',
+      entityId: 'drg-1',
+      revisionLabel: 'REV B',
+      superseded: false,
+      ...over,
+    };
+  }
+
+  it('shows no governing-revision warning when nothing is superseded', () => {
+    _governingLinks = [link(), link({ id: 'link-2', entityId: 'drg-2' })];
+    renderScreen();
+    expect(screen.queryByText(/governing revision/i)).toBeNull();
+  });
+
+  it('warns above the tiles when a governing revision has been superseded', () => {
+    _governingLinks = [link({ superseded: true })];
+    renderScreen();
+
+    expect(screen.getByText('Governing revision superseded')).toBeInTheDocument();
+    expect(screen.getByText(/has since been superseded \(REV B\)/)).toBeInTheDocument();
+    expect(
+      screen.getByText('This is a warning. It does not block conforming the lot.'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the warning BEFORE the first tile — it changes what they mean', () => {
+    _governingLinks = [link({ superseded: true })];
+    const { container } = renderScreen();
+
+    const notice = container.querySelector('.shell-notice-warn');
+    const firstTile = container.querySelector('.shell-hub');
+    expect(notice).not.toBeNull();
+    expect(firstTile).not.toBeNull();
+    expect(notice!.compareDocumentPosition(firstTile!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('pluralises the warning across several superseded links', () => {
+    _governingLinks = [
+      link({ superseded: true }),
+      link({ id: 'link-2', entityId: 'drg-2', revisionLabel: 'REV 3', superseded: true }),
+    ];
+    renderScreen();
+
+    expect(screen.getByText('2 governing revisions superseded')).toBeInTheDocument();
+    expect(screen.getByText(/have since been superseded \(REV B, REV 3\)/)).toBeInTheDocument();
+  });
+
+  it('never turns the warning into a gate — no conform/block affordance appears', () => {
+    _governingLinks = [link({ superseded: true })];
+    renderScreen();
+    expect(screen.queryByRole('button', { name: /conform|block|resolve|acknowledge/i })).toBeNull();
   });
 
   it('carries project and lot context to the Drawings & Docs surface', () => {
