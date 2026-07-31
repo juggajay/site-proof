@@ -6,6 +6,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
+import { assertCanonicalNcrVocabulary } from '../../lib/ncrVocabulary.js';
 import {
   NCR_QUALITY_MANAGEMENT_ROLES,
   parseNcrRouteParam,
@@ -48,6 +49,11 @@ ncrWorkflowRouter.post(
     const user = req.user as AuthUser;
     const id = parseNcrRouteParam(req.params.id, 'id');
     const { rootCauseCategory, rootCauseDescription, proposedCorrectiveAction } = validation.data;
+
+    // Wave G G5 (spec §5.2 gap 1, AT-G27). The root cause is what every trend
+    // in the learning loop groups on, so an unconstrained string here degrades
+    // the whole surface silently. No-op while NCR_LEARNING_LOOP_ENABLED is unset.
+    assertCanonicalNcrVocabulary({ rootCauseCategory });
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },

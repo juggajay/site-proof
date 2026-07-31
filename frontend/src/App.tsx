@@ -18,6 +18,7 @@ import {
   AUDIT_LOG_PAGE_ROLES,
   COMPANY_ADMIN_ROLES,
   COMMERCIAL_ROLES,
+  NCR_ANALYTICS_ROLES,
   HANDOVER_EXPORT_ROLES,
   INTERNAL_ROLES,
   LOT_EDITOR_ROLES,
@@ -59,6 +60,7 @@ import {
   LotsPage,
   MagicLinkPage,
   MyCompanyPage,
+  NCRAnalyticsPage,
   NCRPage,
   NotFoundPage,
   NotificationsPage,
@@ -454,6 +456,17 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <NCRPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+
+              {/* Wave G G5 — NCR trends. Office roles only (spec §7 row 7);
+                  the backend enforces the same set on the analytics route. */}
+              <Route
+                path="/projects/:projectId/ncr/analytics"
+                element={
+                  <ProjectProtectedRoute allowedRoles={NCR_ANALYTICS_ROLES}>
+                    <NCRAnalyticsPage />
                   </ProjectProtectedRoute>
                 }
               />

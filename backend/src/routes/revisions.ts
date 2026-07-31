@@ -255,15 +255,25 @@ router.post(
         });
       }
 
-      // The supersession pointer. `itp_template` has none until G2 §2.2(a) adds
-      // `ITPTemplate.supersededById`, so a template supersession records the
-      // ISSUE here and gains its chain in G2 — stated rather than silently
-      // skipped.
-      if (body.supersedesId && isDocumentBacked(body.entityType)) {
-        await tx.document.update({
-          where: { id: body.supersedesId },
-          data: { supersededById: body.entityId },
-        });
+      // The supersession pointer.
+      //
+      // Wave G G5 closes the gap this block used to state: `itp_template` had
+      // no chain until G2 §2.2(a) added `ITPTemplate.supersededById`, so a
+      // template supersession recorded the ISSUE and left the chain unset. G2
+      // shipped the column (#1724) and G5's proposal-accept route writes it, so
+      // this route writes it too — one meaning, not two writers disagreeing.
+      if (body.supersedesId) {
+        if (isDocumentBacked(body.entityType)) {
+          await tx.document.update({
+            where: { id: body.supersedesId },
+            data: { supersededById: body.entityId },
+          });
+        } else if (body.entityType === 'itp_template') {
+          await tx.iTPTemplate.update({
+            where: { id: body.supersedesId },
+            data: { supersededById: body.entityId, supersededAt: new Date() },
+          });
+        }
       }
 
       return created;

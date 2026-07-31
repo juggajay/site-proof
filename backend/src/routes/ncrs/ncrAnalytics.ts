@@ -1,4 +1,28 @@
 // NCR analytics and role-check endpoints
+//
+// Wave G G5 (`docs/plans/wave-g-execution-spec-2026-07-31.md` §5) rewrote the
+// analytics query plan. Three things changed and each has a reason in the spec:
+//
+//  1. **The breakdowns are SQL aggregations, not a JS pass over an unbounded
+//     `findMany`.** §8 P4 targets p95 < 2s at 5,000 NCRs/project and names the
+//     shipped implementation as one that will not meet it; the `groupBy` pattern
+//     is copied from the sibling report route (`routes/reports/ncrRoutes.ts`).
+//     Monthly trends and the activity hop use parameterised `$queryRaw` because
+//     `date_trunc` and a join are not expressible through `groupBy`.
+//  2. **Every list is capped and carries counts, not id arrays.** [GR-N4]:
+//     `repeatOffenders` was uncapped and each entry carried unbounded `ncrIds`
+//     and `categories`. The `drillDown` block — an id array per bucket, the same
+//     unbounded shape — is gone with it. The endpoint had zero frontend
+//     consumers at HEAD, so nothing was depending on the removed block; the UI
+//     drills down by filtering the NCR register on the folded category instead.
+//  3. **The route is office-role gated.** §7 row 7: nothing in G5 is exposed to
+//     `subcontractor` / `subcontractor_admin`, and repeat-offender data about
+//     one subcontractor must never be readable by another. Shipped behaviour
+//     admitted any active project user, `viewer` and `foreman` included.
+//
+// These are unflagged on purpose (see `lib/ncrVocabulary.ts` for the full note):
+// they are defect fixes on a consumer-less route, and a flag on a defect fix
+// means the defect ships.
 import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
@@ -15,8 +39,22 @@ import {
   buildNcrAnalyticsResponse,
   buildNcrAnalyticsRoleResponse,
 } from './ncrAnalyticsResponses.js';
+import {
+  buildActivityBuckets,
+  buildRepeatIssues,
+  foldCategoryCounts,
+  foldRootCauseCounts,
+} from './ncrAnalyticsAggregation.js';
+import {
+  loadRecurringChecklistItems,
+  loadRepeatOffenders,
+  raisedAtRange,
+  toCount,
+} from './ncrAnalyticsLoaders.js';
 
 export const ncrAnalyticsRouter = Router();
+
+const CLOSED_STATUSES = ['closed', 'closed_concession'];
 
 function parseOptionalDateQuery(
   value: unknown,
@@ -73,9 +111,11 @@ ncrAnalyticsRouter.get(
     const endDate = parseOptionalDateQuery(req.query.endDate, 'endDate', true);
     validateDateRange(startDate, endDate);
 
-    await requireActiveProjectUser(projectId, user);
+    // Spec §7 row 7. Repeat-offender data names one subcontractor's failure rate
+    // to whoever is reading; that is an office judgement, never a field or
+    // portal one.
+    await requireActiveProjectUser(projectId, user, 'Access denied', NCR_QUALITY_MANAGEMENT_ROLES);
 
-    // Build date filter
     const dateFilter: Prisma.DateTimeFilter = {};
     if (startDate) {
       dateFilter.gte = startDate;
@@ -89,200 +129,142 @@ ncrAnalyticsRouter.get(
       where.raisedAt = dateFilter;
     }
 
-    // Get all NCRs for analytics
-    const ncrs = await prisma.nCR.findMany({
-      where,
-      select: {
-        id: true,
-        ncrNumber: true,
-        status: true,
-        severity: true,
-        category: true,
-        rootCauseCategory: true,
-        raisedAt: true,
-        closedAt: true,
-        dueDate: true,
-        responsibleSubcontractorId: true,
-        description: true,
-      },
-    });
+    const range = raisedAtRange(startDate, endDate);
 
-    // Root cause breakdown
-    const rootCauseBreakdown: Record<string, number> = {};
-    ncrs.forEach((ncr) => {
-      const cause = ncr.rootCauseCategory || 'Not categorized';
-      rootCauseBreakdown[cause] = (rootCauseBreakdown[cause] || 0) + 1;
-    });
+    const [
+      statusGroups,
+      severityGroups,
+      categoryGroups,
+      rootCauseGroups,
+      repeatIssueGroups,
+      offenderCounts,
+      overdueNCRs,
+      linkedToChecklistItem,
+      volumeRows,
+      closureRows,
+      activityRows,
+      itemGroups,
+    ] = await Promise.all([
+      prisma.nCR.groupBy({ by: ['status'], where, _count: { _all: true } }),
+      prisma.nCR.groupBy({ by: ['severity'], where, _count: { _all: true } }),
+      prisma.nCR.groupBy({ by: ['category'], where, _count: { _all: true } }),
+      prisma.nCR.groupBy({ by: ['rootCauseCategory'], where, _count: { _all: true } }),
+      prisma.nCR.groupBy({
+        by: ['category', 'rootCauseCategory'],
+        where,
+        _count: { _all: true },
+      }),
+      prisma.nCR.groupBy({
+        by: ['responsibleSubcontractorId'],
+        where: { ...where, responsibleSubcontractorId: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.nCR.count({
+        where: { ...where, dueDate: { lt: new Date() }, status: { notIn: CLOSED_STATUSES } },
+      }),
+      prisma.nCR.count({ where: { ...where, itpChecklistItemId: { not: null } } }),
+      prisma.$queryRaw<Array<{ month: string; count: bigint }>>`
+        SELECT to_char(n.raised_at AT TIME ZONE 'UTC', 'YYYY-MM') AS month, COUNT(*) AS count
+        FROM ncrs n
+        WHERE n.project_id = ${projectId} ${range}
+        GROUP BY 1
+        ORDER BY 1
+      `,
+      prisma.$queryRaw<Array<{ month: string; count: bigint; total_days: number }>>`
+        SELECT
+          to_char(n.closed_at AT TIME ZONE 'UTC', 'YYYY-MM') AS month,
+          COUNT(*) AS count,
+          SUM(EXTRACT(EPOCH FROM (n.closed_at - n.raised_at)) / 86400.0) AS total_days
+        FROM ncrs n
+        WHERE n.project_id = ${projectId} AND n.closed_at IS NOT NULL ${range}
+        GROUP BY 1
+        ORDER BY 1
+      `,
+      // AT-G28: the NCR -> NCRLot -> Lot.activitySlug hop. LEFT JOINs so an NCR
+      // with no lot, or a lot with a null slug, lands in the explicit
+      // "not classified" bucket rather than vanishing from the chart.
+      // COUNT(DISTINCT) so a two-lot NCR is one NCR in each activity it touched.
+      prisma.$queryRaw<Array<{ slug: string | null; count: bigint }>>`
+        SELECT l.activity_slug AS slug, COUNT(DISTINCT n.id) AS count
+        FROM ncrs n
+        LEFT JOIN ncr_lots nl ON nl.ncr_id = n.id
+        LEFT JOIN lots l ON l.id = nl.lot_id
+        WHERE n.project_id = ${projectId} ${range}
+        GROUP BY 1
+      `,
+      prisma.nCR.groupBy({
+        by: ['itpChecklistItemId', 'responsibleSubcontractorId'],
+        where: { ...where, itpChecklistItemId: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
 
-    // Category breakdown
-    const categoryBreakdown: Record<string, number> = {};
-    ncrs.forEach((ncr) => {
-      const cat = ncr.category || 'Uncategorized';
-      categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
-    });
-
-    // Severity breakdown
-    const severityBreakdown: Record<string, number> = {
-      minor: 0,
-      major: 0,
-    };
-    ncrs.forEach((ncr) => {
-      severityBreakdown[ncr.severity] = (severityBreakdown[ncr.severity] || 0) + 1;
-    });
-
-    // Status breakdown
     const statusBreakdown: Record<string, number> = {};
-    ncrs.forEach((ncr) => {
-      statusBreakdown[ncr.status] = (statusBreakdown[ncr.status] || 0) + 1;
-    });
+    let totalNCRs = 0;
+    let closedNCRs = 0;
+    for (const group of statusGroups) {
+      const count = group._count._all;
+      statusBreakdown[group.status] = count;
+      totalNCRs += count;
+      if (CLOSED_STATUSES.includes(group.status)) closedNCRs += count;
+    }
+    const openNCRs = totalNCRs - closedNCRs;
 
-    // Calculate metrics
-    const totalNCRs = ncrs.length;
-    const openNCRs = ncrs.filter((n) => !['closed', 'closed_concession'].includes(n.status)).length;
-    const closedNCRs = ncrs.filter((n) =>
-      ['closed', 'closed_concession'].includes(n.status),
-    ).length;
-    const overdueNCRs = ncrs.filter((n) => {
-      if (!n.dueDate || ['closed', 'closed_concession'].includes(n.status)) return false;
-      return new Date(n.dueDate) < new Date();
-    }).length;
-
-    // Average time to close (for closed NCRs)
-    const closedWithDates = ncrs.filter((n) => n.closedAt && n.raisedAt);
-    let avgDaysToClose = 0;
-    if (closedWithDates.length > 0) {
-      const totalDays = closedWithDates.reduce((sum, n) => {
-        const diff = new Date(n.closedAt!).getTime() - new Date(n.raisedAt).getTime();
-        return sum + diff / (1000 * 60 * 60 * 24);
-      }, 0);
-      avgDaysToClose = Math.round((totalDays / closedWithDates.length) * 10) / 10;
+    const severityBreakdown: Record<string, number> = { minor: 0, major: 0 };
+    for (const group of severityGroups) {
+      severityBreakdown[group.severity] = group._count._all;
     }
 
-    // Format for chart data
-    const rootCauseChartData = Object.entries(rootCauseBreakdown)
-      .map(([name, value]) => ({
-        name,
-        value,
-        percentage: Math.round((value / totalNCRs) * 100),
-      }))
-      .sort((a, b) => b.value - a.value);
+    const rootCauseChartData = foldRootCauseCounts(
+      rootCauseGroups.map((group) => ({
+        value: group.rootCauseCategory,
+        count: group._count._all,
+      })),
+      totalNCRs,
+    );
+    const categoryChartData = foldCategoryCounts(
+      categoryGroups.map((group) => ({ value: group.category, count: group._count._all })),
+      totalNCRs,
+    );
 
-    const categoryChartData = Object.entries(categoryBreakdown)
-      .map(([name, value]) => ({
-        name,
-        value,
-        percentage: Math.round((value / totalNCRs) * 100),
-      }))
-      .sort((a, b) => b.value - a.value);
+    const volumeTrendData = volumeRows.map((row) => ({
+      month: row.month,
+      count: toCount(row.count),
+    }));
 
-    // Closure time trend - group by month
-    const closureTimeTrend: Record<string, { totalDays: number; count: number }> = {};
-    closedWithDates.forEach((ncr) => {
-      const closedMonth = new Date(ncr.closedAt!).toISOString().substring(0, 7); // YYYY-MM format
-      const daysToClose =
-        (new Date(ncr.closedAt!).getTime() - new Date(ncr.raisedAt).getTime()) /
-        (1000 * 60 * 60 * 24);
-
-      if (!closureTimeTrend[closedMonth]) {
-        closureTimeTrend[closedMonth] = { totalDays: 0, count: 0 };
-      }
-      closureTimeTrend[closedMonth].totalDays += daysToClose;
-      closureTimeTrend[closedMonth].count += 1;
+    let closedTotalDays = 0;
+    let closedWithDates = 0;
+    const closureTimeTrendData = closureRows.map((row) => {
+      const count = toCount(row.count);
+      const totalDays = Number(row.total_days ?? 0);
+      closedTotalDays += totalDays;
+      closedWithDates += count;
+      return {
+        month: row.month,
+        avgDays: count > 0 ? Math.round((totalDays / count) * 10) / 10 : 0,
+        count,
+      };
     });
+    const avgDaysToClose =
+      closedWithDates > 0 ? Math.round((closedTotalDays / closedWithDates) * 10) / 10 : 0;
 
-    const closureTimeTrendData = Object.entries(closureTimeTrend)
-      .map(([month, data]) => ({
-        month,
-        avgDays: Math.round((data.totalDays / data.count) * 10) / 10,
-        count: data.count,
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+    const activityChartData = buildActivityBuckets(
+      activityRows.map((row) => ({ value: row.slug, count: toCount(row.count) })),
+      totalNCRs,
+    );
 
-    // NCR volume trend - group by month
-    const volumeTrend: Record<string, number> = {};
-    ncrs.forEach((ncr) => {
-      const raisedMonth = new Date(ncr.raisedAt).toISOString().substring(0, 7);
-      volumeTrend[raisedMonth] = (volumeTrend[raisedMonth] || 0) + 1;
-    });
+    const repeatIssues = buildRepeatIssues(
+      repeatIssueGroups.map((group) => ({
+        category: group.category,
+        rootCauseCategory: group.rootCauseCategory,
+        count: group._count._all,
+      })),
+    );
 
-    const volumeTrendData = Object.entries(volumeTrend)
-      .map(([month, count]) => ({ month, count }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
-    // Feature #475: Repeat issue identification
-    // Group NCRs by category + root cause to identify repeat issues
-    const repeatIssueGroups: Record<
-      string,
-      {
-        category: string;
-        rootCause: string;
-        ncrs: { id: string; ncrNumber: string; raisedAt: Date; status: string }[];
-        count: number;
-      }
-    > = {};
-
-    ncrs.forEach((ncr) => {
-      const category = ncr.category || 'Uncategorized';
-      const rootCause = ncr.rootCauseCategory || 'Not categorized';
-      const key = `${category}::${rootCause}`;
-
-      if (!repeatIssueGroups[key]) {
-        repeatIssueGroups[key] = {
-          category,
-          rootCause,
-          ncrs: [],
-          count: 0,
-        };
-      }
-      repeatIssueGroups[key].ncrs.push({
-        id: ncr.id,
-        ncrNumber: ncr.ncrNumber,
-        raisedAt: ncr.raisedAt,
-        status: ncr.status,
-      });
-      repeatIssueGroups[key].count++;
-    });
-
-    // Filter to only show groups with 2+ NCRs (actual repeats)
-    const repeatIssues = Object.values(repeatIssueGroups)
-      .filter((group) => group.count >= 2)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10); // Top 10 repeat issues
-
-    // Also identify subcontractors with repeat issues
-    const subcontractorIssues: Record<
-      string,
-      {
-        subcontractorId: string;
-        ncrCount: number;
-        ncrIds: string[];
-        categories: string[];
-      }
-    > = {};
-
-    ncrs.forEach((ncr) => {
-      if (ncr.responsibleSubcontractorId) {
-        const subId = ncr.responsibleSubcontractorId;
-        if (!subcontractorIssues[subId]) {
-          subcontractorIssues[subId] = {
-            subcontractorId: subId,
-            ncrCount: 0,
-            ncrIds: [],
-            categories: [],
-          };
-        }
-        subcontractorIssues[subId].ncrCount++;
-        subcontractorIssues[subId].ncrIds.push(ncr.id);
-        if (!subcontractorIssues[subId].categories.includes(ncr.category || 'Uncategorized')) {
-          subcontractorIssues[subId].categories.push(ncr.category || 'Uncategorized');
-        }
-      }
-    });
-
-    // Filter to subcontractors with 2+ NCRs
-    const repeatOffenders = Object.values(subcontractorIssues)
-      .filter((sub) => sub.ncrCount >= 2)
-      .sort((a, b) => b.ncrCount - a.ncrCount);
+    const [repeatOffenders, recurring] = await Promise.all([
+      loadRepeatOffenders(projectId, where, offenderCounts),
+      loadRecurringChecklistItems(projectId, range, itemGroups),
+    ]);
 
     res.json(
       buildNcrAnalyticsResponse({
@@ -293,15 +275,24 @@ ncrAnalyticsRouter.get(
         avgDaysToClose,
         rootCauseChartData,
         categoryChartData,
+        activityChartData,
         severityBreakdown,
         statusBreakdown,
         closureTimeTrendData,
         volumeTrendData,
-        rootCauseBreakdown,
-        categoryBreakdown,
-        ncrs,
         repeatIssues,
         repeatOffenders,
+        recurringItems: recurring.items,
+        // Honest coverage, not an implied 100%: how many NCRs carry the
+        // checklist-item link at all, and how many of the recurring groups
+        // resolved to an item with no lineage pointer (every row created before
+        // G2 is its own root).
+        checklistItemCoverage: {
+          linked: linkedToChecklistItem,
+          total: totalNCRs,
+          itemsWithoutLineage: recurring.itemsWithoutLineage,
+          itemsObserved: recurring.itemsObserved,
+        },
       }),
     );
   }),

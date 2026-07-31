@@ -32,5 +32,19 @@ export const INTERNAL_ROLES = [
 // accident when a role is inserted into ROLE_HIERARCHY.
 export const HANDOVER_EXPORT_ROLES = ['owner', 'admin', 'project_manager', 'quality_manager'];
 
+// Wave G G5 — mirrors the backend's `NCR_QUALITY_MANAGEMENT_ROLES`
+// (`backend/src/routes/ncrs/ncrAccess.ts:41`), which the analytics route now
+// enforces (spec §7 row 7). Repeat-failure and repeat-offender trends name one
+// subcontractor's failure rate to whoever is reading, so the surface is an
+// office view: no foreman, no site engineer, no viewer, nothing to a
+// subcontractor. Listed literally for the same reason HANDOVER_EXPORT_ROLES is.
+export const NCR_ANALYTICS_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'quality_manager',
+];
+
 export const REPORT_ROLES = [...INTERNAL_ROLES, 'viewer'];
 export const PROJECT_WORKSPACE_ROLES = [...INTERNAL_ROLES, 'viewer'];

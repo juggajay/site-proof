@@ -23,6 +23,7 @@ import {
   rectificationNotesReferencesChecklistItem,
 } from './instances/ncrLinks.js';
 import { isUniqueConstraintOn } from '../ncrs/ncrCoreValidation.js';
+import { assertCanonicalNcrVocabulary } from '../../lib/ncrVocabulary.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
 import {
   assertExpectedPreviousItpCompletion,
@@ -162,6 +163,11 @@ completionsRouter.post(
       signatureDataUrl,
       expectedPreviousCompletion,
     } = parseResult.data;
+
+    // Wave G G5 (spec §5.2 gap 1, AT-G27): a failed ITP item raises an NCR, so
+    // this is a third NCR-category write site. No-op while
+    // NCR_LEARNING_LOOP_ENABLED is unset.
+    assertCanonicalNcrVocabulary({ category: ncrCategory });
 
     // Validate required reasons and derive the completion status (direct status
     // takes precedence over the isCompleted flag). See completionWorkflow.ts.
@@ -507,6 +513,13 @@ completionsRouter.post(
                   qmApprovalRequired: isMajor,
                   clientNotificationRequired: isMajor,
                   raisedById: user.userId,
+                  // Wave G G5 (spec §5.3, AT-G29): the first-class link. The
+                  // free-text marker below stays written — it is what the
+                  // shipped "View NCR" breadcrumb reconstruction reads and what
+                  // the backfill script parses for legacy rows — but recurrence
+                  // by checklist item now groups on an indexed column instead of
+                  // a substring search.
+                  itpChecklistItemId: checklistItemId,
                   // Store ITP item reference in rectification notes for traceability. The
                   // human-readable sentence keeps context for reviewers; the trailing
                   // machine-parseable marker lets the GET ITP instance endpoint re-attach

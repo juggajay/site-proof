@@ -96,6 +96,9 @@ export const TestResultsPage = lazy(() =>
 export const NCRPage = lazy(() =>
   import('@/pages/ncr/NCRPage').then((m) => ({ default: m.NCRPage })),
 );
+export const NCRAnalyticsPage = lazy(() =>
+  import('@/pages/ncr/analytics/NCRAnalyticsPage').then((m) => ({ default: m.NCRAnalyticsPage })),
+);
 export const DailyDiaryPage = lazy(() =>
   import('@/pages/diary/DailyDiaryPage').then((m) => ({ default: m.DailyDiaryPage })),
 );

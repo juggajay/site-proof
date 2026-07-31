@@ -85,6 +85,7 @@ vi.mock('./appLazyPages', () => ({
   PublicHoldPointBatchReleasePage: () => <div>Public hold point batch release</div>,
   TestResultsPage: () => <div>Test results</div>,
   NCRPage: () => <div>NCR</div>,
+  NCRAnalyticsPage: () => <div>NCR trends</div>,
   DailyDiaryPage: () => <div>Daily diary</div>,
   DelayRegisterPage: () => <div>Delays</div>,
   DocketApprovalsPage: () => <div>Docket approvals</div>,

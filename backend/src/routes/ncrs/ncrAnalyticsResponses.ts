@@ -1,42 +1,64 @@
+/**
+ * Response assembly for `GET /api/ncrs/analytics/:projectId`.
+ *
+ * Wave G G5 (spec §5) changed two things about the shape:
+ *
+ *  - **`drillDown` is gone.** It returned an array of every NCR id in every
+ *    root-cause and category bucket — the same unbounded shape [GR-N4] flags on
+ *    `repeatOffenders`, doubled. The endpoint had zero frontend consumers at
+ *    HEAD, so nothing was reading it; the UI drills down by filtering the NCR
+ *    register on a folded category, which is a route that already exists.
+ *  - **Buckets carry a canonical `key` alongside their label,** because the
+ *    labels are now derived from the shared vocabulary and a chart click needs
+ *    the value to filter by, not the words shown to the reader.
+ *
+ * `repeatOffenders.data[].{subcontractorId, ncrCount}` keep their shipped names.
+ */
+
 type Breakdown = Record<string, number>;
 
-type DrilldownNcr = {
-  id: string;
-  rootCauseCategory?: string | null;
-  category?: string | null;
-};
+export interface AnalyticsChecklistItemCoverage {
+  /** NCRs carrying `itpChecklistItemId`. */
+  linked: number;
+  /** NCRs in scope, linked or not. */
+  total: number;
+  /** Observed items with no `sourceChecklistItemId` — their own lineage root. */
+  itemsWithoutLineage: number;
+  /** Distinct linked items observed. */
+  itemsObserved: number;
+}
 
 export type NcrAnalyticsResponseInput<
-  TRootCauseData,
-  TCategoryData,
+  TChartDatum,
   TTrendData,
   TRepeatIssue,
   TRepeatOffender,
+  TRecurringItem,
 > = {
   totalNCRs: number;
   openNCRs: number;
   closedNCRs: number;
   overdueNCRs: number;
   avgDaysToClose: number;
-  rootCauseChartData: TRootCauseData[];
-  categoryChartData: TCategoryData[];
+  rootCauseChartData: TChartDatum[];
+  categoryChartData: TChartDatum[];
+  activityChartData: TChartDatum[];
   severityBreakdown: Breakdown;
   statusBreakdown: Breakdown;
   closureTimeTrendData: TTrendData[];
   volumeTrendData: TTrendData[];
-  rootCauseBreakdown: Breakdown;
-  categoryBreakdown: Breakdown;
-  ncrs: DrilldownNcr[];
   repeatIssues: TRepeatIssue[];
   repeatOffenders: TRepeatOffender[];
+  recurringItems: TRecurringItem[];
+  checklistItemCoverage: AnalyticsChecklistItemCoverage;
 };
 
 export function buildNcrAnalyticsResponse<
-  TRootCauseData,
-  TCategoryData,
+  TChartDatum,
   TTrendData,
   TRepeatIssue,
   TRepeatOffender,
+  TRecurringItem,
 >({
   totalNCRs,
   openNCRs,
@@ -45,22 +67,30 @@ export function buildNcrAnalyticsResponse<
   avgDaysToClose,
   rootCauseChartData,
   categoryChartData,
+  activityChartData,
   severityBreakdown,
   statusBreakdown,
   closureTimeTrendData,
   volumeTrendData,
-  rootCauseBreakdown,
-  categoryBreakdown,
-  ncrs,
   repeatIssues,
   repeatOffenders,
+  recurringItems,
+  checklistItemCoverage,
 }: NcrAnalyticsResponseInput<
-  TRootCauseData,
-  TCategoryData,
+  TChartDatum,
   TTrendData,
   TRepeatIssue,
-  TRepeatOffender
+  TRepeatOffender,
+  TRecurringItem
 >) {
+  const breakdownChart = (breakdown: Breakdown) =>
+    Object.entries(breakdown).map(([name, value]) => ({
+      key: name,
+      name,
+      value,
+      percentage: totalNCRs > 0 ? Math.round((value / totalNCRs) * 100) : 0,
+    }));
+
   return {
     summary: {
       total: totalNCRs,
@@ -79,21 +109,19 @@ export function buildNcrAnalyticsResponse<
         title: 'NCRs by Category',
         data: categoryChartData,
       },
+      activity: {
+        title: 'NCRs by Work Type',
+        description:
+          'Lot activity the NCR was raised against. An NCR spanning two activities counts in both.',
+        data: activityChartData,
+      },
       severity: {
         title: 'NCRs by Severity',
-        data: Object.entries(severityBreakdown).map(([name, value]) => ({
-          name,
-          value,
-          percentage: totalNCRs > 0 ? Math.round((value / totalNCRs) * 100) : 0,
-        })),
+        data: breakdownChart(severityBreakdown),
       },
       status: {
         title: 'NCRs by Status',
-        data: Object.entries(statusBreakdown).map(([name, value]) => ({
-          name,
-          value,
-          percentage: totalNCRs > 0 ? Math.round((value / totalNCRs) * 100) : 0,
-        })),
+        data: breakdownChart(statusBreakdown),
       },
       closureTimeTrend: {
         title: 'Average Closure Time Trend',
@@ -107,22 +135,6 @@ export function buildNcrAnalyticsResponse<
         data: volumeTrendData,
       },
     },
-    drillDown: {
-      rootCause: Object.fromEntries(
-        Object.keys(rootCauseBreakdown).map((cause) => [
-          cause,
-          ncrs
-            .filter((ncr) => (ncr.rootCauseCategory || 'Not categorized') === cause)
-            .map((ncr) => ncr.id),
-        ]),
-      ),
-      category: Object.fromEntries(
-        Object.keys(categoryBreakdown).map((category) => [
-          category,
-          ncrs.filter((ncr) => (ncr.category || 'Uncategorized') === category).map((ncr) => ncr.id),
-        ]),
-      ),
-    },
     repeatIssues: {
       title: 'Repeat Issues',
       description: 'NCRs grouped by category and root cause showing recurring problems',
@@ -133,6 +145,13 @@ export function buildNcrAnalyticsResponse<
       title: 'Subcontractors with Multiple NCRs',
       description: 'Subcontractors responsible for 2 or more NCRs',
       data: repeatOffenders,
+    },
+    recurringItems: {
+      title: 'Recurring ITP Failures',
+      description:
+        'Checklist items that failed two or more times, grouped by the requirement rather than by each project copy of it',
+      data: recurringItems,
+      coverage: checklistItemCoverage,
     },
   };
 }

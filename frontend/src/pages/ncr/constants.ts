@@ -16,25 +16,16 @@ export const ncrStatusColors: Record<string, string> = {
 // Default fallback status color
 export const DEFAULT_STATUS_COLOR = 'bg-muted text-foreground';
 
-// NCR category options for the create form
-export const NCR_CATEGORIES = [
-  { value: 'materials', label: 'Materials' },
-  { value: 'workmanship', label: 'Workmanship' },
-  { value: 'documentation', label: 'Documentation' },
-  { value: 'process', label: 'Process' },
-  { value: 'design', label: 'Design' },
-  { value: 'other', label: 'Other' },
-] as const;
-
-// Root cause category options for the respond form
-export const ROOT_CAUSE_CATEGORIES = [
-  { value: 'human_error', label: 'Human Error' },
-  { value: 'equipment', label: 'Equipment' },
-  { value: 'materials', label: 'Materials' },
-  { value: 'process', label: 'Process' },
-  { value: 'training', label: 'Training' },
-  { value: 'other', label: 'Other' },
-] as const;
+// NCR category options for the create form, and root-cause options for the
+// respond form. Wave G G5 (spec §5.2 gap 1) made these a server-enforced
+// vocabulary, so the lists now live in `@/lib/ncrVocabulary` — the frontend
+// mirror of `backend/src/lib/ncrVocabulary.ts`, with a pinned-equality drift
+// test on each side. Re-exported here so the existing import sites keep working
+// and there is exactly one list, not two that agree by luck.
+export {
+  NCR_CATEGORIES,
+  NCR_ROOT_CAUSE_CATEGORIES as ROOT_CAUSE_CATEGORIES,
+} from '@/lib/ncrVocabulary';
 
 /**
  * Returns the CSS class names for a given NCR status badge.
