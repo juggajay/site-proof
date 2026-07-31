@@ -213,6 +213,11 @@ export const AuditAction = {
   DIARY_SUBMITTED: 'diary_submitted',
   DIARY_REOPENED: 'diary_reopened',
   DIARY_ADDENDUM_ADDED: 'diary_addendum_added',
+  // Wave C5.1 §4.4a — the one write path that edits a delivery outside the
+  // diary-editable lock. Written with `writeAuditLogInTransaction` (hard-fail),
+  // carrying the diary's status and lock state so a reader can see the edit
+  // landed after submission.
+  DELIVERY_EVIDENCE_UPDATED: 'delivery_evidence_updated',
   // ITP
   ITP_ITEM_COMPLETED: 'itp_item_completed',
   ITP_ITEM_UPDATED: 'itp_item_updated',

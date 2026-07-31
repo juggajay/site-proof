@@ -8,6 +8,11 @@ import { requireAuth, requireRole } from './middleware/authMiddleware.js';
 import { authRouter } from './routes/auth.js';
 import { projectsRouter } from './routes/projects.js';
 import { lotsRouter } from './routes/lots.js';
+import {
+  deliveriesRouter,
+  lotDeliveriesRouter,
+  projectDeliveriesRouter,
+} from './routes/deliveries/index.js';
 import { foliosRouter } from './routes/folio/index.js';
 import {
   handoverExportsRouter,
@@ -147,7 +152,16 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/auth', authRateLimiter, authRouter);
   app.use('/api/api-keys', apiKeysRouter); // Feature #747: API key management
   app.use('/api/projects', projectsRouter);
+  // Wave C5.1 — delivery evidence. Two-segment read paths, so they never
+  // collide with the project/lot routers' dynamic `/:id`; mounted before them
+  // anyway, per the house rule that specific paths precede `/:id`.
+  app.use('/api/projects', projectDeliveriesRouter);
+  app.use('/api/lots', lotDeliveriesRouter);
   app.use('/api/lots', lotsRouter);
+  // §4.4a — the evidence-mutation route. Deliberately NOT nested under
+  // `/api/diary/:diaryId/...`: the caller is a quality manager at handover who
+  // has a lot and a delivery, not a diary id.
+  app.use('/api/deliveries', deliveriesRouter);
   // Wave D `D1b` — folio issue and download. Mounts no multer and accepts no
   // bytes on any route (`[DH-i]`, AT-143).
   app.use('/api/folios', foliosRouter);

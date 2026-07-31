@@ -88,6 +88,10 @@ export const READINESS_REASON_CODES = [
   // `blocksAction: false`, and deliberately NOT a member of
   // HANDOVER_BLOCKING_REASON_CODES — spec §1.7 E4, AT-G3/AT-G4.
   'governing_revision_superseded',
+  // Wave C5.1 — delivery traceability (lib/evidenceReadiness/deliveryItems.ts).
+  // Support severity, `blocksAction: false`, and deliberately NOT a member of
+  // `HANDOVER_BLOCKING_REASON_CODES` (`[C5S-B5]`).
+  'delivery_not_lot_linked',
 ] as const;
 
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
@@ -304,6 +308,12 @@ export const REASON_CODE_PROVENANCE: Record<
     // would make the registry cite a function that adds nothing.
     predicate: 'engine',
     source: 'buildGoverningRevisionItems (Wave G G1, spec §1.3(d))',
+  },
+  delivery_not_lot_linked: {
+    // Engine-owned count-only item: a plain `lotId IS NULL` count over the
+    // project's deliveries, with no dedicated predicate behind it.
+    predicate: 'engine',
+    source: 'buildUnlinkedDeliveryItem (delivery register, C5.1)',
   },
 };
 

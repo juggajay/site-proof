@@ -1183,16 +1183,22 @@
 }
 
 /* ---------- templates ---------- */
+/* Four columns for seven authority cells: two full rows, the last cell
+   spanning the gap. Five columns left three dead cells in row two once WA and
+   the national standards libraries joined the breakdown. */
 .sp-lp .tgrid {
   margin-top: 56px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border: 1px solid var(--hair);
   border-radius: 12px;
   overflow: hidden;
   background: var(--hair);
   gap: 1px;
   box-shadow: var(--sh-card);
+}
+.sp-lp .tgrid .tcell:last-child {
+  grid-column: span 2;
 }
 @media (max-width: 880px) {
   .sp-lp .tgrid {

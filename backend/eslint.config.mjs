@@ -43,6 +43,7 @@ export default tseslint.config(
       'scripts/bench-pdf-folio.mjs',
       'scripts/bench-zip-spike.mjs',
       'scripts/bench-zip-cost.mjs',
+      'scripts/verify-marketing-claims.mjs',
     ],
     languageOptions: {
       globals: {

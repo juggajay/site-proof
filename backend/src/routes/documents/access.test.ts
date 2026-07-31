@@ -7,6 +7,11 @@ const mockPrisma = vi.hoisted(() => ({
   variationEvidence: {
     findFirst: vi.fn(),
   },
+  // Wave C5.1: `delivery_docket` is the third EVIDENCE_LINK_GUARDS entry, so
+  // the metadata/delete guards now probe this table too.
+  diaryDelivery: {
+    findFirst: vi.fn(),
+  },
   iTPCompletionAttachment: {
     findFirst: vi.fn(),
   },
@@ -113,6 +118,7 @@ describe('document access', () => {
     mockPrisma.lot.findFirst.mockResolvedValue(null);
     mockPrisma.nCREvidence.findFirst.mockResolvedValue(null);
     mockPrisma.variationEvidence.findFirst.mockResolvedValue(null);
+    mockPrisma.diaryDelivery.findFirst.mockResolvedValue(null);
     mockPrisma.iTPCompletionAttachment.findFirst.mockResolvedValue(null);
     ncrAccessMocks.canReadNcr.mockResolvedValue(false);
   });
