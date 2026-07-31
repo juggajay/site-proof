@@ -7,6 +7,11 @@ import { SheetErrorBanner } from './SheetErrorBanner';
 import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 import { DictationMicButton } from '@/components/ui/DictationMicButton';
+import { DeliveryDocketCapture } from '@/components/deliveries/DeliveryDocketCapture';
+import { queueDeliveryDocket } from '@/components/deliveries/queueDeliveryDocket';
+import { toast } from '@/components/ui/toaster';
+import { useAuth } from '@/lib/auth';
+import { logError } from '@/lib/logger';
 import {
   getOptionalDiaryQuantityError,
   parseOptionalDiaryQuantityInput,
@@ -15,6 +20,7 @@ import {
 interface AddDeliverySheetProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Resolves with the delivery id so a captured docket can be filed against it. */
   onSave: (data: {
     description: string;
     supplier?: string;
@@ -23,7 +29,9 @@ interface AddDeliverySheetProps {
     unit?: string;
     lotId?: string;
     notes?: string;
-  }) => Promise<void>;
+  }) => Promise<string | undefined | void>;
+  /** Required to queue a docket photo; without it capture is not offered. */
+  projectId?: string;
   defaultLotId: string | null;
   lots: Array<{ id: string; lotNumber: string }>;
   initialData?: {
@@ -43,11 +51,16 @@ export function AddDeliverySheet({
   isOpen,
   onClose,
   onSave,
+  projectId,
   defaultLotId,
   lots,
   initialData,
   draftKey,
 }: AddDeliverySheetProps) {
+  const { user } = useAuth();
+  // Not drafted — a File cannot be serialised, and a restored draft that
+  // silently lost the photo would be worse than one that never had it.
+  const [docketFile, setDocketFile] = useState<File | null>(null);
   // An interrupted entry restored from the auto-draft; edits never draft.
   const [restoredDraft] = useState(() => (initialData ? null : readSheetDraft(draftKey)));
   const [description, setDescription] = useState(
@@ -71,7 +84,9 @@ export function AddDeliverySheet({
     !!initialData ||
       Boolean(
         restoredDraft &&
-        (restoredDraft.quantity ||
+        (restoredDraft.supplier ||
+          restoredDraft.docketNumber ||
+          restoredDraft.quantity ||
           restoredDraft.unit ||
           restoredDraft.notes ||
           (restoredDraft.lotId || '') !== (defaultLotId || '')),
@@ -110,8 +125,8 @@ export function AddDeliverySheet({
     if (!description.trim() || quantityError) return;
     const parsedQuantity = parseOptionalDiaryQuantityInput(quantity);
     void runSave(
-      () =>
-        onSave({
+      async () => {
+        const deliveryId = await onSave({
           description: description.trim(),
           supplier: supplier || undefined,
           docketNumber: docketNumber || undefined,
@@ -119,7 +134,29 @@ export function AddDeliverySheet({
           unit: unit || undefined,
           lotId: lotId || undefined,
           notes: notes || undefined,
-        }),
+        });
+
+        // A docket that cannot be queued must not fail the delivery: the entry
+        // is recorded either way and the row honestly reads "Not filed in CIVOS".
+        if (docketFile && deliveryId && projectId) {
+          try {
+            await queueDeliveryDocket({
+              projectId,
+              deliveryId,
+              file: docketFile,
+              lotId: lotId || undefined,
+              capturedBy: user?.id ?? 'unknown',
+            });
+          } catch (err) {
+            logError('Delivery docket could not be queued', err);
+            toast({
+              title: 'Delivery saved, docket was not',
+              description: 'Open the delivery and add its docket again.',
+              variant: 'warning',
+            });
+          }
+        }
+      },
       () => {
         // The entry is recorded (online or queued offline) — drop the draft.
         draft.clearDraft();
@@ -129,6 +166,7 @@ export function AddDeliverySheet({
         setQuantity('');
         setUnit('');
         setNotes('');
+        setDocketFile(null);
         setShowMore(false);
         onClose();
       },
@@ -160,46 +198,61 @@ export function AddDeliverySheet({
           />
         </div>
 
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">Supplier</label>
-          <input
-            type="text"
-            value={supplier}
-            onChange={(e) => setSupplier(e.target.value)}
-            placeholder="Supplier name"
-            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
-            autoCapitalize="words"
-            autoComplete="organization"
-            enterKeyHint="next"
-            spellCheck={false}
+        {/* Capture first — the same control the shell mounts, so the two
+            surfaces cannot drift. Supplier and docket number are the
+            transcription of this photo and moved behind the disclosure with the
+            rest of the detail. */}
+        {projectId && (
+          <DeliveryDocketCapture
+            file={docketFile}
+            onSelect={setDocketFile}
+            onRemove={() => setDocketFile(null)}
+            hint="Or add it later — the delivery saves either way."
           />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">Docket Number</label>
-          <input
-            type="text"
-            value={docketNumber}
-            onChange={(e) => setDocketNumber(e.target.value)}
-            placeholder="e.g. DEL-001"
-            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
-            autoCapitalize="characters"
-            autoComplete="off"
-            enterKeyHint="done"
-            spellCheck={false}
-          />
-        </div>
+        )}
 
         <button
+          type="button"
           onClick={() => setShowMore(!showMore)}
-          className="flex items-center gap-1 text-sm text-primary touch-manipulation"
+          aria-expanded={showMore}
+          className="flex min-h-[48px] w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-[15px] text-muted-foreground touch-manipulation"
         >
           {showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          {showMore ? 'Less details' : 'More details'}
+          {showMore ? 'Fewer details' : 'Supplier / docket no. / quantity'}
         </button>
 
         {showMore && (
           <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Supplier</label>
+              <input
+                type="text"
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
+                placeholder="Supplier name"
+                className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                autoCapitalize="words"
+                autoComplete="organization"
+                enterKeyHint="next"
+                spellCheck={false}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Docket Number</label>
+              <input
+                type="text"
+                value={docketNumber}
+                onChange={(e) => setDocketNumber(e.target.value)}
+                placeholder="e.g. DEL-001"
+                className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                autoCapitalize="characters"
+                autoComplete="off"
+                enterKeyHint="done"
+                spellCheck={false}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Quantity</label>

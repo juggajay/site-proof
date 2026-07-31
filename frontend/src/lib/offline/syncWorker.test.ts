@@ -29,7 +29,7 @@ vi.mock('../offlineDb', () => ({
   markPhotoSynced: vi.fn(),
   markPhotoUploadedAwaitingAttach: vi.fn(),
   markPhotoSyncError: vi.fn(),
-  relinkOfflineNcrPhotos: vi.fn(),
+  relinkOfflinePhotoEntity: vi.fn(),
   getOfflineLot: vi.fn(),
   detectLotSyncConflict: vi.fn(),
   markLotSynced: vi.fn(),
@@ -80,7 +80,7 @@ import {
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
-  relinkOfflineNcrPhotos,
+  relinkOfflinePhotoEntity,
   getOfflineLot,
   detectLotSyncConflict,
   markLotSynced,
@@ -112,7 +112,7 @@ const getOfflinePhotoMock = getOfflinePhoto as Mock;
 const markPhotoSyncedMock = markPhotoSynced as Mock;
 const markPhotoUploadedAwaitingAttachMock = markPhotoUploadedAwaitingAttach as Mock;
 const markPhotoSyncErrorMock = markPhotoSyncError as Mock;
-const relinkOfflineNcrPhotosMock = relinkOfflineNcrPhotos as Mock;
+const relinkOfflinePhotoEntityMock = relinkOfflinePhotoEntity as Mock;
 const getOfflineLotMock = getOfflineLot as Mock;
 const detectLotSyncConflictMock = detectLotSyncConflict as Mock;
 const markLotSyncedMock = markLotSynced as Mock;
@@ -526,7 +526,7 @@ describe('syncSingleItem — ncr_create', () => {
     });
     // The queued placeholder id is rewritten to the real NCR id so the photo
     // attach step targets the NCR that now exists.
-    expect(relinkOfflineNcrPhotosMock).toHaveBeenCalledWith('offline-ncr-abc', 'ncr-server-1');
+    expect(relinkOfflinePhotoEntityMock).toHaveBeenCalledWith('offline-ncr-abc', 'ncr-server-1');
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(21);
   });
 
@@ -537,7 +537,7 @@ describe('syncSingleItem — ncr_create', () => {
 
     expect(result).toEqual({ status: 'handled' });
     expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(21, 'invalid');
-    expect(relinkOfflineNcrPhotosMock).not.toHaveBeenCalled();
+    expect(relinkOfflinePhotoEntityMock).not.toHaveBeenCalled();
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 

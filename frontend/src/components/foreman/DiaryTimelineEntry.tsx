@@ -20,6 +20,13 @@ export interface TimelineEntryData {
   idRego?: string;
   hours?: number;
   hoursOperated?: number;
+  /**
+   * C5-a — deliveries only. The evidence link, set by
+   * PATCH /api/deliveries/:id/evidence. The timeline route spreads the whole
+   * DiaryDelivery row into `data`, so this already arrives; nothing read it.
+   * Its presence is the ONLY thing entitled to say a docket is filed.
+   */
+  docketDocumentId?: string | null;
 }
 
 export interface TimelineEntry {

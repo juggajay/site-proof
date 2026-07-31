@@ -35,7 +35,7 @@ export {
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
-  relinkOfflineNcrPhotos,
+  relinkOfflinePhotoEntity,
   updateOfflinePhotoMeta,
 } from './offline/photos';
 

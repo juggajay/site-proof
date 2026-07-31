@@ -98,6 +98,20 @@ export const STATUS_LABELS: Record<string, string> = {
   delivery_docket_not_filed: 'Not filed in CIVOS',
   delivery_no_lot: 'No lot linked',
 
+  // Wave C5-a — the TRANSIENT states of a docket photo captured on a phone, on
+  // the way to `delivery_docket_filed`. They exist because filing a docket is a
+  // four-step chain (create the delivery, relink the queued photo to its server
+  // id, upload the file, PATCH the evidence link) and any step can be the one
+  // still outstanding. The two settled states above are reused verbatim rather
+  // than re-spelled — a second "Filed"/"Not filed" pair would drift.
+  //
+  // The word "Attached" appears nowhere: it reads as done, and a photo sitting
+  // in the offline queue is not done. Nothing may read `delivery_docket_filed`
+  // until the server has answered the PATCH.
+  delivery_docket_saved_on_device: 'Saved on device',
+  delivery_docket_uploading: 'Uploading',
+  delivery_docket_filing_failed: 'Filing failed',
+
   // Hold point / subcontractor admin statuses
   requested: 'Requested',
   released: 'Released',

@@ -29,11 +29,17 @@ import {
 import { SheetDraftRestoredHint } from '@/components/foreman/sheets/SheetDraftRestoredHint';
 import { SheetErrorBanner } from '@/components/foreman/sheets/SheetErrorBanner';
 import { DictationMicButton } from '@/components/ui/DictationMicButton';
+import { DeliveryDocketCapture } from '@/components/deliveries/DeliveryDocketCapture';
+import { queueDeliveryDocket } from '@/components/deliveries/queueDeliveryDocket';
+import { useAuth } from '@/lib/auth';
+import { toast } from '@/components/ui/toaster';
+import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 
 export function DeliveryFormScreen() {
   const navigate = useNavigate();
   const { projectId } = useEffectiveProjectId();
+  const { user } = useAuth();
   const { lots, timeline, handlers } = useDiaryShellData();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
@@ -53,6 +59,10 @@ export function DeliveryFormScreen() {
     restoredDraft ? restoredDraft.lotId || '' : defaultLotId || '',
   );
   const [notes, setNotes] = useState(restoredDraft?.notes ?? '');
+  // The docket photo is NOT drafted: a File cannot be serialised into
+  // localStorage, and a restored draft that silently lost the photo would be
+  // worse than one that never claimed to have it.
+  const [docketFile, setDocketFile] = useState<File | null>(null);
   const [showMore, setShowMore] = useState(
     Boolean(
       restoredDraft &&
@@ -112,8 +122,8 @@ export function DeliveryFormScreen() {
     if (!description.trim() || quantityError) return;
     const parsedQuantity = parseOptionalDiaryQuantityInput(quantity);
     void runSave(
-      () =>
-        handlers.addDeliveryFromSheet({
+      async () => {
+        const deliveryId = await handlers.addDeliveryFromSheet({
           description: description.trim(),
           supplier: supplier || undefined,
           docketNumber: docketNumber || undefined,
@@ -121,9 +131,34 @@ export function DeliveryFormScreen() {
           unit: unit || undefined,
           lotId: lotId || undefined,
           notes: notes || undefined,
-        }),
+        });
+
+        // Step 1 of the filing chain has landed, so the docket now has
+        // something to be filed against. A failure HERE must not fail the save:
+        // the delivery is recorded either way, and the row will read "Not filed
+        // in CIVOS" — which is true — rather than losing the whole entry.
+        if (docketFile && deliveryId && projectId) {
+          try {
+            await queueDeliveryDocket({
+              projectId,
+              deliveryId,
+              file: docketFile,
+              lotId: lotId || undefined,
+              capturedBy: user?.id ?? 'unknown',
+            });
+          } catch (err) {
+            logError('Delivery docket could not be queued', err);
+            toast({
+              title: 'Delivery saved, docket was not',
+              description: 'Open the delivery and add its docket again.',
+              variant: 'warning',
+            });
+          }
+        }
+      },
       () => {
         draft.clearDraft();
+        setDocketFile(null);
         navigate(backPath);
       },
     );
@@ -184,17 +219,31 @@ export function DeliveryFormScreen() {
         />
       </div>
 
+      {/* Capture first. The docket photo is the evidence; supplier, docket
+          number and quantity are the transcription of it and sit behind the
+          disclosure. */}
+      <DeliveryDocketCapture
+        file={docketFile}
+        onSelect={setDocketFile}
+        onRemove={() => setDocketFile(null)}
+        hint="Or add it later — the delivery saves either way."
+      />
+
+      {/* A 48px row rather than a bare text link: the shipped control only had a
+          48px hit area via ::after, and a disclosure the foreman cannot see is a
+          disclosure he does not use. */}
       <button
         type="button"
         onClick={() => setShowMore(!showMore)}
-        className="shell-tap48 flex items-center gap-1 text-sm text-muted-foreground touch-manipulation"
+        aria-expanded={showMore}
+        className="flex min-h-[48px] w-full items-center gap-2 rounded-xl border border-border bg-card px-3 text-[15px] text-muted-foreground touch-manipulation"
       >
         {showMore ? (
           <ChevronUp size={16} aria-hidden="true" />
         ) : (
           <ChevronDown size={16} aria-hidden="true" />
         )}
-        {showMore ? 'Less details' : 'Supplier / docket / quantity'}
+        {showMore ? 'Fewer details' : 'Supplier / docket no. / quantity'}
       </button>
 
       {showMore && (

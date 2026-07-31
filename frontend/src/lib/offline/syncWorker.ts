@@ -37,7 +37,7 @@ import {
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
-  relinkOfflineNcrPhotos,
+  relinkOfflinePhotoEntity,
   getOfflineLot,
   detectLotSyncConflict,
   markLotSynced,
@@ -115,6 +115,17 @@ type DocketItem = Extract<SyncQueueItem, { type: 'docket_create' | 'docket_submi
 type PhotoUploadItem = Extract<SyncQueueItem, { type: 'photo_upload' }>;
 type NcrCreateItem = Extract<SyncQueueItem, { type: 'ncr_create' }>;
 type LotEditItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
+
+/**
+ * A delivery id minted by `queueDiaryDeliveryOffline` (`createLocalId('delivery')`
+ * → `delivery-<uuid>`) rather than by Postgres. A docket photo still pointing at
+ * one means step 1 of the filing chain has not landed: the delivery it is
+ * evidence for does not exist server-side yet, so PATCHing its evidence would
+ * 404. Server ids are bare UUIDs and can never carry this prefix.
+ */
+function isLocalDeliveryId(deliveryId: string): boolean {
+  return deliveryId.startsWith('delivery-');
+}
 
 function isOfflineCompletionId(completionId: string): boolean {
   return completionId.startsWith('offline-');
@@ -518,6 +529,16 @@ async function syncDelivery(item: DeliveryItem, itemId: number): Promise<SyncIte
         );
       }
 
+      // Step 2 of the docket filing chain. The response body was thrown away
+      // before C5-a, which is precisely why a docket photo could never be filed
+      // against an offline-created delivery: nothing knew the server id. Same
+      // shape as syncNcrCreate — relink first, so the photo_upload item that
+      // follows this one in the queue PATCHes a delivery that exists.
+      const created = (await response.json().catch(() => null)) as { id?: string } | null;
+      if (created?.id && created.id !== deliveryId) {
+        await relinkOfflinePhotoEntity(deliveryId, created.id);
+      }
+
       await removeSyncQueueItem(itemId);
       await markDeliverySynced(deliveryId);
       return SYNCED;
@@ -641,7 +662,11 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
       const needsNcrAttach =
         (photo.attachAs === 'ncr_evidence' || (!photo.attachAs && photo.entityType === 'ncr')) &&
         !!photo.entityId;
-      const needsPostUploadAttach = needsItpAttach || needsNcrAttach;
+      const needsDeliveryAttach =
+        (photo.attachAs === 'delivery_evidence' ||
+          (!photo.attachAs && photo.entityType === 'delivery')) &&
+        !!photo.entityId;
+      const needsPostUploadAttach = needsItpAttach || needsNcrAttach || needsDeliveryAttach;
       let documentId = photo.serverDocumentId;
       const keepPostUploadAttachQueued = async (message: string): Promise<SyncItemResult> => {
         await markSyncItemError(itemId, message);
@@ -684,6 +709,17 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
             'Waiting for synced ITP completion before attaching evidence',
           );
         }
+      }
+
+      // Step 1 of the filing chain has not landed yet: the delivery this docket
+      // belongs to is still a local placeholder. Wait rather than upload — the
+      // Document would carry a meaningless entityId and the PATCH would 404.
+      // syncDelivery relinks this photo the moment its delivery reaches the
+      // server, and this item is retried on the next pass.
+      if (needsDeliveryAttach && photo.entityId && isLocalDeliveryId(photo.entityId)) {
+        return keepPostUploadAttachQueued(
+          'Waiting for the delivery to sync before filing its docket',
+        );
       }
 
       if (!documentId) {
@@ -804,6 +840,40 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         }
       }
 
+      // Step 4 — the only step that makes the docket EVIDENCE. Until this
+      // returns 200 the file is just a Document in the project, and no surface
+      // may read `delivery_docket_filed`. The route deliberately bypasses the
+      // diary lock (`backend/src/routes/deliveries/index.ts`), so this succeeds
+      // on a submitted diary — which is the point: the supplier's paper docket
+      // turns up the morning after the foreman submitted.
+      if (needsDeliveryAttach && documentId) {
+        let attachResponse: Response;
+        try {
+          attachResponse = await authFetch(
+            apiUrl(`/api/deliveries/${encodeURIComponent(photo.entityId!)}/evidence`),
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ docketDocumentId: documentId }),
+            },
+          );
+        } catch (error) {
+          return keepPostUploadAttachQueued(
+            error instanceof Error ? error.message : 'Failed to file delivery docket',
+          );
+        }
+
+        if (!attachResponse.ok) {
+          // The file is safely on the server and serverDocumentId is recorded;
+          // only the evidence link is missing, so a retry is attach-only and
+          // never re-uploads. The UI reads this as "Filing failed", not "Filed".
+          const errorText = await attachResponse.text();
+          return keepPostUploadAttachQueued(errorText || 'Failed to file delivery docket');
+        }
+      }
+
       // Remove from sync queue
       await removeSyncQueueItem(itemId);
       // Mark photo as synced
@@ -850,7 +920,7 @@ async function syncNcrCreate(item: NcrCreateItem, itemId: number): Promise<SyncI
       const result = (await response.json()) as { ncr?: { id?: string } };
       const serverNcrId = result.ncr?.id;
       if (serverNcrId) {
-        await relinkOfflineNcrPhotos(ncrId, serverNcrId);
+        await relinkOfflinePhotoEntity(ncrId, serverNcrId);
       }
       await removeSyncQueueItem(itemId);
       return SYNCED;

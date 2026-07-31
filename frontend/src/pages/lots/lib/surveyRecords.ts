@@ -96,7 +96,9 @@ export interface LotDelivery {
   batchRef: string | null;
   docketDocumentId: string | null;
   docketDocument: { id: string; filename: string } | null;
-  diary: { id: string; date: string } | null;
+  // `projectId` is what the evidence route needs to queue a docket against this
+  // row; the API has always returned it (`DELIVERY_SELECT`) and nothing read it.
+  diary: { id: string; date: string; projectId?: string } | null;
 }
 
 /** CIVOS's workflow state. The only survey string entitled to a status colour. */

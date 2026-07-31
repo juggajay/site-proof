@@ -164,16 +164,19 @@ export async function getOfflinePhoto(photoId: string): Promise<OfflinePhoto | u
   return offlineDb.photos.get(photoId);
 }
 
-// Repoint every queued evidence photo from a local placeholder NCR id to the
-// real server id once an offline-created NCR syncs, so the photo_upload attach
-// step (POST /api/ncrs/:id/evidence) targets the NCR that now exists. entityId
-// is a Dexie index, so this queries directly. Returns how many photos moved.
-export async function relinkOfflineNcrPhotos(
-  localNcrId: string,
-  serverNcrId: string,
+// Repoint every queued evidence photo from a local placeholder id to the real
+// server id once the row it belongs to syncs, so the photo_upload attach step
+// targets a row that now exists. Used by the NCR chain (POST
+// /api/ncrs/:id/evidence) and the delivery docket chain (PATCH
+// /api/deliveries/:id/evidence) — the operation is entity-agnostic, and local
+// ids are prefixed and random enough that entityId alone identifies the row.
+// entityId is a Dexie index, so this queries directly. Returns how many moved.
+export async function relinkOfflinePhotoEntity(
+  localEntityId: string,
+  serverEntityId: string,
 ): Promise<number> {
-  return offlineDb.photos.where('entityId').equals(localNcrId).modify({
-    entityId: serverNcrId,
+  return offlineDb.photos.where('entityId').equals(localEntityId).modify({
+    entityId: serverEntityId,
     localUpdatedAt: new Date().toISOString(),
   });
 }
