@@ -45,6 +45,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { buildUnlinkedDeliveryItem } from '../../lib/evidenceReadiness/deliveryItems.js';
 import { prisma } from '../../lib/prisma.js';
+import { parseOrBadRequest } from '../../lib/zodParse.js';
 import {
   requireEffectiveProjectRole,
   requireInternalProjectAccess,
@@ -125,14 +126,6 @@ const registerQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(DELIVERY_REGISTER_MAX_LIMIT).optional(),
   offset: z.coerce.number().int().min(0).max(100_000).optional(),
 });
-
-function parseOrBadRequest<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
-  const result = schema.safeParse(value);
-  if (!result.success) {
-    throw AppError.fromZodError(result.error);
-  }
-  return result.data;
-}
 
 function parseDateBoundary(value: string | undefined, field: string): Date | undefined {
   if (!value) {

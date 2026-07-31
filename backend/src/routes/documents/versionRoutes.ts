@@ -53,60 +53,78 @@ type CreateDocumentVersionRouterDependencies = {
   sanitizeUploadFilename: (filename: string) => string;
 };
 
+// Generic versioning creates a NEW `Document` row with a new id and flips the
+// old row to `isLatestVersion: false`. A workflow record whose FK still points
+// at the OLD row would then render the SUPERSEDED file while the document
+// register shows the current one — stale evidence inside a signed folio, the
+// exact inverse of "originals preserved, replacements supersede".
+//
+// NOTE: this list is HAND-WRITTEN and does NOT read `EVIDENCE_LINK_GUARDS`. So
+// "adding the next evidence table is a single entry" (evidenceLinkGuards.ts) is
+// true for delete and metadata and FALSE for versioning — a new evidence link
+// owes an entry in BOTH places. Unifying the two would change refusal behaviour
+// for ITP and NCR documents, so it belongs to whoever owns those, not to the
+// wave adding the next link.
+//
+// Order is precedence: the first match names the refusal.
+const GENERIC_VERSIONING_BLOCKS: Array<{
+  evidenceType: string;
+  message: string;
+  find: (prisma: PrismaClient, documentId: string) => Promise<{ id: string } | null>;
+}> = [
+  {
+    evidenceType: 'itp',
+    message: 'Workflow evidence documents must be replaced from the ITP or NCR workflow.',
+    find: (prisma, documentId) =>
+      prisma.iTPCompletionAttachment.findFirst({ where: { documentId }, select: { id: true } }),
+  },
+  {
+    evidenceType: 'ncr',
+    message: 'Workflow evidence documents must be replaced from the ITP or NCR workflow.',
+    find: (prisma, documentId) =>
+      prisma.nCREvidence.findFirst({ where: { documentId }, select: { id: true } }),
+  },
+  {
+    // Wave C5.1 §4.3 `[C5R-B3]`. C5 replaces a docket by re-pointing its FK to a
+    // newly uploaded document, audited — never by versioning underneath it.
+    evidenceType: 'delivery_docket',
+    message: 'Delivery docket documents must be replaced from the delivery, not versioned here.',
+    find: (prisma, documentId) =>
+      prisma.diaryDelivery.findFirst({
+        where: { docketDocumentId: documentId },
+        select: { id: true },
+      }),
+  },
+  {
+    // Wave C5.2, same reasoning: C5 supersedes at the RECORD level — a re-survey
+    // is a new row carrying its own document.
+    evidenceType: 'survey_report',
+    message: 'Survey report documents must be replaced from the survey record, not versioned here.',
+    find: (prisma, documentId) =>
+      prisma.surveyRecord.findFirst({
+        where: { reportDocumentId: documentId },
+        select: { id: true },
+      }),
+  },
+];
+
 async function assertDocumentCanUseGenericVersioning(
   prisma: PrismaClient,
   documentId: string,
 ): Promise<void> {
-  // NOTE: this is a HAND-WRITTEN check that does not read
-  // `EVIDENCE_LINK_GUARDS`. So "adding the next evidence table is a single
-  // entry" (evidenceLinkGuards.ts) is true for delete and metadata and FALSE
-  // for versioning — a new evidence link owes an entry in BOTH places.
-  // Unifying the two is a real cleanup and it belongs to whoever owns the ITP
-  // and NCR refusal behaviour, not to the wave adding the next link.
-  const [itpAttachment, ncrEvidence, deliveryDocket] = await Promise.all([
-    prisma.iTPCompletionAttachment.findFirst({
-      where: { documentId },
-      select: { id: true },
-    }),
-    prisma.nCREvidence.findFirst({
-      where: { documentId },
-      select: { id: true },
-    }),
-    // Wave C5.1 §4.3 `[C5R-B3]`, and this is the sharp one. Generic versioning
-    // creates a NEW `Document` row with a new id and flips the old row to
-    // `isLatestVersion: false`. A C5 FK still points at the OLD row, so the
-    // folio and the release package would render the SUPERSEDED file while the
-    // document register shows the current one — stale evidence inside a signed
-    // folio, the exact inverse of "originals preserved, replacements
-    // supersede". C5 replaces a docket by re-pointing its FK to a newly
-    // uploaded document, audited, never by versioning underneath it.
-    prisma.diaryDelivery.findFirst({
-      where: { docketDocumentId: documentId },
-      select: { id: true },
-    }),
-  ]);
-
-  if (!itpAttachment && !ncrEvidence && !deliveryDocket) {
+  const links = await Promise.all(
+    GENERIC_VERSIONING_BLOCKS.map((block) => block.find(prisma, documentId)),
+  );
+  const index = links.findIndex(Boolean);
+  if (index === -1) {
     return;
   }
 
-  if (deliveryDocket && !itpAttachment && !ncrEvidence) {
-    throw AppError.conflict(
-      'Delivery docket documents must be replaced from the delivery, not versioned here.',
-      {
-        code: 'WORKFLOW_EVIDENCE_VERSION_BLOCKED',
-        evidenceType: 'delivery_docket',
-      },
-    );
-  }
-
-  throw AppError.conflict(
-    'Workflow evidence documents must be replaced from the ITP or NCR workflow.',
-    {
-      code: 'WORKFLOW_EVIDENCE_VERSION_BLOCKED',
-      evidenceType: itpAttachment ? 'itp' : 'ncr',
-    },
-  );
+  const block = GENERIC_VERSIONING_BLOCKS[index];
+  throw AppError.conflict(block.message, {
+    code: 'WORKFLOW_EVIDENCE_VERSION_BLOCKED',
+    evidenceType: block.evidenceType,
+  });
 }
 
 export function createDocumentVersionRouter({

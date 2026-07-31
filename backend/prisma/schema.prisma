@@ -93,6 +93,9 @@ model User {
   testEntries                 TestResult[]                 @relation("EnteredByUser")
   testVerifications           TestResult[]                 @relation("VerifiedByTestUser")
   testRejections              TestResult[]                 @relation("RejectedByTestUser")
+  surveyRequests              SurveyRecord[]               @relation("SurveyRequestedByUser")
+  surveyReviews               SurveyRecord[]               @relation("SurveyReviewedByUser")
+  surveyAcceptances           SurveyRecord[]               @relation("SurveyAcceptedByUser")
   uploadedDocs                Document[]
   documentSignedUrlTokens     DocumentSignedUrlToken[]
   notifications               Notification[]
@@ -445,6 +448,7 @@ model Project {
   artifactLegalHolds          ArtifactLegalHold[]
   holdPointMailConsents       HoldPointMailConsent[]
   revisionIssues              RevisionIssue[]
+  surveyRecords               SurveyRecord[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -642,6 +646,7 @@ model Lot {
   documents                Document[]
   diaryActivities          DiaryActivity[]
   diaryDeliveries          DiaryDelivery[]
+  surveyRecords            SurveyRecord[]
   diaryEvents              DiaryEvent[]
   diaryDelays              DiaryDelay[]
   diaryPlant               DiaryPlant[]
@@ -1748,6 +1753,7 @@ model Document {
   planSheets               PlanSheet[]
   importBatches            ImportBatch[]
   deliveryDockets          DiaryDelivery[]
+  surveyReports            SurveyRecord[]
 
   @@unique([projectId, requestKey])
   @@index([projectId, documentType])
@@ -2611,4 +2617,84 @@ model ArtifactLegalHold {
 
   @@index([artifactType, artifactId, createdAt])
   @@map("artifact_legal_holds")
+}
+
+// ============================================================================
+// Survey records (Wave C5.2)
+// ============================================================================
+
+/// A survey deliverable as FILED EVIDENCE: which survey, on which lot, done by
+/// whom, the report file, and **the verdict the surveyor themselves stated**.
+///
+/// `[C5S-B1]` — the rule this table turns on: **a conformance verdict is a
+/// certification. CIVOS records who made one; it never makes one.** There is no
+/// coordinate, no level, no deviation and no tolerance column here, and there
+/// will not be one until RG-2 and RG-3 are discharged against primary sources.
+/// `surveyorVerdict` is a TRANSCRIPTION of what the report says, with
+/// `'not_stated'` as a first-class value so "the report gave no verdict" is a
+/// recordable fact rather than a backfilled guess.
+///
+/// Supersession is RECORD-level, in the `Drawing` shape: a re-survey is a new
+/// professional act, so it is a new row with `supersededById` set on the old
+/// one — never a new version of the old row's `Document`. The report FK is
+/// `Restrict` so the original file cannot be deleted out from under it.
+model SurveyRecord {
+  id        String  @id @default(uuid())
+  /// Derived from the lot at write time, never read from the request body.
+  projectId String  @map("project_id")
+  lotId     String? @map("lot_id")
+  /// `set_out|conformance|as_built`, CHECK-constrained. Three, because they are
+  /// three different contractual acts. No fourth is added speculatively.
+  kind      String
+  /// `requested|in_progress|received|accepted|rejected`, CHECK-constrained.
+  /// PILOT-GATED `[C5S-B4]`: the names encode a claim about how a real job runs
+  /// and stay behind C5_SURVEY_RECORDS_ENABLED until one real conformance
+  /// survey has round-tripped. The CHECK is what makes correcting them a
+  /// reviewed migration instead of a silent data drift.
+  status    String  @default("requested")
+
+  requestedById String?   @map("requested_by")
+  requestedAt   DateTime? @map("requested_at")
+
+  /// The surveyor is a real, identifiable third-party professional. Every one of
+  /// these is transcribed by a named CIVOS user and every write is audited —
+  /// a wrong entry here is a defamation-shaped risk, not just a data one.
+  surveyorName         String?   @map("surveyor_name")
+  surveyorCompany      String?   @map("surveyor_company")
+  surveyorRegistration String?   @map("surveyor_registration")
+  surveyedAt           DateTime? @map("surveyed_at")
+
+  reportDocumentId String? @map("report_document_id")
+
+  /// `conforms|does_not_conform|qualified|not_stated`, CHECK-constrained.
+  /// THE SURVEYOR'S, not CIVOS's. Every surface renders it attributed.
+  surveyorVerdict  String? @map("surveyor_verdict")
+  /// Where in the report the verdict was read from, so a reader can check it.
+  verdictSourceNote String? @map("verdict_source_note")
+
+  reviewedById String?   @map("reviewed_by")
+  reviewedAt   DateTime? @map("reviewed_at")
+  acceptedById String?   @map("accepted_by")
+  acceptedAt   DateTime? @map("accepted_at")
+
+  rejectionReason String? @map("rejection_reason")
+  supersededById  String? @map("superseded_by_id")
+  notes           String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot            Lot?           @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  reportDocument Document?      @relation(fields: [reportDocumentId], references: [id], onDelete: Restrict)
+  requestedBy    User?          @relation("SurveyRequestedByUser", fields: [requestedById], references: [id], onDelete: SetNull)
+  reviewedBy     User?          @relation("SurveyReviewedByUser", fields: [reviewedById], references: [id], onDelete: SetNull)
+  acceptedBy     User?          @relation("SurveyAcceptedByUser", fields: [acceptedById], references: [id], onDelete: SetNull)
+  supersededBy   SurveyRecord?  @relation("SurveyRecordSupersedes", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes     SurveyRecord[] @relation("SurveyRecordSupersedes")
+
+  @@index([projectId, status])
+  @@index([lotId])
+  @@index([projectId, kind])
+  @@map("survey_records")
 }

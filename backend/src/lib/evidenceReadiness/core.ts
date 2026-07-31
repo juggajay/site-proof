@@ -14,6 +14,9 @@ export type EvidenceReadinessArea =
   | 'ncr'
   | 'docket'
   | 'diary'
+  // Wave C5.2. Deliveries deliberately reuse `diary` rather than minting a
+  // second area — they are diary rows. A survey is not.
+  | 'survey'
   | 'document'
   | 'budget'
   | 'permission';

@@ -92,6 +92,9 @@ export const READINESS_REASON_CODES = [
   // Support severity, `blocksAction: false`, and deliberately NOT a member of
   // `HANDOVER_BLOCKING_REASON_CODES` (`[C5S-B5]`).
   'delivery_not_lot_linked',
+  // Wave C5.2 — survey lifecycle (lib/evidenceReadiness/surveyItems.ts).
+  // `warning`, `blocksAction: false`, and NOT a handover blocker (`[C5S-B5]`).
+  'survey_not_accepted',
 ] as const;
 
 export type ReadinessReasonCode = (typeof READINESS_REASON_CODES)[number];
@@ -314,6 +317,12 @@ export const REASON_CODE_PROVENANCE: Record<
     // project's deliveries, with no dedicated predicate behind it.
     predicate: 'engine',
     source: 'buildUnlinkedDeliveryItem (delivery register, C5.1)',
+  },
+  survey_not_accepted: {
+    // Engine-owned count-only item: a count of survey records on the lot whose
+    // status is not `accepted`. No predicate; C5 computes no verdict.
+    predicate: 'engine',
+    source: 'buildSurveyNotAcceptedItem (lot survey list, C5.2)',
   },
 };
 
