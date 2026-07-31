@@ -1,0 +1,96 @@
+{
+  "benchmark": "F0.5 exit gate (execution spec §8, Rev 3.1)",
+  "spec": "docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md",
+  "startedAt": "2026-07-31T01:38:52.891Z",
+  "finishedAt": "2026-07-31T01:40:57.347Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 13.8,
+      "sampleMs": 1000,
+      "freeMemMiB": 16295,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 1.8,
+      "sampleMs": 1000,
+      "freeMemMiB": 15451,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "only": "ABCD",
+    "lots": 5000,
+    "claimIterations": 20,
+    "entityIterations": 50,
+    "pageIterations": 20
+  },
+  "results": {
+    "A": {
+      "label": "claim inclusion decision, 5000 members",
+      "route": "POST /api/projects/:projectId/claims",
+      "budgetMs": 3000,
+      "flagOn": {
+        "n": 20,
+        "min": 2196.6863999999987,
+        "p50": 2237.316499999997,
+        "p95": 2472.3701999999994,
+        "max": 2498.0957,
+        "mean": 2282.4361949999993
+      },
+      "flagOff": {
+        "n": 20,
+        "min": 1531.2410999999993,
+        "p50": 1617.1775000000052,
+        "p95": 2022.3925000000017,
+        "max": 2076.0570000000007,
+        "mean": 1686.995115000001
+      },
+      "samplesMs": [
+        2498.0957,
+        2369.9737999999998,
+        2472.3701999999994,
+        2313.7593000000015,
+        2237.316499999997,
+        2280.0973000000013,
+        2262.328999999998,
+        2269.803799999998,
+        2398.6945000000014,
+        2196.6863999999987,
+        2197.502099999998,
+        2243.4289999999964,
+        2231.788800000002,
+        2232.614300000001,
+        2223.0507,
+        2225.5377000000008,
+        2206.696799999998,
+        2201.1208999999944,
+        2206.6736999999994,
+        2381.1834000000017
+      ],
+      "snapshotCostMs": 449.97769999999764,
+      "phaseP95Ms": {
+        "evaluate": 451.98269999999866,
+        "mutate": 629.3587000000007,
+        "audit": 9.773800000002666,
+        "snapshot": 735.9416000000056
+      },
+      "snapshotAudit": {
+        "totalRows": 5001,
+        "aggregateRows": 1,
+        "memberRows": 5000,
+        "chunkCalls": 11,
+        "maxMemberBytes": 178,
+        "maxAggregateBytes": 215
+      },
+      "pass": true
+    }
+  },
+  "verdict": {
+    "failures": [],
+    "pass": true
+  }
+}
