@@ -47,7 +47,7 @@ import { AWAITING_RELEASE_HOLD_POINT_STATUSES } from '../readiness/predicates.js
 import { logInfo } from '../serverLogger.js';
 import { MAX_CHASES_PER_REQUEST } from '../../routes/holdpoints/chaseCore.js';
 import { parseNotificationEmailList } from '../../routes/holdpoints/validation.js';
-import { parseProjectIdAllowlist, resolveAppTimeZone } from './helpers.js';
+import { parseProjectIdAllowlist, resolveAppTimeZone, type ProjectIdAllowlist } from './helpers.js';
 import {
   finaliseGroupItems,
   reserveGroupItems,
@@ -213,8 +213,23 @@ export function isReminderDue(
   );
 }
 
+/**
+ * The two scopes INTERSECT, they never override each other: the env allowlist
+ * says which projects the chase arm may mail at all, and `options.projectIds`
+ * (a targeted manual run) narrows that further. `'all'` only ever survives when
+ * neither side named ids.
+ */
+function resolveScopedProjectIds(
+  canary: ProjectIdAllowlist,
+  requested: string[] | undefined,
+): ProjectIdAllowlist {
+  if (canary === 'all') return requested ?? 'all';
+  if (!requested) return canary;
+  return canary.filter((id) => requested.includes(id));
+}
+
 async function loadEligibleHoldPoints(
-  scopedIds: string[],
+  scopedIds: ProjectIdAllowlist,
   deps: HoldPointChaseAutomationDependencies,
 ): Promise<EligibleHoldPoint[]> {
   return (await deps.prisma.holdPoint.findMany({
@@ -224,7 +239,9 @@ async function loadEligibleHoldPoints(
       notificationSentAt: { not: null },
       notificationSentTo: { not: null },
       lot: {
-        projectId: { in: scopedIds },
+        // `'all'` drops the id filter and nothing else; the `project.status`
+        // gate below still applies, so '*' means "every ACTIVE project".
+        ...(scopedIds === 'all' ? {} : { projectId: { in: scopedIds } }),
         // Project closure terminates reissuance (E.0 item 11 clause 3). The
         // whole automation family scopes to `status: 'active'`; this matches it
         // and is strictly tighter than the shipped archived-only write gate.
@@ -362,18 +379,23 @@ export async function processHoldPointChaseReminders(
     deferred: 0,
   };
 
-  const canary = parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV]);
-  const scopedIds = options.projectIds
-    ? canary.filter((id) => options.projectIds!.includes(id))
-    : canary;
+  const scopedIds = resolveScopedProjectIds(
+    parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV]),
+    options.projectIds,
+  );
 
   // FAIL CLOSED. This is the whole deploy story: E2 is inert until the env var
-  // names projects.
-  if (scopedIds.length === 0) return result;
-  result.canaryProjects = scopedIds.length;
+  // names projects (or `*`, the explicit all-projects opt-in).
+  if (scopedIds !== 'all' && scopedIds.length === 0) return result;
 
   const eligible = await loadEligibleHoldPoints(scopedIds, deps);
   result.eligibleHoldPoints = eligible.length;
+  // Under `*` there is no id list to count, so report the projects the scan
+  // actually reached.
+  result.canaryProjects =
+    scopedIds === 'all'
+      ? new Set(eligible.map((holdPoint) => holdPoint.lot.projectId)).size
+      : scopedIds.length;
 
   const groups = groupByProjectAndRecipient(eligible);
   result.recipientGroups = groups.length;

@@ -312,6 +312,79 @@ describe('AT-113(E2) the canary gate fails CLOSED for the chase arm', () => {
     const otherHoldPoints = await prisma.holdPoint.findMany({ where: { lotId: otherLotId } });
     expect(otherHoldPoints.every((hp) => hp.chaseCount === 0)).toBe(true);
   });
+
+  // Jay's decision of 2026-07-31: after the canary passed, widen from three
+  // named projects to the whole estate. `*` is the only value that does it.
+  it.each([
+    ['the bare sentinel', '*'],
+    ['a padded sentinel', ' * '],
+  ])('%s reaches BOTH projects, including the one never named', async (_label, value) => {
+    await createAwaitingHoldPoint({
+      suffix: 'star-in',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+    await createAwaitingHoldPoint({
+      suffix: 'star-out',
+      lotId: otherLotId,
+      templateId: otherTemplateId,
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    process.env[CANARY_ENV] = value;
+    const result = await processHoldPointChaseReminders({ now: new Date() });
+
+    expect(result.canaryProjects).toBe(2);
+    expect(result.digestsSent).toBe(2);
+    expect(result.holdPointsReminded).toBe(2);
+    const otherHoldPoints = await prisma.holdPoint.findMany({ where: { lotId: otherLotId } });
+    expect(otherHoldPoints.every((hp) => hp.chaseCount === 1)).toBe(true);
+  });
+
+  it('a sentinel inside a list does not widen — only the named project sends', async () => {
+    await createAwaitingHoldPoint({
+      suffix: 'mixed-in',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+    await createAwaitingHoldPoint({
+      suffix: 'mixed-out',
+      lotId: otherLotId,
+      templateId: otherTemplateId,
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    process.env[CANARY_ENV] = `${projectId},*`;
+    const result = await processHoldPointChaseReminders({ now: new Date() });
+
+    expect(result.canaryProjects).toBe(1);
+    expect(result.digestsSent).toBe(1);
+    const otherHoldPoints = await prisma.holdPoint.findMany({ where: { lotId: otherLotId } });
+    expect(otherHoldPoints.every((hp) => hp.chaseCount === 0)).toBe(true);
+  });
+
+  // `*` widens the ENV gate only. An explicit projectIds (a targeted manual run)
+  // still narrows the pass — the two scopes intersect, they do not override.
+  it('still honours an explicit projectIds under the sentinel', async () => {
+    await createAwaitingHoldPoint({
+      suffix: 'star-scoped-in',
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+    await createAwaitingHoldPoint({
+      suffix: 'star-scoped-out',
+      lotId: otherLotId,
+      templateId: otherTemplateId,
+      scheduledDate: new Date(Date.now() - 2 * DAY_MS),
+    });
+
+    process.env[CANARY_ENV] = '*';
+    const result = await processHoldPointChaseReminders({
+      now: new Date(),
+      projectIds: [projectId],
+    });
+
+    expect(result.digestsSent).toBe(1);
+    const otherHoldPoints = await prisma.holdPoint.findMany({ where: { lotId: otherLotId } });
+    expect(otherHoldPoints.every((hp) => hp.chaseCount === 0)).toBe(true);
+  });
 });
 
 describe('AT-116 mail is bounded — the digest, the daily limit, casing, suppression', () => {

@@ -1,4 +1,5 @@
 const DEFAULT_TIME_OF_DAY = '17:00';
+const ALL_PROJECTS_SENTINEL = '*';
 const DEFAULT_WORKING_DAYS = new Set([1, 2, 3, 4, 5]);
 
 type ProjectWorkingDays = {
@@ -25,18 +26,29 @@ export function parsePositiveInteger(value: unknown, fallback: number): number {
  * which is precisely the "inert" case a canary rollout means, and it lands on
  * the branch that scans the whole estate.
  *
- * So this ALWAYS returns an array, never undefined: unset, empty, whitespace
- * and separator-only values ('', ' ', ',', ' , , ') all return `[]`, and `[]`
- * means "no projects" everywhere it is consumed. Duplicates are collapsed and
- * entries are trimmed.
+ * So this NEVER returns undefined: unset, empty, whitespace and separator-only
+ * values ('', ' ', ',', ' , , ') all return `[]`, and `[]` means "no projects"
+ * everywhere it is consumed. Duplicates are collapsed and entries are trimmed.
+ *
+ * The one widening escape hatch is the literal `'*'` as the WHOLE (trimmed)
+ * value, which returns `'all'` — every project the consumer would otherwise
+ * scan, subject to its own `project.status = 'active'` scoping. It is a
+ * separate return value, not an empty list, precisely so "empty means all"
+ * can never creep back in. A `*` anywhere inside a list ('id1,*') is dropped
+ * as an invalid id and the named ids stand: a malformed entry must never
+ * widen the scope beyond what was spelled out.
  */
-export function parseProjectIdAllowlist(value: string | null | undefined): string[] {
+export type ProjectIdAllowlist = 'all' | string[];
+
+export function parseProjectIdAllowlist(value: string | null | undefined): ProjectIdAllowlist {
+  if (value?.trim() === ALL_PROJECTS_SENTINEL) return 'all';
+
   return [
     ...new Set(
       (value ?? '')
         .split(',')
         .map((id) => id.trim())
-        .filter((id) => id.length > 0),
+        .filter((id) => id.length > 0 && id !== ALL_PROJECTS_SENTINEL),
     ),
   ];
 }

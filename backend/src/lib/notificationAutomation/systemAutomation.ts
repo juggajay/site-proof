@@ -220,7 +220,7 @@ async function createAlertRecord(
  * every active project is not a bound.
  */
 type StaleScanState = {
-  canaryProjectIds: Set<string>;
+  canaryProjectIds: 'all' | Set<string>;
   budget: number;
   cursor: { projectId: string; scheduledDate: Date | null; id: string } | null;
   projectsDeferred: number;
@@ -242,7 +242,7 @@ async function createStaleHoldPointAlerts(
 ): Promise<void> {
   // Canary gate. Scopes the stale scan only — the overdue-NCR pass runs for
   // every project, as it always has.
-  if (!scan.canaryProjectIds.has(project.id)) return;
+  if (scan.canaryProjectIds !== 'all' && !scan.canaryProjectIds.has(project.id)) return;
 
   if (scan.budget <= 0) {
     scan.projectsDeferred += 1;
@@ -388,11 +388,13 @@ export async function processSystemAlerts(
     createdAlerts: [],
   };
 
+  const canary = parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV]);
   const scan: StaleScanState = {
-    // Read once per pass, and always an array — see parseProjectIdAllowlist for
-    // why `undefined` here would be an estate-wide storm rather than an inert
-    // deploy (E.0 item 8c).
-    canaryProjectIds: new Set(parseProjectIdAllowlist(process.env[WAVE_E_CANARY_ENV])),
+    // Read once per pass, and never `undefined` — see parseProjectIdAllowlist
+    // for why that would be an estate-wide storm rather than an inert deploy
+    // (E.0 item 8c). `'all'` is the explicit opt-in to the whole estate; the
+    // projects being iterated are already `status: 'active'`.
+    canaryProjectIds: canary === 'all' ? 'all' : new Set(canary),
     budget: STALE_HOLD_POINT_ALERTS_PER_PASS,
     cursor: null,
     projectsDeferred: 0,
