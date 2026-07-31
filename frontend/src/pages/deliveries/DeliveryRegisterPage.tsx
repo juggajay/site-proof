@@ -43,6 +43,8 @@ import {
 
 const COLUMN_COUNT = 8;
 
+type FilterChange = (next: Partial<DeliveryRegisterFilters>) => void;
+
 function formatDiaryDate(value: string | undefined): string {
   if (!value) return '-';
   return new Date(value).toLocaleDateString('en-AU', {
@@ -65,6 +67,241 @@ function DocketCell({ delivery }: { delivery: DeliveryRow }) {
     );
   }
   return <Badge variant="outline">{formatStatusLabel('delivery_docket_not_filed')}</Badge>;
+}
+
+/**
+ * The two project-wide counts. Both are prompts, never blockers: an unfiled
+ * docket and an unlinked delivery are things to go and do, not reasons to
+ * refuse a conformance.
+ */
+function RegisterNotices({
+  unlinkedCount,
+  missingDocketCount,
+  onFilter,
+}: {
+  unlinkedCount: number;
+  missingDocketCount: number;
+  onFilter: FilterChange;
+}) {
+  if (unlinkedCount <= 0 && missingDocketCount <= 0) return null;
+
+  return (
+    <div className="space-y-2 rounded-lg border bg-card p-4" data-testid="delivery-readiness">
+      {missingDocketCount > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span>
+            <b>{missingDocketCount}</b>{' '}
+            {missingDocketCount === 1 ? 'delivery is' : 'deliveries are'} waiting on a docket. They
+            are still recorded — filing the docket is what turns the record into evidence.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => onFilter({ docket: 'not_filed' })}
+          >
+            Show the {missingDocketCount}
+          </Button>
+        </div>
+      ) : null}
+      {unlinkedCount > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span>
+            <b>{unlinkedCount}</b> {unlinkedCount === 1 ? 'delivery is' : 'deliveries are'} not
+            linked to a lot. Linking them is what puts them on a lot&rsquo;s evidence folio.
+          </span>
+          <Badge variant="secondary" className="ml-auto">
+            Support — never blocks a conform
+          </Badge>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onFilter({ link: 'unlinked' })}
+          >
+            Show the {unlinkedCount}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RegisterFilterBar({
+  filters,
+  supplierDraft,
+  disabled,
+  refreshing,
+  filtersActive,
+  onSupplierDraft,
+  onFilter,
+  onClear,
+}: {
+  filters: DeliveryRegisterFilters;
+  supplierDraft: string;
+  disabled: boolean;
+  refreshing: boolean;
+  filtersActive: boolean;
+  onSupplierDraft: (value: string) => void;
+  onFilter: FilterChange;
+  onClear: () => void;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Supplier</span>
+          <Input
+            className="w-56"
+            placeholder="Search supplier"
+            value={supplierDraft}
+            disabled={disabled}
+            onChange={(event) => onSupplierDraft(event.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Lot link</span>
+          <NativeSelect
+            className="w-44"
+            value={filters.link}
+            disabled={disabled}
+            onChange={(event) =>
+              onFilter({ link: event.target.value as DeliveryRegisterFilters['link'] })
+            }
+          >
+            <option value="all">All deliveries</option>
+            <option value="linked">Linked to a lot</option>
+            <option value="unlinked">Not linked</option>
+          </NativeSelect>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Docket</span>
+          <NativeSelect
+            className="w-48"
+            value={filters.docket}
+            disabled={disabled}
+            onChange={(event) =>
+              onFilter({ docket: event.target.value as DeliveryRegisterFilters['docket'] })
+            }
+          >
+            <option value="all">All deliveries</option>
+            <option value="filed">Docket filed</option>
+            <option value="not_filed">Not filed in CIVOS</option>
+          </NativeSelect>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">From</span>
+          <Input
+            type="date"
+            className="w-40"
+            value={filters.from}
+            disabled={disabled}
+            onChange={(event) => onFilter({ from: event.target.value })}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">To</span>
+          <Input
+            type="date"
+            className="w-40"
+            value={filters.to}
+            disabled={disabled}
+            onChange={(event) => onFilter({ to: event.target.value })}
+          />
+        </label>
+        {filtersActive ? (
+          <Button type="button" variant="ghost" onClick={onClear}>
+            Clear filters
+          </Button>
+        ) : null}
+        {refreshing ? (
+          <span className="text-sm text-muted-foreground" role="status">
+            Refreshing…
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Nothing here" and "nothing matched" are different answers and get different
+ * copy — a filtered empty register that reads as an empty project is how a
+ * missing docket stops being chased.
+ */
+function RegisterEmptyState({
+  filtersActive,
+  diaryPath,
+  onClear,
+}: {
+  filtersActive: boolean;
+  diaryPath: string;
+  onClear: () => void;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-8 text-center">
+      {filtersActive ? (
+        <>
+          <p className="font-medium">No deliveries match these filters</p>
+          <Button type="button" variant="outline" className="mt-4" onClick={onClear}>
+            Clear filters
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="font-medium">No deliveries recorded yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Deliveries reach this register from the daily diary.
+          </p>
+          <Link to={diaryPath} className="mt-4 inline-block text-sm text-primary hover:underline">
+            Go to the daily diary
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DeliveryTableRow({
+  delivery,
+  canEdit,
+  isEditing,
+  onToggleEdit,
+}: {
+  delivery: DeliveryRow;
+  canEdit: boolean;
+  isEditing: boolean;
+  onToggleEdit: () => void;
+}) {
+  return (
+    <tr className="hover:bg-muted/30">
+      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
+        {formatDiaryDate(delivery.diary?.date)}
+      </td>
+      <td className="px-4 py-3 text-sm font-medium">{delivery.description || '-'}</td>
+      <td className="px-4 py-3 text-sm">{delivery.supplier || '-'}</td>
+      <td className="px-4 py-3 text-right text-sm">{formatDeliveryQuantity(delivery) || '-'}</td>
+      <td className="px-4 py-3 text-sm">
+        {delivery.lot ? (
+          <Badge variant="secondary">{delivery.lot.lotNumber}</Badge>
+        ) : (
+          <Badge variant="outline">{formatStatusLabel('delivery_no_lot')}</Badge>
+        )}
+      </td>
+      <td className="px-4 py-3 text-sm text-muted-foreground">{delivery.batchRef || '-'}</td>
+      <td className="px-4 py-3 text-sm">
+        <DocketCell delivery={delivery} />
+      </td>
+      <td className="px-4 py-3 text-right">
+        {canEdit ? (
+          <Button type="button" variant="outline" size="sm" onClick={onToggleEdit}>
+            {isEditing ? 'Editing' : 'Edit'}
+          </Button>
+        ) : null}
+      </td>
+    </tr>
+  );
 }
 
 export function DeliveryRegisterPage() {
@@ -108,7 +345,7 @@ export function DeliveryRegisterPage() {
   const filtersActive = hasActiveDeliveryFilters(filters);
   const diaryPath = `/projects/${encodeURIComponent(projectId ?? '')}/diary`;
 
-  const applyFilters = (next: Partial<DeliveryRegisterFilters>) => {
+  const applyFilters: FilterChange = (next) => {
     setEditingId(null);
     // Offset always resets: page 3 of one filter set is not page 3 of another.
     // `replace` so typing a supplier name doesn't bury the back button.
@@ -148,9 +385,7 @@ export function DeliveryRegisterPage() {
 
   const showSkeleton = isLoading && !shown;
   const showHardError = isError && !shown;
-  const showStaleWarning = isError && Boolean(shown);
   const rangeStart = shown && shown.total > 0 ? offset + 1 : 0;
-  const rangeEnd = offset + deliveries.length;
 
   return (
     <div className="space-y-6">
@@ -172,126 +407,26 @@ export function DeliveryRegisterPage() {
         </Button>
       </div>
 
-      {shown && (shown.unlinkedCount > 0 || shown.missingDocketCount > 0) ? (
-        <div className="space-y-2 rounded-lg border bg-card p-4" data-testid="delivery-readiness">
-          {shown.missingDocketCount > 0 ? (
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span>
-                <b>{shown.missingDocketCount}</b>{' '}
-                {shown.missingDocketCount === 1 ? 'delivery is' : 'deliveries are'} waiting on a
-                docket. They are still recorded — filing the docket is what turns the record into
-                evidence.
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="ml-auto"
-                onClick={() => applyFilters({ docket: 'not_filed' })}
-              >
-                Show the {shown.missingDocketCount}
-              </Button>
-            </div>
-          ) : null}
-          {shown.unlinkedCount > 0 ? (
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span>
-                <b>{shown.unlinkedCount}</b>{' '}
-                {shown.unlinkedCount === 1 ? 'delivery is' : 'deliveries are'} not linked to a lot.
-                Linking them is what puts them on a lot&rsquo;s evidence folio.
-              </span>
-              <Badge variant="secondary" className="ml-auto">
-                Support — never blocks a conform
-              </Badge>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => applyFilters({ link: 'unlinked' })}
-              >
-                Show the {shown.unlinkedCount}
-              </Button>
-            </div>
-          ) : null}
-        </div>
+      {shown ? (
+        <RegisterNotices
+          unlinkedCount={shown.unlinkedCount}
+          missingDocketCount={shown.missingDocketCount}
+          onFilter={applyFilters}
+        />
       ) : null}
 
-      <div className="rounded-lg border bg-card p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Supplier</span>
-            <Input
-              className="w-56"
-              placeholder="Search supplier"
-              value={supplierDraft}
-              disabled={showSkeleton}
-              onChange={(event) => setSupplierDraft(event.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Lot link</span>
-            <NativeSelect
-              className="w-44"
-              value={filters.link}
-              disabled={showSkeleton}
-              onChange={(event) =>
-                applyFilters({ link: event.target.value as DeliveryRegisterFilters['link'] })
-              }
-            >
-              <option value="all">All deliveries</option>
-              <option value="linked">Linked to a lot</option>
-              <option value="unlinked">Not linked</option>
-            </NativeSelect>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Docket</span>
-            <NativeSelect
-              className="w-48"
-              value={filters.docket}
-              disabled={showSkeleton}
-              onChange={(event) =>
-                applyFilters({ docket: event.target.value as DeliveryRegisterFilters['docket'] })
-              }
-            >
-              <option value="all">All deliveries</option>
-              <option value="filed">Docket filed</option>
-              <option value="not_filed">Not filed in CIVOS</option>
-            </NativeSelect>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">From</span>
-            <Input
-              type="date"
-              className="w-40"
-              value={filters.from}
-              disabled={showSkeleton}
-              onChange={(event) => applyFilters({ from: event.target.value })}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">To</span>
-            <Input
-              type="date"
-              className="w-40"
-              value={filters.to}
-              disabled={showSkeleton}
-              onChange={(event) => applyFilters({ to: event.target.value })}
-            />
-          </label>
-          {filtersActive ? (
-            <Button type="button" variant="ghost" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          ) : null}
-          {isFetching && !showSkeleton ? (
-            <span className="text-sm text-muted-foreground" role="status">
-              Refreshing…
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <RegisterFilterBar
+        filters={filters}
+        supplierDraft={supplierDraft}
+        disabled={showSkeleton}
+        refreshing={isFetching && !showSkeleton}
+        filtersActive={filtersActive}
+        onSupplierDraft={setSupplierDraft}
+        onFilter={applyFilters}
+        onClear={clearFilters}
+      />
 
-      {showStaleWarning ? (
+      {isError && shown ? (
         // Stale rows stay on screen: an old page of deliveries is more use than
         // an empty one, as long as it is labelled as old.
         <div
@@ -324,29 +459,11 @@ export function DeliveryRegisterPage() {
           ))}
         </div>
       ) : deliveries.length === 0 ? (
-        <div className="rounded-lg border bg-card p-8 text-center">
-          {filtersActive ? (
-            <>
-              <p className="font-medium">No deliveries match these filters</p>
-              <Button type="button" variant="outline" className="mt-4" onClick={clearFilters}>
-                Clear filters
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="font-medium">No deliveries recorded yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Deliveries reach this register from the daily diary.
-              </p>
-              <Link
-                to={diaryPath}
-                className="mt-4 inline-block text-sm text-primary hover:underline"
-              >
-                Go to the daily diary
-              </Link>
-            </>
-          )}
-        </div>
+        <RegisterEmptyState
+          filtersActive={filtersActive}
+          diaryPath={diaryPath}
+          onClear={clearFilters}
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">
           <div className="overflow-x-auto">
@@ -366,45 +483,14 @@ export function DeliveryRegisterPage() {
               <tbody className="divide-y">
                 {deliveries.map((delivery) => (
                   <Fragment key={delivery.id}>
-                    <tr className="hover:bg-muted/30">
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
-                        {formatDiaryDate(delivery.diary?.date)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium">
-                        {delivery.description || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm">{delivery.supplier || '-'}</td>
-                      <td className="px-4 py-3 text-right text-sm">
-                        {formatDeliveryQuantity(delivery) || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {delivery.lot ? (
-                          <Badge variant="secondary">{delivery.lot.lotNumber}</Badge>
-                        ) : (
-                          <Badge variant="outline">{formatStatusLabel('delivery_no_lot')}</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {delivery.batchRef || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <DocketCell delivery={delivery} />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {canEditEvidence ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setEditingId(editingId === delivery.id ? null : delivery.id)
-                            }
-                          >
-                            {editingId === delivery.id ? 'Editing' : 'Edit'}
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
+                    <DeliveryTableRow
+                      delivery={delivery}
+                      canEdit={canEditEvidence}
+                      isEditing={editingId === delivery.id}
+                      onToggleEdit={() =>
+                        setEditingId(editingId === delivery.id ? null : delivery.id)
+                      }
+                    />
                     {canEditEvidence && editingId === delivery.id ? (
                       <DeliveryEvidenceEditor
                         delivery={delivery}
@@ -423,7 +509,7 @@ export function DeliveryRegisterPage() {
           <div className="flex flex-wrap items-center gap-3 border-t bg-muted/30 px-4 py-3">
             <span className="text-sm text-muted-foreground">
               Showing <b className="text-foreground">{rangeStart}</b>&ndash;
-              <b className="text-foreground">{rangeEnd}</b> of{' '}
+              <b className="text-foreground">{offset + deliveries.length}</b> of{' '}
               <b className="text-foreground">{shown?.total ?? 0}</b>
             </span>
             <div className="ml-auto flex gap-2">

@@ -137,6 +137,9 @@ const registerQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).max(100_000).optional(),
 });
 
+const LOT_LINK_FILTERS = { linked: { not: null }, unlinked: null } as const;
+const DOCKET_FILTERS = { filed: { not: null }, not_filed: null } as const;
+
 function parseDateBoundary(value: string | undefined, field: string): Date | undefined {
   if (!value) {
     return undefined;
@@ -159,11 +162,10 @@ function buildRegisterWhere(projectId: string, query: z.infer<typeof registerQue
   const to = parseDateBoundary(query.to, 'to');
   const dateRange = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
 
-  const lotFilter =
-    query.linked === 'unlinked' ? null : query.linked === 'linked' ? { not: null } : query.lotId;
-
-  const docketFilter =
-    query.docket === 'not_filed' ? null : query.docket === 'filed' ? { not: null } : undefined;
+  // Both "is this column set" filters read the same way: the enum picks a
+  // presence test, and no enum leaves the column unconstrained.
+  const lotFilter = query.linked ? LOT_LINK_FILTERS[query.linked] : query.lotId;
+  const docketFilter = query.docket ? DOCKET_FILTERS[query.docket] : undefined;
 
   return {
     diary: {
