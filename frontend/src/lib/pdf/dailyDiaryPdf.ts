@@ -1,16 +1,21 @@
+import { DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { devLog } from '../logger';
 import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DailyDiaryPDFData } from './types';
 
 /**
  * Generate a PDF daily diary report
  */
-export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<void> {
+export async function generateDailyDiaryPDF(
+  data: DailyDiaryPDFData,
+  generatedAt: Date = new Date(),
+): Promise<void> {
   const jsPDF = await getJsPDF();
   const startTime = Date.now();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -21,6 +26,7 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   const formatDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleDateString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       weekday: 'long',
       day: '2-digit',
       month: 'long',
@@ -31,6 +37,7 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   const formatDateTime = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -617,7 +624,7 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   const diaryDate = data.diary.date.split('T')[0];
   drawPdfFooters(doc, {
     margin,
-    generatedAt: new Date(),
+    generatedAt,
     docRef: `${data.project.name} / Diary ${diaryDate}`,
   });
 

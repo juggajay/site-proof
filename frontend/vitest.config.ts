@@ -21,6 +21,10 @@ export default defineConfig({
     clearMocks: true,
     css: true,
     environment: 'jsdom',
+    // Belt-and-braces TZ pin so PDF byte-regression tests render the same
+    // instants on every machine. Deferring to an inherited TZ is what lets the
+    // AT-G22 child runs (spawned with TZ=UTC) actually render under UTC.
+    env: { TZ: process.env.TZ || 'Australia/Sydney' },
     // Half the cores, not all of them: with one jsdom worker per core the
     // pool oversubscribes the box (cumulative import time ~4x wall time) and
     // starved workers miss Testing Library's async windows, flaking tests

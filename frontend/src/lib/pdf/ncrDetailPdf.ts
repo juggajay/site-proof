@@ -1,8 +1,8 @@
 import { devLog } from '../logger';
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
 import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { NCRDetailData } from './types';
 
@@ -55,10 +55,14 @@ function getEvidenceDetails(evidence: NcrEvidenceItem, formatDateTime: DateTimeF
 /**
  * Generate a PDF detail report for a Non-Conformance Report (NCR)
  */
-export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
+export async function generateNCRDetailPDF(
+  data: NCRDetailData,
+  generatedAt: Date = new Date(),
+): Promise<void> {
   const jsPDF = await getJsPDF();
   const startTime = Date.now();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -69,6 +73,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   const formatDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleDateString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -78,6 +83,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   const formatDateTime = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -395,7 +401,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   // ========== FOOTER ==========
   drawPdfFooters(doc, {
     margin,
-    generatedAt: new Date(),
+    generatedAt,
     docRef: `${data.project.name} / ${data.ncr.ncrNumber}`,
   });
 

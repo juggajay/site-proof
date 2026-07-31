@@ -1,14 +1,18 @@
 import { devLog } from '../logger';
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { drawPdfBrandingHeader, drawPdfFooters, resolvePdfBranding } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DashboardPDFAttentionItem, DashboardPDFData } from './types';
 
-export async function generateDashboardPDF(data: DashboardPDFData): Promise<void> {
+export async function generateDashboardPDF(
+  data: DashboardPDFData,
+  generatedAt: Date = new Date(),
+): Promise<void> {
   const startTime = Date.now();
   const jsPDF = await getJsPDF();
   const doc = new jsPDF('portrait', 'mm', 'a4');
+  pinPdfIdentity(doc, generatedAt);
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -21,6 +25,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
     const date = new Date(`${dateStr}T00:00:00`);
     if (Number.isNaN(date.getTime())) return 'N/A';
     return date.toLocaleDateString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -32,6 +37,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
     const date = new Date(dateStr);
     if (Number.isNaN(date.getTime())) return 'N/A';
     return date.toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: 'short',
       year: 'numeric',

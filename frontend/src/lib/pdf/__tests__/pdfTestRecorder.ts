@@ -65,8 +65,18 @@ export class JsPdfRecorder {
     this.operations.push({ name: 'save', args: [filename] });
   }
 
+  // The two identity setters `pinPdfIdentity` calls on every generated doc.
+  // Recorded rather than stubbed so a test can assert the pinning happened.
+  setCreationDate(...args: unknown[]) {
+    this.operations.push({ name: 'setCreationDate', args });
+  }
+
   setDrawColor(...args: unknown[]) {
     this.operations.push({ name: 'setDrawColor', args });
+  }
+
+  setFileId(...args: unknown[]) {
+    this.operations.push({ name: 'setFileId', args });
   }
 
   setFillColor(...args: unknown[]) {

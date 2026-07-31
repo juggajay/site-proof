@@ -1,4 +1,4 @@
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
 import {
   drawCompanyDetailsLine,
@@ -6,7 +6,7 @@ import {
   drawPdfFooters,
   PDF_NONE_RECORDED,
 } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultConformanceOptions } from './types';
 import type {
@@ -43,7 +43,11 @@ function formatSpecLimit(
 function formatShortDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-AU');
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString('en-AU', {
+        timeZone: DEFAULT_APP_TIME_ZONE,
+      });
 }
 
 // Disposition + closure status for the NCR reference row. The conformance report
@@ -180,6 +184,7 @@ function formatOptionalDateTime(dateStr: string | null | undefined, fallback = '
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return fallback;
   return date.toLocaleString('en-AU', {
+    timeZone: DEFAULT_APP_TIME_ZONE,
     dateStyle: 'short',
     timeStyle: 'short',
   });
@@ -192,9 +197,11 @@ function formatOptionalDateTime(dateStr: string | null | undefined, fallback = '
 export async function generateConformanceReportPDF(
   data: ConformanceReportData,
   options: ConformanceFormatOptions = defaultConformanceOptions,
+  generatedAt: Date = new Date(),
 ): Promise<void> {
   const jsPDF = await getJsPDF();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
@@ -336,6 +343,7 @@ export async function generateConformanceReportPDF(
   doc.setFont('helvetica', 'normal');
   if (data.lot.conformedAt) {
     const conformedDate = new Date(data.lot.conformedAt).toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       dateStyle: 'medium',
       timeStyle: 'short',
     });
@@ -912,7 +920,7 @@ export async function generateConformanceReportPDF(
   // Document identity on every page (shared chrome).
   drawPdfFooters(doc, {
     margin,
-    generatedAt: new Date(),
+    generatedAt,
     docRef: `${data.project.name} / Lot ${data.lot.lotNumber}`,
   });
 

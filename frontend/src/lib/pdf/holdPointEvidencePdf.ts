@@ -1,6 +1,6 @@
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { drawPdfHeaderBand, drawPdfFooters } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
 import type { HPEvidencePackageData, HPPackageOptions } from './types';
@@ -10,7 +10,11 @@ function formatReleaseMethod(method: string): string {
 }
 
 function shortDate(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleDateString('en-AU') : '';
+  return value
+    ? new Date(value).toLocaleDateString('en-AU', {
+        timeZone: DEFAULT_APP_TIME_ZONE,
+      })
+    : '';
 }
 
 // Result-vs-spec-limit label (MRTS50 10.1.1(b)): show the acceptance limit
@@ -56,9 +60,11 @@ function getReleaseDetailRows(data: HPEvidencePackageData['holdPoint']): string[
 export async function generateHPEvidencePackagePDF(
   data: HPEvidencePackageData,
   options: HPPackageOptions = defaultHPPackageOptions,
+  generatedAt: Date = new Date(),
 ): Promise<void> {
   const jsPDF = await getJsPDF();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
@@ -160,6 +166,7 @@ export async function generateHPEvidencePackagePDF(
 
   if (data.holdPoint.scheduledDate) {
     const scheduledDate = new Date(data.holdPoint.scheduledDate).toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       dateStyle: 'medium',
       timeStyle: 'short',
     });
@@ -169,6 +176,7 @@ export async function generateHPEvidencePackagePDF(
 
   if (data.holdPoint.releasedAt) {
     const releasedDate = new Date(data.holdPoint.releasedAt).toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       dateStyle: 'medium',
       timeStyle: 'short',
     });
@@ -447,7 +455,9 @@ export async function generateHPEvidencePackagePDF(
       data.photos.slice(0, 10).forEach((photo) => {
         checkPageBreak(6);
         const uploadDate = photo.uploadedAt
-          ? new Date(photo.uploadedAt).toLocaleDateString('en-AU')
+          ? new Date(photo.uploadedAt).toLocaleDateString('en-AU', {
+              timeZone: DEFAULT_APP_TIME_ZONE,
+            })
           : '';
         doc.text(
           `- ${photo.filename}${photo.caption ? ` (${photo.caption})` : ''} ${uploadDate}`,

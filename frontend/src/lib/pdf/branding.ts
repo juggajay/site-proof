@@ -1,3 +1,4 @@
+import { DEFAULT_APP_TIME_ZONE } from '../localDate';
 import type { PDFBrandableData, PDFBrandingData, PDFCompanyBranding } from './types';
 import { fetchWithTimeout } from '../fetchWithTimeout';
 
@@ -322,6 +323,7 @@ export function drawPdfFooters(
   opts: { margin: number; generatedAt: string | number | Date; docRef: string },
 ): void {
   const generated = new Date(opts.generatedAt).toLocaleString('en-AU', {
+    timeZone: DEFAULT_APP_TIME_ZONE,
     dateStyle: 'medium',
     timeStyle: 'short',
   });

@@ -1,8 +1,8 @@
 import { devLog } from '../logger';
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
 import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
 import type {
@@ -41,10 +41,12 @@ function formatPct(value: number | null | undefined): string {
 export async function generateClaimEvidencePackagePDF(
   data: ClaimEvidencePackageData,
   options: ClaimPackageOptions = defaultPackageOptions,
+  generatedAt: Date = new Date(),
 ): Promise<void> {
   const jsPDF = await getJsPDF();
   const startTime = Date.now();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -158,8 +160,12 @@ export async function generateClaimEvidencePackagePDF(
 
   // Claim period
   doc.setFontSize(12);
-  const periodStart = new Date(data.claim.periodStart).toLocaleDateString('en-AU');
-  const periodEnd = new Date(data.claim.periodEnd).toLocaleDateString('en-AU');
+  const periodStart = new Date(data.claim.periodStart).toLocaleDateString('en-AU', {
+    timeZone: DEFAULT_APP_TIME_ZONE,
+  });
+  const periodEnd = new Date(data.claim.periodEnd).toLocaleDateString('en-AU', {
+    timeZone: DEFAULT_APP_TIME_ZONE,
+  });
   doc.text(`Claim Period: ${periodStart} - ${periodEnd}`, pageWidth / 2, 115, { align: 'center' });
 
   // Summary box
@@ -204,7 +210,9 @@ export async function generateClaimEvidencePackagePDF(
     doc.setFontSize(10);
     doc.text(`Prepared by: ${data.claim.preparedBy.name}`, margin, 195);
     if (data.claim.preparedAt) {
-      const preparedDate = new Date(data.claim.preparedAt).toLocaleDateString('en-AU');
+      const preparedDate = new Date(data.claim.preparedAt).toLocaleDateString('en-AU', {
+        timeZone: DEFAULT_APP_TIME_ZONE,
+      });
       doc.text(`Date: ${preparedDate}`, margin, 203);
     }
   }
@@ -443,13 +451,13 @@ export async function generateClaimEvidencePackagePDF(
           const parts: string[] = [];
           if (completion?.completedBy?.name) {
             const when = completion.completedAt
-              ? ` on ${new Date(completion.completedAt).toLocaleDateString('en-AU')}`
+              ? ` on ${new Date(completion.completedAt).toLocaleDateString('en-AU', { timeZone: DEFAULT_APP_TIME_ZONE })}`
               : '';
             parts.push(`Completed by ${completion.completedBy.name}${when}`);
           }
           if (completion?.verifiedBy?.name) {
             const when = completion.verifiedAt
-              ? ` on ${new Date(completion.verifiedAt).toLocaleDateString('en-AU')}`
+              ? ` on ${new Date(completion.verifiedAt).toLocaleDateString('en-AU', { timeZone: DEFAULT_APP_TIME_ZONE })}`
               : '';
             parts.push(`Verified by ${completion.verifiedBy.name}${when}`);
           } else if (item.responsibleParty) {
@@ -501,7 +509,7 @@ export async function generateClaimEvidencePackagePDF(
               checkPageBreak(5);
               const org = hp.releasedBy?.organization ? ` (${hp.releasedBy.organization})` : '';
               const when = hp.releasedAt
-                ? ` on ${new Date(hp.releasedAt).toLocaleDateString('en-AU')}`
+                ? ` on ${new Date(hp.releasedAt).toLocaleDateString('en-AU', { timeZone: DEFAULT_APP_TIME_ZONE })}`
                 : '';
               const desc = hp.description ? `${hp.description.slice(0, 45)}: ` : '';
               doc.setFontSize(8);
@@ -613,7 +621,9 @@ export async function generateClaimEvidencePackagePDF(
         yPos += 5;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
-        const conformedDate = new Date(lot.conformedAt).toLocaleDateString('en-AU');
+        const conformedDate = new Date(lot.conformedAt).toLocaleDateString('en-AU', {
+          timeZone: DEFAULT_APP_TIME_ZONE,
+        });
         doc.text(`Conformed: ${conformedDate}`, margin, yPos);
         yPos += 4;
         if (lot.conformedBy) {
@@ -798,7 +808,9 @@ export async function generateClaimEvidencePackagePDF(
           yPos += 4;
 
           if (document.uploadedAt) {
-            const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU');
+            const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU', {
+              timeZone: DEFAULT_APP_TIME_ZONE,
+            });
             doc.text(`Uploaded: ${uploadedDate} | Document ID: ${document.id}`, margin + 6, yPos);
             yPos += 4;
           }
@@ -826,7 +838,9 @@ export async function generateClaimEvidencePackagePDF(
           yPos += 4;
 
           if (document.uploadedAt) {
-            const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU');
+            const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU', {
+              timeZone: DEFAULT_APP_TIME_ZONE,
+            });
             doc.text(
               `Uploaded: ${uploadedDate} | Document ID: ${document.documentId}`,
               margin + 6,
