@@ -72,17 +72,75 @@ function serializeClientError(error: unknown): SerializedClientError {
   }
 }
 
+export const REDACTED = '[redacted]';
+// Base for parsing relative URLs. Never echoed back: the origin is only kept
+// when the caller's URL was absolute to begin with.
+const URL_PARSE_BASE = 'http://siteproof.local';
+
+// Mirrors the backend vocabulary in backend/src/lib/logSanitization.ts. The two
+// packages cannot share a module, so keep these in step when either changes.
+// ponytail: only the token shapes that can reach a browser are ported — path
+// capability tokens and bearer/secret key=value pairs.
+const PATH_TOKEN_PATTERNS: RegExp[] = [
+  // Public hold-point release links carry the capability token in the path,
+  // both as the app route and as the API call the page makes.
+  /(\/hp-release\/(?:batch\/)?)[^/?#\s]+/gi,
+  /(\/api\/holdpoints\/public\/(?:batch\/)?)[^/?#\s]+/gi,
+];
+
+/** Redact capability tokens embedded in a URL path segment. */
+export function redactPath(pathname: string): string {
+  let safe = pathname;
+  for (const pattern of PATH_TOKEN_PATTERNS) {
+    safe = safe.replace(pattern, `$1${REDACTED}`);
+  }
+  return safe
+    .replace(/sub_invite_[^/?#\s]+/gi, REDACTED)
+    .replace(/\/(?:reset|magic|verify)_[^/?#\s]+/gi, `/${REDACTED}`);
+}
+
+/** Redact secrets in free text (error messages, breadcrumb messages). */
+export function redactSensitiveText(value: string): string {
+  return redactPath(value)
+    .replace(/\b(Bearer|ApiKey)\s+[A-Za-z0-9._~+/=-]+/gi, `$1 ${REDACTED}`)
+    .replace(
+      /\b(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature|authorization)=([^&\s]+)/gi,
+      (_match, key: string) => `${key}=${REDACTED}`,
+    );
+}
+
+/**
+ * Sanitize a URL for logging: path tokens redacted, every query value and the
+ * hash redacted wholesale (a value is not trusted just because its key looks
+ * innocuous). Origin is preserved so breadcrumbs stay useful.
+ */
+export function redactUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl, URL_PARSE_BASE);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return REDACTED;
+    }
+
+    const origin = rawUrl.startsWith(url.origin) ? url.origin : '';
+    const query = Array.from(url.searchParams.keys())
+      .map((key) => `${encodeURIComponent(key)}=${REDACTED}`)
+      .join('&');
+
+    return `${origin}${redactPath(url.pathname)}${query ? `?${query}` : ''}${
+      url.hash ? `#${REDACTED}` : ''
+    }`;
+  } catch {
+    return REDACTED;
+  }
+}
+
 export function getSafeLocationPath(): string | undefined {
   if (typeof window === 'undefined') {
     return undefined;
   }
 
   const { pathname, search, hash } = window.location;
-  // Redact capability tokens embedded in the path segment (hold-point public
-  // release links) before the path leaves the browser. Query and hash are
-  // redacted wholesale below.
-  const safePathname = pathname.replace(/(\/hp-release\/(?:batch\/)?)[^/?#\s]+/gi, '$1[redacted]');
-  return `${safePathname}${search ? '?[redacted]' : ''}${hash ? '#[redacted]' : ''}`;
+  return `${redactPath(pathname)}${search ? '?[redacted]' : ''}${hash ? '#[redacted]' : ''}`;
 }
 
 export async function reportClientError(

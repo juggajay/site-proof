@@ -2,7 +2,12 @@
 // Initialized once at startup (see index.ts). When SENTRY_DSN is unset
 // (local/dev/test) every export here is a safe no-op.
 import * as Sentry from '@sentry/node';
-import { sanitizeLogText, sanitizeLogValue } from './logSanitization.js';
+import { sanitizeLogText, sanitizeLogValue, sanitizeUrlValueForLog } from './logSanitization.js';
+
+// Breadcrumb data keys that hold a URL. `url` is used by the http/fetch
+// instrumentation, `from`/`to` by navigation breadcrumbs. These get the
+// URL-aware scrubber (redacts every query value, not just sensitive keys).
+const BREADCRUMB_URL_KEYS = ['url', 'from', 'to'];
 
 let sentryEnabled = false;
 
@@ -28,11 +33,59 @@ function getRelease(): string | undefined {
 }
 
 /**
+ * Scrub a single breadcrumb. Node's HTTP auto-instrumentation records request
+ * URLs here, so without this the public hold-point release tokens (which ride
+ * in the path) and any query string would reach Sentry unredacted.
+ */
+export function scrubSentryBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
+  if (breadcrumb.message) {
+    breadcrumb.message = sanitizeLogText(breadcrumb.message);
+  }
+
+  if (breadcrumb.data) {
+    const data = sanitizeLogValue(breadcrumb.data) as Record<string, unknown>;
+    for (const key of BREADCRUMB_URL_KEYS) {
+      if (typeof data[key] === 'string') {
+        data[key] = sanitizeUrlValueForLog(data[key] as string);
+      }
+    }
+    breadcrumb.data = data;
+  }
+
+  return breadcrumb;
+}
+
+function scrubSentryRequest(request: NonNullable<Sentry.ErrorEvent['request']>): void {
+  if (typeof request.url === 'string') {
+    request.url = sanitizeUrlValueForLog(request.url);
+  }
+  if (typeof request.query_string === 'string') {
+    request.query_string = sanitizeLogText(request.query_string);
+  }
+  if (request.data) {
+    request.data = sanitizeLogValue(request.data);
+  }
+  // Never forward cookies or auth headers to a third party.
+  delete request.cookies;
+  if (request.headers) {
+    delete request.headers.cookie;
+    delete request.headers.authorization;
+    delete request.headers.Authorization;
+  }
+}
+
+/**
  * Scrub secrets out of outbound Sentry events. The previous webhook approach
  * sanitized every payload before forwarding; we preserve that guarantee here so
  * tokens/credentials that surface in error messages are never sent to Sentry.
  */
 export function scrubSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+  if (event.breadcrumbs) {
+    // beforeBreadcrumb covers SDK-recorded crumbs; this covers crumbs attached
+    // straight onto an event, which never pass through that hook.
+    event.breadcrumbs = event.breadcrumbs.map((breadcrumb) => scrubSentryBreadcrumb(breadcrumb));
+  }
+
   if (event.message) {
     event.message = sanitizeLogText(event.message);
   }
@@ -48,19 +101,7 @@ export function scrubSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   }
 
   if (event.request) {
-    if (typeof event.request.query_string === 'string') {
-      event.request.query_string = sanitizeLogText(event.request.query_string);
-    }
-    if (event.request.data) {
-      event.request.data = sanitizeLogValue(event.request.data);
-    }
-    // Never forward cookies or auth headers to a third party.
-    delete event.request.cookies;
-    if (event.request.headers) {
-      delete event.request.headers.cookie;
-      delete event.request.headers.authorization;
-      delete event.request.headers.Authorization;
-    }
+    scrubSentryRequest(event.request);
   }
 
   return event;
@@ -86,6 +127,7 @@ export function initSentry(): void {
     tracesSampleRate: parseSampleRate(process.env.SENTRY_TRACES_SAMPLE_RATE, 0),
     sendDefaultPii: false,
     beforeSend: (event) => scrubSentryEvent(event),
+    beforeBreadcrumb: (breadcrumb) => scrubSentryBreadcrumb(breadcrumb),
   });
 
   sentryEnabled = true;
