@@ -572,6 +572,13 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
+    // The doc sheet's revision timeline. No issues is the pre-adoption case,
+    // which the timeline states in words rather than treating as an error.
+    if (path === '/api/revisions') {
+      await fulfillJson(route, { issues: [] });
+      return;
+    }
+
     await fulfillJson(route, { message: `Unhandled E2E API route: ${path}` }, 404);
   });
 
