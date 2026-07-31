@@ -10,6 +10,12 @@ import { holdPointReleased, testPendingByStatus } from '../../lib/readiness/pred
 import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
+  ClaimReadinessAccumulator,
+  isClaimMemberReasonCode,
+  mapBlockedLotForReason,
+  toClaimReadinessAggregateRow,
+} from './claimReadinessSummary.js';
+import {
   buildClaimCertificationView,
   buildClaimDetailResponse,
   buildClaimReadinessResponse,
@@ -136,6 +142,23 @@ function parseClaimReadinessPagination(query: {
   };
 }
 
+// Keyset predicate for the register's natural key (lotNumber ASC, id ASC).
+// Shared by the paginated readiness route, the F1 aggregate's internal scan and
+// the F1 drill-down so all three walk the register identically.
+function claimReadinessCursorWhere(
+  baseWhere: Prisma.LotWhereInput,
+  cursor: ClaimReadinessCursor | null,
+): Prisma.LotWhereInput {
+  if (!cursor) return baseWhere;
+  return {
+    ...baseWhere,
+    OR: [
+      { lotNumber: { gt: cursor.lotNumber } },
+      { lotNumber: cursor.lotNumber, id: { gt: cursor.id } },
+    ],
+  };
+}
+
 type AuthUser = NonNullable<Express.Request['user']>;
 
 interface ClaimReadRouterDependencies {
@@ -206,10 +229,11 @@ function parseOptionalClaimBooleanQuery(value: unknown, field: string): boolean 
   throw AppError.badRequest(`${field} must be true or false`);
 }
 
-// Build the claim-readiness view-models for a set of lot rows. Shared by the
-// legacy full-list path and the paginated path so both produce identical items;
-// only the response envelope differs. Byte-identical to the prior inline block.
-async function computeClaimReadinessItems(lots: ClaimReadinessLotRow[]) {
+// Build the claim readiness for a set of lot rows. Shared by the legacy
+// full-list path, the paginated path and the F1 aggregate so all three read the
+// same computation; only the envelope differs. Byte-identical to the prior
+// inline block.
+async function computeClaimReadiness(lots: ClaimReadinessLotRow[]) {
   // Cumulative claiming: a conformed lot can appear on multiple claims, so its
   // readiness must reflect how much has already been claimed.
   const cumulativeClaimedByLotId = await getCumulativeClaimedPercentByLot(
@@ -269,8 +293,61 @@ async function computeClaimReadinessItems(lots: ClaimReadinessLotRow[]) {
       },
     });
 
-    return mapClaimReadinessItem(lot, readiness);
+    return { lot, readiness };
   });
+}
+
+async function computeClaimReadinessItems(lots: ClaimReadinessLotRow[]) {
+  const computed = await computeClaimReadiness(lots);
+  return computed.map(({ lot, readiness }) => mapClaimReadinessItem(lot, readiness));
+}
+
+function claimReadinessBaseWhere(projectId: string): Prisma.LotWhereInput {
+  return { projectId, status: { in: [...CLAIM_LOT_QUERYABLE_STATUSES] } };
+}
+
+// A deleted cursor (its anchor lot no longer exists in this project) is a hard
+// restart signal, not a silent skip — surface INVALID_CURSOR so the client
+// restarts from page one.
+async function assertClaimReadinessCursorAnchor(
+  projectId: string,
+  cursor: ClaimReadinessCursor | null,
+): Promise<void> {
+  if (!cursor) return;
+  const anchor = await prisma.lot.findFirst({
+    where: { id: cursor.id, projectId },
+    select: { id: true },
+  });
+  if (!anchor) {
+    throw new AppError(400, 'Invalid pagination cursor', ErrorCodes.INVALID_CURSOR);
+  }
+}
+
+// The F1 aggregate's internal walk. Yields one keyset page of computed readiness
+// at a time so the caller can fold it into sums and drop it: the whole register
+// is never resident, which is what keeps the aggregate off the memory and
+// event-loop risk the spec asks it to observe (§4.3 `[FR-7]`).
+async function* scanClaimReadiness(
+  projectId: string,
+): AsyncGenerator<Awaited<ReturnType<typeof computeClaimReadiness>>> {
+  const baseWhere = claimReadinessBaseWhere(projectId);
+  let cursor: ClaimReadinessCursor | null = null;
+
+  for (;;) {
+    const lots: ClaimReadinessLotRow[] = await prisma.lot.findMany({
+      where: claimReadinessCursorWhere(baseWhere, cursor),
+      select: CLAIM_READINESS_LOT_SELECT,
+      orderBy: [{ lotNumber: 'asc' }, { id: 'asc' }],
+      take: CLAIM_READINESS_MAX_PAGE_SIZE,
+    });
+    if (lots.length === 0) return;
+
+    yield await computeClaimReadiness(lots);
+
+    if (lots.length < CLAIM_READINESS_MAX_PAGE_SIZE) return;
+    const last = lots[lots.length - 1];
+    cursor = { lotNumber: last.lotNumber, id: last.id };
+  }
 }
 
 export function createClaimReadRouter({
@@ -330,10 +407,7 @@ export function createClaimReadRouter({
       await requireCommercialProjectAccess(req.user!, projectId);
 
       const pagination = parseClaimReadinessPagination(req.query);
-      const baseWhere: Prisma.LotWhereInput = {
-        projectId,
-        status: { in: [...CLAIM_LOT_QUERYABLE_STATUSES] },
-      };
+      const baseWhere = claimReadinessBaseWhere(projectId);
 
       // Legacy full-list behaviour (no cursor/limit params): unchanged for
       // existing callers. Its removal is an F0.2a exit item.
@@ -347,29 +421,10 @@ export function createClaimReadRouter({
         return;
       }
 
-      // A deleted cursor (its anchor lot no longer exists in this project) is a
-      // hard restart signal, not a silent skip — surface INVALID_CURSOR so the
-      // client restarts from page one.
-      if (pagination.cursor) {
-        const anchor = await prisma.lot.findFirst({
-          where: { id: pagination.cursor.id, projectId },
-          select: { id: true },
-        });
-        if (!anchor) {
-          throw new AppError(400, 'Invalid pagination cursor', ErrorCodes.INVALID_CURSOR);
-        }
-      }
+      await assertClaimReadinessCursorAnchor(projectId, pagination.cursor);
 
       // Keyset pagination on the register's natural key (lotNumber ASC, id ASC).
-      const where: Prisma.LotWhereInput = pagination.cursor
-        ? {
-            ...baseWhere,
-            OR: [
-              { lotNumber: { gt: pagination.cursor.lotNumber } },
-              { lotNumber: pagination.cursor.lotNumber, id: { gt: pagination.cursor.id } },
-            ],
-          }
-        : baseWhere;
+      const where = claimReadinessCursorWhere(baseWhere, pagination.cursor);
 
       // Over-fetch by one to detect whether a further page exists.
       const pageLots = await prisma.lot.findMany({
@@ -396,6 +451,85 @@ export function createClaimReadRouter({
       }
 
       res.json(body);
+    }),
+  );
+
+  // GET /api/projects/:projectId/claim-readiness/summary - Wave F F1.
+  //
+  // The project-level blocked-value aggregate (spec §1.2). AGGREGATE ONLY: it
+  // walks the register in keyset pages and keeps sums, so it holds one page at a
+  // time and serialises ~6 numbers plus at most 17 group rows — never 5,000
+  // view-models. That shape is the reason it fits the §4.2 budget, and it is why
+  // this endpoint (not a second unpaginated full-list route) is the sanctioned
+  // replacement for the legacy path above whose removal is an F0.2a exit item.
+  //
+  // `canViewCommercial: true` in `computeClaimReadiness` is correct here and
+  // deliberate (spec §5 F1 `[FR-5]`): this route sits behind
+  // `requireCommercialProjectAccess`, and a role-derived `false` would make
+  // `buildLotReadinessFromInputs` drop `budgetAmount` and silently under-count
+  // the total.
+  readRouter.get(
+    '/:projectId/claim-readiness/summary',
+    asyncHandler(async (req, res) => {
+      const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
+      await requireCommercialProjectAccess(req.user!, projectId);
+
+      const accumulator = new ClaimReadinessAccumulator();
+      for await (const page of scanClaimReadiness(projectId)) {
+        for (const { lot, readiness } of page) {
+          accumulator.add(toClaimReadinessAggregateRow(lot, readiness));
+        }
+      }
+
+      res.json(accumulator.result());
+    }),
+  );
+
+  // GET /api/projects/:projectId/claim-readiness/blocked-lots?reasonCode=… -
+  // Wave F F1 drill-down: the source lots behind ONE summary group, paginated on
+  // the same keyset cursor and the same 500 cap as the readiness route.
+  //
+  // The filter is on a COMPUTED code, so a page is a page OF THE REGISTER, not a
+  // page of matches: `items` may be short (even empty) while `nextCursor` is
+  // still set. Clients follow the cursor until it is null.
+  readRouter.get(
+    '/:projectId/claim-readiness/blocked-lots',
+    asyncHandler(async (req, res) => {
+      const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
+      await requireCommercialProjectAccess(req.user!, projectId);
+
+      const reasonCode = getOptionalClaimQueryString(req.query.reasonCode, 'reasonCode');
+      if (reasonCode === undefined || !isClaimMemberReasonCode(reasonCode)) {
+        throw AppError.badRequest('reasonCode must be a known claim blocking reason code');
+      }
+
+      const pagination = parseClaimReadinessPagination(req.query) ?? {
+        limit: CLAIM_READINESS_MAX_PAGE_SIZE,
+        cursor: null,
+      };
+      await assertClaimReadinessCursorAnchor(projectId, pagination.cursor);
+
+      const pageLots = await prisma.lot.findMany({
+        where: claimReadinessCursorWhere(claimReadinessBaseWhere(projectId), pagination.cursor),
+        select: CLAIM_READINESS_LOT_SELECT,
+        orderBy: [{ lotNumber: 'asc' }, { id: 'asc' }],
+        take: pagination.limit + 1,
+      });
+
+      const hasMore = pageLots.length > pagination.limit;
+      const lots = hasMore ? pageLots.slice(0, pagination.limit) : pageLots;
+      const nextCursor =
+        hasMore && lots.length > 0 ? encodeClaimReadinessCursor(lots[lots.length - 1]) : null;
+
+      const items = (await computeClaimReadiness(lots))
+        .map(({ lot, readiness }) => ({
+          row: toClaimReadinessAggregateRow(lot, readiness),
+          readiness,
+        }))
+        .filter(({ row }) => row.reasonCodes.includes(reasonCode))
+        .map(({ row, readiness }) => mapBlockedLotForReason(row, readiness, reasonCode));
+
+      res.json({ reasonCode, items, nextCursor });
     }),
   );
 

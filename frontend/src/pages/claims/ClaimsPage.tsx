@@ -640,6 +640,7 @@ export function ClaimsPage() {
       <ClaimsLoadErrorAlert loadError={loadError} onRetry={() => void refetch()} />
 
       <ClaimsMainContent
+        projectId={projectId ?? ''}
         loadError={loadError}
         totals={totals}
         cumulativeChartData={cumulativeChartData}

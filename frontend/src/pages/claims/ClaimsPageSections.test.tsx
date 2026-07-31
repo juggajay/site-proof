@@ -228,6 +228,19 @@ const READY_LOT_READINESS: ProjectClaimReadiness = {
   ],
 };
 
+// Wave F F1: `ClaimsPage` now also renders the blocked-value panel, so a page
+// test has to answer its aggregate call. Ordering matters — the panel's paths
+// start with `/claim-readiness`, so they must be matched BEFORE the modal's.
+const BLOCKED_VALUE_SUMMARY = {
+  totalBudget: 100000,
+  claimableValue: 100000,
+  blockedValue: 0,
+  lotsInScope: 1,
+  lotsBlocked: 0,
+  lotsWithNullBudget: 0,
+  groups: [],
+};
+
 describe('ClaimsTable payment schedule wording', () => {
   it('labels the response deadline as payment schedule due, not certification due', () => {
     render(
@@ -395,7 +408,13 @@ describe('ClaimsPage TanStack Query register', () => {
   });
 
   it('renders revisits instantly from cache without refetching inside staleTime', async () => {
-    apiFetchMock.mockResolvedValue({ claims: [SEEDED_CLAIM] });
+    apiFetchMock.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.startsWith('/api/projects/p1/claim-readiness/summary')
+          ? BLOCKED_VALUE_SUMMARY
+          : { claims: [SEEDED_CLAIM] },
+      ),
+    );
 
     const first = renderClaimsPage();
     expect(await screen.findByText('Claim 7')).toBeInTheDocument();
@@ -413,6 +432,9 @@ describe('ClaimsPage TanStack Query register', () => {
   it('invalidates the claims key after create so the register refetches', async () => {
     let claimsResponse: { claims: Claim[] } = { claims: [] };
     apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path.startsWith('/api/projects/p1/claim-readiness/summary')) {
+        return Promise.resolve(BLOCKED_VALUE_SUMMARY);
+      }
       if (path.startsWith('/api/projects/p1/claim-readiness')) {
         return Promise.resolve({
           items: READY_LOT_READINESS.lots,
@@ -480,6 +502,9 @@ describe('ClaimsPage TanStack Query register', () => {
       if (path === '/api/projects/p1/claims') {
         return Promise.resolve({ claims: [SEEDED_CLAIM] });
       }
+      if (path.startsWith('/api/projects/p1/claim-readiness/summary')) {
+        return Promise.resolve(BLOCKED_VALUE_SUMMARY);
+      }
       return Promise.resolve({ project: { name: 'Project One' } });
     });
 
@@ -511,6 +536,9 @@ describe('ClaimsPage TanStack Query register', () => {
       }
       if (path === '/api/projects/p1/claims') {
         return Promise.resolve({ claims: [SEEDED_CLAIM] });
+      }
+      if (path.startsWith('/api/projects/p1/claim-readiness/summary')) {
+        return Promise.resolve(BLOCKED_VALUE_SUMMARY);
       }
       return Promise.resolve({ project: { name: 'Project One' } });
     });

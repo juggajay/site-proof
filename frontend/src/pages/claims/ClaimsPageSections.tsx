@@ -11,6 +11,7 @@ import type {
   MonthlyClaimBreakdownPoint,
 } from './claimsPageData';
 import { formatCurrency } from './utils';
+import { ClaimBlockedValuePanel } from './components/ClaimBlockedValuePanel';
 import { ClaimsSummary } from './components/ClaimsSummary';
 import { ClaimsTable } from './components/ClaimsTable';
 
@@ -103,6 +104,7 @@ export function ClaimsAccessDeniedState({ message }: ClaimsAccessDeniedStateProp
 }
 
 interface ClaimsMainContentProps {
+  projectId: string;
   loadError: string | null;
   totals: ClaimSummaryTotals;
   cumulativeChartData: CumulativeClaimChartPoint[];
@@ -126,6 +128,7 @@ interface ClaimsMainContentProps {
 }
 
 export function ClaimsMainContent({
+  projectId,
   loadError,
   totals,
   cumulativeChartData,
@@ -167,6 +170,7 @@ export function ClaimsMainContent({
         formatCurrency={formatCurrency}
         onExport={onExportMonthlyData}
       />
+      <ClaimBlockedValuePanel projectId={projectId} />
       <ClaimsTable
         claims={claims}
         loadingCompleteness={loadingCompleteness}

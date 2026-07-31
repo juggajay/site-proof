@@ -29,6 +29,9 @@
  *   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/siteproof_test_f05bench \
  *     npm run bench:f05
  *
+ * Section E (Wave F F1's blocked-value aggregate) is OPT-IN via `--only=E`; the
+ * default `--only` string is unchanged, so an F0.5 gate run is unaffected.
+ *
  * Flags: --claim-iterations=N (default 20), --entity-iterations=N (default 50),
  *        --page-iterations=N (default 20), --lots=N (default 5000),
  *        --keep (skip teardown so the seeded dataset can be inspected),
@@ -757,6 +760,105 @@ async function benchClaimReadiness(project: SeededProject): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// E. Wave F F1 — the blocked-value aggregate and its drill-down.
+//
+// OPT-IN (`--only=E`, or `AE`/`ACE`): it is not in the default `ABCD` string, so
+// an F0.5 gate run is byte-for-byte the run it has always been.
+//
+// Budgets from the Wave F spec §4.2: aggregate p95 < 3s at 5,000 lots,
+// drill-down page p95 < 1s. §4.3 sets the EXPECTATION at ~1.4s and says a result
+// materially above ~2s means the endpoint was built in the shape §1.2 forbids
+// (re-hydrating 5,000 view-models) — so the number is a shape check, not only a
+// latency check.
+//
+// The exit gate also asks for a memory and event-loop observation `[FR-7]`,
+// because F1 is a synchronous request on the main API process and the repo's
+// precedent (`handoverExportWorker.ts`, split out over measured 69.99ms stalls)
+// says to measure rather than assume.
+// ---------------------------------------------------------------------------
+
+/** Max event-loop delay observed while the probe is running, in ms. */
+function startLoopLagProbe(intervalMs = 20): () => number {
+  let worst = 0;
+  let last = performance.now();
+  const timer = setInterval(() => {
+    const now = performance.now();
+    worst = Math.max(worst, now - last - intervalMs);
+    last = now;
+  }, intervalMs);
+  return () => {
+    clearInterval(timer);
+    return worst;
+  };
+}
+
+async function benchClaimReadinessSummary(project: SeededProject): Promise<void> {
+  console.log(`\n=== E. F1 blocked-value aggregate over ${LOT_COUNT} lots ===`);
+
+  const summaryMs: number[] = [];
+  const drillMs: number[] = [];
+  let worstLoopLag = 0;
+  let peakHeapMb = 0;
+  let lastBody: Record<string, unknown> = {};
+
+  for (let iteration = 0; iteration < PAGE_ITERATIONS; iteration += 1) {
+    const heapBefore = process.memoryUsage().heapUsed;
+    const stopProbe = startLoopLagProbe();
+    const started = performance.now();
+    const res = await api('get', `/api/projects/${project.projectId}/claim-readiness/summary`);
+    const totalMs = performance.now() - started;
+    worstLoopLag = Math.max(worstLoopLag, stopProbe());
+    peakHeapMb = Math.max(peakHeapMb, (process.memoryUsage().heapUsed - heapBefore) / 1024 / 1024);
+
+    if (res.status !== 200) {
+      throw new Error(
+        `claim-readiness summary failed: ${res.status} ${JSON.stringify(res.body).slice(0, 500)}`,
+      );
+    }
+    if (res.body.lotsInScope !== LOT_COUNT) {
+      throw new Error(`expected ${LOT_COUNT} lots in scope, got ${res.body.lotsInScope}`);
+    }
+    summaryMs.push(totalMs);
+    lastBody = res.body as Record<string, unknown>;
+
+    // The drill-down is only meaningful when something is blocked; the seeded
+    // register is deliberately all-conformed, so fall back to the code the
+    // register does carry rather than skipping the measurement.
+    const groups = (lastBody.groups ?? []) as { code: string }[];
+    const reasonCode = groups[0]?.code ?? 'not_conformed';
+    const drillStarted = performance.now();
+    const drillRes = await api(
+      'get',
+      `/api/projects/${project.projectId}/claim-readiness/blocked-lots?reasonCode=${reasonCode}&limit=500`,
+    );
+    drillMs.push(performance.now() - drillStarted);
+    if (drillRes.status !== 200) {
+      throw new Error(`drill-down failed: ${drillRes.status}`);
+    }
+  }
+
+  const summary = reportStats('aggregate summary (whole project)', summaryMs);
+  const drill = reportStats('drill-down page of 500', drillMs);
+  console.log(
+    `  worst event-loop lag during a request: ${ms(worstLoopLag)}   ` +
+      `peak heap growth per request: ${peakHeapMb.toFixed(1)}MB`,
+  );
+  console.log(`  aggregate body: ${JSON.stringify(lastBody).length} bytes`);
+
+  sections.F1 = {
+    summary,
+    drillDown: drill,
+    worstLoopLagMs: worstLoopLag,
+    peakHeapGrowthMb: peakHeapMb,
+    responseBytes: JSON.stringify(lastBody).length,
+    body: lastBody,
+  };
+
+  verdict('F1: blocked-value aggregate', summary.p95, 3000);
+  verdict('F1: blocked-lots drill-down page', drill.p95, 1000);
+}
+
+// ---------------------------------------------------------------------------
 // D. Diagnostic (read-only): where the 5,000-lot conformance read spends time.
 //
 // NOT a product change and not part of the gate. READ THIS BEFORE QUOTING ANY
@@ -1006,7 +1108,7 @@ try {
   await bootstrapTenant();
 
   let claimProject: SeededProject | null = null;
-  if (ONLY.includes('A') || ONLY.includes('C')) {
+  if (ONLY.includes('A') || ONLY.includes('C') || ONLY.includes('E')) {
     claimProject = await seedProject('Claim ceiling', LOT_COUNT, 'conformed');
     projectIds.push(claimProject.projectId);
   }
@@ -1027,6 +1129,7 @@ try {
   if (conformProject) await benchSingleEntityDecision(conformProject);
   if (claimProject && ONLY.includes('C')) await benchClaimReadiness(claimProject);
   if (claimProject && ONLY.includes('D')) await diagnoseConformanceRead(claimProject);
+  if (claimProject && ONLY.includes('E')) await benchClaimReadinessSummary(claimProject);
 
   console.log(`\n=== Verdict ===`);
   if (failures.length === 0) {
