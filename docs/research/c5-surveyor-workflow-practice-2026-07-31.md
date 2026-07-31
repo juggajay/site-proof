@@ -914,3 +914,119 @@ widens the applicability of the spec pass's §4.1 finding beyond NSW.
     Board of Queensland Engineering Competency Framework** (competency E.4 *"Set out complex engineering
     works"*, which names *"conformance reports"* as acceptable evidence) turned out to be the best
     professional-body source available and is cited above.
+
+---
+
+## 10. Practitioner delta — post-draft
+
+A late sub-researcher pass landed after §1–§9 were drafted. **It changes no verdict in the table at the
+top**; it strengthens two of them and closes part of the §9.1 gap. Recorded here rather than woven in, so
+the delta stays auditable.
+
+**Context warning that governs this whole section:** r/Surveying is **US-dominated**. Rows below are
+**AU-identified only where marked `[AU]`**; the rest describe US practice and are included because they are
+the only first-person accounts of the *mechanism* available. They are grade **D/D+** — anonymous or
+pseudonymous — and nothing structural rests on them.
+
+### 10.1 GAP1 (request channel) — partially closed: the named channel is a project-start meeting
+
+The §9.1 gap was "no day-to-day request channel at any grade". The delta supplies a **project-start**
+channel, not a day-to-day one:
+
+| # | Claim | Source | Grade | Date |
+|---|---|---|---|---|
+| 71 | The named channel is a **Pre-Construction meeting** with an **attendance sheet** and a **one-page Utility Requirements Checklist** handed out | r/Surveying `189gsyf` comment `kbrjjik` | **D** (US) | 3 Dec 2023 |
+| 72 | Same shape independently: a **Day-1 meeting** at which **cheat sheets** are distributed | r/Surveying `1gjf792` comment `lvcsaos` | **D** (US) | 2024 |
+| 73 | Day-to-day, the channel **collapses to phone, text, or the foreman walking up** | same two threads | **D** (US) | 2023–2024 |
+| 74 | **Two further independent self-scheduling accounts** — the surveyor works the next thing off the sequence rather than waiting to be asked | r/Surveying, delta pass | **D** | 2023–2024 |
+
+**Two independent accounts converge on "requirements are agreed once, at a meeting, on paper; after that
+it is verbal."** That is a genuinely useful shape and it is consistent with everything in §1: the
+*standing* requirement is established up front (which is what MRWA's C154_13 engagement brief and TMR's
+survey brief are, at authority level), and the *per-event* ask is untracked.
+
+**Correction to §9.1, stated plainly:** the delta found **zero** evidence for a whiteboard, WhatsApp
+group, look-ahead-program integration, or a request form — but those terms were **NOT SEARCHED** in this
+delta pass. §9.1 should be read as *"not established"*, **not** as *"searched and absent"*. The earlier
+streams did search them and came back empty; the delta neither confirms nor extends that.
+
+### 10.2 GAP2 (turnaround) — a real scope boundary, and the overnight assumption dies
+
+The most useful thing in the delta is a distinction §3 did not draw:
+
+| # | Claim | Source | Grade | Date |
+|---|---|---|---|---|
+| 75 | **For set-out, the deliverable never reaches an office**: the **cut sheet is handed to the contractor before leaving site** | r/Surveying `12m31cx` comment `jgbfsfk` | **D** (US) | 2023 |
+| 76 | Same, independently: a **marked printout dropped at the job trailer** | r/Surveying `1gjf792` comment `lvcnj9l` | **D** (US) | 2024 |
+| 77 | Clock: the **site engineer responds in ~2 weeks** | r/Surveying `1gjf792` comment `lvg9vob` | **D** (US) | 2024 |
+| 78 | Clock: **disputes surface ~2 weeks later**, not on the day | r/Surveying `12m31cx` comment `jgdpvsk` | **D** (US) | 2023 |
+| 79 | **Batched as-built ≈ 8 h vs ≈ 2 h incremental** — batching costs 4× | r/Surveying `tgdrqc` comment `i12z5db` | **D** (US) | 2022 |
+| 80 | **No overnight / next-morning turnaround evidence anywhere** in the delta corpus; **no AU-specific turnaround number exists** in the corpus at all | delta pass, negative | **D** (negative) | 2026-07-31 |
+
+**Scope boundary this creates:** `received` is a **conformance-record** concept, not a **set-out** one. For
+set-out there is no office artifact to receive — the deliverable is a cut sheet handed over on site. If the
+C5 record is ever pointed at set-out as well as conformance, `received` has no counterpart event to fire on.
+
+Claim 80 is consistent with §3.4, which already declined to assert same-day and put the published range at
+1–4 business days. **The delta removes any remaining temptation to assume overnight.** Claim 79 is the one
+with product relevance: incremental pickup is 4× cheaper than batched, which is an argument *for* a record
+that tolerates partial coverage (§2.4) rather than one that waits for a complete job.
+
+### 10.3 The AU finding that matters most: the report's real destination is an NCR
+
+| # | Claim | Source | Grade | Date |
+|---|---|---|---|---|
+| 81 | **`[AU]`** *"i just setout and report on the wae, i dont build it"* (WAE = work-as-executed). The described flow is **conformance report → NCR**, with **the engineer pushing back on it** | r/Surveying `1aj86s7` comment `kozgvos` | **D+** (AU) | 5 Feb 2024 |
+| 82 | On the receiving side: *"some firms will stamp anything. They'll happily stamp the design plans, ignoring every field change"* | r/civilengineering `1ppzdrr` comment `nuszpla` | **D** | 19 Dec 2025 |
+
+**Claim 81 is the single most on-point practitioner line found in the entire study for Q4.** The surveyor's
+self-description is explicitly *"I report, I don't build"* — the report is a **finding handed to someone
+else to act on**, and what it feeds is an **NCR**, which is contested rather than approved. That is the
+survey-record-as-evidence framing arriving from the practitioner's own mouth, and it independently
+corroborates §4.6 (*"remove `accepted` from the survey record"*) and §4.5 claim 57 (*"I never tell them to
+move the formwork… it will show up in the as-constructed report"*).
+
+**It also strengthens §5.6:** if the downstream artifact is an NCR that the engineer argues with, then a
+terminal `rejected` on the survey record is modelling the wrong object. The thing that gets disputed is the
+*finding*, and the disposition lives on the NCR — which CIVOS already has.
+
+Claim 82 is a caution about the acceptance side, not evidence of a workflow step: it says stamping can be
+perfunctory. Single anonymous source; noted, not relied on.
+
+### 10.4 Flagged, uncorroborated — do NOT build on this
+
+> A **single anonymous allegation of falsified density tests** (r/Surveying `1ivkcvo` comment `mecil6q`).
+>
+> **One source, anonymous, uncorroborated, and an allegation of misconduct.** It is recorded here only so
+> that a future pass does not "rediscover" it and mistake it for a finding. **It supports no claim in this
+> document and must not be cited as evidence of AU industry practice.** Per the pass's own rule: never
+> assert from a single D source.
+
+### 10.5 Honest negatives and one correction
+
+- **r/AusEngineering title search for "survey" returns a clean empty result.** This is a **genuine
+  negative**, not a rate limit — worth recording because §0.1 listed AU subreddits as unreached, and at
+  least this one is now known to be genuinely empty rather than blocked.
+- **pullpush now refuses agents outright**; **arctic-shift body-search times out** on r/Surveying. The
+  Reddit archive route described in §0.1 is now closed, not merely slow. Anyone extending this work needs a
+  different channel (LinkedIn `/posts/`, per §9.2).
+- **Correction to §3.1(c).** The narrative clause *"Leica marks out-of-tolerance deltas red"* rests on a
+  **snippet-only** capture of a third-party copy of the Leica Infinity help — the underlying page body was
+  never retrieved. **Treat it as unconfirmed.** It appears in narrative only and is **not** in any claim
+  table row, so no graded claim is affected; the TBC `Pass`/red-highlight facts in claim 35 are from
+  Trimble's own help pages and stand.
+
+### 10.6 Net effect on the verdict table
+
+**None of the five verdicts changes.** Two are strengthened:
+
+- **`requested` (KEEP, optional)** — strengthened. Requirements are agreed once at a project-start meeting
+  (claims 71–72); the per-event ask is phone/text/foreman (claim 73) with two more self-scheduling accounts
+  (claim 74). Exactly the "standing requirement up front, untracked ask per event" picture §1.9 concluded
+  from B/C sources, now visible in D-grade first-person accounts.
+- **`accepted` (RESTRUCTURE, remove from the survey record)** — strengthened by claim 81, the clearest
+  practitioner statement found: the report is a finding that feeds an **NCR**, contested by the engineer,
+  never "accepted" on the document.
+
+One boundary added rather than a verdict changed: **`received` applies to conformance records, not set-out**
+(§10.2).
