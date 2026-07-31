@@ -36,9 +36,35 @@ import {
   itpHubSummary,
   lotStatusTone,
   GOVERNING_REVISION_WARNING_NOTE,
+  type GoverningRevisionWarning,
 } from './lotsShellState';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { useShellLotParam } from './useShellLotParam';
+
+/**
+ * The governing-revision warning, or nothing. Owns its own empty case so the
+ * hub — already the most branch-heavy screen in the shell — does not grow
+ * another conditional to carry it.
+ */
+function GoverningRevisionNotice({ warning }: { warning: GoverningRevisionWarning | null }) {
+  if (!warning) return null;
+
+  return (
+    <div className="shell-notice shell-notice-warn" role="status">
+      <AlertTriangle
+        size={19}
+        strokeWidth={1.9}
+        className="mt-px flex-none text-warning"
+        aria-hidden
+      />
+      <span className="min-w-0">
+        <b className="block">{warning.title}</b>
+        <span className="block">{warning.detail}</span>
+        <span className="mt-[7px] block">{GOVERNING_REVISION_WARNING_NOTE}</span>
+      </span>
+    </div>
+  );
+}
 
 export function LotHubScreen() {
   const navigate = useNavigate();
@@ -120,21 +146,7 @@ export function LotHubScreen() {
         A warning, never a gate: G1 records that a governing record moved on, and
         the office decides what that costs.
       */}
-      {revisionWarning && (
-        <div className="shell-notice shell-notice-warn" role="status">
-          <AlertTriangle
-            size={19}
-            strokeWidth={1.9}
-            className="mt-px flex-none text-warning"
-            aria-hidden
-          />
-          <span className="min-w-0">
-            <b className="block">{revisionWarning.title}</b>
-            <span className="block">{revisionWarning.detail}</span>
-            <span className="mt-[7px] block">{GOVERNING_REVISION_WARNING_NOTE}</span>
-          </span>
-        </div>
-      )}
+      <GoverningRevisionNotice warning={revisionWarning} />
 
       <HubTile
         icon={ClipboardCheck}
