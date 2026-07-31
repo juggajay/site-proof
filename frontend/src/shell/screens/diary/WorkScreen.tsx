@@ -11,13 +11,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, Clock, Truck, Flag, ChevronRight, Trash2 } from 'lucide-react';
+import { Wrench, Clock, Truck, Flag, ChevronRight, Lock, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
+import { DeliveryEvidenceSheet } from '@/components/deliveries/DeliveryEvidenceSheet';
+import { DocketChip } from '@/components/deliveries/DocketChip';
+import {
+  docketFilingStatusKey,
+  type DocketFilingStatusKey,
+} from '@/components/deliveries/docketFilingState';
+import { useDeliveryDocketPhotos } from '@/components/deliveries/useDeliveryDocketPhotos';
 
 const ADD_ITEMS = [
   { type: 'activity' as const, icon: Wrench, label: 'Activity' },
@@ -30,6 +37,10 @@ export function WorkScreen() {
   const navigate = useNavigate();
   const { projectId } = useEffectiveProjectId();
   const { diary, timeline, handlers } = useDiaryShellData();
+  const { byDeliveryId, isOnline } = useDeliveryDocketPhotos();
+  // The delivery whose evidence sheet is open. Only ever a delivery — the sheet
+  // files a docket and nothing else can carry one.
+  const [evidenceFor, setEvidenceFor] = useState<TimelineEntry | null>(null);
 
   const isSubmitted = diary?.status === 'submitted';
 
@@ -49,8 +60,15 @@ export function WorkScreen() {
   // Edit opens the matching form pre-filled (?edit=<id>); the form seeds from the
   // entry and the existing save path PATCHes it. Replaces the old no-op that set
   // sheet state nothing in the shell renders.
-  const navToEdit = (entry: TimelineEntry) => {
-    if (isSubmitted) return;
+  //
+  // C5-a: once the diary is submitted a delivery row is no longer dead. Its
+  // CONTENT stays locked — the row never reopens the edit form — but filing its
+  // docket is evidence, not an edit, so the row opens the evidence sheet.
+  const openEntry = (entry: TimelineEntry) => {
+    if (isSubmitted) {
+      if (entry.type === 'delivery') setEvidenceFor(entry);
+      return;
+    }
     navigate(withProjectQuery(`/m/diary/work/${entry.type}`, projectId, { edit: entry.id }));
   };
 
@@ -116,6 +134,17 @@ export function WorkScreen() {
         </div>
       )}
 
+      {/* Submitted diaries used to be a dead end. Say what is still possible. */}
+      {isSubmitted && workEntries.length > 0 && (
+        <div className="flex gap-2.5 rounded-2xl bg-secondary px-4 py-3.5 text-[14px] leading-[1.5] text-muted-foreground">
+          <Lock size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
+            The diary is submitted, so entries can&rsquo;t be changed. Dockets can still be filed
+            against them.
+          </span>
+        </div>
+      )}
+
       {/* Work entries list */}
       {workEntries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
@@ -124,7 +153,16 @@ export function WorkScreen() {
               key={entry.id}
               entry={entry}
               isSubmitted={isSubmitted}
-              onEdit={navToEdit}
+              docketStatusKey={
+                entry.type === 'delivery'
+                  ? docketFilingStatusKey({
+                      docketDocumentId: entry.data?.docketDocumentId,
+                      photo: byDeliveryId.get(entry.id),
+                      isOnline,
+                    })
+                  : undefined
+              }
+              onOpen={openEntry}
               onDelete={(e) => void handlers.handleDeleteEntry(e)}
             />
           ))}
@@ -136,6 +174,27 @@ export function WorkScreen() {
             use the keyboard mic and just say it.
           </p>
         )
+      )}
+
+      {evidenceFor && projectId && (
+        <DeliveryEvidenceSheet
+          isOpen
+          onClose={() => setEvidenceFor(null)}
+          projectId={projectId}
+          lotId={evidenceFor.lot?.id}
+          queuedPhoto={byDeliveryId.get(evidenceFor.id) ?? null}
+          delivery={{
+            id: evidenceFor.id,
+            description: evidenceFor.description,
+            supplier: evidenceFor.data?.supplier,
+            docketNumber: evidenceFor.data?.docketNumber,
+            quantity: evidenceFor.data?.quantity,
+            unit: evidenceFor.data?.unit,
+            lotLabel: evidenceFor.lot ? `Lot ${evidenceFor.lot.lotNumber}` : null,
+            recordedAt: evidenceFor.createdAt,
+            docketDocumentId: evidenceFor.data?.docketDocumentId,
+          }}
+        />
       )}
     </ShellScreen>
   );
@@ -153,11 +212,13 @@ const TYPE_LABELS: Record<string, string> = {
 interface WorkEntryProps {
   entry: TimelineEntry;
   isSubmitted: boolean;
-  onEdit: (entry: TimelineEntry) => void;
+  /** Deliveries only — the filing state of this row's docket. */
+  docketStatusKey?: DocketFilingStatusKey;
+  onOpen: (entry: TimelineEntry) => void;
   onDelete: (entry: TimelineEntry) => void;
 }
 
-function WorkEntry({ entry, isSubmitted, onEdit, onDelete }: WorkEntryProps) {
+function WorkEntry({ entry, isSubmitted, docketStatusKey, onOpen, onDelete }: WorkEntryProps) {
   const typeLabel = TYPE_LABELS[entry.type] ?? entry.type;
   const meta = [
     entry.lot ? `Lot ${entry.lot.lotNumber}` : null,
@@ -189,22 +250,34 @@ function WorkEntry({ entry, isSubmitted, onEdit, onDelete }: WorkEntryProps) {
     armTimer.current = setTimeout(() => setArmed(false), 4000);
   };
 
+  // A submitted delivery row stays TAPPABLE — not to edit it, but to file its
+  // docket. Every other type is genuinely finished once the diary is in.
+  const canOpen = !isSubmitted || entry.type === 'delivery';
+  // Only the row that can actually file a docket says so. A locked activity row
+  // keeps its Edit label (and its disabled button) — announcing "File docket
+  // for" on it would be a screen reader promising an action that does not exist.
+  const actionLabel = isSubmitted && canOpen ? 'File docket for' : `Edit ${typeLabel}:`;
+
   return (
     <div
       className={cn(
         'flex items-center gap-1 rounded-xl border border-border bg-card px-1 shadow-sm',
-        isSubmitted && 'opacity-60',
+        isSubmitted && !canOpen && 'opacity-60',
+        isSubmitted &&
+          docketStatusKey &&
+          docketStatusKey !== 'delivery_docket_filed' &&
+          'border-warning/50',
       )}
     >
       <button
         type="button"
-        disabled={isSubmitted}
-        onClick={() => !isSubmitted && onEdit(entry)}
-        aria-label={`Edit ${typeLabel}: ${entry.description}${meta ? ` — ${meta}` : ''}`}
+        disabled={!canOpen}
+        onClick={() => canOpen && onOpen(entry)}
+        aria-label={`${actionLabel} ${entry.description}${meta ? ` — ${meta}` : ''}`}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-3',
           'min-h-[52px] text-left touch-manipulation transition-transform duration-150',
-          !isSubmitted && 'active:scale-[.98]',
+          canOpen && 'active:scale-[.98]',
         )}
       >
         <span className="min-w-0 flex-1">
@@ -216,7 +289,8 @@ function WorkEntry({ entry, isSubmitted, onEdit, onDelete }: WorkEntryProps) {
           </span>
           {meta && <span className="mt-0.5 block text-[13px] text-muted-foreground">{meta}</span>}
         </span>
-        {!isSubmitted && (
+        {docketStatusKey && <DocketChip statusKey={docketStatusKey} />}
+        {canOpen && (
           <ChevronRight
             size={16}
             className="flex-shrink-0 text-muted-foreground/50"

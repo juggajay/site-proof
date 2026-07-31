@@ -10,6 +10,9 @@
 import { useState } from 'react';
 import { Check, Copy, FileText } from 'lucide-react';
 
+import { DeliveryEvidenceSheet } from '@/components/deliveries/DeliveryEvidenceSheet';
+import { useDeliveryDocketPhotos } from '@/components/deliveries/useDeliveryDocketPhotos';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
 import type { LotDelivery } from '../lib/surveyRecords';
 
@@ -66,6 +69,11 @@ function BatchRef({ value }: { value: string }) {
 
 export function LotDeliveriesTable({ deliveries }: { deliveries: LotDelivery[] }) {
   const [showAll, setShowAll] = useState(false);
+  // C5-a. "Not filed in CIVOS" was a dead label here: it named the gap and
+  // offered no way to close it, so the reader had to go and find the diary the
+  // delivery came from. It is now the button that files the docket.
+  const [filingFor, setFilingFor] = useState<LotDelivery | null>(null);
+  const { byDeliveryId } = useDeliveryDocketPhotos();
 
   const visible = showAll ? deliveries : deliveries.slice(0, INITIAL_ROW_LIMIT);
   const hidden = deliveries.length - visible.length;
@@ -140,9 +148,17 @@ export function LotDeliveriesTable({ deliveries }: { deliveries: LotDelivery[] }
                     // Not "NO DOCKET". The docket almost certainly exists on
                     // paper in somebody's ute — what is missing is the filing,
                     // and the label should say the thing that is actually true.
-                    <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                      Not filed in CIVOS
-                    </span>
+                    // Through formatStatusLabel so this surface and the mobile
+                    // chip cannot word the same state two ways.
+                    <button
+                      type="button"
+                      onClick={() => setFilingFor(delivery)}
+                      disabled={!delivery.diary?.projectId}
+                      className="inline-flex min-h-[32px] items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground disabled:cursor-default disabled:hover:text-muted-foreground"
+                      aria-label={`File docket for ${delivery.description ?? 'this delivery'}`}
+                    >
+                      {formatStatusLabel('delivery_docket_not_filed')}
+                    </button>
                   )}
                 </td>
               </tr>
@@ -170,6 +186,25 @@ export function LotDeliveriesTable({ deliveries }: { deliveries: LotDelivery[] }
           </button>
         )}
       </div>
+
+      {filingFor?.diary?.projectId && (
+        <DeliveryEvidenceSheet
+          isOpen
+          onClose={() => setFilingFor(null)}
+          projectId={filingFor.diary.projectId}
+          queuedPhoto={byDeliveryId.get(filingFor.id) ?? null}
+          delivery={{
+            id: filingFor.id,
+            description: filingFor.description ?? 'Delivery',
+            supplier: filingFor.supplier,
+            docketNumber: filingFor.docketNumber,
+            quantity: filingFor.quantity,
+            unit: filingFor.unit,
+            recordedAt: filingFor.diary.date,
+            docketDocumentId: filingFor.docketDocumentId,
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -299,28 +299,46 @@ export function useDiaryMobileHandlers({
     unit?: string;
     lotId?: string;
     notes?: string;
-  }) => {
+  }): Promise<string | undefined> => {
     const payload = { ...data, lotId: data.lotId || activeLotId || undefined };
     if (editingEntry?.type === 'delivery') {
       await updateTimelineEntryFromSheet(editingEntry, 'deliveries', payload);
-      return;
+      return editingEntry.id;
     }
+
+    // C5-a: the id of the row this created is the ONLY thing a docket photo can
+    // be filed against, so it is kept rather than thrown away. Online it is the
+    // server id; queued offline it is the local placeholder, which `syncDelivery`
+    // relinks to the server id before the photo's evidence PATCH runs.
+    let createdDeliveryId: string | undefined;
 
     await createWithOfflineFallback(
       async (currentDiary) => {
-        await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/deliveries`, {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
+        const created = await apiFetch<{ id?: string }>(
+          `/api/diary/${encodeURIComponent(currentDiary.id)}/deliveries`,
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          },
+        );
+        createdDeliveryId = created?.id;
       },
-      (currentProjectId, currentDiary) =>
-        queueDiaryDeliveryOffline(
+      async (currentProjectId, currentDiary) => {
+        const queued = await queueDiaryDeliveryOffline(
           currentDiary
             ? { diaryId: currentDiary.id }
             : { projectId: currentProjectId, date: selectedDate },
           payload,
-        ),
+        );
+        // Optional-chained deliberately: a docket is an add-on, and no shape
+        // surprise from the queue may take the foreman's typed delivery down
+        // with it. No id simply means no docket can be filed yet.
+        createdDeliveryId = queued?.id;
+        return queued;
+      },
     );
+
+    return createdDeliveryId;
   };
 
   const addEventFromSheet = async (data: {

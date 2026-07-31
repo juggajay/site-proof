@@ -252,11 +252,14 @@ export interface OfflinePhoto {
   id: string;
   projectId: string;
   lotId?: string;
-  entityType: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general';
+  // 'delivery' (C5-a) rides the SAME queue as every other evidence photo. The
+  // upload route ignores entityType for linking, so the executor follows the
+  // NCR shape: upload, then PATCH the domain row.
+  entityType: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general' | 'delivery';
   entityId?: string;
   completionId?: string;
   checklistItemId?: string;
-  attachAs?: 'itp_completion_attachment' | 'ncr_evidence' | 'document_only';
+  attachAs?: 'itp_completion_attachment' | 'ncr_evidence' | 'delivery_evidence' | 'document_only';
   documentType: string;
   category?: string;
   fileName: string;

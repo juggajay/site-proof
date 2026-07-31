@@ -51,6 +51,7 @@ interface DiaryMobileSheetsProps {
     impact?: string;
     lotId?: string;
   }) => Promise<void>;
+  /** Resolves with the delivery id so a captured docket can be filed against it. */
   onAddDelivery: (data: {
     description: string;
     supplier?: string;
@@ -59,7 +60,7 @@ interface DiaryMobileSheetsProps {
     unit?: string;
     lotId?: string;
     notes?: string;
-  }) => Promise<void>;
+  }) => Promise<string | undefined>;
   onAddEvent: (data: {
     eventType: string;
     description: string;
@@ -164,9 +165,14 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            await onAddDelivery({ ...data, lotId: data.lotId || activeLotId || undefined });
+            const deliveryId = await onAddDelivery({
+              ...data,
+              lotId: data.lotId || activeLotId || undefined,
+            });
             if (editingEntry) setEditingEntry(null);
+            return deliveryId;
           }}
+          projectId={projectId}
           defaultLotId={activeLotId}
           lots={lots}
           draftKey={draftKeyFor('delivery')}
