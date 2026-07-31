@@ -1,6 +1,6 @@
 import 'leaflet/dist/leaflet.css';
 
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import {
   Circle,
@@ -21,18 +21,7 @@ import {
 import L from 'leaflet';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import {
-  Crosshair,
-  ExternalLink,
-  History,
-  Image as ImageIcon,
-  ImageDown,
-  Layers,
-  Navigation,
-  PencilRuler,
-  Square,
-  type LucideIcon,
-} from 'lucide-react';
+import { ExternalLink, Navigation } from 'lucide-react';
 
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
@@ -48,7 +37,6 @@ import { formatDateKey } from '@/lib/localDate';
 import { authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
-import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
@@ -62,7 +50,7 @@ import { DrawLotLayer } from './DrawLotLayer';
 import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
 import { HistoryPanel } from './HistoryPanel';
 import { TestCoveragePanel } from './TestCoveragePanel';
-import { MapLayersMenu } from './MapLayersMenu';
+import { MapToolbar } from './MapToolbar';
 import { buildMapLayerRows, type MapPanelId, type MapPinLayerId } from './mapLayerRows';
 import {
   getTestCoverageColor,
@@ -111,11 +99,6 @@ const POLYGON_STROKE_COLOR = '#1f2937';
 // patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
 const GAP_COLOR = '#dc2626';
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
-// Mirrors RESULT_CAP in backend/src/routes/spatialSearch.ts. The wire only
-// carries a boolean (`photosTruncated` / `testResultsTruncated`), so the number
-// has to be stated here to say WHICH first-N a reader is looking at. A map that
-// silently drops the 501st pin is a map that lies about what is on the ground.
-const PIN_RESULT_CAP = 500;
 
 // DG-4b. Both marker layers wear the SAME neutral shell — a white face with the
 // constant POLYGON_STROKE_COLOR casing already used for every lot boundary — and
@@ -602,89 +585,6 @@ function EmptyStateCallout({
     </div>
   );
 }
-
-/**
- * Map toolbar control.
- *
- * DG-4b: on mobile this is a CAPTIONED TILE, never a bare icon. Tiles share the
- * row (`flex-1` between a 48px floor and a 56px ceiling) so six controls land at
- * 56px and seven at 48px on a 390px phone — no horizontal scroll, no overflow
- * menu, and nothing a foreman needs two taps away. The caption is the point: an
- * unlabelled icon on a jobsite is a guess.
- *
- * `label` is the stable accessible name ("Cancel draw"), `text` the desktop
- * caption, `short` the tile caption ("Cancel") — a tile has ~7 characters before
- * it wraps, and the accessible name must not shrink to fit.
- */
-const ToolbarButton = forwardRef<
-  HTMLButtonElement,
-  // Extends the native button props so `DropdownMenuTrigger asChild` can inject
-  // its handlers and aria-expanded. Without the spread below the desktop Layers
-  // menu never opens — Radix's props land nowhere.
-  Omit<React.ComponentPropsWithoutRef<'button'>, 'children' | 'className'> & {
-    icon: LucideIcon;
-    label: string;
-    text?: string;
-    short?: string;
-    pressed?: boolean;
-    tile: boolean;
-    testId: string;
-    /** Small numeric badge (armed pin layers on the Layers control). */
-    count?: number;
-    /**
-     * A layer this control owns has failed. Drawn as a red dot so the state
-     * SURVIVES the menu closing — the detail stays in the on-map notice.
-     */
-    alert?: boolean;
-  }
->(function ToolbarButton(
-  { icon: Icon, label, text, short, pressed, tile, testId, count, alert, ...rest },
-  ref,
-) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      {...rest}
-      aria-pressed={pressed}
-      aria-label={label}
-      title={label}
-      className={cn(
-        'pointer-events-auto relative rounded-md border text-sm font-medium shadow-sm disabled:opacity-50',
-        tile
-          ? 'flex min-h-[58px] min-w-12 max-w-14 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 py-1'
-          : 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5',
-        pressed ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted',
-      )}
-      data-testid={testId}
-    >
-      <Icon className={tile ? 'h-5 w-5' : 'h-3.5 w-3.5'} aria-hidden />
-      <span className={tile ? 'text-center text-[9.5px] font-semibold leading-tight' : undefined}>
-        {tile ? (short ?? text ?? label) : (text ?? label)}
-      </span>
-      {count != null && count > 0 && (
-        <span
-          className={cn(
-            'font-mono text-[9px] font-bold leading-none',
-            tile ? 'absolute right-1 top-1' : 'ml-0.5',
-          )}
-          data-testid={`${testId}-count`}
-        >
-          {count}
-        </span>
-      )}
-      {alert && (
-        <span
-          className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-background bg-destructive text-[8px] font-bold leading-none text-destructive-foreground"
-          data-testid={`${testId}-alert`}
-          aria-hidden
-        >
-          !
-        </span>
-      )}
-    </button>
-  );
-});
 
 export function LotMapView({
   projectId,
@@ -1427,183 +1327,49 @@ export function LotMapView({
                 </div>
               )}
 
-              <div
-                className={cn(
-                  'flex items-stretch',
-                  // Mobile: tiles SHARE the row (flex-1, 48–56px) so six land at
-                  // 56px and seven at 48px on a 390px phone. Desktop wraps.
-                  isMobile ? 'gap-[3px]' : 'flex-wrap items-center gap-2',
-                )}
-                data-testid="lot-map-toolbar"
-              >
-                <ToolbarButton
-                  icon={Square}
-                  label="Find by area"
-                  text={drawArmed ? 'Cancel' : 'Find by area'}
-                  short={drawArmed ? 'Cancel' : 'Area'}
-                  onClick={armFindByArea}
-                  pressed={drawArmed}
-                  tile={isMobile}
-                  testId="find-by-area-button"
-                />
-                <ToolbarButton
-                  icon={Crosshair}
-                  label="My location"
-                  text={locating ? 'Locating…' : 'My location'}
-                  short={locating ? 'Locating…' : 'Locate'}
-                  onClick={handleLocate}
-                  disabled={locating || !map}
-                  tile={isMobile}
-                  testId="locate-me-button"
-                />
-                {/* Photos earns a top-level tile on the phone and only there:
-                    it is the layer a foreman reaches for most, and burying it
-                    one tap deeper is the whole failure the tiles fix. On desktop
-                    the pointer makes the menu cheap, so it lives there only. */}
-                {isMobile && (
-                  <ToolbarButton
-                    icon={ImageIcon}
-                    label="Photos"
-                    short="Photos"
-                    onClick={togglePhotos}
-                    pressed={photosArmed}
-                    tile
-                    testId="photos-button"
+              <MapToolbar
+                isMobile={isMobile}
+                drawArmed={drawArmed}
+                onFindByArea={armFindByArea}
+                locating={locating}
+                canLocate={Boolean(map)}
+                onLocate={handleLocate}
+                photosArmed={photosArmed}
+                onTogglePhotos={togglePhotos}
+                layersOpen={layersOpen}
+                onLayersOpenChange={setLayersOpen}
+                layerModel={layerMenuModel}
+                onTogglePin={handleTogglePin}
+                onOpenPanel={handleOpenPanel}
+                unavailablePinLayers={unavailablePinLayers}
+                truncatedPinLayers={truncatedPinLayers}
+                canManageSettings={canManageSettings}
+                drawLotArmed={drawLotArmed}
+                onDrawLot={armDrawLot}
+                snapshotting={snapshotting}
+                onSnapshot={handleSnapshot}
+                historyArmed={historyArmed}
+                onToggleHistory={toggleHistory}
+              />
+              {/* `w-fit` so the panel's wrapper does not stretch across the
+                  column and swallow map drags either side of it. */}
+              {plansOpen && (
+                <div className="pointer-events-auto w-fit">
+                  <PlansPanel
+                    settingsHref={linkPaths.settings}
+                    sheets={registeredSheets}
+                    shown={planShown}
+                    opacity={planOpacity}
+                    blend={planBlend}
+                    offscreenIds={offscreenSheetIds}
+                    onToggle={togglePlanShown}
+                    onOpacityChange={setPlanOpacity}
+                    onBlendChange={setPlanBlend}
+                    onZoom={zoomToSheet}
+                    onClose={() => setPlansOpen(false)}
                   />
-                )}
-                <MapLayersMenu
-                  isMobile={isMobile}
-                  open={layersOpen}
-                  onOpenChange={setLayersOpen}
-                  model={layerMenuModel}
-                  onTogglePin={handleTogglePin}
-                  onOpenPanel={handleOpenPanel}
-                  trigger={
-                    <ToolbarButton
-                      icon={Layers}
-                      label="Layers"
-                      short="Layers"
-                      // Desktop: Radix owns the trigger's click. Mobile: the tile
-                      // opens the sheet itself.
-                      onClick={isMobile ? () => setLayersOpen(true) : undefined}
-                      pressed={layersOpen || layerMenuModel.armedCount > 0}
-                      count={layerMenuModel.armedCount}
-                      alert={unavailablePinLayers.length > 0}
-                      tile={isMobile}
-                      testId="layers-button"
-                    />
-                  }
-                />
-                {canManageSettings && (
-                  <ToolbarButton
-                    icon={PencilRuler}
-                    label={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
-                    text={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
-                    short={drawLotArmed ? 'Cancel' : 'Draw lot'}
-                    onClick={armDrawLot}
-                    pressed={drawLotArmed}
-                    tile={isMobile}
-                    testId="draw-lot-button"
-                  />
-                )}
-                {/* "Save map", not "Snapshot": it writes a PNG of the map to
-                    project Documents. The camera icon said "take a photo". */}
-                <ToolbarButton
-                  icon={ImageDown}
-                  label="Save map"
-                  text={snapshotting ? 'Saving…' : 'Save map'}
-                  short={snapshotting ? 'Saving…' : 'Save map'}
-                  onClick={handleSnapshot}
-                  disabled={snapshotting}
-                  tile={isMobile}
-                  testId="snapshot-button"
-                />
-                {/* A rule, not a gap: Past is not an "act" peer of the controls
-                    to its left. */}
-                <span
-                  className={cn(
-                    'w-px flex-none self-stretch bg-foreground/25',
-                    isMobile ? 'mx-1 my-1.5' : 'mx-1',
-                  )}
-                  aria-hidden
-                />
-                <ToolbarButton
-                  icon={History}
-                  label={historyArmed ? 'Exit Past view' : 'Past view'}
-                  text={historyArmed ? 'Exit Past view' : 'Past'}
-                  short="Past"
-                  onClick={toggleHistory}
-                  pressed={historyArmed}
-                  tile={isMobile}
-                  testId="history-button"
-                />
-              </div>
-
-              <div className="flex flex-col items-start gap-1.5">
-                {/* AT-94 `[C3S-d]`. Both marker layers ride `spatial-search`, a POST
-                    that is deliberately NOT in the offline runtime cache — nothing
-                    stale is ever shown. So when a fetch fails the layer must SAY it
-                    is unavailable: an empty map reads as "no pins here", which is a
-                    different statement and a false one.
-
-                    It stays ON THE MAP rather than inside the chooser: a notice
-                    that only exists while a menu is open is a notice nobody reads. */}
-                {unavailablePinLayers.length > 0 && (
-                  <p
-                    className="max-w-[16rem] rounded border border-destructive/50 bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow"
-                    role="status"
-                    data-testid="map-pin-layers-unavailable"
-                  >
-                    {unavailablePinLayers.join(' and ')}{' '}
-                    {unavailablePinLayers.length > 1 ? 'are' : 'is'} unavailable
-                    {navigator.onLine ? ' right now' : ' offline'} — nothing stale is shown.
-                  </p>
-                )}
-                {truncatedPinLayers.length > 0 && (
-                  <p
-                    className="max-w-[18rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow"
-                    role="status"
-                    data-testid="map-pin-layers-truncated"
-                  >
-                    <span className="mr-1.5 inline-flex items-center rounded-full border bg-secondary px-2 py-0.5 font-mono text-[10px] font-semibold text-foreground">
-                      {PIN_RESULT_CAP}+
-                    </span>
-                    Showing the first {PIN_RESULT_CAP} {truncatedPinLayers.join(' and ')} in this
-                    view. Zoom in to see the rest.
-                  </p>
-                )}
-                {drawArmed && (
-                  <p className="max-w-[12rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                    {isMobile
-                      ? 'Drag a box on the map. Tap the button again to cancel.'
-                      : 'Drag a box on the map. Press Esc to cancel.'}
-                  </p>
-                )}
-                {drawLotArmed && (
-                  <p className="max-w-[14rem] rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
-                    {isMobile
-                      ? 'Tap to place polygon corners; double-tap to finish. Tap the button again to cancel.'
-                      : 'Click to place polygon corners; double-click to finish. Press Esc to cancel.'}
-                  </p>
-                )}
-                {plansOpen && (
-                  <div className="pointer-events-auto">
-                    <PlansPanel
-                      settingsHref={linkPaths.settings}
-                      sheets={registeredSheets}
-                      shown={planShown}
-                      opacity={planOpacity}
-                      blend={planBlend}
-                      offscreenIds={offscreenSheetIds}
-                      onToggle={togglePlanShown}
-                      onOpacityChange={setPlanOpacity}
-                      onBlendChange={setPlanBlend}
-                      onZoom={zoomToSheet}
-                      onClose={() => setPlansOpen(false)}
-                    />
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             <MapContainer
