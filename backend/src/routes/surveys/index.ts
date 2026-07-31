@@ -257,6 +257,43 @@ function assertAttributable(status: string, surveyorName: string | null): void {
  * has one business day to action it (research §5.3, §5.6). "Returned" with no
  * reason is a message that cannot be acted on.
  */
+/**
+ * The transition map, plus the two things it cannot say on its own.
+ *
+ * A superseded record is history: its state is what it was when it was
+ * replaced, and moving it would rewrite what the successor was written against.
+ *
+ * And the map's one dead end is not a dead end in the WORKFLOW. The AU idiom for
+ * a redo is a new, cross-referenced artifact (MRTS50 cl. 7.2), so the corrected
+ * report is a new record that supersedes this one. A bare "no transitions
+ * allowed" would read as "this record is finished", which it is not — hence the
+ * hint.
+ */
+function assertTransitionAllowed(
+  record: { status: string; supersededById: string | null },
+  status: string,
+): void {
+  if (record.supersededById) {
+    throw AppError.badRequest('A superseded survey record cannot change state.', {
+      code: 'SURVEY_SUPERSEDED_IMMUTABLE',
+    });
+  }
+
+  const allowed = VALID_SURVEY_TRANSITIONS[record.status] ?? [];
+  if (allowed.includes(status)) {
+    return;
+  }
+
+  throw AppError.badRequest(`Cannot move a survey from ${record.status} to ${status}`, {
+    code: 'INVALID_SURVEY_TRANSITION',
+    from: record.status,
+    allowedTransitions: allowed,
+    ...(record.status === 'returned_for_correction'
+      ? { hint: 'File the corrected report as a new survey record and supersede this one.' }
+      : {}),
+  });
+}
+
 function assertReturnReason(status: string, returnReason: string | null): void {
   if (status === 'returned_for_correction' && !returnReason?.trim()) {
     throw AppError.badRequest(
@@ -748,33 +785,7 @@ surveysRouter.post(
         { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
       );
 
-      // A superseded record is history: its state is what it was when it was
-      // replaced. Moving it would rewrite what the successor was written
-      // against, which is the whole point of keeping it.
-      if (record.supersededById) {
-        throw AppError.badRequest('A superseded survey record cannot change state.', {
-          code: 'SURVEY_SUPERSEDED_IMMUTABLE',
-        });
-      }
-
-      const allowed = VALID_SURVEY_TRANSITIONS[record.status] ?? [];
-      if (!allowed.includes(status)) {
-        throw AppError.badRequest(`Cannot move a survey from ${record.status} to ${status}`, {
-          code: 'INVALID_SURVEY_TRANSITION',
-          from: record.status,
-          allowedTransitions: allowed,
-          // The one dead end in the map is not a dead end in the workflow: the
-          // AU idiom for a redo is a NEW, cross-referenced artifact (MRTS50
-          // cl. 7.2), so the corrected report is a new record that supersedes
-          // this one. Said here because a bare "no transitions allowed" would
-          // read as "this record is finished", which it is not.
-          ...(record.status === 'returned_for_correction'
-            ? {
-                hint: 'File the corrected report as a new survey record and supersede this one.',
-              }
-            : {}),
-        });
-      }
+      assertTransitionAllowed(record, status);
 
       assertReportPresentFor(status, record.reportDocumentId);
       assertAttributable(status, record.surveyorName);

@@ -2,6 +2,23 @@
 
 **Date:** 31 July 2026 · **Rev 2:** 31 Jul at `1e6ed156`, folding adversarial review R1 (7/10, Rev 2 required). **Rev 1:** 31 Jul at `f944c39a`, merged as #1713.
 
+> **SUPERSEDED ON THE C5.2 STATE MACHINE (31 Jul 2026).** This document specifies
+> `requested → in_progress → received → accepted` (+ `rejected`), and **RG-7 —
+> its own named open question, §12 and §16.2 — came back and killed three of
+> those states.** `docs/research/c5-surveyor-workflow-practice-2026-07-31.md`
+> found that no AU source models an in-progress survey, that nothing anywhere
+> accepts a survey record (acceptance is hold-point release and lot conformance),
+> and that the AU act is *"referred back for correction"*, not rejection. The
+> shipped machine is **`requested → received`, plus `returned_for_correction`
+> looping to a new record via the supersession chain**; `survey_not_accepted`
+> became `survey_not_received`. Read `backend/src/routes/surveys/statusWorkflow.ts`
+> and migration `20260813000000_c5_survey_state_restructure` for the current
+> contract. **Everything else in this spec — C5.1, C5.3, the tenancy rules, the
+> evidence-link guards, `[C5S-B1]` — still stands.** The `accepted`-shaped
+> passages below (§0.3 `[C5R-B1]`, §4.5, §5.2, §6, §8, AT-172, AT-174) are kept
+> as the record of what was built and why it was changed, exactly as the pilot
+> gate `[C5S-B4]` intended.
+
 **Status:** implementation-ready for **C5.1, C5.2 and C5.3**. **C5.4 and C5.5 are specified and BLOCKED** — each on a named research gap and, for the workflow-shaped parts, on pilot validation the program itself already requires (`CIVOS-Validated-Buildout-Plan-2026-07-24.md:84`). Nothing in C5.1–C5.3 is gated on a Jay decision; the five decisions in §15.1 shape C5.4/C5.5 and the rollout, not the build.
 
 **All `file:line` citations in this document were re-opened for Rev 2 at HEAD `1e6ed1567429b598008beea12fbba026ef6adbf8`** (= `origin/master`, `docs(plans): Wave G execution spec (#1714)`). Rev 1's citations were derived at `f944c39a`; the review was written at `ee4d59c6`. **Every line number in Rev 2 was re-verified at `1e6ed156`, including the review's own** — §19 records which of the review's citations were off and which of its claims are refuted. Nothing is carried forward from another document without being re-derived here.
