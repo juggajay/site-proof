@@ -94,6 +94,7 @@ const SURVEY_SELECT = {
   acceptedAt: true,
   rejectionReason: true,
   supersededById: true,
+  supersessionReason: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
@@ -147,7 +148,15 @@ const statusSchema = z
   .strict();
 
 const reportSchema = z.object({ documentId: z.string().uuid() }).strict();
-const supersedeSchema = z.object({ supersededById: z.string().uuid() }).strict();
+/**
+ * Wave C5-c: `reason` is optional and free text. Optional because C5.2 shipped
+ * without it and a required field would refuse every client that has not been
+ * redeployed; free text because "why this survey was redone" has no vocabulary
+ * short of inventing one.
+ */
+const supersedeSchema = z
+  .object({ supersededById: z.string().uuid(), reason: optionalText(1000) })
+  .strict();
 
 const registerQuerySchema = z.object({
   status: z.enum(SURVEY_STATUSES as [string, ...string[]]).optional(),
@@ -429,15 +438,31 @@ lotSurveysRouter.get(
     }
     await requireInternalProjectAccess(req.user!, lot.projectId);
 
+    // Wave C5-c. `includeSuperseded=true` opts INTO the prior revisions, in the
+    // project register's existing shape (`registerQuerySchema`) rather than a
+    // second spelling of the same idea. The lot page asks for them so it can
+    // group each prior revision under the record that replaced it — a
+    // supersession chain the reader can only see one end of is not a chain.
+    const { includeSuperseded } = parseOrBadRequest(
+      registerQuerySchema.pick({ includeSuperseded: true }),
+      req.query,
+    );
+
     const surveys = await prisma.surveyRecord.findMany({
-      // Reads default to the current revision — the `Drawing` convention.
-      where: { lotId: lot.id, supersededById: null },
+      // Reads still DEFAULT to the current revision — the `Drawing` convention.
+      where: { lotId: lot.id, ...(includeSuperseded === 'true' ? {} : { supersededById: null }) },
       select: SURVEY_SELECT,
       orderBy: [{ createdAt: 'desc' }],
       take: SURVEY_REGISTER_MAX_LIMIT,
     });
 
-    const notAccepted = surveys.filter((survey) => survey.status !== 'accepted').length;
+    // Readiness counts CURRENT records only, whatever the caller asked to see.
+    // Without the `supersededById === null` filter, opting into the history
+    // would inflate the lot's own warning with records that were replaced
+    // precisely so they would stop counting.
+    const notAccepted = surveys.filter(
+      (survey) => survey.supersededById === null && survey.status !== 'accepted',
+    ).length;
     const item = buildSurveyNotAcceptedItem(notAccepted);
 
     res.json({ surveys, readiness: item ? [item] : [] });
@@ -690,7 +715,7 @@ surveysRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user!;
     const surveyId = parseDiaryRouteParam(req.params.surveyId, 'surveyId');
-    const { supersededById } = parseOrBadRequest(supersedeSchema, req.body);
+    const { supersededById, reason } = parseOrBadRequest(supersedeSchema, req.body);
 
     const updated = await prisma.$transaction(async (tx) => {
       const record = await loadSurveyOr404(tx, surveyId);
@@ -709,11 +734,12 @@ surveysRouter.post(
 
       const next = await tx.surveyRecord.update({
         where: { id: surveyId },
-        data: { supersededById },
+        data: { supersededById, supersessionReason: reason ?? null },
         select: SURVEY_SELECT,
       });
       await auditSurvey(tx, record, user.id, AuditAction.SURVEY_RECORD_SUPERSEDED, {
         supersededById: { from: null, to: supersededById },
+        supersessionReason: reason ?? null,
       });
       return next;
     });
