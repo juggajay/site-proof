@@ -1,0 +1,37 @@
+{
+  "benchmark": "F0.5 exit gate (execution spec §8, Rev 3.1)",
+  "spec": "docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md",
+  "startedAt": "2026-07-31T03:54:49.547Z",
+  "finishedAt": "2026-07-31T03:55:09.014Z",
+  "note": "P1 pre-G1 baseline (Wave G spec section 8 P1) - lot readiness before revision-governance input",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 58.2,
+      "sampleMs": 1000,
+      "freeMemMiB": 12374,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 52.4,
+      "sampleMs": 1000,
+      "freeMemMiB": 11380,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "only": "C",
+    "lots": 5000,
+    "claimIterations": 20,
+    "entityIterations": 50,
+    "pageIterations": 20
+  },
+  "results": {},
+  "verdict": {
+    "failures": [],
+    "pass": true
+  }
+}

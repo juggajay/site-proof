@@ -137,6 +137,24 @@ export function DrawingRevisionModal({
             </NativeSelect>
           </div>
 
+          {/* Reason */}
+          <div>
+            <Label htmlFor="drawing-revision-reason" className="mb-2">
+              Reason for revision
+            </Label>
+            <Input
+              id="drawing-revision-reason"
+              type="text"
+              value={form.reason}
+              onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
+              placeholder="e.g., Client direction CD-11 changed the batter slope"
+            />
+            <p className="mt-1 text-sm text-muted-foreground">
+              Recorded against the revision so the register can say why the previous one was
+              replaced.
+            </p>
+          </div>
+
           <div className="rounded-lg bg-warning/10 border border-warning/20 p-3 text-sm text-warning">
             <strong>Note:</strong> The previous revision ({drawing.revision || 'original'}) will be
             marked as superseded.

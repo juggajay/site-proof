@@ -7,6 +7,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { checkConformancePrerequisitesBatch } from '../../lib/conformancePrerequisites.js';
 import { holdPointReleased, testPendingByStatus } from '../../lib/readiness/predicates.js';
+import { loadSupersededGoverningRevisions } from '../../lib/revisionGovernance.js';
 import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
@@ -250,6 +251,13 @@ async function computeClaimReadiness(lots: ClaimReadinessLotRow[]) {
     { regimeFetcher: prismaRegimeStreamFetcher() },
   );
 
+  // Wave G G1 (spec §1.3(d)). Batched for the same reason the line above is:
+  // three queries for the whole page, never one per lot. Empty map while
+  // `REVISION_GOVERNANCE_ENABLED` is off, which is every environment today.
+  const supersededRevisionsByLotId = await loadSupersededGoverningRevisions(
+    lots.map((lot) => lot.id),
+  );
+
   return lots.map((lot) => {
     const conformStatus = conformStatusByLotId.get(lot.id);
     if (!conformStatus?.prerequisites) {
@@ -288,6 +296,7 @@ async function computeClaimReadiness(lots: ClaimReadinessLotRow[]) {
         photos: lot.documents.filter((document) => document.documentType === 'photo').length,
         pendingTests: lot.testResults.filter(testPendingByStatus).length,
       },
+      supersededGoverningRevisions: supersededRevisionsByLotId.get(lot.id),
     });
 
     return { lot, readiness };

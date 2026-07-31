@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
+import { useAuth } from '@/lib/auth';
+import { RevisionTimelineModal } from '@/components/revisions/RevisionTimelineModal';
 import { getDocumentAccessUrl, openDocumentAccessUrl } from '@/lib/documentAccess';
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
@@ -134,6 +136,11 @@ export function DrawingsPage() {
   // Download current set state
   const [downloadingCurrentSet, setDownloadingCurrentSet] = useState(false);
 
+  // Wave G G1 — revision history. Self-gating: the modal renders "not enabled"
+  // when `/api/revisions` 404s, so no frontend flag mirror is needed.
+  const [historyDrawing, setHistoryDrawing] = useState<Drawing | null>(null);
+
+  const { user } = useAuth();
   const currentProjectRole = useCurrentProjectRole(projectId);
   const canManageDrawings = DRAWING_WRITE_ROLES.includes(currentProjectRole || '');
 
@@ -281,6 +288,7 @@ export function DrawingsPage() {
       title: drawing.title || '',
       issueDate: '',
       status: 'for_construction',
+      reason: '',
     });
     setRevisionFile(null);
     setShowRevisionModal(true);
@@ -462,6 +470,7 @@ export function DrawingsPage() {
           handleStatusChange={handleStatusChange}
           handleOpenDrawing={handleOpenDrawing}
           openRevisionModal={openRevisionModal}
+          openRevisionHistory={setHistoryDrawing}
           setDrawingPendingDelete={setDrawingPendingDelete}
           isMobile={isMobile}
         />
@@ -506,6 +515,18 @@ export function DrawingsPage() {
           uploading={uploading}
           onClose={resetRevisionForm}
           onUpload={handleRevisionUpload}
+        />
+      )}
+
+      {/* Revision history (Wave G G1) */}
+      {historyDrawing && projectId && (
+        <RevisionTimelineModal
+          projectId={projectId}
+          entityType="drawing"
+          entityId={historyDrawing.id}
+          recordLabel={historyDrawing.drawingNumber}
+          currentUserId={user?.id ?? null}
+          onClose={() => setHistoryDrawing(null)}
         />
       )}
 

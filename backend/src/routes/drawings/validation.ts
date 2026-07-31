@@ -8,6 +8,7 @@ const MAX_DRAWING_NUMBER_LENGTH = 120;
 const MAX_TITLE_LENGTH = 240;
 const MAX_REVISION_LENGTH = 40;
 const MAX_DATE_LENGTH = 32;
+const MAX_REASON_LENGTH = 1000;
 export const MAX_FILENAME_LENGTH = 180;
 export const MAX_SEARCH_LENGTH = 200;
 export const MAX_CURRENT_SET_DOWNLOAD_DRAWINGS = 500;
@@ -63,6 +64,11 @@ export const supersedeDrawingSchema = z.object({
   revision: requiredFormStringSchema('revision', MAX_REVISION_LENGTH),
   issueDate: nullableFormStringSchema('issueDate', MAX_DATE_LENGTH),
   status: optionalDrawingStatusSchema,
+  // Wave G G1 (spec §1.7 E3, AT-G2). Optional in the SCHEMA and required by the
+  // route only while REVISION_GOVERNANCE_ENABLED is on: making it required here
+  // would change a shipped route's contract for every caller the moment this
+  // merges, flag or no flag.
+  reason: nullableFormStringSchema('reason', MAX_REASON_LENGTH),
 });
 
 export function getOptionalQueryString(

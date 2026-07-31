@@ -22,6 +22,12 @@ interface DrawingRegisterTableProps {
   handleStatusChange: (drawingId: string, newStatus: string) => void;
   handleOpenDrawing: (drawing: Drawing) => Promise<void>;
   openRevisionModal: (drawing: Drawing) => void;
+  /**
+   * Wave G G1 — opens the revision timeline for this drawing. Desktop table
+   * only for now; `DrawingMobileList` is unchanged, and the mobile surface
+   * follows when there is a mockup for it.
+   */
+  openRevisionHistory: (drawing: Drawing) => void;
   setDrawingPendingDelete: (drawing: Drawing | null) => void;
   /** When true, renders a mobile card list instead of the overflow table. */
   isMobile?: boolean;
@@ -37,6 +43,7 @@ export function DrawingRegisterTable({
   handleStatusChange,
   handleOpenDrawing,
   openRevisionModal,
+  openRevisionHistory,
   setDrawingPendingDelete,
   isMobile = false,
 }: DrawingRegisterTableProps) {
@@ -200,6 +207,28 @@ export function DrawingRegisterTable({
                         />
                       </svg>
                     </button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openRevisionHistory(drawing)}
+                      className="h-8 w-8 hover:bg-muted"
+                      aria-label={`Revision history for ${drawing.drawingNumber}`}
+                      title="Revision history"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </Button>
                     {canManageDrawings && !drawing.supersededBy && (
                       <Button
                         variant="ghost"

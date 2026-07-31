@@ -984,4 +984,113 @@ describe('evidence readiness helpers', () => {
     ).toBe(true);
     expect(readiness.conformance.state).toBe('blocked');
   });
+
+  // Wave G G1 (spec §1.8). The route-level halves of AT-G3/AT-G4 live in
+  // `routes/revisions.test.ts`; these pin the properties that are the ENGINE's
+  // to keep — one item, never a blocker, and present on an already-conformed
+  // lot where the conformance builder short-circuits.
+  describe('AT-G3 / AT-G4 — superseded governing revisions', () => {
+    const conformableStatus: LotReadinessInput['conformStatus'] = {
+      canConform: true,
+      blockingReasons: [],
+      prerequisites: {
+        itpAssigned: true,
+        itpCompleted: true,
+        itpCompletedCount: 1,
+        itpTotalCount: 1,
+        itpIncompleteItems: [],
+        testRequired: false,
+        hasPassingTest: false,
+        testResults: [],
+        noOpenNcrs: true,
+        openNcrs: [],
+      },
+    };
+
+    it('AT-G3: emits exactly one warning and zero blockers, however many links are superseded', () => {
+      const readiness = buildLotReadinessFromInputs(
+        baseInput({
+          conformStatus: conformableStatus,
+          supersededGoverningRevisions: [
+            { entityType: 'drawing', entityId: 'dwg-1', revisionLabel: 'C' },
+            { entityType: 'specification', entityId: 'doc-1', revisionLabel: 'Ed. 2' },
+          ],
+        }),
+      );
+
+      const matches = readiness.conformance.warnings.filter(
+        (readinessItem) => readinessItem.code === 'governing_revision_superseded',
+      );
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        severity: 'warning',
+        area: 'document',
+        blocksAction: false,
+        count: 2,
+        relatedIds: ['dwg-1', 'doc-1'],
+      });
+      expect(readiness.conformance.blockers).toHaveLength(0);
+      // The claim bucket's `not_conformed` blocker is pre-existing and unrelated;
+      // what AT-G3 requires is that NO blocker carries the new code.
+      expect(
+        [...readiness.conformance.blockers, ...readiness.claim.blockers].some(
+          (readinessItem) => readinessItem.code === 'governing_revision_superseded',
+        ),
+      ).toBe(false);
+    });
+
+    it('emits nothing when no link is superseded', () => {
+      const readiness = buildLotReadinessFromInputs(
+        baseInput({ conformStatus: conformableStatus, supersededGoverningRevisions: [] }),
+      );
+      expect(
+        readiness.conformance.warnings.some(
+          (readinessItem) => readinessItem.code === 'governing_revision_superseded',
+        ),
+      ).toBe(false);
+    });
+
+    it('AT-G4: still surfaces on an already-conformed lot, where the conformance builder short-circuits', () => {
+      const readiness = buildLotReadinessFromInputs(
+        baseInput({
+          lot: {
+            id: 'lot-1',
+            lotNumber: 'LOT-001',
+            status: 'conformed',
+            budgetAmount: 100,
+            claimedInId: null,
+          },
+          conformStatus: conformableStatus,
+          supersededGoverningRevisions: [
+            { entityType: 'drawing', entityId: 'dwg-1', revisionLabel: 'C' },
+          ],
+        }),
+      );
+
+      expect(readiness.conformance.warnings.map((readinessItem) => readinessItem.code)).toContain(
+        'governing_revision_superseded',
+      );
+      // E4: the lot stays conformed and nothing gates on the warning.
+      expect(readiness.conformance.state).toBe('already_conformed');
+      expect(readiness.summary.actionBlockerCount).toBe(0);
+    });
+
+    it('survives the subcontractor commercial filter — it is evidence, not a budget item', () => {
+      const readiness = filterCommercialReadiness(
+        buildLotReadinessFromInputs(
+          baseInput({
+            canViewCommercial: false,
+            conformStatus: conformableStatus,
+            supersededGoverningRevisions: [
+              { entityType: 'drawing', entityId: 'dwg-1', revisionLabel: 'C' },
+            ],
+          }),
+        ),
+      );
+
+      expect(readiness.conformance.warnings.map((readinessItem) => readinessItem.code)).toContain(
+        'governing_revision_superseded',
+      );
+    });
+  });
 });

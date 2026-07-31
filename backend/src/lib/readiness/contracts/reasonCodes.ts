@@ -82,6 +82,12 @@ export const READINESS_REASON_CODES = [
   // than re-deriving the threshold. Added WITH provenance in the same change.
   'ncr_overdue',
   'hold_point_overdue',
+  // revision governance (Wave G G1 — `evidenceReadiness.ts`
+  // buildGoverningRevisionItems). Added WITH provenance in the same change, as
+  // L26-27 requires. Advisory by construction: `severity: 'warning'` ∧
+  // `blocksAction: false`, and deliberately NOT a member of
+  // HANDOVER_BLOCKING_REASON_CODES — spec §1.7 E4, AT-G3/AT-G4.
+  'governing_revision_superseded',
   // Wave C5.1 — delivery traceability (lib/evidenceReadiness/deliveryItems.ts).
   // Support severity, `blocksAction: false`, and deliberately NOT a member of
   // `HANDOVER_BLOCKING_REASON_CODES` (`[C5S-B5]`).
@@ -292,6 +298,16 @@ export const REASON_CODE_PROVENANCE: Record<
     predicate: 'holdPointAwaitingRelease',
     source:
       'systemAutomation stale_hold_point pass (systemAutomation.ts — status in AWAITING_RELEASE_HOLD_POINT_STATUSES ∧ scheduledDate past, within the 30-day horizon)',
+  },
+  governing_revision_superseded: {
+    // No predicate: the signal is a join, not a computation. An ACTIVE
+    // `LotGoverningRevision` whose target row carries a non-null
+    // `superseded_by_id` — `lib/revisionGovernance.ts`
+    // `loadSupersededGoverningRevisions`. Nothing in `predicates.ts` reads
+    // either table, and inventing a predicate wrapper around one `findMany`
+    // would make the registry cite a function that adds nothing.
+    predicate: 'engine',
+    source: 'buildGoverningRevisionItems (Wave G G1, spec §1.3(d))',
   },
   delivery_not_lot_linked: {
     // Engine-owned count-only item: a plain `lotId IS NULL` count over the

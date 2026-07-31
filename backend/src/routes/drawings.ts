@@ -6,6 +6,7 @@ import { AppError } from '../lib/AppError.js';
 import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
+import { revisionGovernanceEnabled } from '../lib/revisionGovernance.js';
 import {
   createDrawingSchema,
   parseDrawingDate,
@@ -157,7 +158,7 @@ router.post(
           },
         });
 
-        return tx.drawing.create({
+        const createdDrawing = await tx.drawing.create({
           data: {
             projectId,
             documentId: document.id,
@@ -181,6 +182,23 @@ router.post(
             },
           },
         });
+
+        // Wave G G1 (spec §1.7 E3, AT-G2). The FIRST issue of a drawing:
+        // `supersedesId` null, and `reason` legitimately absent — there is no
+        // prior revision to explain replacing.
+        if (revisionGovernanceEnabled()) {
+          await tx.revisionIssue.create({
+            data: {
+              projectId,
+              entityType: 'drawing',
+              entityId: createdDrawing.id,
+              revisionLabel: createdDrawing.revision ?? '—',
+              issuedById: userId,
+            },
+          });
+        }
+
+        return createdDrawing;
       });
     } catch (error) {
       await cleanupStoredDrawingUpload(fileUrl, uploadedFile, projectId);
@@ -343,7 +361,7 @@ router.post(
       cleanupUploadedFile(uploadedFile);
       throw AppError.fromZodError(parseResult.error, zodValidationMessage(parseResult.error));
     }
-    const { title, revision, issueDate, status } = parseResult.data;
+    const { title, revision, issueDate, status, reason } = parseResult.data;
     let issueDateValue: Date | null;
     try {
       issueDateValue = parseDrawingDate(issueDate, 'issueDate');
@@ -371,6 +389,18 @@ router.post(
     if (oldDrawing.supersededById) {
       cleanupUploadedFile(uploadedFile);
       throw AppError.badRequest('Only the current drawing revision can be superseded');
+    }
+
+    // Wave G G1 (spec §1.7 E3, AT-G2). A supersession with no stated reason is
+    // an unexplained replacement of a controlled record — rejected. Checked
+    // AFTER the access gate so an unauthorised caller still gets 403, not a
+    // validation hint about a route it cannot use.
+    const governanceEnabled = revisionGovernanceEnabled();
+    if (governanceEnabled && !reason) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.badRequest('A reason is required when superseding a revision', {
+        code: 'REVISION_REASON_REQUIRED',
+      });
     }
 
     const existingRevision = await prisma.drawing.findFirst({
@@ -445,6 +475,40 @@ router.post(
           where: { id: drawingId },
           data: { supersededById: createdDrawing.id },
         });
+
+        // Wave G G1 (spec §1.8 AT-G1). Both writes are INSIDE the existing
+        // transaction: the supersession and its issue record commit together or
+        // not at all, and the audit gap noted at spec §1.2 (supersede wrote no
+        // audit row while DELETE did) closes here.
+        if (governanceEnabled) {
+          await tx.revisionIssue.create({
+            data: {
+              projectId: oldDrawing.projectId,
+              entityType: 'drawing',
+              entityId: createdDrawing.id,
+              revisionLabel: revision,
+              supersedesId: drawingId,
+              reason,
+              issuedById: userId,
+            },
+          });
+
+          await writeAuditLogInTransaction(tx, {
+            projectId: oldDrawing.projectId,
+            userId,
+            entityType: 'drawing',
+            entityId: createdDrawing.id,
+            action: AuditAction.REVISION_ISSUED,
+            changes: {
+              drawingNumber: oldDrawing.drawingNumber,
+              revisionLabel: revision,
+              supersedesId: drawingId,
+              supersedesRevision: oldDrawing.revision,
+              reason,
+            },
+            req,
+          });
+        }
 
         return createdDrawing;
       });

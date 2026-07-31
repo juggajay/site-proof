@@ -135,12 +135,14 @@ describe('drawings upload data helpers', () => {
         title: '  Issued  ',
         issueDate: '2026-05-10',
         status: 'as_built',
+        reason: '  Design change  ',
       };
       expect(normalizeRevisionForm(form)).toEqual({
         revision: 'C',
         title: 'Issued',
         issueDate: '2026-05-10',
         status: 'as_built',
+        reason: 'Design change',
       });
     });
   });
@@ -212,6 +214,7 @@ describe('drawings upload data helpers', () => {
         title: 'Issued',
         issueDate: '2026-05-10',
         status: 'for_construction',
+        reason: 'Client direction CD-11',
       });
       expect(fd.get('file')).toBeInstanceOf(File);
       expect(fd.get('projectId')).toBeNull();
@@ -219,17 +222,20 @@ describe('drawings upload data helpers', () => {
       expect(fd.get('title')).toBe('Issued');
       expect(fd.get('issueDate')).toBe('2026-05-10');
       expect(fd.get('status')).toBe('for_construction');
+      expect(fd.get('reason')).toBe('Client direction CD-11');
     });
 
-    it('omits blank title and issue date but always sends the revision', () => {
+    it('omits blank title, issue date and reason but always sends the revision', () => {
       const fd = buildDrawingRevisionFormData(makeFile(), {
         revision: 'C',
         title: '  ',
         issueDate: '',
         status: 'as_built',
+        reason: '   ',
       });
       expect(fd.get('title')).toBeNull();
       expect(fd.get('issueDate')).toBeNull();
+      expect(fd.get('reason')).toBeNull();
       expect(fd.get('revision')).toBe('C');
       expect(fd.get('status')).toBe('as_built');
     });

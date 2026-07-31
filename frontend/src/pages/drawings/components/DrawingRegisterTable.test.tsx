@@ -42,6 +42,7 @@ function renderTable(overrides: Partial<Parameters<typeof DrawingRegisterTable>[
     handleStatusChange: vi.fn(),
     handleOpenDrawing: vi.fn().mockResolvedValue(undefined),
     openRevisionModal: vi.fn(),
+    openRevisionHistory: vi.fn(),
     setDrawingPendingDelete: vi.fn(),
     ...overrides,
   };
@@ -134,6 +135,7 @@ describe('DrawingRegisterTable', () => {
         handleStatusChange={vi.fn()}
         handleOpenDrawing={vi.fn().mockResolvedValue(undefined)}
         openRevisionModal={vi.fn()}
+        openRevisionHistory={vi.fn()}
         setDrawingPendingDelete={vi.fn()}
         isMobile={true}
       />,

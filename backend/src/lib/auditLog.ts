@@ -233,6 +233,11 @@ export const AuditAction = {
   // Documents
   DOCUMENT_DELETED: 'document_deleted',
   DRAWING_DELETED: 'drawing_deleted',
+  // Wave G G1 — revision governance. Written by `writeAuditLogInTransaction`
+  // inside the issuing transaction, never by the swallowing `createAuditLog`:
+  // an issuance whose audit row can vanish is an un-audited issuance. Closes
+  // the gap the spec names at §1.2 (supersede wrote nothing, DELETE wrote a row).
+  REVISION_ISSUED: 'revision_issued',
   // Test Results
   TEST_RESULT_CREATED: 'test_result_created',
   TEST_RESULT_UPDATED: 'test_result_updated',

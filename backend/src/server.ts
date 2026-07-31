@@ -44,6 +44,7 @@ import { commentsRouter } from './routes/comments.js';
 import { notificationsRouter } from './routes/notifications.js';
 import documentsRouter from './routes/documents.js';
 import { drawingsRouter } from './routes/drawings.js';
+import { revisionsRouter } from './routes/revisions.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import apiKeysRouter, { authenticateApiKey } from './routes/apiKeys.js';
 import { consentRouter } from './routes/consent.js';
@@ -195,6 +196,8 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/documents', documentsRouter);
   app.use('/api/drawings', drawingsRouter);
+  // Wave G G1: 404s entirely while REVISION_GOVERNANCE_ENABLED is unset.
+  app.use('/api/revisions', revisionsRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/consent', consentRouter); // Feature #776: Privacy consent tracking
   app.use('/api/mfa', mfaRouter); // Feature #22, #420, #421: MFA/2FA support
