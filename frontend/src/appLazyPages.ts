@@ -102,6 +102,11 @@ export const NCRAnalyticsPage = lazy(() =>
 export const DailyDiaryPage = lazy(() =>
   import('@/pages/diary/DailyDiaryPage').then((m) => ({ default: m.DailyDiaryPage })),
 );
+export const DeliveryRegisterPage = lazy(() =>
+  import('@/pages/deliveries/DeliveryRegisterPage').then((m) => ({
+    default: m.DeliveryRegisterPage,
+  })),
+);
 export const DelayRegisterPage = lazy(() =>
   import('@/pages/diary/DelayRegisterPage').then((m) => ({ default: m.DelayRegisterPage })),
 );

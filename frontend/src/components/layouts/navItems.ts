@@ -28,6 +28,7 @@ import {
   FileCheck,
   GitPullRequest,
   Package,
+  Truck,
 } from 'lucide-react';
 
 import { HANDOVER_EXPORT_ROLES } from '@/appRouteRoles';
@@ -106,6 +107,7 @@ export const projectNavigation: NavigationItem[] = [
   },
   { name: 'Docket Approvals', href: 'dockets', icon: FileCheck, section: 'Commercial' },
   { name: 'Documents', href: 'documents', icon: FileText, section: 'Records' },
+  { name: 'Deliveries', href: 'deliveries', icon: Truck, section: 'Records' },
   {
     name: 'Subcontractors',
     href: 'subcontractors',

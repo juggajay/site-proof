@@ -89,6 +89,15 @@ export const STATUS_LABELS: Record<string, string> = {
   failed: 'Failed',
   cancelled: 'Cancelled',
 
+  // Delivery docket evidence (Wave C5-b). "Not filed in CIVOS" is deliberate:
+  // "NO DOCKET" accuses the foreman of not having one, when the usual truth is
+  // that the supplier's docket exists on paper and nobody has uploaded it yet.
+  // The register's whole job is to get that file in, so the label names the
+  // missing action, not a missing document.
+  delivery_docket_filed: 'Docket filed',
+  delivery_docket_not_filed: 'Not filed in CIVOS',
+  delivery_no_lot: 'No lot linked',
+
   // Hold point / subcontractor admin statuses
   requested: 'Requested',
   released: 'Released',

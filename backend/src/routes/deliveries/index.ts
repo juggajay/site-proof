@@ -121,6 +121,16 @@ const registerQuerySchema = z.object({
   supplier: z.string().trim().min(1).max(120).optional(),
   lotId: z.string().trim().min(1).max(128).optional(),
   linked: z.enum(['linked', 'unlinked']).optional(),
+  /**
+   * C5-b. "Filed" means the docket EVIDENCE is attached — `docketDocumentId`,
+   * the one of the three evidence fields that is a file. `docketNumber` is the
+   * foreman's typed diary content and is not evidence of anything: a delivery
+   * can carry a docket number and still have no docket in CIVOS.
+   *
+   * Server-side because the register pages. Filtering the current page in the
+   * browser would report "3 not filed" on a project with 200 of them.
+   */
+  docket: z.enum(['filed', 'not_filed']).optional(),
   from: z.string().trim().max(64).optional(),
   to: z.string().trim().max(64).optional(),
   limit: z.coerce.number().int().min(1).max(DELIVERY_REGISTER_MAX_LIMIT).optional(),
@@ -152,6 +162,9 @@ function buildRegisterWhere(projectId: string, query: z.infer<typeof registerQue
   const lotFilter =
     query.linked === 'unlinked' ? null : query.linked === 'linked' ? { not: null } : query.lotId;
 
+  const docketFilter =
+    query.docket === 'not_filed' ? null : query.docket === 'filed' ? { not: null } : undefined;
+
   return {
     diary: {
       projectId,
@@ -161,6 +174,7 @@ function buildRegisterWhere(projectId: string, query: z.infer<typeof registerQue
       ? { supplier: { contains: query.supplier, mode: 'insensitive' as const } }
       : {}),
     ...(lotFilter !== undefined ? { lotId: lotFilter } : {}),
+    ...(docketFilter !== undefined ? { docketDocumentId: docketFilter } : {}),
   };
 }
 
@@ -216,16 +230,22 @@ projectDeliveriesRouter.get(
 
     const where = buildRegisterWhere(projectId, query);
 
-    const [deliveries, total, unlinkedCount] = await Promise.all([
+    const [deliveries, total, unlinkedCount, missingDocketCount] = await Promise.all([
       prisma.diaryDelivery.findMany({
         where,
         select: DELIVERY_SELECT,
-        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        // C5-b. The register is read as a chronology of what arrived on site, so
+        // it orders by the DIARY DATE the delivery was recorded against — not by
+        // `createdAt`, which is when someone typed it up and puts a delivery
+        // back-entered a week late at the top of the page. `id` is the stable
+        // tiebreak that keeps paging deterministic when a diary holds several.
+        orderBy: [{ diary: { date: 'desc' } }, { id: 'asc' }],
         take: limit,
         skip: offset,
       }),
       prisma.diaryDelivery.count({ where }),
       prisma.diaryDelivery.count({ where: { diary: { projectId }, lotId: null } }),
+      prisma.diaryDelivery.count({ where: { diary: { projectId }, docketDocumentId: null } }),
     ]);
 
     const unlinkedItem = buildUnlinkedDeliveryItem(unlinkedCount);
@@ -237,6 +257,10 @@ projectDeliveriesRouter.get(
       offset,
       hasMore: offset + deliveries.length < total,
       unlinkedCount,
+      // Project-wide like `unlinkedCount`, deliberately NOT filter-scoped: it is
+      // the number the register exists to drive to zero, and a filtered view
+      // must not make it look smaller than it is.
+      missingDocketCount,
       readiness: unlinkedItem ? [unlinkedItem] : [],
     });
   }),
