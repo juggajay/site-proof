@@ -26,6 +26,7 @@ import { useLotSubcontractorAssignments } from './hooks/useLotSubcontractorAssig
 import { useItpActionModals, type ItpActionModalHandlers } from './hooks/useItpActionModals';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { EvidenceFolioSection } from './components/EvidenceFolioSection';
+import { SurveyMaterialsSection } from './components/SurveyMaterialsSection';
 import { FOLIO_ISSUER_ROLES } from './hooks/useLotFolios';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
@@ -522,6 +523,12 @@ export function LotDetailPage() {
         onCloseReportDialog={() => setShowReportFormatDialog(false)}
         onReportFormatChange={setSelectedReportFormat}
       />
+
+      {/* Wave C5-c — survey records and lot-linked deliveries. Below Quality
+          Management and above the folio, because it answers the question
+          between them: what an outside professional stated about this lot, and
+          what physically went into it. */}
+      {lotId && <SurveyMaterialsSection lotId={lotId} effectiveRole={effectiveRole} />}
 
       {/* Wave D `D1b` — the issued evidence folio (spec §9). Role-gated on the
           SERVER-derived effective project role, and re-checked by the backend

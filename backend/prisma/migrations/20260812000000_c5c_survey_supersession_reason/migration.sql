@@ -1,0 +1,13 @@
+-- Wave C5-c — why a survey record was replaced.
+--
+-- C5.2 shipped the supersession CHAIN (`superseded_by_id`) but not its REASON,
+-- so the lot page could say "this record was replaced" and never why. That is
+-- the half of "originals survive replacement" that a reader actually needs: the
+-- 22 July "does not conform" record only makes sense beside the sentence
+-- "re-survey after trim and re-roll of CH1310-CH1330".
+--
+-- Nullable and unconstrained, deliberately. Every survey record superseded
+-- before this migration has no reason and never will; a NOT NULL default would
+-- invent one. No CHECK, because unlike `kind`, `status` and `surveyor_verdict`
+-- this is free text a human wrote, not a vocabulary.
+ALTER TABLE "survey_records" ADD COLUMN "supersession_reason" TEXT;

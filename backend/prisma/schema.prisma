@@ -2830,6 +2830,11 @@ model SurveyRecord {
 
   rejectionReason String? @map("rejection_reason")
   supersededById  String? @map("superseded_by_id")
+  /// Wave C5-c. Why this record was replaced, written by whoever superseded it.
+  /// Free text, not a vocabulary — the chain says *that* it was replaced, this
+  /// says why, and a supersession chain a reader cannot explain is a chain they
+  /// will not trust.
+  supersessionReason String? @map("supersession_reason")
   notes           String?
 
   createdAt DateTime @default(now()) @map("created_at")

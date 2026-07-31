@@ -95,6 +95,50 @@ export const STATUS_LABELS: Record<string, string> = {
   suspended: 'Suspended',
   removed: 'Removed',
   inactive: 'Inactive',
+
+  // ---------------------------------------------------------------------
+  // Wave C5-c — survey records. Every key here is PREFIXED, and that is not
+  // decoration.
+  //
+  // This map is flat and global: a bare `accepted` key would relabel Wave G5's
+  // `NcrTemplateProposal.status` (`'open'|'accepted'|'rejected'`,
+  // `backend/prisma/schema.prisma:2027`), which renders through this same
+  // helper and means something entirely different. Prefixed keys are distinct by
+  // construction, so a survey vocabulary cannot reach a surface that never
+  // asked for it. Callers go through `surveyStatusLabel` /
+  // `surveyVerdictLabel` in `pages/lots/lib/surveyRecords.ts` rather than
+  // hand-assembling the prefix.
+  // ---------------------------------------------------------------------
+
+  // CIVOS's OWN workflow state — what the business did with the record. The
+  // backend's closed vocabulary is `requested|in_progress|received|accepted|
+  // rejected` (`backend/src/routes/surveys/statusWorkflow.ts`). These are the
+  // only survey strings entitled to a status colour.
+  //
+  // `superseded` is not a stored status — it is `supersededById !== null` — but
+  // it is rendered as one, so it is spelled out here rather than title-cased by
+  // accident.
+  survey_requested: 'Requested',
+  survey_in_progress: 'Survey in progress',
+  survey_received: 'Report received',
+  survey_accepted: 'Evidence record accepted',
+  survey_rejected: 'Evidence record rejected',
+  survey_superseded: 'Superseded',
+
+  // The SURVEYOR'S stated verdict (`surveyorVerdict`), NOT a CIVOS status —
+  // the single most important distinction on the lot page. This is a
+  // transcription of what a third-party professional wrote on their own report.
+  // It is rendered as an attributed quotation, never as a coloured badge: a
+  // green "Conforms" chip reads as CIVOS finding the lot conformant, which
+  // CIVOS has neither the measurements nor the standing to do.
+  //
+  // The strings match `SURVEY_VERDICT_LABEL` in
+  // `backend/src/routes/folio/assemble.ts` exactly, so the lot page and the
+  // issued folio PDF quote the same surveyor in the same words.
+  survey_verdict_conforms: 'Conforms',
+  survey_verdict_does_not_conform: 'Does not conform',
+  survey_verdict_qualified: 'Qualified',
+  survey_verdict_not_stated: 'The report states no verdict',
 };
 
 export interface FormatStatusLabelOptions {

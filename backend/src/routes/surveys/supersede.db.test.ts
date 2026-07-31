@@ -94,11 +94,16 @@ describe('C5.2 — AT-175 supersession', () => {
       data: { projectId, lotId, kind: 'conformance', ...overrides },
     });
 
-  const supersede = (id: string, supersededById: string) =>
+  const supersede = (id: string, supersededById: string, reason?: string) =>
     request(app)
       .post(`/api/surveys/${id}/supersede`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ supersededById });
+      .send({ supersededById, ...(reason ? { reason } : {}) });
+
+  const listLotSurveys = (query = '') =>
+    request(app)
+      .get(`/api/lots/${lotId}/surveys${query}`)
+      .set('Authorization', `Bearer ${adminToken}`);
 
   it('supersedes a record by a later one on the same lot and of the same kind', async () => {
     const original = await mkSurvey();
@@ -185,5 +190,55 @@ describe('C5.2 — AT-175 supersession', () => {
       .get(`/api/surveys/${original.id}`)
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
+  });
+
+  // Wave C5-c. The lot page groups prior revisions under the record that
+  // replaced them, which it cannot do if it can only see one end of the chain.
+  describe('C5-c — the lot read can opt into the history', () => {
+    it('returns superseded revisions with their reason when asked', async () => {
+      const original = await mkSurvey({ kind: 'set_out' });
+      const revision = await mkSurvey({ kind: 'set_out' });
+      const reason = 're-survey after trim and re-roll of CH1310-CH1330';
+
+      const superseded = await supersede(original.id, revision.id, reason).expect(200);
+      expect(superseded.body.supersessionReason).toBe(reason);
+
+      const list = await listLotSurveys('?includeSuperseded=true').expect(200);
+      const returned = list.body.surveys.find((s: { id: string }) => s.id === original.id);
+
+      expect(returned).toBeDefined();
+      expect(returned.supersededById).toBe(revision.id);
+      expect(returned.supersessionReason).toBe(reason);
+    });
+
+    it('keeps the reason optional, so a pre-C5-c client is not refused', async () => {
+      const original = await mkSurvey({ kind: 'set_out' });
+      const revision = await mkSurvey({ kind: 'set_out' });
+
+      const res = await supersede(original.id, revision.id).expect(200);
+      expect(res.body.supersessionReason).toBeNull();
+    });
+
+    // The readiness warning must not inflate just because the caller asked to
+    // SEE the history. A record was superseded precisely so it would stop
+    // counting against the lot.
+    it('counts readiness over current records only, whatever was requested', async () => {
+      const original = await mkSurvey({ kind: 'as_built', status: 'requested' });
+      const revision = await mkSurvey({ kind: 'as_built', status: 'requested' });
+      await supersede(original.id, revision.id).expect(200);
+
+      const withHistory = await listLotSurveys('?includeSuperseded=true').expect(200);
+      const withoutHistory = await listLotSurveys().expect(200);
+
+      expect(withHistory.body.surveys.length).toBeGreaterThan(withoutHistory.body.surveys.length);
+      expect(withHistory.body.readiness).toEqual(withoutHistory.body.readiness);
+    });
+
+    it('still defaults to the current revision only', async () => {
+      const list = await listLotSurveys('?includeSuperseded=false').expect(200);
+      expect(
+        list.body.surveys.every((s: { supersededById: null }) => s.supersededById === null),
+      ).toBe(true);
+    });
   });
 });
