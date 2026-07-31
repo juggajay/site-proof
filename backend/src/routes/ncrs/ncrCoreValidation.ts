@@ -82,6 +82,21 @@ function nullableOptionalTrimmedNcrString(fieldName: string, maxLength: number) 
   );
 }
 
+/**
+ * C5.4a — what every NCR read surface returns for its linked delivery. The
+ * diary supplies the date (a delivery has no date of its own) and is what
+ * scopes the row to a project.
+ */
+export const NCR_LINKED_DELIVERY_SELECT = {
+  id: true,
+  description: true,
+  supplier: true,
+  docketNumber: true,
+  batchRef: true,
+  lotId: true,
+  diary: { select: { id: true, date: true } },
+} satisfies Prisma.DiaryDeliverySelect;
+
 export const MUTUALLY_EXCLUSIVE_RESPONSIBLE_PARTY_MESSAGE =
   'An NCR can be assigned to a user or a subcontractor, not both';
 
@@ -105,6 +120,10 @@ export const createNcrSchema = z
       NCR_ID_MAX_LENGTH,
     ),
     linkedTestResultId: optionalTrimmedNcrString('Linked test result ID', NCR_ID_MAX_LENGTH),
+    // C5.4a §4.4. Create-only, exactly like its sibling above and deliberately
+    // absent from `updateNcrSchema` — making it patchable would be new
+    // behaviour, not the shipped pattern.
+    linkedDeliveryId: optionalTrimmedNcrString('Linked delivery ID', NCR_ID_MAX_LENGTH),
     dueDate: optionalTrimmedNcrString('dueDate', NCR_DATE_INPUT_MAX_LENGTH),
     lotIds: z
       .array(requiredTrimmedNcrString('Lot ID', NCR_ID_MAX_LENGTH, 'Lot ID is required'))

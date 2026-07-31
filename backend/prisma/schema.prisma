@@ -1147,6 +1147,16 @@ model NCR {
   // "View NCR" breadcrumb reconstruction.
   itpChecklistItemId String? @map("itp_checklist_item_id")
 
+  // Wave C5.4a §4.4 — which delivery this NCR is about. There is no
+  // "quarantined material" state: AU civil handles nonconforming material with
+  // an NCR plus the prohibition on incorporating it, and CIVOS already enforces
+  // that through `lotConformable`'s `noOpenNcrs` limb. All that was missing was
+  // the pointer at the delivery.
+  //
+  // `SetNull` and the index both copy `linkedTestResultId` exactly: deleting a
+  // delivery nulls the link and never cascades an NCR away.
+  linkedDeliveryId String? @map("linked_delivery_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1159,6 +1169,7 @@ model NCR {
   responsibleUser          User?                 @relation("ResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
   responsibleSubcontractor SubcontractorCompany? @relation(fields: [responsibleSubcontractorId], references: [id], onDelete: SetNull)
   linkedTestResult         TestResult?           @relation("NcrLinkedFailedTestResult", fields: [linkedTestResultId], references: [id], onDelete: SetNull)
+  linkedDelivery           DiaryDelivery?        @relation("NcrLinkedDelivery", fields: [linkedDeliveryId], references: [id], onDelete: SetNull)
   verifiedBy               User?                 @relation("VerifiedByUser", fields: [verifiedById], references: [id], onDelete: SetNull)
   closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id], onDelete: SetNull)
   qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id], onDelete: SetNull)
@@ -1175,6 +1186,7 @@ model NCR {
   @@index([projectId, category, status])
   @@index([projectId, itpChecklistItemId])
   @@index([linkedTestResultId])
+  @@index([linkedDeliveryId])
   @@index([raisedById, raisedAt], map: "ncrs_raised_by_raised_at_idx")
   @@index([responsibleUserId, raisedAt], map: "ncrs_responsible_user_raised_at_idx")
   @@map("ncrs")
@@ -1366,6 +1378,8 @@ model DiaryDelivery {
   // delete. Follows Drawing.document. The usable error message comes from the
   // `delivery_docket` EVIDENCE_LINK_GUARDS entry, not from this FK.
   docketDocument Document? @relation(fields: [docketDocumentId], references: [id], onDelete: Restrict)
+  // C5.4a. Back-relation only; the FK and its index live on `ncrs`.
+  linkedNcrs     NCR[]     @relation("NcrLinkedDelivery")
 
   @@unique([diaryId, requestKey])
   @@index([lotId])

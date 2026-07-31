@@ -25,6 +25,7 @@ import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js
 import {
   createNcrSchema,
   isUniqueConstraintOn,
+  NCR_LINKED_DELIVERY_SELECT,
   parseOptionalNcrDueDate,
   updateNcrSchema,
 } from './ncrCoreValidation.js';
@@ -55,6 +56,7 @@ const NCR_CREATE_INCLUDE = {
       status: true,
     },
   },
+  linkedDelivery: { select: NCR_LINKED_DELIVERY_SELECT },
   ncrLots: {
     include: {
       lot: { select: { lotNumber: true } },
@@ -187,6 +189,51 @@ async function requireFailedTestResultForNcr(
   return testResult.id;
 }
 
+/**
+ * C5.4a §4.4 — the delivery an NCR is about, validated in the
+ * `requireFailedTestResultForNcr` shape above.
+ *
+ * `diary_deliveries` has NO `project_id` (`[C5R-A9]`): a delivery reaches a
+ * project only through `daily_diaries`. The same-project check is therefore a
+ * join to `diary.projectId`, not a column read — written as a column comparison
+ * it compiles and silently passes nothing, which would let another tenant's
+ * delivery hang off this project's NCR and render in its folio.
+ *
+ * There is no `passFail`-equivalent gate, because a delivery has no such field
+ * and inventing one would be the quarantine state under another name
+ * (`[C54S-B3]`).
+ */
+async function requireDeliveryForNcr(
+  projectId: string,
+  linkedDeliveryId?: string | null,
+  ncrLotIds: string[] = [],
+): Promise<string | null> {
+  if (!linkedDeliveryId) {
+    return null;
+  }
+
+  const delivery = await prisma.diaryDelivery.findUnique({
+    where: { id: linkedDeliveryId },
+    select: {
+      id: true,
+      lotId: true,
+      diary: { select: { projectId: true } },
+    },
+  });
+
+  if (!delivery || delivery.diary.projectId !== projectId) {
+    throw AppError.badRequest('Linked delivery must belong to the NCR project');
+  }
+
+  // A delivery with no lot links freely — that is the common case, since an NCR
+  // is often what prompts someone to go and link the delivery to its lot.
+  if (delivery.lotId && ncrLotIds.length > 0 && !ncrLotIds.includes(delivery.lotId)) {
+    throw AppError.badRequest('Linked delivery lot must be included in the NCR lots');
+  }
+
+  return delivery.id;
+}
+
 ncrCoreRouter.use(ncrListRouter);
 
 // GET /api/ncrs/:id - Get single NCR
@@ -213,6 +260,7 @@ ncrCoreRouter.get(
             status: true,
           },
         },
+        linkedDelivery: { select: NCR_LINKED_DELIVERY_SELECT },
         verifiedBy: { select: { fullName: true, email: true } },
         closedBy: { select: { fullName: true, email: true } },
         qmApprovedBy: { select: { id: true, fullName: true, email: true } },
@@ -261,6 +309,7 @@ ncrCoreRouter.post(
       responsibleUserId,
       responsibleSubcontractorId,
       linkedTestResultId,
+      linkedDeliveryId,
       dueDate,
       lotIds,
       requestKey,
@@ -284,6 +333,11 @@ ncrCoreRouter.post(
     const linkedFailedTestResultId = await requireFailedTestResultForNcr(
       projectId,
       linkedTestResultId,
+      ncrLotIds,
+    );
+    const linkedMaterialDeliveryId = await requireDeliveryForNcr(
+      projectId,
+      linkedDeliveryId,
       ncrLotIds,
     );
     const parsedDueDate = parseOptionalNcrDueDate(dueDate);
@@ -311,6 +365,7 @@ ncrCoreRouter.post(
               category,
               severity: severity || 'minor',
               linkedTestResultId: linkedFailedTestResultId,
+              linkedDeliveryId: linkedMaterialDeliveryId,
               qmApprovalRequired: isMajor,
               clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
               raisedById: user.userId,
@@ -376,6 +431,7 @@ ncrCoreRouter.post(
         category: ncr.category,
         lotIds: ncrLotIds,
         ...(linkedFailedTestResultId ? { linkedTestResultId: linkedFailedTestResultId } : {}),
+        ...(linkedMaterialDeliveryId ? { linkedDeliveryId: linkedMaterialDeliveryId } : {}),
       },
       req,
     });
