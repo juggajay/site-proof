@@ -1,4 +1,4 @@
-import { ClipboardCheck, Download, FileText, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Download, FileText, Loader2, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 
@@ -17,6 +17,12 @@ export function HoldPointEvidencePackageCard({
   downloadingPdf,
   pdfError,
 }: HoldPointEvidencePackageCardProps) {
+  // Empty for every tenant without `C5_SURVEY_RECORDS_ENABLED` (`[C5S-B4]`,
+  // fail-closed at the backend). The section below is then omitted entirely
+  // rather than saying "no surveys are recorded", which would claim a register
+  // this tenant has not been given.
+  const surveys = evidencePackage.surveys ?? [];
+
   return (
     <div className="space-y-6">
       <div id="evidence-package" className="scroll-mt-4 rounded-lg border bg-card shadow-sm">
@@ -121,6 +127,41 @@ export function HoldPointEvidencePackageCard({
             </div>
           )}
         </div>
+
+        {surveys.length > 0 && (
+          <div className="rounded-lg border bg-card p-5 shadow-sm">
+            <div className="mb-1 flex items-center gap-2">
+              <Ruler className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-semibold">Survey Records</h2>
+            </div>
+            {/* `[C5S-B1]`: every verdict below is the surveyor's own. The
+                attribution line the server composes says whose it is and who in
+                CIVOS transcribed it, so a reader can tell a transcription from
+                a signature. Do not summarise it away. */}
+            <p className="mb-4 text-sm text-muted-foreground">
+              Each verdict below is the surveyor&rsquo;s own, as recorded in CIVOS.
+            </p>
+            <div className="space-y-3">
+              {surveys.map((survey) => (
+                <div key={survey.id} className="border-b pb-3 last:border-0 last:pb-0">
+                  <div className="font-medium">
+                    {survey.kind} · {survey.status}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Surveyor&rsquo;s verdict: {survey.surveyorVerdict ?? 'not recorded'}
+                    {survey.verdictSourceNote ? ` — per ${survey.verdictSourceNote}` : ''}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{survey.verdictAttribution}</div>
+                  {survey.reportFilename && (
+                    <div className="text-xs text-muted-foreground">
+                      Report on file: {survey.reportFilename}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="rounded-lg border bg-card p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
