@@ -107,6 +107,11 @@ const KEEP_DATA = process.argv.includes('--keep');
 const ONLY = (
   process.argv.find((arg) => arg.startsWith('--only='))?.slice(7) ?? 'ABCD'
 ).toUpperCase();
+/**
+ * `--note=pre-G1 baseline`. Recorded verbatim in the result file so an A/B pair
+ * of runs is self-identifying instead of relying on which timestamp came first.
+ */
+const NOTE = process.argv.find((arg) => arg.startsWith('--note='))?.slice(7) ?? null;
 
 // ---------------------------------------------------------------------------
 // Prisma operation recorder (existing `$use` compatibility shim — tests only)
@@ -1077,6 +1082,7 @@ async function writeRecord(error?: unknown): Promise<void> {
     spec: 'docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md',
     startedAt: STARTED_AT,
     finishedAt: new Date().toISOString(),
+    ...(NOTE ? { note: NOTE } : {}),
     machine: machine
       ? { ...machine, loadAfterMeasurement: await sampleMachineLoad() }
       : await machineBlock(),
