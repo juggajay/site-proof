@@ -267,10 +267,6 @@ export function buildClaimableLotsResponse<TLot>(lots: TLot[]) {
   return { lots };
 }
 
-export function buildClaimReadinessResponse<TLot>(lots: TLot[]) {
-  return { lots };
-}
-
 export function buildClaimsListResponse<TClaim>(claims: TClaim[]) {
   return { claims };
 }

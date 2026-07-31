@@ -18,7 +18,6 @@ import {
 import {
   buildClaimCertificationView,
   buildClaimDetailResponse,
-  buildClaimReadinessResponse,
   buildClaimableLotsResponse,
   buildClaimsListResponse,
   getClaimReadDisputeNotes,
@@ -39,8 +38,9 @@ const CLAIM_LOT_QUERYABLE_STATUSES = [
   'claimed',
 ] as const;
 
-// The lot fields the claim-readiness computation reads. Shared by the legacy
-// full-list query and the paginated query so both fetch an identical shape.
+// The lot fields the claim-readiness computation reads. Shared by the paginated
+// query, the F1 aggregate's scan and its drill-down so all three fetch an
+// identical shape.
 const CLAIM_READINESS_LOT_SELECT = {
   id: true,
   lotNumber: true,
@@ -115,17 +115,15 @@ function decodeClaimReadinessCursor(value: string): ClaimReadinessCursor {
   return { lotNumber, id };
 }
 
-// Returns null when the request opts out of pagination (no cursor/limit params),
-// preserving the historical full-list response for existing callers.
+// Always paginated. The unpaginated full-list default F0.2a kept for existing
+// callers is gone (F0.2a exit item): a request with no cursor/limit params is
+// the first page at the 500 cap, not the whole register.
 function parseClaimReadinessPagination(query: {
   cursor?: unknown;
   limit?: unknown;
-}): ClaimReadinessPagination | null {
+}): ClaimReadinessPagination {
   const cursorParam = getOptionalClaimQueryString(query.cursor, 'cursor');
   const limitParam = getOptionalClaimQueryString(query.limit, 'limit');
-  if (cursorParam === undefined && limitParam === undefined) {
-    return null;
-  }
 
   let limit = CLAIM_READINESS_MAX_PAGE_SIZE;
   if (limitParam !== undefined) {
@@ -229,10 +227,9 @@ function parseOptionalClaimBooleanQuery(value: unknown, field: string): boolean 
   throw AppError.badRequest(`${field} must be true or false`);
 }
 
-// Build the claim readiness for a set of lot rows. Shared by the legacy
-// full-list path, the paginated path and the F1 aggregate so all three read the
-// same computation; only the envelope differs. Byte-identical to the prior
-// inline block.
+// Build the claim readiness for a set of lot rows. Shared by the paginated
+// path, the F1 aggregate and its drill-down so all three read the same
+// computation; only the envelope differs.
 async function computeClaimReadiness(lots: ClaimReadinessLotRow[]) {
   // Cumulative claiming: a conformed lot can appear on multiple claims, so its
   // readiness must reflect how much has already been claimed.
@@ -409,18 +406,6 @@ export function createClaimReadRouter({
       const pagination = parseClaimReadinessPagination(req.query);
       const baseWhere = claimReadinessBaseWhere(projectId);
 
-      // Legacy full-list behaviour (no cursor/limit params): unchanged for
-      // existing callers. Its removal is an F0.2a exit item.
-      if (!pagination) {
-        const lots = await prisma.lot.findMany({
-          where: baseWhere,
-          select: CLAIM_READINESS_LOT_SELECT,
-          orderBy: { lotNumber: 'asc' },
-        });
-        res.json(buildClaimReadinessResponse(await computeClaimReadinessItems(lots)));
-        return;
-      }
-
       await assertClaimReadinessCursorAnchor(projectId, pagination.cursor);
 
       // Keyset pagination on the register's natural key (lotNumber ASC, id ASC).
@@ -460,8 +445,8 @@ export function createClaimReadRouter({
   // walks the register in keyset pages and keeps sums, so it holds one page at a
   // time and serialises ~6 numbers plus at most 17 group rows — never 5,000
   // view-models. That shape is the reason it fits the §4.2 budget, and it is why
-  // this endpoint (not a second unpaginated full-list route) is the sanctioned
-  // replacement for the legacy path above whose removal is an F0.2a exit item.
+  // this endpoint (not a second unpaginated full-list route) was the sanctioned
+  // replacement for the legacy full-list path, now deleted (F0.2a exit item).
   //
   // `canViewCommercial: true` in `computeClaimReadiness` is correct here and
   // deliberate (spec §5 F1 `[FR-5]`): this route sits behind
@@ -503,10 +488,7 @@ export function createClaimReadRouter({
         throw AppError.badRequest('reasonCode must be a known claim blocking reason code');
       }
 
-      const pagination = parseClaimReadinessPagination(req.query) ?? {
-        limit: CLAIM_READINESS_MAX_PAGE_SIZE,
-        cursor: null,
-      };
+      const pagination = parseClaimReadinessPagination(req.query);
       await assertClaimReadinessCursorAnchor(projectId, pagination.cursor);
 
       const pageLots = await prisma.lot.findMany({

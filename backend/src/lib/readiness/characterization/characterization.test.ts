@@ -118,10 +118,16 @@ describe('readiness characterization corpus', () => {
   });
 
   it('claim-readiness endpoint snapshot for the whole project', async () => {
+    // F0.2a exit item: the unpaginated default is gone, so the corpus walks the
+    // register through the cursor API. It fits in one page (the corpus is dozens
+    // of lots, the cap is 500), asserted below so a growing corpus cannot
+    // silently start snapshotting a truncated register. The per-lot content is
+    // unchanged; only the envelope moved from `{ lots }` to `{ items, … }`.
     const res = await request(app)
-      .get(`/api/projects/${projectId}/claim-readiness`)
+      .get(`/api/projects/${projectId}/claim-readiness?limit=500`)
       .set('Authorization', `Bearer ${token}`);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.nextCursor).toBeNull();
     await expect(JSON.stringify(normalizeReadiness(res.body), null, 2)).toMatchFileSnapshot(
       './__fixtures__/claim-readiness.snapshot.json',
     );

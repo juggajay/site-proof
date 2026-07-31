@@ -7,7 +7,6 @@ import {
   buildClaimDetailResponse,
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
-  buildClaimReadinessResponse,
   buildClaimableLotsResponse,
   buildClaimsListResponse,
   buildClaimPaymentRecordedResponse,
@@ -347,13 +346,11 @@ describe('mapClaimReadinessItem', () => {
 });
 
 describe('claim collection response helpers', () => {
-  it('wraps claimable lots, readiness lots, and claim lists under their existing keys', () => {
+  it('wraps claimable lots and claim lists under their existing keys', () => {
     const lots = [{ id: 'lot-1' }];
-    const readinessLots = [{ lotId: 'lot-1' }];
     const claims = [{ id: 'claim-1' }];
 
     expect(buildClaimableLotsResponse(lots)).toEqual({ lots });
-    expect(buildClaimReadinessResponse(readinessLots)).toEqual({ lots: readinessLots });
     expect(buildClaimsListResponse(claims)).toEqual({ claims });
   });
 
