@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
 
 import type { ProjectControlLine, ProjectLotGeometry } from './lotMapData';
 
@@ -16,6 +16,10 @@ const fakeMap = {
   }),
   on: vi.fn(),
   off: vi.fn(),
+  // AreaDrawLayer/DrawLotLayer swap the container's cursor and suspend map
+  // dragging while armed, so a test that ARMS a tool needs both of these.
+  getContainer: () => document.createElement('div'),
+  dragging: { disable: vi.fn(), enable: vi.fn() },
 };
 // Captures the options passed to MapContainer (they are Leaflet OPTIONS, not
 // DOM attributes — the mock must record them, never spread them onto the DOM).
@@ -176,6 +180,62 @@ vi.mock('./lotMapData', async (importOriginal) => ({
 import { ApiError } from '@/lib/api';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { LotMapView } from './LotMapView';
+
+// Radix's DropdownMenu (the desktop Layers chooser) calls the Pointer Capture
+// API and scrollIntoView, neither of which jsdom implements. Stubbing them is
+// what lets the menu actually open in a test instead of throwing.
+beforeAll(() => {
+  const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
+  proto.hasPointerCapture ??= () => false;
+  proto.setPointerCapture ??= () => {};
+  proto.releasePointerCapture ??= () => {};
+  proto.scrollIntoView ??= () => {};
+});
+
+/**
+ * Open the Layers chooser and return its container. One helper for both
+ * surfaces: Radix opens on pointerdown, the mobile sheet on a plain tap.
+ */
+async function openLayers(): Promise<HTMLElement> {
+  // Toggling a pin layer leaves the chooser OPEN (arming two layers is one
+  // errand), so re-entering must not close it.
+  const already = screen.queryByTestId(isMobileValue ? 'map-layers-sheet' : 'map-layers-menu');
+  if (already) return already;
+  const trigger = screen.getByTestId('layers-button');
+  if (isMobileValue) {
+    fireEvent.click(trigger);
+    return screen.findByTestId('map-layers-sheet');
+  }
+  // Enter on the trigger, not a synthetic pointerdown: jsdom has no PointerEvent
+  // so Radix never sees a real button-0 press, and the keyboard path is the one
+  // that has to work anyway.
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  return screen.findByTestId('map-layers-menu');
+}
+
+/** Toggle a pin layer through the chooser, the way a user reaches it. */
+async function toggleLayer(id: 'photos' | 'testPins') {
+  await openLayers();
+  fireEvent.click(await screen.findByTestId(`map-layer-${id}`));
+}
+
+/**
+ * A pin layer's armed state as a user reads it: `aria-checked` on its row, which
+ * is the accessible state — not a colour, and not a class.
+ */
+async function expectLayerChecked(id: 'photos' | 'testPins', checked: boolean) {
+  await openLayers();
+  expect(await screen.findByTestId(`map-layer-${id}`)).toHaveAttribute(
+    'aria-checked',
+    String(checked),
+  );
+}
+
+/** Open a panel through the chooser. */
+async function openPanel(id: 'plans' | 'coverage' | 'testCoverage') {
+  await openLayers();
+  fireEvent.click(await screen.findByTestId(`map-panel-${id}`));
+}
 
 function polygonGeometry(over: Partial<ProjectLotGeometry> = {}): ProjectLotGeometry {
   return {
@@ -402,7 +462,7 @@ describe('LotMapView', () => {
     expect(screen.queryByTestId('backfill-run')).not.toBeInTheDocument();
   });
 
-  it('toggles the Plans panel and shows the no-registered-sheets hint', () => {
+  it('opens the Plans panel from the Layers chooser and shows the no-registered-sheets hint', async () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(
       <LotMapView
@@ -413,9 +473,13 @@ describe('LotMapView', () => {
     );
 
     expect(screen.queryByTestId('plans-panel')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('plans-button'));
-    const panel = screen.getByTestId('plans-panel');
+    await openPanel('plans');
+    const panel = await screen.findByTestId('plans-panel');
     expect(within(panel).getByText(/No registered plan sheets yet/i)).toBeInTheDocument();
+    // DG-4b. Opened from a chooser that closed behind it, the panel has to carry
+    // its own way out — there is no toolbar toggle to press again.
+    fireEvent.click(within(panel).getByTestId('plans-close'));
+    expect(screen.queryByTestId('plans-panel')).not.toBeInTheDocument();
   });
 
   it('shows the Draw lot button only when the user can manage settings', () => {
@@ -454,7 +518,7 @@ describe('LotMapView', () => {
     ).toBeInTheDocument();
   });
 
-  it('entering History closes the Plans panel (mutually exclusive tools)', () => {
+  it('entering History closes the Plans panel (mutually exclusive tools)', async () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(
       <LotMapView
@@ -463,8 +527,8 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
-    fireEvent.click(screen.getByTestId('plans-button'));
-    expect(screen.getByTestId('plans-panel')).toBeInTheDocument();
+    await openPanel('plans');
+    expect(await screen.findByTestId('plans-panel')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('history-button'));
     expect(screen.queryByTestId('plans-panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('history-panel')).toBeInTheDocument();
@@ -510,7 +574,7 @@ describe('LotMapView', () => {
     );
   }
 
-  it('recolours a lot from its status fill to its testing verdict when armed', () => {
+  it('recolours a lot from its status fill to its testing verdict when armed', async () => {
     // in_progress -> #56B4E9 on the status palette; insufficient -> #E69F00.
     testCoverageQuery.data = {
       lots: [{ lotId: 'lot-1', state: 'insufficient', lotNumber: 'LOT-001', rules: [] }],
@@ -519,50 +583,61 @@ describe('LotMapView', () => {
     renderWithTesting();
 
     expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
-    fireEvent.click(screen.getByTestId('testing-button'));
+    await openPanel('testCoverage');
     expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#E69F00');
     expect(screen.getByTestId('testing-legend')).toBeInTheDocument();
     expect(screen.getByTestId('test-coverage-panel')).toBeInTheDocument();
   });
 
-  it('AT-86 an in-flight or failed fetch keeps STATUS colours — never grey', () => {
+  it('AT-86 an in-flight or failed fetch keeps STATUS colours — never grey', async () => {
     // Grey is the `unknown` VERDICT. Painting it while the answer is unknown to
     // the CLIENT would be CIVOS asserting it has no rule when it has no answer.
     testCoverageQuery.isLoading = true;
     renderWithTesting();
-    fireEvent.click(screen.getByTestId('testing-button'));
+    await openPanel('testCoverage');
     expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
 
     testCoverageQuery.isLoading = false;
     testCoverageQuery.error = new ApiError(500, 'boom');
-    fireEvent.click(screen.getByTestId('testing-button')); // off
-    fireEvent.click(screen.getByTestId('testing-button')); // on again, now errored
+    fireEvent.click(screen.getByTestId('test-coverage-clear')); // off
+    await openPanel('testCoverage'); // on again, now errored
     expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
     expect(screen.getByTestId('test-coverage-error')).toBeInTheDocument();
   });
 
-  it('AT-95 History disarms Testing, and the toggle is unavailable in History', () => {
+  it('AT-95 Past view disarms Test coverage and withdraws its row, saying why', async () => {
     testCoverageQuery.data = {
       lots: [{ lotId: 'lot-1', state: 'satisfied' }],
       lotsWithoutGeometry: 0,
     };
     renderWithTesting();
 
-    fireEvent.click(screen.getByTestId('testing-button'));
-    expect(screen.getByTestId('testing-button')).toHaveAttribute('aria-pressed', 'true');
+    await openPanel('testCoverage');
     expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#009E73');
 
     fireEvent.click(screen.getByTestId('history-button'));
-    // Disarmed, its panel gone, its toggle gone, and the map back on the
-    // historical STATUS colours — one date in the picture, not two.
-    expect(screen.queryByTestId('testing-button')).not.toBeInTheDocument();
+    // Disarmed, its panel gone, and the map back on the historical STATUS
+    // colours — one date in the picture, not two.
     expect(screen.queryByTestId('test-coverage-panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('polygon')).toHaveAttribute('data-fill', '#56B4E9');
     expect(screen.getByTestId('history-panel')).toBeInTheDocument();
 
-    // Leaving History restores the toggle, still disarmed (never re-armed for you).
+    // DG-4b: the row is withdrawn from the chooser, and the chooser SAYS so
+    // rather than silently dropping it — a missing row otherwise reads as a
+    // missing feature.
+    const menu = await openLayers();
+    expect(within(menu).queryByTestId('map-panel-testCoverage')).not.toBeInTheDocument();
+    expect(within(menu).queryByTestId('map-panel-coverage')).not.toBeInTheDocument();
+    expect(within(menu).getByTestId('map-layers-live-only')).toHaveTextContent(
+      /Test pins, Coverage and Test coverage are live-only/i,
+    );
+    fireEvent.keyDown(menu, { key: 'Escape' });
+
+    // Leaving Past view restores the row, still disarmed (never re-armed for you).
     fireEvent.click(screen.getByTestId('history-button'));
-    expect(screen.getByTestId('testing-button')).toHaveAttribute('aria-pressed', 'false');
+    const live = await openLayers();
+    expect(within(live).getByTestId('map-panel-testCoverage')).toBeInTheDocument();
+    expect(screen.queryByTestId('test-coverage-panel')).not.toBeInTheDocument();
   });
 
   it('shows an access-denied message on a 403', () => {
@@ -571,19 +646,24 @@ describe('LotMapView', () => {
     expect(screen.getByText(/do not have access/i)).toBeInTheDocument();
   });
 
-  it('collapses toolbar buttons to icon-only (accessible name preserved) on mobile', () => {
+  it('DG-4b every mobile control is a CAPTIONED tile — no unlabelled icon', () => {
     isMobileValue = true;
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
 
-    // Icon-only: no visible caption text, but the button is still reachable by
-    // its accessible name (aria-label) and carries a ≥44px (h-11 w-11) hit area.
+    // The caption is the point: a bare icon on a jobsite is a guess. The short
+    // caption is visible; the full accessible name is unchanged.
     const findButton = screen.getByTestId('find-by-area-button');
     expect(findButton).toHaveAttribute('aria-label', 'Find by area');
-    expect(findButton.className).toMatch(/\bh-11\b/);
-    expect(findButton.className).toMatch(/\bw-11\b/);
-    expect(within(findButton).queryByText('Find by area')).not.toBeInTheDocument();
+    expect(within(findButton).getByText('Area')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'My location' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('locate-me-button')).getByText('Locate')).toBeInTheDocument();
+
+    // Armed, the control says how to get OUT of the mode it just entered.
+    fireEvent.click(findButton);
+    expect(
+      within(screen.getByTestId('find-by-area-button')).getByText('Cancel'),
+    ).toBeInTheDocument();
   });
 
   it('uses touch wording for the draw-lot hint on mobile', () => {
@@ -664,7 +744,7 @@ describe('LotMapView', () => {
       ...over,
     });
 
-    it('renders pins only for photos with coords once the Photos layer is on', () => {
+    it('renders pins only for photos with coords once the Photos layer is on', async () => {
       setPhotos([photo(), photo({ id: 'photo-2', gpsLatitude: null, gpsLongitude: null })]);
       mockQueries({ geometries: [polygonGeometry()] });
       render(
@@ -678,14 +758,14 @@ describe('LotMapView', () => {
       // Off by default — no pins.
       expect(screen.queryByTestId('photo-pin-photo-1')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByTestId('photos-button'));
-      expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'true');
+      await toggleLayer('photos');
+      await expectLayerChecked('photos', true);
       expect(screen.getByTestId('photo-pin-photo-1')).toBeInTheDocument();
       // The null-coord photo is skipped.
       expect(screen.queryByTestId('photo-pin-photo-2')).not.toBeInTheDocument();
     });
 
-    it('routes a pin View through linkTargets so the foreman shell stays under /m', () => {
+    it('routes a pin View through linkTargets so the foreman shell stays under /m', async () => {
       setPhotos([photo()]);
       mockQueries({ geometries: [polygonGeometry()] });
       render(
@@ -696,12 +776,12 @@ describe('LotMapView', () => {
           linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
         />,
       );
-      fireEvent.click(screen.getByTestId('photos-button'));
+      await toggleLayer('photos');
       fireEvent.click(screen.getByTestId('photo-pin-view-photo-1'));
       expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
     });
 
-    it('renders an unlinked pin (no View) when the shell photo has no lot destination', () => {
+    it('renders an unlinked pin (no View) when the shell photo has no lot destination', async () => {
       setPhotos([photo({ lotId: null })]);
       mockQueries({ geometries: [polygonGeometry()] });
       render(
@@ -712,12 +792,12 @@ describe('LotMapView', () => {
           linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
         />,
       );
-      fireEvent.click(screen.getByTestId('photos-button'));
+      await toggleLayer('photos');
       expect(screen.getByTestId('photo-pin-photo-1')).toBeInTheDocument();
       expect(screen.queryByTestId('photo-pin-view-photo-1')).not.toBeInTheDocument();
     });
 
-    it('AT-94 an armed marker layer whose fetch failed says so instead of showing an empty map', () => {
+    it('AT-94 an armed marker layer whose fetch failed says so instead of showing an empty map', async () => {
       setPhotos([]);
       spatialSearchMutation.error = new ApiError(0, 'offline');
       mockQueries({ geometries: [polygonGeometry()] });
@@ -730,8 +810,8 @@ describe('LotMapView', () => {
       );
       expect(screen.queryByTestId('map-pin-layers-unavailable')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByTestId('photos-button'));
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await toggleLayer('photos');
+      await toggleLayer('testPins');
       // Named, not silent: `spatial-search` is a POST and deliberately uncached
       // (AT-94 `[C3S-d]`), so offline there is nothing to show — and a blank map
       // reads as "no tests here", which is a different and false statement.
@@ -741,7 +821,7 @@ describe('LotMapView', () => {
       spatialSearchMutation.error = null;
     });
 
-    it('persists the Photos toggle per project', () => {
+    it('persists the Photos toggle per project', async () => {
       mockQueries({ geometries: [polygonGeometry()] });
       const { unmount } = render(
         <LotMapView
@@ -750,8 +830,8 @@ describe('LotMapView', () => {
           canManageSettings={false}
         />,
       );
-      expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'false');
-      fireEvent.click(screen.getByTestId('photos-button'));
+      await expectLayerChecked('photos', false);
+      await toggleLayer('photos');
       expect(readLocalStorageItem('siteproof.mapPhotos.proj-1')).toBe('true');
 
       // A fresh mount reads the persisted preference back as on.
@@ -763,7 +843,7 @@ describe('LotMapView', () => {
           canManageSettings={false}
         />,
       );
-      expect(screen.getByTestId('photos-button')).toHaveAttribute('aria-pressed', 'true');
+      await expectLayerChecked('photos', true);
     });
   });
 
@@ -808,15 +888,15 @@ describe('LotMapView', () => {
       );
     }
 
-    it('renders a pin with provenance and accuracy once the layer is on', () => {
+    it('renders a pin with provenance and accuracy once the layer is on', async () => {
       setTests([located()]);
       renderMap();
 
       // Default off.
       expect(screen.queryByTestId('test-pin-tr-1')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByTestId('test-pins-button'));
-      expect(screen.getByTestId('test-pins-button')).toHaveAttribute('aria-pressed', 'true');
+      await toggleLayer('testPins');
+      await expectLayerChecked('testPins', true);
       const pin = screen.getByTestId('test-pin-tr-1');
       expect(pin).toHaveTextContent('Density Ratio');
       expect(pin).toHaveTextContent('Verified');
@@ -827,15 +907,15 @@ describe('LotMapView', () => {
       );
     });
 
-    it('says "Picked on map" and no radius for a map pick', () => {
+    it('says "Picked on map" and no radius for a map pick', async () => {
       setTests([located({ sampleLocationSource: 'map_pick', sampleLocationAccuracyM: null })]);
       renderMap();
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await toggleLayer('testPins');
       expect(screen.getByTestId('test-pin-point-tr-1')).toHaveTextContent('Picked on map');
       expect(screen.getByTestId('test-pin-point-tr-1')).not.toHaveTextContent('±');
     });
 
-    it('AT-84 an unlocated test is never drawn — no centroid, no text-derived pin', () => {
+    it('AT-84 an unlocated test is never drawn — no centroid, no text-derived pin', async () => {
       // The lot HAS a polygon (so a centroid was available) and the test HAS free
       // text a parser could have read a chainage out of. Neither may become a
       // marker `[C3S-B1]`. A third row carries half a coordinate — also not a
@@ -851,30 +931,30 @@ describe('LotMapView', () => {
         located({ id: 'tr-half', sampleLongitude: null }),
       ]);
       renderMap();
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await toggleLayer('testPins');
 
       expect(screen.queryByTestId('test-pin-tr-unlocated')).not.toBeInTheDocument();
       expect(screen.queryByTestId('test-pin-tr-half')).not.toBeInTheDocument();
       expect(screen.queryByTestId('marker')).not.toBeInTheDocument();
     });
 
-    it('routes a pin View through linkTargets so the foreman shell stays under /m', () => {
+    it('routes a pin View through linkTargets so the foreman shell stays under /m', async () => {
       setTests([located()]);
       renderMap({ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` });
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await toggleLayer('testPins');
       fireEvent.click(screen.getByTestId('test-pin-view-tr-1'));
       expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
     });
 
-    it('renders an unlinked pin (no View) when the shell test has no lot destination', () => {
+    it('renders an unlinked pin (no View) when the shell test has no lot destination', async () => {
       setTests([located({ lotId: null, lotNumber: null })]);
       renderMap({ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` });
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await toggleLayer('testPins');
       expect(screen.getByTestId('test-pin-tr-1')).toBeInTheDocument();
       expect(screen.queryByTestId('test-pin-view-tr-1')).not.toBeInTheDocument();
     });
 
-    it('persists the Test pins toggle per project', () => {
+    it('persists the Test pins toggle per project', async () => {
       setTests([located()]);
       const { unmount } = render(
         <LotMapView
@@ -884,7 +964,7 @@ describe('LotMapView', () => {
         />,
       );
       mockQueries({ geometries: [polygonGeometry()] });
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await toggleLayer('testPins');
       expect(readLocalStorageItem('siteproof.mapTests.proj-1')).toBe('true');
 
       unmount();
@@ -896,10 +976,10 @@ describe('LotMapView', () => {
           canManageSettings={false}
         />,
       );
-      expect(screen.getByTestId('test-pins-button')).toHaveAttribute('aria-pressed', 'true');
+      await expectLayerChecked('testPins', true);
     });
 
-    it('AT-95 History disarms the pin layer too, and its toggle is unavailable there', () => {
+    it('AT-95 Past view disarms the pin layer and withdraws its row from the chooser', async () => {
       setTests([located()]);
       testCoverageQuery.data = {
         lots: [{ lotId: 'lot-1', state: 'satisfied' }],
@@ -908,60 +988,222 @@ describe('LotMapView', () => {
       renderMap();
 
       // Both C3 layers armed at once.
-      fireEvent.click(screen.getByTestId('testing-button'));
-      fireEvent.click(screen.getByTestId('test-pins-button'));
+      await openPanel('testCoverage');
+      await toggleLayer('testPins');
       expect(screen.getByTestId('test-pin-tr-1')).toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('history-button'));
       // `[C3R-B5]` today's captures have no place on a map showing a past date.
-      expect(screen.queryByTestId('testing-button')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('test-pins-button')).not.toBeInTheDocument();
       expect(screen.queryByTestId('test-pin-tr-1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('test-coverage-panel')).not.toBeInTheDocument();
 
-      // Leaving History restores both toggles, still disarmed.
+      const past = await openLayers();
+      expect(within(past).queryByTestId('map-layer-testPins')).not.toBeInTheDocument();
+      // Photo pins are NOT live-only, so that row survives — the withdrawal is a
+      // rule about the data, not a blanket "menu is smaller in Past view".
+      expect(within(past).getByTestId('map-layer-photos')).toBeInTheDocument();
+      expect(within(past).getByTestId('map-layers-live-only')).toHaveTextContent(/live-only/i);
+      fireEvent.keyDown(past, { key: 'Escape' });
+
+      // Leaving Past view restores the row, still disarmed — never re-armed for you.
       fireEvent.click(screen.getByTestId('history-button'));
-      expect(screen.getByTestId('testing-button')).toHaveAttribute('aria-pressed', 'false');
-      expect(screen.getByTestId('test-pins-button')).toHaveAttribute('aria-pressed', 'false');
+      await expectLayerChecked('testPins', false);
     });
 
-    // Exit item 13 `[C3R-A10]`. jsdom has no layout, so this asserts the two things
-    // that DECIDE the 360px outcome: every toolbar item is icon-only at a ≥44px hit
-    // area, and the container wraps. 10 items x 44px + 9 gaps x 8px = 512px, so at
-    // 360px the toolbar takes exactly two rows (~96px) and the map keeps its
-    // min(520px, 60dvh) height — a stolen row, never a clipped or hidden button.
-    it('[C3R-A10] all ten toolbar items stay reachable and icon-only at phone width', () => {
+    /**
+     * DG-4b, replacing `[C3R-A10]`. jsdom has no layout, so this asserts the
+     * rule that DECIDES the 390px outcome rather than measuring it: every tile
+     * is `flex-1` between a 48px floor and a 56px ceiling, so N tiles share one
+     * row instead of wrapping, scrolling, or hiding. Six tiles (foreman) land at
+     * 56px; seven (canManageSettings) at 48px. Break the rule and this fails.
+     */
+    it('DG-4b tiles share one row at phone width, and Draw lot is the only role difference', () => {
       isMobileValue = true;
       setTests([located()]);
       testCoverageQuery.data = { lots: [], lotsWithoutGeometry: 0 };
       mockQueries({ geometries: [polygonGeometry()] });
-      render(
-        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      const { rerender } = render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
       );
 
-      const ids = [
+      // Foreman: six captioned tiles, no Draw lot.
+      const foremanTiles = [
         'find-by-area-button',
-        'coverage-button',
-        'plans-button',
-        'testing-button',
-        'test-pins-button',
-        'photos-button',
-        'draw-lot-button',
-        'snapshot-button',
         'locate-me-button',
+        'photos-button',
+        'layers-button',
+        'snapshot-button',
         'history-button',
       ];
-      for (const id of ids) {
-        const button = screen.getByTestId(id);
-        expect(button).toHaveAttribute('aria-label');
-        expect(button.className).toMatch(/\bh-11\b/);
-        expect(button.className).toMatch(/\bw-11\b/);
+      for (const id of foremanTiles) {
+        const tile = screen.getByTestId(id);
+        expect(tile).toHaveAttribute('aria-label');
+        // The one rule: share the row, never below 48px, never above 56px.
+        expect(tile.className).toMatch(/\bflex-1\b/);
+        expect(tile.className).toMatch(/\bmin-w-12\b/);
+        expect(tile.className).toMatch(/\bmax-w-14\b/);
+        // A caption, always — no unlabelled icon at any width.
+        expect(tile.textContent?.trim()).not.toBe('');
       }
-      expect(screen.getByRole('button', { name: 'Test pins' })).toBeInTheDocument();
-      // flex-wrap is what makes the failure mode "a second row", not "a hidden button".
-      expect(screen.getByTestId('find-by-area-button').parentElement?.className).toMatch(
-        /flex-wrap/,
+      expect(screen.queryByTestId('draw-lot-button')).not.toBeInTheDocument();
+      expect(screen.getByTestId('lot-map-toolbar').className).not.toMatch(/flex-wrap/);
+
+      // canManageSettings: the same row, one tile longer.
+      rerender(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
       );
+      const drawLot = screen.getByTestId('draw-lot-button');
+      expect(drawLot.className).toMatch(/\bflex-1\b/);
+      expect(drawLot).toHaveAttribute('aria-label', 'Draw lot');
+      expect(within(drawLot).getByText('Draw lot')).toBeInTheDocument();
+      // Armed, the tile says how to get out — caption short, accessible name full.
+      fireEvent.click(drawLot);
+      const armed = screen.getByTestId('draw-lot-button');
+      expect(armed).toHaveAttribute('aria-label', 'Cancel draw');
+      expect(within(armed).getByText('Cancel')).toBeInTheDocument();
+
       expect(mapContainerProps.current.style).toMatchObject({ height: 'min(520px, 60dvh)' });
+    });
+  });
+
+  // ── DG-4b: the Layers chooser ─────────────────────────────────────────────
+  describe('Layers chooser', () => {
+    function renderMap(over: { canManageSettings?: boolean } = {}) {
+      mockQueries({ geometries: [polygonGeometry()] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={over.canManageSettings ?? false}
+        />,
+      );
+    }
+
+    function setPins({
+      photos = [] as import('./spatialSearchData').SpatialPhoto[],
+      photosTruncated = false,
+      testResultsTruncated = false,
+    }) {
+      spatialSearchMutation.data = {
+        lots: [],
+        lotsTruncated: false,
+        photos,
+        photosTruncated,
+        testResults: [],
+        testResultsTruncated,
+      };
+    }
+
+    const photo = (id: string): import('./spatialSearchData').SpatialPhoto => ({
+      id,
+      filename: `${id}.jpg`,
+      caption: null,
+      captureTimestamp: null,
+      lotId: 'lot-1',
+      gpsLatitude: -33.8,
+      gpsLongitude: 151.0,
+    });
+
+    it('a pin row is a menuitemcheckbox whose whole row is the target (mobile sheet)', async () => {
+      isMobileValue = true;
+      setPins({ photos: [photo('p-1'), photo('p-2')] });
+      renderMap();
+
+      const sheet = await openLayers();
+      const row = within(sheet).getByTestId('map-layer-photos');
+      // A switch would say "this is a setting that stays". A checkbox on the
+      // whole 56px row is what a gloved thumb can actually hit.
+      expect(row.tagName).toBe('BUTTON');
+      expect(row).toHaveAttribute('role', 'menuitemcheckbox');
+      expect(row).toHaveAttribute('aria-checked', 'false');
+      expect(row.className).toMatch(/min-h-\[56px\]/);
+      expect(row.className).toMatch(/\bw-full\b/);
+
+      fireEvent.click(row);
+      expect(within(await openLayers()).getByTestId('map-layer-photos')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      // Armed, the row states what it is drawing — a count, not a verdict.
+      expect(within(await openLayers()).getByTestId('map-layer-photos')).toHaveTextContent(
+        '2 in view',
+      );
+    });
+
+    it('panel rows are NOT checkboxes and they close the sheet behind them', async () => {
+      isMobileValue = true;
+      renderMap();
+
+      const sheet = await openLayers();
+      const panelRow = within(sheet).getByTestId('map-panel-coverage');
+      expect(panelRow).not.toHaveAttribute('role', 'menuitemcheckbox');
+      expect(panelRow).not.toHaveAttribute('aria-checked');
+
+      fireEvent.click(panelRow);
+      await waitFor(() => expect(screen.queryByTestId('map-layers-sheet')).not.toBeInTheDocument());
+      expect(screen.getByTestId('coverage-panel')).toBeInTheDocument();
+    });
+
+    it('the desktop chooser closes on Escape and toggling a pin leaves it open', async () => {
+      setPins({ photos: [photo('p-1')] });
+      renderMap();
+
+      const menu = await openLayers();
+      fireEvent.click(within(menu).getByTestId('map-layer-photos'));
+      // Arming two layers is one errand — the menu must survive the first.
+      expect(screen.getByTestId('map-layers-menu')).toBeInTheDocument();
+
+      fireEvent.keyDown(screen.getByTestId('map-layers-menu'), { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByTestId('map-layers-menu')).not.toBeInTheDocument());
+      // Closing the chooser does not disarm what it armed.
+      expect(screen.getByTestId('photo-pin-p-1')).toBeInTheDocument();
+    });
+
+    it('counts armed pin layers on the trigger', async () => {
+      setPins({ photos: [photo('p-1')] });
+      renderMap();
+
+      expect(screen.queryByTestId('layers-button-count')).not.toBeInTheDocument();
+      await toggleLayer('photos');
+      expect(screen.getByTestId('layers-button-count')).toHaveTextContent('1');
+      await toggleLayer('testPins');
+      expect(screen.getByTestId('layers-button-count')).toHaveTextContent('2');
+    });
+
+    it('AT-94 a failed layer marks the trigger AND keeps its notice on the map', async () => {
+      setPins({});
+      spatialSearchMutation.error = new ApiError(0, 'offline');
+      renderMap();
+
+      expect(screen.queryByTestId('layers-button-alert')).not.toBeInTheDocument();
+      await toggleLayer('photos');
+      fireEvent.keyDown(screen.getByTestId('map-layers-menu'), { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByTestId('map-layers-menu')).not.toBeInTheDocument());
+
+      // The dot survives the chooser closing; the words stay on the map, because
+      // a notice that only exists while a menu is open is a notice nobody reads.
+      expect(screen.getByTestId('layers-button-alert')).toBeInTheDocument();
+      expect(screen.getByTestId('map-pin-layers-unavailable')).toHaveTextContent(
+        /Photos is unavailable/i,
+      );
+      spatialSearchMutation.error = null;
+    });
+
+    it('says when the backend capped the answer instead of quietly dropping pins', async () => {
+      // `truncated` has been on the wire since spatialSearch shipped and the map
+      // has never rendered it: a capped map and a sparse map looked identical.
+      setPins({ photos: [photo('p-1')], photosTruncated: true });
+      renderMap();
+
+      expect(screen.queryByTestId('map-pin-layers-truncated')).not.toBeInTheDocument();
+      await toggleLayer('photos');
+      expect(screen.getByTestId('map-pin-layers-truncated')).toHaveTextContent(
+        /500\+.*Showing the first 500 photo pins in this view\. Zoom in to see the rest\./,
+      );
     });
   });
 });

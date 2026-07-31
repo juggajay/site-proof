@@ -1,4 +1,4 @@
-import { Crosshair } from 'lucide-react';
+import { Crosshair, X } from 'lucide-react';
 
 import type { PlanSheetListItem } from '@/pages/projects/settings/planSheetsData';
 
@@ -14,6 +14,12 @@ interface PlansPanelProps {
   onOpacityChange: (value: number) => void;
   onBlendChange: (value: boolean) => void;
   onZoom: (id: string) => void;
+  /**
+   * DG-4b. The panel now opens from the Layers chooser rather than a toolbar
+   * toggle, so it has to carry its own way out — the way Coverage and Test
+   * coverage already do.
+   */
+  onClose: () => void;
 }
 
 /**
@@ -32,14 +38,27 @@ export function PlansPanel({
   onOpacityChange,
   onBlendChange,
   onZoom,
+  onClose,
 }: PlansPanelProps) {
   const anyShown = sheets.some((sheet) => shown[sheet.id]);
 
   return (
     <div
-      className="mt-2 w-72 max-w-[calc(100vw-1.5rem)] max-h-[60vh] overflow-y-auto rounded-md border bg-background p-3 shadow-lg"
+      className="w-72 max-w-[calc(100vw-1.5rem)] max-h-[60vh] overflow-y-auto rounded-md border bg-background p-3 shadow-lg"
       data-testid="plans-panel"
     >
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground">Plan overlays</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="-mr-1 -mt-1 flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Close plan overlays"
+          data-testid="plans-close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
       {sheets.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           No registered plan sheets yet. Upload and georeference drawings in{' '}
@@ -54,7 +73,6 @@ export function PlansPanel({
         </p>
       ) : (
         <>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Plan sheets</p>
           <ul className="space-y-1.5">
             {sheets.map((sheet) => (
               <li key={sheet.id} className="flex items-center gap-2">
