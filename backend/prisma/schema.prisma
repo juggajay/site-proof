@@ -693,6 +693,38 @@ model ITPTemplate {
   // must not manufacture 40 silent auto-fill candidates on one accept click.
   specAffirmedAt         DateTime? @map("spec_affirmed_at")
   specAffirmedById       String?   @map("spec_affirmed_by_id")
+
+  // Wave G G2 (spec §2.2(a)) — the provenance that already existed in the
+  // seeder header comments and was dropped on the way to the database. Every
+  // column is nullable: the library asserts what its own file cites and nothing
+  // more, so a template whose header states no edition keeps a null rather than
+  // a guessed one.
+  authority           String?   @map("authority") // 'TMR' | 'TfNSW' | 'VicRoads' | 'DIT' | 'MRWA' | 'Austroads' | 'WSA' | free text
+  specEdition         String?   @map("spec_edition") // '04/10134' | 'March 2025' — as published, never normalised
+  specIssuedOn        DateTime? @map("spec_issued_on")
+  effectiveFrom       DateTime? @map("effective_from")
+  reviewDueOn         DateTime? @map("review_due_on")
+  changeSummary       String?   @map("change_summary")
+  // §2.2(b): the shared annexure caveat. Seeder-set, never an AI judgement.
+  annexureWarning     Boolean   @default(false) @map("annexure_warning")
+  // §2.2(f) [GR-B3]: the GLOBAL library's own supersession chain, copying
+  // `Drawing`'s shape (`schema.prisma` Drawing model). It records NO
+  // `RevisionIssue` — that table is strictly project-scoped and a library
+  // edition change is a library fact, not a transmittal to named recipients.
+  supersededById      String?   @map("superseded_by_id")
+  supersededAt        DateTime? @map("superseded_at")
+  supersededBySeedRun String?   @map("superseded_by_seed_run")
+  // §2.2(c): clone lineage. Deliberately NOT a foreign key — a corporate master
+  // can be deleted and the copy's lineage must survive that, the same reasoning
+  // `Comment.entityId` uses for keying without an FK.
+  sourceTemplateId    String?   @map("source_template_id")
+  // Import lineage DOES get an FK, because it can: `ImportBatch` rows are never
+  // hard-deleted (the GC sweeps abandoned batches to `cancelled` and keeps
+  // applied ones indefinitely — `importBatchGc.ts`), so `SetNull` fires only
+  // when the whole project cascades away and takes the template with it. The FK
+  // is what makes "traceable to its source document in ONE join" literally true.
+  importBatchId       String?   @map("import_batch_id")
+
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
@@ -700,8 +732,15 @@ model ITPTemplate {
   checklistItems ITPChecklistItem[]
   lots           Lot[]
   itpInstances   ITPInstance[]
+  supersededBy   ITPTemplate?       @relation("ITPTemplateSupersedes", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes     ITPTemplate[]      @relation("ITPTemplateSupersedes")
+  importBatch    ImportBatch?       @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
+  @@unique([projectId, name, specEdition])
   @@index([projectId])
+  @@index([projectId, supersededById])
+  @@index([sourceTemplateId])
+  @@index([importBatchId])
   @@map("itp_templates")
 }
 
@@ -716,6 +755,15 @@ model ITPChecklistItem {
   evidenceRequired   String  @default("none") @map("evidence_required")
   testType           String? @map("test_type")
   notes              String?
+  // Wave G G2 (spec §2.2(c) [GR-A3]) — item-level lineage. Clone creates fresh
+  // rows, so the same logical checklist item has a different id in every project
+  // that adopted the template; without this, G5's cross-project recurrence
+  // ("this item failed 7 times across 3 subcontractors") can only ever count
+  // within one project's copy. Chains resolve by walking to the root. A null
+  // pointer (every row created before G2) aggregates as its own root and is
+  // reported as such — identity is NEVER guessed from description text.
+  // No FK, for the same reason as ITPTemplate.sourceTemplateId.
+  sourceChecklistItemId String? @map("source_checklist_item_id")
 
   template       ITPTemplate     @relation(fields: [templateId], references: [id], onDelete: Cascade)
   itpCompletions ITPCompletion[]
@@ -723,6 +771,7 @@ model ITPChecklistItem {
   testResults    TestResult[]
 
   @@index([templateId])
+  @@index([sourceChecklistItemId])
   @@map("itp_checklist_items")
 }
 
@@ -2321,6 +2370,7 @@ model ImportBatch {
   mappingProfile ImportMappingProfile? @relation(fields: [mappingProfileId], references: [id], onDelete: SetNull)
   createdBy      User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
   proposal       AiProposal?
+  itpTemplates   ITPTemplate[]
 
   @@index([projectId, kind, status])
   @@index([projectId, createdAt])

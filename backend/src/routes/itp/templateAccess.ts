@@ -14,6 +14,13 @@ export const TEMPLATE_MANAGER_ROLES = [
   'site_manager',
 ];
 
+/**
+ * Wave G G2 §2.3 — who may compare two template versions. The manager set plus
+ * `site_engineer`, who reads specifications for a living but does not manage the
+ * project's template set. Foreman, subcontractor and viewer are excluded.
+ */
+export const TEMPLATE_COMPARE_ROLES = [...TEMPLATE_MANAGER_ROLES, 'site_engineer'];
+
 function isCompanyAdmin(user: AuthenticatedUser): boolean {
   return user.roleInCompany === 'admin' || user.roleInCompany === 'owner';
 }

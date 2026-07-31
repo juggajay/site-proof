@@ -256,6 +256,7 @@ templatesRouter.post(
             evidenceRequired: item.evidenceRequired || 'none',
             acceptanceCriteria: item.acceptanceCriteria || null,
             testType: item.testType || null,
+            notes: item.notes || null,
           })),
         },
       },
@@ -324,16 +325,60 @@ templatesRouter.post(
 
     await requireProjectTemplateAccess(targetProjectId, user, true);
 
-    // Create the cloned template
+    const clonedName = name || `${sourceTemplate.name} (Copy)`;
+
+    // Wave G G2: the clone now carries the source's `specEdition`, which brings
+    // it under the new `@@unique([projectId, name, specEdition])`. Pre-check it
+    // so the second copy of the same edition under the same name reports what is
+    // actually wrong instead of surfacing a bare P2002. Same two-path shape the
+    // drawings supersede route already uses (spec §1.7 E2): 400 from this
+    // pre-check, 409 from the generic P2002 mapping if two requests race.
+    if (sourceTemplate.specEdition) {
+      const clash = await prisma.iTPTemplate.findFirst({
+        where: {
+          projectId: targetProjectId,
+          name: clonedName,
+          specEdition: sourceTemplate.specEdition,
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        throw AppError.badRequest(
+          `This project already has a template named "${clonedName}" at ${sourceTemplate.specEdition}. Give the copy a different name.`,
+          { code: 'TEMPLATE_EDITION_DUPLICATE' },
+        );
+      }
+    }
+
+    // Create the cloned template.
+    //
+    // Wave G G2 (spec §2.2(c)): a controlled copy now records where it came
+    // from. Before G2 the only tie back to the corporate master was the default
+    // `(Copy)` suffix in the name, and `notes` — every seeder's clause citation
+    // — was dropped on every copy. Both are fixed here.
+    //
+    // `sourceChecklistItemId` records the IMMEDIATE parent, not the root
+    // [GR-A3]: a clone of a clone points at the clone, and cross-project
+    // aggregation resolves by walking the chain. Identity is never guessed from
+    // description text.
     const clonedTemplate = await prisma.iTPTemplate.create({
       data: {
         projectId: targetProjectId,
-        name: name || `${sourceTemplate.name} (Copy)`,
+        name: clonedName,
         description: sourceTemplate.description,
         activityType: sourceTemplate.activityType,
         specificationReference: sourceTemplate.specificationReference,
         stateSpec: sourceTemplate.stateSpec,
         isActive: true,
+        sourceTemplateId: sourceTemplate.id,
+        // The provenance travels with the copy — a controlled copy is inspected
+        // against the same published specification edition as its master.
+        authority: sourceTemplate.authority,
+        specEdition: sourceTemplate.specEdition,
+        specIssuedOn: sourceTemplate.specIssuedOn,
+        effectiveFrom: sourceTemplate.effectiveFrom,
+        reviewDueOn: sourceTemplate.reviewDueOn,
+        annexureWarning: sourceTemplate.annexureWarning,
         checklistItems: {
           create: sourceTemplate.checklistItems.map((item, index) => ({
             description: item.description,
@@ -343,6 +388,8 @@ templatesRouter.post(
             evidenceRequired: item.evidenceRequired,
             acceptanceCriteria: item.acceptanceCriteria,
             testType: item.testType,
+            notes: item.notes,
+            sourceChecklistItemId: item.id,
           })),
         },
       },
@@ -413,6 +460,7 @@ templatesRouter.patch(
           evidenceRequired: item.evidenceRequired || 'none',
           acceptanceCriteria: item.acceptanceCriteria || null,
           testType: item.testType || null,
+          notes: item.notes || null,
         })),
       };
     }

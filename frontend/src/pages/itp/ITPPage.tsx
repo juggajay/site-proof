@@ -20,6 +20,8 @@ import { EditTemplateModal } from './components/EditTemplateModal';
 import { PropagateTemplateModal } from './components/PropagateTemplateModal';
 import { ImportFromProjectModal } from './components/ImportFromProjectModal';
 import { PendingItpVerificationsSection } from './components/PendingItpVerificationsSection';
+import { TemplateCompareModal } from './components/TemplateCompareModal';
+import { TemplateProvenance } from './components/TemplateProvenance';
 import { queryKeys } from '@/lib/queryKeys';
 
 // A lot the edited template is assigned to (GET /templates/:id/lots), used to
@@ -55,6 +57,14 @@ export function ITPPage() {
   const [includeGlobalTemplates, setIncludeGlobalTemplates] = useState(true);
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>('');
   const [responsiblePartyFilter, setResponsiblePartyFilter] = useState<string>(''); // Feature #711
+  // Wave G G2 (spec §2.2(e)): which two template versions are being compared.
+  // `againstId` comes from the template's own supersession chain, so no extra
+  // fetch is needed to know a newer edition exists.
+  const [compareTarget, setCompareTarget] = useState<{
+    baseId: string;
+    againstId: string;
+    baseLabel: string;
+  } | null>(null);
 
   const token = getAuthToken();
 
@@ -604,7 +614,36 @@ export function ITPPage() {
                   {template.description && (
                     <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
                   )}
-                  <div className="flex items-center justify-between text-sm">
+                  <TemplateProvenance
+                    authority={template.authority}
+                    specEdition={template.specEdition}
+                    specIssuedOn={template.specIssuedOn}
+                    effectiveFrom={template.effectiveFrom}
+                    specificationReference={template.specificationReference}
+                    annexureWarning={template.annexureWarning}
+                  />
+                  {/* Adoption of a newer library edition is a HUMAN act — this
+                      notice offers the comparison and nothing else. Nothing is
+                      migrated, and no existing instance snapshot moves. */}
+                  {template.supersededById && projectId && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-primary/30 bg-primary/5 px-2 py-1.5">
+                      <span className="text-xs">Newer edition available</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCompareTarget({
+                            baseId: template.id,
+                            againstId: template.supersededById!,
+                            baseLabel: template.name,
+                          })
+                        }
+                        className="text-xs px-2 py-0.5 rounded border hover:bg-muted"
+                      >
+                        Compare
+                      </button>
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
                       {responsiblePartyFilter
                         ? `${template.checklistItems.filter((i) => i.responsibleParty === responsiblePartyFilter).length} ${responsiblePartyFilter} items`
@@ -700,6 +739,16 @@ export function ITPPage() {
           onSubmit={(data) => handleUpdateTemplate(editingTemplate.id, data)}
           loading={creating}
           errorMessage={editError}
+        />
+      )}
+
+      {compareTarget && projectId && (
+        <TemplateCompareModal
+          projectId={projectId}
+          baseId={compareTarget.baseId}
+          againstId={compareTarget.againstId}
+          baseLabel={compareTarget.baseLabel}
+          onClose={() => setCompareTarget(null)}
         />
       )}
 

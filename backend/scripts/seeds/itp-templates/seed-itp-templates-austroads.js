@@ -12,6 +12,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { withItpTemplateSeedLock } from './seed-lock.mjs';
+import { seedGlobalTemplate } from './seed-writer.mjs';
 const prisma = new PrismaClient();
 
 // =============================================================================
@@ -1475,42 +1476,9 @@ const austroadsDrainageTemplate = {
 // SEED FUNCTION
 // =============================================================================
 async function seedTemplate(templateData) {
-  const { checklistItems, ...templateFields } = templateData;
-
-  // Check if template already exists
-  const existing = await prisma.iTPTemplate.findFirst({
-    where: {
-      name: templateFields.name,
-      stateSpec: templateFields.stateSpec,
-      projectId: null
-    }
-  });
-
-  if (existing) {
-    console.log(`  Template "${templateFields.name}" already exists, skipping...`);
-    return existing;
-  }
-
-  // Create template with checklist items
-  const template = await prisma.iTPTemplate.create({
-    data: {
-      ...templateFields,
-      projectId: null, // Global template
-      isActive: true,
-      checklistItems: {
-        create: checklistItems.map((item, index) => ({
-          sequenceNumber: index + 1,
-          ...item
-        }))
-      }
-    },
-    include: {
-      checklistItems: true
-    }
-  });
-
-  console.log(`  Created: ${template.name} (${template.checklistItems.length} items)`);
-  return template;
+  // Wave G G2 §2.2: one shared write path for the whole library, so
+  // provenance and --supersede land in every seeder at once.
+  return seedGlobalTemplate(prisma, templateData);
 }
 
 async function main() {

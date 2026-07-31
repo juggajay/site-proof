@@ -14,6 +14,7 @@
     "scripts/lib/run-script.ts",
     "scripts/backfill-one-time-token-hashes.ts",
     "scripts/backfill-lot-activity-slug.ts",
+    "scripts/backfill-itp-snapshots.ts",
     "scripts/classify-test-types.ts",
     "scripts/check-unique-migration-preconditions.ts",
     "scripts/data-retention.ts",

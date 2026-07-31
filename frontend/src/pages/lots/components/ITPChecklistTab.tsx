@@ -25,6 +25,7 @@ import {
   toggleExpandedItpCategory,
   type ItpStatusFilter,
 } from './itpChecklistTabHelpers';
+import { TemplateProvenance } from '@/pages/itp/components/TemplateProvenance';
 
 // Main ITPChecklistTab props
 export interface ITPChecklistTabProps {
@@ -362,7 +363,17 @@ export function ITPChecklistTab({
               </button>
             </div>
           </div>
-          <div className="w-full bg-muted rounded-full h-2.5">
+          {/* Wave G G2 §2.2(a),(b): what this lot was inspected against. Read
+              from the ASSIGNMENT SNAPSHOT, so it states the edition that
+              governed the work rather than whatever the library holds today. */}
+          <TemplateProvenance
+            authority={itpInstance.template.authority}
+            specEdition={itpInstance.template.specEdition}
+            specIssuedOn={itpInstance.template.specIssuedOn}
+            specificationReference={itpInstance.template.specificationReference}
+            annexureWarning={itpInstance.template.annexureWarning}
+          />
+          <div className="mt-3 w-full bg-muted rounded-full h-2.5">
             <div
               className="bg-primary h-2.5 rounded-full transition-all"
               style={{ width: `${percentage}%` }}

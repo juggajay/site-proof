@@ -10,6 +10,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { withItpTemplateSeedLock } from './seed-lock.mjs';
+import { seedGlobalTemplate } from './seed-writer.mjs';
 const prisma = new PrismaClient()
 
 // =============================================================================
@@ -1492,55 +1493,9 @@ const qldEME2Template = {
 // =============================================================================
 
 async function seedTemplate(templateData) {
-  console.log(`  Seeding: ${templateData.name}...`)
-
-  const existing = await prisma.iTPTemplate.findFirst({
-    where: {
-      name: templateData.name,
-      stateSpec: 'MRTS',
-      projectId: null
-    }
-  })
-
-  if (existing) {
-    console.log(`  ⚠️  "${templateData.name}" already exists (ID: ${existing.id}). Skipping.`)
-    return existing
-  }
-
-  const template = await prisma.iTPTemplate.create({
-    data: {
-      projectId: null,
-      name: templateData.name,
-      description: templateData.description,
-      activityType: templateData.activityType,
-      specificationReference: templateData.specificationReference,
-      stateSpec: templateData.stateSpec,
-      isActive: true,
-      checklistItems: {
-        create: templateData.checklistItems.map((item, index) => ({
-          sequenceNumber: index + 1,
-          description: item.description,
-          acceptanceCriteria: item.acceptanceCriteria,
-          pointType: item.pointType,
-          responsibleParty: item.responsibleParty,
-          evidenceRequired: item.evidenceRequired,
-          testType: item.testType,
-          notes: item.notes
-        }))
-      }
-    },
-    include: {
-      checklistItems: true
-    }
-  })
-
-  // Print summary with hold/witness/standard counts
-  const hp = template.checklistItems.filter(i => i.pointType === 'hold_point').length
-  const wp = template.checklistItems.filter(i => i.pointType === 'witness').length
-  const sp = template.checklistItems.filter(i => i.pointType === 'standard').length
-  console.log(`  ✅ Created: ${template.name} (${template.checklistItems.length} items: ${hp}H/${wp}W/${sp}S)`)
-
-  return template
+  // Wave G G2 §2.2: one shared write path for the whole library, so
+  // provenance and --supersede land in every seeder at once.
+  return seedGlobalTemplate(prisma, templateData)
 }
 
 // =============================================================================

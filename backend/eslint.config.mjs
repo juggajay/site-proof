@@ -39,6 +39,8 @@ export default tseslint.config(
       'scripts/check-migration-drift.mjs',
       'scripts/seed-e2e.mjs',
       'scripts/seeds/itp-templates/index.mjs',
+      'scripts/seeds/itp-templates/provenance.mjs',
+      'scripts/seeds/itp-templates/seed-writer.mjs',
       'scripts/smoke-production.mjs',
       'scripts/bench-pdf-folio.mjs',
       'scripts/bench-zip-spike.mjs',

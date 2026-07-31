@@ -10,6 +10,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { withItpTemplateSeedLock } from './seed-lock.mjs';
+import { seedGlobalTemplate } from './seed-writer.mjs';
 
 const prisma = new PrismaClient()
 
@@ -381,67 +382,11 @@ const nswEarthworksTemplate = {
 // =============================================================================
 
 async function seedNSWTemplates() {
-  console.log('🌱 Seeding NSW (TfNSW) ITP Templates...\n')
+  console.log('🌱 Seeding NSW (TfNSW) ITP Templates...')
 
-  // Check if template already exists
-  const existing = await prisma.iTPTemplate.findFirst({
-    where: {
-      name: nswEarthworksTemplate.name,
-      stateSpec: 'TfNSW',
-      projectId: null
-    }
-  })
-
-  if (existing) {
-    console.log(`⚠️  Template "${nswEarthworksTemplate.name}" already exists (ID: ${existing.id})`)
-    console.log('   Skipping to avoid duplicates. Delete existing template first if you want to re-seed.')
-    return existing
-  }
-
-  // Create the template with checklist items
-  const template = await prisma.iTPTemplate.create({
-    data: {
-      projectId: null, // Global template
-      name: nswEarthworksTemplate.name,
-      description: nswEarthworksTemplate.description,
-      activityType: nswEarthworksTemplate.activityType,
-      specificationReference: nswEarthworksTemplate.specificationReference,
-      stateSpec: nswEarthworksTemplate.stateSpec,
-      isActive: true,
-      checklistItems: {
-        create: nswEarthworksTemplate.checklistItems.map((item, index) => ({
-          sequenceNumber: index + 1,
-          description: item.description,
-          acceptanceCriteria: item.acceptanceCriteria,
-          pointType: item.pointType,
-          responsibleParty: item.responsibleParty,
-          evidenceRequired: item.evidenceRequired,
-          testType: item.testType,
-          notes: item.notes
-        }))
-      }
-    },
-    include: {
-      checklistItems: true
-    }
-  })
-
-  // Summary
-  const holdPoints = template.checklistItems.filter(i => i.pointType === 'hold_point')
-  const witnessPoints = template.checklistItems.filter(i => i.pointType === 'witness')
-  const standardItems = template.checklistItems.filter(i => i.pointType === 'standard')
-
-  console.log(`✅ Created: ${template.name}`)
-  console.log(`   ID: ${template.id}`)
-  console.log(`   Spec: ${template.specificationReference}`)
-  console.log(`   State: ${template.stateSpec}`)
-  console.log(`   Total Items: ${template.checklistItems.length}`)
-  console.log(`   - Hold Points (H): ${holdPoints.length}`)
-  console.log(`   - Witness Points (W): ${witnessPoints.length}`)
-  console.log(`   - Standard Items: ${standardItems.length}`)
-  console.log('')
-
-  return template
+  // Wave G G2 §2.2: one shared write path for the whole library, so
+  // provenance and --supersede land in every seeder at once.
+  return seedGlobalTemplate(prisma, nswEarthworksTemplate)
 }
 
 // =============================================================================

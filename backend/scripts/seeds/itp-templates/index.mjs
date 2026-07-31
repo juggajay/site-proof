@@ -61,6 +61,7 @@ function parseArgs(argv) {
   const options = {
     execute: false,
     list: false,
+    supersede: false,
     states: null,
     activities: null,
     scripts: null,
@@ -71,6 +72,8 @@ function parseArgs(argv) {
       options.execute = true;
     } else if (arg === '--list') {
       options.list = true;
+    } else if (arg === '--supersede') {
+      options.supersede = true;
     } else if (arg.startsWith('--state=')) {
       options.states = parseCsv(arg.slice('--state='.length));
     } else if (arg.startsWith('--activity=')) {
@@ -103,6 +106,12 @@ function printHelp() {
 Options:
   --list                    List selected seeders and exit.
   --execute                 Run selected seeders. Without this flag, this is a dry run.
+  --supersede               Push a spec revision INTO the library: where a seeder's
+                            provenance names a different spec edition than the row
+                            already in the database, create the new edition as a NEW
+                            template and mark the old one superseded. Existing project
+                            ITP instances keep their snapshots untouched. Operator-only
+                            — there is no API route for this. Requires --execute.
   --state=<csv>             Filter by state: austroads, nsw, qld, sa, vic, wa, national.
   --activity=<csv>          Filter by activity: baseline, earthworks, asphalt, seals, surfacing,
                             drainage, environmental, pavements, conduits, road-furniture, structures,
@@ -124,11 +133,11 @@ function printSelection(selected) {
   }
 }
 
-function runSeeder(seeder) {
+function runSeeder(seeder, childEnv) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(process.execPath, [resolve(scriptDir, seeder.file)], {
       cwd: backendRoot,
-      env: process.env,
+      env: childEnv,
       stdio: 'inherit',
     });
 
@@ -144,7 +153,7 @@ function runSeeder(seeder) {
   });
 }
 
-async function execute(selected) {
+async function execute(selected, options) {
   const dotenv = await import('dotenv');
   dotenv.config({ path: resolve(backendRoot, '.env') });
 
@@ -152,9 +161,26 @@ async function execute(selected) {
     throw new Error('DATABASE_URL is required to execute ITP template seeders.');
   }
 
+  // Wave G G2 §2.2(f): the seeders are spawned as separate processes, so the
+  // supersede mode and the run label reach them through the environment. A
+  // seeder invoked directly (`node seed-itp-templates-x.js`) sees neither and
+  // keeps its create-once behaviour.
+  const runLabel = `itp-seed-${new Date().toISOString()}`;
+  const childEnv = options.supersede
+    ? { ...process.env, ITP_SEED_SUPERSEDE: '1', ITP_SEED_RUN_LABEL: runLabel }
+    : process.env;
+
+  if (options.supersede) {
+    console.log(`\nSupersede mode. Run label: ${runLabel}`);
+    console.log(
+      'A template whose seeder names a NEW spec edition will be re-created and the old row retired.',
+    );
+    console.log('Existing project ITP instances keep their snapshots — nothing is rewritten.');
+  }
+
   for (const seeder of selected) {
     console.log(`\n=== Running ${seeder.file} ===`);
-    await runSeeder(seeder);
+    await runSeeder(seeder, childEnv);
   }
 
   console.log(`\nCompleted ${selected.length} ITP template seeder(s).`);
@@ -175,11 +201,14 @@ async function main() {
   }
 
   if (!options.execute) {
+    if (options.supersede) {
+      console.log('\n--supersede requires --execute. Nothing was written.');
+    }
     console.log('\nDry run only. Add --execute to write global ITP templates to the configured database.');
     return;
   }
 
-  await execute(selected);
+  await execute(selected, options);
 }
 
 main().catch((error) => {
