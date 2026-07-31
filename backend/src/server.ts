@@ -13,6 +13,7 @@ import {
   lotDeliveriesRouter,
   projectDeliveriesRouter,
 } from './routes/deliveries/index.js';
+import { lotSurveysRouter, projectSurveysRouter, surveysRouter } from './routes/surveys/index.js';
 import { foliosRouter } from './routes/folio/index.js';
 import {
   handoverExportsRouter,
@@ -157,11 +158,16 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   // anyway, per the house rule that specific paths precede `/:id`.
   app.use('/api/projects', projectDeliveriesRouter);
   app.use('/api/lots', lotDeliveriesRouter);
+  // Wave C5.2 — survey records. Every route is fail-closed behind
+  // C5_SURVEY_RECORDS_ENABLED: with the flag absent, nothing here is reachable.
+  app.use('/api/projects', projectSurveysRouter);
+  app.use('/api/lots', lotSurveysRouter);
   app.use('/api/lots', lotsRouter);
   // §4.4a — the evidence-mutation route. Deliberately NOT nested under
   // `/api/diary/:diaryId/...`: the caller is a quality manager at handover who
   // has a lot and a delivery, not a diary id.
   app.use('/api/deliveries', deliveriesRouter);
+  app.use('/api/surveys', surveysRouter);
   // Wave D `D1b` — folio issue and download. Mounts no multer and accepts no
   // bytes on any route (`[DH-i]`, AT-143).
   app.use('/api/folios', foliosRouter);

@@ -89,6 +89,26 @@ const EVIDENCE_LINK_GUARDS: EvidenceLinkGuard[] = [
     deleteBlockedMessage: 'Delivery docket documents must be removed from the delivery.',
     metadataLockedMessage: 'Delivery docket documents cannot be modified.',
   },
+  {
+    // Wave C5.2 §4.3 `[C5R-B3]`. `survey_records.report_document_id` is
+    // `onDelete: Restrict`; this turns the FK violation into a 409 with
+    // guidance instead of a bare 422 INVALID_REFERENCE.
+    evidenceType: 'survey_report',
+    async findLink(prisma, documentId) {
+      const link = await prisma.surveyRecord.findFirst({
+        where: { reportDocumentId: documentId },
+        select: { status: true },
+      });
+      if (!link) {
+        return null;
+      }
+      // An accepted survey is closed: renaming or re-categorising the report
+      // behind it would change evidence the acceptance was made against.
+      return { metadataLocked: link.status === 'accepted' };
+    },
+    deleteBlockedMessage: 'Survey report documents must be removed from the survey record.',
+    metadataLockedMessage: 'A survey report cannot be modified once the survey has been accepted.',
+  },
 ];
 
 /**

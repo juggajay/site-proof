@@ -218,6 +218,13 @@ export const AuditAction = {
   // carrying the diary's status and lock state so a reader can see the edit
   // landed after submission.
   DELIVERY_EVIDENCE_UPDATED: 'delivery_evidence_updated',
+  // Wave C5.2. A survey record names a real, identifiable professional and
+  // states a verdict attributed to them — a wrong entry is a defamation-shaped
+  // risk, not just a data-quality one — so every write is audited.
+  SURVEY_RECORD_CREATED: 'survey_record_created',
+  SURVEY_RECORD_UPDATED: 'survey_record_updated',
+  SURVEY_RECORD_STATUS_CHANGED: 'survey_record_status_changed',
+  SURVEY_RECORD_SUPERSEDED: 'survey_record_superseded',
   // ITP
   ITP_ITEM_COMPLETED: 'itp_item_completed',
   ITP_ITEM_UPDATED: 'itp_item_updated',

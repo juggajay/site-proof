@@ -12,6 +12,10 @@ const mockPrisma = vi.hoisted(() => ({
   diaryDelivery: {
     findFirst: vi.fn(),
   },
+  // Wave C5.2: `survey_report` is the fourth entry.
+  surveyRecord: {
+    findFirst: vi.fn(),
+  },
   iTPCompletionAttachment: {
     findFirst: vi.fn(),
   },
@@ -119,6 +123,7 @@ describe('document access', () => {
     mockPrisma.nCREvidence.findFirst.mockResolvedValue(null);
     mockPrisma.variationEvidence.findFirst.mockResolvedValue(null);
     mockPrisma.diaryDelivery.findFirst.mockResolvedValue(null);
+    mockPrisma.surveyRecord.findFirst.mockResolvedValue(null);
     mockPrisma.iTPCompletionAttachment.findFirst.mockResolvedValue(null);
     ncrAccessMocks.canReadNcr.mockResolvedValue(false);
   });

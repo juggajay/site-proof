@@ -79,6 +79,11 @@ function buildApp(
     diaryDelivery: {
       findFirst: vi.fn(async () => null),
     },
+    // Wave C5.2: `survey_report` is the fourth entry. The linked cases have
+    // their own DB-backed suite (surveys/surveyRecord.db.test.ts, AT-187).
+    surveyRecord: {
+      findFirst: vi.fn(async () => null),
+    },
     // Wave B: deleting a document also checks it is not the source of a live or
     // applied import. No batch here — the import-source guard has its own suite
     // (documents/importSourceHygiene.test.ts).

@@ -57,6 +57,12 @@ const RETAINED_PROJECT_RELATIONS = [
   'testResults',
   'lotSubcontractorAssignments',
   'scheduledReports',
+  // Wave C5.2 `[C5R-A7]`, AT-188. This array is the AUTHORITY — the `_count`
+  // select alone is inert, because both the total and the reported breakdown
+  // iterate this list. A project-scoped table missing from here is either
+  // invisible to the guard (the project is classed empty and its evidence
+  // destroyed) or blows up on the FK.
+  'surveyRecords',
   'auditLogs',
   'comments',
 ] as const;
@@ -700,6 +706,12 @@ export function createProjectWriteRouter({
                 testResults: true,
                 lotSubcontractorAssignments: true,
                 scheduledReports: true,
+                // Wave C5.2 `[C5R-A7]`, AT-188. A project-scoped table that is
+                // not enumerated here is either invisible to the guard (the
+                // project is classed empty and its survey evidence destroyed)
+                // or blows up on the FK. Deliveries need no entry — they are
+                // covered transitively through `dailyDiaries`.
+                surveyRecords: true,
               },
             },
           },
