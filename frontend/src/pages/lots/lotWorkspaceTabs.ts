@@ -12,7 +12,7 @@
  * URL shape: `?tab=<workspace>[&view=<subview>]`. Pre-DG-4a links are still
  * live in sent emails and in stored notification rows — mention notifications
  * emitted `?tab=comments&commentId=…` (`backend/src/routes/notifications/
- * mentions.ts`) and the hold-point dashboard alert emits `?tab=holdpoints`
+ * mentions.ts`) and the hold-point dashboard alert emitted `?tab=holdpoints`
  * (`backend/src/routes/dashboard/operationalRoutes.ts`) — so those values
  * resolve here and `useLotReadinessNavigation` rewrites the URL to canonical
  * form with replace:true, preserving every other param. Anything unrecognised
