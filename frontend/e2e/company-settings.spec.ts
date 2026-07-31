@@ -758,7 +758,7 @@ test.describe('Company settings seeded owner contract', () => {
     await expect(page.getByText('Logo rejected by server')).toBeVisible();
   });
 
-  test('renders unlimited plan billing without falling back to free/basic labels', async ({
+  test('renders unlimited plan limits without falling back to free/basic labels', async ({
     page,
   }) => {
     await mockCompanySettingsApi(page, {
@@ -773,9 +773,18 @@ test.describe('Company settings seeded owner contract', () => {
 
     const billingSection = page.getByTestId('billing-section');
     await expect(billingSection).toContainText('unlimited');
-    await expect(billingSection).toContainText('Custom pricing');
+    // Project and user limits come from the company record, so a null limit
+    // must read "Unlimited" rather than the basic 3/5 fallbacks.
     await expect(billingSection).toContainText('Unlimited');
+    // PLAN_BILLING_LABEL, asserted as a literal: importing the constant would
+    // pull src/lib/config.ts and its import.meta.env read into Playwright's
+    // Node context, where import.meta.env does not exist.
+    await expect(billingSection).toContainText('No published price yet');
     await expect(billingSection.getByText('Free', { exact: true })).toHaveCount(0);
+    // Per-tier price and storage-quota labels are gone: no billing path, no
+    // quota enforcement, no storage metering behind either of them.
+    await expect(billingSection.getByText(/\$\s?\d/)).toHaveCount(0);
+    await expect(billingSection.getByText('Storage', { exact: true })).toHaveCount(0);
     await expect(billingSection.getByText('1 GB', { exact: true })).toHaveCount(0);
   });
 

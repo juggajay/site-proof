@@ -3,6 +3,12 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { getPhotoLocationLinks } from '../src/pages/lots/components/photoLocationLinks';
 import { formatDateKey, getCalendarDaysSince } from '../src/lib/localDate';
+import {
+  compareClaims,
+  computeSeederCounts,
+  countInSource,
+  format,
+} from '../../backend/scripts/verify-marketing-claims.mjs';
 
 async function collectSourceFiles(dir: URL): Promise<URL[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -2969,6 +2975,99 @@ test.describe('production readiness guardrails', () => {
           }
         }
       });
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('landing page template claims match the shipped ITP seeder library', async () => {
+    // AT-G32. The public numbers are hand-maintained copy on a marketing page,
+    // and they had drifted by roughly a quarter (116/3,070/813 claimed against
+    // 152/3,501/939 shipped) with nothing able to notice. Every figure on the
+    // page now has to be recomputed from the seeders that produce it.
+    const { ok, problems } = compareClaims();
+    expect(problems, 'run `npm run verify:claims` from backend/ for the table').toEqual([]);
+    expect(ok).toBe(true);
+
+    // Independent of the script's own comparison: the totals it computes are
+    // the literal strings a visitor reads.
+    const landingSource = await readFile(
+      new URL('../src/pages/LandingPage.tsx', import.meta.url),
+      'utf8',
+    );
+    const { total } = computeSeederCounts();
+    expect(landingSource).toContain(
+      `${format(total.templates)} ITP templates · ${format(total.checklistPoints)} checklist points`,
+    );
+    expect(landingSource).toContain(
+      `${format(total.templates)} templates · ${format(total.checklistPoints)} checklist points · ${format(total.holdPoints)} hold points`,
+    );
+  });
+
+  test('the marketing-claims verifier cannot import or execute a seeder', async () => {
+    // AT-G39. Every seeder is an executable script with top-level side effects
+    // and no entry guard: importing one writes global ITP templates to whatever
+    // DATABASE_URL is loaded, which for an agent running this locally is
+    // production. The safe implementation and the dangerous one are three
+    // characters apart, so the fence is asserted rather than assumed.
+    const verifierSource = await readFile(
+      new URL('../../backend/scripts/verify-marketing-claims.mjs', import.meta.url),
+      'utf8',
+    );
+
+    expect(verifierSource).not.toMatch(/\b(?:import|require)\s*\(\s*['"`][^'"`]*seeds\//);
+    expect(verifierSource).not.toMatch(/\bfrom\s+['"][^'"]*seeds\//);
+    expect(verifierSource).not.toContain('@prisma' + '/client');
+    expect(verifierSource).not.toMatch(/child_process|execSync|spawn/);
+    expect(verifierSource).toContain('readFileSync');
+
+    // The mapper line that makes a naive count wrong: 39 of the 40 seeders
+    // carry one, and counting it published a checklist-point total 39 too high
+    // — stably, which is the failure mode hardest to notice.
+    const fixture = [
+      'const template = {',
+      "  activityType: 'earthworks',",
+      '  checklistItems: [',
+      '    {',
+      "      pointType: 'hold_point',",
+      '    },',
+      '  ].map((item) => ({',
+      '    pointType: item.pointType,',
+      '  })),',
+      '};',
+    ].join('\n');
+
+    expect(countInSource(fixture)).toEqual({
+      templates: 1,
+      checklistPoints: 1,
+      holdPoints: 1,
+    });
+  });
+
+  test('no price or storage quota renders while tier enforcement is off', async () => {
+    // AT-G35. Company Settings shipped a per-month price and a gigabyte quota
+    // for the `professional` tier with no billing path, no quota enforcement
+    // and no storage metering behind either.
+    const tierLimitsSource = await readFile(
+      new URL('../../backend/src/lib/tierLimits.ts', import.meta.url),
+      'utf8',
+    );
+    expect(
+      tierLimitsSource,
+      'tier enforcement was switched on — revisit the price and quota copy this guard removed',
+    ).toContain('export const TIER_QUOTA_ENFORCEMENT_ENABLED: boolean = false;');
+
+    const priceLiteral =
+      /\$\s?\d[\d,.]*\s*(?:\/|\s+per\s+)\s*(?:month|mo|year|yr|annum|user|seat)\b/i;
+    const quotaLiteral = /\breturn\s+'\d+\s?(?:GB|TB|MB)'/i;
+    const offenders: string[] = [];
+
+    for (const file of await collectSourceFiles(new URL('../src/', import.meta.url))) {
+      if (/\.(?:test|spec)\.[cm]?[tj]sx?$/.test(file.pathname)) continue;
+
+      const source = await readFile(file, 'utf8');
+      if (priceLiteral.test(source)) offenders.push(`${file.pathname} (price)`);
+      if (quotaLiteral.test(source)) offenders.push(`${file.pathname} (storage quota)`);
     }
 
     expect(offenders).toEqual([]);

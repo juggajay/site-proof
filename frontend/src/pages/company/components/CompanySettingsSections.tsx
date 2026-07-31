@@ -7,8 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { supportMailtoHref } from '@/lib/contactLinks';
 import {
   formatLimit,
-  getPlanBillingLabel,
-  getPlanStorageLabel,
+  PLAN_BILLING_LABEL,
   type Company,
   type CompanyFormData,
 } from '../companySettingsData';
@@ -248,9 +247,7 @@ export function CompanyBillingSection({ company, supportEmail }: CompanyBillingS
           <p className="text-2xl font-bold capitalize mt-1">
             {company?.subscriptionTier || 'Basic'}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {getPlanBillingLabel(company?.subscriptionTier)}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{PLAN_BILLING_LABEL}</p>
         </div>
 
         <div className="p-4 rounded-lg bg-muted/50 border">
@@ -275,10 +272,6 @@ export function CompanyBillingSection({ company, supportEmail }: CompanyBillingS
               <span>
                 {company?.userCount || 0} / {formatLimit(company?.userLimit, 5)}
               </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Storage</span>
-              <span>{getPlanStorageLabel(company?.subscriptionTier)}</span>
             </div>
           </div>
         </div>
