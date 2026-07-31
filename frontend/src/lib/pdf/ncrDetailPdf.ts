@@ -1,4 +1,5 @@
 import { devLog } from '../logger';
+import { formatDeliveryLabel } from '../linkedDelivery';
 import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { formatStatusLabel } from '../statusLabels';
 import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
@@ -198,6 +199,9 @@ export async function generateNCRDetailPDF(
   );
   if (data.ncr.linkedTestResult) {
     addField('Linked Failed Test', formatLinkedTestReference(data.ncr.linkedTestResult));
+  }
+  if (data.ncr.linkedDelivery) {
+    addField('Linked Delivery', formatDeliveryLabel(data.ncr.linkedDelivery));
   }
 
   yPos += 5;

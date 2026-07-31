@@ -18,6 +18,7 @@ import {
 import { buildNcrListResponse } from './ncrCoreResponses.js';
 import {
   getOptionalQueryString,
+  NCR_LINKED_DELIVERY_SELECT,
   parseNcrSeverityFilter,
   parseNcrSortBy,
   parseNcrStatusFilter,
@@ -303,6 +304,7 @@ ncrListRouter.get(
               status: true,
             },
           },
+          linkedDelivery: { select: NCR_LINKED_DELIVERY_SELECT },
           ncrLots: {
             include: {
               lot: { select: { lotNumber: true, description: true } },

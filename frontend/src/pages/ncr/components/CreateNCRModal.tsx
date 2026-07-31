@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { logError } from '@/lib/logger';
 import { Check } from 'lucide-react';
 import { useResponsiblePartyOptions } from '../hooks/useResponsiblePartyOptions';
+import { formatDeliveryLabel, type LinkedDeliverySummary } from '@/lib/linkedDelivery';
 import { ResponsiblePartyPicker, type ResponsibleParty } from './ResponsiblePartyPicker';
 
 const createNCRSchema = z.object({
@@ -27,6 +28,8 @@ const createNCRSchema = z.object({
   severity: z.string().trim().min(1, 'Severity is required'),
   specificationReference: z.string().trim().optional().default(''),
   dueDate: z.string().trim().optional().default(''),
+  // C5.4a — optional. Which delivery supplied the material this NCR is about.
+  linkedDeliveryId: z.string().trim().optional().default(''),
 });
 
 type CreateNCRFormData = z.infer<typeof createNCRSchema>;
@@ -37,6 +40,7 @@ const DEFAULT_CREATE_NCR_VALUES: CreateNCRFormData = {
   severity: 'minor',
   specificationReference: '',
   dueDate: '',
+  linkedDeliveryId: '',
 };
 
 interface CreateNCRModalProps {
@@ -51,6 +55,7 @@ interface CreateNCRModalProps {
     dueDate?: string;
     responsibleUserId?: string;
     responsibleSubcontractorId?: string;
+    linkedDeliveryId?: string;
   }) => void;
   loading: boolean;
   projectId?: string;
@@ -76,6 +81,9 @@ function CreateNCRModalInner({
   const [responsibleParty, setResponsibleParty] = useState<ResponsibleParty>({
     type: 'unassigned',
   });
+  // C5.4a. Best-effort: the picker is optional, so a failed lookup hides the
+  // field rather than blocking the NCR.
+  const [deliveries, setDeliveries] = useState<LinkedDeliverySummary[]>([]);
   const token = getAuthToken();
 
   const {
@@ -112,6 +120,29 @@ function CreateNCRModalInner({
     }
 
     let cancelled = false;
+
+    // C5.4a. Bounded by the route (DELIVERY_REGISTER_MAX_LIMIT); the newest
+    // deliveries are the ones an NCR is being raised about.
+    const fetchDeliveries = async () => {
+      if (!projectId) {
+        return;
+      }
+      try {
+        const data = await apiFetch<{ deliveries: LinkedDeliverySummary[] }>(
+          `/api/projects/${encodeURIComponent(projectId)}/deliveries?limit=100`,
+        );
+        if (!cancelled) {
+          setDeliveries(data.deliveries || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          logError('Failed to fetch deliveries:', err);
+          setDeliveries([]);
+        }
+      }
+    };
+    fetchDeliveries();
+
     const fetchLots = async () => {
       setLotsLoading(true);
       if (!projectId) {
@@ -174,6 +205,7 @@ function CreateNCRModalInner({
       responsibleUserId: responsibleParty.type === 'user' ? responsibleParty.userId : undefined,
       responsibleSubcontractorId:
         responsibleParty.type === 'subcontractor' ? responsibleParty.subcontractorId : undefined,
+      linkedDeliveryId: data.linkedDeliveryId?.trim() || undefined,
     });
   };
 
@@ -339,6 +371,26 @@ function CreateNCRModalInner({
               placeholder="e.g., MRTS05, Q6-2021"
             />
           </div>
+          {deliveries.length > 0 && (
+            <div>
+              <Label htmlFor="ncr-linked-delivery">Linked Delivery</Label>
+              <NativeSelect
+                id="ncr-linked-delivery"
+                {...register('linkedDeliveryId')}
+                className="mt-1"
+              >
+                <option value="">Not about a specific delivery</option>
+                {deliveries.map((delivery) => (
+                  <option key={delivery.id} value={delivery.id}>
+                    {formatDeliveryLabel(delivery)}
+                  </option>
+                ))}
+              </NativeSelect>
+              <p className="text-sm text-muted-foreground mt-1">
+                Which delivery supplied the material this NCR is about.
+              </p>
+            </div>
+          )}
           <div>
             <Label htmlFor="ncr-due-date">Due Date</Label>
             <Input

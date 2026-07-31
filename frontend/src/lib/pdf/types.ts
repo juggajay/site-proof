@@ -592,6 +592,14 @@ export interface NCRDetailData extends PDFBrandableData {
       testRequestNumber: string | null;
       laboratoryReportNumber?: string | null;
     } | null;
+    // C5.4a: the delivery that supplied the material this NCR is about.
+    linkedDelivery?: {
+      id: string;
+      description: string;
+      supplier: string | null;
+      docketNumber: string | null;
+      diary: { id: string; date: string };
+    } | null;
     dueDate?: string | null;
     closedAt?: string | null;
     closedBy?: { fullName: string; email: string } | null;
