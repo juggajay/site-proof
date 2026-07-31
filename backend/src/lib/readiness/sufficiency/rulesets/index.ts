@@ -32,8 +32,9 @@ import { VICROADS_204_V2 } from './vicroads-204.v2.js';
  * §6.5 kept it for one stated job: C1.2 (#1594) writes `rules[].ruleId` into the
  * immutable `RequirementEvaluation` table, so `vicroads-204.v1/compaction-density`
  * had to keep resolving to the definition it was decided under. The review
- * verified that job is not being done and cannot be: `RequirementEvaluation` has
- * ZERO rows (`READINESS_SNAPSHOTS_ENABLED` is off), and nothing anywhere resolves
+ * verified that job is not being done and cannot be: `RequirementEvaluation` had
+ * ZERO rows at review time (`READINESS_SNAPSHOTS_ENABLED` was still off; it has
+ * been ON in prod since 2026-07-26), and nothing anywhere resolves
  * a `ruleId` back to a pack — the only two readers of this array are
  * `effectiveRulesets` and `resolveRuleset`, and BOTH filter the effective window,
  * which `.v1`'s `effectiveTo: '2026-07-27'` has been outside since that date. No
