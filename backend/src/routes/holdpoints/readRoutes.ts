@@ -45,6 +45,7 @@ import {
 } from './workingHoursResponses.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 import { resolveHoldPointEvidenceInputs } from './evidencePackageInputs.js';
+import { loadHoldPointEvidenceSurveys } from './surveyEvidence.js';
 import {
   getHoldPointChecklistItemsForInstance,
   resolveHoldPointChecklistItemForInstance,
@@ -370,6 +371,7 @@ holdPointReadRouter.get(
       checklistItems,
       completions: itpInstance.completions,
       holdPointSequenceNumber: holdPointItem.sequenceNumber,
+      surveys: await loadHoldPointEvidenceSurveys(lot.id),
     });
 
     res.json(buildHoldPointEvidencePackageResponse(evidencePackage));
@@ -544,6 +546,7 @@ holdPointReadRouter.post(
       checklistItems,
       completions: itpInstance.completions,
       holdPointSequenceNumber: holdPointItem.sequenceNumber,
+      surveys: await loadHoldPointEvidenceSurveys(lot.id),
       extraFields: { isPreview: true },
     });
 

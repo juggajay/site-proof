@@ -317,6 +317,32 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     caption: string | null;
     uploadedAt: string | null;
   }[];
+  /**
+   * Wave `C5.3` — survey records held for the lot, present only when the
+   * tenant has `C5_SURVEY_RECORDS_ENABLED` (`[C5S-B4]`, fail-closed at the
+   * backend), so OPTIONAL rather than defaulted to `[]` on the way in.
+   *
+   * `[C5S-B1]`: `surveyorVerdict` is the SURVEYOR'S, transcribed from their
+   * report — never CIVOS's finding. Render it with `verdictAttribution`, which
+   * the server composes for exactly that reason. There is deliberately no
+   * document id here: the survey report is not part of the public download
+   * allow-list.
+   */
+  surveys?: {
+    id: string;
+    kind: string;
+    status: string;
+    surveyorName: string | null;
+    surveyorCompany: string | null;
+    surveyorRegistration: string | null;
+    surveyedAt: string | null;
+    surveyorVerdict: string | null;
+    verdictSourceNote: string | null;
+    reportFilename: string | null;
+    isAccepted: boolean;
+    acceptedAt: string | null;
+    verdictAttribution: string;
+  }[];
   summary: {
     totalChecklistItems: number;
     completedItems: number;
@@ -325,6 +351,10 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     passingTests: number;
     totalPhotos: number;
     totalAttachments: number;
+    /** Wave `C5.3`. Optional for the same reason `surveys` is. */
+    totalSurveys?: number;
+    /** Records a named CIVOS user ACCEPTED — not a count of conforming surveys. */
+    acceptedSurveys?: number;
   };
   generatedAt: string;
 }

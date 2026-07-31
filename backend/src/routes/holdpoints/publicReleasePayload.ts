@@ -5,6 +5,7 @@ import { AppError } from '../../lib/AppError.js';
 import { holdPointReleaseTokenLookup } from './tokens.js';
 import { resolveHoldPointEvidenceInputs } from './evidencePackageInputs.js';
 import { buildHoldPointEvidencePackage } from './evidencePackage.js';
+import { loadHoldPointEvidenceSurveys } from './surveyEvidence.js';
 
 // =============================================================================
 // Shared public hold-point release read helpers. Extracted verbatim from
@@ -146,6 +147,11 @@ export async function buildPublicHoldPointReleasePayload(
     checklistItems,
     completions: itpInstance.completions,
     holdPointSequenceNumber: holdPointItem.sequenceNumber,
+    // Wave `C5.3`. Lot-scoped, so a batch link reaching this hold point returns
+    // this lot's surveys and no other's — the same scoping the rest of the
+    // package already has. Carries no fileUrl and no document id, so the public
+    // download allow-list below is unchanged.
+    surveys: await loadHoldPointEvidenceSurveys(lot.id),
   });
 
   return {

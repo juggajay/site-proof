@@ -11,10 +11,12 @@ import {
   mapHoldPointEvidenceLot,
   mapHoldPointEvidencePhotos,
   mapHoldPointEvidenceProject,
+  mapHoldPointEvidenceSurveys,
   mapHoldPointEvidenceTestResults,
   type EvidenceChecklistItemInput,
   type EvidenceCompletionInput,
   type EvidenceDocumentInput,
+  type EvidenceSurveyInput,
   type EvidenceTestResultInput,
 } from './evidencePackage.js';
 
@@ -34,6 +36,8 @@ const COMPLETED_AT = new Date('2026-03-01T02:00:00.000Z');
 const VERIFIED_AT = new Date('2026-03-02T02:00:00.000Z');
 const CREATED_AT = new Date('2026-03-03T02:00:00.000Z');
 const UPLOADED_AT = new Date('2026-03-04T02:00:00.000Z');
+const SURVEYED_AT = new Date('2026-03-05T02:00:00.000Z');
+const ACCEPTED_AT = new Date('2026-03-06T02:00:00.000Z');
 
 const items: EvidenceChecklistItemInput[] = [
   {
@@ -560,6 +564,8 @@ describe('buildHoldPointEvidenceSummary', () => {
       typeof buildHoldPointEvidenceSummary
     >[2];
 
+    // Wave `C5.3` added two counts, and the surveys argument is optional: a
+    // caller that passes none still reports zero rather than omitting the key.
     expect(buildHoldPointEvidenceSummary(checklist, testResults, photos)).toEqual({
       totalChecklistItems: 3,
       completedItems: 2,
@@ -568,7 +574,103 @@ describe('buildHoldPointEvidenceSummary', () => {
       passingTests: 2,
       totalPhotos: 2,
       totalAttachments: 3,
+      totalSurveys: 0,
+      acceptedSurveys: 0,
     });
+  });
+
+  it('counts surveys and accepted surveys separately (Wave `C5.3`)', () => {
+    const checklist = [] as unknown as Parameters<typeof buildHoldPointEvidenceSummary>[0];
+    const testResults = [] as unknown as Parameters<typeof buildHoldPointEvidenceSummary>[1];
+    const photos = [] as unknown as Parameters<typeof buildHoldPointEvidenceSummary>[2];
+
+    const summary = buildHoldPointEvidenceSummary(
+      checklist,
+      testResults,
+      photos,
+      mapHoldPointEvidenceSurveys([
+        buildSurveyInput({ id: 's1', status: 'accepted', surveyorVerdict: 'conforms' }),
+        buildSurveyInput({ id: 's2', status: 'received', surveyorVerdict: 'not_stated' }),
+        buildSurveyInput({ id: 's3', status: 'rejected' }),
+      ]),
+    );
+
+    expect(summary.totalSurveys).toBe(3);
+    // `acceptedSurveys` counts records a named CIVOS user accepted. It is NOT a
+    // count of conforming surveys: `s2` carries a verdict and is not accepted,
+    // and no count anywhere reads `surveyorVerdict` (`[C5S-B1]`).
+    expect(summary.acceptedSurveys).toBe(1);
+  });
+});
+
+function buildSurveyInput(overrides: Partial<EvidenceSurveyInput> = {}): EvidenceSurveyInput {
+  return {
+    id: 'survey-1',
+    kind: 'conformance',
+    status: 'accepted',
+    surveyorName: 'J. Smith',
+    surveyorCompany: 'Smith Surveys Pty Ltd',
+    surveyorRegistration: 'RS-1234',
+    surveyedAt: SURVEYED_AT,
+    surveyorVerdict: 'conforms',
+    verdictSourceNote: 'report rev B',
+    acceptedAt: ACCEPTED_AT,
+    acceptedBy: { fullName: 'Quinn Manager' },
+    reportDocument: { filename: 'conformance-survey-rev-b.pdf' },
+    ...overrides,
+  };
+}
+
+describe('mapHoldPointEvidenceSurveys (Wave `C5.3`)', () => {
+  it('attributes the verdict to the surveyor and names who recorded it (`[C5S-B1]`)', () => {
+    const [mapped] = mapHoldPointEvidenceSurveys([buildSurveyInput()]);
+
+    expect(mapped).toEqual({
+      id: 'survey-1',
+      kind: 'conformance',
+      status: 'accepted',
+      surveyorName: 'J. Smith',
+      surveyorCompany: 'Smith Surveys Pty Ltd',
+      surveyorRegistration: 'RS-1234',
+      surveyedAt: SURVEYED_AT,
+      surveyorVerdict: 'conforms',
+      verdictSourceNote: 'report rev B',
+      reportFilename: 'conformance-survey-rev-b.pdf',
+      isAccepted: true,
+      acceptedAt: ACCEPTED_AT,
+      verdictAttribution: 'Verdict stated by J. Smith, recorded in CIVOS by Quinn Manager.',
+    });
+  });
+
+  it('emits no fileUrl and no document id — the public download allow-list is unchanged', () => {
+    // The package is served to unauthenticated token bearers, and
+    // `getPublicEvidenceDocumentIds` builds the allow-list from checklist
+    // attachments and photos. A document id here would widen it silently.
+    const [mapped] = mapHoldPointEvidenceSurveys([buildSurveyInput()]);
+    const keys = Object.keys(mapped!);
+
+    expect(keys).not.toContain('fileUrl');
+    expect(keys).not.toContain('reportDocumentId');
+    expect(keys).not.toContain('documentId');
+  });
+
+  it('still names the surveyor as the source when nobody has accepted the record yet', () => {
+    const [mapped] = mapHoldPointEvidenceSurveys([
+      buildSurveyInput({ status: 'received', acceptedAt: null, acceptedBy: null }),
+    ]);
+
+    expect(mapped!.isAccepted).toBe(false);
+    expect(mapped!.verdictAttribution).toBe('Verdict stated by J. Smith.');
+  });
+
+  it('falls back to "the surveyor" rather than dropping the attribution', () => {
+    const [mapped] = mapHoldPointEvidenceSurveys([
+      buildSurveyInput({ surveyorName: null, acceptedBy: null }),
+    ]);
+
+    // A bare verdict with no attribution is exactly what `[C5S-B1]` forbids —
+    // it reads as CIVOS's own finding. An unnamed surveyor is still a surveyor.
+    expect(mapped!.verdictAttribution).toBe('Verdict stated by the surveyor.');
   });
 });
 

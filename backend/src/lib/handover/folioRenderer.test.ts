@@ -1,6 +1,7 @@
 // Wave D `D1b` — the server-side folio renderer.
 // **AT-127** (byte determinism), **AT-136**, **AT-137**, **AT-153** (purity).
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,10 +9,23 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { buildFolioPayloadFixture } from './folioFixture.js';
-import { FOLIO_LEGAL_WORDING } from './folioPayload.js';
+import {
+  FOLIO_LEGAL_WORDING,
+  countEvidenceRows,
+  type FolioDeliveryPayload,
+  type FolioSnapshotPayload,
+  type FolioSurveyPayload,
+} from './folioPayload.js';
 import { renderFolioPdf } from './folioRenderer.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * The SHA-256 of the fixture folio, measured at `ba20a703` — the commit before
+ * Wave `C5.3` existed. See the characterization test at the bottom of this file
+ * for why it is written down rather than computed.
+ */
+const PRE_C5_FIXTURE_SHA256 = '27625e3df792b391c9e4507d33e6ae0e8232a1e163db683a90e2bbfaf3e8a557';
 
 /**
  * Pull the drawn strings out of an UNCOMPRESSED pdf, so **AT-137** is asserted
@@ -180,6 +194,181 @@ describe('folio renderer — the §4.3.2 content contract', () => {
   it('names an unresolvable test type rather than dropping it', async () => {
     const text = await renderText();
     expect(text).toContain('Bespoke widget torque');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave `C5.3` — surveys and deliveries in the folio
+// ---------------------------------------------------------------------------
+
+const SURVEY: FolioSurveyPayload = {
+  id: 'survey-1',
+  kind: 'conformance',
+  status: 'accepted',
+  surveyorName: 'J. Smith',
+  surveyorCompany: 'Smith Surveys Pty Ltd',
+  surveyorRegistration: 'Registered Surveyor 4471',
+  surveyedAt: '2026-07-19T00:00:00.000Z',
+  surveyorVerdict: 'conforms',
+  verdict: 'Conforms',
+  verdictSourceNote: 'report rev B',
+  reportFilename: 'conformance-survey-rev-b.pdf',
+  recordedByName: 'Quinn Manager',
+  recordedAt: '2026-07-20T00:00:00.000Z',
+};
+
+const DELIVERY: FolioDeliveryPayload = {
+  id: 'delivery-1',
+  deliveredOn: '2026-07-16T00:00:00.000Z',
+  description: 'N32 concrete',
+  supplier: 'Boral Concrete',
+  docketNumber: 'DK-99812',
+  batchRef: 'BATCH-7741',
+  quantity: '12.5',
+  unit: 'm3',
+  docketFilename: 'docket-99812.pdf',
+};
+
+function withC5Rows(
+  overrides: {
+    surveys?: readonly FolioSurveyPayload[];
+    deliveries?: readonly FolioDeliveryPayload[];
+  } = {},
+): FolioSnapshotPayload {
+  const evidence = {
+    ...buildFolioPayloadFixture().evidence,
+    surveys: overrides.surveys ?? [SURVEY],
+    deliveries: overrides.deliveries ?? [DELIVERY],
+  };
+  // `evidenceRowCount` must be overridden alongside `evidence`: the fixture
+  // computes it from its own collections, and the spread would otherwise leave
+  // a payload whose printed row count disagrees with its own rows.
+  return buildFolioPayloadFixture({ evidence, evidenceRowCount: countEvidenceRows(evidence) });
+}
+
+async function renderC5Text(payload = withC5Rows()): Promise<string> {
+  return extractPdfText(await renderFolioPdf(payload, { compress: false }));
+}
+
+describe('folio renderer — the survey section attributes, it does not assert (**AT-181**)', () => {
+  it("labels the verdict as the SURVEYOR'S and names who recorded it in CIVOS", async () => {
+    const text = await renderC5Text();
+
+    expect(text).toContain("Surveyor's verdict");
+    expect(text).toContain('J. Smith');
+    expect(text).toContain('Conforms');
+    // The pairing is the point: whose finding, and who typed it in. A verdict
+    // rendered without the second half reads as CIVOS's own (`[C5S-B1]`).
+    expect(text).toContain('Recorded in CIVOS by');
+    expect(text).toContain('Quinn Manager');
+    expect(text).toContain(
+      "Every verdict below is the surveyor's own, transcribed from their report",
+    );
+    expect(text).toContain('it states no finding of its own about any survey');
+  });
+
+  it('`[C5S-B2]`: the survey copy never says CIVOS checks, validates, verifies or certifies', async () => {
+    // Asserted over the RENDERED TEXT of the survey section, not over this
+    // repo's source — a grep of the source asserts nothing about what a reader
+    // sees. The banned words are scoped to the section this wave added, because
+    // "verification" is legitimate ITP vocabulary elsewhere in the same folio.
+    const text = await renderC5Text();
+    const section = text.slice(
+      text.indexOf('Survey records held'),
+      text.indexOf('Material deliveries linked to this lot'),
+    );
+    expect(section.length).toBeGreaterThan(100);
+
+    for (const banned of [/validat/i, /verif/i, /certif/i, /\bcheck/i]) {
+      expect(section).not.toMatch(banned);
+    }
+  });
+
+  it('prints a delivery transcribed from the supplier paperwork, with the docket named', async () => {
+    const text = await renderC5Text();
+
+    expect(text).toContain('Material deliveries linked to this lot');
+    expect(text).toContain('N32 concrete');
+    expect(text).toContain('Boral Concrete');
+    expect(text).toContain('DK-99812');
+    expect(text).toContain('BATCH-7741');
+    expect(text).toContain('12.5 m3');
+    expect(text).toContain('docket-99812.pdf');
+  });
+
+  it('names an unfiled docket and an unnamed surveyor rather than hiding the row', async () => {
+    const text = await renderC5Text(
+      withC5Rows({
+        surveys: [
+          { ...SURVEY, surveyorName: null, surveyorCompany: null, surveyorRegistration: null },
+        ],
+        deliveries: [{ ...DELIVERY, docketFilename: null, supplier: null }],
+      }),
+    );
+
+    // `[DH-B1]`: the gap is stated, never omitted.
+    expect(text).toContain('not filed');
+    expect(text).toContain('not recorded');
+  });
+
+  it('makes no submission or certification claim in the new sections either (**AT-136**)', async () => {
+    const text = await renderC5Text();
+    for (const claim of [
+      /civos (submits|lodges|certifies|approves)/i,
+      /certified by civos/i,
+      /approved by civos/i,
+      /compliant with/i,
+    ]) {
+      expect(text).not.toMatch(claim);
+    }
+    for (const signatureish of ['Signature', 'Signed', 'Date signed', 'RPEQ No']) {
+      expect(text).not.toContain(signatureish);
+    }
+  });
+
+  it('counts the new rows in the footer, so the stated evidence-row count stays true', async () => {
+    const payload = withC5Rows();
+    const base = buildFolioPayloadFixture();
+    // `countEvidenceRows` drives a REFUSAL upstream, so a collection that is
+    // printed but not counted is a folio that quietly exceeds its own bound.
+    expect(payload.evidenceRowCount).toBe(base.evidenceRowCount + 2);
+    expect(await renderC5Text(payload)).toContain(`${payload.evidenceRowCount} evidence rows`);
+  });
+});
+
+describe('folio renderer — characterization: the flag off changes NOTHING', () => {
+  it('renders byte-for-byte what it rendered before Wave `C5.3` existed', async () => {
+    // THE PIN. `C5_SURVEY_RECORDS_ENABLED` is fail-closed, so for every tenant
+    // that has not been switched on `evidence.surveys` is `[]`; a lot with no
+    // linked delivery has `evidence.deliveries` `[]` too. This asserts that in
+    // that state — which is production's state on the day this merges — the
+    // folio a customer downloads is the SAME BYTES, not merely the same words.
+    //
+    // The expected value was measured by rendering this fixture at `ba20a703`,
+    // the commit before this wave. It is written down rather than computed
+    // because a computed baseline would move with the code it is meant to hold
+    // still. If a future change to the renderer or the fixture is intended to
+    // change the bytes, re-measure and say so in the PR — do not delete this.
+    const bytes = await renderFolioPdf(buildFolioPayloadFixture());
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(PRE_C5_FIXTURE_SHA256);
+
+    const payload = buildFolioPayloadFixture();
+    expect(payload.evidence.surveys).toEqual([]);
+    expect(payload.evidence.deliveries).toEqual([]);
+  });
+
+  it('and the pin has teeth: one survey row changes the bytes', async () => {
+    const bytes = await renderFolioPdf(withC5Rows({ deliveries: [] }));
+    expect(createHash('sha256').update(bytes).digest('hex')).not.toBe(PRE_C5_FIXTURE_SHA256);
+  });
+
+  it('omits both headings entirely when the collections are empty', async () => {
+    const text = await renderText();
+    // Not "No survey records are held for this lot." — printing that on a
+    // tenant without the flag asserts CIVOS holds a survey register it has not
+    // been given, which is a claim about the product, not about the lot.
+    expect(text).not.toContain('Survey records held');
+    expect(text).not.toContain('Material deliveries linked to this lot');
   });
 });
 

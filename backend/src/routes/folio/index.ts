@@ -15,7 +15,8 @@ import { Router } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
-import type { FolioSnapshotPayload } from '../../lib/handover/folioPayload.js';
+import { isFolioPayloadSchemaCurrent } from '../../lib/handover/folioPayload.js';
+import { FOLIO_PAYLOAD_SCHEMA_VERSION } from '../../lib/handover/revisionTokens.js';
 import { loadFolioArtifactBuffer } from '../../lib/handover/folioStorage.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -76,6 +77,27 @@ foliosRouter.post(
       throw new AppError(409, 'This folio has already been issued.', 'FOLIO_ALREADY_ISSUED');
     }
 
+    // **AT-180**. A snapshot written before a payload-shape change carries an
+    // older `schemaVersion` and is missing keys this build's renderer reads.
+    // The cast on the line below is unchecked by TypeScript, so the check has
+    // to be here: refuse with a reason, and NEVER read a v1 payload as v2. The
+    // session is cheap to redo — the snapshot is one human action old — which
+    // is why this is a refusal rather than a migration.
+    const snapshotPayload = reservation.snapshot.payload;
+    if (!isFolioPayloadSchemaCurrent(snapshotPayload)) {
+      throw new AppError(
+        409,
+        'This folio session was prepared against an older folio format and cannot be ' +
+          'issued. Start a new session so the folio compiles from the current records.',
+        'FOLIO_PAYLOAD_SCHEMA_STALE',
+        {
+          expectedSchemaVersion: FOLIO_PAYLOAD_SCHEMA_VERSION,
+          snapshotSchemaVersion:
+            (snapshotPayload as { schemaVersion?: unknown } | null)?.schemaVersion ?? null,
+        },
+      );
+    }
+
     const result = await issueFolio({
       reservation: {
         issueId: reservation.issueId,
@@ -85,7 +107,7 @@ foliosRouter.post(
         version: reservation.version,
         expiresAt: reservation.expiresAt,
       },
-      payload: reservation.snapshot.payload as unknown as FolioSnapshotPayload,
+      payload: snapshotPayload,
       lot: reservation.lot,
       userId: user.id,
       now: new Date(),

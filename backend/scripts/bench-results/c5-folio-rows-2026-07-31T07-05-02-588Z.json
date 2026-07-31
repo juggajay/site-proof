@@ -1,0 +1,86 @@
+{
+  "benchmark": "c5-folio-rows",
+  "spec": "docs/plans/wave-c5-survey-material-traceability-spec-2026-07-31.md §9, AT-179",
+  "startedAt": "2026-07-31T07:05:02.588Z",
+  "finishedAt": "2026-07-31T07:05:39.817Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 26.5,
+      "sampleMs": 1000,
+      "freeMemMiB": 12507,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "lots": 500,
+    "iterations": 8,
+    "distribution": [
+      {
+        "lotsPerHundred": 50,
+        "surveys": 1,
+        "deliveries": 2
+      },
+      {
+        "lotsPerHundred": 30,
+        "surveys": 2,
+        "deliveries": 6
+      },
+      {
+        "lotsPerHundred": 15,
+        "surveys": 3,
+        "deliveries": 14
+      },
+      {
+        "lotsPerHundred": 4,
+        "surveys": 5,
+        "deliveries": 30
+      },
+      {
+        "lotsPerHundred": 1,
+        "surveys": 8,
+        "deliveries": 60
+      }
+    ]
+  },
+  "results": {
+    "perLotRowDelta": {
+      "note": "surveys + deliveries added to one lot vs a pre-C5.3 build",
+      "p50": 3,
+      "p95": 17,
+      "p99": 35,
+      "max": 68,
+      "budget": 50
+    },
+    "surveyOnlyRowDelta": {
+      "note": "what the C5_SURVEY_RECORDS_ENABLED flag alone adds",
+      "p99": 5,
+      "max": 8,
+      "lotsWhereMeasuredDeltaDisagreesWithSeed": 0
+    },
+    "worstLotEvidenceRowCount": {
+      "flagOff": 60,
+      "flagOn": 68,
+      "ceiling": 5000
+    },
+    "assembleP95Ms": {
+      "flagOff": 4.81,
+      "flagOn": 6.06,
+      "deltaMs": 1.25,
+      "deltaPercent": 25.88,
+      "budgetPercent": 15,
+      "p50FlagOff": 3.89,
+      "p50FlagOn": 4.72
+    }
+  },
+  "verdict": {
+    "perLotRowDeltaUnderBudget": true,
+    "ceilingNotRaised": true,
+    "worstLotUnderCeiling": true,
+    "flagAddsExactlyTheSeededSurveys": true,
+    "assembleP95DeltaUnderBudget": false
+  }
+}

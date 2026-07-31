@@ -16,6 +16,7 @@
 // is the precondition **AT-127** depends on.
 
 import type { LoganPsp5ProfileResult } from './loganPsp5Profile.js';
+import { FOLIO_PAYLOAD_SCHEMA_VERSION } from './revisionTokens.js';
 
 /**
  * The compilation disclaimer, VERBATIM from spec §2.5, asserted by **AT-137**.
@@ -123,12 +124,70 @@ export interface FolioHoldPointPayload {
   readonly releasedByOrg: string | null;
 }
 
+/**
+ * One survey record, Wave `C5.3`.
+ *
+ * `[C5S-B1]` — **CIVOS records a verdict; it never makes one.** `verdict` below
+ * is a LABEL for what the surveyor's own report said, resolved server-side in
+ * the {@link FolioTestPayload.verdict} shape so the renderer prints a string it
+ * is given rather than deciding anything. `recordedByName` / `recordedAt` name
+ * the CIVOS user who transcribed it, which is what lets a reader tell a
+ * transcription from a signature (spec §8, **AT-181**).
+ */
+export interface FolioSurveyPayload {
+  readonly id: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly surveyorName: string | null;
+  readonly surveyorCompany: string | null;
+  readonly surveyorRegistration: string | null;
+  readonly surveyedAt: string | null;
+  /** The raw stored value, or null when the record carries none yet. */
+  readonly surveyorVerdict: string | null;
+  /** The rendered label for {@link surveyorVerdict}. THE SURVEYOR'S, always. */
+  readonly verdict: string;
+  /** Where in the report the verdict was read from — "per report rev B". */
+  readonly verdictSourceNote: string | null;
+  readonly reportFilename: string | null;
+  readonly recordedByName: string | null;
+  readonly recordedAt: string | null;
+}
+
+/**
+ * One materials delivery linked to this lot, Wave `C5.3`.
+ *
+ * Every field is a TRANSCRIPTION of the supplier's paperwork. `batchRef` in
+ * particular is free text off the docket — not parsed, not validated against
+ * any vocabulary (structuring it is C5.4, behind RG-6).
+ */
+export interface FolioDeliveryPayload {
+  readonly id: string;
+  /** The diary day the delivery was recorded against, ISO. */
+  readonly deliveredOn: string | null;
+  readonly description: string;
+  readonly supplier: string | null;
+  readonly docketNumber: string | null;
+  readonly batchRef: string | null;
+  readonly quantity: string | null;
+  readonly unit: string | null;
+  readonly docketFilename: string | null;
+}
+
 export interface FolioEvidencePayload {
   readonly tests: readonly FolioTestPayload[];
   readonly ncrs: readonly FolioNcrPayload[];
   readonly documents: readonly FolioDocumentPayload[];
   readonly itpCompletions: readonly FolioItpCompletionPayload[];
   readonly holdPoints: readonly FolioHoldPointPayload[];
+  /**
+   * Wave `C5.3`. EMPTY unless `C5_SURVEY_RECORDS_ENABLED` is on — fail-closed,
+   * so a tenant without the flag gets byte-identical folios to the ones it got
+   * before this wave (`assemble.ts`, and the characterization pin in
+   * `folioRenderer.test.ts`).
+   */
+  readonly surveys: readonly FolioSurveyPayload[];
+  /** Wave `C5.3`. Unflagged — C5.1 shipped unflagged (`[C5S-f]`). */
+  readonly deliveries: readonly FolioDeliveryPayload[];
 }
 
 export interface FolioSnapshotPayload {
@@ -151,6 +210,30 @@ export function countEvidenceRows(evidence: FolioEvidencePayload): number {
     evidence.ncrs.length +
     evidence.documents.length +
     evidence.itpCompletions.length +
-    evidence.holdPoints.length
+    evidence.holdPoints.length +
+    // Wave `C5.3`: these count too. The ceiling drives a REFUSAL, not a
+    // truncation (`assemble.ts`), so a collection that is rendered but not
+    // counted is a folio that silently exceeds its own stated bound.
+    evidence.surveys.length +
+    evidence.deliveries.length
+  );
+}
+
+/**
+ * Is a payload read back out of `FolioSnapshot.payload` the shape this build
+ * renders? **AT-180**.
+ *
+ * A stored `payloadSchemaVersion: 1` snapshot predates `evidence.surveys` and
+ * `evidence.deliveries`. Casting it to {@link FolioSnapshotPayload} and
+ * rendering it anyway would either throw on `.length` or — if the renderer were
+ * ever made lenient — print a folio that looks like the lot holds no survey and
+ * no delivery, which is the silent omission `[DH-B1]` forbids. So the caller
+ * refuses it and says why; it is never read as v2.
+ */
+export function isFolioPayloadSchemaCurrent(payload: unknown): payload is FolioSnapshotPayload {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload as { schemaVersion?: unknown }).schemaVersion === FOLIO_PAYLOAD_SCHEMA_VERSION
   );
 }
