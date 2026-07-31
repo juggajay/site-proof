@@ -1,7 +1,13 @@
 /**
  * Readiness-driven tab navigation for LotDetailPage, extracted from the page.
  *
- * Owns the URL-derived tab state (`tab` query param, `action=assign-itp`), the
+ * DG-4a: the URL now names one of five workspace tabs plus an optional subview
+ * (`?tab=evidence&view=photos`), resolved through `../lotWorkspaceTabs`. Legacy
+ * and unknown values resolve to a real panel and are rewritten in place with
+ * replace:true, preserving every other param. Everything below is otherwise
+ * unchanged.
+ *
+ * Owns the URL-derived tab state (`tab`/`view` query params, `action=assign-itp`), the
  * readiness focus target + highlighted-tab state, and the effect that runs
  * after a readiness action navigates to a tab: one animation frame to
  * scrollIntoView/focus the tab panel (honouring prefers-reduced-motion) and a
@@ -22,7 +28,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RefObject } from 'react';
 import type { SetURLSearchParams } from 'react-router-dom';
-import { LOT_TABS } from '../constants';
+import {
+  defaultContentTab,
+  isCanonicalLotTabUrl,
+  lotTabLabel,
+  lotTabParams,
+  resolveLotTab,
+  workspaceTabFor,
+  type LotWorkspaceTab,
+} from '../lotWorkspaceTabs';
 import type { LotTab } from '../types';
 
 export interface ReadinessFocusTarget {
@@ -42,28 +56,57 @@ export function useLotReadinessNavigation({
   setSearchParams,
   tabSectionRef,
 }: UseLotReadinessNavigationParams) {
-  // Get current tab from URL or default to 'itp'
-  const currentTab = (searchParams.get('tab') as LotTab) || 'itp';
+  // DG-4a: the URL names a workspace tab plus an optional subview; both resolve
+  // to the content view the panel renders. resolveLotTab is total, so a legacy
+  // (?tab=photos) or unknown (?tab=nonsense) value lands on a real panel.
+  const tabParam = searchParams.get('tab');
+  const viewParam = searchParams.get('view');
+  const currentTab = resolveLotTab(tabParam, viewParam);
+  const currentWorkspaceTab = workspaceTabFor(currentTab);
   const shouldOpenAssignItp = searchParams.get('action') === 'assign-itp';
-  const currentTabLabel = LOT_TABS.find((tab) => tab.id === currentTab)?.label ?? 'Lot detail';
+  const currentTabLabel = lotTabLabel(currentTab);
   const [readinessFocusTarget, setReadinessFocusTarget] = useState<ReadinessFocusTarget | null>(
     null,
   );
   const [highlightedReadinessTab, setHighlightedReadinessTab] = useState<LotTab | null>(null);
 
+  // Canonicalize a legacy/unknown tab param in place, preserving every other
+  // param (commentId on a mention deep link, highlight on an ITP one) so a
+  // stored notification link still lands where it always did. Skipped when the
+  // URL carries no tab at all: a bare lot URL already means the ITP checklist,
+  // and rewriting it would push history churn onto every lot page load.
+  const applyCanonicalParams = useCallback((params: URLSearchParams, tabId: LotTab) => {
+    const canonical = lotTabParams(tabId);
+    params.set('tab', canonical.tab);
+    if (canonical.view) params.set('view', canonical.view);
+    else params.delete('view');
+    return params;
+  }, []);
+
+  useEffect(() => {
+    if (tabParam === null && viewParam === null) return;
+    if (isCanonicalLotTabUrl(tabParam, viewParam, currentTab)) return;
+    setSearchParams(applyCanonicalParams(new URLSearchParams(searchParams), currentTab), {
+      replace: true,
+    });
+  }, [applyCanonicalParams, currentTab, searchParams, setSearchParams, tabParam, viewParam]);
+
   // Handle tab change
   const handleTabChange = (tabId: LotTab) => {
     setReadinessFocusTarget(null);
     setHighlightedReadinessTab(null);
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', tabId);
+    const params = applyCanonicalParams(new URLSearchParams(searchParams), tabId);
     params.delete('action');
     setSearchParams(params);
   };
 
+  /** Top-level tab click: open the workspace tab on its default subview. */
+  const handleWorkspaceTabChange = (workspaceTab: LotWorkspaceTab) => {
+    handleTabChange(defaultContentTab(workspaceTab));
+  };
+
   const handleReadinessTabChange = (tabId: LotTab, actionCode?: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', tabId);
+    const params = applyCanonicalParams(new URLSearchParams(searchParams), tabId);
     if (tabId === 'itp' && (actionCode === 'no_itp_assigned' || actionCode === 'no_itp')) {
       params.set('action', 'assign-itp');
     } else {
@@ -108,11 +151,13 @@ export function useLotReadinessNavigation({
 
   return {
     currentTab,
+    currentWorkspaceTab,
     shouldOpenAssignItp,
     currentTabLabel,
     readinessFocusTarget,
     highlightedReadinessTab,
     handleTabChange,
+    handleWorkspaceTabChange,
     handleReadinessTabChange,
     handleAssignItpActionHandled,
   };

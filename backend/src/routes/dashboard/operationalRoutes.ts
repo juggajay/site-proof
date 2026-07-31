@@ -327,7 +327,10 @@ dashboardOperationalRouter.get(
         type: 'hold_point' as const,
         title: hp.description || hp.itpChecklistItem?.description || 'Hold Point',
         subtitle: `Status: ${hp.status.replace('_', ' ')}`,
-        link: `/projects/${projectId}/lots/${hp.lot.id}?tab=holdpoints&hp=${hp.id}`,
+        // Hold points are ITP checklist items; the lot workspace has never had
+        // a "holdpoints" tab, so this landed on an empty panel until DG-4a
+        // taught the page to resolve it (and anything unknown) to the checklist.
+        link: `/projects/${projectId}/lots/${hp.lot.id}?tab=itp&hp=${hp.id}`,
         metadata: {
           lotNumber: hp.lot.lotNumber,
           lotId: hp.lot.id,

@@ -11,7 +11,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // Types and constants extracted to separate files
 import type { Lot, LocationState, LotSubcontractorAssignment } from './types';
-import { getLotTabsForRole } from './constants';
+import { getLotWorkspaceTabsForRole, type LotWorkspaceTab } from './lotWorkspaceTabs';
 import { canReviewItpByRole } from './components/itpChecklistTabHelpers';
 import { useLotQualityAccessQuery } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
@@ -33,6 +33,7 @@ import { LotReadinessPanel } from './components/LotReadinessPanel';
 import { LotDetailTabPanel } from './components/LotDetailTabPanel';
 import { LotDetailModals } from './components/LotDetailModals';
 import { CreateTestModal } from '@/pages/tests/components/CreateTestModal';
+import { Tabs } from '@/components/ui/tabs';
 import {
   LotDetailEmptyState,
   LotDetailErrorState,
@@ -80,10 +81,12 @@ export function LotDetailPage() {
   // the tab panel the hook scrolls and focuses.
   const {
     currentTab,
+    currentWorkspaceTab,
     shouldOpenAssignItp,
     currentTabLabel,
     highlightedReadinessTab,
     handleTabChange,
+    handleWorkspaceTabChange,
     handleReadinessTabChange,
     handleAssignItpActionHandled,
   } = useLotReadinessNavigation({ searchParams, setSearchParams, tabSectionRef });
@@ -327,7 +330,7 @@ export function LotDetailPage() {
   // Foreman is a field-execution role: render lot detail field-first (no
   // commercial claim-readiness language) and order the tabs around field work.
   const isForeman = qualityAccess?.role === 'foreman';
-  const lotTabs = getLotTabsForRole(qualityAccess?.role);
+  const lotTabs = getLotWorkspaceTabsForRole(qualityAccess?.role);
 
   // Check if user is a subcontractor
   const isSubcontractor = ['subcontractor', 'subcontractor_admin'].includes(
@@ -444,63 +447,71 @@ export function LotDetailPage() {
           </div>
         )}
 
-      {/* Tab Navigation */}
-      <LotTabNavigation
-        tabs={lotTabs}
-        currentTab={currentTab}
-        onTabChange={handleTabChange}
-        counts={{ tests: testsCount, ncrs: ncrsCount }}
-      />
+      {/* DG-4a workspace tabs. The Radix root has to wrap both the strip and
+          the panel — that is what pairs the active trigger with the panel via
+          aria-controls/aria-labelledby and gives the strip arrow-key support. */}
+      <Tabs
+        value={currentWorkspaceTab}
+        onValueChange={(value) => handleWorkspaceTabChange(value as LotWorkspaceTab)}
+        className="space-y-6"
+      >
+        <LotTabNavigation
+          tabs={lotTabs}
+          currentTab={currentWorkspaceTab}
+          counts={{ tests: testsCount, ncrs: ncrsCount }}
+          isMobile={isMobile}
+        />
 
-      {/* Tab Content */}
-      <LotDetailTabPanel
-        tabSectionRef={tabSectionRef}
-        currentTab={currentTab}
-        currentTabLabel={currentTabLabel}
-        highlightedReadinessTab={highlightedReadinessTab}
-        lot={lot}
-        projectId={projectId}
-        lotId={lotId}
-        itpInstance={itpInstance}
-        setItpInstance={setItpInstance}
-        templates={templates}
-        loadingItp={loadingItp}
-        itpLoadError={itpLoadError}
-        isOnline={isOnline}
-        isOfflineData={isOfflineData}
-        offlinePendingCount={offlinePendingCount}
-        isMobile={isMobile}
-        updatingCompletion={updatingCompletion}
-        canCompleteITPItems={canCompleteITPItems}
-        canAssignITPTemplate={canAssignITPTemplate}
-        toggleCompletion={toggleCompletion}
-        updateNotes={updateNotes}
-        mobileMarkNA={mobileMarkNA}
-        mobileMarkFailed={mobileMarkFailed}
-        handleMobileAddPhoto={handleMobileAddPhoto}
-        handleAddPhoto={handleAddPhoto}
-        assignTemplate={assignTemplate}
-        unassignTemplate={unassignTemplate}
-        refetchItp={refetchItp}
-        assigningTemplate={assigningTemplate}
-        shouldOpenAssignItp={shouldOpenAssignItp}
-        handleAssignItpActionHandled={handleAssignItpActionHandled}
-        setNaModal={setNaModal}
-        setFailedModal={setFailedModal}
-        canReviewITP={canReviewITP}
-        currentUserId={user?.id}
-        verifyCompletion={verifyCompletion}
-        rejectCompletion={rejectCompletion}
-        testResults={testResults}
-        loadingTests={loadingTests}
-        canCreateTests={canCreateTests}
-        onAddTestResult={handleAddTestResult}
-        ncrs={ncrs}
-        loadingNcrs={loadingNcrs}
-        handleTabChange={handleTabChange}
-        activityLogs={activityLogs}
-        loadingHistory={loadingHistory}
-      />
+        {/* Tab Content */}
+        <LotDetailTabPanel
+          tabSectionRef={tabSectionRef}
+          currentTab={currentTab}
+          currentTabLabel={currentTabLabel}
+          highlightedReadinessTab={highlightedReadinessTab}
+          lot={lot}
+          projectId={projectId}
+          lotId={lotId}
+          itpInstance={itpInstance}
+          setItpInstance={setItpInstance}
+          templates={templates}
+          loadingItp={loadingItp}
+          itpLoadError={itpLoadError}
+          isOnline={isOnline}
+          isOfflineData={isOfflineData}
+          offlinePendingCount={offlinePendingCount}
+          isMobile={isMobile}
+          updatingCompletion={updatingCompletion}
+          canCompleteITPItems={canCompleteITPItems}
+          canAssignITPTemplate={canAssignITPTemplate}
+          toggleCompletion={toggleCompletion}
+          updateNotes={updateNotes}
+          mobileMarkNA={mobileMarkNA}
+          mobileMarkFailed={mobileMarkFailed}
+          handleMobileAddPhoto={handleMobileAddPhoto}
+          handleAddPhoto={handleAddPhoto}
+          assignTemplate={assignTemplate}
+          unassignTemplate={unassignTemplate}
+          refetchItp={refetchItp}
+          assigningTemplate={assigningTemplate}
+          shouldOpenAssignItp={shouldOpenAssignItp}
+          handleAssignItpActionHandled={handleAssignItpActionHandled}
+          setNaModal={setNaModal}
+          setFailedModal={setFailedModal}
+          canReviewITP={canReviewITP}
+          currentUserId={user?.id}
+          verifyCompletion={verifyCompletion}
+          rejectCompletion={rejectCompletion}
+          testResults={testResults}
+          loadingTests={loadingTests}
+          canCreateTests={canCreateTests}
+          onAddTestResult={handleAddTestResult}
+          ncrs={ncrs}
+          loadingNcrs={loadingNcrs}
+          handleTabChange={handleTabChange}
+          activityLogs={activityLogs}
+          loadingHistory={loadingHistory}
+        />
+      </Tabs>
 
       {/* Quality Management Section */}
       <QualityManagementSection

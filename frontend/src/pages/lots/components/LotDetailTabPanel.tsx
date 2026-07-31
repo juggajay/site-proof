@@ -11,9 +11,12 @@
 import type { RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommentsSection } from '@/components/comments/CommentsSection';
+import { TabsContent } from '@/components/ui/tabs';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
+import { LOT_SUBVIEWS, workspaceTabFor } from '../lotWorkspaceTabs';
 import type { ActivityLog, ITPInstance, ITPTemplate, Lot, LotTab, NCR, TestResult } from '../types';
 import { ITPChecklistTab, type ITPChecklistTabProps } from './ITPChecklistTab';
+import { LotSubviewTabs } from './LotSubviewTabs';
 import { PhotosTab } from './PhotosTab';
 
 interface LotDetailTabPanelProps {
@@ -134,17 +137,20 @@ export function LotDetailTabPanel({
   })();
 
   return (
-    <div
+    // Radix owns role="tabpanel", the id/aria-labelledby pairing with the active
+    // trigger, and the panel's tabIndex. Only the active workspace tab's content
+    // is mounted, so rendering just this one value is the same DOM Radix would
+    // produce from five siblings.
+    <TabsContent
       ref={tabSectionRef}
-      className={`min-h-[300px] rounded-lg outline-none transition-shadow duration-200 ${
+      value={workspaceTabFor(currentTab)}
+      className={`mt-0 min-h-[300px] rounded-lg outline-none transition-shadow duration-200 ${
         highlightedReadinessTab === currentTab
           ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-background'
           : ''
       }`}
-      role="tabpanel"
-      tabIndex={-1}
-      aria-label={`${currentTabLabel} section`}
       data-testid="lot-tab-panel"
+      data-tab-label={currentTabLabel}
       data-readiness-highlighted={highlightedReadinessTab === currentTab ? 'true' : 'false'}
     >
       {/* ITP Checklist Tab */}
@@ -256,66 +262,80 @@ export function LotDetailTabPanel({
         </div>
       )}
 
-      {/* Photos Tab */}
-      {currentTab === 'photos' && lotId && (
-        <PhotosTab
-          projectId={projectId}
-          itpInstance={itpInstance}
-          lotId={lotId}
-          onTabChange={handleTabChange}
-          onItpInstanceUpdate={setItpInstance}
-        />
+      {/* Evidence tab — Photos and Documents, each rendered exactly as it
+          shipped as its own tab. No aggregate "All" view: the two sources are
+          separately paginated and merging them client-side would show a
+          partial, silently-truncated list. */}
+      {(currentTab === 'photos' || currentTab === 'documents') && (
+        <LotSubviewTabs
+          label="Evidence views"
+          views={LOT_SUBVIEWS.evidence}
+          currentView={currentTab}
+          onViewChange={handleTabChange}
+        >
+          {currentTab === 'photos' && lotId && (
+            <PhotosTab
+              projectId={projectId}
+              itpInstance={itpInstance}
+              lotId={lotId}
+              onTabChange={handleTabChange}
+              onItpInstanceUpdate={setItpInstance}
+            />
+          )}
+
+          {currentTab === 'documents' && (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Documents</h2>
+                <button
+                  type="button"
+                  onClick={() => navigate(lotDocumentsUploadPath)}
+                  disabled={!projectId}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Upload Document
+                </button>
+              </div>
+              <div className="rounded-lg border p-6 text-center">
+                <div className="text-4xl mb-2">📄</div>
+                <h3 className="text-lg font-semibold mb-2">Lot Documents</h3>
+                <p className="mx-auto max-w-xl text-muted-foreground">
+                  View drawings, specifications, photos, certificates, and other project documents
+                  filtered to this lot in the Documents register.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(lotDocumentsPath)}
+                  disabled={!projectId}
+                  className="mt-4 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  View Lot Documents
+                </button>
+              </div>
+            </>
+          )}
+        </LotSubviewTabs>
       )}
 
-      {/* Documents Tab */}
-      {currentTab === 'documents' && (
-        <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Documents</h2>
-            <button
-              type="button"
-              onClick={() => navigate(lotDocumentsUploadPath)}
-              disabled={!projectId}
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Upload Document
-            </button>
-          </div>
-          <div className="rounded-lg border p-6 text-center">
-            <div className="text-4xl mb-2">📄</div>
-            <h3 className="text-lg font-semibold mb-2">Lot Documents</h3>
-            <p className="mx-auto max-w-xl text-muted-foreground">
-              View drawings, specifications, photos, certificates, and other project documents
-              filtered to this lot in the Documents register.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate(lotDocumentsPath)}
-              disabled={!projectId}
-              className="mt-4 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              View Lot Documents
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Activity tab — opens on the full shipped Comments experience
+          (composer, attachments, replies, edit/delete, polling, pagination);
+          Changes is the former History tab. Not a merged feed. */}
+      {(currentTab === 'comments' || currentTab === 'history') && (
+        <LotSubviewTabs
+          label="Activity views"
+          views={LOT_SUBVIEWS.activity}
+          currentView={currentTab}
+          onViewChange={handleTabChange}
+        >
+          {currentTab === 'comments' && lotId && (
+            <CommentsSection entityType="Lot" entityId={lotId} />
+          )}
 
-      {/* Comments Tab */}
-      {currentTab === 'comments' && lotId && (
-        <div className="animate-in fade-in duration-200">
-          <CommentsSection entityType="Lot" entityId={lotId} />
-        </div>
+          {currentTab === 'history' && (
+            <HistoryTabContent activityLogs={activityLogs} loading={loadingHistory} />
+          )}
+        </LotSubviewTabs>
       )}
-
-      {/* History Tab */}
-      {currentTab === 'history' && (
-        <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Activity History</h2>
-          </div>
-          <HistoryTabContent activityLogs={activityLogs} loading={loadingHistory} />
-        </div>
-      )}
-    </div>
+    </TabsContent>
   );
 }

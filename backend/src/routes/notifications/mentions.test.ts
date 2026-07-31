@@ -146,8 +146,12 @@ describe('createMentionNotifications', () => {
       'project-1',
     );
 
+    // DG-4a: comments are the Activity tab's default subview on the lot
+    // workspace. Notifications stored before that still say ?tab=comments and
+    // are canonicalized by the lot page on arrival.
     expect(buildLink).toHaveBeenCalledWith('ncr', 'ncr-1', 'project-1', {
-      tab: 'comments',
+      tab: 'activity',
+      view: 'comments',
       commentId: 'comment-9',
     });
     expect(notificationCreate).toHaveBeenCalledWith({

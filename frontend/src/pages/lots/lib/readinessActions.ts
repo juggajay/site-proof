@@ -1,15 +1,17 @@
 import { INTERNAL_ROLES } from '@/appRouteRoles';
 import type { EvidenceReadinessItem, LotEvidenceReadiness } from '@/types/evidenceReadiness';
+import { isKnownLotTabParam, resolveLotTab } from '../lotWorkspaceTabs';
 import type { LotTab } from '../types';
-
-const TAB_IDS: LotTab[] = ['itp', 'tests', 'ncrs', 'photos', 'documents', 'comments', 'history'];
 
 function tabFromHref(href?: string): LotTab | null {
   if (!href) return null;
   if (!href.startsWith('?')) return null;
-  const params = new URLSearchParams(href.startsWith('?') ? href.slice(1) : href);
+  const params = new URLSearchParams(href.slice(1));
   const tab = params.get('tab');
-  return tab && TAB_IDS.includes(tab as LotTab) ? (tab as LotTab) : null;
+  if (!tab) return null;
+  // Accepts both the canonical DG-4a pair (?tab=evidence&view=documents) and the
+  // pre-DG-4a single value (?tab=documents) the readiness engine emits today.
+  return isKnownLotTabParam(tab) ? resolveLotTab(tab, params.get('view')) : null;
 }
 
 function tabFromArea(area: EvidenceReadinessItem['area']): LotTab | null {
