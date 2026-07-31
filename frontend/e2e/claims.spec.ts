@@ -196,6 +196,26 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
     }
 
     if (
+      url.pathname === `/api/projects/${E2E_PROJECT_ID}/claim-readiness/summary` &&
+      route.request().method() === 'GET'
+    ) {
+      // Wave F F1: the blocked-value panel's aggregate. Served rather than left
+      // to the 404 fallback below, so the claims page loads with no unhandled
+      // route — an unhandled call here would degrade to "unavailable" silently
+      // and mask a real regression in the panel later.
+      await json({
+        totalBudget: 100000,
+        claimableValue: 100000,
+        blockedValue: 0,
+        lotsInScope: 1,
+        lotsBlocked: 0,
+        lotsWithNullBudget: 0,
+        groups: [],
+      });
+      return;
+    }
+
+    if (
       url.pathname === `/api/projects/${E2E_PROJECT_ID}/claim-readiness` &&
       route.request().method() === 'GET'
     ) {

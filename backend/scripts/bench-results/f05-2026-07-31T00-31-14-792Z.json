@@ -1,0 +1,67 @@
+{
+  "benchmark": "F0.5 exit gate (execution spec §8, Rev 3.1)",
+  "spec": "docs/plans/f0-5-benchmark-results-2026-07-26.md; docs/plans/wave-c1-exit-evidence-2026-07-28.md",
+  "startedAt": "2026-07-31T00:31:14.792Z",
+  "finishedAt": "2026-07-31T00:32:01.841Z",
+  "machine": {
+    "node": "v22.14.0",
+    "platform": "win32 x64",
+    "cpus": "AMD Ryzen 7 5800X 8-Core Processor             ",
+    "totalMemMiB": 32692,
+    "load": {
+      "cpuBusyPercent": 25.1,
+      "sampleMs": 1000,
+      "freeMemMiB": 16326,
+      "cpuCount": 16
+    },
+    "loadAfterMeasurement": {
+      "cpuBusyPercent": 30.1,
+      "sampleMs": 1000,
+      "freeMemMiB": 16073,
+      "cpuCount": 16
+    }
+  },
+  "options": {
+    "only": "CE",
+    "lots": 5000,
+    "claimIterations": 20,
+    "entityIterations": 50,
+    "pageIterations": 20
+  },
+  "results": {
+    "F1": {
+      "summary": {
+        "n": 20,
+        "min": 1258.207599999998,
+        "p50": 1309.359900000003,
+        "p95": 1426.6261999999988,
+        "max": 1445.2643000000025,
+        "mean": 1325.91222
+      },
+      "drillDown": {
+        "n": 20,
+        "min": 122.09920000000056,
+        "p50": 136.64560000000347,
+        "p95": 156.44910000000164,
+        "max": 157.86069999999745,
+        "mean": 136.36627999999945
+      },
+      "worstLoopLagMs": 50.29369999999835,
+      "peakHeapGrowthMb": 104.8663558959961,
+      "responseBytes": 137,
+      "body": {
+        "totalBudget": 86875000,
+        "claimableValue": 86875000,
+        "blockedValue": 0,
+        "lotsInScope": 5000,
+        "lotsBlocked": 0,
+        "lotsWithNullBudget": 0,
+        "groups": []
+      }
+    }
+  },
+  "verdict": {
+    "failures": [],
+    "pass": true
+  }
+}

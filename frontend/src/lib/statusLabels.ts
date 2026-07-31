@@ -68,6 +68,15 @@ export const STATUS_LABELS: Record<string, string> = {
   hold_point_overdue: 'Hold Point Overdue',
   unreleased_hold_points: 'Hold Points Not Released',
 
+  // Claim-member reason codes (Wave F F1's blocked-value groups). Listed for
+  // the same reason as `ncr_overdue`: the Title Case fallback renders "Itp" and
+  // "Ncrs". The rest of `CLAIM_MEMBER_REASON_CODES` falls back safely.
+  itp_incomplete: 'ITP Checklist Incomplete',
+  no_itp: 'No ITP Assigned',
+  unreleased_itp_hold_points: 'ITP Hold Points Not Released',
+  open_major_ncrs: 'Open Major NCRs',
+  open_minor_ncrs: 'Open Minor NCRs',
+
   // Handover export job statuses (Wave D §7.4:
   // `queued|snapshotting|processing|complete|failed|cancelled`). Only
   // `snapshotting` differs from what the Title Case fallback would produce —
