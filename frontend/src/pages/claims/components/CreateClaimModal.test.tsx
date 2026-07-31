@@ -192,6 +192,42 @@ describe('CreateClaimModal create flow', () => {
     expect(screen.getByLabelText(/claim this time.*LOT-002/i)).toBeInTheDocument();
   });
 
+  // Wave F F1 rule, applied to the modal: a lot with no budget is COUNTED in
+  // the lot count, EXCLUDED from the dollar total, and the exclusion is STATED
+  // — the same contract ClaimBlockedValuePanel already renders for the project.
+  it('counts null-budget lots but excludes them from the total and says so', async () => {
+    mockClaimReadinessAndVariations({
+      readiness: {
+        lots: [
+          READY_LOT_READINESS.lots[0],
+          {
+            ...READY_LOT_READINESS.lots[0],
+            lotId: 'lot-2',
+            lotNumber: 'LOT-002',
+            claim: { ...READY_LOT_READINESS.lots[0].claim, budgetAmount: null },
+          },
+        ],
+      },
+      variations: { variations: [] },
+    });
+
+    renderModal();
+
+    expect(await screen.findByText('LOT-002')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+    fireEvent.click(screen.getByLabelText('Select LOT-002'));
+
+    // Both lots are selectable and counted; only the priced one adds value.
+    expect(screen.getByText(/2 lots selected/)).toBeInTheDocument();
+    expect(screen.getByText('Total Claim Amount').nextElementSibling).toHaveTextContent('$100,000');
+    expect(screen.getByText('No budget')).toBeInTheDocument();
+    expect(screen.getByText(/Lots with no budget set: 1\./)).toBeInTheDocument();
+
+    // …and the disclosure only appears while such a lot is actually selected.
+    fireEvent.click(screen.getByLabelText('Select LOT-002'));
+    expect(screen.queryByText(/Lots with no budget set/)).not.toBeInTheDocument();
+  });
+
   it('requires selected lot claim increments to be greater than zero', async () => {
     mockClaimReadinessAndVariations({ variations: { variations: [] } });
 

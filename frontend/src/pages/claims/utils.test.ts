@@ -181,7 +181,12 @@ describe('claim percentage parsing', () => {
 describe('calculateLotClaimAmount', () => {
   it("computes this claim's increment of the budget", () => {
     expect(calculateLotClaimAmount(makeLot({ percentComplete: '30' }))).toBe(30000);
-    expect(calculateLotClaimAmount(makeLot({ budgetAmount: null, percentComplete: '30' }))).toBe(0);
+  });
+
+  it('returns null for a lot with no budget instead of a confident $0', () => {
+    expect(
+      calculateLotClaimAmount(makeLot({ budgetAmount: null, percentComplete: '30' })),
+    ).toBeNull();
   });
 });
 

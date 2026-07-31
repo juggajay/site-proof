@@ -269,10 +269,18 @@ export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
   }
 }
 
-/** Calculate claim amount for a lot based on percent complete */
-export function calculateLotClaimAmount(lot: ConformedLot): number {
+/**
+ * Claim amount for a lot based on percent complete, or null when the lot has no
+ * budget set. A null-budget lot is still claimable (budget is informational), so
+ * it is COUNTED in lot counts but carries no value — the same counted/excluded/
+ * stated rule the claim-readiness summary applies (see ClaimBlockedValuePanel).
+ * Callers must exclude nulls from sums rather than coerce them to $0, which
+ * prints a confident dollar figure for a lot nobody priced.
+ */
+export function calculateLotClaimAmount(lot: ConformedLot): number | null {
+  if (lot.budgetAmount == null) return null;
   const percentComplete = parseClaimPercentageInput(lot.percentComplete);
-  return (lot.budgetAmount ?? 0) * ((percentComplete ?? 0) / 100);
+  return lot.budgetAmount * ((percentComplete ?? 0) / 100);
 }
 
 export function parseClaimPercentageInput(value: string): number | null {

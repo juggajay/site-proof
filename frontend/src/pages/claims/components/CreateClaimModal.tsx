@@ -303,8 +303,13 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   const selectedVariations = approvedVariations.filter((variation) =>
     selectedVariationIds.includes(variation.id),
   );
+  // Null-budget lots are counted in "N lots selected" and stay selectable, but
+  // carry no value — same rule the project-level ClaimBlockedValuePanel states.
+  const selectedLotsWithoutBudget = selectedLots.filter(
+    (lot) => calculateLotClaimAmount(lot) === null,
+  ).length;
   const totalClaimAmount =
-    selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0) +
+    selectedLots.reduce((sum, lot) => sum + (calculateLotClaimAmount(lot) ?? 0), 0) +
     selectedVariations.reduce((sum, variation) => sum + (variation.approvedAmount ?? 0), 0);
   const hasPartialProgress = selectedLots.some(
     (l) => (parseClaimPercentageInput(l.percentComplete) ?? 0) < 100,
@@ -408,6 +413,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                   const supportItems = lot.readinessItems.filter(
                     (item) => item.severity === 'support',
                   );
+                  const lotClaimAmount = calculateLotClaimAmount(lot);
                   const percentageInputId = `claim-percent-${lot.id}`;
                   const percentageError = getSelectedLotClaimIncrementError(
                     lot.percentComplete,
@@ -493,7 +499,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           />
                           <span className="text-sm">%</span>
                           <span className="ml-auto font-semibold text-primary">
-                            {formatCurrency(calculateLotClaimAmount(lot))}
+                            {lotClaimAmount === null ? 'No budget' : formatCurrency(lotClaimAmount)}
                           </span>
                           {percentageError && (
                             <span
@@ -574,6 +580,12 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
               )}
               {hasPartialProgress && <span className="ml-1">(includes partial progress)</span>}
             </p>
+            {selectedLotsWithoutBudget > 0 && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Lots with no budget set: {selectedLotsWithoutBudget}. They are counted above but
+                carry no value.
+              </p>
+            )}
           </div>
         </div>
       </ModalBody>
