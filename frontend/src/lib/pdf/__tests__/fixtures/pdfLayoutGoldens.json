@@ -1,0 +1,49 @@
+{
+  "_comment": [
+    "Wave G G4a — AT-G23 goldens for the four hard layout fixtures.",
+    "These pin PAGE COUNT and TEXT-OP EXTENTS, deliberately NOT raw bytes: a jspdf",
+    "patch bump would invalidate byte goldens all at once and present as four",
+    "unexplained failures, while structural facts stay meaningful across patch",
+    "releases and still catch the layout regressions the fixtures exist for.",
+    "topMm/bottomMm are text baselines in mm from the page top; the reserved",
+    "footer band is excluded (see PDF_FOOTER_BAND_MM in pdfRenderHarness.ts).",
+    "bottomMarginMm is the generator's own margin — no text may fall below it."
+  ],
+  "longDescriptions": {
+    "pageCount": 2,
+    "bottomMarginMm": 20,
+    "extents": [
+      { "page": 1, "topMm": 20, "bottomMm": 272 },
+      { "page": 2, "topMm": 24, "bottomMm": 182 }
+    ]
+  },
+  "largeItp": {
+    "pageCount": 7,
+    "bottomMarginMm": 20,
+    "extents": [
+      { "page": 1, "topMm": 20, "bottomMm": 276 },
+      { "page": 2, "topMm": 20, "bottomMm": 272 },
+      { "page": 3, "topMm": 22, "bottomMm": 271 },
+      { "page": 4, "topMm": 22, "bottomMm": 271 },
+      { "page": 5, "topMm": 22, "bottomMm": 271 },
+      { "page": 6, "topMm": 22, "bottomMm": 271 },
+      { "page": 7, "topMm": 22, "bottomMm": 211 }
+    ]
+  },
+  "manyPhotos": {
+    "pageCount": 2,
+    "bottomMarginMm": 20,
+    "extents": [
+      { "page": 1, "topMm": 20, "bottomMm": 240 },
+      { "page": 2, "topMm": 20, "bottomMm": 218 }
+    ]
+  },
+  "missingOptionals": {
+    "pageCount": 2,
+    "bottomMarginMm": 20,
+    "extents": [
+      { "page": 1, "topMm": 20, "bottomMm": 239 },
+      { "page": 2, "topMm": 25, "bottomMm": 32 }
+    ]
+  }
+}

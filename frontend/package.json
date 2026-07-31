@@ -46,7 +46,7 @@
     "dompurify": "^3.3.1",
     "framer-motion": "^12.31.0",
     "html-to-image": "^1.11.13",
-    "jspdf": "^4.2.1",
+    "jspdf": "4.2.1",
     "leaflet": "^1.9.4",
     "leaflet-imageoverlay-rotated": "^0.2.1",
     "lucide-react": "^0.303.0",

@@ -1,17 +1,21 @@
 import { devLog } from '../logger';
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { DocketDetailPDFData } from './types';
 
 /**
  * Generate a PDF detail report for a Docket
  */
-export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promise<void> {
+export async function generateDocketDetailPDF(
+  data: DocketDetailPDFData,
+  generatedAt: Date = new Date(),
+): Promise<void> {
   const jsPDF = await getJsPDF();
   const startTime = Date.now();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -22,6 +26,7 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   const formatDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleDateString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -31,6 +36,7 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   const formatDateTime = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -480,7 +486,7 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   // ========== FOOTER ==========
   drawPdfFooters(doc, {
     margin,
-    generatedAt: new Date(),
+    generatedAt,
     docRef: `${data.project.name} / Docket ${data.docket.docketNumber}`,
   });
 

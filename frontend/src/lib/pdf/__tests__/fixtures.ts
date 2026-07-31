@@ -8,3 +8,10 @@ export {
   notifiedHpEvidencePackageFixture,
   releasedHpEvidencePackageFixture,
 } from './fixtures/holdPointEvidenceFixtures';
+export {
+  conformedLotConformanceFixture,
+  largeItpConformanceFixture,
+  longDescriptionsConformanceFixture,
+  manyPhotosHpEvidenceFixture,
+  missingOptionalsConformanceFixture,
+} from './fixtures/conformanceReportFixture';

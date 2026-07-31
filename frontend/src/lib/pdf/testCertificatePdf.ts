@@ -1,17 +1,21 @@
 import { devLog } from '../logger';
-import { formatDateKey } from '../localDate';
+import { formatDateKey, DEFAULT_APP_TIME_ZONE } from '../localDate';
 import { drawCompanyDetailsLine, drawPdfBrandingHeader, drawPdfFooters } from './branding';
-import { getJsPDF } from './jsPdfRuntime';
+import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { TestCertificateData } from './types';
 
 /**
  * Generate a PDF test certificate for a test result
  */
-export async function generateTestCertificatePDF(data: TestCertificateData): Promise<void> {
+export async function generateTestCertificatePDF(
+  data: TestCertificateData,
+  generatedAt: Date = new Date(),
+): Promise<void> {
   const jsPDF = await getJsPDF();
   const startTime = Date.now();
   const doc = new jsPDF();
+  pinPdfIdentity(doc, generatedAt);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -22,6 +26,7 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   const formatDate = (dateStr: string | null | undefined): string => {
     if (!dateStr) return 'Not recorded';
     return new Date(dateStr).toLocaleDateString('en-AU', {
+      timeZone: DEFAULT_APP_TIME_ZONE,
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -296,7 +301,7 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   // ========== FOOTER ==========
   drawPdfFooters(doc, {
     margin,
-    generatedAt: new Date(),
+    generatedAt,
     docRef: `${data.project.name} / Test ${data.test.testRequestNumber || data.test.id}`,
   });
 
