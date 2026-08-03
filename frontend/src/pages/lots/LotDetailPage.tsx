@@ -537,7 +537,9 @@ export function LotDetailPage() {
           Management and above the folio, because it answers the question
           between them: what an outside professional stated about this lot, and
           what physically went into it. */}
-      {lotId && <SurveyMaterialsSection lotId={lotId} effectiveRole={effectiveRole} />}
+      {lotId && (
+        <SurveyMaterialsSection lotId={lotId} projectId={projectId} effectiveRole={effectiveRole} />
+      )}
 
       {/* Wave D `D1b` — the issued evidence folio (spec §9). Role-gated on the
           SERVER-derived effective project role, and re-checked by the backend
