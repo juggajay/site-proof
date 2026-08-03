@@ -182,7 +182,12 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
       {isOpen && (
         <motion.div
           key="bottomsheet-backdrop"
-          className="fixed inset-0 z-50 flex items-end"
+          // pointer-events-auto is not decoration: `pointer-events` INHERITS, and
+          // this sheet renders in-tree wherever it is called. Mounted inside a
+          // `pointer-events-none` container (the map toolbar column does exactly
+          // this) the sheet paints but every row, the backdrop and the X are
+          // untappable. A fixed full-viewport modal always wants `auto`.
+          className="pointer-events-auto fixed inset-0 z-50 flex items-end"
           variants={backdropVariants}
           initial="hidden"
           animate="visible"

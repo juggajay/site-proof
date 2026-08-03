@@ -26,9 +26,15 @@ const fakeMap = {
 const mapContainerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 // Same capture pattern for TileLayer so tests can fire its tileerror handler.
 const tileLayerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+// `position` is a Leaflet control option, so it never reaches the DOM — record it.
+const layersControlProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 vi.mock('react-leaflet', () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
-  const LayersControl = Object.assign(Passthrough, { BaseLayer: Passthrough });
+  const RecordingLayersControl = ({ children, ...props }: { children?: React.ReactNode }) => {
+    layersControlProps.current = props;
+    return <div>{children}</div>;
+  };
+  const LayersControl = Object.assign(RecordingLayersControl, { BaseLayer: Passthrough });
   return {
     MapContainer: ({ children, ...props }: { children?: React.ReactNode }) => {
       mapContainerProps.current = props;
@@ -697,6 +703,32 @@ describe('LotMapView', () => {
     // toolbar) below fixed z-50 page UI like OfflineIndicator and dialog
     // overlays. Removing it re-breaks the offline pill on the map page.
     expect(screen.getByTestId('lot-map-stacking-root')).toHaveClass('isolate');
+  });
+
+  // ── QA-02. The toolbar has to WIN the hit-test against Leaflet's own controls.
+  // jsdom cannot hit-test, so these lock the CSS/option contract that decides it;
+  // only a real-viewport Playwright tap proves the tap itself.
+  it('stacks the toolbar column above leaflet control containers (z-index 1000)', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    // At an exact z-1000 tie Leaflet wins on DOM order and eats taps meant for
+    // the rightmost tile ("Past").
+    expect(screen.getByTestId('lot-map-toolbar-column')).toHaveClass('z-[1001]');
+  });
+
+  it('moves the leaflet layers control to the top-LEFT on mobile, clear of the toolbar', () => {
+    isMobileValue = true;
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    // Top-left is free on phones because zoomControl is off there.
+    expect(layersControlProps.current.position).toBe('topleft');
+    expect(mapContainerProps.current.zoomControl).toBe(false);
+  });
+
+  it('keeps the leaflet layers control at the top-right on desktop', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    expect(layersControlProps.current.position).toBe('topright');
   });
 
   it('suppresses the tile-error toast while offline (the global OfflineIndicator pill covers it)', () => {
