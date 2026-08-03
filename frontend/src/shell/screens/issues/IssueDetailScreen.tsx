@@ -141,7 +141,9 @@ export function IssueDetailScreen() {
     const document = item.document;
     if (!document?.id) return;
 
-    void openDocumentAccessUrl(document.id, document.fileUrl).catch((error) => {
+    void openDocumentAccessUrl(document.id, document.fileUrl, {
+      disposition: 'inline',
+    }).catch((error) => {
       handleApiError(error, 'Could not open evidence');
     });
   };

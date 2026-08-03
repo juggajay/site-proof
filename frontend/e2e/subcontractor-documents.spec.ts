@@ -157,7 +157,7 @@ test.describe('Subcontractor documents mobile access', () => {
 
     await expect.poll(() => popup.url()).toContain('/signed/subbie-sanitised-doc');
     expect(api.getSignedUrlRequests()).toContainEqual(
-      expect.objectContaining({ disposition: 'attachment' }),
+      expect.objectContaining({ disposition: 'inline' }),
     );
 
     await popup.close();

@@ -137,7 +137,9 @@ describe('SubcontractorNCRsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /rectification-photo\.jpg/i }));
 
-    expect(openDocumentAccessUrl).toHaveBeenCalledWith('document-1', undefined);
+    expect(openDocumentAccessUrl).toHaveBeenCalledWith('document-1', undefined, {
+      disposition: 'inline',
+    });
     expect(apiFetch).toHaveBeenCalledWith('/api/subcontractors/my-company?projectId=project-1');
     expect(apiFetch).toHaveBeenCalledWith(
       '/api/ncrs?projectId=project-1&subcontractorCompanyId=subbie-company-1&subcontractorView=true',

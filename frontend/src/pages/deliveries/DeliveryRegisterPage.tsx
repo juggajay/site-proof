@@ -60,7 +60,11 @@ function DocketCell({ delivery }: { delivery: DeliveryRow }) {
       <button
         type="button"
         className="text-left text-sm text-primary underline-offset-2 hover:underline"
-        onClick={() => void openDocumentAccessUrl(delivery.docketDocument!.id)}
+        onClick={() =>
+          void openDocumentAccessUrl(delivery.docketDocument!.id, null, {
+            disposition: 'inline',
+          })
+        }
       >
         {delivery.docketDocument.filename}
       </button>

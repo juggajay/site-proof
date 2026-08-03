@@ -196,7 +196,9 @@ describe('IssueDetailScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Open openable\.jpg/i }));
 
-    expect(openDocumentAccessUrl).toHaveBeenCalledWith('d3', undefined);
+    expect(openDocumentAccessUrl).toHaveBeenCalledWith('d3', undefined, {
+      disposition: 'inline',
+    });
   });
 
   it('renders and opens non-photo evidence documents', () => {
@@ -207,7 +209,9 @@ describe('IssueDetailScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: /compaction-cert\.pdf/i }));
 
     expect(screen.getByText('certificate')).toBeInTheDocument();
-    expect(openDocumentAccessUrl).toHaveBeenCalledWith('doc-cert-1', null);
+    expect(openDocumentAccessUrl).toHaveBeenCalledWith('doc-cert-1', null, {
+      disposition: 'inline',
+    });
   });
 
   it('shows an Add photo affordance (foreman adds evidence)', () => {
