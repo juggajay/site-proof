@@ -1,9 +1,10 @@
 /**
  * DocsShellRoutes — the /m/docs/* sub-tree (Drawings & Docs).
  *
- * Nested under ShellRoutes' /m/docs route. Provides a shared docs context (one
- * drawing-register fetch) so the list reads the register via the pure helpers in
- * docsShellState — mirroring the PhotosShellRoutes / IssuesShellRoutes pattern.
+ * Nested under ShellRoutes' /m/docs route. Provides a shared docs context (the
+ * drawing-register fetch plus the lot-filed drawing documents) so the list reads
+ * both sources via the pure helpers in docsShellState — mirroring the
+ * PhotosShellRoutes / IssuesShellRoutes pattern.
  *
  * Route map:
  *   /m/docs              → DocsListScreen (register list; ?lotId= scopes to a lot)
@@ -20,8 +21,10 @@
  * VIEW + acknowledge only (research 14): no upload / new revision / supersede /
  * delete / status-change affordance anywhere.
  *
- * Specs live in the same drawing register, so they appear here too; the separate
- * project Documents table is intentionally NOT merged in (scope: register only).
+ * Specs live in the same drawing register, so they appear here too. Drawings
+ * filed against a LOT are project Documents rather than register rows (the
+ * Drawing model has no lot link), so those are merged in as well — otherwise the
+ * lot hub's Drawings tile lands on an empty list for lots that have drawings.
  */
 import { useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';

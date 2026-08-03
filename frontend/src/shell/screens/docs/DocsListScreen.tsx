@@ -19,9 +19,10 @@
  * belong to the desktop Drawing Register. A search input appears once the
  * register is long enough to scroll past.
  *
- * The optional ?lotId= deep-link (the lot hub's Drawings tile) is honoured:
- * lot-linked rows narrow to that lot, while project-wide drawings stay visible
- * because the drawing register is project-scoped today.
+ * The ?lotId= deep-link (the lot hub's Drawings tile) is honoured: lot-linked
+ * rows narrow to that lot, while project-wide drawings stay visible. Lot linkage
+ * lives on the drawing DOCUMENTS the Documents page files against a lot; the
+ * drawing register itself is project-scoped, so its rows are always project-wide.
  */
 import { useMemo, useState } from 'react';
 import { ChevronRight, FileSpreadsheet, Ruler, Search } from 'lucide-react';
@@ -45,14 +46,14 @@ const SEARCH_THRESHOLD = 8;
  * One card anatomy, the same as every hub tile: leading icon + one label + ONE
  * chip + chevron, and the WHOLE card is the tap target. No nested action.
  *
- * The lot / PROJECT-WIDE pill that used to sit beside the revision pill is gone.
- * `DocItem.lotLabel` is derived from a lot relation the Drawing model does not
- * have (see this module's header), so that pill read PROJECT-WIDE on every card
- * in production — deleting it removed a constant, not information.
+ * There is no lot / PROJECT-WIDE pill beside the revision pill: the list is
+ * already scoped by the lot deep-link, so the pill would repeat the header on
+ * every card rather than tell the foreman something new.
  *
- * ONE icon for every row, deliberately: the register holds drawings AND specs
- * with no type column to split on, so a drawing-vs-spec icon would be inventing
- * data. It is the same `Ruler` the lot hub's Drawings tile uses.
+ * ONE icon for every row, deliberately: the list holds drawings, specs and
+ * lot-filed drawing documents with no type column to split on, so a
+ * drawing-vs-spec icon would be inventing data. It is the same `Ruler` the lot
+ * hub's Drawings tile uses.
  */
 function DocCard({ item, onPress }: { item: DocItem; onPress: () => void }) {
   const ariaLabel = [
@@ -182,7 +183,7 @@ export function DocsListScreen() {
             <span>
               No drawings for this lot yet.
               <br />
-              Drawings are managed on the register in the office.
+              Drawings are filed in the office.
             </span>
           ) : (
             <span>

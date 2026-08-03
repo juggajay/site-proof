@@ -30,7 +30,9 @@ import { revisionPillLabel, type DocItem } from './docsShellState';
 
 /**
  * A drawing register row IS the governed `drawing` record — `DocItem.id` is the
- * `Drawing.id` the revision issues are recorded against.
+ * `Drawing.id` the revision issues are recorded against. A lot-filed drawing
+ * DOCUMENT is not that record, so the history section is skipped for it rather
+ * than querying a timeline that can only come back empty.
  */
 const ENTITY_TYPE = 'drawing';
 
@@ -46,15 +48,22 @@ export function DocSheet({
   const { user } = useAuth();
   const { opening, openDoc } = useDocFileOpen();
 
+  const isRegisterDrawing = item.source === 'register';
+
   // Same cache entry the timeline below reads — one fetch, and the header can
-  // attribute the current revision without a second endpoint.
-  const { issues, governanceDisabled } = useRevisionIssues(projectId ?? '', ENTITY_TYPE, item.id);
+  // attribute the current revision without a second endpoint. An empty entityId
+  // leaves the query disabled, which is how a document-sourced row skips it.
+  const { issues, governanceDisabled } = useRevisionIssues(
+    projectId ?? '',
+    ENTITY_TYPE,
+    isRegisterDrawing ? item.id : '',
+  );
   const issuedLine = revisionIssuedLine(currentRevisionIssue(issues));
 
   // Flag off ⇒ the whole section goes, heading and all. `hideWhenDisabled` is
   // the body's half of that promise; the heading is the sheet's, and both read
   // the one hook result rather than deciding separately.
-  const showHistory = Boolean(projectId) && !governanceDisabled;
+  const showHistory = isRegisterDrawing && Boolean(projectId) && !governanceDisabled;
 
   return (
     <ResponsiveSheet open onClose={onClose} title={item.number}>
