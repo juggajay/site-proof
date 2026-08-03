@@ -43,7 +43,9 @@ export function NCREvidenceList({
                   <button
                     type="button"
                     onClick={() => {
-                      void openDocumentAccessUrl(document.id, document.fileUrl).catch((error) => {
+                      void openDocumentAccessUrl(document.id, document.fileUrl, {
+                        disposition: 'inline',
+                      }).catch((error) => {
                         logError('Failed to open NCR evidence:', error);
                         toast({
                           title: 'Could not open evidence',

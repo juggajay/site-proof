@@ -57,7 +57,7 @@ function formatUploadedDate(dateStr: string): string {
 function DocCard({ doc }: { doc: DocItem }) {
   const handleOpen = async () => {
     try {
-      await openDocumentAccessUrl(doc.id, doc.fileUrl);
+      await openDocumentAccessUrl(doc.id, doc.fileUrl, { disposition: 'inline' });
     } catch (err) {
       logError('Failed to open subcontractor document:', err);
       toast({

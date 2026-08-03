@@ -222,7 +222,7 @@ export function SubcontractorDocumentsPage() {
 function DocumentCard({ document }: { document: Document }) {
   const handleOpenDocument = async () => {
     try {
-      await openDocumentAccessUrl(document.id, document.fileUrl);
+      await openDocumentAccessUrl(document.id, document.fileUrl, { disposition: 'inline' });
     } catch (err) {
       logError('Failed to open subcontractor document:', err);
       toast({

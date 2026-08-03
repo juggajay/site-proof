@@ -369,7 +369,9 @@ export function DrawingsPage() {
 
   const handleOpenDrawing = async (drawing: Drawing) => {
     try {
-      await openDocumentAccessUrl(drawing.document.id, drawing.document.fileUrl);
+      await openDocumentAccessUrl(drawing.document.id, drawing.document.fileUrl, {
+        disposition: 'inline',
+      });
     } catch (err) {
       logError('Error opening drawing:', err);
       toast({

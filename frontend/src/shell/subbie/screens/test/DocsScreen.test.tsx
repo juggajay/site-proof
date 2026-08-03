@@ -8,7 +8,8 @@
  *   - documents module gating (off → PortalAccessDenied, no query)
  *   - exact query URL incl. subcontractorView=true + capped page size
  *   - grouping by category
- *   - tapping a row delegates to openDocumentAccessUrl(id, fileUrl)
+ *   - tapping a row delegates to openDocumentAccessUrl(id, fileUrl) asking for
+ *     inline disposition (attachment leaves the opened tab blank)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -138,7 +139,7 @@ describe('subbie shell DocsScreen', () => {
     expect(screen.getByText('SW-201 Rev C')).toBeInTheDocument();
   });
 
-  it('delegates open to openDocumentAccessUrl(id, fileUrl)', async () => {
+  it('delegates open to openDocumentAccessUrl(id, fileUrl) with inline disposition', async () => {
     setApi({
       documents: [
         {
@@ -154,7 +155,9 @@ describe('subbie shell DocsScreen', () => {
     const row = await screen.findByRole('button', { name: 'Open SW-201 Rev C' });
     fireEvent.click(row);
     await waitFor(() =>
-      expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('d1', 'https://x/sw201.pdf'),
+      expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('d1', 'https://x/sw201.pdf', {
+        disposition: 'inline',
+      }),
     );
   });
 

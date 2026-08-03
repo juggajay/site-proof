@@ -186,6 +186,8 @@ describe('SubcontractorDocumentsPage', () => {
       await screen.findByRole('button', { name: /open sanitised-specification\.pdf/i }),
     );
 
-    expect(openDocumentAccessUrl).toHaveBeenCalledWith('document-2', undefined);
+    expect(openDocumentAccessUrl).toHaveBeenCalledWith('document-2', undefined, {
+      disposition: 'inline',
+    });
   });
 });

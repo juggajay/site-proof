@@ -177,7 +177,9 @@ export function DeliveryEvidenceEditor({
                 <button
                   type="button"
                   className="text-sm text-primary underline-offset-2 hover:underline"
-                  onClick={() => void openDocumentAccessUrl(docket.id)}
+                  onClick={() =>
+                    void openDocumentAccessUrl(docket.id, null, { disposition: 'inline' })
+                  }
                 >
                   {docket.filename}
                 </button>
