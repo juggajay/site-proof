@@ -19,7 +19,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import {
   SURVEY_PROGRESS_STEPS,
+  canEditSurvey,
   canReturnSurvey,
+  canSupersedeSurvey,
   isQuotableVerdict,
   surveyKindLabel,
   surveyStatusLabel,
@@ -205,20 +207,94 @@ export function SurveyStatusProgress({ status }: { status: string }) {
   );
 }
 
+/** The row's quiet secondary action — same shape wherever it appears. */
+function RowAction({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * What came back, why, and where the workflow goes next.
+ *
+ * Not a dead end: `returned_for_correction` has no status edge out, so the
+ * corrected report is a NEW record that supersedes this one — and the action
+ * that files it sits on the sentence that promises it. C5.2 shipped the sentence
+ * without the affordance, which is a quality system telling a user to do
+ * something the UI cannot do.
+ */
+function ReturnedNotice({
+  record,
+  replaced,
+  onSupersede,
+}: {
+  record: SurveyRecord;
+  replaced: boolean;
+  onSupersede: (() => void) | null;
+}) {
+  return (
+    <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+      <p className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Returned to the surveyor:</span>{' '}
+        {record.returnReason ?? 'no reason was recorded.'}
+      </p>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {replaced || record.supersededById
+          ? 'The corrected report was filed as a new record.'
+          : 'File the corrected report as a new survey record on this lot — this one stays as the record of what came back.'}
+      </p>
+      {onSupersede && (
+        <div className="mt-2">
+          <RowAction onClick={onSupersede}>File the corrected report</RowAction>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface SurveyRecordRowProps {
   group: SurveyRevisionGroup;
   canDecide: boolean;
+  /** Whether this user may file and correct records (the wider creator set). */
+  canEdit: boolean;
   deciding: boolean;
   onReturn: (surveyId: string, returnReason: string) => void;
+  onEdit: (record: SurveyRecord) => void;
+  onSupersede: (record: SurveyRecord) => void;
 }
 
-export function SurveyRecordRow({ group, canDecide, deciding, onReturn }: SurveyRecordRowProps) {
+export function SurveyRecordRow({
+  group,
+  canDecide,
+  canEdit,
+  deciding,
+  onReturn,
+  onEdit,
+  onSupersede,
+}: SurveyRecordRowProps) {
   const [showEarlier, setShowEarlier] = useState(false);
   const [confirmReturn, setConfirmReturn] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const record = group.current;
 
   const showDecision = canDecide && canReturnSurvey(record);
+  const showEdit = canEdit && canEditSurvey(record);
+  const showSupersede = canDecide && canSupersedeSurvey(record);
   const { tint, Icon } = presentationFor(record.status);
 
   return (
@@ -254,20 +330,11 @@ export function SurveyRecordRow({ group, canDecide, deciding, onReturn }: Survey
           <SurveyVerdictBlock record={record} />
 
           {record.status === 'returned_for_correction' && (
-            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Returned to the surveyor:</span>{' '}
-                {record.returnReason ?? 'no reason was recorded.'}
-              </p>
-              {/* Not a dead end. The corrected report is a NEW record that
-                  supersedes this one, so the reader is told where to look
-                  rather than left with a record that reads as finished. */}
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                {group.earlier.length > 0 || record.supersededById
-                  ? 'The corrected report was filed as a new record.'
-                  : 'File the corrected report as a new survey record on this lot — this one stays as the record of what came back.'}
-              </p>
-            </div>
+            <ReturnedNotice
+              record={record}
+              replaced={group.earlier.length > 0}
+              onSupersede={showSupersede ? () => onSupersede(record) : null}
+            />
           )}
 
           {record.reportDocument && (
@@ -282,16 +349,14 @@ export function SurveyRecordRow({ group, canDecide, deciding, onReturn }: Survey
           {record.status !== 'returned_for_correction' && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
               <SurveyStatusProgress status={record.status} />
-              {showDecision && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmReturn(true)}
-                  disabled={deciding}
-                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
-                >
-                  Return for correction
-                </button>
-              )}
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {showEdit && <RowAction onClick={() => onEdit(record)}>Edit</RowAction>}
+                {showDecision && (
+                  <RowAction onClick={() => setConfirmReturn(true)} disabled={deciding}>
+                    Return for correction
+                  </RowAction>
+                )}
+              </div>
             </div>
           )}
 

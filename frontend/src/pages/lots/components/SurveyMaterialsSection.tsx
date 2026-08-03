@@ -11,24 +11,43 @@
  * deliveries card is unflagged (C5.1 shipped unflagged) and stands alone.
  */
 
-import { Ruler, Truck } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Ruler, Truck } from 'lucide-react';
 
 import { ApiError } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
 import { LotDeliveriesTable } from './LotDeliveriesTable';
 import { SurveyRecordRow } from './SurveyRecordRow';
-import { useLotDeliveries, useLotSurveys, useSurveyReturn } from '../hooks/useLotSurveyMaterials';
+import { SurveyRecordEditorModal, type SurveyEditorMode } from './SurveyRecordEditorModal';
+import { useLotDeliveries, useLotSurveys, useSurveyStatus } from '../hooks/useLotSurveyMaterials';
 import {
+  SURVEY_CREATOR_ROLES,
   SURVEY_DECIDER_ROLES,
   countOutstandingSurveys,
   groupSurveyRevisions,
+  type SurveyRecord,
 } from '../lib/surveyRecords';
 
 interface SurveyMaterialsSectionProps {
   lotId: string;
+  projectId: string | undefined;
   /** The SERVER-derived effective project role, never `user.role`. */
   effectiveRole: string;
+}
+
+/** The one entry point into the editor, wherever the card offers it. */
+function RecordSurveyButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+    >
+      <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+      Record a survey
+    </button>
+  );
 }
 
 function SectionCard({
@@ -76,6 +95,7 @@ function AsyncSectionBody({
   loadingLabel,
   errorLabel,
   emptyMessage,
+  emptyAction,
   isEmpty,
   children,
 }: {
@@ -85,6 +105,8 @@ function AsyncSectionBody({
   loadingLabel: string;
   errorLabel: string;
   emptyMessage: string;
+  /** The action that closes the gap the empty message names, if there is one. */
+  emptyAction?: React.ReactNode;
   isEmpty: boolean;
   children: React.ReactNode;
 }) {
@@ -115,6 +137,7 @@ function AsyncSectionBody({
     return (
       <div className="border-t border-border px-4 py-6 text-center">
         <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        {emptyAction && <div className="mt-3 flex justify-center">{emptyAction}</div>}
       </div>
     );
   }
@@ -122,12 +145,21 @@ function AsyncSectionBody({
   return <>{children}</>;
 }
 
-export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterialsSectionProps) {
+export function SurveyMaterialsSection({
+  lotId,
+  projectId,
+  effectiveRole,
+}: SurveyMaterialsSectionProps) {
   const surveysQuery = useLotSurveys(lotId);
   const deliveriesQuery = useLotDeliveries(lotId);
-  const decide = useSurveyReturn(lotId);
+  const decide = useSurveyStatus(lotId);
+  // One editor, opened in one of three modes. Not three modals: §7.2 requires
+  // the capture to happen on ONE surface, and a second capture surface is what
+  // `[C3R-B3]` cost.
+  const [editor, setEditor] = useState<{ mode: SurveyEditorMode; record: SurveyRecord | null }>();
 
   const canDecide = SURVEY_DECIDER_ROLES.includes(effectiveRole);
+  const canCreate = SURVEY_CREATOR_ROLES.includes(effectiveRole);
 
   // A 404 is the feature flag being off for this tenant, not a failure.
   const surveysDisabled =
@@ -139,7 +171,7 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
 
   const handleReturn = (surveyId: string, returnReason: string) => {
     decide.mutate(
-      { surveyId, returnReason },
+      { surveyId, status: 'returned_for_correction', returnReason },
       {
         onSuccess: () => {
           toast({
@@ -170,11 +202,16 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
           title="Survey records"
           blurb="Set-out, conformance and as-built — who surveyed it, what they stated, and whether their report has arrived."
           actions={
-            outstanding > 0 ? (
-              <span className="inline-flex items-center rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
-                {outstanding === 1 ? '1 outstanding' : `${outstanding} outstanding`}
-              </span>
-            ) : null
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {outstanding > 0 && (
+                <span className="inline-flex items-center rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
+                  {outstanding === 1 ? '1 outstanding' : `${outstanding} outstanding`}
+                </span>
+              )}
+              {canCreate && groups.length > 0 && (
+                <RecordSurveyButton onClick={() => setEditor({ mode: 'create', record: null })} />
+              )}
+            </div>
           }
         >
           <AsyncSectionBody
@@ -184,6 +221,14 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
             loadingLabel="Loading survey records…"
             errorLabel="Could not load survey records."
             emptyMessage="No survey records filed against this lot."
+            // Empty is the state EVERY fresh lot starts in, so the header
+            // button alone would leave the commonest case with the action
+            // furthest from the sentence that asks for it.
+            emptyAction={
+              canCreate ? (
+                <RecordSurveyButton onClick={() => setEditor({ mode: 'create', record: null })} />
+              ) : null
+            }
             isEmpty={groups.length === 0}
           >
             <ul>
@@ -192,8 +237,11 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
                   key={group.current.id}
                   group={group}
                   canDecide={canDecide}
+                  canEdit={canCreate}
                   deciding={decide.isLoading}
                   onReturn={handleReturn}
+                  onEdit={(record) => setEditor({ mode: 'edit', record })}
+                  onSupersede={(record) => setEditor({ mode: 'supersede', record })}
                 />
               ))}
             </ul>
@@ -237,6 +285,16 @@ export function SurveyMaterialsSection({ lotId, effectiveRole }: SurveyMaterials
         blocks a conform. CIVOS records that a report arrived; whether it is accepted is decided
         when the hold point is released.
       </p>
+
+      {editor && (
+        <SurveyRecordEditorModal
+          mode={editor.mode}
+          lotId={lotId}
+          projectId={projectId}
+          record={editor.record}
+          onClose={() => setEditor(undefined)}
+        />
+      )}
     </div>
   );
 }

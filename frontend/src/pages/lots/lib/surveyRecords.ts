@@ -62,11 +62,62 @@ export const SURVEY_KIND_LABELS: Readonly<Record<string, string>> = {
   as_built: 'As-built',
 };
 
+/** The backend's `SURVEY_KINDS`, derived from the labels so the two cannot drift. */
+export const SURVEY_KINDS = Object.keys(SURVEY_KIND_LABELS);
+
+/**
+ * The backend's `SURVEY_VERDICTS` (`surveys/statusWorkflow.ts`).
+ *
+ * `not_stated` is in the list and is not a null: "the report gave no verdict" is
+ * a fact somebody read off the report, and leaving it unset says only that
+ * nobody has transcribed it yet. The editor offers both.
+ */
+export const SURVEY_VERDICTS = ['conforms', 'does_not_conform', 'qualified', 'not_stated'];
+
 /**
  * Mirrors the backend `SURVEY_DECIDERS` (`routes/surveys/index.ts`). A client
  * gate is an affordance; the route re-checks it on every call.
  */
 export const SURVEY_DECIDER_ROLES = ['owner', 'admin', 'project_manager', 'quality_manager'];
+
+/**
+ * Mirrors the backend `SURVEY_CREATORS` (`routes/surveys/index.ts:69`) — who may
+ * file, edit and attach a report to a survey record.
+ *
+ * Wider than {@link SURVEY_DECIDER_ROLES} by exactly `site_engineer`: filing a
+ * report is a clerical act and survey coordination sits in the site engineer's
+ * duty list, while returning a third party's deliverable and superseding a
+ * record are judgements. `foreman` is in neither, and no subcontractor role
+ * reaches any survey surface.
+ */
+export const SURVEY_CREATOR_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_engineer',
+  'quality_manager',
+];
+
+/**
+ * The body the create route accepts (`createSurveySchema`). Explicit nulls, not
+ * absent keys: the backend normalises absent and null identically, and a form
+ * that clears a field must send the clearing.
+ */
+export interface SurveyDraft {
+  kind: string;
+  status: string;
+  reportDocumentId: string | null;
+  surveyorName: string | null;
+  surveyorCompany: string | null;
+  surveyorRegistration: string | null;
+  surveyedAt: string | null;
+  surveyorVerdict: string | null;
+  verdictSourceNote: string | null;
+  notes: string | null;
+}
+
+/** What PATCH accepts — a draft minus the three fields it refuses. */
+export type SurveyPatch = Omit<SurveyDraft, 'kind' | 'status' | 'reportDocumentId'>;
 
 export interface SurveyRecord {
   id: string;
@@ -258,4 +309,30 @@ export function countOutstandingSurveys(groups: readonly SurveyRevisionGroup[]):
  */
 export function canReturnSurvey(record: SurveyRecord): boolean {
   return record.status === 'received' && record.supersededById === null;
+}
+
+/**
+ * Whether the editor may be opened against this record.
+ *
+ * Mirrors `assertEditableWhenSuperseded`, and note which half is frozen: the
+ * SUPERSEDED record is closed, the current one stays editable in every state.
+ * A superseded record is what the record that replaced it was written against,
+ * so changing it rewrites history; fixing a mistyped surveyor name on a live
+ * record is filing hygiene.
+ */
+export function canEditSurvey(record: SurveyRecord): boolean {
+  return record.supersededById === null;
+}
+
+/**
+ * Whether a corrected report can still be filed against this record.
+ *
+ * `returned_for_correction` has no status edge out — the corrected report is a
+ * NEW record that supersedes this one — so this is the continuation of the loop,
+ * not a second way to change state. The backend refuses to supersede a record
+ * that was already superseded (`Only the current survey revision can be
+ * superseded`).
+ */
+export function canSupersedeSurvey(record: SurveyRecord): boolean {
+  return record.status === 'returned_for_correction' && record.supersededById === null;
 }
