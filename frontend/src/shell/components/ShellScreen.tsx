@@ -20,10 +20,11 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, Moon, Sun } from 'lucide-react';
+import { ChevronLeft, LogOut, Moon, Sun } from 'lucide-react';
 import { SyncChip } from './SyncChip';
 import { useTimeGreeting } from '../hooks/useTimeGreeting';
 import { useAuth } from '@/lib/auth';
+import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
 import { useOptionalTheme } from '@/lib/theme';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { apiFetch } from '@/lib/api';
@@ -123,6 +124,38 @@ function ThemeToggle() {
   );
 }
 
+// ── Sign out ─────────────────────────────────────────────────────────────────
+
+/**
+ * Sign out of the shell. Field crews share site devices, so both mobile shells
+ * need a way off the account; the shells have no classic Header/UserMenu.
+ *
+ * Lives in the home kicker row (the CIVOS/role line) rather than the greeting
+ * row: account chrome sits with the account chrome, and the greeting row stays
+ * at three controls. Home only — every inner screen is one back-tap from here.
+ *
+ * Routed through useUnsyncedSignOut so a foreman with queued offline work gets
+ * the same "this will be deleted" confirm desktop users get.
+ */
+function SignOutButton() {
+  const navigate = useNavigate();
+  const { requestSignOut, dialog, isSigningOut } = useUnsyncedSignOut();
+  return (
+    <>
+      <button
+        type="button"
+        disabled={isSigningOut}
+        onClick={() => void requestSignOut(() => navigate('/login', { replace: true }))}
+        className="shell-tap48 ml-auto flex items-center gap-1 font-mono text-[11px] font-semibold tracking-[0.14em] text-muted-foreground transition-colors active:text-foreground disabled:opacity-60"
+      >
+        <LogOut size={13} strokeWidth={2.2} aria-hidden="true" />
+        SIGN OUT
+      </button>
+      {dialog}
+    </>
+  );
+}
+
 // ── Home header ───────────────────────────────────────────────────────────────
 
 function HomeHeader({
@@ -182,6 +215,7 @@ function HomeHeader({
           CIVOS
         </span>
         <span className="shell-chip text-[10.5px]">{chipLabel}</span>
+        <SignOutButton />
       </div>
 
       {/* Main greeting row */}
