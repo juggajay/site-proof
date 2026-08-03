@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeAll, beforeEach } from 'vitest';
 
 import type { ProjectControlLine, ProjectLotGeometry } from './lotMapData';
 
@@ -32,7 +32,9 @@ vi.mock('react-leaflet', () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   const RecordingLayersControl = ({ children, ...props }: { children?: React.ReactNode }) => {
     layersControlProps.current = props;
-    return <div>{children}</div>;
+    // A testid so its ABSENCE on mobile is assertable — the recorded props
+    // object survives across tests and cannot prove a non-render.
+    return <div data-testid="layers-control">{children}</div>;
   };
   const LayersControl = Object.assign(RecordingLayersControl, { BaseLayer: Passthrough });
   return {
@@ -42,7 +44,9 @@ vi.mock('react-leaflet', () => {
     },
     TileLayer: (props: Record<string, unknown>) => {
       tileLayerProps.current = props;
-      return <div data-testid="tile-layer" />;
+      // `data-url` is the only tell for WHICH basemap is mounted — the url is a
+      // Leaflet option, so it never reaches the DOM on its own.
+      return <div data-testid="tile-layer" data-url={String(props.url)} />;
     },
     ScaleControl: () => <div data-testid="scale-control" />,
     LayersControl,
@@ -716,18 +720,10 @@ describe('LotMapView', () => {
     expect(screen.getByTestId('lot-map-toolbar-column')).toHaveClass('z-[1001]');
   });
 
-  it('moves the leaflet layers control to the top-LEFT on mobile, clear of the toolbar', () => {
-    isMobileValue = true;
-    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
-    render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
-    // Top-left is free on phones because zoomControl is off there.
-    expect(layersControlProps.current.position).toBe('topleft');
-    expect(mapContainerProps.current.zoomControl).toBe(false);
-  });
-
   it('keeps the leaflet layers control at the top-right on desktop', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
+    expect(screen.getByTestId('layers-control')).toBeInTheDocument();
     expect(layersControlProps.current.position).toBe('topright');
   });
 
@@ -750,6 +746,129 @@ describe('LotMapView', () => {
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Map imagery failed to load' }),
     );
+  });
+
+  // ── QA/RT-02: the basemap picker ──────────────────────────────────────────
+  //
+  // On a 390px phone the CIVOS toolbar column is `inset-x-3` — it spans the whole
+  // top strip, so Leaflet's native basemap switcher was covered in EVERY top
+  // corner (top-right by "Past", then top-left by "Area" after PR #1744 moved
+  // it). Relocating corners is whack-a-mole, so mobile drops the control and the
+  // Layers sheet owns the choice. jsdom cannot hit-test; these lock the contract
+  // that a real-viewport tap then proves.
+  describe('Basemap picker', () => {
+    const SATELLITE = /api\.maptiler\.com/;
+    const STREET = /tile\.openstreetmap\.org/;
+
+    function renderMap() {
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView
+          projectId="proj-1"
+          filteredLotIds={new Set(['lot-1'])}
+          canManageSettings={false}
+        />,
+      );
+    }
+
+    /** Every basemap tile layer currently mounted, by url. */
+    function mountedTileUrls(): string[] {
+      return screen.getAllByTestId('tile-layer').map((el) => el.getAttribute('data-url') ?? '');
+    }
+
+    beforeEach(() => {
+      vi.stubEnv('VITE_MAPTILER_KEY', 'test-maptiler-key');
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('mobile: no leaflet layers control at all, and exactly one basemap tile', () => {
+      isMobileValue = true;
+      renderMap();
+
+      // The whole point: nothing for the toolbar to cover, in any corner.
+      expect(screen.queryByTestId('layers-control')).not.toBeInTheDocument();
+      const urls = mountedTileUrls();
+      expect(urls).toHaveLength(1);
+      // Same default the checked BaseLayer had — satellite when a key exists.
+      expect(urls[0]).toMatch(SATELLITE);
+    });
+
+    it('mobile: the Layers sheet offers the basemap as a radio choice with the active one marked', async () => {
+      isMobileValue = true;
+      renderMap();
+
+      const sheet = await openLayers();
+      const satellite = within(sheet).getByTestId('map-basemap-satellite');
+      const street = within(sheet).getByTestId('map-basemap-street');
+      // Radios, not ticks: exactly one basemap is drawn, so a checkbox would lie.
+      expect(satellite).toHaveAttribute('role', 'menuitemradio');
+      expect(satellite).toHaveAttribute('aria-checked', 'true');
+      expect(street).toHaveAttribute('aria-checked', 'false');
+      // Captioned and thumb-sized, like every other row on this sheet.
+      expect(satellite).toHaveTextContent('Satellite');
+      expect(street).toHaveTextContent('Street');
+      expect(street.className).toMatch(/min-h-\[56px\]/);
+      expect(street.className).toMatch(/\bw-full\b/);
+    });
+
+    it('mobile: choosing Street swaps the single tile layer and re-arms the tile-error toast', async () => {
+      isMobileValue = true;
+      renderMap();
+
+      // Arm the one-shot tile-error toast against the satellite layer.
+      (tileLayerProps.current.eventHandlers as { tileerror: () => void }).tileerror();
+      expect(toastMock).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(within(await openLayers()).getByTestId('map-basemap-street'));
+
+      const urls = mountedTileUrls();
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toMatch(STREET);
+      expect(within(await openLayers()).getByTestId('map-basemap-street')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+
+      // The toast re-arms for the newly drawn layer — all the `baselayerchange`
+      // listener ever did, now that there is no LayersControl to fire it.
+      (tileLayerProps.current.eventHandlers as { tileerror: () => void }).tileerror();
+      expect(toastMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('mobile: with no MapTiler key there is one basemap, so no choice is offered', async () => {
+      vi.stubEnv('VITE_MAPTILER_KEY', '');
+      isMobileValue = true;
+      renderMap();
+
+      const urls = mountedTileUrls();
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toMatch(STREET);
+
+      const sheet = await openLayers();
+      expect(within(sheet).queryByTestId('map-basemap-section')).not.toBeInTheDocument();
+      // The pin rows are untouched — the sheet did not lose its other sections.
+      expect(within(sheet).getByTestId('map-layer-photos')).toBeInTheDocument();
+    });
+
+    it('desktop: the native control still holds both base layers at the top-right, and the sheet adds nothing', async () => {
+      renderMap();
+
+      expect(screen.getByTestId('layers-control')).toBeInTheDocument();
+      expect(layersControlProps.current.position).toBe('topright');
+      // Both BaseLayers mount their tile layer in the mock; Leaflet shows the
+      // checked one. Unchanged from what shipped.
+      const urls = mountedTileUrls();
+      expect(urls).toHaveLength(2);
+      expect(urls.some((u) => SATELLITE.test(u))).toBe(true);
+      expect(urls.some((u) => STREET.test(u))).toBe(true);
+
+      // Desktop's dropdown deliberately does NOT duplicate the native control.
+      const menu = await openLayers();
+      expect(within(menu).queryByTestId('map-basemap-section')).not.toBeInTheDocument();
+      expect(within(menu).queryByTestId('map-basemap-satellite')).not.toBeInTheDocument();
+    });
   });
 
   describe('Photos layer', () => {

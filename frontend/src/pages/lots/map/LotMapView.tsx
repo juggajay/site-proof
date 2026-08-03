@@ -51,7 +51,12 @@ import { AssignDrawnLotDialog } from './AssignDrawnLotDialog';
 import { HistoryPanel } from './HistoryPanel';
 import { TestCoveragePanel } from './TestCoveragePanel';
 import { MapToolbar } from './MapToolbar';
-import { buildMapLayerRows, type MapPanelId, type MapPinLayerId } from './mapLayerRows';
+import {
+  buildMapLayerRows,
+  type MapBasemapId,
+  type MapPanelId,
+  type MapPinLayerId,
+} from './mapLayerRows';
 import {
   getTestCoverageColor,
   testCoverageByLot,
@@ -98,7 +103,6 @@ const POLYGON_STROKE_COLOR = '#1f2937';
 // Gap overlay: dashed red outline + light red fill (see PR note — SVG hatch
 // patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
 const GAP_COLOR = '#dc2626';
-const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
 
 // DG-4b. Both marker layers wear the SAME neutral shell — a white face with the
 // constant POLYGON_STROKE_COLOR casing already used for every lot boundary — and
@@ -720,6 +724,24 @@ export function LotMapView({
     tileErrorShownRef.current = false;
   }, []);
 
+  // QA/RT-02. Read at render, not module scope, so the satellite branch is
+  // reachable from a test that stubs the env.
+  const maptilerKey = import.meta.env.VITE_MAPTILER_KEY as string | undefined;
+  const satelliteAvailable = Boolean(maptilerKey);
+  // Mobile has no Leaflet LayersControl to hold the choice (see the tile block
+  // below), so the choice lives here and the Layers sheet drives it. Same
+  // default the control's `checked` BaseLayer had.
+  const [basemap, setBasemap] = useState<MapBasemapId>(satelliteAvailable ? 'satellite' : 'street');
+  const changeBasemap = useCallback(
+    (next: MapBasemapId) => {
+      setBasemap(next);
+      // All the `baselayerchange` listener ever did: re-arm the tile-error toast
+      // for the layer now on screen.
+      resetTileError();
+    },
+    [resetTileError],
+  );
+
   const handleLocate = useCallback(() => {
     if (!map) return;
     if (!('geolocation' in navigator)) {
@@ -1273,6 +1295,28 @@ export function LotMapView({
 
   const showEmptyState = filteredGeometries.length === 0;
 
+  // One definition per basemap, used by both surfaces. Only ever ONE of these is
+  // mounted at a time (mobile picks one; the desktop control mounts the checked
+  // BaseLayer), so this adds no tile fetches over what shipped.
+  const satelliteTile = satelliteAvailable ? (
+    <TileLayer
+      url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${maptilerKey}`}
+      attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      maxZoom={20}
+      crossOrigin="anonymous"
+      eventHandlers={{ tileerror: handleTileError }}
+    />
+  ) : null;
+  const streetTile = (
+    <TileLayer
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      maxZoom={19}
+      crossOrigin="anonymous"
+      eventHandlers={{ tileerror: handleTileError }}
+    />
+  );
+
   return (
     <div className="bg-background" data-testid="lot-map-view">
       {/* A registered plan sheet is a reason to render the map even with zero
@@ -1349,6 +1393,9 @@ export function LotMapView({
                 layerModel={layerMenuModel}
                 onTogglePin={handleTogglePin}
                 onOpenPanel={handleOpenPanel}
+                basemap={basemap}
+                onBasemapChange={changeBasemap}
+                satelliteAvailable={satelliteAvailable}
                 unavailablePinLayers={unavailablePinLayers}
                 truncatedPinLayers={truncatedPinLayers}
                 canManageSettings={canManageSettings}
@@ -1395,32 +1442,33 @@ export function LotMapView({
               // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
               style={{ height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }}
             >
-              {/* Top-LEFT on mobile: at phone width the 44x44 layers toggle at
-                  top-right sits physically on top of the toolbar's rightmost
-                  tile ("Past"), so the tap landed on Leaflet. Top-left is free
-                  on phones because `zoomControl` is off above. */}
-              <LayersControl position={isMobile ? 'topleft' : 'topright'}>
-                {MAPTILER_KEY && (
-                  <LayersControl.BaseLayer checked name="Satellite">
-                    <TileLayer
-                      url={`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${MAPTILER_KEY}`}
-                      attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      maxZoom={20}
-                      crossOrigin="anonymous"
-                      eventHandlers={{ tileerror: handleTileError }}
-                    />
+              {/* QA/RT-02. On mobile there is no Leaflet LayersControl at all.
+                  Wherever it was cornered it lost: the CIVOS toolbar column is
+                  `inset-x-3`, so it spans the full top strip and covers both top
+                  corners — top-right sat under the "Past" tile, top-left under
+                  "Area", and the tap never reached Leaflet. So the basemap
+                  choice moves into the Layers sheet (a control the toolbar
+                  cannot cover, because the toolbar opens it) and exactly one
+                  TileLayer is rendered here, the same one the checked BaseLayer
+                  drew. Desktop keeps the native control, untouched. */}
+              {isMobile ? (
+                basemap === 'satellite' && satelliteAvailable ? (
+                  satelliteTile
+                ) : (
+                  streetTile
+                )
+              ) : (
+                <LayersControl position="topright">
+                  {satelliteAvailable && (
+                    <LayersControl.BaseLayer checked name="Satellite">
+                      {satelliteTile}
+                    </LayersControl.BaseLayer>
+                  )}
+                  <LayersControl.BaseLayer checked={!satelliteAvailable} name="Street">
+                    {streetTile}
                   </LayersControl.BaseLayer>
-                )}
-                <LayersControl.BaseLayer checked={!MAPTILER_KEY} name="Street">
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    maxZoom={19}
-                    crossOrigin="anonymous"
-                    eventHandlers={{ tileerror: handleTileError }}
-                  />
-                </LayersControl.BaseLayer>
-              </LayersControl>
+                </LayersControl>
+              )}
 
               <ScaleControl position="bottomleft" imperial={false} />
               <NorthArrow />
