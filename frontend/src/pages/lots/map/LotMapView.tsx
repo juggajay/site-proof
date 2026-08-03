@@ -1307,7 +1307,15 @@ export function LotMapView({
                 `auto` on each control is what keeps the transparent gaps between
                 controls draggable — the map has to stay usable underneath its
                 own toolbar. */}
-            <div className="pointer-events-none absolute inset-x-3 top-3 z-[1000] flex flex-col gap-2">
+            {/* z-[1001], not 1000: Leaflet's own `.leaflet-top`/`.leaflet-bottom`
+                control containers are z-index 1000, and the MapContainer comes
+                later in DOM order, so at 1000 Leaflet wins the tie and its
+                controls take the tap. One above them, still inside the
+                `relative isolate` root, so nothing leaks over app chrome. */}
+            <div
+              className="pointer-events-none absolute inset-x-3 top-3 z-[1001] flex flex-col gap-2"
+              data-testid="lot-map-toolbar-column"
+            >
               {/* Past view is not an action, it is a MODE: it changes the date
                   the whole map is about. So it gets a permanent bar stating that
                   date, not a popover that closes and leaves you unable to tell
@@ -1387,7 +1395,11 @@ export function LotMapView({
               // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
               style={{ height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }}
             >
-              <LayersControl position="topright">
+              {/* Top-LEFT on mobile: at phone width the 44x44 layers toggle at
+                  top-right sits physically on top of the toolbar's rightmost
+                  tile ("Past"), so the tap landed on Leaflet. Top-left is free
+                  on phones because `zoomControl` is off above. */}
+              <LayersControl position={isMobile ? 'topleft' : 'topright'}>
                 {MAPTILER_KEY && (
                   <LayersControl.BaseLayer checked name="Satellite">
                     <TileLayer

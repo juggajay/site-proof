@@ -122,6 +122,15 @@ describe('BottomSheet', () => {
     expect(dialog).toHaveAttribute('aria-label', 'My Sheet');
   });
 
+  // ── Pointer events ─────────────────────────────────────────────────────────
+  it('sets pointer-events-auto on the root so an inert container cannot disable it', () => {
+    // `pointer-events` inherits. The sheet renders in-tree, and the map toolbar
+    // column is `pointer-events-none` — without `auto` here the sheet paints but
+    // nothing in it is tappable. jsdom cannot hit-test, so this locks the class.
+    renderSheet();
+    expect(screen.getByRole('dialog')).toHaveClass('pointer-events-auto');
+  });
+
   // ── Content does not bubble to backdrop ────────────────────────────────────
   it('does NOT call onClose when clicking inside the sheet content', () => {
     const onClose = vi.fn();
