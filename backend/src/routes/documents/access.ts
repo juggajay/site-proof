@@ -53,6 +53,26 @@ const DOCUMENT_SPECIAL_PORTAL_CATEGORIES = [
   'test_results',
   'ncr_evidence',
 ] as const;
+
+/**
+ * Categories a subcontractor portal identity may never read, at any lot scope.
+ * Commercial documents (head contracts, rate schedules, claim and variation
+ * backup) are principal-side material; unlike the special categories above,
+ * nothing surfaces them to the portal, so they are excluded outright rather
+ * than routed to a portal module. Every upload surface writes the lowercase
+ * category ids from the document form, so a case-sensitive match is enough.
+ */
+const DOCUMENT_PORTAL_BLOCKED_CATEGORIES: readonly string[] = ['commercial'];
+
+/**
+ * Excluded from the portal's *general* document scope: the special categories
+ * reach subcontractors through their own module scopes, the blocked ones never.
+ */
+const DOCUMENT_GENERAL_SCOPE_EXCLUDED_CATEGORIES: string[] = [
+  ...DOCUMENT_SPECIAL_PORTAL_CATEGORIES,
+  ...DOCUMENT_PORTAL_BLOCKED_CATEGORIES,
+];
+
 const DOCUMENT_CATEGORY_PORTAL_MODULES: Record<
   (typeof DOCUMENT_SPECIAL_PORTAL_CATEGORIES)[number],
   SubcontractorPortalAccessKey
@@ -87,6 +107,10 @@ export const INTERNAL_ONLY_DOCUMENT_TYPES = ['drawing', IMPORT_SOURCE_DOCUMENT_T
 
 function isNcrEvidenceCategory(category?: string | null): boolean {
   return category === 'ncr_evidence';
+}
+
+function isPortalBlockedCategory(category?: string | null): boolean {
+  return category != null && DOCUMENT_PORTAL_BLOCKED_CATEGORIES.includes(category);
 }
 
 function getDocumentPortalModule(category?: string | null): SubcontractorPortalAccessKey {
@@ -180,6 +204,10 @@ async function hasSubcontractorDocumentPortalAccess(
     return true;
   }
 
+  if (isPortalBlockedCategory(category)) {
+    return false;
+  }
+
   return hasSubcontractorPortalModuleAccess({
     userId: user.id,
     role: user.roleInCompany,
@@ -195,6 +223,10 @@ export async function requireSubcontractorDocumentPortalAccess(
 ): Promise<void> {
   if (!isDocumentSubcontractorUser(user)) {
     return;
+  }
+
+  if (isPortalBlockedCategory(category)) {
+    throw AppError.forbidden('Access denied');
   }
 
   await requireSubcontractorPortalModuleAccess({
@@ -274,7 +306,7 @@ function getDocumentModuleCompanyIds(
 
 function getGeneralDocumentCategoryScope(): Prisma.DocumentWhereInput {
   return {
-    OR: [{ category: null }, { category: { notIn: [...DOCUMENT_SPECIAL_PORTAL_CATEGORIES] } }],
+    OR: [{ category: null }, { category: { notIn: DOCUMENT_GENERAL_SCOPE_EXCLUDED_CATEGORIES } }],
   };
 }
 
@@ -380,7 +412,7 @@ export async function applyDocumentPortalCategoryScope(
   if (canReadGeneralDocuments) {
     categoryAccess.push(
       { category: null },
-      { category: { notIn: [...DOCUMENT_SPECIAL_PORTAL_CATEGORIES] } },
+      { category: { notIn: DOCUMENT_GENERAL_SCOPE_EXCLUDED_CATEGORIES } },
     );
   }
   if (canReadItpEvidence) {
