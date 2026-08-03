@@ -52,6 +52,7 @@ import { currentDocCount } from '../docsShellState';
 function makeItem(over: Partial<DocItem> = {}): DocItem {
   return {
     id: 'd1',
+    source: 'register',
     number: 'DRG-1204',
     title: 'Embankment typical sections',
     revision: 'C',

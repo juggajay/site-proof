@@ -1,7 +1,8 @@
 /**
  * Exhaustive unit tests for the pure Drawings & Docs shell state helpers:
- * current-revision detection, the projection + current-first ordering, the
- * optional lot filter, search, counts, and the revision pill label.
+ * current-revision detection, the projection of BOTH sources (drawing register
+ * rows and lot-filed drawing documents) + the merge/dedupe, current-first
+ * ordering, the lot filter, search, counts, and the revision pill label.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -13,6 +14,7 @@ import {
   sortDocsCurrentFirst,
   toDocItems,
   type DocItem,
+  type DrawingDocumentRow,
   type DrawingRegisterRow,
 } from '../docsShellState';
 
@@ -29,9 +31,22 @@ function row(over: Partial<DrawingRegisterRow> = {}): DrawingRegisterRow {
   };
 }
 
+function docRow(over: Partial<DrawingDocumentRow> = {}): DrawingDocumentRow {
+  return {
+    id: 'document-1',
+    filename: 'Sheet-05-pavement.pdf',
+    caption: 'Pavement sheet for the lot',
+    supersededById: null,
+    lotId: 'lot-1',
+    lot: { id: 'lot-1', lotNumber: 'LOT-001' },
+    ...over,
+  };
+}
+
 function item(over: Partial<DocItem> = {}): DocItem {
   return {
     id: 'd1',
+    source: 'register',
     number: 'DRG-1204',
     title: 'Embankment typical sections',
     revision: 'C',
@@ -61,6 +76,7 @@ describe('toDocItems projection', () => {
     const [it] = toDocItems([row()]);
     expect(it).toMatchObject({
       id: 'd1',
+      source: 'register',
       number: 'DRG-1204',
       title: 'Embankment typical sections',
       revision: 'C',
@@ -91,6 +107,81 @@ describe('toDocItems projection', () => {
       row({ lotId: 'explicit', lot: { id: 'rel', lotNumber: 'LOT-001' } }),
     ])[0];
     expect(it.lotId).toBe('explicit');
+  });
+});
+
+describe('drawing-document projection', () => {
+  it('projects a lot-filed drawing document onto the DocItem shape', () => {
+    const [it] = toDocItems([], [docRow()]);
+    expect(it).toEqual({
+      id: 'document-1',
+      source: 'document',
+      number: 'Sheet-05-pavement.pdf',
+      title: 'Pavement sheet for the lot',
+      revision: null,
+      current: true,
+      lotLabel: 'LOT-001',
+      lotId: 'lot-1',
+      documentId: 'document-1',
+      fileUrl: null,
+    });
+  });
+
+  it('marks a formally superseded document as not current', () => {
+    const [it] = toDocItems([], [docRow({ supersededById: 'document-2' })]);
+    expect(it.current).toBe(false);
+  });
+
+  it('tolerates a document with no caption and no lot link', () => {
+    const [it] = toDocItems([], [docRow({ caption: null, lotId: null, lot: null })]);
+    expect(it.title).toBeNull();
+    expect(it.lotId).toBeNull();
+    expect(it.lotLabel).toBeNull();
+  });
+
+  it('falls back to the lot relation id when lotId is absent', () => {
+    const [it] = toDocItems([], [docRow({ lotId: undefined })]);
+    expect(it.lotId).toBe('lot-1');
+  });
+});
+
+describe('toDocItems merge + dedupe', () => {
+  it('merges register rows and drawing documents into one list', () => {
+    const out = toDocItems([row({ id: 'd1', drawingNumber: 'DRG-1' })], [docRow({ id: 'doc-9' })]);
+    expect(out.map((i) => i.id)).toEqual(['d1', 'doc-9']);
+    expect(out.map((i) => i.number)).toEqual(['DRG-1', 'Sheet-05-pavement.pdf']);
+    expect(out.map((i) => i.source)).toEqual(['register', 'document']);
+  });
+
+  it('drops the document that already backs a register row (no duplicate file)', () => {
+    // Every register drawing is backed by a Document row, so the same file comes
+    // back from BOTH endpoints — the register row must win.
+    const out = toDocItems(
+      [row({ id: 'd1', document: { id: 'doc-1' } })],
+      [docRow({ id: 'doc-1', filename: 'DRG-1204-C.pdf' }), docRow({ id: 'doc-2' })],
+    );
+    expect(out).toHaveLength(2);
+    expect(out.map((i) => i.documentId).sort()).toEqual(['doc-1', 'doc-2']);
+    expect(out.find((i) => i.documentId === 'doc-1')).toMatchObject({
+      source: 'register',
+      number: 'DRG-1204',
+      revision: 'C',
+    });
+  });
+
+  it('orders the merged set current-first, then by number', () => {
+    const out = toDocItems(
+      [row({ id: 'd1', drawingNumber: 'DRG-9', document: { id: 'doc-1' } })],
+      [
+        docRow({ id: 'doc-a', filename: 'AAA.pdf', supersededById: 'doc-old' }),
+        docRow({ id: 'doc-b', filename: 'BBB.pdf' }),
+      ],
+    );
+    expect(out.map((i) => i.number)).toEqual(['BBB.pdf', 'DRG-9', 'AAA.pdf']);
+  });
+
+  it('defaults the document list to empty (register-only callers unchanged)', () => {
+    expect(toDocItems([row()])).toHaveLength(1);
   });
 });
 
@@ -172,6 +263,27 @@ describe('filterDocsByLot', () => {
     const snapshot = items.map((i) => i.id);
     filterDocsByLot(items, 'lot-1');
     expect(items.map((i) => i.id)).toEqual(snapshot);
+  });
+
+  it('really narrows a merged list to the lot — the deep-link is no longer a no-op', () => {
+    // The regression this whole surface change exists for: lot linkage lives on
+    // the DOCUMENT rows, so filtering only did something once they were merged.
+    const merged = toDocItems(
+      [row({ id: 'd1', drawingNumber: 'DRG-1', document: { id: 'doc-1' } })],
+      [
+        docRow({ id: 'doc-mine', filename: 'MINE.pdf', lotId: 'lot-1' }),
+        docRow({
+          id: 'doc-theirs',
+          filename: 'THEIRS.pdf',
+          lotId: 'lot-2',
+          lot: { id: 'lot-2', lotNumber: 'LOT-002' },
+        }),
+      ],
+    );
+
+    const scoped = filterDocsByLot(merged, 'lot-1');
+    // The lot's own drawing, plus the project-wide register row; not lot-2's.
+    expect(scoped.map((i) => i.number).sort()).toEqual(['DRG-1', 'MINE.pdf']);
   });
 });
 

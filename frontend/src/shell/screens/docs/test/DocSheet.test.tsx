@@ -60,6 +60,7 @@ import { DocSheet } from '../DocSheet';
 function makeItem(over: Partial<DocItem> = {}): DocItem {
   return {
     id: 'drg-1',
+    source: 'register',
     number: 'DRG-1204',
     title: 'Culvert headwall details',
     revision: 'C',
@@ -176,6 +177,28 @@ describe('DocSheet', () => {
     // The sheet still does its main job.
     expect(screen.getByRole('button', { name: /Open drawing/i })).toBeInTheDocument();
     expect(screen.getByText('REV C — CURRENT')).toBeInTheDocument();
+  });
+
+  it('renders no history for a lot-filed drawing DOCUMENT, and asks for none', async () => {
+    // A document row is not the governed `drawing` record, so its id would only
+    // ever return an empty timeline — the sheet skips the section and the query.
+    apiGetMock.mockResolvedValue(ISSUES);
+    renderSheet(
+      makeItem({
+        id: 'document-9',
+        source: 'document',
+        number: 'Lot sheet A.pdf',
+        revision: null,
+        documentId: 'document-9',
+      }),
+    );
+
+    await screen.findByText('Lot sheet A.pdf');
+    expect(screen.queryByText('Revision history')).toBeNull();
+    expect(screen.queryByTestId('timeline-body')).toBeNull();
+    expect(apiGetMock).not.toHaveBeenCalled();
+    // It still does its main job: opening the file.
+    expect(screen.getByRole('button', { name: /Open drawing/i })).toBeInTheDocument();
   });
 
   it('renders no history section at all without a resolved project', async () => {
