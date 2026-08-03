@@ -3,6 +3,7 @@ import {
   Image as ImageIcon,
   FlaskConical,
   Map as MapIcon,
+  Satellite,
   Waypoints,
 } from 'lucide-react';
 
@@ -19,6 +20,7 @@ import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
 import { cn } from '@/lib/utils';
 
 import type {
+  MapBasemapId,
   MapLayerMenuModel,
   MapPanelId,
   MapPanelRow,
@@ -37,6 +39,11 @@ const PANEL_ICON: Record<MapPanelId, typeof ImageIcon> = {
   testCoverage: FlaskConical,
 };
 
+const BASEMAPS: { id: MapBasemapId; label: string; icon: typeof ImageIcon }[] = [
+  { id: 'satellite', label: 'Satellite', icon: Satellite },
+  { id: 'street', label: 'Street', icon: MapIcon },
+];
+
 interface MapLayersMenuProps {
   isMobile: boolean;
   open: boolean;
@@ -50,6 +57,16 @@ interface MapLayersMenuProps {
   model: MapLayerMenuModel;
   onTogglePin: (id: MapPinLayerId) => void;
   onOpenPanel: (id: MapPanelId) => void;
+  /**
+   * QA/RT-02, mobile only. The phone has no Leaflet basemap switcher — the CIVOS
+   * toolbar spans the whole top strip and covered it in every corner — so the
+   * choice lives on this sheet. Desktop's native top-right control is untouched
+   * and these are ignored there.
+   */
+  basemap: MapBasemapId;
+  onBasemapChange: (id: MapBasemapId) => void;
+  /** False without a MapTiler key: one basemap exists, so no choice is offered. */
+  satelliteAvailable: boolean;
 }
 
 /** "Test pins, Coverage and Test coverage are live-only." */
@@ -80,6 +97,9 @@ export function MapLayersMenu({
   model,
   onTogglePin,
   onOpenPanel,
+  basemap,
+  onBasemapChange,
+  satelliteAvailable,
 }: MapLayersMenuProps) {
   const liveOnly = liveOnlySentence(model.liveOnly);
 
@@ -89,7 +109,35 @@ export function MapLayersMenu({
         {trigger}
         <BottomSheet isOpen={open} onClose={() => onOpenChange(false)} title="Map layers">
           <div data-testid="map-layers-sheet">
-            <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            {/* Without a MapTiler key there is exactly one basemap, so the whole
+                section goes — a locked single choice is not a choice, and it is
+                the same thing the Leaflet control did (it only ever rendered the
+                BaseLayers that existed). */}
+            {satelliteAvailable && (
+              <div data-testid="map-basemap-section">
+                <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Basemap
+                </p>
+                {BASEMAPS.map(({ id, label, icon: Icon }) => (
+                  <SheetChoiceRow
+                    key={id}
+                    role="menuitemradio"
+                    checked={basemap === id}
+                    icon={Icon}
+                    label={label}
+                    onClick={() => onBasemapChange(id)}
+                    testId={`map-basemap-${id}`}
+                  />
+                ))}
+              </div>
+            )}
+
+            <p
+              className={cn(
+                'px-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground',
+                satelliteAvailable && 'mt-4 border-t pt-4',
+              )}
+            >
               Show on map
             </p>
             {model.pins.map((row) => (
@@ -184,47 +232,85 @@ export function MapLayersMenu({
 }
 
 /**
- * A pin layer on the mobile sheet. The WHOLE 56px row is the button — not a
- * 40x24 switch floating at the end of it — and it carries
- * role="menuitemcheckbox" so the tick is the accessible state, not a colour.
+ * A settable row on the mobile sheet. The WHOLE 56px row is the button — not a
+ * 40x24 switch floating at the end of it — and the state is carried by
+ * `aria-checked`, not a colour.
+ *
+ * `role` is the row's whole meaning: `menuitemcheckbox` for a pin layer (a set —
+ * arm as many as you like), `menuitemradio` for the basemap (a choice — exactly
+ * one). The indicator follows it: a square tick box vs a round radio dot.
  */
-function SheetPinRow({ row, onToggle }: { row: MapPinLayerRow; onToggle: () => void }) {
-  const Icon = PIN_ICON[row.id];
-  const count = countLabel(row.count);
+function SheetChoiceRow({
+  role,
+  checked,
+  icon: Icon,
+  label,
+  detail,
+  onClick,
+  testId,
+}: {
+  role: 'menuitemcheckbox' | 'menuitemradio';
+  checked: boolean;
+  icon: typeof ImageIcon;
+  label: string;
+  detail?: string | null;
+  onClick: () => void;
+  testId: string;
+}) {
+  const radio = role === 'menuitemradio';
   return (
     <button
       type="button"
-      role="menuitemcheckbox"
-      aria-checked={row.checked}
-      onClick={onToggle}
+      role={role}
+      aria-checked={checked}
+      onClick={onClick}
       className="flex min-h-[56px] w-full items-center gap-3 border-t px-1 text-left first:border-t-0"
-      data-testid={`map-layer-${row.id}`}
+      data-testid={testId}
     >
       <span
         className={cn(
-          'flex h-[22px] w-[22px] flex-none items-center justify-center rounded border-2',
-          row.checked
+          'flex h-[22px] w-[22px] flex-none items-center justify-center border-2',
+          radio ? 'rounded-full' : 'rounded',
+          checked
             ? 'border-primary bg-primary text-primary-foreground'
             : 'border-muted-foreground/60 bg-card',
         )}
         aria-hidden
       >
-        {row.checked && (
-          <svg
-            viewBox="0 0 24 24"
-            className="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={3}
-          >
-            <path d="m20 6-11 11-5-5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        {checked &&
+          (radio ? (
+            <span className="h-2 w-2 rounded-full bg-current" />
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3 w-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+            >
+              <path d="m20 6-11 11-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ))}
       </span>
       <Icon className="h-5 w-5 flex-none text-muted-foreground" aria-hidden />
-      <span className="flex-1 text-[15px]">{row.label}</span>
-      {count && <span className="text-xs text-muted-foreground">{count}</span>}
+      <span className="flex-1 text-[15px]">{label}</span>
+      {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
     </button>
+  );
+}
+
+/** A pin layer on the mobile sheet: a checkbox row, because layers are a set. */
+function SheetPinRow({ row, onToggle }: { row: MapPinLayerRow; onToggle: () => void }) {
+  return (
+    <SheetChoiceRow
+      role="menuitemcheckbox"
+      checked={row.checked}
+      icon={PIN_ICON[row.id]}
+      label={row.label}
+      detail={countLabel(row.count)}
+      onClick={onToggle}
+      testId={`map-layer-${row.id}`}
+    />
   );
 }
 

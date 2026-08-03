@@ -13,7 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 
 import { MapLayersMenu } from './MapLayersMenu';
-import type { MapLayerMenuModel, MapPanelId, MapPinLayerId } from './mapLayerRows';
+import type { MapBasemapId, MapLayerMenuModel, MapPanelId, MapPinLayerId } from './mapLayerRows';
 
 // Mirrors RESULT_CAP in backend/src/routes/spatialSearch.ts. The wire only
 // carries a boolean (`photosTruncated` / `testResultsTruncated`), so the number
@@ -119,6 +119,11 @@ interface MapToolbarProps {
   layerModel: MapLayerMenuModel;
   onTogglePin: (id: MapPinLayerId) => void;
   onOpenPanel: (id: MapPanelId) => void;
+  /** Mobile only — the basemap the Layers sheet offers and the map draws. */
+  basemap: MapBasemapId;
+  onBasemapChange: (id: MapBasemapId) => void;
+  /** False without a MapTiler key: there is one basemap and nothing to choose. */
+  satelliteAvailable: boolean;
   /** Armed marker layers whose viewport fetch failed, by display name. */
   unavailablePinLayers: string[];
   /** Armed marker layers the backend capped, by display name. */
@@ -153,6 +158,9 @@ export function MapToolbar({
   layerModel,
   onTogglePin,
   onOpenPanel,
+  basemap,
+  onBasemapChange,
+  satelliteAvailable,
   unavailablePinLayers,
   truncatedPinLayers,
   canManageSettings,
@@ -216,6 +224,9 @@ export function MapToolbar({
           model={layerModel}
           onTogglePin={onTogglePin}
           onOpenPanel={onOpenPanel}
+          basemap={basemap}
+          onBasemapChange={onBasemapChange}
+          satelliteAvailable={satelliteAvailable}
           trigger={
             <ToolbarButton
               icon={Layers}

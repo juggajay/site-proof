@@ -18,6 +18,12 @@
 export type MapPinLayerId = 'photos' | 'testPins';
 export type MapPanelId = 'plans' | 'coverage' | 'testCoverage';
 
+/**
+ * The ground the map sits on. Exactly one is drawn at a time — this is a choice,
+ * never a set, which is why the mobile sheet renders it as radios and not ticks.
+ */
+export type MapBasemapId = 'satellite' | 'street';
+
 export interface MapPinLayerRow {
   id: MapPinLayerId;
   label: string;
