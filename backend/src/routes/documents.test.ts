@@ -2966,6 +2966,179 @@ describe('Documents API', () => {
       }
     }, 60000);
 
+    it('should hide commercial category documents from subcontractor portal identities', async () => {
+      const suffix = `${Date.now()}-${crypto.randomUUID()}`;
+      const subRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `doc-sub-commercial-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Commercial Scope Subcontractor',
+          tosAccepted: true,
+        });
+      const subToken = subRes.body.token;
+      const subUserId = subRes.body.user.id;
+
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Commercial Scope Subcontractor ${suffix}`,
+          primaryContactName: 'Commercial Sub',
+          primaryContactEmail: `doc-sub-commercial-contact-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { documents: true },
+        },
+      });
+
+      // Project-wide (lotId: null) is the leak path — that scope is deliberately
+      // open to the portal, so the category exclusion is the only thing hiding
+      // contracts and claim backup. The assigned-lot copy proves lot assignment
+      // does not buy commercial access either.
+      const projectWideCommercialDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'contract',
+          category: 'commercial',
+          filename: 'head-contract-rates.pdf',
+          fileUrl: '/uploads/documents/head-contract-rates.pdf',
+          uploadedById: userId,
+        },
+      });
+      const assignedLotCommercialDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'contract',
+          category: 'commercial',
+          filename: 'assigned-lot-claim-backup.pdf',
+          fileUrl: '/uploads/documents/assigned-lot-claim-backup.pdf',
+          uploadedById: userId,
+        },
+      });
+      const projectWideGeneralDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'specification',
+          category: 'construction',
+          filename: 'project-wide-construction-spec.pdf',
+          fileUrl: '/uploads/documents/project-wide-construction-spec.pdf',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        const internalListRes = await request(app)
+          .get(`/api/documents/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(internalListRes.status).toBe(200);
+        const internalDocumentIds = internalListRes.body.documents.map(
+          (document: { id: string }) => document.id,
+        );
+        expect(internalDocumentIds).toContain(projectWideCommercialDocument.id);
+        expect(internalDocumentIds).toContain(assignedLotCommercialDocument.id);
+
+        const internalSignedUrlRes = await request(app)
+          .post(`/api/documents/${projectWideCommercialDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(internalSignedUrlRes.status).toBe(200);
+
+        await prisma.user.update({
+          where: { id: subUserId },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subUserId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            canCompleteITP: true,
+          },
+        });
+
+        const subListRes = await request(app)
+          .get(`/api/documents/${projectId}`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(subListRes.status).toBe(200);
+        const subDocumentIds = subListRes.body.documents.map(
+          (document: { id: string }) => document.id,
+        );
+        expect(subDocumentIds).not.toContain(projectWideCommercialDocument.id);
+        expect(subDocumentIds).not.toContain(assignedLotCommercialDocument.id);
+        // Control: the portal list is genuinely populated, not empty for an
+        // unrelated reason.
+        expect(subDocumentIds).toContain(projectWideGeneralDocument.id);
+
+        const subPortalListRes = await request(app)
+          .get(`/api/documents/${projectId}?subcontractorView=true`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(subPortalListRes.status).toBe(200);
+        expect(
+          subPortalListRes.body.documents.map((document: { id: string }) => document.id),
+        ).not.toContain(projectWideCommercialDocument.id);
+
+        const subCategoryFilterRes = await request(app)
+          .get(`/api/documents/${projectId}?category=commercial`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(subCategoryFilterRes.status).toBe(403);
+
+        for (const commercialDocument of [
+          projectWideCommercialDocument,
+          assignedLotCommercialDocument,
+        ]) {
+          const subSignedUrlRes = await request(app)
+            .post(`/api/documents/${commercialDocument.id}/signed-url`)
+            .set('Authorization', `Bearer ${subToken}`);
+          expect(subSignedUrlRes.status).toBe(403);
+
+          const subFileRes = await request(app)
+            .get(`/api/documents/file/${commercialDocument.id}`)
+            .set('Authorization', `Bearer ${subToken}`);
+          expect(subFileRes.status).toBe(403);
+        }
+      } finally {
+        await prisma.documentSignedUrlToken.deleteMany({
+          where: {
+            documentId: {
+              in: [
+                projectWideCommercialDocument.id,
+                assignedLotCommercialDocument.id,
+                projectWideGeneralDocument.id,
+              ],
+            },
+          },
+        });
+        await prisma.document.deleteMany({
+          where: {
+            id: {
+              in: [
+                projectWideCommercialDocument.id,
+                assignedLotCommercialDocument.id,
+                projectWideGeneralDocument.id,
+              ],
+            },
+          },
+        });
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subUserId } });
+        await prisma.user.delete({ where: { id: subUserId } }).catch(() => {});
+      }
+    }, 60000);
+
     it('should scope subcontractor documents across all active linked companies', async () => {
       const suffix = `${Date.now()}-${crypto.randomUUID()}`;
       const subRes = await request(app)
