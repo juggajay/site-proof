@@ -154,6 +154,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       '- Avoid uploading credentials, private keys, or unrelated personal data.',
       '- Photo capture and the daily diary pre-select the lot you are standing in from GPS — you can still change it.',
       '- GPS-tagged photos appear as pins on the site map when the Photos layer is on.',
+      '- Documents filed under a commercial category are never visible in the subcontractor portal, even on work a subcontractor can otherwise see.',
     ].join('\n'),
   },
   {
@@ -172,6 +173,23 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     ].join('\n'),
   },
   {
+    slug: 'deliveries',
+    title: 'Deliveries and materials',
+    body: [
+      'Track every material delivery from the daily diary to the lot, with the supplier docket attached as evidence.',
+      'Log deliveries in the daily diary. The foreman records a delivery with a photo of the supplier docket — or adds the photo later; the delivery saves either way. Dictation and offline capture work the same as the rest of the diary.',
+      'Review the delivery register. Deliveries shows every delivery across the project with its lot link, batch or mix reference, and whether the supplier docket is on file. Supplier, lot-linked, docket-filed, and date filters all run on the server, so the counts are the truth.',
+      'Attach evidence after the diary locks. The supplier docket, batch reference, and lot link can be attached to a delivery after the diary has locked — only those three evidence fields, and every change is written to the audit log.',
+      'Tips:',
+      '- "Docket filed" means the actual supplier docket document is attached. A typed docket number alone does not count.',
+      '- The unlinked-delivery and missing-docket counters are project-wide totals that filters never shrink — they are the numbers to drive to zero before handover.',
+      '- An unlinked delivery raises a support-level readiness prompt. It never blocks conformance or a claim.',
+      '- An NCR can name the delivery that supplied the bad material — pick the delivery on the NCR create form and the link shows on the NCR and its PDF. The link is set at creation only.',
+      '- The register sorts by the diary date the delivery was recorded against, so a late back-entry files where it happened, not at the top.',
+      '- Deliveries are internal. Subcontractors never see the register.',
+    ].join('\n'),
+  },
+  {
     slug: 'claims-reports',
     title: 'Claims, variations, costs, and reports',
     body: [
@@ -187,6 +205,21 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       '- The Costs page tracks labour and plant spend from approved dockets against lot budgets, broken down by subcontractor and by lot.',
       '- Reports can be scheduled to arrive by email on a recurring basis on Professional and Enterprise plans.',
       '- Reports are strongest when field teams maintain lots, dockets, tests, and diaries daily.',
+    ].join('\n'),
+  },
+  {
+    slug: 'handover',
+    title: 'Handover and the evidence folio',
+    body: [
+      'Issue per-lot evidence folios and export the whole project as a verified handover package.',
+      'Issue a lot evidence folio. From the lot page, issue a versioned folio PDF that brings together the lot tests, hold points, ITP completions, NCRs, deliveries, and a listing of the documents and photos held, with its SHA-256 hash shown in the app.',
+      'Request the project handover export. Handover Exports assembles the whole project into one download — the snapshot is sized up front and refused if it is too large, then frozen in a single transaction, and the ZIP is hash-verified.',
+      'Check closeout readiness first. The export page nudges when lots lack an evidence folio, but it never blocks the export.',
+      'Tips:',
+      '- Re-issuing a folio mints a new version. Version numbers are never reused and old versions are never overwritten.',
+      '- A folio prints what is expected, present, and missing — and above 5,000 evidence rows it refuses to issue rather than silently omit records.',
+      '- Folio issuance and the handover export are limited to owner, admin, project manager, and quality manager.',
+      '- Reports are the day-to-day review surface; the handover export is the end-of-job evidence package for the principal.',
     ].join('\n'),
   },
   {

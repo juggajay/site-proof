@@ -18,7 +18,9 @@ const PINNED_TOPICS: ReadonlyArray<[slug: string, title: string]> = [
   ['subbie-dockets', 'Subcontractor portal and dockets'],
   ['documents-drawings', 'Documents, drawings, and photos'],
   ['ncr-diary', 'NCRs and daily diary'],
+  ['deliveries', 'Deliveries and materials'],
   ['claims-reports', 'Claims, variations, costs, and reports'],
+  ['handover', 'Handover and the evidence folio'],
   ['admin', 'Admin, audit, and settings'],
   ['ai-copilot', 'AI in CIVOS: setup copilot and Clancy'],
   ['integrations', 'Integrations: API keys and webhooks'],
@@ -276,6 +278,114 @@ describe('product knowledge — test sufficiency facts', () => {
     // precisely the plausible-sounding feature Clancy would invent.
     expect(body('itp-holdpoints-tests')).toContain(
       'no list of everything they owe you across projects',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deliveries and handover. Same discipline as the blocks above: Clancy could
+// not answer "is that load's docket on file?" or "how do I hand the job over?"
+// at all before this, and an AI filling a knowledge gap from plausibility is
+// the exact failure the mirror exists to prevent. Every expectation is cited to
+// the code that makes it true.
+// ---------------------------------------------------------------------------
+describe('product knowledge — deliveries and handover facts', () => {
+  const body = (slug: string) => getHelpTopic(slug)?.body ?? '';
+
+  it('keeps a typed docket number from reading as filed evidence', () => {
+    // deliveries/index.ts:141,179 DOCKET_FILTERS test `docketDocumentId` only;
+    // docketFilingState.ts:40-61 names it the ONLY input. `docketNumber` is
+    // free text, so conflating the two would report evidence that is not held.
+    expect(body('deliveries')).toContain(
+      'means the actual supplier docket document is attached. A typed docket number alone does not count',
+    );
+  });
+
+  it('states the counters are project-wide, not filter-scoped', () => {
+    // deliveries/index.ts:249-250 count on `{ diary: { projectId } }` with no
+    // filter spread, unlike `total` (:248) which uses the filtered `where`.
+    expect(body('deliveries')).toContain('project-wide totals that filters never shrink');
+  });
+
+  it('names the exact three fields the after-lock route may touch', () => {
+    // deliveries/index.ts:109 EVIDENCE_FIELDS = docketDocumentId, batchRef,
+    // lotId, with a `.strict()` body schema (:112-118) — an unknown key is a
+    // 400. Widening this copy would promise a diary edit the lock forbids.
+    expect(body('deliveries')).toContain(
+      'The supplier docket, batch reference, and lot link can be attached to a delivery after the diary has locked — only those three evidence fields',
+    );
+    expect(body('deliveries')).toContain('every change is written to the audit log');
+  });
+
+  it('keeps an unlinked delivery advisory — it gates nothing', () => {
+    // evidenceReadiness/deliveryItems.ts:16-30 severity 'support',
+    // blocksAction: false, and it is absent from HANDOVER_BLOCKING_REASON_CODES.
+    expect(body('deliveries')).toContain(
+      'raises a support-level readiness prompt. It never blocks conformance or a claim',
+    );
+  });
+
+  it('states the NCR delivery link is create-only', () => {
+    // ncrCoreValidation.ts:124-126 — linkedDeliveryId is in createNcrSchema and
+    // deliberately absent from updateNcrSchema; no update path references it.
+    expect(body('deliveries')).toContain('The link is set at creation only');
+  });
+
+  it('states the register sorts by diary date, not created-at', () => {
+    // deliveries/index.ts:244 orderBy [{ diary: { date: 'desc' } }, { id: 'asc' }].
+    expect(body('deliveries')).toContain(
+      'sorts by the diary date the delivery was recorded against',
+    );
+  });
+
+  it('keeps the register internal-only', () => {
+    // Both register endpoints call requireInternalProjectAccess
+    // (deliveries/index.ts:203,227), which 403s a portal identity.
+    expect(body('deliveries')).toContain('Deliveries are internal. Subcontractors never see');
+  });
+
+  it('describes what a folio actually contains, without overstating it', () => {
+    // folioPayload.ts:176-191 collections; folioRenderer.ts:286-402 prints ALL
+    // hold points with a Released column, and documents/photos are a
+    // filename/type/captured TABLE — nothing is embedded. Survey records are
+    // omitted on purpose: they are gated on C5_SURVEY_RECORDS_ENABLED, off in
+    // production, so naming them would describe a feature no user can see.
+    const handover = body('handover');
+    expect(handover).toContain('a listing of the documents and photos held');
+    expect(handover).not.toContain('survey');
+  });
+
+  it('states the folio hash and that versions are append-only', () => {
+    // folioStorage.ts:64-66 sha256 over the PDF bytes, surfaced in
+    // EvidenceFolioSection.tsx:132-138. issuance.ts:104-108 takes MAX+1 under a
+    // @@unique([lotId, version]); the folio_issues_reject_update trigger makes
+    // an overwrite impossible at the database level.
+    const handover = body('handover');
+    expect(handover).toContain('SHA-256 hash shown in the app');
+    expect(handover).toContain('Version numbers are never reused and old versions are never');
+  });
+
+  it('states the row ceiling as a refusal, not a truncation', () => {
+    // assemble.ts:52 FOLIO_EVIDENCE_ROW_CEILING_DEFAULT = 5000; :509-520 throws
+    // FOLIO_EVIDENCE_CEILING_EXCEEDED inside the session transaction, so no
+    // partial folio is ever issued. Silently omitting records is the failure.
+    expect(body('handover')).toContain(
+      'above 5,000 evidence rows it refuses to issue rather than silently omit records',
+    );
+  });
+
+  it('keeps the closeout nudge a nudge', () => {
+    // HandoverExportPage.tsx:139-158 — "a nudge, never a gate"; the request
+    // button never disables on folio coverage and the manifest records
+    // lotsWithoutFolio (exportRunner.ts:202).
+    expect(body('handover')).toContain('nudges when lots lack an evidence folio, but it never');
+  });
+
+  it('names the four roles that can issue a folio and request an export', () => {
+    // folio/access.ts:23 FOLIO_ISSUERS and handoverExports/access.ts:27
+    // HANDOVER_EXPORT_REQUESTERS are the same four.
+    expect(body('handover')).toContain(
+      'limited to owner, admin, project manager, and quality manager',
     );
   });
 });
