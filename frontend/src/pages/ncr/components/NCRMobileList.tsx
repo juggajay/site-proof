@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { SwipeableCard } from '@/components/foreman/SwipeableCard';
+import { getNcrStatusMobileVariant } from '@/lib/statusColors';
+import { NCRGateStrip } from './NCRGateStrip';
 import type { NCR } from '../types';
 
 interface NCRMobileListProps {
@@ -88,14 +90,6 @@ function NCRMobileListInner({
             new Date(ncr.dueDate) < new Date() &&
             ncr.status !== 'closed' &&
             ncr.status !== 'closed_concession';
-          const statusVariant =
-            ncr.status === 'closed' || ncr.status === 'closed_concession'
-              ? 'default'
-              : ncr.status === 'open'
-                ? 'error'
-                : ncr.status === 'verification'
-                  ? 'default'
-                  : 'default';
 
           return (
             <div
@@ -134,7 +128,7 @@ function NCRMobileListInner({
                   subtitleClassName="line-clamp-2"
                   status={{
                     label: formatStatusLabel(ncr.status),
-                    variant: statusVariant,
+                    variant: getNcrStatusMobileVariant(ncr.status),
                   }}
                   fields={[
                     {
@@ -157,6 +151,11 @@ function NCRMobileListInner({
                       priority: 'secondary',
                     },
                     { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
+                    {
+                      label: 'Progress',
+                      value: <NCRGateStrip ncr={ncr} />,
+                      priority: 'secondary',
+                    },
                   ]}
                   onClick={() => onSelectNcr(ncr)}
                   className={cn(

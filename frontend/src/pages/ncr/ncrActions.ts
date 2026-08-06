@@ -38,7 +38,12 @@ function hasRole(userRole: UserRole | null, roles: string[]): boolean {
   return !!userRole && roles.includes(userRole.role);
 }
 
-function requiresQmApproval(ncr: NCR): boolean {
+/**
+ * A major NCR flagged for QM approval cannot be closed until an owner or
+ * quality manager approves it. Exported because the register's gate strip
+ * (`ncrGateStrip.ts`) needs the same rule to say why a row is stuck.
+ */
+export function requiresQmApproval(ncr: NCR): boolean {
   return ncr.severity === 'major' && ncr.qmApprovalRequired;
 }
 

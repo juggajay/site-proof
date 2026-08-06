@@ -1,54 +1,47 @@
-// Monochrome by default — colour reserved for states where a human must decide:
-// Hold Point (awaiting release) = warning, NCR Raised (open non-conformance) = destructive.
-// Neutral lifecycle states use muted-foreground shades so the eye lands on what needs action.
+// The canonical lot-status vocabulary: key, label and the one-line explanation
+// shown on the dashboard legend. Colour is NOT here — every swatch, dot and
+// chip for these statuses comes from `lib/statusColors.ts`, which is what stops
+// the dashboard, the register and the map from drifting apart.
 export const LOT_STATUS_OVERVIEW_ITEMS = [
   {
     key: 'not_started',
     label: 'Not Started',
     description: 'Work has not begun on site.',
-    dotClassName: 'bg-muted-foreground/30',
   },
   {
     key: 'in_progress',
     label: 'In Progress',
     description: 'Work is underway but not ready for evidence review.',
-    dotClassName: 'bg-muted-foreground/60',
   },
   {
     key: 'awaiting_test',
     label: 'Awaiting Test',
     description: 'The lot needs test evidence before conformance.',
-    dotClassName: 'bg-muted-foreground/60',
   },
   {
     key: 'hold_point',
     label: 'Hold Point',
     description: 'Inspection or release is required before work continues.',
-    dotClassName: 'bg-warning',
   },
   {
     key: 'ncr_raised',
     label: 'NCR Raised',
     description: 'An open non-conformance must be resolved.',
-    dotClassName: 'bg-destructive',
   },
   {
     key: 'completed',
     label: 'Completed',
     description: 'Field work is complete but not yet conformed.',
-    dotClassName: 'bg-foreground/70',
   },
   {
     key: 'conformed',
     label: 'Conformed',
     description: 'Quality evidence is approved and the lot can be claimed.',
-    dotClassName: 'bg-foreground',
   },
   {
     key: 'claimed',
     label: 'Claimed',
     description: 'The lot is included in a progress claim.',
-    dotClassName: 'bg-foreground',
   },
 ] as const;
 
@@ -59,18 +52,6 @@ export const EMPTY_LOT_STATUS_COUNTS: LotStatusCounts = Object.fromEntries(
   LOT_STATUS_OVERVIEW_ITEMS.map((item) => [item.key, 0]),
 ) as LotStatusCounts;
 
-// Badge classes matching the dot scheme above: muted lifecycle states, colour
-// only where a human must act, foreground tint for the earned end states.
-export const LOT_STATUS_BADGE_CLASSES: Record<LotStatusKey, string> = {
-  not_started: 'bg-muted text-muted-foreground',
-  in_progress: 'bg-muted text-muted-foreground',
-  awaiting_test: 'bg-muted text-muted-foreground',
-  hold_point: 'bg-warning/10 text-warning',
-  ncr_raised: 'bg-destructive/10 text-destructive',
-  completed: 'bg-muted text-muted-foreground',
-  conformed: 'bg-foreground/10 text-foreground',
-  claimed: 'bg-foreground/10 text-foreground',
-};
-
-export const getLotStatusBadgeClass = (status: string): string =>
-  LOT_STATUS_BADGE_CLASSES[status as LotStatusKey] ?? 'bg-muted text-muted-foreground';
+// Re-exported so the surfaces that already import it from here keep working;
+// the colours themselves live in `lib/statusColors.ts`.
+export { getLotStatusBadgeClass, getLotStatusSwatch } from './statusColors';

@@ -1,4 +1,5 @@
-import { LOT_STATUS_OVERVIEW_ITEMS, type LotStatusKey } from '@/lib/lotStatusOverview';
+import { LOT_STATUS_OVERVIEW_ITEMS } from '@/lib/lotStatusOverview';
+import { getLotStatusSwatch, lotStatusUsesDarkText } from '@/lib/statusColors';
 
 export interface LinearMapLot {
   id: string;
@@ -31,30 +32,16 @@ interface LinearMapScale {
   unmappedCount: number;
 }
 
-// Okabe-Ito colour-blind-safe palette (Feature #438), keyed to the canonical
-// lot statuses in lib/lotStatusOverview.ts. `darkText` marks fills too light
-// for white labels.
-const LOT_STATUS_MAP_COLORS: Record<LotStatusKey, { fill: string; darkText?: boolean }> = {
-  not_started: { fill: '#d1d5db', darkText: true },
-  in_progress: { fill: '#56B4E9', darkText: true },
-  awaiting_test: { fill: '#F0E442', darkText: true },
-  hold_point: { fill: '#E69F00', darkText: true },
-  ncr_raised: { fill: '#D55E00' },
-  completed: { fill: '#0072B2' },
-  conformed: { fill: '#009E73' },
-  claimed: { fill: '#CC79A7', darkText: true },
-};
-
 export const LOT_STATUS_LEGEND = LOT_STATUS_OVERVIEW_ITEMS.map((item) => ({
   key: item.key,
   label: item.label,
 }));
 
-export const getStatusColor = (status: string) =>
-  LOT_STATUS_MAP_COLORS[status as LotStatusKey]?.fill ?? '#9ca3af';
+// Map fills come from the shared status-colour map (Okabe-Ito, colour-blind
+// safe, Feature #438) so a polygon and its register chip are one decision.
+export const getStatusColor = getLotStatusSwatch;
 
-export const statusUsesDarkText = (status: string) =>
-  LOT_STATUS_MAP_COLORS[status as LotStatusKey]?.darkText ?? false;
+export const statusUsesDarkText = lotStatusUsesDarkText;
 
 // Get activity type color
 export const getActivityColor = (activityType: string | null) => {
