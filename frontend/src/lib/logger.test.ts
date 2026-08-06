@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getSafeLocationPath, redactUrl } from './logger';
+import { getSafeLocationPath, isPageUnloading, logError, redactUrl } from './logger';
 
 function stubLocation(url: string) {
   vi.stubGlobal('window', { location: new URL(url) });
@@ -50,5 +50,32 @@ describe('redactUrl', () => {
     expect(redactUrl('/lots/42#anchor')).toBe('/lots/42#[redacted]');
     expect(redactUrl('javascript:void(0)')).toBe('[redacted]');
     expect(redactUrl('data:text/html,<p>x</p>')).toBe('[redacted]');
+  });
+});
+
+describe('logError while the document unloads', () => {
+  it('drops fetch rejections caused by navigation, and logs again after a bfcache restore', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      logError('before unload');
+      expect(consoleError).toHaveBeenCalledTimes(1);
+
+      window.dispatchEvent(new Event('pagehide'));
+      expect(isPageUnloading()).toBe(true);
+
+      // What a navigated-away page produces: every in-flight fetch rejects.
+      logError('Error fetching timeline:', new TypeError('Failed to fetch'));
+      expect(consoleError).toHaveBeenCalledTimes(1);
+
+      window.dispatchEvent(new Event('pageshow'));
+      expect(isPageUnloading()).toBe(false);
+
+      logError('after restore');
+      expect(consoleError).toHaveBeenCalledTimes(2);
+    } finally {
+      window.dispatchEvent(new Event('pageshow'));
+      consoleError.mockRestore();
+    }
   });
 });
