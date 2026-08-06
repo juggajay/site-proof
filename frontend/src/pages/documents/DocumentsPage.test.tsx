@@ -1,6 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import { DEVICES, installMatchMedia } from '@/test/stubs/matchMedia';
 import { apiFetch, authFetch } from '@/lib/api';
@@ -31,6 +31,26 @@ function renderDocumentsPage(initialEntry: string) {
     </Routes>,
     { initialEntries: [initialEntry] },
   );
+}
+
+// Radix's DropdownMenu calls the Pointer Capture API and scrollIntoView, neither
+// of which jsdom implements. Stubbing them is what lets the row overflow menu
+// actually open.
+beforeAll(() => {
+  const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
+  proto.hasPointerCapture ??= () => false;
+  proto.setPointerCapture ??= () => {};
+  proto.releasePointerCapture ??= () => {};
+  proto.scrollIntoView ??= () => {};
+});
+
+// Enter on the trigger, not a synthetic pointerdown: jsdom has no PointerEvent
+// so Radix never sees a real button-0 press, and the keyboard path has to work
+// anyway.
+function openRowActions(filename: string) {
+  fireEvent.keyDown(screen.getByRole('button', { name: `More actions for ${filename}` }), {
+    key: 'Enter',
+  });
 }
 
 describe('DocumentsPage', () => {
@@ -190,13 +210,12 @@ describe('DocumentsPage', () => {
       expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByRole('button', { name: 'Add document-page-1.jpg to favourites' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Delete document-page-1.jpg' }),
-    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download document-page-1.jpg' })).toBeVisible();
+
+    openRowActions('document-page-1.jpg');
+    expect(screen.queryByRole('menuitem', { name: 'Add to favourites' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Version history' })).toBeVisible();
   });
 
   it('paginates past the first 100 documents', async () => {
@@ -235,6 +254,35 @@ describe('DocumentsPage', () => {
         '/api/documents/project-1?category=quality&page=1&limit=100',
       );
     });
+  });
+
+  it('keeps one filter mechanism on desktop: chips visible, the rest behind More filters', async () => {
+    documentTotal = 1;
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('Quality: 1')).toBeInTheDocument();
+    });
+
+    // The chips are the category filter; the duplicate Category select is gone.
+    expect(screen.queryByLabelText('Category')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Document Type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Lot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search documents by filename or caption')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Favourites' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: /More filters/ }));
+    fireEvent.change(screen.getByLabelText('Document Type'), { target: { value: 'photo' } });
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/documents/project-1?documentType=photo&page=1&limit=100',
+      );
+    });
+
+    // The trigger carries the count of what it hides — category is not one of
+    // them, so applying a chip must not change it.
+    expect(screen.getByRole('button', { name: 'More filters, 1 active' })).toBeInTheDocument();
   });
 
   it('collapses the filter set behind one button on a phone', async () => {
@@ -369,9 +417,8 @@ describe('DocumentsPage', () => {
       expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
     });
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Version history for document-page-1.jpg' }),
-    );
+    openRowActions('document-page-1.jpg');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Version history' }));
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/doc-page-1/versions');
@@ -430,9 +477,8 @@ describe('DocumentsPage', () => {
       expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
     });
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Version history for document-page-1.jpg' }),
-    );
+    openRowActions('document-page-1.jpg');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Version history' }));
 
     await waitFor(() => {
       expect(screen.getByText('document-page-1-original.jpg')).toBeInTheDocument();

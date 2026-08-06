@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import { History, Upload } from 'lucide-react';
+import { History, MoreHorizontal, Star, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { DocumentAccessUrl } from '@/lib/documentAccess';
 import {
   canPreviewDocument as canPreview,
@@ -242,53 +248,35 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                     </span>
                   )}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <span>{formatFileSize(doc.fileSize)}</span>
-                  <span>{formatDate(doc.uploadedAt)}</span>
-                  {doc.uploadedBy && <span>by {doc.uploadedBy.fullName}</span>}
+                {/* Middots, not four-column gaps: the metadata reads as one
+                    sentence instead of a row of unlabelled values. */}
+                <div className="mt-1 truncate text-sm text-muted-foreground">
+                  {[
+                    formatFileSize(doc.fileSize),
+                    formatDate(doc.uploadedAt),
+                    doc.uploadedBy ? `by ${doc.uploadedBy.fullName}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                   {doc.lot && (
-                    <span className="font-medium text-foreground">Lot {doc.lot.lotNumber}</span>
+                    <>
+                      {' · '}
+                      <span className="font-medium text-foreground">Lot {doc.lot.lotNumber}</span>
+                    </>
                   )}
                 </div>
-                {doc.caption && (
-                  <p className="text-sm text-muted-foreground mt-1 truncate">{doc.caption}</p>
-                )}
+                {/* Reserved whether or not there is a caption, so every row in
+                    the register is the same height. */}
+                <p className="mt-1 min-h-[1.25rem] truncate text-sm text-muted-foreground">
+                  {doc.caption}
+                </p>
               </div>
 
-              {/* Actions — own full-width row below md (44px targets there). */}
+              {/* Actions — own full-width row below md (44px targets there).
+                  Preview and download are the two everyday ones and stay
+                  inline; the rest (including delete) live behind the overflow
+                  so no row ends in a wall of equal-weight icons. */}
               <div className="flex w-full items-center justify-end gap-1 md:w-auto md:gap-2 [&_button]:h-11 [&_button]:w-11 md:[&_button]:h-9 md:[&_button]:w-9">
-                {canManageDocuments && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onToggleFavourite(doc)}
-                    className={
-                      doc.isFavourite
-                        ? 'text-foreground hover:bg-muted'
-                        : 'text-muted-foreground hover:bg-muted'
-                    }
-                    title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
-                    aria-label={
-                      doc.isFavourite
-                        ? `Remove ${doc.filename} from favourites`
-                        : `Add ${doc.filename} to favourites`
-                    }
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill={doc.isFavourite ? 'currentColor' : 'none'}
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                      />
-                    </svg>
-                  </Button>
-                )}
                 {canPreview(doc.mimeType) && (
                   <Button
                     variant="ghost"
@@ -330,35 +318,49 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                     />
                   </svg>
                 </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onViewVersions(doc)}
-                  className="text-muted-foreground hover:bg-muted"
-                  title="Version history"
-                  aria-label={`Version history for ${doc.filename}`}
-                >
-                  <History className="h-5 w-5" />
-                </Button>
-                {canManageDocuments && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onMarkPendingDelete(doc)}
-                    className="text-destructive hover:bg-destructive/10"
-                    title="Delete"
-                    aria-label={`Delete ${doc.filename}`}
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </Button>
-                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:bg-muted"
+                      title="More actions"
+                      aria-label={`More actions for ${doc.filename}`}
+                    >
+                      <MoreHorizontal className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[200px]">
+                    {canManageDocuments && (
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        onSelect={() => onToggleFavourite(doc)}
+                      >
+                        <Star
+                          className="h-4 w-4"
+                          fill={doc.isFavourite ? 'currentColor' : 'none'}
+                        />
+                        {doc.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onSelect={() => onViewVersions(doc)}
+                    >
+                      <History className="h-4 w-4" />
+                      Version history
+                    </DropdownMenuItem>
+                    {canManageDocuments && (
+                      <DropdownMenuItem
+                        className="cursor-pointer text-destructive focus:text-destructive"
+                        onSelect={() => onMarkPendingDelete(doc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ))}
