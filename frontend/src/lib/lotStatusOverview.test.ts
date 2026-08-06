@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_LOT_STATUS_COUNTS, LOT_STATUS_OVERVIEW_ITEMS } from './lotStatusOverview';
+import {
+  EMPTY_LOT_STATUS_COUNTS,
+  LOT_STATUS_OVERVIEW_ITEMS,
+  getLotStatusSwatch,
+} from './lotStatusOverview';
 
 describe('lotStatusOverview', () => {
   it('keeps the dashboard lot status sequence stable', () => {
@@ -25,11 +29,14 @@ describe('lotStatusOverview', () => {
     ]);
   });
 
-  it('keeps every status documented and styled', () => {
+  it('keeps every status documented and coloured', () => {
     expect(LOT_STATUS_OVERVIEW_ITEMS).toHaveLength(8);
     for (const item of LOT_STATUS_OVERVIEW_ITEMS) {
       expect(item.description).toMatch(/\S/);
-      expect(item.dotClassName).toMatch(/^bg-/);
+      // Colour lives in `statusColors.ts`, not on this list — but every status
+      // here must resolve to a real swatch rather than the unknown fallback.
+      expect(getLotStatusSwatch(item.key)).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(getLotStatusSwatch(item.key)).not.toBe('#9ca3af');
     }
   });
 

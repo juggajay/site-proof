@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { toast } from '@/components/ui/toaster';
 import { RowActions } from '@/components/ui/RowActions';
 import { getStatusBadgeColor } from '../constants';
+import { NCRGateStrip } from './NCRGateStrip';
 import { buildNcrDetailPdfData } from '../ncrDetailPdfData';
 import { getAvailableNcrActions } from '../ncrActions';
 import { buildNcrRowActions } from '../ncrRowActions';
@@ -240,11 +241,16 @@ function NCRTableInner({
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${getStatusBadgeColor(ncr.status)}`}
-                  >
-                    {formatStatusLabel(ncr.status)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${getStatusBadgeColor(ncr.status)}`}
+                    >
+                      {formatStatusLabel(ncr.status)}
+                    </span>
+                    {/* Responded · Reviewed · Rectified · Closed — which party
+                        still owes something, without opening the NCR. */}
+                    <NCRGateStrip ncr={ncr} />
+                  </div>
                   {/* A fact about the NCR, not an action — it belongs with the
                       status, not in the actions column it used to widen. */}
                   {ncr.clientNotifiedAt && (

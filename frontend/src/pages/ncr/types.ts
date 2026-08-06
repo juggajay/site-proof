@@ -50,7 +50,12 @@ export interface NCR {
   rootCauseCategory?: string | null;
   rootCauseDescription?: string | null;
   proposedCorrectiveAction?: string | null;
+  // The four gate timestamps behind the register's progress strip
+  // (`ncrGateStrip.ts`). All are plain scalars on the NCR row, returned by the
+  // list route's `include` without a select — no extra query per row.
   responseSubmittedAt?: string | null;
+  qmReviewedAt?: string | null;
+  rectificationSubmittedAt?: string | null;
   project: { id?: string; name: string; projectNumber: string };
   ncrLots: Array<{ lot: { lotNumber: string; description: string } }>;
   clientNotificationRequired?: boolean;

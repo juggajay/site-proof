@@ -7,7 +7,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import type { NCR } from '@/pages/lots/types';
-import { ncrStatusColors, severityColors } from '@/pages/lots/constants';
+import { getNcrStatusBadgeClass, severityColors } from '@/pages/lots/constants';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
 
@@ -151,7 +151,7 @@ export function NCRsTabContent({
               </td>
               <td className="px-4 py-3 text-sm">
                 <span
-                  className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-muted text-muted-foreground'}`}
+                  className={`px-2 py-1 rounded text-xs font-medium ${getNcrStatusBadgeClass(ncr.status)}`}
                 >
                   {formatStatusLabel(ncr.status)}
                 </span>

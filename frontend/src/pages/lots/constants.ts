@@ -22,15 +22,9 @@ export const testStatusColors: Record<string, string> = {
   verified: 'bg-muted text-muted-foreground',
 };
 
-// Status color classes for NCR workflow status
-export const ncrStatusColors: Record<string, string> = {
-  open: 'bg-destructive/10 text-destructive',
-  investigating: 'bg-warning/10 text-warning',
-  rectification: 'bg-warning/10 text-warning',
-  verification: 'bg-muted text-muted-foreground',
-  closed: 'bg-muted text-muted-foreground',
-  closed_concession: 'bg-muted text-muted-foreground',
-};
+// The lot page's NCRs tab used to keep its own NCR colour map, which disagreed
+// with the register's. Both now read `lib/statusColors.ts`.
+export { getNcrStatusBadgeClass } from '@/lib/statusColors';
 
 // Severity color classes for NCRs
 export const severityColors: Record<string, string> = {

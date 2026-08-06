@@ -5,6 +5,7 @@ import {
   type LotStatusCounts,
   type LotStatusKey,
 } from '@/lib/lotStatusOverview';
+import { getLotStatusSwatch } from '@/lib/statusColors';
 
 interface LotStatusOverviewProps {
   counts?: Partial<LotStatusCounts>;
@@ -41,8 +42,11 @@ export function LotStatusOverview({ counts, onStatusClick }: LotStatusOverviewPr
             type="button"
           >
             <div className="flex items-start gap-3">
+              {/* Same swatch the lot map and the register chip use, so this
+                  legend teaches the colours the rest of the app then speaks. */}
               <span
-                className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${item.dotClassName}`}
+                className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full"
+                style={{ backgroundColor: getLotStatusSwatch(item.key) }}
                 aria-hidden="true"
               />
               <div className="min-w-0 flex-1">

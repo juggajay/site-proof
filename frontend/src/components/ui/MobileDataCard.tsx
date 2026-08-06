@@ -8,12 +8,21 @@ interface DataField {
   priority: 'primary' | 'secondary' | 'tertiary';
 }
 
+/** Exported so callers can map a domain status onto this palette in one place. */
+export type MobileDataCardStatusVariant =
+  | 'default'
+  | 'warning'
+  | 'success'
+  | 'error'
+  | 'info'
+  | 'pending';
+
 interface MobileDataCardProps {
   title: string;
   subtitle?: string;
   status?: {
     label: string;
-    variant: 'default' | 'warning' | 'success' | 'error' | 'info' | 'pending';
+    variant: MobileDataCardStatusVariant;
   };
   fields: DataField[];
   onClick?: () => void;
@@ -27,7 +36,7 @@ interface MobileDataCardProps {
   subtitleClassName?: string;
 }
 
-const statusColors = {
+const statusColors: Record<MobileDataCardStatusVariant, string> = {
   default: 'bg-muted text-foreground',
   warning: 'bg-warning/10 text-warning',
   success: 'bg-success/10 text-success',

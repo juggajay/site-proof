@@ -3,18 +3,10 @@
  * Extracted from NCRPage.tsx for reusability.
  */
 
-// Status color classes for NCR status badges
-export const ncrStatusColors: Record<string, string> = {
-  open: 'bg-destructive/10 text-destructive',
-  investigating: 'bg-muted text-muted-foreground',
-  rectification: 'bg-muted text-muted-foreground',
-  verification: 'bg-muted text-muted-foreground',
-  closed: 'bg-muted text-muted-foreground',
-  closed_concession: 'bg-muted text-muted-foreground',
-};
-
-// Default fallback status color
-export const DEFAULT_STATUS_COLOR = 'bg-muted text-foreground';
+// NCR status colour is owned by `lib/statusColors.ts` — the same map the lot
+// NCRs tab and the mobile card read, so five lifecycle states stop rendering
+// as the same grey.
+export { getNcrStatusBadgeClass as getStatusBadgeColor } from '@/lib/statusColors';
 
 // NCR category options for the create form, and root-cause options for the
 // respond form. Wave G G5 (spec §5.2 gap 1) made these a server-enforced
@@ -26,10 +18,3 @@ export {
   NCR_CATEGORIES,
   NCR_ROOT_CAUSE_CATEGORIES as ROOT_CAUSE_CATEGORIES,
 } from '@/lib/ncrVocabulary';
-
-/**
- * Returns the CSS class names for a given NCR status badge.
- */
-export function getStatusBadgeColor(status: string): string {
-  return ncrStatusColors[status] ?? DEFAULT_STATUS_COLOR;
-}
