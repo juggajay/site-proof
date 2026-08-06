@@ -17,6 +17,14 @@ vi.mock('@/lib/api', () => ({ apiFetch: apiFetchMock }));
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
 vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
 
+// jsdom has no matchMedia; drive the viewport branch explicitly (desktop table
+// vs phone card list) instead of relying on a polyfill default.
+const viewport = vi.hoisted(() => ({ isMobile: false }));
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useMediaQuery')>();
+  return { ...actual, useIsMobile: () => viewport.isMobile };
+});
+
 const CONTROL_LINE = {
   id: 'cl-1',
   projectId: 'project-1',
@@ -76,6 +84,7 @@ describe('ControlLinesPage', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     toastMock.mockReset();
+    viewport.isMobile = false;
   });
 
   it('renders control lines with coordinate system, point count, and chainage range', async () => {
@@ -142,6 +151,28 @@ describe('ControlLinesPage', () => {
 
     const setoutButton = await screen.findByRole('button', { name: /Import from setout sheet/ });
     expect(setoutButton).toBeEnabled();
+  });
+
+  it('renders cards instead of the table on a phone', async () => {
+    viewport.isMobile = true;
+    mockApi({ controlLines: [CONTROL_LINE] });
+    renderPage();
+
+    expect(await screen.findByText('MC00 Mainline')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText(/GDA2020 \/ MGA Zone 56 \(EPSG:7856\)/)).toBeInTheDocument();
+    expect(screen.getByText('0 – 1,500')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Edit MC00/ })).toBeInTheDocument();
+  });
+
+  it('hides card write actions for a read-only internal role on a phone', async () => {
+    viewport.isMobile = true;
+    mockApi({ role: 'viewer', controlLines: [CONTROL_LINE] });
+    renderPage();
+
+    expect(await screen.findByText('MC00 Mainline')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit MC00/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete MC00/ })).not.toBeInTheDocument();
   });
 
   it('hides write actions for a read-only internal role', async () => {

@@ -3,6 +3,19 @@
  * Extracted from ProjectSettingsPage.tsx for reusability.
  */
 
+/** A user's membership of one project, as returned by /api/projects/:id/users. */
+export interface ProjectUser {
+  id: string;
+  userId: string;
+  email: string;
+  fullName: string | null;
+  role: string;
+  status: string;
+  joinedAt?: string | null;
+  invitedAt?: string | null;
+  acceptedAt?: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;

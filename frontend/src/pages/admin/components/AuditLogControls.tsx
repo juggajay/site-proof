@@ -45,7 +45,7 @@ export function AuditLogHeader({
   onExport: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-3">
           <ClipboardList className="h-8 w-8" />
@@ -58,6 +58,7 @@ export function AuditLogHeader({
         variant="outline"
         onClick={onExport}
         disabled={loading || exporting || hasError || total === 0}
+        className="self-start md:self-auto"
       >
         <Download className="h-4 w-4" />
         {exporting ? 'Exporting...' : 'Export CSV'}

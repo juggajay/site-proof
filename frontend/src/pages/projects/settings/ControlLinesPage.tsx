@@ -12,7 +12,7 @@ import {
   coordinateSystemLabel,
   defaultCoordinateSystemForState,
 } from '@/lib/spatial/coordinateSystems';
-import type { ControlPoint } from './controlPointsParsing';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import {
   ProjectAdminLoadError,
   ProjectAdminResourceGate,
@@ -20,8 +20,10 @@ import {
 } from './ProjectAdminPageState';
 import { ControlLineFormModal } from './ControlLineFormModal';
 import { ControlLineImportModal } from './ControlLineImportModal';
+import { ControlLinesMobileList } from './ControlLinesMobileList';
 import { SetoutImportModal } from './SetoutImportModal';
 import {
+  chainageRange,
   useControlLines,
   useControlLinesAccess,
   useCreateControlLine,
@@ -30,14 +32,6 @@ import {
   type ControlLine,
   type ControlLineInput,
 } from './controlLinesData';
-
-function chainageRange(points: ControlPoint[]): string {
-  if (points.length === 0) return '-';
-  const chainages = points.map((p) => p.chainage);
-  const min = Math.min(...chainages);
-  const max = Math.max(...chainages);
-  return `${min.toLocaleString()} – ${max.toLocaleString()}`;
-}
 
 function ControlLinesEmptyState({ readOnly, onAdd }: { readOnly: boolean; onAdd: () => void }) {
   return (
@@ -138,6 +132,7 @@ export function ControlLinesPage() {
 
   const { project, canManage, readOnly, loading: accessLoading } = useControlLinesAccess(projectId);
   const { aiConfigured } = useAiStatus();
+  const isMobile = useIsMobile();
   const controlLinesQuery = useControlLines(projectId);
   const createMutation = useCreateControlLine(projectId);
   const updateMutation = useUpdateControlLine(projectId);
@@ -213,7 +208,7 @@ export function ControlLinesPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Control Lines</h1>
           <p className="text-muted-foreground">
@@ -221,7 +216,7 @@ export function ControlLinesPage() {
           </p>
         </div>
         {canManage && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -269,6 +264,14 @@ export function ControlLinesPage() {
       <ProjectAdminResourceGate loading={loading} loadError={loadError} canManage={true}>
         {controlLines.length === 0 ? (
           <ControlLinesEmptyState readOnly={readOnly || !canManage} onAdd={openAddModal} />
+        ) : isMobile ? (
+          <ControlLinesMobileList
+            controlLines={controlLines}
+            showActions={canManage && !readOnly}
+            deletingId={deleteMutation.isLoading ? (linePendingDelete?.id ?? null) : null}
+            onEdit={openEditModal}
+            onRequestDelete={setLinePendingDelete}
+          />
         ) : (
           <ControlLinesTable
             controlLines={controlLines}

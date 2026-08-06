@@ -18,34 +18,26 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatProjectUserJoinedDate } from './projectUserDateFormatting';
-import {
-  canAssignProjectRole,
-  canRemoveProjectUser,
-  isLastActiveProjectTeamLead,
-} from './projectUsersGuards';
 import {
   ProjectAdminLoadError,
   ProjectAdminResourceGate,
   ProjectAdminStatusBanners,
 } from './ProjectAdminPageState';
+import { ProjectUsersMobileList } from './ProjectUsersMobileList';
+import {
+  PROJECT_ROLES,
+  PROJECT_TEAM_LEAD_GUARD_COPY,
+  projectUserRoleLabel,
+  projectUserRowState,
+} from './projectUserRoles';
+import type { ProjectUser } from './types';
 import {
   canGrantProjectAdminRole,
   isProtectedProjectManagementRole,
   useProjectAdminResource,
 } from './projectPageAccess';
-
-interface ProjectUser {
-  id: string;
-  userId: string;
-  email: string;
-  fullName: string | null;
-  role: string;
-  status: string;
-  joinedAt?: string | null;
-  invitedAt?: string | null;
-  acceptedAt?: string | null;
-}
 
 interface AssignableProjectUser {
   id: string;
@@ -53,20 +45,6 @@ interface AssignableProjectUser {
   fullName?: string | null;
   roleInCompany?: string | null;
 }
-
-const ROLES = [
-  { value: 'admin', label: 'Admin', description: 'Full project access' },
-  {
-    value: 'project_manager',
-    label: 'Project Manager',
-    description: 'Manage project settings and team',
-  },
-  { value: 'quality_manager', label: 'Quality Manager', description: 'Manage quality, ITPs, NCRs' },
-  { value: 'site_manager', label: 'Site Manager', description: 'Coordinate site operations' },
-  { value: 'site_engineer', label: 'Site Engineer', description: 'Field quality and testing' },
-  { value: 'foreman', label: 'Foreman', description: 'Manage lots and daily activities' },
-  { value: 'viewer', label: 'Viewer', description: 'Read-only access' },
-];
 
 const statusColors: Record<string, string> = {
   active: 'bg-success/10 text-success',
@@ -165,17 +143,8 @@ function ProjectUsersTable({
         </thead>
         <tbody className="divide-y">
           {users.map((user) => {
-            const lastActiveTeamLead = isLastActiveProjectTeamLead(user, users);
-            const canManageThisUser =
-              canManageProtectedProjectRoles || !isProtectedProjectManagementRole(user.role);
-            const roleOptions = ROLES.filter(
-              (role) =>
-                canAssignProjectRole(user, role.value, users) &&
-                (canManageProtectedProjectRoles || !isProtectedProjectManagementRole(role.value)),
-            );
-            const canRemove = canRemoveProjectUser(user, users);
-            const teamLeadGuardCopy =
-              'Add another active admin or project manager before changing this role.';
+            const { lastActiveTeamLead, canManageThisUser, roleOptions, canRemove } =
+              projectUserRowState(user, users, canManageProtectedProjectRoles);
 
             return (
               <tr key={user.id} className="hover:bg-muted/25">
@@ -206,14 +175,13 @@ function ProjectUsersTable({
                         ))}
                       </NativeSelect>
                       {lastActiveTeamLead ? (
-                        <p className="mt-1 text-xs text-muted-foreground">{teamLeadGuardCopy}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {PROJECT_TEAM_LEAD_GUARD_COPY}
+                        </p>
                       ) : null}
                     </>
                   ) : (
-                    <span className="capitalize">
-                      {ROLES.find((r) => r.value === user.role)?.label ||
-                        user.role.replace('_', ' ')}
-                    </span>
+                    <span className="capitalize">{projectUserRoleLabel(user.role)}</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -299,6 +267,7 @@ function ProjectUsersTable({
 export function ProjectUsersPage() {
   const { projectId } = useParams();
   const { user: currentUser } = useAuth();
+  const isMobile = useIsMobile();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [assignableUsers, setAssignableUsers] = useState<AssignableProjectUser[]>([]);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(false);
@@ -342,7 +311,7 @@ export function ProjectUsersPage() {
     currentUser?.roleInCompany || currentUser?.role,
     project?.currentUserRole,
   );
-  const assignableRoleOptions = ROLES.filter(
+  const assignableRoleOptions = PROJECT_ROLES.filter(
     (role) => canManageProtectedProjectRoles || !isProtectedProjectManagementRole(role.value),
   );
 
@@ -572,13 +541,18 @@ export function ProjectUsersPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Project Team</h1>
           <p className="text-muted-foreground">Manage team members and their roles</p>
         </div>
         {canManageUsers && (
-          <Button type="button" onClick={openInviteModal} disabled={readOnly}>
+          <Button
+            type="button"
+            onClick={openInviteModal}
+            disabled={readOnly}
+            className="self-start md:self-auto"
+          >
             <UserPlus className="h-4 w-4" />
             Add Team Member
           </Button>
@@ -598,6 +572,22 @@ export function ProjectUsersPage() {
       <ProjectAdminResourceGate loading={loading} loadError={loadError} canManage={canManageUsers}>
         {users.length === 0 ? (
           <ProjectUsersEmptyState readOnly={readOnly} onInvite={openInviteModal} />
+        ) : isMobile ? (
+          <ProjectUsersMobileList
+            users={users}
+            currentUserId={currentUser?.id}
+            editingUser={editingUser}
+            editRole={editRole}
+            saving={saving}
+            removingUserId={removingUserId}
+            readOnly={readOnly}
+            canManageProtectedProjectRoles={canManageProtectedProjectRoles}
+            onEditRoleChange={setEditRole}
+            onStartEditing={startEditing}
+            onSaveRole={handleUpdateRole}
+            onCancelEditing={cancelEditing}
+            onRequestRemove={requestRemoveUser}
+          />
         ) : (
           <ProjectUsersTable
             users={users}

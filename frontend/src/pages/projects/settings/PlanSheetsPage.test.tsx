@@ -20,6 +20,14 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }));
 vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
 
+// jsdom has no matchMedia; drive the viewport branch explicitly (desktop table
+// vs phone card list) instead of relying on a polyfill default.
+const viewport = vi.hoisted(() => ({ isMobile: false }));
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useMediaQuery')>();
+  return { ...actual, useIsMobile: () => viewport.isMobile };
+});
+
 const SHEET = {
   id: 'ps-1',
   name: 'C-101 Rev D',
@@ -76,6 +84,7 @@ describe('PlanSheetsPage', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     toastMock.mockReset();
+    viewport.isMobile = false;
   });
 
   it('renders sheets with dimensions, coordinate system, and registration badge', async () => {
@@ -132,6 +141,31 @@ describe('PlanSheetsPage', () => {
     expect(
       screen.queryByText(/to register a sheet by chainage, add a control line first/i),
     ).not.toBeInTheDocument();
+  });
+
+  it('renders cards instead of the table on a phone', async () => {
+    viewport.isMobile = true;
+    mockApi({ planSheets: [SHEET] });
+    renderPage();
+
+    expect(await screen.findByText('C-101 Rev D')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    // Every column the table showed is still reachable on the card.
+    expect(screen.getByText('4200 × 2970')).toBeInTheDocument();
+    expect(screen.getByText(/GDA2020 \/ MGA Zone 56 \(EPSG:7856\)/)).toBeInTheDocument();
+    expect(screen.getByText('Registered')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Rename C-101/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Delete C-101/ })).toBeInTheDocument();
+  });
+
+  it('hides card write actions for a read-only internal role on a phone', async () => {
+    viewport.isMobile = true;
+    mockApi({ role: 'viewer', planSheets: [SHEET] });
+    renderPage();
+
+    expect(await screen.findByText('C-101 Rev D')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Re-register/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete C-101/ })).not.toBeInTheDocument();
   });
 
   it('hides write actions for a read-only internal role', async () => {
