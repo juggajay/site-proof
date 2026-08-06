@@ -570,6 +570,10 @@ describe('Wave G G5 — management learning loop', () => {
       });
 
       try {
+        // The refusal now lands at CREATE rather than at accept. Same rule
+        // (§2.3: a new library edition is an operator act), enforced before a
+        // dead-end proposal can enter the queue and wait weeks for a reviewer to
+        // discover it can never be actioned.
         const createRes = await request(app)
           .post('/api/ncr-learning/proposals')
           .set('Authorization', `Bearer ${qmToken}`)
@@ -578,19 +582,17 @@ describe('Wave G G5 — management learning loop', () => {
             checklistItemId: global.checklistItems[0].id,
             proposedChange: 'Tighten the acceptance criteria.',
           });
-        expect(createRes.status).toBe(201);
 
-        const acceptRes = await request(app)
-          .post(`/api/ncr-learning/proposals/${createRes.body.proposal.id}/accept`)
-          .set('Authorization', `Bearer ${qmToken}`)
-          .send({ revisionLabel: 'Ed. 2', changeSummary: 'New edition' });
+        expect(createRes.status).toBe(400);
+        expect(createRes.body.error.details).toEqual({ code: 'GLOBAL_TEMPLATE_NOT_ISSUABLE' });
 
-        expect(acceptRes.status).toBe(400);
-        expect(acceptRes.body.error.details).toEqual({ code: 'GLOBAL_TEMPLATE_NOT_ISSUABLE' });
+        // Nothing was recorded, and the library template is untouched.
+        const queued = await prisma.templateRevisionProposal.count({
+          where: { templateId: global.id },
+        });
+        expect(queued).toBe(0);
         const untouched = await prisma.iTPTemplate.findUniqueOrThrow({ where: { id: global.id } });
         expect(untouched.supersededById).toBeNull();
-
-        await prisma.templateRevisionProposal.deleteMany({ where: { templateId: global.id } });
       } finally {
         await prisma.templateRevisionProposal.deleteMany({ where: { templateId: global.id } });
         await prisma.iTPTemplate.delete({ where: { id: global.id } });

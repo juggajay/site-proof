@@ -33,6 +33,12 @@ vi.mock('./components/PendingItpVerificationsSection', () => ({
   PendingItpVerificationsSection: () => null,
 }));
 
+// Same reason: the proposal review queue fetches on mount through apiGet (which
+// calls the real apiFetch, not the mock above) and has its own suite.
+vi.mock('./components/TemplateProposalsSection', () => ({
+  TemplateProposalsSection: () => null,
+}));
+
 // Drive the page's bootstrap query directly: this test isolates role-aware
 // action visibility, not the data/network layer.
 vi.mock('./itpPageData', async (importOriginal) => {

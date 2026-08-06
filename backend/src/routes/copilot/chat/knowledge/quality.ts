@@ -75,6 +75,8 @@ The form edits lot number, description, activity, area, chainage/offsets, layer,
       'import from project',
       'hold point item',
       'verification queue',
+      'template change proposal',
+      'new revision',
     ],
     roles:
       'All internal project roles can view; template management and verification are role-gated.',
@@ -85,7 +87,9 @@ The form edits lot number, description, activity, area, chainage/offsets, layer,
 
 In the template editor, **Add checklist item** creates a row; arrows reorder it; Remove deletes it. Each row defines description, point type, responsible party, evidence requirement and other rule fields. **Acceptance criteria** is the plain-language or specification requirement the completed check must satisfy—set it in that row's Acceptance criteria input. Saving an edited template can offer propagation to assigned lots; the user may apply or skip it rather than silently rewriting snapshots.
 
-The verification queue links back to the lot evidence. **Verify** accepts a completed item. **Reject** opens the required reason and returns it for correction. Users without reviewer permission do not see those verbs.`,
+The verification queue links back to the lot evidence. **Verify** accepts a completed item. **Reject** opens the required reason and returns it for correction. Users without reviewer permission do not see those verbs.
+
+**Template change proposals raised from NCR trends are reviewed on this page**, not on the AI Setup Copilot page. The Template change proposals section lists proposals raised from NCR Analytics with the failure evidence frozen at the time they were raised. **Review** opens the decision: accepting requires a revision label and a reason, and **opens a new revision that is an exact copy** of the template plus supersedes the current one—it does not itself make the change, so the template editor opens on the new revision next for the user to make it. Rejecting requires a reason. A proposal whose template already has a newer revision is marked superseded and cannot be accepted. Decided proposals sit under a collapsed Decisions list. The section is visible only to owner, admin, project manager, site manager and quality manager, and it is absent entirely when the NCR learning loop is not enabled in the environment.`,
   },
   {
     route: 'projects/<projectId>/hold-points',
@@ -167,7 +171,9 @@ The visible row button is the current next step: Respond, Review Response, Submi
     surface: 'office',
     body: `NCR Analytics highlights repeated quality failures rather than editing NCRs.
 
-**Back to NCRs** returns to the register. Charts break down root cause, category and activity. Repeat-failure and responsible-party sections identify patterns from closed and open records. **Propose template change** opens a reviewed proposal for an ITP improvement; it does not silently alter a template. Cancel closes the proposal, and Create/Submit is disabled until its required explanation and target are supplied.`,
+**Back to NCRs** returns to the register. Charts break down root cause, category and activity. Repeat-failure and responsible-party sections identify patterns from closed and open records. **Propose template change** opens a reviewed proposal for an ITP improvement; it does not silently alter a template. Cancel closes the proposal, and Create/Submit is disabled until its required explanation and target are supplied.
+
+Proposals are RAISED here but DECIDED on the project **ITP Templates** page, in its Template change proposals section; a link showing the number of open proposals appears here when any are waiting. A proposal cannot be raised against a state spec library template—copy the library template into the project first and propose against the copy.`,
   },
   {
     route: 'projects/<projectId>/documents',

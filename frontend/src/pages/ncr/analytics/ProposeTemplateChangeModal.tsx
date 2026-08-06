@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { proposalErrorCode } from '@/pages/itp/templateProposals';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/Modal';
@@ -75,9 +76,24 @@ export function ProposeTemplateChangeModal({
     onSuccess: () => {
       setSubmitError(null);
       setProposedChange('');
-      void queryClient.invalidateQueries({ queryKey });
+      // Prefix, not this exact key: the review surface on the ITP Templates
+      // page keeps status-scoped lists, and a new proposal belongs in its open
+      // queue too.
+      void queryClient.invalidateQueries({
+        queryKey: ['template-revision-proposals', projectId],
+      });
     },
     onError: (error: unknown) => {
+      // A library template has no revision path from the app, and the server now
+      // says so at create time rather than letting a dead-end proposal sit in
+      // the queue. Name the fix; the raw message is an operator's, not this
+      // reviewer's.
+      if (proposalErrorCode(error) === 'GLOBAL_TEMPLATE_NOT_ISSUABLE') {
+        setSubmitError(
+          'This is a library template — copy it into the project first (ITP Templates → Copy), then propose against the copy.',
+        );
+        return;
+      }
       setSubmitError(
         error instanceof ApiError
           ? 'Could not record the proposal. Check you still manage templates on this project.'
