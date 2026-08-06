@@ -84,31 +84,6 @@ type PublicReleasedHoldPoint = {
   };
 };
 
-// Benchmark T3. Same envelope as the released response so one client branch
-// (`holdPoint.status`) covers both outcomes — but every release field is
-// reported null, because a rejected hold point has none.
-export function buildPublicHoldPointRejectedResponse(holdPoint: PublicReleasedHoldPoint) {
-  return {
-    success: true,
-    message: 'Hold point rejected via secure link',
-    holdPoint: {
-      id: holdPoint.id,
-      description: holdPoint.description,
-      itpChecklistItemId: holdPoint.itpChecklistItemId,
-      status: holdPoint.status,
-      releasedAt: null,
-      releasedByName: null,
-      releasedByOrg: null,
-      releaseMethod: null,
-      releaseNotes: holdPoint.releaseNotes,
-    },
-    lot: {
-      id: holdPoint.lot.id,
-      lotNumber: holdPoint.lot.lotNumber,
-    },
-  };
-}
-
 export function buildPublicHoldPointReleasedResponse(holdPoint: PublicReleasedHoldPoint) {
   return {
     success: true,

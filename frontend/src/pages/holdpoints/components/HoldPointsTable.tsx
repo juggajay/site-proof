@@ -518,17 +518,6 @@ function HoldPointRowActions({
           )}
         </>
       )}
-      {hp.status === 'rejected' && (
-        <>
-          <span className="text-sm text-destructive">Rejected</span>
-          <button
-            onClick={() => onRequestRelease(hp)}
-            className="text-sm text-primary hover:underline"
-          >
-            Request Release Again
-          </button>
-        </>
-      )}
       {hp.status === 'released' && (
         <>
           <span className="text-sm text-muted-foreground">&#x2713; Released</span>

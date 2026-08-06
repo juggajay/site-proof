@@ -6,17 +6,20 @@ import type { ItpHoldPointState } from '../types';
 // the office had already called the superintendent, and to change that had to
 // leave the checklist and find one row among the register's thousands.
 //
-// This block renders the four states a hold point can actually be in, and puts
+// This block renders the three states a hold point can actually be in, and puts
 // the request action on the row.
+//
+// There is deliberately no 'rejected' state: the public release door ships with
+// Release as its only verb, so no hold point can reach one. Adding the row state
+// before the decision exists would render a state the backend cannot produce.
 
-export type HoldPointRowState = 'not_requested' | 'requested' | 'released' | 'rejected';
+export type HoldPointRowState = 'not_requested' | 'requested' | 'released';
 
 export function getHoldPointRowState(
   holdPoint: ItpHoldPointState | undefined,
   hasReleaseAttribution: boolean,
 ): HoldPointRowState {
   if (holdPoint?.status === 'released' || hasReleaseAttribution) return 'released';
-  if (holdPoint?.status === 'rejected') return 'rejected';
   if (holdPoint?.status === 'notified') return 'requested';
   return 'not_requested';
 }
@@ -91,31 +94,6 @@ export function ITPChecklistHoldPointState({
           {releasedAt && ` on ${releasedAt}`}
           {releaseMethod && ` via ${formatReleaseMethod(releaseMethod)}`}
         </p>
-        {holdPoint?.releaseNotes && (
-          <p className="mt-1 rounded border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
-            <span className="font-medium">Conditions:</span> {holdPoint.releaseNotes}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (state === 'rejected') {
-    return (
-      <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 p-2">
-        <p className="text-xs font-medium text-destructive">Release rejected by the authority</p>
-        {holdPoint?.releaseNotes && (
-          <p className="mt-0.5 text-xs text-destructive/90">{holdPoint.releaseNotes}</p>
-        )}
-        {canRequestRelease && (
-          <button
-            type="button"
-            onClick={onRequestRelease}
-            className="mt-2 rounded border border-destructive/40 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/10"
-          >
-            Request release again
-          </button>
-        )}
       </div>
     );
   }

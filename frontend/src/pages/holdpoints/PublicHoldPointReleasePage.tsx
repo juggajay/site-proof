@@ -5,14 +5,10 @@ import { apiFetch, apiUrl } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
+import { SignaturePad } from '@/components/ui/SignaturePad';
 import { getReleaseIdentityParts } from './holdPointReleaseIdentity';
 import { HoldPointEvidencePackageCard } from './components/HoldPointEvidencePackageCard';
 import { formatDate, formatDateTime, StatusPill } from './components/publicReleaseShared';
-import {
-  isDecisionCommentSufficient,
-  PublicReleaseDecisionForm,
-  type PublicReleaseDecision,
-} from './components/PublicReleaseDecisionForm';
 
 interface PublicReleaseResponse {
   evidencePackage: HPEvidencePackageData;
@@ -101,9 +97,6 @@ export function PublicHoldPointReleasePage() {
   const [releasedByName, setReleasedByName] = useState('');
   const [releasedByOrg, setReleasedByOrg] = useState('');
   const [releaseNotes, setReleaseNotes] = useState('');
-  // T3: which verb the approver chose. 'release' matches the old single-button
-  // behaviour, so the page still opens on the common case.
-  const [decision, setDecision] = useState<PublicReleaseDecision>('release');
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -153,7 +146,7 @@ export function PublicHoldPointReleasePage() {
   const currentStatus =
     releaseResult?.holdPoint.status || evidencePackage?.holdPoint.status || 'pending';
   const releasedHoldPoint =
-    (releaseResult?.holdPoint.status === 'released' ? releaseResult.holdPoint : null) ||
+    releaseResult?.holdPoint ||
     (evidencePackage?.holdPoint.status === 'released'
       ? {
           status: evidencePackage.holdPoint.status,
@@ -165,12 +158,8 @@ export function PublicHoldPointReleasePage() {
           releaseNotes: evidencePackage.holdPoint.releaseNotes,
         }
       : null);
-  const isRejected = currentStatus === 'rejected';
   const canRelease =
-    Boolean(data?.tokenInfo.canRelease) &&
-    currentStatus !== 'released' &&
-    currentStatus !== 'rejected' &&
-    !releaseResult;
+    Boolean(data?.tokenInfo.canRelease) && currentStatus !== 'released' && !releaseResult;
   const releasedIdentity = releasedHoldPoint ? getReleaseIdentityParts(releasedHoldPoint) : null;
   const releasedIdentityLabel =
     releasedIdentity?.primary && releasedIdentity.primary !== 'Release recorded'
@@ -187,13 +176,6 @@ export function PublicHoldPointReleasePage() {
       photos: evidencePackage.summary.totalPhotos,
     };
   }, [evidencePackage]);
-
-  const rejectionOutcome =
-    releaseResult?.holdPoint.status === 'rejected' || (isRejected && !releasedHoldPoint)
-      ? {
-          reason: releaseResult?.holdPoint.releaseNotes ?? evidencePackage?.holdPoint.releaseNotes,
-        }
-      : null;
 
   const handleDownloadPdf = async () => {
     if (!evidencePackage || downloadingPdf) return;
@@ -213,7 +195,6 @@ export function PublicHoldPointReleasePage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token || !releasedByName.trim() || !signatureDataUrl || submittingRef.current) return;
-    if (!isDecisionCommentSufficient(decision, releaseNotes)) return;
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -228,24 +209,21 @@ export function PublicHoldPointReleasePage() {
             releasedByOrg: releasedByOrg.trim() || undefined,
             releaseNotes: releaseNotes.trim() || undefined,
             signatureDataUrl,
-            decision,
           }),
         },
       );
       setReleaseResult(result);
-      if (result.holdPoint.status === 'released') {
-        setData((current) =>
-          current
-            ? {
-                ...current,
-                evidencePackage: applyReleaseToEvidencePackage(
-                  current.evidencePackage,
-                  result.holdPoint,
-                ),
-              }
-            : current,
-        );
-      }
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              evidencePackage: applyReleaseToEvidencePackage(
+                current.evidencePackage,
+                result.holdPoint,
+              ),
+            }
+          : current,
+      );
     } catch (error) {
       setSubmitError(extractErrorMessage(error, 'Could not release this hold point.'));
     } finally {
@@ -356,22 +334,7 @@ export function PublicHoldPointReleasePage() {
         </section>
 
         <aside className="rounded-lg border bg-card p-5 shadow-sm lg:sticky lg:top-6 lg:self-start">
-          {rejectionOutcome ? (
-            <div>
-              <div className="flex items-center gap-2 text-destructive" role="status">
-                <AlertTriangle className="h-5 w-5" />
-                <h2 className="font-semibold">Hold Point Rejected</h2>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Nothing has been released. The site team has been told, with your reason.
-              </p>
-              {rejectionOutcome.reason && (
-                <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {rejectionOutcome.reason}
-                </p>
-              )}
-            </div>
-          ) : releasedHoldPoint ? (
+          {releasedHoldPoint ? (
             <div>
               <div className="flex items-center gap-2 text-success" role="status">
                 <CheckCircle2 className="h-5 w-5" />
@@ -404,23 +367,100 @@ export function PublicHoldPointReleasePage() {
               </Button>
             </div>
           ) : (
-            <PublicReleaseDecisionForm
-              decision={decision}
-              onDecisionChange={setDecision}
-              releasedByName={releasedByName}
-              onReleasedByNameChange={setReleasedByName}
-              releasedByOrg={releasedByOrg}
-              onReleasedByOrgChange={setReleasedByOrg}
-              comment={releaseNotes}
-              onCommentChange={setReleaseNotes}
-              signatureDataUrl={signatureDataUrl}
-              onSignatureChange={setSignatureDataUrl}
-              tokenRecipientName={tokenRecipientName}
-              canAction={canRelease}
-              submitting={submitting}
-              submitError={submitError}
-              onSubmit={handleSubmit}
-            />
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <h2 className="font-semibold">Release Hold Point</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Confirm the evidence package before releasing this hold point.
+                </p>
+              </div>
+
+              {!canRelease && (
+                <div
+                  className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+                  role="alert"
+                >
+                  This link can no longer release the hold point.
+                </div>
+              )}
+
+              <label className="block text-sm font-medium">
+                Released By
+                <input
+                  value={releasedByName}
+                  onChange={(event) => setReleasedByName(event.target.value)}
+                  maxLength={120}
+                  required
+                  disabled={Boolean(tokenRecipientName) || !canRelease || submitting}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                />
+                {tokenRecipientName && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    This secure link is assigned to {tokenRecipientName}.
+                  </span>
+                )}
+              </label>
+
+              <label className="block text-sm font-medium">
+                Organisation
+                <input
+                  value={releasedByOrg}
+                  onChange={(event) => setReleasedByOrg(event.target.value)}
+                  maxLength={160}
+                  disabled={!canRelease || submitting}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+
+              <label className="block text-sm font-medium">
+                Release Notes
+                <textarea
+                  value={releaseNotes}
+                  onChange={(event) => setReleaseNotes(event.target.value)}
+                  maxLength={2000}
+                  rows={4}
+                  disabled={!canRelease || submitting}
+                  className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+
+              <div>
+                <SignaturePad
+                  onChange={setSignatureDataUrl}
+                  required
+                  fullWidth
+                  disabled={!canRelease || submitting}
+                  label="Sign to confirm release"
+                />
+                {!signatureDataUrl && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    A signature is required to release this hold point.
+                  </p>
+                )}
+              </div>
+
+              {submitError && (
+                <div
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
+                  {submitError}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!canRelease || submitting || !releasedByName.trim() || !signatureDataUrl}
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Release Hold Point
+              </Button>
+            </form>
           )}
         </aside>
       </div>

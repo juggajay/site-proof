@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
@@ -12,10 +12,7 @@ import {
 import { holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
 import { requireSuperintendentApprovalRecipients } from './holdpoints/superintendentRecipients.js';
 import { buildPublicHoldPointEvidencePackageResponse } from './holdpoints/evidencePackage.js';
-import {
-  buildPublicHoldPointRejectedResponse,
-  buildPublicHoldPointReleasedResponse,
-} from './holdpoints/actionResponses.js';
+import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionResponses.js';
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
@@ -32,13 +29,11 @@ import {
 } from './holdpoints/publicReleasePayload.js';
 import {
   buildHoldPointPublicReleaseAuditChanges,
-  executeHoldPointTokenRejection,
   executeHoldPointTokenRelease,
   rejectTerminalPublicHoldPointRelease,
-  runHoldPointRejectionPostCommit,
   runHoldPointReleasePostCommit,
 } from './holdpoints/publicReleaseExecution.js';
-import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
+import { AuditAction } from '../lib/auditLog.js';
 import { recordDecision } from '../lib/readiness/recordDecision.js';
 import {
   evaluateHoldPointReleaseReadiness,
@@ -78,6 +73,20 @@ holdpointsRouter.use(holdPointReleaseLinkRouter);
 // PUBLIC ENDPOINTS - No authentication required (Feature #23)
 // These endpoints use secure time-limited tokens for superintendent access
 // ============================================================================
+
+// The bearer credential for every route below is IN THE URL, and the responses
+// carry the evidence package plus the invited recipient's email. A shared cache
+// keyed on that URL would hand both to the next reader of the same link, so the
+// whole public section is `no-store` — one `use` rather than a header line per
+// route, because the property belongs to the section, not to any one handler.
+//
+// `Referrer-Policy: no-referrer` is NOT repeated here: helmet already sets it
+// globally in server.ts (verified against the installed version), and a second
+// per-route copy would drift from it.
+holdpointsRouter.use('/public', (_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  next();
+});
 
 // Wave E2.1 — the unsubscribe door for an external recipient with no CIVOS
 // account. Mounted at the head of the public section so its two-segment
@@ -163,13 +172,7 @@ holdpointsRouter.post(
       throw AppError.fromZodError(parseResult.error);
     }
 
-    const {
-      releasedByName,
-      releasedByOrg,
-      releaseNotes,
-      signatureDataUrl,
-      decision: approverDecision,
-    } = parseResult.data;
+    const { releasedByName, releasedByOrg, releaseNotes, signatureDataUrl } = parseResult.data;
 
     // Find the token and validate it
     const releaseToken = await prisma.holdPointReleaseToken.findFirst({
@@ -230,54 +233,6 @@ holdpointsRouter.post(
         },
       ],
     );
-
-    // Benchmark T3 — the approver said no. Handled before the release machinery
-    // because nothing about a rejection is a release: no readiness decision is
-    // recorded (nothing became conformant), no ITP completion is reconciled and
-    // no release column is written. The token claim, the status flip and the
-    // audit row still commit as one transaction.
-    if (approverDecision === 'reject') {
-      const rejectedAt = new Date();
-      const { holdPoint } = await prisma.$transaction(async (tx) => {
-        const result = await executeHoldPointTokenRejection(tx, {
-          tokenId: releaseToken.id,
-          holdPointId: releaseToken.holdPoint.id,
-          rejectedAt,
-          effectiveRejectedByName: effectiveReleasedByName,
-          rejectedByOrg: releasedByOrg,
-          rejectionReason: releaseNotes!,
-          signatureDataUrl,
-        });
-
-        await writeAuditLogInTransaction(tx, {
-          projectId: releaseToken.holdPoint.lot.projectId,
-          entityType: 'hold_point',
-          entityId: releaseToken.holdPoint.id,
-          action: AuditAction.HP_PUBLIC_REJECTED,
-          changes: {
-            rejectedByName: effectiveReleasedByName,
-            submittedRejectedByName: releasedByName,
-            rejectedByOrg: releasedByOrg,
-            // Redacted by sanitizeAuditChanges' /token/i pattern — see
-            // buildHoldPointPublicReleaseAuditChanges for why the key matters.
-            tokenRecipient: releaseToken.recipientEmail,
-            tokenRecipientName: releaseToken.recipientName,
-          },
-          req,
-        });
-
-        return result;
-      });
-
-      await runHoldPointRejectionPostCommit({
-        holdPoint,
-        projectId: releaseToken.holdPoint.lot.projectId,
-        rejectionReason: releaseNotes!,
-      });
-
-      res.json(buildPublicHoldPointRejectedResponse(holdPoint));
-      return;
-    }
 
     const releasedAt = new Date();
     // Wave C1.2 (§5.2, §3.4.3 `[C1R-B7]`): the sufficiency advisory is resolved

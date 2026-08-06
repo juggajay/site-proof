@@ -568,22 +568,4 @@ describe('HoldPointsPage single request release', () => {
       expect(registerReads.length).toBeGreaterThan(1);
     });
   });
-
-  it('offers a rejected hold point a re-request rather than leaving it stuck', async () => {
-    mockSingleRequestApi([
-      makeHoldPoint({
-        id: 'hp-1',
-        lotNumber: 'LOT-001',
-        description: 'Formation inspection',
-        status: 'rejected',
-        releaseNotes: 'Compaction results do not meet the specified 95% RDD.',
-      }),
-    ]);
-
-    renderPage();
-
-    await findLotCard('LOT-001');
-    expect(screen.getAllByText('Rejected').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Request Release Again/i })).toBeInTheDocument();
-  });
 });

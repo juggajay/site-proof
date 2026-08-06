@@ -260,44 +260,12 @@ export const previewEvidencePackageSchema = z.object({
   itpChecklistItemId: requiredIdSchema('itpChecklistItemId'),
 });
 
-// Benchmark T3 — the approver gets verbs, not one button. `release` is the
-// pre-existing behaviour and stays the default so an older client (or a replayed
-// request) is unchanged. The two deliberate verbs must say WHY in writing: a
-// condition nobody wrote down and a rejection with no reason are both worthless
-// in an evidence pack.
-export const PUBLIC_RELEASE_DECISIONS = ['release', 'release_with_conditions', 'reject'] as const;
-export type PublicReleaseDecision = (typeof PUBLIC_RELEASE_DECISIONS)[number];
-
-/** Enforced server-side; the live counter on the page mirrors it, never sets it. */
-export const MIN_PUBLIC_RELEASE_COMMENT_LENGTH = 25;
-
-export function publicReleaseDecisionRequiresComment(decision: PublicReleaseDecision): boolean {
-  return decision !== 'release';
-}
-
-export const publicReleaseSchema = z
-  .object({
-    releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
-    releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
-    releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-    signatureDataUrl: requiredSignatureDataUrlSchema,
-    decision: z.enum(PUBLIC_RELEASE_DECISIONS).optional().default('release'),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      publicReleaseDecisionRequiresComment(data.decision) &&
-      (data.releaseNotes ?? '').length < MIN_PUBLIC_RELEASE_COMMENT_LENGTH
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['releaseNotes'],
-        message:
-          data.decision === 'reject'
-            ? `A rejection reason of at least ${MIN_PUBLIC_RELEASE_COMMENT_LENGTH} characters is required.`
-            : `Conditions of at least ${MIN_PUBLIC_RELEASE_COMMENT_LENGTH} characters are required.`,
-      });
-    }
-  });
+export const publicReleaseSchema = z.object({
+  releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
+  releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
+  releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
+  signatureDataUrl: requiredSignatureDataUrlSchema,
+});
 
 export const MAX_BATCH_RELEASE_ITEMS = 25;
 

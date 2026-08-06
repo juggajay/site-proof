@@ -237,7 +237,6 @@ export const AuditAction = {
   HP_ESCALATED: 'hp_escalated',
   HP_ESCALATION_RESOLVED: 'hp_escalation_resolved',
   HP_PUBLIC_RELEASED: 'hp_public_released',
-  HP_PUBLIC_REJECTED: 'hp_public_rejected',
   // A QR/secure release link produced on screen for a co-located approver.
   // Recorded because the link is release-capable and leaves the app outside
   // email — the audit row names who put it on screen and when.

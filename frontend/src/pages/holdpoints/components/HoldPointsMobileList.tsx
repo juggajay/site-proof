@@ -159,7 +159,6 @@ const statusVariants: Record<string, MobileDataCardStatusVariant> = {
   pending: 'default',
   notified: 'warning',
   released: 'default',
-  rejected: 'error',
 };
 
 function HoldPointMobileCard({
@@ -305,12 +304,6 @@ function HoldPointMobileCard({
                 )}
               </Button>
             </>
-          )}
-
-          {hp.status === 'rejected' && (
-            <Button size="lg" className="w-full" onClick={() => onRequestRelease(hp)}>
-              Request Release Again
-            </Button>
           )}
 
           {hp.status === 'released' && !isVirtual && (

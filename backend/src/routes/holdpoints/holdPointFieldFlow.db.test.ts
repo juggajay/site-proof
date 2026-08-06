@@ -1,8 +1,8 @@
-// Benchmark field-flow tickets T2 (QR release link) and T3 (approver verbs).
+// Benchmark field-flow ticket T2 — the QR release link.
 //
-// DB-backed on purpose: the load-bearing claims are about persisted state — a
-// minted token really opens the public release door, a rejection really does
-// NOT complete the ITP item, and the token really is single-use afterwards.
+// DB-backed on purpose: the load-bearing claim is about persisted state — a
+// minted token really opens the public release door, and releasing through it
+// writes the same register record as the emailed link.
 // `src/test/databaseSafety.ts` keeps this on the local disposable database.
 
 import crypto from 'crypto';
@@ -33,8 +33,6 @@ const tag = `hp-field-flow-${Date.now()}`;
 const RECIPIENT_EMAIL = `${tag}-superintendent@example.com`;
 const RECIPIENT_NAME = 'Named Superintendent';
 const SIGNATURE = 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=';
-const REJECTION_REASON = 'Compaction results do not meet the specified 95% RDD for this layer.';
-const CONDITIONS = 'Released subject to the 28-day break result being submitted before overlay.';
 
 let requesterToken: string;
 let requesterId: string;
@@ -355,173 +353,23 @@ describe('T2 — POST /api/holdpoints/:id/release-link', () => {
     });
     expect(audit).toHaveLength(1);
   });
-});
 
-describe('T3 — approver verbs on the public release door', () => {
-  it('rejects a hold point without releasing it or completing its ITP item', async () => {
-    const { holdPoint, checklistItem } = await createHoldPoint('reject');
+  // The token IS the credential and it lives in the URL, so a cached response
+  // hands the evidence package and the recipient's email to whoever reads the
+  // same link next. Asserted on both public doors, since the header comes from
+  // one `use` on the section rather than from either handler.
+  // (`Referrer-Policy: no-referrer` is helmet's global default in server.ts,
+  // which this bare test app does not mount, so it is not asserted here.)
+  it('never lets a cache keep a token-scoped response', async () => {
+    const { holdPoint } = await createHoldPoint('no-store');
     const emailed = await createEmailedToken(holdPoint.id, 'emailed');
 
-    const response = await postPublicDecision(emailed.raw, {
-      decision: 'reject',
-      releaseNotes: REJECTION_REASON,
-    });
+    const read = await request(app).get(`/api/holdpoints/public/${emailed.raw}`);
+    expect(read.status).toBe(200);
+    expect(read.headers['cache-control']).toBe('private, no-store, max-age=0');
 
-    expect(response.status).toBe(200);
-    expect(response.body.holdPoint).toMatchObject({
-      status: 'rejected',
-      releasedAt: null,
-      releasedByName: null,
-      releaseNotes: REJECTION_REASON,
-    });
-
-    const rejected = await prisma.holdPoint.findUnique({ where: { id: holdPoint.id } });
-    expect(rejected).toMatchObject({ status: 'rejected', releaseNotes: REJECTION_REASON });
-    // No release column may be written: an evidence document that printed
-    // "Released by ..." for a rejected hold point would state something untrue.
-    expect(rejected!.releasedAt).toBeNull();
-    expect(rejected!.releasedByName).toBeNull();
-    expect(rejected!.releaseMethod).toBeNull();
-    expect(rejected!.releaseSignatureUrl).toBeNull();
-
-    // The gated checklist item stays unsatisfied.
-    const completion = await prisma.iTPCompletion.findUnique({
-      where: {
-        itpInstanceId_checklistItemId: { itpInstanceId, checklistItemId: checklistItem.id },
-      },
-    });
-    expect(completion).toBeNull();
-  });
-
-  it('records who rejected on the token row and in the audit trail', async () => {
-    const { holdPoint } = await createHoldPoint('reject-audit');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    await postPublicDecision(emailed.raw, {
-      decision: 'reject',
-      releaseNotes: REJECTION_REASON,
-    });
-
-    const usedToken = await prisma.holdPointReleaseToken.findUnique({
-      where: { id: emailed.token.id },
-    });
-    expect(usedToken!.usedAt).not.toBeNull();
-    expect(usedToken!.releasedByName).toBe(RECIPIENT_NAME);
-    expect(usedToken!.releaseSignatureUrl).toBe(SIGNATURE);
-    expect(usedToken!.releaseNotes).toBe(REJECTION_REASON);
-
-    const audit = await prisma.auditLog.findMany({
-      where: { entityId: holdPoint.id, action: AuditAction.HP_PUBLIC_REJECTED },
-    });
-    expect(audit).toHaveLength(1);
-    const changes = JSON.parse(audit[0].changes ?? '{}') as Record<string, unknown>;
-    expect(changes.rejectedByName).toBe(RECIPIENT_NAME);
-    expect(changes.submittedRejectedByName).toBe('Submitted Free Text Name');
-    expect(JSON.stringify(changes)).not.toContain(RECIPIENT_EMAIL);
-  });
-
-  it('tells the crew the work came back, with the reason', async () => {
-    const { holdPoint } = await createHoldPoint('reject-notify');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    await postPublicDecision(emailed.raw, {
-      decision: 'reject',
-      releaseNotes: REJECTION_REASON,
-    });
-
-    const notifications = await prisma.notification.findMany({
-      where: { projectId, type: 'hold_point_rejected' },
-    });
-    expect(notifications).toHaveLength(1);
-    expect(notifications[0].userId).toBe(requesterId);
-    expect(notifications[0].message).toContain(REJECTION_REASON);
-    expect(notifications[0].message).toContain('NOT released');
-    expect(holdPoint.id).toBeTruthy();
-  });
-
-  it('burns the token, so a rejection cannot be re-submitted as a release', async () => {
-    const { holdPoint } = await createHoldPoint('reject-replay');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    await postPublicDecision(emailed.raw, {
-      decision: 'reject',
-      releaseNotes: REJECTION_REASON,
-    });
-
-    const replay = await postPublicDecision(emailed.raw);
-    expect(replay.status).toBe(410);
-
-    const stillRejected = await prisma.holdPoint.findUnique({ where: { id: holdPoint.id } });
-    expect(stillRejected!.status).toBe('rejected');
-  });
-
-  it('refuses a rejection with no usable reason', async () => {
-    const { holdPoint } = await createHoldPoint('reject-no-reason');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    const response = await postPublicDecision(emailed.raw, {
-      decision: 'reject',
-      releaseNotes: 'nope',
-    });
-
-    expect(response.status).toBe(400);
-
-    const untouched = await prisma.holdPoint.findUnique({ where: { id: holdPoint.id } });
-    expect(untouched!.status).toBe('notified');
-    const unusedToken = await prisma.holdPointReleaseToken.findUnique({
-      where: { id: emailed.token.id },
-    });
-    expect(unusedToken!.usedAt).toBeNull();
-  });
-
-  it('releases with conditions, keeping the conditions on the record', async () => {
-    const { holdPoint, checklistItem } = await createHoldPoint('conditional');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    const response = await postPublicDecision(emailed.raw, {
-      decision: 'release_with_conditions',
-      releaseNotes: CONDITIONS,
-    });
-
-    expect(response.status).toBe(200);
-    expect(response.body.holdPoint.status).toBe('released');
-
-    const released = await prisma.holdPoint.findUnique({ where: { id: holdPoint.id } });
-    expect(released).toMatchObject({
-      status: 'released',
-      releasedByName: RECIPIENT_NAME,
-      releaseNotes: CONDITIONS,
-    });
-
-    const completion = await prisma.iTPCompletion.findUnique({
-      where: {
-        itpInstanceId_checklistItemId: { itpInstanceId, checklistItemId: checklistItem.id },
-      },
-    });
-    expect(completion).toMatchObject({ status: 'completed' });
-  });
-
-  it('refuses a conditional release whose conditions were never written down', async () => {
-    const { holdPoint } = await createHoldPoint('conditional-empty');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    const response = await postPublicDecision(emailed.raw, {
-      decision: 'release_with_conditions',
-    });
-
-    expect(response.status).toBe(400);
-    const untouched = await prisma.holdPoint.findUnique({ where: { id: holdPoint.id } });
-    expect(untouched!.status).toBe('notified');
-  });
-
-  it('still releases when no decision is sent, so an older client is unaffected', async () => {
-    const { holdPoint } = await createHoldPoint('default-verb');
-    const emailed = await createEmailedToken(holdPoint.id, 'emailed');
-
-    const response = await postPublicDecision(emailed.raw);
-
-    expect(response.status).toBe(200);
-    const released = await prisma.holdPoint.findUnique({ where: { id: holdPoint.id } });
-    expect(released!.status).toBe('released');
+    const release = await postPublicDecision(emailed.raw);
+    expect(release.status).toBe(200);
+    expect(release.headers['cache-control']).toBe('private, no-store, max-age=0');
   });
 });

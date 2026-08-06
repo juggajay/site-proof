@@ -58,7 +58,6 @@ describe('getHoldPointRowState', () => {
     expect(getHoldPointRowState(makeHoldPoint({ status: 'pending' }), false)).toBe('not_requested');
     expect(getHoldPointRowState(makeHoldPoint({ status: 'notified' }), false)).toBe('requested');
     expect(getHoldPointRowState(makeHoldPoint({ status: 'released' }), false)).toBe('released');
-    expect(getHoldPointRowState(makeHoldPoint({ status: 'rejected' }), false)).toBe('rejected');
   });
 
   it('still reads released from the completion when no hold point is served', () => {
@@ -125,22 +124,7 @@ describe('ITPChecklistHoldPointState', () => {
     expect(screen.queryByRole('button', { name: /qr code/i })).not.toBeInTheDocument();
   });
 
-  it('shows the rejection reason and lets the crew ask again', async () => {
-    const { onRequestRelease } = renderState(
-      makeHoldPoint({
-        status: 'rejected',
-        releaseNotes: 'Compaction results do not meet the specified 95% RDD.',
-      }),
-    );
-
-    expect(screen.getByText(/Release rejected by the authority/)).toBeInTheDocument();
-    expect(screen.getByText(/95% RDD/)).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /request release again/i }));
-    expect(onRequestRelease).toHaveBeenCalledTimes(1);
-  });
-
-  it('reads out the release attribution, and any conditions attached to it', () => {
+  it('reads out the release attribution', () => {
     renderState(
       makeHoldPoint({
         status: 'released',
@@ -148,13 +132,11 @@ describe('ITPChecklistHoldPointState', () => {
         releasedByOrg: 'Client Company',
         releaseMethod: 'secure_link',
         releasedAt: '2026-09-04T02:00:00.000Z',
-        releaseNotes: 'Subject to the 28-day break result before overlay.',
       }),
     );
 
     const attribution = screen.getByText(/Released by Amos Soo/);
     expect(attribution).toHaveTextContent('Client Company');
     expect(attribution).toHaveTextContent('via secure link');
-    expect(screen.getByText(/Conditions:/).parentElement).toHaveTextContent('28-day break');
   });
 });

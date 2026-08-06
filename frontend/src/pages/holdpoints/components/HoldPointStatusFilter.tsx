@@ -69,7 +69,6 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
           <option value="notified">Awaiting Release</option>
           <option value="notice-expired">Awaiting Release — Notice Expired</option>
           <option value="released">Released</option>
-          <option value="rejected">Rejected</option>
         </select>
         {showExport && (
           <button

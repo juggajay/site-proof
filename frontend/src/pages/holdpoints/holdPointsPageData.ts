@@ -20,7 +20,6 @@ const STATUS_FILTER_VALUES: readonly StatusFilter[] = [
   'pending',
   'notified',
   'released',
-  'rejected',
   'notice-expired',
 ];
 
