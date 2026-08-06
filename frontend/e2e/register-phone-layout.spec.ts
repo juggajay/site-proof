@@ -209,18 +209,20 @@ test('documents: filters collapse, content above the fold, no duplicate tag chip
   expect(h).toBeGreaterThanOrEqual(44);
 
   // The sheet's own Apply button must not sit under the mobile shell nav.
+  // Polled rather than waited on a fixed delay: the sheet slides up over
+  // ~300ms, and hit-testing a moving element is how this would flake.
   const apply = sheet.getByRole('button', { name: /Apply Filters/i });
   await expect(apply).toBeVisible();
-  await page.waitForTimeout(500);
-  const applyBox = (await apply.boundingBox())!;
-  const hitTop = await page.evaluate(
-    ([x, y]) => {
-      const el = document.elementFromPoint(x, y);
-      return el?.textContent?.slice(0, 30) ?? 'none';
-    },
-    [applyBox.x + applyBox.width / 2, applyBox.y + applyBox.height / 2],
-  );
-  expect(hitTop).toContain('Apply');
+  await expect
+    .poll(async () => {
+      const box = await apply.boundingBox();
+      if (!box) return 'none';
+      return page.evaluate(
+        ([x, y]) => document.elementFromPoint(x, y)?.textContent?.slice(0, 30) ?? 'none',
+        [box.x + box.width / 2, box.y + box.height / 2],
+      );
+    })
+    .toContain('Apply');
 });
 
 test('deliveries: filters collapse and the first row is above the fold', async ({ page }) => {
