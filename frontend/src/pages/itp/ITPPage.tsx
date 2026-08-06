@@ -199,7 +199,9 @@ export function ITPPage() {
       name: string;
       description: string;
       activityType: string;
-      checklistItems: Omit<ChecklistItem, 'id'>[];
+      // Rows carry their persisted id so the server can preserve checklist
+      // lineage across the update's delete-and-recreate.
+      checklistItems: ChecklistItem[];
     },
   ) => {
     if (!token || creating) return;

@@ -25,6 +25,14 @@ const optionalText = (field: string, maxLength: number) =>
     .nullable();
 
 export const checklistItemSchema = z.object({
+  // Wave G G5: the id of the row this payload is EDITING, when it is editing one.
+  // The update route replaces items by delete-and-recreate, so without this an
+  // edit had no way to say "this row is still that row" — and every edited
+  // template lost its `sourceChecklistItemId` lineage, which is what makes an
+  // NCR raised against the new revision aggregate with the failures that caused
+  // it. Optional and advisory: it is used ONLY to look up lineage among this
+  // template's own rows (see `templates.ts`), never to address a row for write.
+  id: z.string().trim().max(MAX_TEMPLATE_ID_LENGTH).optional(),
   description: requiredText('description', MAX_CHECKLIST_ITEM_DESCRIPTION_LENGTH),
   pointType: requiredText('pointType', MAX_SHORT_TEXT_LENGTH).optional(),
   isHoldPoint: z.boolean().optional(),

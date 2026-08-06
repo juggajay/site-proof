@@ -34,6 +34,9 @@ export function EditTemplateModal({
   const [checklistItems, setChecklistItems] = useState<EditableChecklistItem[]>(
     template.checklistItems
       .map((item) => ({
+        // Echoed back on save so the server can carry this row's lineage
+        // pointer across its delete-and-recreate (see EditableChecklistItem).
+        id: item.id,
         description: item.description,
         category: item.category,
         responsibleParty: item.responsibleParty,

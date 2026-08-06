@@ -167,17 +167,33 @@ router.get(
       req.query,
     );
 
-    await requireProjectTemplateAccess(query.projectId, req.user!);
+    // `manage` — NOT a plain read gate. `TEMPLATE_MANAGER_ROLES` is exactly the
+    // office set `NCR_ANALYTICS_ROLES` uses, and a proposal quotes the failure
+    // trend that produced it ("7 NCRs across 3 subcontractors"). The ITP
+    // Templates page this list renders on is reachable by foremen and site
+    // engineers, who may read templates but not the trend behind them, so this
+    // list has to be gated more tightly than the page hosting it.
+    await requireProjectTemplateAccess(query.projectId, req.user!, true);
 
-    const proposals = await prisma.templateRevisionProposal.findMany({
-      where: { projectId: query.projectId, ...(query.status ? { status: query.status } : {}) },
-      orderBy: [{ status: 'asc' }, { proposedAt: 'desc' }],
-      // Bounded for the same reason every list in G5 is bounded ([GR-N4]).
-      take: PROPOSAL_PAGE_SIZE,
-      include: proposalInclude,
-    });
+    const where = {
+      projectId: query.projectId,
+      ...(query.status ? { status: query.status } : {}),
+    };
 
-    res.json({ proposals });
+    const [proposals, total] = await Promise.all([
+      prisma.templateRevisionProposal.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { proposedAt: 'desc' }],
+        // Bounded for the same reason every list in G5 is bounded ([GR-N4]).
+        take: PROPOSAL_PAGE_SIZE,
+        include: proposalInclude,
+      }),
+      // The unbounded count, so a UI showing a capped page can say what it is
+      // capping and a badge cannot silently under-report the queue.
+      prisma.templateRevisionProposal.count({ where }),
+    ]);
+
+    res.json({ proposals, total });
   }),
 );
 
@@ -219,6 +235,18 @@ router.post(
     if (!template) throw AppError.notFound('ITP template');
     if (template.projectId !== null && template.projectId !== body.projectId) {
       throw AppError.notFound('ITP template');
+    }
+    // Refuse the dead end at the door. Accept has always refused a library
+    // target (§2.3 — a new library edition is an operator act, not an API one),
+    // but refusing only at decide time let a proposal sit in the queue for weeks
+    // before a reviewer discovered it could never be actioned. The reviewer with
+    // the evidence in front of them is the one who should be told to clone
+    // first, while they still have it.
+    if (template.projectId === null) {
+      throw AppError.badRequest(
+        'This is a library template — clone it into the project first, then propose against the copy.',
+        { code: 'GLOBAL_TEMPLATE_NOT_ISSUABLE' },
+      );
     }
 
     const proposal = await prisma.templateRevisionProposal.create({
@@ -291,6 +319,28 @@ router.post(
     const governanceEnabled = revisionGovernanceEnabled();
 
     const result = await prisma.$transaction(async (tx) => {
+      // Claim the proposal FIRST, guarded on `status: 'open'`. The checks above
+      // read outside the transaction, so two reviewers hitting Accept together
+      // both passed them and both went on to open a revision — leaving the
+      // template with two active successors and no way to tell which one the
+      // project is meant to inspect against. Under READ COMMITTED the second
+      // transaction blocks on this row until the first commits, then re-evaluates
+      // the WHERE, matches nothing, and rolls its whole revision back.
+      const claimed = await tx.templateRevisionProposal.updateMany({
+        where: { id: proposal.id, status: 'open' },
+        data: {
+          status: 'accepted',
+          decidedById: userId,
+          decidedAt: new Date(),
+          decisionNote: body.changeSummary,
+        },
+      });
+      if (claimed.count === 0) {
+        throw AppError.badRequest('This proposal was already decided by someone else', {
+          code: 'PROPOSAL_ALREADY_DECIDED',
+        });
+      }
+
       // The new revision is a COPY carrying the reviewer's change summary. The
       // reviewer edits the items on the new revision afterwards, through the
       // shipped template routes — which is exactly why this route does not try
@@ -338,11 +388,20 @@ router.post(
       });
 
       // The supersession pointer G1's generic route could not set, because
-      // `ITPTemplate.supersededById` did not exist until G2 §2.2(a).
-      await tx.iTPTemplate.update({
-        where: { id: source.id },
+      // `ITPTemplate.supersededById` did not exist until G2 §2.2(a). Guarded on
+      // `supersededById: null` for the same reason the claim above is guarded:
+      // a template that acquired a successor between the read and here must not
+      // have that pointer overwritten, which would orphan the other revision.
+      const superseded = await tx.iTPTemplate.updateMany({
+        where: { id: source.id, supersededById: null },
         data: { supersededById: revision.id, supersededAt: new Date(), isActive: false },
       });
+      if (superseded.count === 0) {
+        throw AppError.badRequest(
+          'That template has already been superseded. Re-raise the proposal against the current revision.',
+          { code: 'TEMPLATE_ALREADY_SUPERSEDED' },
+        );
+      }
 
       if (governanceEnabled) {
         await tx.revisionIssue.create({
@@ -358,15 +417,11 @@ router.post(
         });
       }
 
+      // The decision itself was written by the guarded claim above; this only
+      // attaches the revision it produced, which could not be known until now.
       const decided = await tx.templateRevisionProposal.update({
         where: { id: proposal.id },
-        data: {
-          status: 'accepted',
-          decidedById: userId,
-          decidedAt: new Date(),
-          decisionNote: body.changeSummary,
-          resultingTemplateId: revision.id,
-        },
+        data: { resultingTemplateId: revision.id },
         include: proposalInclude,
       });
 
@@ -394,15 +449,30 @@ router.post(
       });
     }
 
-    const decided = await prisma.templateRevisionProposal.update({
-      where: { id: proposal.id },
-      data: {
-        status: 'rejected',
-        decidedById: req.user!.id,
-        decidedAt: new Date(),
-        decisionNote: body.decisionNote,
-      },
-      include: proposalInclude,
+    // Guarded on `status: 'open'` for the same reason accept is: the check above
+    // read outside the transaction, so a reject racing an accept could otherwise
+    // overwrite a decision that had already opened a revision — leaving a
+    // rejected proposal pointing at a live successor template.
+    const decided = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.templateRevisionProposal.updateMany({
+        where: { id: proposal.id, status: 'open' },
+        data: {
+          status: 'rejected',
+          decidedById: req.user!.id,
+          decidedAt: new Date(),
+          decisionNote: body.decisionNote,
+        },
+      });
+      if (claimed.count === 0) {
+        throw AppError.badRequest('This proposal was already decided by someone else', {
+          code: 'PROPOSAL_ALREADY_DECIDED',
+        });
+      }
+
+      return tx.templateRevisionProposal.findUniqueOrThrow({
+        where: { id: proposal.id },
+        include: proposalInclude,
+      });
     });
 
     res.json({ proposal: decided });
