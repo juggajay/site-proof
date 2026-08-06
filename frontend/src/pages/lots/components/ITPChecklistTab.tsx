@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, WifiOff, CloudOff, Unlink } from 'lucide-react';
+import { RefreshCw, WifiOff, CloudOff, Unlink, FileDown, ClipboardList } from 'lucide-react';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findFirstIncompleteItpCategory } from '@/components/foreman/mobileItpChecklistHelpers';
@@ -28,6 +28,7 @@ import {
   type ItpStatusFilter,
 } from './itpChecklistTabHelpers';
 import { TemplateProvenance } from '@/pages/itp/components/TemplateProvenance';
+import { useChecklistPdfDownload } from '../hooks/useChecklistPdfDownload';
 
 // Main ITPChecklistTab props
 export interface ITPChecklistTabProps {
@@ -128,6 +129,12 @@ export function ITPChecklistTab({
     projectId,
     holdPoints: itpInstance?.holdPoints,
     onRefreshItp: onRetryItp,
+  });
+
+  const { downloadingChecklist, downloadChecklist } = useChecklistPdfDownload({
+    lot,
+    projectId,
+    itpInstance,
   });
 
   // Local state for ITP tab
@@ -347,6 +354,30 @@ export function ITPChecklistTab({
               <span className="max-w-[18rem] truncate text-sm text-muted-foreground">
                 {itpInstance.template.name}
               </span>
+              {/* Generated PDFs, not window.print — the as-recorded checklist
+                  and the blank wet-ink Field Complete sheet a crew takes out. */}
+              <button
+                type="button"
+                onClick={() => downloadChecklist('electronic')}
+                disabled={downloadingChecklist !== null}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+                title="Download the checklist as recorded, as a PDF"
+              >
+                <FileDown className="h-4 w-4" />
+                <span>
+                  {downloadingChecklist === 'electronic' ? 'Downloading…' : 'Checklist PDF'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadChecklist('field')}
+                disabled={downloadingChecklist !== null}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+                title="Download a blank Field Complete sheet for wet-ink sign-off"
+              >
+                <ClipboardList className="h-4 w-4" />
+                <span>{downloadingChecklist === 'field' ? 'Downloading…' : 'Field copy'}</span>
+              </button>
               {canAssignITPTemplate && (
                 <button
                   type="button"
