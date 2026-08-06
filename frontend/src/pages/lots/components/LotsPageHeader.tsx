@@ -72,13 +72,6 @@ interface LotsPageHeaderProps {
   isMobile: boolean;
   isSubcontractor: boolean;
   canCreate: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
-  selectedCount: number;
-  /** A shipped frequency ruleset governs this project (Wave C1 §9.4). */
-  hasGoverningRuleset: boolean;
-  rulesetLoadFailed: boolean;
-  onRetryRulesetLoad: () => void;
   viewMode: ViewMode;
   onToggleViewMode: (mode: ViewMode) => void;
   onOpenExport: () => void;
@@ -86,28 +79,18 @@ interface LotsPageHeaderProps {
   onOpenImport: () => void;
   onOpenBulkWizard: () => void;
   onOpenCreate: () => void;
-  onOpenBulkStatus: () => void;
-  onOpenBulkAssign: () => void;
-  onOpenBulkTestAttributes: () => void;
-  onOpenBulkDelete: () => void;
-  onOpenPrintLabels: () => void;
 }
 
 /**
  * Lot register page header. The register-level tools (export, print, import,
  * bulk create) live behind an overflow menu so "Create Lot" reads as the single
- * primary action instead of one of five equal-weight buttons.
+ * primary action instead of one of five equal-weight buttons. Bulk verbs live in
+ * LotSelectionBar, above the rows they act on.
  */
 export function LotsPageHeader({
   isMobile,
   isSubcontractor,
   canCreate,
-  canEdit,
-  canDelete,
-  selectedCount,
-  hasGoverningRuleset,
-  rulesetLoadFailed,
-  onRetryRulesetLoad,
   viewMode,
   onToggleViewMode,
   onOpenExport,
@@ -115,13 +98,7 @@ export function LotsPageHeader({
   onOpenImport,
   onOpenBulkWizard,
   onOpenCreate,
-  onOpenBulkStatus,
-  onOpenBulkAssign,
-  onOpenBulkTestAttributes,
-  onOpenBulkDelete,
-  onOpenPrintLabels,
 }: LotsPageHeaderProps) {
-  const hasSelection = selectedCount > 0;
   const showRegisterTools = !isMobile;
   const showImportTools = !isMobile && !isSubcontractor && canCreate;
 
@@ -142,55 +119,6 @@ export function LotsPageHeader({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        {canCreate && hasSelection && (
-          <>
-            <Button variant="outline" onClick={onOpenBulkStatus}>
-              Update Status ({selectedCount})
-            </Button>
-            {!isSubcontractor && (
-              <Button variant="outline" onClick={onOpenBulkAssign}>
-                Assign Subcontractor ({selectedCount})
-              </Button>
-            )}
-          </>
-        )}
-        {/* Wave C1: only where a shipped ruleset governs the project —
-            elsewhere the attributes have no consumer. Gated on canEdit, NOT
-            canCreate: the backend bulk route enforces LOT_EDITORS (F8). */}
-        {canEdit && !isSubcontractor && hasSelection && hasGoverningRuleset && (
-          <Button variant="outline" onClick={onOpenBulkTestAttributes}>
-            Set Testing Attributes ({selectedCount})
-          </Button>
-        )}
-        {/* C1 (F14): the pack lookup failed — say so and offer a retry rather
-            than silently behaving like an unsupported project. */}
-        {canEdit &&
-          !isSubcontractor &&
-          hasSelection &&
-          !hasGoverningRuleset &&
-          rulesetLoadFailed && (
-            <Button variant="outline" onClick={onRetryRulesetLoad}>
-              Testing attributes unavailable — Retry
-            </Button>
-          )}
-        {canDelete && hasSelection && (
-          <Button
-            variant="outline"
-            className="text-destructive border-destructive hover:bg-destructive/10"
-            onClick={onOpenBulkDelete}
-          >
-            Delete Selected ({selectedCount})
-          </Button>
-        )}
-        {hasSelection && (
-          <Button
-            variant="outline"
-            className="text-foreground border-border hover:bg-muted/50"
-            onClick={onOpenPrintLabels}
-          >
-            Print Labels ({selectedCount})
-          </Button>
-        )}
         {showRegisterTools && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

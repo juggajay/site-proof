@@ -28,6 +28,7 @@ describe('lotsPagePreferences', () => {
         'description',
         'chainage',
         'activityType',
+        'daysOpen',
         'subcontractor',
       ]);
     });

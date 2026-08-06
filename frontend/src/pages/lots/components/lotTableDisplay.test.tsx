@@ -43,12 +43,13 @@ describe('column width constants', () => {
   it('keeps a default width for every table column', () => {
     expect(DEFAULT_COLUMN_WIDTHS).toEqual({
       lotNumber: 140,
-      description: 130,
-      chainage: 110,
-      activityType: 180,
+      description: 110,
+      chainage: 100,
+      activityType: 126,
       status: 110,
-      subcontractor: 120,
-      budget: 100,
+      daysOpen: 104,
+      subcontractor: 110,
+      budget: 90,
     });
   });
 

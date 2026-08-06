@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { COLUMN_CONFIG, type ColumnId } from './lotFilterConfig';
 import {
   LotExpandedDetailsRow,
+  LotGroupBandRow,
   LotTableEmptyState,
   LotTableLoadMoreIndicator,
 } from './LotTableSections';
@@ -13,15 +13,13 @@ import {
   COLUMN_WIDTH_STORAGE_KEY,
   DEFAULT_COLUMN_WIDTHS,
   SELECT_COLUMN_WIDTH,
-  formatChainage,
-  highlightSearchTerm,
   parseColumnWidthsPreference,
 } from './lotTableDisplay';
 import { LotRowActions } from './LotRowActions';
+import { LotTableCell } from './LotTableCells';
+import { buildLotRegisterRows, type LotGroupBy } from './lotRegisterQueue';
 import type { Lot } from '../lotsPageTypes';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
-import { formatStatusLabel } from '@/lib/statusLabels';
-import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 
 interface LotTableProps {
   displayedLots: Lot[];
@@ -42,6 +40,11 @@ interface LotTableProps {
   onSelectLot: (lotId: string) => void;
   onSelectAll: () => void;
   allDeletableSelected: boolean;
+  // Grouping
+  groupBy: LotGroupBy | null;
+  groupCounts: Map<string, number>;
+  collapsedGroups: Set<string>;
+  onToggleGroup: (groupKey: string) => void;
   // Handlers
   onSort: (field: string) => void;
   onDeleteClick: (lot: Lot) => void;
@@ -74,6 +77,10 @@ export const LotTable = React.memo(function LotTable({
   onSelectLot,
   onSelectAll,
   allDeletableSelected,
+  groupBy,
+  groupCounts,
+  collapsedGroups,
+  onToggleGroup,
   onSort,
   onDeleteClick,
   onCloneLot,
@@ -189,32 +196,51 @@ export const LotTable = React.memo(function LotTable({
     [columnWidths, sortField, sortDirection, onSort, handleResizeStart],
   );
 
-  // Row virtualizer for table body
+  // Row virtualizer for table body. When a grouping is active the virtualized
+  // list interleaves collapsible group bands with the lot rows, so it runs over
+  // a flattened row model rather than over displayedLots directly.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const rows = useMemo(
+    () => buildLotRegisterRows({ displayedLots, groupBy, groupCounts, collapsedGroups }),
+    [displayedLots, groupBy, groupCounts, collapsedGroups],
+  );
 
   // Memoize expanded rows key to trigger virtualizer re-measurement
   const expandedRowsKey = useMemo(() => Array.from(expandedRows).sort().join(','), [expandedRows]);
 
   const rowVirtualizer = useVirtualizer({
-    count: displayedLots.length,
+    count: rows.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: useCallback(
       (index: number) => {
+        const row = rows[index];
+        if (!row) return 52;
+        if (row.kind === 'band') return 40;
         // Expanded rows are taller
-        const lot = displayedLots[index];
-        return lot && expandedRows.has(lot.id) ? 220 : 52;
+        return expandedRows.has(row.lot.id) ? 220 : 52;
       },
-      [displayedLots, expandedRows],
+      [rows, expandedRows],
     ),
     overscan: 5,
   });
 
-  // Re-measure all rows when expandedRows changes
+  // Re-measure all rows when expandedRows or the grouping changes
   useEffect(() => {
     rowVirtualizer.measure();
-  }, [expandedRowsKey, rowVirtualizer]);
+  }, [expandedRowsKey, rows, rowVirtualizer]);
 
-  const colSpanCount = canDelete ? (isSubcontractor ? 7 : 9) : isSubcontractor ? 6 : 8;
+  // Counted rather than guessed: select column + the data columns actually
+  // rendered for this role + the actions column. A hard-coded total silently
+  // goes wrong every time the column set changes.
+  const colSpanCount = useMemo(() => {
+    const dataColumns = orderedVisibleColumns.filter((columnId) => {
+      if (columnId === 'subcontractor' && isSubcontractor) return false;
+      if (columnId === 'budget' && !canViewBudgets) return false;
+      return COLUMN_CONFIG.some((column) => column.id === columnId);
+    }).length;
+    return (canDelete ? 1 : 0) + dataColumns + 1;
+  }, [orderedVisibleColumns, isSubcontractor, canViewBudgets, canDelete]);
 
   return (
     <div
@@ -245,9 +271,14 @@ export const LotTable = React.memo(function LotTable({
               if (!column) return null;
 
               if (
-                ['lotNumber', 'description', 'chainage', 'activityType', 'status'].includes(
-                  columnId,
-                )
+                [
+                  'lotNumber',
+                  'description',
+                  'chainage',
+                  'activityType',
+                  'status',
+                  'daysOpen',
+                ].includes(columnId)
               ) {
                 return (
                   <SortableHeader key={columnId} field={columnId}>
@@ -308,8 +339,30 @@ export const LotTable = React.memo(function LotTable({
                 </tr>
               )}
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const lot = displayedLots[virtualRow.index];
-                if (!lot) return null;
+                const row = rows[virtualRow.index];
+                if (!row) return null;
+
+                if (row.kind === 'band') {
+                  return (
+                    <tr
+                      key={row.key}
+                      data-index={virtualRow.index}
+                      ref={rowVirtualizer.measureElement}
+                      className="border-b bg-muted/60"
+                    >
+                      <LotGroupBandRow
+                        groupKey={row.key}
+                        label={row.label}
+                        count={row.count}
+                        collapsed={row.collapsed}
+                        colSpanCount={colSpanCount}
+                        onToggle={onToggleGroup}
+                      />
+                    </tr>
+                  );
+                }
+
+                const lot = row.lot;
                 return (
                   <React.Fragment key={lot.id}>
                     <tr
@@ -355,72 +408,14 @@ export const LotTable = React.memo(function LotTable({
                       {orderedVisibleColumns.map((columnId) => {
                         if (columnId === 'subcontractor' && isSubcontractor) return null;
                         if (columnId === 'budget' && !canViewBudgets) return null;
-
-                        switch (columnId) {
-                          case 'lotNumber':
-                            return (
-                              <td key={columnId} className="p-3 font-medium">
-                                {highlightSearchTerm(lot.lotNumber, searchQuery)}
-                              </td>
-                            );
-                          case 'description':
-                            return (
-                              <td key={columnId} className="p-3 max-w-xs">
-                                <span className="block truncate" title={lot.description || ''}>
-                                  {lot.description
-                                    ? highlightSearchTerm(lot.description, searchQuery)
-                                    : '\u2014'}
-                                </span>
-                              </td>
-                            );
-                          case 'chainage':
-                            return (
-                              <td key={columnId} className="p-3 whitespace-nowrap">
-                                {formatChainage(lot)}
-                              </td>
-                            );
-                          case 'activityType': {
-                            const activityLabel = formatActivityLabel(lot.activityType) || '\u2014';
-                            return (
-                              <td key={columnId} className="p-3">
-                                <span className="block truncate" title={activityLabel}>
-                                  {activityLabel}
-                                </span>
-                              </td>
-                            );
-                          }
-                          case 'status':
-                            return (
-                              <td key={columnId} className="p-3">
-                                <span
-                                  className={`px-2 py-1 rounded text-xs font-medium ${getLotStatusBadgeClass(lot.status)}`}
-                                >
-                                  {formatStatusLabel(lot.status)}
-                                </span>
-                              </td>
-                            );
-                          case 'subcontractor': {
-                            const subcontractorName =
-                              lot.assignedSubcontractor?.companyName || '\u2014';
-                            return (
-                              <td key={columnId} className="p-3">
-                                <span className="block truncate" title={subcontractorName}>
-                                  {subcontractorName}
-                                </span>
-                              </td>
-                            );
-                          }
-                          case 'budget':
-                            return (
-                              <td key={columnId} className="p-3">
-                                {lot.budgetAmount
-                                  ? `$${lot.budgetAmount.toLocaleString('en-AU')}`
-                                  : '\u2014'}
-                              </td>
-                            );
-                          default:
-                            return null;
-                        }
+                        return (
+                          <LotTableCell
+                            key={columnId}
+                            columnId={columnId}
+                            lot={lot}
+                            searchQuery={searchQuery}
+                          />
+                        );
                       })}
                       <td className="p-3">
                         <LotRowActions

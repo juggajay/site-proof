@@ -6,14 +6,20 @@ import { isRecord, parseJsonPreference } from '@/lib/storagePreferences';
 // Default column widths in pixels. The budget is set so that the whole table —
 // select column + these + the actions column — fits a 1440px window without
 // horizontal overflow, which is what used to clip the row actions.
+//
+// Days Open joined an already-full row, so every other column gave a little
+// back to keep the same total. Activity Type paid the most: it was the widest
+// column and truncates with a title tooltip either way, where a lot number or a
+// status pill has to be readable whole.
 export const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
   lotNumber: 140,
-  description: 130,
-  chainage: 110,
-  activityType: 180,
+  description: 110,
+  chainage: 100,
+  activityType: 126,
   status: 110,
-  subcontractor: 120,
-  budget: 100,
+  daysOpen: 104,
+  subcontractor: 110,
+  budget: 90,
 };
 
 // Wide enough for the expand chevron and the select checkbox side by side. At
