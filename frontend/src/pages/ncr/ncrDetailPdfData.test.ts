@@ -93,6 +93,37 @@ describe('buildNcrDetailPdfData', () => {
     );
   });
 
+  it('sections evidence as before, then after, then untagged', () => {
+    const evidenceItem = (id: string, evidenceType: string) => ({
+      id,
+      evidenceType,
+      uploadedAt: '2026-06-04T00:00:00.000Z',
+      document: {
+        id: `document-${id}`,
+        filename: `${id}.jpg`,
+        mimeType: 'image/jpeg',
+        uploadedAt: '2026-06-04T00:00:00.000Z',
+      },
+    });
+
+    const data = buildNcrDetailPdfData(
+      buildNcr({
+        ncrEvidence: [
+          evidenceItem('legacy', 'photo'),
+          evidenceItem('after', 'after_photo'),
+          evidenceItem('before', 'before_photo'),
+        ],
+      }),
+    );
+
+    expect(data.ncr.evidence?.map((item) => item.id)).toEqual(['before', 'after', 'legacy']);
+    expect(data.ncr.evidence?.map((item) => item.evidenceType)).toEqual([
+      'before_photo',
+      'after_photo',
+      'photo',
+    ]);
+  });
+
   it('falls back cleanly for unassigned NCRs with no evidence', () => {
     const data = buildNcrDetailPdfData(
       buildNcr({

@@ -611,7 +611,8 @@ test.describe('Subbie mobile shell direct routes', () => {
     const submit = page.getByRole('button', { name: 'Submit for Verification' });
     await expect(submit).toBeDisabled();
 
-    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+    // Paired dropzones: a repair photo is the "after" side.
+    await page.getByLabel('After (the fix)').setInputFiles({
       name: 'repair-photo.jpg',
       mimeType: 'image/jpeg',
       buffer: Buffer.from('repair photo'),
@@ -621,7 +622,7 @@ test.describe('Subbie mobile shell direct routes', () => {
       .poll(() => api.ncrEvidenceLinks())
       .toContainEqual({
         documentId: 'doc-uploaded-1',
-        evidenceType: 'photo',
+        evidenceType: 'after_photo',
       });
     await expect(page.getByText('✓ repair-photo.jpg')).toBeVisible();
 

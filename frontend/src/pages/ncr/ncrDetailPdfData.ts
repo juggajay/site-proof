@@ -1,5 +1,6 @@
 import type { NCRDetailData } from '@/lib/pdfGenerator';
 import type { NCR } from './types';
+import { groupEvidenceByPhase } from './ncrEvidencePhase';
 
 type NcrTimeline = NonNullable<NCRDetailData['timeline']>;
 type NcrTimelineEvent = NcrTimeline[number];
@@ -35,8 +36,14 @@ const buildResponsibleUser = (ncr: NCR): PdfResponsibleUser =>
 const buildResponsibleSubcontractor = (ncr: NCR): PdfResponsibleSubcontractor =>
   ncr.responsibleSubcontractor ? { companyName: ncr.responsibleSubcontractor.companyName } : null;
 
-const buildNcrEvidence = (ncr: NCR): PdfEvidence =>
-  ncr.ncrEvidence?.map((evidence) => ({
+// The report sections evidence by phase — every before photo, then every after
+// photo, then legacy/untagged evidence — so the client reads the defect and the
+// fix as a pair rather than one undifferentiated list. The renderer prints each
+// item's `evidenceType` as its Type line, which labels the sections.
+const buildNcrEvidence = (ncr: NCR): PdfEvidence => {
+  const { before, after, unphased } = groupEvidenceByPhase(ncr.ncrEvidence ?? []);
+
+  return [...before, ...after, ...unphased].map((evidence) => ({
     id: evidence.id,
     evidenceType: evidence.evidenceType,
     uploadedAt: evidence.uploadedAt,
@@ -48,7 +55,8 @@ const buildNcrEvidence = (ncr: NCR): PdfEvidence =>
           uploadedAt: evidence.document.uploadedAt,
         }
       : null,
-  })) ?? [];
+  }));
+};
 
 function buildNcrTimeline(ncr: NCR): NcrTimeline {
   const timeline: NcrTimeline = [

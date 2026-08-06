@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NCREvidenceList } from './NCREvidenceList';
+import { MISSING_AFTER_EVIDENCE_MESSAGE, hasAfterEvidence } from '../ncrEvidencePhase';
 
 const closeNCRSchema = z.object({
   verificationNotes: z.string().trim().optional().default(''),
@@ -54,6 +55,9 @@ function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNC
 
   if (!isOpen || !ncr) return null;
 
+  // Mirrors the server gate in ncrEvidencePhase.assertAfterEvidencePresent.
+  const canClose = hasAfterEvidence(ncr.ncrEvidence ?? []);
+
   const footer = (
     <>
       <Button type="button" variant="outline" className="min-h-[44px]" onClick={handleClose}>
@@ -64,7 +68,8 @@ function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNC
         form="close-ncr-form"
         variant="success"
         className="min-h-[44px]"
-        disabled={loading}
+        disabled={loading || !canClose}
+        title={canClose ? 'Close NCR' : MISSING_AFTER_EVIDENCE_MESSAGE}
       >
         {loading ? 'Closing...' : 'Close NCR'}
       </Button>
@@ -91,6 +96,15 @@ function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNC
           emptyLabel="No rectification evidence has been uploaded yet."
         />
       </div>
+
+      {!canClose && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+        >
+          {MISSING_AFTER_EVIDENCE_MESSAGE}
+        </div>
+      )}
 
       <form id="close-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
         <div>

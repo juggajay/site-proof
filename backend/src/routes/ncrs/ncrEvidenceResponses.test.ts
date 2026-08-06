@@ -67,6 +67,18 @@ describe('NCR evidence response helpers', () => {
     });
   });
 
+  it('groups before/after photos with photos, not documents', () => {
+    const before = { id: 'before-1', evidenceType: 'before_photo' };
+    const after = { id: 'after-1', evidenceType: 'after_photo' };
+    const legacy = { id: 'photo-1', evidenceType: 'photo' };
+    const evidence = [before, after, legacy];
+
+    const { grouped } = buildNcrEvidenceListResponse(evidence);
+
+    expect(grouped.photos).toEqual([before, after, legacy]);
+    expect(grouped.documents).toEqual([]);
+  });
+
   it('strips raw document file URLs from all grouped list evidence', () => {
     const evidence = [
       {

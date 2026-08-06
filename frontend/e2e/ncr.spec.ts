@@ -10,6 +10,7 @@ import {
 const E2E_OPEN_NCR_ID = 'e2e-ncr-open';
 const E2E_MAJOR_NCR_ID = 'e2e-ncr-major';
 const E2E_NCR_EVIDENCE_DOCUMENT_ID = 'e2e-ncr-evidence-document';
+const E2E_MAJOR_NCR_EVIDENCE_DOCUMENT_ID = 'e2e-major-ncr-evidence-document';
 
 type OpenNcrStatus = 'open' | 'investigating' | 'rectification' | 'verification';
 type OpenNcrOptions = {
@@ -129,7 +130,22 @@ function buildMajorNcr(options: MajorNcrOptions) {
       ? { fullName: 'E2E Project Manager', email: 'pm@example.com' }
       : null,
     verificationNotes: options.majorClosed ? 'Closure evidence verified in E2E.' : null,
-    ncrEvidence: [],
+    // An NCR that reached verification always carries rectification evidence —
+    // both the server's close guard and the after-photo gate require it.
+    ncrEvidence: [
+      {
+        id: 'e2e-major-ncr-evidence',
+        evidenceType: 'after_photo',
+        uploadedAt: '2026-05-09T00:00:00.000Z',
+        document: {
+          id: E2E_MAJOR_NCR_EVIDENCE_DOCUMENT_ID,
+          filename: 'deck-pour-rectified.jpg',
+          fileUrl: '/signed/ncr/deck-pour-rectified.jpg',
+          mimeType: 'image/jpeg',
+          uploadedAt: '2026-05-09T00:00:00.000Z',
+        },
+      },
+    ],
   };
 }
 
@@ -726,7 +742,8 @@ test.describe('NCR seeded lifecycle contract', () => {
     await expect(
       rectifyDialog.getByRole('button', { name: 'Submit for Verification' }),
     ).toBeDisabled();
-    await rectifyDialog.locator('input[accept="image/*"]').setInputFiles({
+    // Paired dropzones: a rectification photo is the "after" side.
+    await rectifyDialog.getByLabel('After (the fix)').setInputFiles({
       name: 'rectification-photo.jpg',
       mimeType: 'image/jpeg',
       buffer: Buffer.from('fake image'),
@@ -736,7 +753,7 @@ test.describe('NCR seeded lifecycle contract', () => {
       .poll(() => api.getEvidenceRequest())
       .toMatchObject({
         documentId: E2E_NCR_EVIDENCE_DOCUMENT_ID,
-        evidenceType: 'photo',
+        evidenceType: 'after_photo',
       });
     await expect(rectifyDialog.getByText('rectification-photo.jpg')).toBeVisible();
     await rectifyDialog

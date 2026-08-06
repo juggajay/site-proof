@@ -12,6 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NCREvidenceList } from './NCREvidenceList';
+import {
+  NCR_EVIDENCE_AFTER_PHOTO,
+  NCR_EVIDENCE_BEFORE_PHOTO,
+  evidencePhaseCaption,
+  isPhotoEvidenceType,
+} from '../ncrEvidencePhase';
 
 const rectifyNCRSchema = z.object({
   rectificationNotes: z.string().trim().optional().default(''),
@@ -72,9 +78,12 @@ function RectifyNCRModalInner({
       const formData = new FormData();
       formData.append('file', await compressImageForUpload(file));
       formData.append('projectId', uploadProjectId);
-      formData.append('documentType', evidenceType === 'photo' ? 'photo' : 'ncr_evidence');
+      formData.append('documentType', isPhotoEvidenceType(evidenceType) ? 'photo' : 'ncr_evidence');
       formData.append('category', 'ncr_evidence');
-      formData.append('caption', `NCR evidence for ${ncr.ncrNumber}`);
+      formData.append(
+        'caption',
+        `NCR evidence for ${ncr.ncrNumber}${evidencePhaseCaption(evidenceType)}`,
+      );
 
       const uploadResponse = await authFetch('/api/documents/upload', {
         method: 'POST',
@@ -191,22 +200,46 @@ function RectifyNCRModalInner({
       <div className="mb-4">
         <p className="text-sm font-medium text-foreground mb-2">Upload Evidence</p>
 
-        {/* Photo Evidence — min-h-[44px] ensures ≥44 px tap target on mobile */}
-        <div className="mb-3">
-          <Label>Photos (Rectification Evidence)</Label>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => {
-              const files = e.target.files;
-              if (files) {
-                Array.from(files).forEach((file) => handleEvidenceUpload(file, 'photo'));
-              }
-            }}
-            disabled={uploadingEvidence}
-            className="w-full min-h-[44px] bg-background border border-border text-foreground rounded-lg px-3 py-2 text-sm mt-1"
-          />
+        {/* Paired photo evidence — min-h-[44px] ensures ≥44 px tap target on mobile */}
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="ncr-evidence-before">Before (the defect)</Label>
+            <input
+              id="ncr-evidence-before"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files) {
+                  Array.from(files).forEach((file) =>
+                    handleEvidenceUpload(file, NCR_EVIDENCE_BEFORE_PHOTO),
+                  );
+                }
+              }}
+              disabled={uploadingEvidence}
+              className="w-full min-h-[44px] bg-background border border-border text-foreground rounded-lg px-3 py-2 text-sm mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="ncr-evidence-after">After (the fix)</Label>
+            <input
+              id="ncr-evidence-after"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files) {
+                  Array.from(files).forEach((file) =>
+                    handleEvidenceUpload(file, NCR_EVIDENCE_AFTER_PHOTO),
+                  );
+                }
+              }}
+              disabled={uploadingEvidence}
+              className="w-full min-h-[44px] bg-background border border-border text-foreground rounded-lg px-3 py-2 text-sm mt-1"
+            />
+          </div>
         </div>
 
         {/* Re-test Certificate — min-h-[44px] ensures ≥44 px tap target on mobile */}
@@ -266,7 +299,8 @@ function RectifyNCRModalInner({
         <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
           <p className="text-sm text-warning">
             <strong>Note:</strong> Please upload or link at least one piece of evidence (photo or
-            re-test certificate) before submitting for verification.
+            re-test certificate) before submitting for verification. An <strong>after</strong> photo
+            of the completed rectification is required before this NCR can be closed.
           </p>
         </div>
       </form>

@@ -1,3 +1,5 @@
+import { isCertificateEvidenceType, isPhotoEvidenceType } from './ncrEvidencePhase.js';
+
 type NcrEvidenceRecord = {
   evidenceType: string;
   document?: unknown;
@@ -38,13 +40,15 @@ export function buildNcrEvidenceAddedResponse(evidence: unknown) {
 
 export function buildNcrEvidenceListResponse(evidence: NcrEvidenceRecord[]) {
   const sanitizedEvidence = evidence.map(stripNcrEvidenceDocumentFileUrl);
+  // `photos` covers every photo phase (plain/before/after) so the mobile shell's
+  // photo grid keeps showing before/after captures instead of demoting them to
+  // `documents`.
   const grouped = {
-    photos: sanitizedEvidence.filter((item) => item.evidenceType === 'photo'),
-    certificates: sanitizedEvidence.filter(
-      (item) => item.evidenceType === 'certificate' || item.evidenceType === 'retest_certificate',
-    ),
+    photos: sanitizedEvidence.filter((item) => isPhotoEvidenceType(item.evidenceType)),
+    certificates: sanitizedEvidence.filter((item) => isCertificateEvidenceType(item.evidenceType)),
     documents: sanitizedEvidence.filter(
-      (item) => !['photo', 'certificate', 'retest_certificate'].includes(item.evidenceType),
+      (item) =>
+        !isPhotoEvidenceType(item.evidenceType) && !isCertificateEvidenceType(item.evidenceType),
     ),
     all: sanitizedEvidence,
   };

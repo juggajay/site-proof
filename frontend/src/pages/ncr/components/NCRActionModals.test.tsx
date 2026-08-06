@@ -92,6 +92,20 @@ function makeNcr(overrides: Partial<NCR> = {}): NCR {
   };
 }
 
+function makeEvidence(id: string, evidenceType: string): NonNullable<NCR['ncrEvidence']>[number] {
+  return {
+    id,
+    evidenceType,
+    uploadedAt: '2026-05-02T00:00:00.000Z',
+    document: {
+      id: `doc-${id}`,
+      filename: `${id}.jpg`,
+      mimeType: 'image/jpeg',
+      uploadedAt: '2026-05-02T00:00:00.000Z',
+    },
+  };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // RespondNCRModal
 // ══════════════════════════════════════════════════════════════════════════════
@@ -216,10 +230,33 @@ describe('RectifyNCRModal', () => {
 
   it('renders file upload inputs with ≥44px tap target class', () => {
     render(<RectifyNCRModal {...defaultProps} />);
+    // Before photos, after photos, re-test certificates.
     const inputs = document.querySelectorAll('input[type="file"]');
-    expect(inputs).toHaveLength(2);
+    expect(inputs).toHaveLength(3);
     inputs.forEach((input) => {
       expect(input.className).toContain('min-h-[44px]');
+    });
+  });
+
+  it('offers separate labelled before and after photo dropzones', () => {
+    render(<RectifyNCRModal {...defaultProps} />);
+    expect(screen.getByLabelText('Before (the defect)')).toBeInTheDocument();
+    expect(screen.getByLabelText('After (the fix)')).toBeInTheDocument();
+  });
+
+  it('tags an after-photo upload with the after evidence type', async () => {
+    render(<RectifyNCRModal {...defaultProps} />);
+
+    fireEvent.change(screen.getByLabelText('After (the fix)'), {
+      target: { files: [new File(['x'], 'fixed.jpg', { type: 'image/jpeg' })] },
+    });
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalled());
+    const [url, options] = apiFetchMock.mock.calls[0] as [string, { body: string }];
+    expect(url).toBe('/api/ncrs/ncr-1/evidence');
+    expect(JSON.parse(options.body)).toEqual({
+      documentId: 'doc-1',
+      evidenceType: 'after_photo',
     });
   });
 
@@ -259,7 +296,7 @@ describe('RectifyNCRModal', () => {
 describe('CloseNCRModal', () => {
   const defaultProps = {
     isOpen: true,
-    ncr: makeNcr(),
+    ncr: makeNcr({ ncrEvidence: [makeEvidence('after-1', 'after_photo')] }),
     onClose: vi.fn(),
     onSubmit: vi.fn(),
     loading: false,
@@ -307,9 +344,28 @@ describe('CloseNCRModal', () => {
     });
   });
 
+  it('blocks closing until an after photo exists, and says why', () => {
+    const ncr = makeNcr({ ncrEvidence: [makeEvidence('before-1', 'before_photo')] });
+    render(<CloseNCRModal {...defaultProps} ncr={ncr} />);
+
+    expect(screen.getByRole('button', { name: 'Close NCR' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Add at least one photo of the completed rectification before closing.',
+    );
+  });
+
+  it('allows closing a legacy NCR whose evidence predates the before/after split', () => {
+    const ncr = makeNcr({ ncrEvidence: [makeEvidence('legacy-1', 'photo')] });
+    render(<CloseNCRModal {...defaultProps} ncr={ncr} />);
+
+    expect(screen.getByRole('button', { name: 'Close NCR' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows QM approval banner for major NCRs with qmApprovedAt set', () => {
     const ncr = makeNcr({
       severity: 'major',
+      ncrEvidence: [makeEvidence('after-1', 'after_photo')],
       qmApprovedAt: '2026-06-01T10:00:00.000Z',
       qmApprovedBy: { fullName: 'Jane QM', email: 'qm@example.com' },
     });
