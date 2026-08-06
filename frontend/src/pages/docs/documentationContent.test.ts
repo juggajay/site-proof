@@ -11,6 +11,7 @@ import { documentationSections } from './documentationContent';
 // and this list are updated together, on purpose.
 // ---------------------------------------------------------------------------
 const PINNED_SECTIONS: ReadonlyArray<[id: string, title: string]> = [
+  ['getting-started', 'Getting started: your first project'],
   ['projects-lots', 'Projects and lots'],
   ['site-map', 'Site map and lot geometry'],
   ['readiness', 'Evidence Readiness'],
@@ -79,7 +80,7 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['site-map', 'grey for No rule'],
   ['site-map', 'Lots that are not drawn are counted, not coloured'],
   ['site-map', 'internal layer that subcontractors never see'],
-  ['site-map', 'unavailable in History'],
+  ['site-map', 'unavailable in Past view'],
   ['site-map', 'shows a pin only where someone captured a sample point'],
   ['site-map', 'counted toward the frequency but never drawn'],
   ['itp-holdpoints-tests', 'optional and blocks nothing'],
@@ -161,6 +162,22 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
     'handover',
     'expires on its stated date and can no longer be downloaded after that — unless a legal hold has been placed on it, which keeps it downloadable',
   ],
+  // The getting-started walkthrough. Written first in the backend mirror and
+  // pinned there against the shipped code. Every sentence below is one the
+  // fact-check CHANGED from the drafted copy — pinned precisely because the
+  // plausible-sounding version is the wrong one (invite lives in company
+  // settings, the plan-sheet fit uses control points, the map control is
+  // labelled Past view).
+  [
+    'getting-started',
+    'Someone who has never used CIVOS is invited to the company first, under Company Settings, Team Members',
+  ],
+  [
+    'getting-started',
+    'any other PDF is placed by matching control points to their grid coordinates',
+  ],
+  ['getting-started', "the map's Past view replays the job"],
+  ['getting-started', 'generate an evidence package to send with each one'],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

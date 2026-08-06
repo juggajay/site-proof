@@ -11,6 +11,7 @@ import { HELP_TOPICS, HELP_TOPIC_SLUGS, getHelpTopic } from './productKnowledge.
 // slug (= section id) and title in the same order as the frontend sections.
 // ---------------------------------------------------------------------------
 const PINNED_TOPICS: ReadonlyArray<[slug: string, title: string]> = [
+  ['getting-started', 'Getting started: your first project'],
   ['projects-lots', 'Projects and lots'],
   ['site-map', 'Site map and lot geometry'],
   ['readiness', 'Evidence Readiness'],
@@ -145,11 +146,11 @@ describe('product knowledge — test sufficiency facts', () => {
   it('keeps undrawn lots counted-not-coloured and the overlay internal-only', () => {
     // projectTestCoverage.ts: `requireInternalProjectAccess` (J3, spec §10.1) and
     // `lotsWithoutGeometry`, rendered as "N lots not on the map — not drawn, so
-    // not coloured." LotMapView hides both toggles while History is armed.
+    // not coloured." LotMapView hides both toggles while Past view is armed.
     const map = body('site-map');
     expect(map).toContain('Lots that are not drawn are counted, not coloured');
     expect(map).toContain('internal layer that subcontractors never see');
-    expect(map).toContain('unavailable in History');
+    expect(map).toContain('unavailable in Past view');
   });
 
   it('states that no sample location is ever derived — the [C3S-B1] honesty rule', () => {
@@ -289,6 +290,71 @@ describe('product knowledge — test sufficiency facts', () => {
 // the exact failure the mirror exists to prevent. Every expectation is cited to
 // the code that makes it true.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// The getting-started walkthrough. It is the one topic a brand-new user reads
+// end to end, so a wrong step sends them looking for a button that is not
+// there. Each expectation below is a sentence that a fact-check against the
+// shipped code CHANGED from the drafted copy — they are pinned precisely
+// because the plausible-sounding version is the wrong one.
+// ---------------------------------------------------------------------------
+describe('product knowledge — getting started walkthrough', () => {
+  const body = (slug: string) => getHelpTopic(slug)?.body ?? '';
+
+  it('sends new-person invites to company settings, not the project Users page', () => {
+    // ProjectUsersPage.tsx:583 the button is "Add Team Member" and :690 offers
+    // only existing company users; :97 tells you to invite in Company Settings
+    // → Team Members first. "Invite your team from the Users page" would send a
+    // new user hunting for a control that page does not have.
+    expect(body('getting-started')).toContain(
+      'Someone who has never used CIVOS is invited to the company first, under Company Settings, Team Members',
+    );
+  });
+
+  it('says control points, not corner points, for a non-georeferenced PDF', () => {
+    // RegistrationSidePanel.tsx:261 "Control points (N/12)" and
+    // PlanSheetRegistrationModal.tsx:250 "Click the drawing to drop a control
+    // point, then enter its grid easting/northing" — 2 points give a Helmert
+    // fit, 3+ least-squares affine. Nothing is restricted to page corners.
+    expect(body('getting-started')).toContain(
+      'any other PDF is placed by matching control points to their grid coordinates',
+    );
+  });
+
+  it('uses the shipped map label — Past view, not History', () => {
+    // MapToolbar.tsx:279-288 `label={historyArmed ? 'Exit Past view' : 'Past
+    // view'}`. "History" survives only as the lucide icon name. The site-map
+    // topic was renamed to match in the same PR, so both topics agree.
+    expect(body('getting-started')).toContain("the map's Past view replays the job");
+  });
+
+  it('states the free subcontractor portal as PRICING POLICY, not a code fact', () => {
+    // Grounding: pricing policy per owner, not derived from code. There is no
+    // billing in this codebase at all and TIER_QUOTA_ENFORCEMENT_ENABLED is
+    // false (tierLimits.ts:14) — portal accounts escape the seat count only as
+    // a side effect of a null companyId. So do NOT "verify" this against
+    // tierLimits or the seat check: if the policy changes, the owner changes
+    // it here, and no code test will ever catch the drift.
+    expect(body('getting-started')).toContain(
+      'Subcontractor portal accounts are free — inviting a subbie never costs them or you anything',
+    );
+  });
+
+  it('does not promise a one-click handover export', () => {
+    // HandoverExportPage.tsx:168 "Check size and request archive" → an async
+    // job polled through queued/snapshotting/processing/complete → a separate
+    // "Download archive" click, after a scope choice and a possible size
+    // refusal. Minimum two clicks with a background job between them.
+    expect(body('getting-started')).not.toContain('one-click');
+  });
+
+  it('says an evidence package is generated, not carried by the claim', () => {
+    // evidenceRoutes.ts:35-37 returns data only and stores nothing on the
+    // claim; the PDF renders in the browser (claimEvidencePackagePdf.ts:41)
+    // from 9 user-chosen sections (EvidencePackageModal.tsx:16-58).
+    expect(body('getting-started')).toContain('generate an evidence package to send with each one');
+  });
+});
+
 describe('product knowledge — deliveries and handover facts', () => {
   const body = (slug: string) => getHelpTopic(slug)?.body ?? '';
 

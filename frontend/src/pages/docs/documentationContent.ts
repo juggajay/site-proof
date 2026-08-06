@@ -16,6 +16,7 @@ import {
   MapPin,
   Package,
   Plug,
+  Rocket,
   Sparkles,
   TestTube,
   Truck,
@@ -78,6 +79,59 @@ export const workflowSteps: DocumentationStep[] = [
 
 export const documentationSections: DocumentationSection[] = [
   {
+    id: 'getting-started',
+    title: 'Getting started: your first project',
+    summary:
+      'The whole path from a new account to a finished job — set up, inspect, claim, and hand over.',
+    icon: Rocket,
+    route: '/projects',
+    routeLabel: 'Open projects',
+    steps: [
+      {
+        title: 'Create the project',
+        description:
+          "Add the project workspace with its number, client and state, then put your team on it from the project's Users page — field crew as foremen, office staff as project or quality managers. Someone who has never used CIVOS is invited to the company first, under Company Settings, Team Members.",
+      },
+      {
+        title: 'Bring in the survey',
+        description:
+          "Import the surveyor's alignment (LandXML or DXF) under Control Lines, and register the drawings under Plan Sheets — a GeoPDF registers itself; any other PDF is placed by matching control points to their grid coordinates.",
+      },
+      {
+        title: 'Create lots',
+        description:
+          'Use Bulk Create Lots to generate lots along a control line from chainage and offsets, assigning an ITP template to every lot in the same pass. Switch the register to Map to see the job on satellite.',
+      },
+      {
+        title: 'Run the quality loop',
+        description:
+          'Complete ITP checks with photo evidence, request hold point releases — the superintendent releases from a secure email link — and upload lab certificates, which CIVOS reads into test results for your review.',
+      },
+      {
+        title: 'Keep the daily record',
+        description:
+          'The diary captures weather, crew, plant and work, with deliveries logged from the phone. The foreman shell is phone-first, and field capture keeps working offline.',
+      },
+      {
+        title: 'Bring subbies on',
+        description:
+          'Invite subcontractor companies from the Subcontractors page. They work in their own portal, and their dockets flow to your Docket Approvals queue.',
+      },
+      {
+        title: 'Claim and hand over',
+        description:
+          'Conform finished lots, build progress claims from them and generate an evidence package to send with each one, then finish with per-lot evidence folios and the project handover export.',
+      },
+    ],
+    tips: [
+      'Lot budgets must be set before a lot can be claimed — add them early.',
+      'Subcontractor portal accounts are free — inviting a subbie never costs them or you anything.',
+      'The Evidence Readiness panel on every lot lists what still blocks conformance or claiming. When in doubt, start there.',
+      "Once work starts moving, the map's Past view replays the job as it was on any date.",
+      'Ask Clancy at any step — it can explain any module and take you to the right page.',
+    ],
+  },
+  {
     id: 'projects-lots',
     title: 'Projects and lots',
     summary: 'Create the project workspace and structure work into claimable, inspectable lots.',
@@ -129,11 +183,11 @@ export const documentationSections: DocumentationSection[] = [
       {
         title: 'Read coverage, testing, photos, and history',
         description:
-          'Use Testing to recolour drawn lots by test frequency, Test pins to show where samples were taken, Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and History to scrub lot status by date.',
+          'Use Testing to recolour drawn lots by test frequency, Test pins to show where samples were taken, Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and Past view to scrub lot status by date.',
       },
     ],
     tips: [
-      'The Testing layer recolours drawn lots with the same three-valued test frequency verdict the lot page shows: green for Testing satisfied, amber for Fewer tests than required, and grey for No rule. Lots that are not drawn are counted, not coloured, and the panel says how many. Testing is an internal layer that subcontractors never see, and it is unavailable in History because a live verdict has no meaning against a past date.',
+      'The Testing layer recolours drawn lots with the same three-valued test frequency verdict the lot page shows: green for Testing satisfied, amber for Fewer tests than required, and grey for No rule. Lots that are not drawn are counted, not coloured, and the panel says how many. Testing is an internal layer that subcontractors never see, and it is unavailable in Past view because a live verdict has no meaning against a past date.',
       'The Test pins layer shows a pin only where someone captured a sample point on a test. Nothing is derived, so a test recorded with a chainage description and no captured coordinate is counted toward the frequency but never drawn. The pin gives the coordinate and how it was captured, such as GPS plus or minus 6 m, or Picked on map.',
       'Overlay registered plan sheets on the imagery and blend the paper away so only the linework shows.',
       'Tiles, plan sheets, and map data you have already viewed stay available offline; there is no bulk pre-download.',
