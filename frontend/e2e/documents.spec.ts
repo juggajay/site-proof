@@ -387,9 +387,7 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(page.getByText('Upload and manage project documents and photos')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Upload Document' })).toBeVisible();
 
-    const photoItem = page
-      .getByTestId('document-row')
-      .filter({ hasText: 'e2e-proof-photo.jpg' });
+    const photoItem = page.getByTestId('document-row').filter({ hasText: 'e2e-proof-photo.jpg' });
     await expect(photoItem).toBeVisible();
     await expect(photoItem.getByText('Photo', { exact: true })).toBeVisible();
     // Category chips carry the display label, never the raw stored value.
@@ -399,9 +397,7 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(photoItem.getByText('Lot LOT-DOC-001')).toBeVisible();
     await expect(photoItem.getByText('E2E evidence photo')).toBeVisible();
 
-    const pdfItem = page
-      .getByTestId('document-row')
-      .filter({ hasText: 'e2e-drawing.pdf' });
+    const pdfItem = page.getByTestId('document-row').filter({ hasText: 'e2e-drawing.pdf' });
     await expect(pdfItem).toBeVisible();
     await expect(
       pdfItem.locator('button[aria-label="Add e2e-drawing.pdf to favourites"]'),
@@ -505,9 +501,7 @@ test.describe('Documents seeded evidence contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/documents`);
 
-    const pdfItem = page
-      .getByTestId('document-row')
-      .filter({ hasText: 'e2e-drawing.pdf' });
+    const pdfItem = page.getByTestId('document-row').filter({ hasText: 'e2e-drawing.pdf' });
     await expect(pdfItem).toBeVisible();
 
     await pdfItem.getByRole('button', { name: 'Version history for e2e-drawing.pdf' }).click();
@@ -549,9 +543,7 @@ test.describe('Documents seeded evidence contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/documents`);
 
-    const pdfItem = page
-      .getByTestId('document-row')
-      .filter({ hasText: 'e2e-drawing.pdf' });
+    const pdfItem = page.getByTestId('document-row').filter({ hasText: 'e2e-drawing.pdf' });
     await expect(pdfItem).toBeVisible();
 
     const popupPromise = page.waitForEvent('popup');
@@ -587,9 +579,7 @@ test.describe('Documents seeded evidence contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/documents`);
 
-    const pdfItem = page
-      .getByTestId('document-row')
-      .filter({ hasText: 'e2e-drawing.pdf' });
+    const pdfItem = page.getByTestId('document-row').filter({ hasText: 'e2e-drawing.pdf' });
     await expect(pdfItem).toBeVisible();
     await pdfItem.getByRole('button', { name: 'Add e2e-drawing.pdf to favourites' }).dblclick();
 
