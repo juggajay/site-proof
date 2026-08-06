@@ -17,15 +17,15 @@ import { ExportLotsModal } from '@/components/lots/ExportLotsModal';
 import { LotQuickView } from '@/components/lots/LotQuickView';
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal';
 import { LinearMapView } from '@/components/lots/LinearMapView';
-import { Printer, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextFAB } from '@/components/mobile/ContextFAB';
-import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { readLocalStorageItem } from '@/lib/storagePreferences';
 
 // Extracted components
 import { LotFiltersBar } from './components/LotFiltersBar';
+import { LotsPageHeader } from './components/LotsPageHeader';
 import {
   COLUMN_ORDER_STORAGE_KEY,
   COLUMN_STORAGE_KEY,
@@ -211,88 +211,29 @@ export function LotsPage() {
       </div>
 
       {/* Page Header */}
-      <div className="flex items-center justify-between print:hidden">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">Lot Register</h1>
-          <ContextHelp title={HELP_CONTENT.lots.title} content={HELP_CONTENT.lots.content} />
-        </div>
-        <div className="flex items-center gap-3">
-          {!isMobile && (
-            <>
-              <Button variant="outline" onClick={() => actions.setExportModalOpen(true)}>
-                Export CSV
-              </Button>
-              <Button variant="outline" onClick={() => window.print()} className="print:hidden">
-                <Printer className="h-4 w-4" /> Print Register
-              </Button>
-            </>
-          )}
-          {canCreate && actions.selectedLots.size > 0 && (
-            <>
-              <Button variant="outline" onClick={() => actions.setBulkStatusModalOpen(true)}>
-                Update Status ({actions.selectedLots.size})
-              </Button>
-              {!isSubcontractor && (
-                <Button variant="outline" onClick={actions.handleOpenBulkAssignModal}>
-                  Assign Subcontractor ({actions.selectedLots.size})
-                </Button>
-              )}
-            </>
-          )}
-          {/* Wave C1: only where a shipped ruleset governs the project —
-              elsewhere the attributes have no consumer. Gated on canEdit, NOT
-              canCreate: the backend bulk route enforces LOT_EDITORS (F8). */}
-          {canEdit && !isSubcontractor && actions.selectedLots.size > 0 && governingRuleset && (
-            <Button variant="outline" onClick={() => actions.setBulkTestAttributesModalOpen(true)}>
-              Set Testing Attributes ({actions.selectedLots.size})
-            </Button>
-          )}
-          {/* C1 (F14): the pack lookup failed — say so and offer a retry rather
-              than silently behaving like an unsupported project. */}
-          {canEdit &&
-            !isSubcontractor &&
-            actions.selectedLots.size > 0 &&
-            !governingRuleset &&
-            rulesetLoadFailed && (
-              <Button variant="outline" onClick={retryRulesetLoad}>
-                Testing attributes unavailable — Retry
-              </Button>
-            )}
-          {canDelete && actions.selectedLots.size > 0 && (
-            <Button
-              variant="outline"
-              className="text-destructive border-destructive hover:bg-destructive/10"
-              onClick={() => actions.setBulkDeleteModalOpen(true)}
-            >
-              Delete Selected ({actions.selectedLots.size})
-            </Button>
-          )}
-          {actions.selectedLots.size > 0 && (
-            <Button
-              variant="outline"
-              className="text-foreground border-border hover:bg-muted/50"
-              onClick={() => actions.setPrintLabelsModalOpen(true)}
-            >
-              Print Labels ({actions.selectedLots.size})
-            </Button>
-          )}
-          {!isSubcontractor && canCreate && (
-            <>
-              {!isMobile && (
-                <>
-                  <Button variant="outline" onClick={() => actions.setImportModalOpen(true)}>
-                    Import Register
-                  </Button>
-                  <Button variant="outline" onClick={() => actions.setBulkWizardOpen(true)}>
-                    Bulk Create Lots
-                  </Button>
-                </>
-              )}
-              <Button onClick={() => actions.setCreateModalOpen(true)}>Create Lot</Button>
-            </>
-          )}
-        </div>
-      </div>
+      <LotsPageHeader
+        isMobile={isMobile}
+        isSubcontractor={isSubcontractor}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        selectedCount={actions.selectedLots.size}
+        hasGoverningRuleset={Boolean(governingRuleset)}
+        rulesetLoadFailed={rulesetLoadFailed}
+        onRetryRulesetLoad={retryRulesetLoad}
+        viewMode={viewMode}
+        onToggleViewMode={toggleViewMode}
+        onOpenExport={() => actions.setExportModalOpen(true)}
+        onPrintRegister={() => window.print()}
+        onOpenImport={() => actions.setImportModalOpen(true)}
+        onOpenBulkWizard={() => actions.setBulkWizardOpen(true)}
+        onOpenCreate={() => actions.setCreateModalOpen(true)}
+        onOpenBulkStatus={() => actions.setBulkStatusModalOpen(true)}
+        onOpenBulkAssign={actions.handleOpenBulkAssignModal}
+        onOpenBulkTestAttributes={() => actions.setBulkTestAttributesModalOpen(true)}
+        onOpenBulkDelete={() => actions.setBulkDeleteModalOpen(true)}
+        onOpenPrintLabels={() => actions.setPrintLabelsModalOpen(true)}
+      />
       <p className="text-sm text-muted-foreground">
         {isSubcontractor
           ? `Viewing lots assigned to your company for ${projectLabel}.`

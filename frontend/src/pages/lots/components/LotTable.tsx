@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { COLUMN_CONFIG, type ColumnId } from './lotFilterConfig';
 import {
@@ -10,12 +9,15 @@ import {
   LotTableLoadMoreIndicator,
 } from './LotTableSections';
 import {
+  ACTIONS_COLUMN_WIDTH,
   COLUMN_WIDTH_STORAGE_KEY,
   DEFAULT_COLUMN_WIDTHS,
+  SELECT_COLUMN_WIDTH,
   formatChainage,
   highlightSearchTerm,
   parseColumnWidthsPreference,
 } from './lotTableDisplay';
+import { LotRowActions } from './LotRowActions';
 import type { Lot } from '../lotsPageTypes';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -83,9 +85,6 @@ export const LotTable = React.memo(function LotTable({
   loadingMore,
   hasMore,
 }: LotTableProps) {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-
   // Expandable rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -227,7 +226,7 @@ export const LotTable = React.memo(function LotTable({
         <thead className="border-b sticky top-0 z-10 bg-muted" data-testid="sticky-table-header">
           <tr>
             {canDelete && (
-              <th className="p-3 w-10">
+              <th className="p-3" style={{ width: SELECT_COLUMN_WIDTH }}>
                 <input
                   type="checkbox"
                   checked={allDeletableSelected}
@@ -276,7 +275,12 @@ export const LotTable = React.memo(function LotTable({
                 </th>
               );
             })}
-            <th className="text-left p-3 font-medium">Actions</th>
+            <th
+              className="text-left p-3 font-medium"
+              style={{ width: ACTIONS_COLUMN_WIDTH, minWidth: ACTIONS_COLUMN_WIDTH }}
+            >
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -371,16 +375,20 @@ export const LotTable = React.memo(function LotTable({
                             );
                           case 'chainage':
                             return (
-                              <td key={columnId} className="p-3">
+                              <td key={columnId} className="p-3 whitespace-nowrap">
                                 {formatChainage(lot)}
                               </td>
                             );
-                          case 'activityType':
+                          case 'activityType': {
+                            const activityLabel = formatActivityLabel(lot.activityType) || '\u2014';
                             return (
                               <td key={columnId} className="p-3">
-                                {formatActivityLabel(lot.activityType) || '\u2014'}
+                                <span className="block truncate" title={activityLabel}>
+                                  {activityLabel}
+                                </span>
                               </td>
                             );
+                          }
                           case 'status':
                             return (
                               <td key={columnId} className="p-3">
@@ -391,12 +399,17 @@ export const LotTable = React.memo(function LotTable({
                                 </span>
                               </td>
                             );
-                          case 'subcontractor':
+                          case 'subcontractor': {
+                            const subcontractorName =
+                              lot.assignedSubcontractor?.companyName || '\u2014';
                             return (
                               <td key={columnId} className="p-3">
-                                {lot.assignedSubcontractor?.companyName || '\u2014'}
+                                <span className="block truncate" title={subcontractorName}>
+                                  {subcontractorName}
+                                </span>
                               </td>
                             );
+                          }
                           case 'budget':
                             return (
                               <td key={columnId} className="p-3">
@@ -410,51 +423,15 @@ export const LotTable = React.memo(function LotTable({
                         }
                       })}
                       <td className="p-3">
-                        <div className="flex items-center gap-1">
-                          <button
-                            className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
-                            onClick={() =>
-                              navigate(
-                                `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(lot.id)}`,
-                                {
-                                  state: { returnFilters: searchParams.toString() },
-                                },
-                              )
-                            }
-                          >
-                            View
-                          </button>
-                          {canCreate && lot.status !== 'conformed' && lot.status !== 'claimed' && (
-                            <button
-                              className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
-                              onClick={() =>
-                                navigate(
-                                  `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(lot.id)}/edit`,
-                                )
-                              }
-                            >
-                              Edit
-                            </button>
-                          )}
-                          {canCreate && (
-                            <button
-                              className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation disabled:opacity-50"
-                              onClick={() => onCloneLot(lot)}
-                              disabled={cloningLotId === lot.id}
-                              title="Clone lot with adjacent chainage"
-                            >
-                              {cloningLotId === lot.id ? 'Cloning...' : 'Clone'}
-                            </button>
-                          )}
-                          {canDelete && lot.status !== 'conformed' && lot.status !== 'claimed' && (
-                            <button
-                              className="text-sm text-destructive hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
-                              onClick={() => onDeleteClick(lot)}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
+                        <LotRowActions
+                          lot={lot}
+                          projectId={projectId}
+                          canCreate={canCreate}
+                          canDelete={canDelete}
+                          cloningLotId={cloningLotId}
+                          onCloneLot={onCloneLot}
+                          onDeleteClick={onDeleteClick}
+                        />
                       </td>
                     </tr>
                     {/* Expanded detail row */}

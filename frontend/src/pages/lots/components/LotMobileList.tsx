@@ -114,7 +114,11 @@ export const LotMobileList = React.memo(function LotMobileList({
   return (
     <div
       ref={isMobile ? pullToRefreshRef : scrollContainerRef}
-      className="overflow-auto max-h-[calc(100vh-280px)] relative"
+      // Phones need more bottom padding than the FAB's own 136px of inset
+      // (fixed bottom-20, 56px tall) because this container's max-height runs
+      // past the fold: the last card's meta row otherwise sits under the FAB.
+      // e2e asserts the clearance, so re-measure rather than trim this by eye.
+      className={`overflow-auto max-h-[calc(100vh-280px)] relative ${isMobile ? 'pb-48' : ''}`}
       data-testid="card-view-container"
     >
       {/* Pull-to-refresh indicator for mobile */}

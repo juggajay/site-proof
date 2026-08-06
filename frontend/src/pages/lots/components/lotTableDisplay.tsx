@@ -3,18 +3,30 @@ import type React from 'react';
 import type { Lot } from '../lotsPageTypes';
 import { isRecord, parseJsonPreference } from '@/lib/storagePreferences';
 
-// Default column widths in pixels
+// Default column widths in pixels. The budget is set so that the whole table —
+// select column + these + the actions column — fits a 1440px window without
+// horizontal overflow, which is what used to clip the row actions.
 export const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
   lotNumber: 140,
-  description: 200,
-  chainage: 100,
-  activityType: 130,
+  description: 130,
+  chainage: 110,
+  activityType: 180,
   status: 110,
-  subcontractor: 140,
+  subcontractor: 120,
   budget: 100,
 };
 
-export const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths';
+// Wide enough for the expand chevron and the select checkbox side by side. At
+// the old 40px the checkbox overflowed into the lot-number cell and read as a
+// missing-glyph box before every lot number.
+export const SELECT_COLUMN_WIDTH = 72;
+
+// Fixed so the actions cell can never be squeezed to a partial word.
+export const ACTIONS_COLUMN_WIDTH = 104;
+
+// v2: the pre-rebalance widths were saved per user and would otherwise keep the
+// overflowing layout alive after the defaults were fixed.
+export const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths_v2';
 export const MIN_COLUMN_WIDTH = 60;
 export const MAX_COLUMN_WIDTH = 600;
 

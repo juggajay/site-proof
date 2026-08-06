@@ -155,8 +155,11 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   if (isMobile) {
     return (
       <>
+        {/* The view switcher used to sit on its own row under this one. It now
+            rides the page title row (LotMobileViewToggle in LotsPageHeader) so
+            the phone reaches the first lot card a whole row sooner. */}
         <div className="flex items-center gap-3">
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <Input
               id="search-input-mobile"
               type="text"
@@ -170,47 +173,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
             onClick={() => setFilterSheetOpen(true)}
             activeCount={activeFilterCount}
           />
-        </div>
-
-        {/* View mode switcher — cards / linear map / satellite map. Without this
-            the map views are unreachable on mobile ('list' renders as cards, so
-            list and card share one button). 44px targets for touch. */}
-        <div className="mt-3 flex items-center gap-1 rounded-lg border bg-muted/30 p-0.5 w-fit">
-          <button
-            onClick={() => onToggleViewMode('card')}
-            className={`flex h-11 w-11 items-center justify-center rounded transition-colors ${
-              viewMode === 'list' || viewMode === 'card'
-                ? 'bg-background shadow-sm'
-                : 'hover:bg-muted'
-            }`}
-            title="Card view"
-            aria-label="Card view"
-            data-testid="view-toggle-card"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => onToggleViewMode('linear')}
-            className={`flex h-11 w-11 items-center justify-center rounded transition-colors ${
-              viewMode === 'linear' ? 'bg-background shadow-sm' : 'hover:bg-muted'
-            }`}
-            title="Linear map view"
-            aria-label="Linear map view"
-            data-testid="view-toggle-linear"
-          >
-            <MapPin className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => onToggleViewMode('map')}
-            className={`flex h-11 w-11 items-center justify-center rounded transition-colors ${
-              viewMode === 'map' ? 'bg-background shadow-sm' : 'hover:bg-muted'
-            }`}
-            title="Satellite map view"
-            aria-label="Satellite map view"
-            data-testid="view-toggle-map"
-          >
-            <MapIcon className="h-4 w-4" />
-          </button>
         </div>
 
         {/* Mobile Filter Bottom Sheet */}
