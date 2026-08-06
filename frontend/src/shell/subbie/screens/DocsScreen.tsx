@@ -21,6 +21,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
@@ -177,8 +178,11 @@ export function DocsScreen() {
       ) : (
         categories.map((category) => (
           <div key={category} className="contents">
+            {/* Raw category enums (`DELIVERY_DOCKET`, `TEST_RESULTS`) reached the
+                header verbatim. The shared label helper humanises them; the
+                stored value and the grouping key are untouched. */}
             <div className="mt-1 font-mono text-[11.5px] font-semibold tracking-[0.12em] text-muted-foreground">
-              {category.toUpperCase()}
+              {formatStatusLabel(category, { fallback: 'Other' }).toUpperCase()}
             </div>
             {grouped[category].map((doc) => (
               <DocCard key={doc.id} doc={doc} />

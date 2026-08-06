@@ -100,6 +100,18 @@ function formatRelativeTime(timestamp: string): string {
   return `${diffDays}d ago`;
 }
 
+/**
+ * Backend titles suffix the project name ("ESCALATED: Missing Daily Diary:
+ * Demo Walkthrough 2026") and the meta line under the card prints it again.
+ * Drop the echo from the title; the meta line stays the one place it is stated.
+ * No-op when the title does not end in the project name.
+ */
+function stripProjectEcho(title: string, projectName: string | null | undefined): string {
+  if (!projectName) return title;
+  const suffix = `: ${projectName}`;
+  return title.endsWith(suffix) ? title.slice(0, -suffix.length) : title;
+}
+
 function getNotificationIcon(type: string) {
   const normalizedType = type.toLowerCase();
   if (normalizedType === 'warning' || normalizedType.includes('alert')) {
@@ -264,48 +276,56 @@ export function NotificationsPage() {
             {filteredNotifications.map((notification) => (
               <li
                 key={notification.id}
-                className={`flex items-stretch ${notification.isRead ? '' : 'bg-primary/5'}`}
+                className={`flex items-start gap-3 px-4 py-3 hover:bg-muted/60 ${notification.isRead ? '' : 'bg-primary/5'}`}
               >
-                <button
-                  type="button"
-                  onClick={() => handleOpenNotification(notification)}
-                  className="flex min-w-0 flex-1 items-start gap-4 px-4 py-4 text-left hover:bg-muted/60"
-                >
-                  <span className="mt-0.5 flex-shrink-0">
-                    {getNotificationIcon(notification.type)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="font-medium">{notification.title}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatRelativeTime(notification.createdAt)}
+                <span className="mt-1 flex-shrink-0">{getNotificationIcon(notification.type)}</span>
+                {/* The text runs the full width of the card. It used to share the
+                    row with an 8px unread dot and the delete icon, which reserved
+                    a ~90px gutter and starved the title to ~215px on a phone —
+                    three-line titles and date tokens split mid-value. The dot is
+                    now inline before the title and delete sits in the meta row. */}
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenNotification(notification)}
+                    className="block w-full text-left"
+                  >
+                    <span className="flex items-start gap-2">
+                      {!notification.isRead && (
+                        <span
+                          className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-primary"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="min-w-0 flex-1 font-medium">
+                        {stripProjectEcho(notification.title, notification.project?.name)}
                       </span>
                     </span>
                     {notification.message && (
-                      <span className="mt-1 block text-sm text-muted-foreground">
+                      <span className="mt-1 line-clamp-2 block text-sm text-muted-foreground">
                         {notification.message}
                       </span>
                     )}
-                    {notification.project && (
-                      <span className="mt-2 block text-xs text-muted-foreground">
-                        {notification.project.name} · {notification.project.projectNumber}
-                      </span>
-                    )}
-                  </span>
-                  {!notification.isRead && (
-                    <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  aria-label="Delete notification"
-                  title="Delete notification"
-                  onClick={() => deleteMutation.mutate(notification.id)}
-                  disabled={deleteMutation.isLoading}
-                  className="flex flex-shrink-0 items-center px-4 text-muted-foreground hover:text-destructive disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                  </button>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">
+                      {formatRelativeTime(notification.createdAt)}
+                      {notification.project
+                        ? ` · ${notification.project.name} · ${notification.project.projectNumber}`
+                        : ''}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Delete notification"
+                      title="Delete notification"
+                      onClick={() => deleteMutation.mutate(notification.id)}
+                      disabled={deleteMutation.isLoading}
+                      className="-my-2 -mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>

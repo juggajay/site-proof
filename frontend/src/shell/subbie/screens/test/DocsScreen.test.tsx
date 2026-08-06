@@ -139,6 +139,31 @@ describe('subbie shell DocsScreen', () => {
     expect(screen.getByText('SW-201 Rev C')).toBeInTheDocument();
   });
 
+  it('humanises raw category enums in the section headers', async () => {
+    setApi({
+      documents: [
+        {
+          id: 'd1',
+          filename: 'ticket.pdf',
+          fileUrl: 'u1',
+          category: 'DELIVERY_DOCKET',
+          uploadedAt: '2026-06-08T00:00:00.000Z',
+        },
+        {
+          id: 'd2',
+          filename: 'nata.pdf',
+          fileUrl: 'u2',
+          category: 'TEST_RESULTS',
+          uploadedAt: '2026-06-08T00:00:00.000Z',
+        },
+      ],
+    });
+    renderScreen();
+    expect(await screen.findByText('DELIVERY DOCKET')).toBeInTheDocument();
+    expect(screen.getByText('TEST RESULTS')).toBeInTheDocument();
+    expect(screen.queryByText(/_/)).not.toBeInTheDocument();
+  });
+
   it('delegates open to openDocumentAccessUrl(id, fileUrl) with inline disposition', async () => {
     setApi({
       documents: [

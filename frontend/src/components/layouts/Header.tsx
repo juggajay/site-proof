@@ -239,21 +239,27 @@ export function Header() {
             className="relative rounded-full p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground touch-manipulation"
             aria-label="Notifications"
           >
-            <Bell className="h-5 w-5" aria-hidden="true" />
-            {unreadCount > 0 && (
-              <>
-                {/* Animated ping effect */}
-                <span className="absolute -right-0.5 -top-0.5 h-5 w-5 rounded-full bg-destructive/60 animate-ping opacity-75" />
-                {/* Badge with count — destructive token: an unread count is a
-                    real signal the user needs to act on (INV-3). */}
-                <span
-                  className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-destructive-foreground"
-                  data-testid="notification-badge"
-                >
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              </>
-            )}
+            {/* The badge anchors to the ICON, not the 44px tap target. Anchored
+                to the target it sat at the box's top-right — visually adrift
+                between the bell and the next button, with the ping ring
+                overflowing the header's top edge. */}
+            <span className="relative flex">
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              {unreadCount > 0 && (
+                <>
+                  {/* Animated ping effect */}
+                  <span className="absolute -right-1.5 -top-1.5 h-4 w-4 rounded-full bg-destructive/60 animate-ping opacity-75" />
+                  {/* Badge with count — destructive token: an unread count is a
+                      real signal the user needs to act on (INV-3). */}
+                  <span
+                    className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium leading-none text-destructive-foreground"
+                    data-testid="notification-badge"
+                  >
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                </>
+              )}
+            </span>
           </Link>
         </div>
         {/* User menu — below md only. At md+ the sidebar owns identity; the

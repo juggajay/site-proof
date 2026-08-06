@@ -64,11 +64,17 @@ export function ProfileOverview({
     <>
       <div className="rounded-lg border bg-card">
         <div className="p-6">
-          <div className="flex items-start gap-6">
+          <div className="flex items-start gap-4 sm:gap-6">
+            {/* shrink-0: without it the flex row squashes the avatar into an
+                ellipse on phones, where the name/email column wants the space. */}
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="h-20 w-20 shrink-0 rounded-full object-cover"
+              />
             ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <span className="text-3xl font-bold">{getInitial(user)}</span>
               </div>
             )}

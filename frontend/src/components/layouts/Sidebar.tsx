@@ -291,92 +291,102 @@ export function Sidebar() {
           project nav is taller than the viewport; without its own scroller it
           overflowed the h-screen layout root and stretched the document, so
           the main content column clipped mid-viewport on window scroll. The
-          nav scrolls; the utility cluster below stays pinned. */}
-      <nav
-        className={cn(
-          'min-h-0 flex-1 space-y-1 overflow-y-auto transition-all duration-300',
-          isCollapsed ? 'p-2' : 'p-4',
-        )}
-      >
-        {filteredNavigation.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.href}
-            title={isCollapsed ? item.name : undefined}
-            className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
-          >
-            {({ isActive }) => (
-              <>
-                <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+          nav scrolls; the utility cluster below stays pinned.
+          The bottom padding + fade are what stop the row at the fold from
+          reading as a half-rendered item butted against the footer: the padding
+          clears the last row of the fade at full scroll, the fade says "more
+          below" at every other scroll position. */}
+      <div className="relative min-h-0 flex-1">
+        <nav
+          className={cn(
+            'h-full space-y-1 overflow-y-auto transition-all duration-300',
+            isCollapsed ? 'p-2 pb-8' : 'p-4 pb-8',
+          )}
+        >
+          {filteredNavigation.map((item) => (
+            <NavLink
+              key={item.name}
+              to={item.href}
+              title={isCollapsed ? item.name : undefined}
+              className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+                  {!isCollapsed && (
+                    <span className="transition-opacity duration-200">{item.name}</span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
+
+          {/* Subcontractor Navigation */}
+          {filteredSubcontractorNavigation.length > 0 && (
+            <>
+              <div className="my-4 border-t pt-4">
                 {!isCollapsed && (
-                  <span className="transition-opacity duration-200">{item.name}</span>
+                  <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                    My Company
+                  </p>
                 )}
-              </>
-            )}
-          </NavLink>
-        ))}
-
-        {/* Subcontractor Navigation */}
-        {filteredSubcontractorNavigation.length > 0 && (
-          <>
-            <div className="my-4 border-t pt-4">
-              {!isCollapsed && (
-                <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
-                  My Company
-                </p>
-              )}
-            </div>
-            {filteredSubcontractorNavigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                title={isCollapsed ? item.name : undefined}
-                className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon className={navIconClass(isActive)} aria-hidden="true" />
-                    {!isCollapsed && (
-                      <span className="transition-opacity duration-200">{item.name}</span>
-                    )}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </>
-        )}
-
-        {/* Hide project navigation for subcontractors */}
-        {projectId && !isSubcontractor && !hasPortalIdentity && (
-          <>
-            <div className="my-4 border-t pt-4">
-              {!isCollapsed && !isOfficeRole && (
-                <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
-                  Project
-                </p>
-              )}
-            </div>
-            {isOfficeRole
-              ? OFFICE_SECTION_ORDER.map((section) => {
-                  const items = filteredProjectNavigation.filter(
-                    (item) => item.section === section,
-                  );
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={section} className="mt-4 first:mt-0 space-y-1">
+              </div>
+              {filteredSubcontractorNavigation.map((item) => (
+                <NavLink
+                  key={item.name}
+                  to={item.href}
+                  title={isCollapsed ? item.name : undefined}
+                  className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
+                >
+                  {({ isActive }) => (
+                    <>
+                      <item.icon className={navIconClass(isActive)} aria-hidden="true" />
                       {!isCollapsed && (
-                        <p className="mb-1 px-3 text-xs font-semibold uppercase text-muted-foreground">
-                          {section}
-                        </p>
+                        <span className="transition-opacity duration-200">{item.name}</span>
                       )}
-                      {items.map(renderProjectNavLink)}
-                    </div>
-                  );
-                })
-              : filteredProjectNavigation.map(renderProjectNavLink)}
-          </>
-        )}
-      </nav>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </>
+          )}
+
+          {/* Hide project navigation for subcontractors */}
+          {projectId && !isSubcontractor && !hasPortalIdentity && (
+            <>
+              <div className="my-4 border-t pt-4">
+                {!isCollapsed && !isOfficeRole && (
+                  <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                    Project
+                  </p>
+                )}
+              </div>
+              {isOfficeRole
+                ? OFFICE_SECTION_ORDER.map((section) => {
+                    const items = filteredProjectNavigation.filter(
+                      (item) => item.section === section,
+                    );
+                    if (items.length === 0) return null;
+                    return (
+                      <div key={section} className="mt-4 first:mt-0 space-y-1">
+                        {!isCollapsed && (
+                          <p className="mb-1 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                            {section}
+                          </p>
+                        )}
+                        {items.map(renderProjectNavLink)}
+                      </div>
+                    );
+                  })
+                : filteredProjectNavigation.map(renderProjectNavLink)}
+            </>
+          )}
+        </nav>
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card to-transparent"
+          aria-hidden="true"
+        />
+      </div>
       <div
         className={cn(
           'border-t space-y-1 transition-all duration-300',

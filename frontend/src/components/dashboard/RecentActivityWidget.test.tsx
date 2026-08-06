@@ -33,6 +33,48 @@ describe('RecentActivityWidget', () => {
     expect(screen.getByText('Unknown time')).toBeInTheDocument();
   });
 
+  it('humanises the raw status enum the backend appends to a description', () => {
+    render(
+      <RecentActivityWidget
+        activities={[
+          {
+            id: 'activity-1',
+            type: 'lot',
+            description: 'Lot LOT-004 status: not_started',
+            timestamp: '2026-06-05T10:00:00.000Z',
+          },
+          {
+            id: 'activity-2',
+            type: 'ncr',
+            description: 'NCR NCR-0001 status: closed_concession',
+            timestamp: '2026-06-05T10:00:00.000Z',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Lot LOT-004 status: Not Started')).toBeInTheDocument();
+    expect(screen.getByText('NCR NCR-0001 status: Closed (Concession)')).toBeInTheDocument();
+    expect(screen.queryByText(/not_started/)).not.toBeInTheDocument();
+  });
+
+  it('leaves a description without a trailing status enum untouched', () => {
+    render(
+      <RecentActivityWidget
+        activities={[
+          {
+            id: 'activity-1',
+            type: 'lot',
+            description: 'Lot EW-001 was created',
+            timestamp: '2026-06-05T10:00:00.000Z',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Lot EW-001 was created')).toBeInTheDocument();
+  });
+
   it('links safe internal activity targets and ignores unsafe links', () => {
     render(
       <MemoryRouter>

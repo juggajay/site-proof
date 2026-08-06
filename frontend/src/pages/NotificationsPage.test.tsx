@@ -30,7 +30,7 @@ interface TestNotification {
   linkUrl: string | null;
   isRead: boolean;
   createdAt: string;
-  project?: null;
+  project?: { id: string; name: string; projectNumber: string } | null;
 }
 
 function buildNotification(overrides: Partial<TestNotification> = {}): TestNotification {
@@ -225,6 +225,32 @@ describe('NotificationsPage', () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it('drops the project name the title echoes from the meta line, and keeps titles that do not echo it', async () => {
+    const project = { id: 'p1', name: 'Demo Walkthrough 2026', projectNumber: 'PRJ-DEMO-001' };
+    apiFetchMock.mockResolvedValue({
+      notifications: [
+        buildNotification({
+          id: 'echo',
+          title: 'ESCALATED: Missing Daily Diary: Demo Walkthrough 2026',
+          project,
+        }),
+        buildNotification({
+          id: 'no-echo',
+          title: 'Hold Point Released',
+          project,
+        }),
+      ],
+      unreadCount: 2,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('ESCALATED: Missing Daily Diary')).toBeInTheDocument();
+    expect(screen.getByText('Hold Point Released')).toBeInTheDocument();
+    // The project name survives exactly once per card — on the meta line.
+    expect(screen.getAllByText(/Demo Walkthrough 2026 · PRJ-DEMO-001/)).toHaveLength(2);
   });
 
   it('exposes the selected notification filter state to assistive technology', async () => {
