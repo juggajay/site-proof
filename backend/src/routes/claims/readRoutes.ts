@@ -9,6 +9,7 @@ import { checkConformancePrerequisitesBatch } from '../../lib/conformancePrerequ
 import { holdPointReleased, testPendingByStatus } from '../../lib/readiness/predicates.js';
 import { loadSupersededGoverningRevisions } from '../../lib/revisionGovernance.js';
 import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
+import { buildClaimBands, priorClaimedLotsWhere } from './claimBands.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   ClaimReadinessAccumulator,
@@ -633,9 +634,62 @@ export function createClaimReadRouter({
       }
       const certification = buildClaimCertificationView(claim.disputeNotes, certifierNameById);
 
+      // The per-lot band projection ("Previously claimed" / "This claim" /
+      // "Claimed to date") the claim detail page renders. Two lean reads on top
+      // of the claim itself, both scoped to the lots already on this claim:
+      // the earlier history rows, and each lot's ITP progress. Kept OUT of the
+      // claim include above so the existing `claimedLots[].lot` payload shape is
+      // unchanged for its other consumers.
+      const claimLotIds = claim.claimedLots.map((claimedLot) => claimedLot.lotId);
+      const [priorRows, itpInstances] = await Promise.all([
+        claimLotIds.length > 0
+          ? prisma.claimedLot.findMany({
+              where: priorClaimedLotsWhere(projectId, claim.claimNumber, claimLotIds),
+              select: {
+                claimId: true,
+                lotId: true,
+                amountClaimed: true,
+                percentageComplete: true,
+              },
+            })
+          : Promise.resolve([]),
+        claimLotIds.length > 0
+          ? prisma.iTPInstance.findMany({
+              where: { lotId: { in: claimLotIds } },
+              select: {
+                lotId: true,
+                completions: { select: { status: true, verificationStatus: true } },
+                template: { select: { _count: { select: { checklistItems: true } } } },
+              },
+            })
+          : Promise.resolve([]),
+      ]);
+
+      const itpByLotId = new Map(itpInstances.map((instance) => [instance.lotId, instance]));
+      const bands = buildClaimBands({
+        claimedLots: claim.claimedLots.map((claimedLot) => ({
+          id: claimedLot.id,
+          amountClaimed: claimedLot.amountClaimed,
+          percentageComplete: claimedLot.percentageComplete,
+          lot: {
+            id: claimedLot.lot.id,
+            lotNumber: claimedLot.lot.lotNumber,
+            description: claimedLot.lot.description,
+            activityType: claimedLot.lot.activityType,
+            chainageStart: claimedLot.lot.chainageStart,
+            chainageEnd: claimedLot.lot.chainageEnd,
+            budgetAmount: claimedLot.lot.budgetAmount,
+            itpInstance: itpByLotId.get(claimedLot.lotId) ?? null,
+          },
+        })),
+        priorRows,
+        priorClaimCount: new Set(priorRows.map((row) => row.claimId)).size,
+      });
+
       res.json(
         buildClaimDetailResponse({
           ...claim,
+          bands,
           variations: claim.variations.map((variation) => ({
             id: variation.id,
             variationNumber: variation.variationNumber,
