@@ -41,6 +41,7 @@ import {
 } from './ncrWorkflowValidation.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
 import { getLotStatusAfterNcrClosure } from './ncrLotStatus.js';
+import { assertAfterEvidencePresent } from './ncrEvidencePhase.js';
 
 export const ncrClosureWorkflowRouter = Router();
 
@@ -144,6 +145,7 @@ interface NcrCloseState extends NcrQmApprovalState {
   qmApprovedById: string | null;
   clientNotificationRequired: boolean;
   clientNotifiedAt: Date | null;
+  ncrEvidence: ReadonlyArray<{ evidenceType: string }>;
 }
 
 /**
@@ -199,6 +201,10 @@ function assertNcrClosable(
       currentStatus: ncr.status,
     });
   }
+
+  // The rectification must be evidenced by something that isn't a "before" photo.
+  // Concession closes are exempt — see assertAfterEvidencePresent.
+  assertAfterEvidencePresent(ncr.ncrEvidence, { withConcession: options.withConcession });
 
   // CRITICAL: For major NCRs, require independent QM approval before closing.
   if (ncr.severity === 'major' && ncr.qmApprovalRequired) {
@@ -261,6 +267,7 @@ async function evaluateNcrClosure(
       qmApprovedById: true,
       clientNotificationRequired: true,
       clientNotifiedAt: true,
+      ncrEvidence: { select: { evidenceType: true } },
       ncrLots: { select: { lotId: true, lot: { select: { status: true } } } },
     },
   });
@@ -495,6 +502,7 @@ ncrClosureWorkflowRouter.post(
         qmApprovedById: true,
         clientNotificationRequired: true,
         clientNotifiedAt: true,
+        ncrEvidence: { select: { evidenceType: true } },
         _count: { select: { ncrLots: true } },
       },
     });

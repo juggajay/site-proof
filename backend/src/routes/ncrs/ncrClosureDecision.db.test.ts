@@ -108,8 +108,8 @@ async function createNcr(
   return ncr;
 }
 
-async function addEvidence(ncrId: string) {
-  const filename = `${tag}-${ncrId}.jpg`;
+async function addEvidence(ncrId: string, evidenceType = 'photo') {
+  const filename = `${tag}-${ncrId}-${evidenceType}.jpg`;
   const document = await prisma.document.create({
     data: {
       projectId,
@@ -121,7 +121,7 @@ async function addEvidence(ncrId: string) {
     },
   });
   return prisma.nCREvidence.create({
-    data: { ncrId, documentId: document.id, evidenceType: 'photo' },
+    data: { ncrId, documentId: document.id, evidenceType },
   });
 }
 
@@ -583,5 +583,63 @@ describe('NCR closure decisions — audit integrity (spec §9 [R3.1-R1])', () =>
       }),
     ).toMatchObject({ qmApprovedAt: null, qmApprovedById: null });
     expect(await snapshotRows(ncr.id)).toHaveLength(0);
+  });
+});
+
+// The before/after evidence gate as the route enforces it (benchmark T6).
+describe('close: after-evidence gate', () => {
+  it('blocks a clean close when the only evidence is a before photo', async () => {
+    const ncr = await createNcr('before-only', {}, { withEvidence: false });
+    await addEvidence(ncr.id, 'before_photo');
+
+    const res = await close(ncr.id, { verificationNotes: 'Looks fine from here' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe(
+      'Add at least one photo of the completed rectification before closing.',
+    );
+    expect(res.body.error.details.code).toBe('NCR_MISSING_AFTER_EVIDENCE');
+    expect(
+      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
+    ).toMatchObject({ status: 'verification' });
+  });
+
+  it('allows the close once an after photo is attached', async () => {
+    const ncr = await createNcr('before-then-after', {}, { withEvidence: false });
+    await addEvidence(ncr.id, 'before_photo');
+    expect((await close(ncr.id, { verificationNotes: 'Too early' })).status).toBe(400);
+
+    await addEvidence(ncr.id, 'after_photo');
+
+    expect((await close(ncr.id, { verificationNotes: 'Rectification verified' })).status).toBe(200);
+    expect(
+      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
+    ).toMatchObject({ status: 'closed' });
+  });
+
+  it('still closes a legacy NCR whose evidence predates the before/after split', async () => {
+    // `createNcr` attaches plain `photo` evidence, exactly as pre-T6 records carry.
+    const ncr = await createNcr('legacy-evidence');
+
+    expect((await close(ncr.id, { verificationNotes: 'Verified' })).status).toBe(200);
+    expect(
+      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
+    ).toMatchObject({ status: 'closed' });
+  });
+
+  it('exempts a concession close — an accepted defect has no rectification photo', async () => {
+    const ncr = await createNcr('concession-before-only', {}, { withEvidence: false });
+    await addEvidence(ncr.id, 'before_photo');
+
+    const res = await close(ncr.id, {
+      withConcession: true,
+      concessionJustification: 'Accepted as constructed; within tolerance for this element.',
+      concessionRiskAssessment: 'No structural or durability risk over the design life.',
+    });
+
+    expect(res.status).toBe(200);
+    expect(
+      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
+    ).toMatchObject({ status: 'closed_concession' });
   });
 });

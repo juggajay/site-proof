@@ -331,9 +331,9 @@ describe('subbie shell NcrsScreen', () => {
     const listCallsBeforeUpload = apiFetchMock.mock.calls.filter(([url]) => url === listUrl).length;
 
     await user.click(screen.getByRole('button', { name: 'Submit Rectification' }));
-    const photoInput = document.querySelector(
-      'input[type="file"][accept="image/*"]',
-    ) as HTMLInputElement;
+    // The rectify sheet now offers paired before/after dropzones; a repair photo
+    // is the "after" side and must be tagged as such for the close gate.
+    const photoInput = screen.getByLabelText('After (the fix)') as HTMLInputElement;
     expect(photoInput).toBeInTheDocument();
     await user.upload(
       photoInput,
@@ -351,7 +351,7 @@ describe('subbie shell NcrsScreen', () => {
         '/api/ncrs/ncr-shell-rectify/evidence',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ documentId: 'doc-uploaded-1', evidenceType: 'photo' }),
+          body: JSON.stringify({ documentId: 'doc-uploaded-1', evidenceType: 'after_photo' }),
         }),
       ),
     );
