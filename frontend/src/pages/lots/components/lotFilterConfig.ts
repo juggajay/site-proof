@@ -6,6 +6,10 @@ export const COLUMN_CONFIG = [
   { id: 'chainage', label: 'Chainage', required: false },
   { id: 'activityType', label: 'Activity Type', required: false },
   { id: 'status', label: 'Status', required: false },
+  // Ageing, derived from the createdAt/conformedAt the list payload already
+  // carries — "what has been sitting the longest" was unanswerable from the
+  // register without it.
+  { id: 'daysOpen', label: 'Days Open', required: false },
   { id: 'subcontractor', label: 'Subcontractor', required: false },
   { id: 'budget', label: 'Budget', required: false },
 ] as const;
@@ -18,6 +22,7 @@ export const DEFAULT_COLUMN_ORDER: ColumnId[] = [
   'chainage',
   'activityType',
   'status',
+  'daysOpen',
   'subcontractor',
   'budget',
 ];

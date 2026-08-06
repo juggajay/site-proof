@@ -1,6 +1,53 @@
 import type { RefObject } from 'react';
-import { AlertTriangle, Calendar, FileText, TestTube } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  TestTube,
+} from 'lucide-react';
 import type { Lot } from '../lotsPageTypes';
+
+interface LotGroupBandRowProps {
+  label: string;
+  /** Total lots in this group across the whole filtered register. */
+  count: number;
+  collapsed: boolean;
+  colSpanCount: number;
+  groupKey: string;
+  onToggle: (groupKey: string) => void;
+}
+
+/**
+ * Section header for a grouped lot register. The count is the group's full size,
+ * not the number of rows currently loaded, so collapsing a band still tells you
+ * how much is inside it.
+ */
+export function LotGroupBandRow({
+  label,
+  count,
+  collapsed,
+  colSpanCount,
+  groupKey,
+  onToggle,
+}: LotGroupBandRowProps) {
+  return (
+    <td colSpan={colSpanCount} className="p-0">
+      <button
+        type="button"
+        onClick={() => onToggle(groupKey)}
+        aria-expanded={!collapsed}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold hover:bg-muted"
+        data-testid={`lot-group-band-${groupKey}`}
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        <span className="truncate">{label}</span>
+        <span className="font-normal text-muted-foreground">({count})</span>
+      </button>
+    </td>
+  );
+}
 
 interface LotTableEmptyStateProps {
   allLotsCount: number;

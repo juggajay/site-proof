@@ -19,12 +19,6 @@ function renderHeader(overrides: Overrides = {}) {
     isMobile: false,
     isSubcontractor: false,
     canCreate: true,
-    canEdit: true,
-    canDelete: true,
-    selectedCount: 0,
-    hasGoverningRuleset: false,
-    rulesetLoadFailed: false,
-    onRetryRulesetLoad: vi.fn(),
     viewMode: 'list',
     onToggleViewMode: vi.fn(),
     onOpenExport: vi.fn(),
@@ -32,11 +26,6 @@ function renderHeader(overrides: Overrides = {}) {
     onOpenImport: vi.fn(),
     onOpenBulkWizard: vi.fn(),
     onOpenCreate: vi.fn(),
-    onOpenBulkStatus: vi.fn(),
-    onOpenBulkAssign: vi.fn(),
-    onOpenBulkTestAttributes: vi.fn(),
-    onOpenBulkDelete: vi.fn(),
-    onOpenPrintLabels: vi.fn(),
     ...overrides,
   };
   const result = renderWithProviders(<LotsPageHeader {...props} />);
@@ -99,21 +88,14 @@ describe('LotsPageHeader (desktop)', () => {
     expect(screen.queryByRole('button', { name: 'Create Lot' })).not.toBeInTheDocument();
   });
 
-  it('still surfaces the bulk-selection actions when lots are selected', () => {
-    renderHeader({ selectedCount: 3, hasGoverningRuleset: true });
+  // Bulk verbs moved to LotSelectionBar, above the rows they act on; the header
+  // must not carry a second copy of them.
+  it('leaves the bulk-selection verbs to the selection bar', () => {
+    renderHeader();
 
-    expect(screen.getByRole('button', { name: 'Update Status (3)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Assign Subcontractor (3)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Set Testing Attributes (3)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete Selected (3)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Print Labels (3)' })).toBeInTheDocument();
-  });
-
-  it('offers the ruleset retry when the pack lookup failed', () => {
-    const { props } = renderHeader({ selectedCount: 1, rulesetLoadFailed: true });
-
-    fireEvent.click(screen.getByRole('button', { name: /Testing attributes unavailable/ }));
-    expect(props.onRetryRulesetLoad).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Update Status/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete Selected/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Print Labels/ })).not.toBeInTheDocument();
   });
 });
 

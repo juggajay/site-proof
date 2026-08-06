@@ -122,6 +122,8 @@ export function useLotsActions({
     [selectedLots],
   );
 
+  const clearSelection = useCallback(() => setSelectedLots(new Set()), []);
+
   // Context menu handlers
   const handleContextMenu = useCallback((e: React.MouseEvent, lot: Lot) => {
     e.preventDefault();
@@ -376,6 +378,7 @@ export function useLotsActions({
     toggleViewMode,
     handleSelectAll,
     handleSelectLot,
+    clearSelection,
     handleContextMenu,
     closeContextMenu,
     handleLotMouseEnter,

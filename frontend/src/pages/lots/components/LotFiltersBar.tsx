@@ -14,6 +14,7 @@ import { LotColumnSettingsMenu } from './LotColumnSettingsMenu';
 import { LotStatusFilterMenu } from './LotStatusFilterMenu';
 import { type ColumnId } from './lotFilterConfig';
 import { buildMobileLotFilterConfigs, countActiveLotFilters } from './lotFiltersBarHelpers';
+import { LOT_GROUP_BY_OPTIONS, LOT_PRESET_VIEWS, type LotGroupBy } from './lotRegisterQueue';
 
 interface ClearFilterButtonProps {
   onClick: () => void;
@@ -63,6 +64,8 @@ interface LotFiltersBarProps {
   areaZoneFilter: string;
   sortField: string;
   sortDirection: 'asc' | 'desc';
+  /** Active register grouping, or null for a flat list. */
+  groupBy: LotGroupBy | null;
   // Data for filter dropdowns
   activityTypes: (string | null | undefined)[];
   areaZones: string[];
@@ -93,6 +96,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   chainageMaxFilter,
   subcontractorFilter,
   areaZoneFilter,
+  groupBy,
   activityTypes,
   areaZones,
   subcontractors,
@@ -385,7 +389,25 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           </>
         )}
 
-        <SavedViewsMenu registerKey="lots" />
+        {/* A curated field list, not a drag-to-group bar: four fields that read
+            well as bands, so nobody has to know the schema to get a queue. */}
+        <div className="flex items-center gap-2">
+          <Label htmlFor="group-by-filter">Group by:</Label>
+          <NativeSelect
+            id="group-by-filter"
+            value={groupBy ?? ''}
+            onChange={(e) => onUpdateFilters({ group: e.target.value })}
+            className="h-8"
+          >
+            {LOT_GROUP_BY_OPTIONS.map((option) => (
+              <option key={option.value || 'none'} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+
+        <SavedViewsMenu registerKey="lots" presets={LOT_PRESET_VIEWS} />
 
         <span className="text-sm text-muted-foreground">
           Showing {filteredLotsCount} of {totalLots} lots

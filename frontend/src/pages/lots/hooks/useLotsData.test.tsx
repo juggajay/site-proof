@@ -14,6 +14,7 @@ vi.mock('@/lib/logger', () => ({ logError: vi.fn(), devLog: vi.fn(), devWarn: vi
 import { apiFetch, ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useLotsData, lotsRegisterQueryKey } from './useLotsData';
+import type { LotGroupBy } from '../components/lotRegisterQueue';
 import type { Lot } from '../lotsPageTypes';
 
 const apiFetchMock = vi.mocked(apiFetch);
@@ -81,6 +82,7 @@ const baseParams = {
   chainageMaxFilter: '',
   subcontractorFilter: '',
   areaZoneFilter: '',
+  groupBy: null as LotGroupBy | null,
 };
 
 type Params = typeof baseParams;
@@ -249,6 +251,47 @@ describe('useLotsData', () => {
     // setQueryData writes synchronously; the observer re-render is async.
     expect(queryClient.getQueryData<Lot[]>(lotsRegisterQueryKey('project-1'))).toHaveLength(1);
     await waitFor(() => expect(result.current.lots.map((l) => l.id)).toEqual(['2']));
+  });
+
+  it('sorts group-first so a grouped register renders contiguous bands', async () => {
+    // Interleaved on purpose: alphabetical lot number order would scatter the
+    // statuses, and a band can only be drawn where its members sit together.
+    mockEndpoints([
+      [
+        makeLot('a', { status: 'conformed' }),
+        makeLot('b', { status: 'not_started' }),
+        makeLot('c', { status: 'conformed' }),
+        makeLot('d', { status: 'not_started' }),
+      ],
+    ]);
+
+    const { result } = renderLotsData(createClient(), { groupBy: 'status' });
+    await waitFor(() => expect(result.current.filteredLots).toHaveLength(4));
+
+    expect(result.current.filteredLots.map((lot) => lot.status)).toEqual([
+      'not_started',
+      'not_started',
+      'conformed',
+      'conformed',
+    ]);
+    // The user's own sort still orders rows within each band.
+    expect(result.current.filteredLots.map((lot) => lot.id)).toEqual(['b', 'd', 'a', 'c']);
+  });
+
+  it('sorts by days open, oldest last, with undated lots at the end', async () => {
+    const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+    mockEndpoints([
+      [
+        makeLot('old', { createdAt: iso(300) }),
+        makeLot('undated'),
+        makeLot('new', { createdAt: iso(2) }),
+      ],
+    ]);
+
+    const { result } = renderLotsData(createClient(), { sortField: 'daysOpen' });
+    await waitFor(() => expect(result.current.filteredLots).toHaveLength(3));
+
+    expect(result.current.filteredLots.map((lot) => lot.id)).toEqual(['new', 'old', 'undated']);
   });
 
   it('does not fetch lots when project id is missing', async () => {

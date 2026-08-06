@@ -11,10 +11,13 @@ function QueryProbe() {
   return <div data-testid="query">{searchParams.toString()}</div>;
 }
 
-function renderMenu(initialUrl = '/tests') {
+function renderMenu(
+  initialUrl = '/tests',
+  presets?: { id: string; name: string; query: string }[],
+) {
   return render(
     <MemoryRouter initialEntries={[initialUrl]}>
-      <SavedViewsMenu registerKey="test-results" />
+      <SavedViewsMenu registerKey="test-results" presets={presets} />
       <QueryProbe />
     </MemoryRouter>,
   );
@@ -73,6 +76,34 @@ describe('SavedViewsMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete view Doomed' }));
 
     expect(screen.queryByRole('button', { name: 'Doomed' })).not.toBeInTheDocument();
+    expect(screen.getByText('No saved views yet.')).toBeInTheDocument();
+  });
+
+  it('omits the presets section entirely for registers that ship none', () => {
+    renderMenu('/tests');
+    fireEvent.click(screen.getByRole('button', { name: /Views/ }));
+    expect(screen.queryByText('Presets')).not.toBeInTheDocument();
+  });
+
+  it('applies a shipped preset without touching the user’s saved views', () => {
+    renderMenu('/tests?status=entered', [
+      { id: 'failures', name: 'Failures', query: 'passFail=fail' },
+      { id: 'all', name: 'All', query: '' },
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Views/ }));
+    expect(screen.getByText('Presets')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('register-preset-failures'));
+    expect(screen.getByTestId('query')).toHaveTextContent('passFail=fail');
+
+    // An empty preset query clears every filter rather than doing nothing.
+    fireEvent.click(screen.getByRole('button', { name: /Views/ }));
+    fireEvent.click(screen.getByTestId('register-preset-all'));
+    expect(screen.getByTestId('query')).toHaveTextContent('');
+
+    // Presets are shipped, not stored: the saved-views list is still empty.
+    fireEvent.click(screen.getByRole('button', { name: /Views/ }));
     expect(screen.getByText('No saved views yet.')).toBeInTheDocument();
   });
 

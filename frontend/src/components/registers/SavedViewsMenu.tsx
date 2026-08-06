@@ -6,6 +6,12 @@ import { deleteView, listViews, saveView, type SavedView } from '@/lib/savedView
 interface SavedViewsMenuProps {
   /** Namespace for this register's presets, e.g. 'ncrs', 'hold-points', 'test-results'. */
   registerKey: string;
+  /**
+   * Shipped, code-defined views listed above the user's own. They are not
+   * editable or deletable — a register that ships useful presets is one nobody
+   * has to configure before it earns its keep.
+   */
+  presets?: { id: string; name: string; query: string }[];
 }
 
 /**
@@ -15,7 +21,7 @@ interface SavedViewsMenuProps {
  * and deletes presets. Self-contained: it reads/writes the register's
  * searchParams directly, so a bar only needs to render it with a registerKey.
  */
-export function SavedViewsMenu({ registerKey }: SavedViewsMenuProps) {
+export function SavedViewsMenu({ registerKey, presets = [] }: SavedViewsMenuProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [views, setViews] = useState<SavedView[]>(() => listViews(registerKey));
   const [open, setOpen] = useState(false);
@@ -31,8 +37,8 @@ export function SavedViewsMenu({ registerKey }: SavedViewsMenuProps) {
     setNewName('');
   };
 
-  const applyView = (view: SavedView) => {
-    setSearchParams(new URLSearchParams(view.query));
+  const applyQuery = (query: string) => {
+    setSearchParams(new URLSearchParams(query));
     closeMenu();
   };
 
@@ -65,7 +71,29 @@ export function SavedViewsMenu({ registerKey }: SavedViewsMenuProps) {
         <>
           <div className="fixed inset-0 z-10" onClick={closeMenu} />
           <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border bg-card shadow-lg">
-            <div className="border-b p-2">
+            {presets.length > 0 && (
+              <>
+                <div className="border-b p-2">
+                  <span className="text-xs font-medium text-muted-foreground">Presets</span>
+                </div>
+                <div>
+                  {presets.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyQuery(preset.query)}
+                      className="block w-full truncate px-3 py-2 text-left text-sm hover:bg-muted"
+                      title={`Apply preset: ${preset.name}`}
+                      data-testid={`register-preset-${preset.id}`}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="border-b border-t p-2">
               <span className="text-xs font-medium text-muted-foreground">Saved views</span>
             </div>
 
@@ -80,7 +108,7 @@ export function SavedViewsMenu({ registerKey }: SavedViewsMenuProps) {
                   >
                     <button
                       type="button"
-                      onClick={() => applyView(view)}
+                      onClick={() => applyQuery(view.query)}
                       className="flex-1 truncate text-left text-sm"
                       title={`Apply view: ${view.name}`}
                     >

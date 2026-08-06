@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
+import { lotDaysOpen, lotGroupSortKey, type LotGroupBy } from '../components/lotRegisterQueue';
 import type { Lot } from '../lotsPageTypes';
 
 const INITIAL_DISPLAY_COUNT = 20;
@@ -46,6 +47,7 @@ interface UseLotsDataParams {
   chainageMaxFilter: string;
   subcontractorFilter: string;
   areaZoneFilter: string;
+  groupBy: LotGroupBy | null;
 }
 
 interface LotsApiResponse {
@@ -90,6 +92,7 @@ export function useLotsData({
   chainageMaxFilter,
   subcontractorFilter,
   areaZoneFilter,
+  groupBy,
 }: UseLotsDataParams) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -267,7 +270,19 @@ export function useLotsData({
       return true;
     });
 
+    // One clock for the whole sort so ageing comparisons stay consistent.
+    const now = Date.now();
+
     return filtered.sort((a, b) => {
+      // Grouping is the primary sort: bands must be contiguous for the table to
+      // render them, and their order is fixed by lotGroupSortKey rather than by
+      // the user's sort direction, which applies within each band.
+      if (groupBy) {
+        const aGroup = lotGroupSortKey(a, groupBy);
+        const bGroup = lotGroupSortKey(b, groupBy);
+        if (aGroup !== bGroup) return aGroup < bGroup ? -1 : 1;
+      }
+
       let aVal: string | number | null = null;
       let bVal: string | number | null = null;
       switch (sortField) {
@@ -291,6 +306,12 @@ export function useLotsData({
           aVal = a.status.toLowerCase();
           bVal = b.status.toLowerCase();
           break;
+        case 'daysOpen':
+          // Lots with no createdAt sort last in either direction rather than
+          // pretending to be brand new.
+          aVal = lotDaysOpen(a, now) ?? Number.MAX_SAFE_INTEGER;
+          bVal = lotDaysOpen(b, now) ?? Number.MAX_SAFE_INTEGER;
+          break;
         default:
           return 0;
       }
@@ -309,6 +330,7 @@ export function useLotsData({
     chainageMaxFilter,
     subcontractorFilter,
     areaZoneFilter,
+    groupBy,
   ]);
 
   const displayedLots = useMemo(
@@ -341,6 +363,7 @@ export function useLotsData({
     chainageMaxFilter,
     subcontractorFilter,
     areaZoneFilter,
+    groupBy,
   ]);
 
   useEffect(() => {
