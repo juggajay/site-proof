@@ -4,7 +4,9 @@ import {
   canPreviewDocument,
   formatDocumentDate,
   formatDocumentFileSize,
+  getDocumentCategoryLabel,
   getDocumentTypeLabel,
+  isRedundantDocumentCategory,
   isExcelDocument,
   isImageDocument,
   isPdfDocument,
@@ -42,8 +44,36 @@ describe('getDocumentTypeLabel', () => {
     expect(getDocumentTypeLabel('photo')).toBe('Photo');
   });
 
-  it('falls back to the raw type for unknown ids', () => {
-    expect(getDocumentTypeLabel('custom-type')).toBe('custom-type');
+  it('never leaks a raw enum for auto-filed types with no option entry', () => {
+    expect(getDocumentTypeLabel('delivery_docket')).toBe('Delivery Docket');
+    expect(getDocumentTypeLabel('custom-type')).toBe('Custom Type');
+  });
+
+  it('spells acronyms out instead of title-casing them', () => {
+    expect(getDocumentTypeLabel('ncr_evidence')).toBe('NCR Evidence');
+    expect(getDocumentTypeLabel('itp_evidence')).toBe('ITP Evidence');
+  });
+});
+
+describe('getDocumentCategoryLabel', () => {
+  it('maps upload-form category ids, auto-filed enums, and free text', () => {
+    expect(getDocumentCategoryLabel('quality')).toBe('Quality');
+    expect(getDocumentCategoryLabel('test_results')).toBe('Test Results');
+    expect(getDocumentCategoryLabel('ncr_evidence')).toBe('NCR Evidence');
+    expect(getDocumentCategoryLabel('Site Photos')).toBe('Site Photos');
+  });
+});
+
+describe('isRedundantDocumentCategory', () => {
+  it('suppresses the category chip when it just repeats the type chip', () => {
+    // The live bug: a filed delivery docket rendered "delivery_docket" twice.
+    expect(isRedundantDocumentCategory('delivery_docket', 'delivery_docket')).toBe(true);
+    expect(isRedundantDocumentCategory('ncr_evidence', 'ncr_evidence')).toBe(true);
+  });
+
+  it('keeps a category that says something the type did not', () => {
+    expect(isRedundantDocumentCategory('photo', 'quality')).toBe(false);
+    expect(isRedundantDocumentCategory('photo', null)).toBe(true);
   });
 });
 

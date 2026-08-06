@@ -22,7 +22,10 @@ export function SelectFilterComponent({ filter, value, onChange }: SelectFilterC
         {filter.label}
       </label>
       <div className="relative">
+        {/* The visible label is not tied to the control (no htmlFor/id pair),
+            so the select had no accessible name at all. Additive. */}
         <select
+          aria-label={filter.label}
           value={value || ''}
           onChange={(e) => onChange(e.target.value || null)}
           className={cn(
@@ -240,6 +243,7 @@ export function DateFilterComponent({ filter, value, onChange }: DateFilterCompo
           </span>
           <input
             type="date"
+            aria-label={`${filter.label} from`}
             value={value.start || ''}
             min={filter.minDate}
             max={value.end || filter.maxDate}
@@ -262,6 +266,7 @@ export function DateFilterComponent({ filter, value, onChange }: DateFilterCompo
           </span>
           <input
             type="date"
+            aria-label={`${filter.label} to`}
             value={value.end || ''}
             min={value.start || filter.minDate}
             max={filter.maxDate}

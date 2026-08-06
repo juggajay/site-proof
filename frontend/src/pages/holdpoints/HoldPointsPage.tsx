@@ -731,10 +731,13 @@ export function HoldPointsPage() {
                 : `${batchEligibleHoldPoints.length} pending hold point${batchEligibleHoldPoints.length === 1 ? '' : 's'} in this lot can be sent for superintendent review.`}
             </div>
           </div>
+          {/* 44px touch targets below md — these are the batch controls a
+              foreman taps with gloves on. */}
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
+              className="h-11 flex-1 sm:h-9 sm:flex-none"
               onClick={handleSelectAllBatchEligible}
               disabled={batchEligibleHoldPoints.length === 0}
             >
@@ -743,6 +746,7 @@ export function HoldPointsPage() {
             <Button
               type="button"
               variant="outline"
+              className="h-11 flex-1 sm:h-9 sm:flex-none"
               onClick={handleClearBatchSelection}
               disabled={selectedBatchHoldPointIds.size === 0}
             >
@@ -750,6 +754,7 @@ export function HoldPointsPage() {
             </Button>
             <Button
               type="button"
+              className="h-11 w-full sm:h-9 sm:w-auto"
               onClick={() => {
                 setBatchRequestError(null);
                 setShowBatchRequestModal(true);

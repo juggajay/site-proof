@@ -101,6 +101,17 @@ describe('DrawingStatsCards', () => {
     expect(screen.getByText('For Construction')).toBeInTheDocument();
     expect(screen.getByText('As-Built')).toBeInTheDocument();
   });
+
+  it('lays the four cards out 2x2 below md so the labels are not clipped', () => {
+    render(
+      <DrawingStatsCards stats={{ total: 8, preliminary: 1, forConstruction: 5, asBuilt: 2 }} />,
+    );
+
+    // Four across at 390px clipped "For Construction" mid-word.
+    const grid = screen.getByText('Total Drawings').closest('.grid');
+    expect(grid).toHaveClass('grid-cols-2');
+    expect(grid).toHaveClass('md:grid-cols-4');
+  });
 });
 
 describe('DrawingFilters', () => {

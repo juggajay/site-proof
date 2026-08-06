@@ -7,12 +7,13 @@
  * URL the page actually requests.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '@/lib/api';
+import { DEVICES, installMatchMedia } from '@/test/stubs/matchMedia';
 
 import { DeliveryRegisterPage } from './DeliveryRegisterPage';
 import type { DeliveryRegisterResponse, DeliveryRow } from './deliveryRegisterData';
@@ -93,7 +94,30 @@ function registerRequestPaths(): string[] {
 
 describe('DeliveryRegisterPage async states', () => {
   beforeEach(() => {
+    // jsdom has no matchMedia; the filter bar picks its layout from it.
+    installMatchMedia(DEVICES.desktopWide);
     apiFetchMock.mockReset();
+  });
+
+  it('collapses the scoping filters behind one button on a phone', async () => {
+    installMatchMedia(DEVICES.phonePortrait);
+    respondWith(() => makeResponse());
+    renderPage();
+
+    expect(await screen.findByText('32 MPa concrete')).toBeInTheDocument();
+    // Supplier search stays inline; lot-link/docket/date move into the sheet.
+    expect(screen.getByPlaceholderText('Search supplier')).toBeVisible();
+    expect(screen.queryByLabelText('Lot link')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    const sheet = screen.getByRole('dialog', { name: /filter deliveries/i });
+    await userEvent.selectOptions(within(sheet).getByLabelText('Docket'), 'not_filed');
+
+    await waitFor(() => {
+      expect(registerRequestPaths().some((path) => path.includes('docket=not_filed'))).toBe(true);
+    });
+    expect(screen.getByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument();
   });
 
   it('shows a skeleton while the first page loads, with the filters disabled', async () => {

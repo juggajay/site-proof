@@ -25,7 +25,7 @@ export function DrawingRegisterHeader({
   onAddDrawing,
 }: DrawingRegisterHeaderProps) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <h1 className="text-2xl font-bold">Drawing Register</h1>
         <p className="text-muted-foreground">
@@ -37,6 +37,7 @@ export function DrawingRegisterHeader({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
+          className="h-11 flex-1 md:h-9 md:flex-none"
           onClick={onDownloadCurrentSet}
           disabled={downloadingCurrentSet || loading || hasDrawingError || !hasProjectId}
           title="Download all current (non-superseded) drawings"
@@ -52,7 +53,11 @@ export function DrawingRegisterHeader({
           {downloadingCurrentSet ? 'Downloading...' : 'Download Current Set'}
         </Button>
         {canManageDrawings && (
-          <Button onClick={onAddDrawing} disabled={loading || hasDrawingError}>
+          <Button
+            onClick={onAddDrawing}
+            className="h-11 flex-1 md:h-9 md:flex-none"
+            disabled={loading || hasDrawingError}
+          >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
@@ -78,7 +83,8 @@ interface DrawingStats {
 
 export function DrawingStatsCards({ stats }: { stats: DrawingStats }) {
   return (
-    <div className="grid grid-cols-4 gap-4">
+    // 2x2 below md: four across on a phone clipped "For Construction" mid-word.
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
       <div className="rounded-lg border bg-card p-4">
         <div className="text-2xl font-bold">{stats.total}</div>
         <div className="text-sm text-muted-foreground">Total Drawings</div>
@@ -116,13 +122,16 @@ export function DrawingFilters({
 }: DrawingFiltersProps) {
   return (
     <div className="rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-end gap-4">
+      {/* Below md the three controls stack full-width: side by side, the search
+          box was squeezed to ~60px — wide enough for "Searc". */}
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:gap-4">
         <div>
           <Label htmlFor="drawing-status-filter" className="mb-1">
             Status
           </Label>
           <NativeSelect
             id="drawing-status-filter"
+            className="h-11 md:h-9"
             value={filterStatus}
             onChange={(e) => onStatusFilterChange(e.target.value)}
           >
@@ -134,20 +143,26 @@ export function DrawingFilters({
             ))}
           </NativeSelect>
         </div>
-        <div className="flex-1">
+        <div className="md:flex-1">
           <Label htmlFor="drawing-search" className="mb-1">
             Search
           </Label>
           <Input
             id="drawing-search"
             type="text"
+            className="h-11 md:h-9"
             value={searchQuery}
             onChange={(e) => onSearchQueryChange(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}
             placeholder="Search by drawing number or title..."
           />
         </div>
-        <Button type="button" variant="secondary" onClick={onSearch}>
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-11 w-full md:h-9 md:w-auto"
+          onClick={onSearch}
+        >
           Search
         </Button>
       </div>

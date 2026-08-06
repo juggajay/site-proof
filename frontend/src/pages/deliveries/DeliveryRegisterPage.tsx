@@ -15,7 +15,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/Skeleton';
+import {
+  FilterBottomSheet,
+  FilterTriggerButton,
+  type FilterConfig,
+  type FilterValues,
+} from '@/components/mobile/FilterBottomSheet';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { apiFetch } from '@/lib/api';
 import { buildCsv } from '@/lib/csv';
 import { downloadBlob } from '@/lib/downloads';
@@ -132,16 +139,7 @@ function RegisterNotices({
   );
 }
 
-function RegisterFilterBar({
-  filters,
-  supplierDraft,
-  disabled,
-  refreshing,
-  filtersActive,
-  onSupplierDraft,
-  onFilter,
-  onClear,
-}: {
+interface RegisterFilterBarProps {
   filters: DeliveryRegisterFilters;
   supplierDraft: string;
   disabled: boolean;
@@ -150,7 +148,129 @@ function RegisterFilterBar({
   onSupplierDraft: (value: string) => void;
   onFilter: FilterChange;
   onClear: () => void;
-}) {
+}
+
+/**
+ * Phone layout: the supplier search stays inline and the four scoping filters
+ * collapse behind one button. Stacked, they were a full viewport of controls
+ * before the first delivery row — the register's whole job is to show the rows
+ * nobody has chased.
+ */
+function MobileRegisterFilterBar({
+  filters,
+  supplierDraft,
+  disabled,
+  refreshing,
+  onSupplierDraft,
+  onFilter,
+  onClear,
+}: RegisterFilterBarProps) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const sheetFilters: FilterConfig[] = [
+    {
+      type: 'select',
+      id: 'link',
+      label: 'Lot link',
+      options: [
+        { value: 'linked', label: 'Linked to a lot' },
+        { value: 'unlinked', label: 'Not linked' },
+      ],
+      value: filters.link === 'all' ? null : filters.link,
+    },
+    {
+      type: 'select',
+      id: 'docket',
+      label: 'Docket',
+      options: [
+        { value: 'filed', label: 'Docket filed' },
+        { value: 'not_filed', label: 'Not filed in CIVOS' },
+      ],
+      value: filters.docket === 'all' ? null : filters.docket,
+    },
+    {
+      type: 'date',
+      id: 'dateRange',
+      label: 'Delivered',
+      value: { start: filters.from || null, end: filters.to || null },
+    },
+  ];
+
+  const values: FilterValues = {
+    link: filters.link === 'all' ? null : filters.link,
+    docket: filters.docket === 'all' ? null : filters.docket,
+    dateRange: { start: filters.from || null, end: filters.to || null },
+  };
+
+  const applyValues = (next: FilterValues) => {
+    const dateRange = next.dateRange as { start: string | null; end: string | null } | undefined;
+    onFilter({
+      link: (next.link as DeliveryRegisterFilters['link']) || 'all',
+      docket: (next.docket as DeliveryRegisterFilters['docket']) || 'all',
+      from: dateRange?.start || '',
+      to: dateRange?.end || '',
+    });
+  };
+
+  const activeCount =
+    (filters.link === 'all' ? 0 : 1) +
+    (filters.docket === 'all' ? 0 : 1) +
+    (filters.from || filters.to ? 1 : 0);
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="flex items-center gap-3">
+        <Input
+          className="h-12 flex-1"
+          type="search"
+          placeholder="Search supplier"
+          aria-label="Search deliveries by supplier"
+          value={supplierDraft}
+          disabled={disabled}
+          onChange={(event) => onSupplierDraft(event.target.value)}
+        />
+        <FilterTriggerButton onClick={() => setSheetOpen(true)} activeCount={activeCount} />
+      </div>
+      {refreshing ? (
+        <span className="mt-2 block text-sm text-muted-foreground" role="status">
+          Refreshing…
+        </span>
+      ) : null}
+
+      <FilterBottomSheet
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title="Filter deliveries"
+        filters={sheetFilters}
+        values={values}
+        onChange={applyValues}
+        onApply={(next) => {
+          applyValues(next);
+          setSheetOpen(false);
+        }}
+        onClear={onClear}
+      />
+    </div>
+  );
+}
+
+function RegisterFilterBar(props: RegisterFilterBarProps) {
+  const isMobile = useIsMobile();
+  const {
+    filters,
+    supplierDraft,
+    disabled,
+    refreshing,
+    filtersActive,
+    onSupplierDraft,
+    onFilter,
+    onClear,
+  } = props;
+
+  if (isMobile) {
+    return <MobileRegisterFilterBar {...props} />;
+  }
+
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -393,7 +513,7 @@ export function DeliveryRegisterPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-4">
         <div>
           <h1 className="text-2xl font-bold">Delivery Register</h1>
           <p className="text-muted-foreground">
@@ -403,6 +523,7 @@ export function DeliveryRegisterPage() {
         <Button
           type="button"
           variant="outline"
+          className="h-11 w-full md:h-9 md:w-auto"
           disabled={deliveries.length === 0}
           onClick={handleExport}
         >

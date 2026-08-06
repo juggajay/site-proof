@@ -1,7 +1,8 @@
 import { Route, Routes } from 'react-router-dom';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
+import { DEVICES, installMatchMedia } from '@/test/stubs/matchMedia';
 import { apiFetch, authFetch } from '@/lib/api';
 import { DocumentsPage } from './DocumentsPage';
 
@@ -34,6 +35,8 @@ function renderDocumentsPage(initialEntry: string) {
 
 describe('DocumentsPage', () => {
   beforeEach(() => {
+    // jsdom has no matchMedia; the filter panel picks its layout from it.
+    installMatchMedia(DEVICES.desktopWide);
     projectRole = 'admin';
     documentTotal = 0;
     apiFetchMock.mockImplementation(async (path: string) => {
@@ -216,7 +219,7 @@ describe('DocumentsPage', () => {
     renderDocumentsPage('/projects/project-1/documents');
 
     await waitFor(() => {
-      expect(screen.getByText('quality: 101')).toBeInTheDocument();
+      expect(screen.getByText('Quality: 101')).toBeInTheDocument();
     });
 
     screen.getByRole('button', { name: 'Next' }).click();
@@ -225,13 +228,45 @@ describe('DocumentsPage', () => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/project-1?page=2&limit=100');
     });
 
-    screen.getByText('quality: 101').click();
+    screen.getByText('Quality: 101').click();
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith(
         '/api/documents/project-1?category=quality&page=1&limit=100',
       );
     });
+  });
+
+  it('collapses the filter set behind one button on a phone', async () => {
+    installMatchMedia(DEVICES.phonePortrait);
+    documentTotal = 1;
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
+    });
+
+    // Search stays inline; every other control is behind the trigger.
+    expect(screen.getByLabelText('Search documents by filename or caption')).toBeVisible();
+    expect(screen.queryByLabelText('Document Type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Lot')).not.toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: 'Filters' });
+    fireEvent.click(trigger);
+
+    const sheet = screen.getByRole('dialog', { name: /filter documents/i });
+    fireEvent.change(within(sheet).getByLabelText('Document Type'), {
+      target: { value: 'photo' },
+    });
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/documents/project-1?documentType=photo&page=1&limit=100',
+      );
+    });
+
+    // The trigger now carries the applied-filter count.
+    expect(screen.getByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument();
   });
 
   it('uses the backend favourites filter and resets pagination', async () => {
