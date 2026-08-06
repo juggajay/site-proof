@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
 import { PortalAccessDenied } from './portalAccess';
@@ -203,8 +204,11 @@ export function SubcontractorDocumentsPage() {
         <>
           {categories.map((category) => (
             <div key={category}>
+              {/* Same raw-enum leak as the shell's DocsScreen, same fix: the
+                  shared label helper humanises the category for display only. */}
               <h2 className="text-sm font-medium text-muted-foreground mb-2">
-                {category} ({groupedDocs[category].length})
+                {formatStatusLabel(category, { fallback: 'Other' })} ({groupedDocs[category].length}
+                )
               </h2>
               <div className="space-y-2">
                 {groupedDocs[category].map((doc) => (

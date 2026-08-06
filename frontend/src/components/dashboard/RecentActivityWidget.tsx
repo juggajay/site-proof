@@ -1,6 +1,7 @@
 import { Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatDateTime } from '@/lib/utils';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 export interface DashboardRecentActivity {
   id: string;
@@ -20,6 +21,19 @@ function formatActivityTimestamp(timestamp: string): string {
     return 'Unknown time';
   }
   return formatDateTime(date);
+}
+
+/**
+ * The feed's descriptions are built server-side as `Lot LOT-004 status:
+ * not_started` (backend `routes/dashboard/statsRoute.ts`), so the raw enum
+ * reached the field verbatim. Humanise it through the shared label helper at
+ * the display layer — the stored value is untouched.
+ */
+function humaniseStatusSuffix(description: string): string {
+  return description.replace(
+    /status:\s*(\S+)\s*$/,
+    (_match, status: string) => `status: ${formatStatusLabel(status)}`,
+  );
 }
 
 function getSafeActivityLink(link: string | undefined): string | null {
@@ -43,6 +57,7 @@ export function RecentActivityWidget({ activities }: RecentActivityWidgetProps) 
         ) : (
           activities.map((activity) => {
             const activityLink = getSafeActivityLink(activity.link);
+            const description = humaniseStatusSuffix(activity.description);
 
             return (
               <div key={activity.id} className="flex items-start justify-between gap-3 px-4 py-3">
@@ -51,10 +66,10 @@ export function RecentActivityWidget({ activities }: RecentActivityWidgetProps) 
                     to={activityLink}
                     className="text-sm leading-relaxed text-foreground hover:text-primary hover:underline"
                   >
-                    {activity.description}
+                    {description}
                   </Link>
                 ) : (
-                  <p className="text-sm leading-relaxed text-foreground">{activity.description}</p>
+                  <p className="text-sm leading-relaxed text-foreground">{description}</p>
                 )}
                 <p className="mt-0.5 flex-shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
                   {formatActivityTimestamp(activity.timestamp)}

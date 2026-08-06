@@ -203,34 +203,39 @@ function AssignmentRow({ assignment, projectName, ownerName, now }: AssignmentRo
   return (
     <Link
       to={safeInternalHref(assignment.primaryAction.href)}
-      className="flex items-center gap-3 rounded-md border border-transparent p-3 transition-colors hover:border-border hover:bg-muted"
+      className="flex flex-col gap-2 rounded-md border border-transparent p-3 transition-colors hover:border-border hover:bg-muted sm:flex-row sm:items-center sm:gap-3"
     >
-      <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+        <Icon
+          className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground sm:mt-0"
+          aria-hidden="true"
+        />
 
-      <div className="min-w-0 flex-1">
-        {/* Line 1 — icon + title + severity chip. */}
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">{assignment.title}</span>
-          <span className={cn(CHIP_CLASS, 'flex-shrink-0', SEVERITY_CHIP[assignment.severity])}>
-            {SEVERITY_LABEL[assignment.severity]}
-          </span>
+        <div className="min-w-0 flex-1">
+          {/* Line 1 — the title, and on a phone nothing else. The chips used to
+              share this row, which truncated the identifier to "NCR N…" on a
+              narrow screen; below sm they stack onto the chip row instead. */}
+          <div className="truncate text-sm font-medium text-foreground">{assignment.title}</div>
+          {/* Line 2 — two structured fields plus the reason code. NEVER prose: that
+              is what keeps every row the same height even with the richer-card
+              exception granted (spec §6.1). */}
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            <span className="font-mono text-[10px] uppercase tracking-wide">
+              {assignment.assignee.kind}
+            </span>{' '}
+            {ownerName}
+            {projectName ? <> &middot; {projectName}</> : null} &middot;{' '}
+            {/* L13 — the raw code (`hold_point_overdue`) used to render here in
+                font-mono. Through the shared label helper it reads as English. */}
+            <span>{formatStatusLabel(assignment.reasonCode)}</span>
+          </p>
         </div>
-        {/* Line 2 — two structured fields plus the reason code. NEVER prose: that
-            is what keeps every row the same height even with the richer-card
-            exception granted (spec §6.1). */}
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          <span className="font-mono text-[10px] uppercase tracking-wide">
-            {assignment.assignee.kind}
-          </span>{' '}
-          {ownerName}
-          {projectName ? <> &middot; {projectName}</> : null} &middot;{' '}
-          {/* L13 — the raw code (`hold_point_overdue`) used to render here in
-              font-mono. Through the shared label helper it reads as English. */}
-          <span>{formatStatusLabel(assignment.reasonCode)}</span>
-        </p>
       </div>
 
-      <div className="flex flex-shrink-0 items-center gap-3">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+        <span className={cn(CHIP_CLASS, SEVERITY_CHIP[assignment.severity])}>
+          {SEVERITY_LABEL[assignment.severity]}
+        </span>
         <span className={cn(CHIP_CLASS, 'font-mono tabular-nums', time.className)}>
           {time.label}
         </span>

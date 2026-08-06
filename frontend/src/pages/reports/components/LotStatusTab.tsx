@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
+import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import type { LotStatusReport } from '../types';
 import { STATUS_COLORS, STATUS_LABELS } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
@@ -179,9 +180,11 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-3">By Activity Type</h3>
           <div className="flex flex-wrap gap-2">
+            {/* The keys are canonical activity slugs (`earthworks_general`);
+                the taxonomy helper owns their display names. */}
             {Object.entries(report.activityCounts).map(([activity, count]) => (
               <span key={activity} className="px-3 py-1 bg-muted rounded-full text-sm">
-                {activity}: <strong>{count}</strong>
+                {formatActivityLabel(activity) || activity}: <strong>{count}</strong>
               </span>
             ))}
           </div>
@@ -220,7 +223,9 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {lot.description || '-'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{lot.activityType}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                    {formatActivityLabel(lot.activityType) || lot.activityType}
+                  </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {lot.chainageStart != null && lot.chainageEnd != null
                       ? `${lot.chainageStart} - ${lot.chainageEnd}`
