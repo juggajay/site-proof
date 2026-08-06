@@ -11,6 +11,7 @@ import { type Alert, type AlertSeverity, type AlertType } from './notifications/
 import { getNotificationTiming, sendNotificationIfEnabled } from './notifications/delivery.js';
 import { notificationAlertsRouter } from './notifications/alerts.js';
 import { notificationUserRouter } from './notifications/userRoutes.js';
+import { notificationGroupedRouter } from './notifications/groupedRoutes.js';
 import { notificationEmailRouter } from './notifications/emailRoutes.js';
 import { notificationDiaryReminderRouter } from './notifications/diaryReminderRoutes.js';
 import { createMentionNotifications } from './notifications/mentions.js';
@@ -102,6 +103,11 @@ notificationsRouter.use(notificationDiaryReminderRouter);
 // mounted here after the route-wide requireAuth above so they inherit auth
 // (mirrors the diary/ and dockets/ child router pattern). Paths are unchanged.
 notificationsRouter.use(notificationAlertsRouter);
+
+// Triaged, repeat-collapsed read endpoint (GET /grouped). A static path, so it
+// is mounted before the user router's dynamic routes. It reuses the user
+// router's visibility rule and does not change any existing endpoint.
+notificationsRouter.use(notificationGroupedRouter);
 
 // Core authenticated user-notification routes (list, unread-count, mark-read,
 // mark-all-read, delete) live in a child router (notifications/userRoutes.ts).
