@@ -6,7 +6,6 @@ import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { getAuthToken } from '@/lib/auth';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
-import { Button } from '@/components/ui/button';
 import {
   extractErrorMessage,
   extractErrorDetails,
@@ -14,7 +13,6 @@ import {
   handleApiError,
 } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
-import { LazyHoldPointsChart } from '@/components/charts/LazyCharts';
 import { formatDateKey } from '@/lib/localDate';
 import { logError } from '@/lib/logger';
 
@@ -45,8 +43,13 @@ interface UploadedEvidenceDocument {
 }
 
 // Extracted components
-import { HoldPointSummaryCards } from './components/HoldPointStatusFilter';
-import { HoldPointsLoadErrorAlert, HoldPointsPageHeader } from './HoldPointsPageSections';
+import { HoldPointSummaryLine } from './components/HoldPointStatusFilter';
+import {
+  HoldPointsBatchSelectionBar,
+  HoldPointsLoadErrorAlert,
+  HoldPointsPageHeader,
+  HoldPointsTrends,
+} from './HoldPointsPageSections';
 import { HoldPointsTable } from './components/HoldPointsTable';
 import { HoldPointsMobileList } from './components/HoldPointsMobileList';
 import { formatHoldPointDate, getStatusLabel } from './components/holdPointTableUtils';
@@ -302,7 +305,9 @@ export function HoldPointsPage() {
       if (field === sortField) {
         updateFilters({ sort: field, dir: sortDirection === 'asc' ? 'desc' : 'asc' });
       } else {
-        updateFilters({ sort: field, dir: 'asc' });
+        // Ageing opens on the longest-waiting hold point — the reason anyone
+        // clicks it. Every other column opens ascending (lot order, oldest date).
+        updateFilters({ sort: field, dir: field === 'waiting' ? 'desc' : 'asc' });
       }
     },
     [sortField, sortDirection, updateFilters],
@@ -686,10 +691,26 @@ export function HoldPointsPage() {
     [updateFilters],
   );
 
+  const handleOpenBatchRequestModal = useCallback(() => {
+    setBatchRequestError(null);
+    setShowBatchRequestModal(true);
+  }, []);
+
+  const selectedLotNumber =
+    selectedLotId === 'all'
+      ? null
+      : (lotOptions.find((lot) => lot.lotId === selectedLotId)?.lotNumber ?? null);
+
   // --- Render ---
 
+  const registerReady = !loading && !loadError && holdPoints.length > 0;
+
+  // Band order is the whole point of this layout: filters, then one line of
+  // counts, then rows. Everything that used to sit between the filters and the
+  // first row — the KPI cards, the permanent batch bar, two 260px charts — is
+  // now either a line, contextual, or below the register.
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <HoldPointsPageHeader
         holdPointCount={holdPoints.length}
         isMobile={isMobile}
@@ -703,75 +724,41 @@ export function HoldPointsPage() {
         onExportCSV={handleExportCSV}
       />
 
-      <AskClancyChips
-        prompts={[
-          {
-            label: 'Hold point summary',
-            question:
-              'Summarise the hold points on this project — how many are open, released, and ready to request?',
-          },
-          {
-            label: 'What needs chasing?',
-            question: 'Which hold points have been notified but not released?',
-          },
-        ]}
-      />
-
       <HoldPointsLoadErrorAlert loadError={loadError} onRetry={handleRetryLoad} />
 
-      {!loading && !loadError && holdPoints.length > 0 && <HoldPointSummaryCards stats={stats} />}
+      {/* Counts and the copilot chips share one line — two former bands, and
+          neither is worth its own row of vertical space above the register. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {registerReady && (
+          <HoldPointSummaryLine
+            stats={stats}
+            statusFilter={statusFilter}
+            onStatusFilterChange={handleStatusFilterChange}
+          />
+        )}
+        <AskClancyChips
+          prompts={[
+            {
+              label: 'Hold point summary',
+              question:
+                'Summarise the hold points on this project — how many are open, released, and ready to request?',
+            },
+            {
+              label: 'What needs chasing?',
+              question: 'Which hold points have been notified but not released?',
+            },
+          ]}
+        />
+      </div>
 
-      {!loading && !loadError && holdPoints.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-medium">Batch release request</div>
-            <div className="text-sm text-muted-foreground">
-              {selectedLotId === 'all'
-                ? 'Select one lot to request multiple hold point releases together.'
-                : `${batchEligibleHoldPoints.length} pending hold point${batchEligibleHoldPoints.length === 1 ? '' : 's'} in this lot can be sent for superintendent review.`}
-            </div>
-          </div>
-          {/* 44px touch targets below md — these are the batch controls a
-              foreman taps with gloves on. */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 sm:h-9 sm:flex-none"
-              onClick={handleSelectAllBatchEligible}
-              disabled={batchEligibleHoldPoints.length === 0}
-            >
-              Select all pending
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 sm:h-9 sm:flex-none"
-              onClick={handleClearBatchSelection}
-              disabled={selectedBatchHoldPointIds.size === 0}
-            >
-              Clear
-            </Button>
-            <Button
-              type="button"
-              className="h-11 w-full sm:h-9 sm:w-auto"
-              onClick={() => {
-                setBatchRequestError(null);
-                setShowBatchRequestModal(true);
-              }}
-              disabled={selectedBatchHoldPoints.length === 0}
-            >
-              Request selected ({selectedBatchHoldPoints.length})
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {!isMobile && !loading && !loadError && holdPoints.length > 0 && (
-        <LazyHoldPointsChart
-          releasesOverTime={chartData.releasesOverTime}
-          avgTimeToRelease={chartData.avgTimeToRelease}
-          releasedCount={holdPoints.filter((hp) => hp.status === 'released').length}
+      {registerReady && (
+        <HoldPointsBatchSelectionBar
+          eligibleCount={batchEligibleHoldPoints.length}
+          selectedCount={selectedBatchHoldPoints.length}
+          selectedLotNumber={selectedLotNumber}
+          onSelectAll={handleSelectAllBatchEligible}
+          onClear={handleClearBatchSelection}
+          onRequestSelected={handleOpenBatchRequestModal}
         />
       )}
 
@@ -822,6 +809,13 @@ export function HoldPointsPage() {
             onClearFilter={handleClearFilter}
           />
         ))}
+
+      {!isMobile && registerReady && (
+        <HoldPointsTrends
+          chartData={chartData}
+          releasedCount={holdPoints.filter((hp) => hp.status === 'released').length}
+        />
+      )}
 
       {showRequestModal && selectedHoldPoint && (
         <RequestReleaseModal

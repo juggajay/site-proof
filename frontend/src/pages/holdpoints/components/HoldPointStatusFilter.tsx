@@ -84,38 +84,73 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
   );
 });
 
-interface SummaryCardsProps {
+interface SummaryLineProps {
   stats: HoldPointStats;
+  statusFilter: StatusFilter;
+  onStatusFilterChange: (filter: StatusFilter) => void;
 }
 
-export const HoldPointSummaryCards = React.memo(function HoldPointSummaryCards({
+/**
+ * The register's counts in one quiet line, above the first row instead of in
+ * front of it. The four KPI cards this replaces cost ~90px and read as
+ * "Total 1728 / Pending 1727" — a near-duplicate pair plus two zeros. Only the
+ * counts that name work survive, each one a shortcut into its filter view;
+ * a zero count is not a thing to do, so it does not render.
+ */
+export const HoldPointSummaryLine = React.memo(function HoldPointSummaryLine({
   stats,
-}: SummaryCardsProps) {
+  statusFilter,
+  onStatusFilterChange,
+}: SummaryLineProps) {
+  const counts = [
+    { filter: 'pending' as const, label: 'pending', value: stats.pending },
+    { filter: 'notified' as const, label: 'awaiting release', value: stats.notified },
+  ].filter((count) => count.value > 0);
+
+  if (counts.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="hp-summary-line">
+        {stats.total > 0
+          ? `All ${stats.total} hold points released.`
+          : 'No hold points awaiting action.'}
+      </p>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div className="rounded-lg border bg-card p-4">
-        <div className="text-sm text-muted-foreground">Total HPs</div>
-        <div className="text-2xl font-bold mt-1">{stats.total}</div>
-      </div>
-      <div className="rounded-lg border bg-card p-4">
-        <div className="text-sm text-muted-foreground">Pending</div>
-        <div className="text-2xl font-bold mt-1 text-muted-foreground">{stats.pending}</div>
-      </div>
-      <div className="rounded-lg border bg-card p-4">
-        <div className="text-sm text-muted-foreground">Awaiting Release</div>
-        <div className="text-2xl font-bold mt-1 text-warning">
-          {stats.notified}
-          {stats.overdue > 0 && (
-            <span className="ml-2 text-sm font-normal text-destructive">
-              ({stats.overdue} overdue)
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="rounded-lg border bg-card p-4">
-        <div className="text-sm text-muted-foreground">Released This Week</div>
-        <div className="text-2xl font-bold mt-1 text-foreground">{stats.releasedThisWeek}</div>
-      </div>
-    </div>
+    <p
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground"
+      data-testid="hp-summary-line"
+    >
+      {counts.map((count, index) => (
+        <span key={count.filter} className="flex items-center gap-x-2">
+          {index > 0 && <span aria-hidden="true">&middot;</span>}
+          <button
+            type="button"
+            onClick={() =>
+              onStatusFilterChange(statusFilter === count.filter ? 'all' : count.filter)
+            }
+            aria-pressed={statusFilter === count.filter}
+            className={`rounded underline-offset-2 hover:underline ${
+              statusFilter === count.filter ? 'font-medium text-foreground' : ''
+            }`}
+          >
+            <span className="font-medium text-foreground">{count.value}</span> {count.label}
+          </button>
+        </span>
+      ))}
+      {stats.overdue > 0 && (
+        <span className="flex items-center gap-x-2">
+          <span aria-hidden="true">&middot;</span>
+          <span className="font-medium text-destructive">{stats.overdue} overdue</span>
+        </span>
+      )}
+      {stats.releasedThisWeek > 0 && (
+        <span className="flex items-center gap-x-2">
+          <span aria-hidden="true">&middot;</span>
+          <span>{stats.releasedThisWeek} released this week</span>
+        </span>
+      )}
+    </p>
   );
 });

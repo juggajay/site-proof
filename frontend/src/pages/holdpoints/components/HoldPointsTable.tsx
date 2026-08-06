@@ -7,6 +7,7 @@ import {
   formatHoldPointDate,
   getStatusBadge,
   getStatusLabel,
+  getWaitingDays,
   isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
@@ -191,6 +192,14 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
               Status
             </SortableHeader>
             <SortableHeader
+              field="waiting"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Days Waiting
+            </SortableHeader>
+            <SortableHeader
               field="notified"
               sortField={sortField}
               sortDirection={sortDirection}
@@ -222,7 +231,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
           {virtualItems.length > 0 && (
             <tr>
               <td
-                colSpan={8}
+                colSpan={9}
                 style={{ height: `${virtualItems[0]?.start ?? 0}px`, padding: 0, border: 'none' }}
               />
             </tr>
@@ -255,7 +264,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
           {virtualItems.length > 0 && (
             <tr>
               <td
-                colSpan={8}
+                colSpan={9}
                 style={{
                   height: `${virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)}px`,
                   padding: 0,
@@ -310,6 +319,7 @@ function HoldPointRow({
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
   const releaseIdentity = hp.releasedAt ? getReleaseIdentityParts(hp) : null;
+  const waitingDays = getWaitingDays(hp);
 
   return (
     <tr
@@ -325,7 +335,15 @@ function HoldPointRow({
           disabled={!canSelectForBatch}
           onChange={() => onToggleBatchSelection(hp)}
           aria-label={`Select ${hp.description} for batch release`}
-          className="h-4 w-4 rounded border-border"
+          // A disabled tick with no explanation reads as broken. Batch release
+          // goes to one superintendent for one lot, so only pending hold points
+          // in the filtered lot can join a batch.
+          title={
+            canSelectForBatch
+              ? undefined
+              : 'Filter to this lot to batch-request its pending hold points'
+          }
+          className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
         />
       </td>
       <td className="px-4 py-3 font-medium">
@@ -343,6 +361,11 @@ function HoldPointRow({
         <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(hp.status)}`}>
           {getStatusLabel(hp.status)}
         </span>
+      </td>
+      <td
+        className={`px-4 py-3 text-sm tabular-nums ${overdue || noticeExpired ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+      >
+        {waitingDays === null ? '-' : `${waitingDays}d`}
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">
         {hp.notificationSentAt ? (

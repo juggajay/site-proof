@@ -49,6 +49,32 @@ export function isNoticeExpired(
   return getCalendarDaysSince(hp.notificationSentAt, referenceDate) >= minimumNoticeDays;
 }
 
+/**
+ * The instant this hold point started waiting on someone: the release request
+ * going out (`notificationSentAt`), else the hold point appearing on the
+ * register (`createdAt`). Null once released — nobody is waiting any more.
+ * Sorting compares these timestamps directly; ordering by them is identical to
+ * ordering by whole days waited, without an Intl call per comparison.
+ */
+export function getWaitingSince(hp: HoldPoint): string | null {
+  if (hp.status === 'released') return null;
+  return hp.notificationSentAt || hp.createdAt || null;
+}
+
+/**
+ * Whole calendar days (Australia/Sydney) this hold point has been waiting.
+ * Null once released. This is the register's ageing column: the number a
+ * quality manager sorts by to find what has been sitting the longest.
+ */
+export function getWaitingDays(
+  hp: HoldPoint,
+  referenceDate: Date | string = new Date(),
+): number | null {
+  const since = getWaitingSince(hp);
+  if (!since) return null;
+  return Math.max(0, getCalendarDaysSince(since, referenceDate));
+}
+
 export function getStatusBadge(status: string): string {
   const styles: Record<string, string> = {
     pending: 'bg-muted text-muted-foreground',
