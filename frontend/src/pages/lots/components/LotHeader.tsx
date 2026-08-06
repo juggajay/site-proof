@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Link2, Check, RefreshCw, Printer, MoreVertical, Pencil } from 'lucide-react';
+import { Link2, Check, RefreshCw, MoreVertical, Pencil } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { LotQRCode } from '@/components/lots/LotQRCode';
 import { AskClancyButton } from '@/components/copilot/AskClancy';
@@ -38,7 +38,6 @@ export interface LotHeaderProps {
   removeAssignmentPending: boolean;
   // Handlers
   onCopyLink: () => void;
-  onPrint: () => void;
   onEdit: () => void;
   onOverrideStatus: () => void;
   onAddSubcontractor: () => void;
@@ -84,7 +83,6 @@ export function LotHeader({
   assignments,
   removeAssignmentPending,
   onCopyLink,
-  onPrint,
   onEdit,
   onOverrideStatus,
   onAddSubcontractor,
@@ -167,15 +165,6 @@ export function LotHeader({
       label: linkCopied ? 'Copied!' : 'Copy Link',
       handler: () => {
         onCopyLink();
-        setMoreOpen(false);
-      },
-    },
-    {
-      key: 'print',
-      icon: <Printer className="h-5 w-5" />,
-      label: 'Print',
-      handler: () => {
-        onPrint();
         setMoreOpen(false);
       },
     },

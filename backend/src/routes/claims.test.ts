@@ -3483,6 +3483,52 @@ describe('Progress Claims API', () => {
       }
     });
 
+    // The evidence PDF prints "Status: Conformed" beside the checklist
+    // completion count. On a force-conformed lot that pairing is a client-trust
+    // torpedo unless the override travels with it, so the payload must carry
+    // the same fields the lot page's "Conformance accepted by override" line
+    // reads.
+    it('exposes force-conformance context so the PDF can explain a Conformed status', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.lots[0].conformanceOverriddenAt).toBeNull();
+      expect(res.body.lots[0].conformanceOverrideReason).toBeNull();
+
+      const overriddenAt = new Date('2025-02-25T02:00:00.000Z');
+      await prisma.lot.update({
+        where: { id: evidenceLotId },
+        data: {
+          conformanceOverriddenAt: overriddenAt,
+          conformanceOverriddenById: userId,
+          conformanceOverrideReason: 'Client accepted as-built deviation',
+        },
+      });
+
+      try {
+        const overridden = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(overridden.status).toBe(200);
+        expect(overridden.body.lots[0].conformanceOverriddenAt).toBe(overriddenAt.toISOString());
+        expect(overridden.body.lots[0].conformanceOverrideReason).toBe(
+          'Client accepted as-built deviation',
+        );
+      } finally {
+        await prisma.lot.update({
+          where: { id: evidenceLotId },
+          data: {
+            conformanceOverriddenAt: null,
+            conformanceOverriddenById: null,
+            conformanceOverrideReason: null,
+          },
+        });
+      }
+    });
+
     it('preserves a zero claimed percentage in the evidence package', async () => {
       const claimedLot = await prisma.claimedLot.findFirstOrThrow({
         where: { claimId: evidenceClaimId },

@@ -1,4 +1,4 @@
-import { LayoutGrid, Map as MapIcon, MapPin, MoreHorizontal, Printer } from 'lucide-react';
+import { LayoutGrid, Map as MapIcon, MapPin, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -75,17 +75,19 @@ interface LotsPageHeaderProps {
   viewMode: ViewMode;
   onToggleViewMode: (mode: ViewMode) => void;
   onOpenExport: () => void;
-  onPrintRegister: () => void;
   onOpenImport: () => void;
   onOpenBulkWizard: () => void;
   onOpenCreate: () => void;
 }
 
 /**
- * Lot register page header. The register-level tools (export, print, import,
- * bulk create) live behind an overflow menu so "Create Lot" reads as the single
+ * Lot register page header. The register-level tools (export, import, bulk
+ * create) live behind an overflow menu so "Create Lot" reads as the single
  * primary action instead of one of five equal-weight buttons. Bulk verbs live in
  * LotSelectionBar, above the rows they act on.
+ *
+ * No print action: screen-print is retired product-wide — every paper need is
+ * served by a generated PDF, not by printing the web page.
  */
 export function LotsPageHeader({
   isMobile,
@@ -94,7 +96,6 @@ export function LotsPageHeader({
   viewMode,
   onToggleViewMode,
   onOpenExport,
-  onPrintRegister,
   onOpenImport,
   onOpenBulkWizard,
   onOpenCreate,
@@ -128,9 +129,6 @@ export function LotsPageHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={onOpenExport}>Export CSV</DropdownMenuItem>
-              <DropdownMenuItem onSelect={onPrintRegister}>
-                <Printer className="h-4 w-4" /> Print Register
-              </DropdownMenuItem>
               {showImportTools && (
                 <>
                   <DropdownMenuItem onSelect={onOpenImport}>Import Register</DropdownMenuItem>

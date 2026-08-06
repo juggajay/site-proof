@@ -8,11 +8,11 @@ import {
   ZoomOut,
   X,
   ExternalLink,
-  Printer,
   Download,
 } from 'lucide-react';
 import { formatDateKey } from '@/lib/localDate';
 import { devWarn } from '@/lib/logger';
+import { toast } from '@/components/ui/toaster';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import {
   assignLanes,
@@ -97,13 +97,9 @@ export function LinearMapView({ lots, onLotClick, areas = [] }: LinearMapViewPro
   const handlePanLeft = () => setPanOffset(Math.max(panOffset - 20, 0));
   const handlePanRight = () => setPanOffset(Math.min(panOffset + 20, (zoomLevel - 1) * 100));
 
-  // Feature #155 - Print handler
-  const handlePrint = useCallback(() => {
-    setPopup(null); // Close any open popup first
-    window.print();
-  }, []);
-
-  // Feature #155 - Export as PNG handler
+  // Feature #155 - Export as PNG handler. There is no print sibling: the map has
+  // no print stylesheet of its own, so window.print() rendered the surrounding
+  // page chrome rather than a map sheet. PNG is the map's take-away.
   const handleExport = useCallback(async () => {
     setPopup(null); // Close any open popup first
 
@@ -121,8 +117,12 @@ export function LinearMapView({ lots, onLotClick, areas = [] }: LinearMapViewPro
       link.href = dataUrl;
       link.click();
     } catch (error) {
-      devWarn('Export failed, falling back to print:', error);
-      window.print();
+      devWarn('Linear map PNG export failed:', error);
+      toast({
+        title: 'Could not export the map',
+        description: 'The map image could not be generated. Try again.',
+        variant: 'error',
+      });
     }
   }, []);
 
@@ -180,16 +180,8 @@ export function LinearMapView({ lots, onLotClick, areas = [] }: LinearMapViewPro
           >
             <ChevronRight className="h-4 w-4" />
           </button>
-          {/* Feature #155 - Print/Export buttons */}
+          {/* Feature #155 - Export button */}
           <div className="w-px h-5 bg-border mx-1" />
-          <button
-            onClick={handlePrint}
-            className="p-1.5 rounded hover:bg-muted"
-            title="Print map"
-            data-testid="linear-map-print"
-          >
-            <Printer className="h-4 w-4" />
-          </button>
           <button
             onClick={handleExport}
             className="p-1.5 rounded hover:bg-muted"

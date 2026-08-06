@@ -152,6 +152,46 @@ export interface ITPCompletion {
   isVerified: boolean;
   verifiedAt: string | null;
   verifiedBy: { fullName: string | null; email: string } | null;
+  // Printed-checklist extras (T5). Optional so every existing caller and
+  // fixture is unaffected; the checklist PDF renders the authority-release and
+  // NCR cells only when the payload carries them.
+  holdPointRelease?: {
+    releasedByName: string | null;
+    releasedByOrg?: string | null;
+    releaseMethod?: string | null;
+    releasedAt: string | null;
+  } | null;
+  linkedNcr?: { ncrNumber: string } | null;
+}
+
+/** Electronic (as-recorded) vs Field Complete (wet-ink) printed checklist. */
+export type ChecklistPdfVariant = 'electronic' | 'field';
+
+/**
+ * Input for the printed ITP checklist. Deliberately a subset of what the lot
+ * detail page already holds — `{ lot, project, itpInstance }` maps straight
+ * onto it, so no new fetch is needed to print.
+ */
+export interface ChecklistPdfData extends PDFBrandableData {
+  project: {
+    name: string;
+    projectNumber?: string | null;
+  };
+  lot: {
+    lotNumber: string;
+    description?: string | null;
+    activityType?: string | null;
+    chainageStart?: number | null;
+    chainageEnd?: number | null;
+    layer?: string | null;
+    areaZone?: string | null;
+  };
+  itp: {
+    templateName: string;
+    specificationReference?: string | null;
+    checklistItems: ITPChecklistItem[];
+    completions: ITPCompletion[];
+  };
 }
 
 export interface TestResult {
@@ -481,6 +521,12 @@ export interface ClaimEvidencePackageData extends PDFBrandableData {
     status: string;
     conformedAt: string | null;
     conformedBy: { name: string; email: string } | null;
+    // Force-conformance context (owner/admin override). Optional so older
+    // payloads and fixtures are unaffected; when present the pack must say so
+    // beside the status rather than let "Conformed" sit unexplained above an
+    // incomplete checklist.
+    conformanceOverriddenAt?: string | null;
+    conformanceOverrideReason?: string | null;
     claimAmount: number;
     percentComplete: number;
     // Physical position (%), no dollars. Optional so older payloads/tests fall

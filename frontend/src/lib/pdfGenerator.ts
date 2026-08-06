@@ -1,3 +1,4 @@
+export { downloadChecklistPdf } from './pdf/checklistPdf';
 export { generateConformanceReportPDF } from './pdf/conformanceReportPdf';
 export { generateDashboardPDF } from './pdf/dashboardPdf';
 export { generateDocketDetailPDF } from './pdf/docketDetailPdf';
@@ -8,6 +9,8 @@ export { generateNCRDetailPDF } from './pdf/ncrDetailPdf';
 export { generateTestCertificatePDF } from './pdf/testCertificatePdf';
 export { defaultConformanceOptions, defaultHPPackageOptions } from './pdf/types';
 export type {
+  ChecklistPdfData,
+  ChecklistPdfVariant,
   ClaimEvidencePackageData,
   ClaimPackageOptions,
   ConformanceCoverage,

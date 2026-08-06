@@ -258,6 +258,13 @@ export function createClaimEvidenceRouter({
                   email: lot.conformedBy.email,
                 }
               : null,
+            // Force-conformance context. Without it the pack prints
+            // "Status: Conformed" directly above a low checklist-completion
+            // count with nothing to explain the gap — the client reads that as
+            // either a lie or a broken system. Same source fields the lot
+            // page's "Conformance accepted by override" line reads.
+            conformanceOverriddenAt: lot.conformanceOverriddenAt?.toISOString() || null,
+            conformanceOverrideReason: lot.conformanceOverrideReason || null,
             claimAmount: claimedLot.amountClaimed ? Number(claimedLot.amountClaimed) : 0,
             percentComplete:
               claimedLot.percentageComplete === null ? 100 : Number(claimedLot.percentageComplete),

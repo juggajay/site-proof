@@ -17,6 +17,14 @@ import * as fixtures from './fixtures';
 export const PINNED_INSTANT = new Date('2026-07-31T04:00:00.000Z');
 
 export const generatorRenders: Record<string, () => Promise<void>> = {
+  checklistElectronic: () =>
+    generators.downloadChecklistPdf(
+      fixtures.mixedStateChecklistFixture,
+      'electronic',
+      PINNED_INSTANT,
+    ),
+  checklistField: () =>
+    generators.downloadChecklistPdf(fixtures.mixedStateChecklistFixture, 'field', PINNED_INSTANT),
   claimEvidencePackage: () =>
     generators.generateClaimEvidencePackagePDF(
       fixtures.submittedClaimEvidencePackageFixture,

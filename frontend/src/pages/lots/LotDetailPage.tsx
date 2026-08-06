@@ -394,7 +394,6 @@ export function LotDetailPage() {
         assignments={assignments}
         removeAssignmentPending={removeAssignmentPending}
         onCopyLink={copyLotLink}
-        onPrint={() => window.print()}
         onEdit={() =>
           navigate(
             `/projects/${encodeURIComponent(projectId || '')}/lots/${encodeURIComponent(lotId || '')}/edit`,

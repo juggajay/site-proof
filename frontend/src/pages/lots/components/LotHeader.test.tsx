@@ -106,7 +106,6 @@ function renderHeader(overrides: Partial<LotHeaderProps> = {}) {
     assignments: [],
     removeAssignmentPending: false,
     onCopyLink: vi.fn(),
-    onPrint: vi.fn(),
     onEdit: vi.fn(),
     onOverrideStatus: vi.fn(),
     onAddSubcontractor: vi.fn(),
@@ -148,7 +147,8 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
     // now behind the overflow.
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+    // Screen-print is retired product-wide; paper comes from generated PDFs.
+    expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
     expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
 
@@ -272,7 +272,7 @@ describe('LotHeader readiness primary action', () => {
     expect(onReadinessAction).toHaveBeenCalledWith('itp', 'unreleased_hold_points');
   });
 
-  it('demotes Edit Lot, Copy Link, Print and Override into the overflow when a primary exists', () => {
+  it('demotes Edit Lot, Copy Link and Override into the overflow when a primary exists', () => {
     renderHeader({
       canManageLot: true,
       canConformLots: true,
@@ -286,7 +286,7 @@ describe('LotHeader readiness primary action', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Override Workflow Status' })).toBeInTheDocument();
   });
 
@@ -426,7 +426,7 @@ describe('LotHeader mobile overflow menu', () => {
     // Primary Edit Lot button visible since canManageLot=true
     expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
 
-    // Copy Link / Print / Override should NOT be inline on mobile
+    // Copy Link / Override should NOT be inline on mobile (Print is gone entirely)
     expect(screen.queryByRole('button', { name: 'Copy Link' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
     expect(
@@ -453,7 +453,7 @@ describe('LotHeader mobile overflow menu', () => {
 
     // Sheet renders its action rows (no legacy Assign Subcontractor row).
     expect(screen.getByText('Copy Link')).toBeInTheDocument();
-    expect(screen.getByText('Print')).toBeInTheDocument();
+    expect(screen.queryByText('Print')).not.toBeInTheDocument();
     expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();
     expect(screen.getByText('Override Workflow Status')).toBeInTheDocument();
   });
@@ -468,14 +468,12 @@ describe('LotHeader mobile overflow menu', () => {
     expect(onCopyLink).toHaveBeenCalledTimes(1);
   });
 
-  it('fires onPrint handler when Print is tapped in the sheet', () => {
+  it('offers no Print action in the sheet — screen-print is retired', () => {
     mockIsMobile = true;
-    const onPrint = vi.fn();
-    renderHeader({ onPrint });
+    renderHeader({});
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByText('Print'));
-    expect(onPrint).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Print')).not.toBeInTheDocument();
   });
 
   it('fires onOverrideStatus handler from the sheet', () => {
@@ -494,9 +492,9 @@ describe('LotHeader mobile overflow menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
 
-    // Copy Link + Print present
+    // Copy Link present; Print retired
     expect(screen.getByText('Copy Link')).toBeInTheDocument();
-    expect(screen.getByText('Print')).toBeInTheDocument();
+    expect(screen.queryByText('Print')).not.toBeInTheDocument();
     // Management actions absent
     expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();
     expect(screen.queryByText('Override Workflow Status')).not.toBeInTheDocument();

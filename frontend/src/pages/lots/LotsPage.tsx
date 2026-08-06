@@ -239,7 +239,6 @@ export function LotsPage() {
         viewMode={viewMode}
         onToggleViewMode={toggleViewMode}
         onOpenExport={() => actions.setExportModalOpen(true)}
-        onPrintRegister={() => window.print()}
         onOpenImport={() => actions.setImportModalOpen(true)}
         onOpenBulkWizard={() => actions.setBulkWizardOpen(true)}
         onOpenCreate={() => actions.setCreateModalOpen(true)}
