@@ -30,6 +30,10 @@ export type ChecklistEditorItem = Pick<
   | 'pointType'
   | 'evidenceRequired'
   | 'testType'
+  // T4: the acceptance criterion is displayed on every checklist surface and
+  // printed under the row on the checklist PDF, but until now nothing in the
+  // editor could enter one — so it was blank on every customer-built template.
+  | 'acceptanceCriteria'
 >;
 
 /** Per-field change handler both modals expose to the shared checklist editor. */

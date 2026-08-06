@@ -122,6 +122,18 @@ export function TemplateChecklistEditor({
                   />
                 )}
               </div>
+              {/* The acceptance criterion this item is checked against. Printed
+                  under the row on the checklist PDF and shown on every
+                  checklist surface, so a blank one costs the field crew the
+                  spec limit they are inspecting to. */}
+              <input
+                type="text"
+                value={item.acceptanceCriteria || ''}
+                onChange={(e) => onItemChange(index, 'acceptanceCriteria', e.target.value)}
+                className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg text-sm"
+                placeholder="Acceptance criteria (e.g. 95% RDD, ±10mm of design)"
+                aria-label="Acceptance criteria"
+              />
             </div>
             {items.length > 1 && (
               <button
