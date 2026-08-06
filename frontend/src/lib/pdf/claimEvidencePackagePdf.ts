@@ -29,6 +29,20 @@ export function supportingStatementNote(state: string | null | undefined): strin
   return null;
 }
 
+/**
+ * The one line that stops "Conformed" reading as a lie on a force-conformed
+ * lot. Wording and date form are taken from the readiness item the lot page
+ * already shows (`backend/src/lib/evidenceReadiness.ts` `conformance_overridden`)
+ * so the pack and the screen never disagree. Returns null for a normally
+ * conformed lot, which is every lot on a healthy claim.
+ */
+export function conformanceOverrideNote(lot: {
+  conformanceOverriddenAt?: string | null;
+}): string | null {
+  if (!lot.conformanceOverriddenAt) return null;
+  return `Conformance accepted by override — an owner or admin force-conformed this lot on ${lot.conformanceOverriddenAt.slice(0, 10)}.`;
+}
+
 /** Physical % rendered as an integer where whole, else 2dp — no dollars. */
 function formatPct(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '-';
@@ -293,7 +307,14 @@ export async function generateClaimEvidencePackagePDF(
       doc.text((lot.activityType || 'N/A').slice(0, 25), xPos, yPos + 4);
       xPos += colWidths[1];
 
-      doc.text(formatStatusLabel(lot.status), xPos, yPos + 4);
+      // A force-conformed lot is marked here too: this table puts Status and
+      // ITP % in adjacent columns, so "Conformed" beside "0%" is the exact
+      // pairing that reads as a broken system without the asterisk.
+      doc.text(
+        `${formatStatusLabel(lot.status)}${lot.conformanceOverriddenAt ? ' *' : ''}`,
+        xPos,
+        yPos + 4,
+      );
       xPos += colWidths[2];
 
       doc.text(`${lot.summary.itpCompletionPercentage}%`, xPos, yPos + 4);
@@ -333,7 +354,23 @@ export async function generateClaimEvidencePackagePDF(
         2,
       yPos + 5,
     );
-    yPos += 15;
+    yPos += 12;
+
+    if ((data.lots ?? []).some((lot) => lot.conformanceOverriddenAt)) {
+      checkPageBreak(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 83, 9);
+      const footnote = doc.splitTextToSize(
+        '* Conformance accepted by override — an owner or admin force-conformed this lot despite outstanding prerequisites. See the lot section for the reason given.',
+        contentWidth,
+      ) as string[];
+      doc.text(footnote, margin, yPos);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      yPos += footnote.length * 4 + 1;
+    }
+    yPos += 3;
   }
 
   // ========== LOT-LEVEL SECTIONS ==========
@@ -390,6 +427,31 @@ export async function generateClaimEvidencePackagePDF(
         yPos,
       );
       yPos += 6;
+
+      // Override context sits with the status, not buried in the conformance
+      // block below, so a reader never meets "Conformed" before the caveat.
+      const overrideNote = conformanceOverrideNote(lot);
+      if (overrideNote) {
+        checkPageBreak(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(180, 83, 9);
+        doc.text(overrideNote, margin, yPos);
+        yPos += 5;
+        if (lot.conformanceOverrideReason) {
+          doc.setFont('helvetica', 'normal');
+          const reasonLines = doc.splitTextToSize(
+            `Reason given: ${lot.conformanceOverrideReason}`,
+            contentWidth,
+          ) as string[];
+          doc.text(reasonLines, margin, yPos);
+          yPos += reasonLines.length * 4;
+        }
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        yPos += 2;
+      }
 
       // Physical progress (%), no dollars — the honest three-point position the
       // Declaration promises. Falls back to the single snapshot % on old payloads.
@@ -628,6 +690,15 @@ export async function generateClaimEvidencePackagePDF(
         yPos += 4;
         if (lot.conformedBy) {
           doc.text(`By: ${lot.conformedBy.name}`, margin, yPos);
+          yPos += 4;
+        }
+        // Repeated here because a long lot section can push this block onto a
+        // later page than the status line — the caveat must travel with every
+        // place the document says "Conformed".
+        if (lot.conformanceOverriddenAt) {
+          doc.setTextColor(180, 83, 9);
+          doc.text('Accepted by override, not by meeting all prerequisites.', margin, yPos);
+          doc.setTextColor(0, 0, 0);
           yPos += 4;
         }
         yPos += 4;
