@@ -28,6 +28,7 @@ export async function capturePhotoOffline(
     completionId?: string;
     checklistItemId?: string;
     attachAs?: OfflinePhoto['attachAs'];
+    ncrEvidenceType?: string;
     documentType?: string;
     category?: string;
     caption?: string;
@@ -50,6 +51,7 @@ export async function capturePhotoOffline(
     completionId: options.completionId,
     checklistItemId: options.checklistItemId,
     attachAs: options.attachAs,
+    ncrEvidenceType: options.ncrEvidenceType,
     documentType: options.documentType ?? 'photo',
     category: options.category,
     fileName: file.name,

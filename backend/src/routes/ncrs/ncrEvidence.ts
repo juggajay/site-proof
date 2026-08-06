@@ -18,8 +18,10 @@ import {
   buildNcrEvidenceAddedResponse,
   buildNcrEvidenceAlreadyLinkedResponse,
   buildNcrEvidenceListResponse,
+  buildNcrEvidenceReclassifiedResponse,
   buildNcrEvidenceRemovedResponse,
 } from './ncrEvidenceResponses.js';
+import { NCR_EVIDENCE_PHASES } from './ncrEvidencePhase.js';
 import { isUniqueConstraintOn } from './ncrCoreValidation.js';
 import { canReadDocument } from '../documents/access.js';
 
@@ -111,6 +113,12 @@ const addEvidenceSchema = z
       });
     }
   });
+
+const reclassifyEvidenceSchema = z.object({
+  evidenceType: z.enum(NCR_EVIDENCE_PHASES, {
+    errorMap: () => ({ message: 'evidenceType must be before_photo or after_photo' }),
+  }),
+});
 
 type AddEvidenceInput = z.infer<typeof addEvidenceSchema>;
 type RequestAuthUser = NonNullable<Request['user']>;
@@ -310,6 +318,86 @@ ncrEvidenceRouter.get(
     });
 
     res.json(buildNcrEvidenceListResponse(evidence));
+  }),
+);
+
+// PATCH /api/ncrs/:id/evidence/:evidenceId - Reclassify evidence between before/after
+//
+// The escape hatch for a mistagged photo. Deliberately allowed during
+// 'verification' (unlike DELETE): that is exactly when a verifier discovers the
+// rectification photo was filed as "before", and without this the after-photo
+// close gate would deadlock the NCR permanently.
+ncrEvidenceRouter.patch(
+  '/:id/evidence/:evidenceId',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const validation = reclassifyEvidenceSchema.safeParse(req.body);
+    if (!validation.success) {
+      throw AppError.fromZodError(validation.error);
+    }
+
+    const user = req.user as RequestAuthUser;
+    const id = parseNcrRouteParam(req.params.id, 'id');
+    const evidenceId = parseNcrRouteParam(req.params.evidenceId, 'evidenceId');
+    const { evidenceType } = validation.data;
+
+    const ncr = await prisma.nCR.findUnique({ where: { id } });
+
+    if (!ncr) {
+      throw AppError.notFound('NCR');
+    }
+
+    if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
+      throw AppError.badRequest('Cannot reclassify evidence on a closed NCR', {
+        currentStatus: ncr.status,
+      });
+    }
+
+    const evidence = await prisma.nCREvidence.findUnique({
+      where: { id: evidenceId },
+      select: {
+        ncrId: true,
+        evidenceType: true,
+        document: { select: { mimeType: true } },
+      },
+    });
+
+    if (!evidence || evidence.ncrId !== id) {
+      throw AppError.notFound('Evidence');
+    }
+
+    await requireNcrResponsibleOrProjectRole(
+      ncr,
+      user,
+      'Only responsible parties or project quality roles can reclassify NCR evidence',
+      NCR_EVIDENCE_MUTATION_ROLES,
+    );
+
+    // Only a photo has a before/after phase; a certificate does not.
+    if (!evidence.document?.mimeType?.toLowerCase().startsWith('image/')) {
+      throw AppError.badRequest('Only photo evidence can be classified as before or after');
+    }
+
+    const updated = await prisma.nCREvidence.update({
+      where: { id: evidenceId },
+      data: { evidenceType },
+      include: ncrEvidenceDocumentInclude,
+    });
+
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr_evidence',
+      entityId: evidenceId,
+      action: AuditAction.NCR_EVIDENCE_RECLASSIFIED,
+      changes: {
+        ncrId: id,
+        evidenceType: { from: evidence.evidenceType, to: evidenceType },
+      },
+      req,
+    });
+
+    res.json(buildNcrEvidenceReclassifiedResponse(updated));
   }),
 );
 

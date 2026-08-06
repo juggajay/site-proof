@@ -822,7 +822,9 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
             },
             body: JSON.stringify({
               documentId,
-              evidenceType: 'photo',
+              // Carry the phase the photo was captured as. Unset = legacy
+              // 'photo', which never satisfies the after-photo close gate.
+              evidenceType: photo.ncrEvidenceType ?? 'photo',
               ...(photo.caption ? { caption: photo.caption } : {}),
             }),
           });

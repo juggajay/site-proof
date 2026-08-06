@@ -25,6 +25,7 @@ import { errorHandler } from '../../middleware/errorHandler.js';
 import { registerTestUser } from '../../test/routeTestHarness.js';
 import { authRouter } from '../auth.js';
 import { ncrsRouter } from './index.js';
+import { NCR_EVIDENCE_PHASE_ROLLOUT } from './ncrEvidencePhase.js';
 
 // Partial mock: only the post-commit signal is replaced, so the count of
 // dispatched webhook events is directly observable.
@@ -108,8 +109,8 @@ async function createNcr(
   return ncr;
 }
 
-async function addEvidence(ncrId: string, evidenceType = 'photo') {
-  const filename = `${tag}-${ncrId}-${evidenceType}.jpg`;
+async function addEvidence(ncrId: string, evidenceType = 'photo', mimeType = 'image/jpeg') {
+  const filename = `${tag}-${ncrId}-${evidenceType}-${Date.now()}.jpg`;
   const document = await prisma.document.create({
     data: {
       projectId,
@@ -117,6 +118,7 @@ async function addEvidence(ncrId: string, evidenceType = 'photo') {
       category: 'ncr_evidence',
       filename,
       fileUrl: `/uploads/documents/${filename}`,
+      mimeType,
       uploadedById: closerId,
     },
   });
@@ -586,10 +588,24 @@ describe('NCR closure decisions — audit integrity (spec §9 [R3.1-R1])', () =>
   });
 });
 
-// The before/after evidence gate as the route enforces it (benchmark T6).
+// The before/after evidence gate as the ROUTE enforces it (benchmark T6). These
+// exercise the real HTTP endpoint, so they double as the "direct API call
+// bypasses the UI" check: there is no client-side shortcut in play here.
 describe('close: after-evidence gate', () => {
+  const POST_ROLLOUT = new Date(NCR_EVIDENCE_PHASE_ROLLOUT.getTime() + 86_400_000);
+  const PRE_ROLLOUT = new Date(NCR_EVIDENCE_PHASE_ROLLOUT.getTime() - 86_400_000);
+
+  /** An NCR raised after the rollout marker, i.e. one the gate applies to. */
+  const createGatedNcr = (suffix: string) =>
+    createNcr(suffix, { createdAt: POST_ROLLOUT }, { withEvidence: false });
+
+  const expectStatus = async (ncrId: string, status: string) =>
+    expect(
+      await prisma.nCR.findUniqueOrThrow({ where: { id: ncrId }, select: { status: true } }),
+    ).toMatchObject({ status });
+
   it('blocks a clean close when the only evidence is a before photo', async () => {
-    const ncr = await createNcr('before-only', {}, { withEvidence: false });
+    const ncr = await createGatedNcr('before-only');
     await addEvidence(ncr.id, 'before_photo');
 
     const res = await close(ncr.id, { verificationNotes: 'Looks fine from here' });
@@ -599,36 +615,50 @@ describe('close: after-evidence gate', () => {
       'Add at least one photo of the completed rectification before closing.',
     );
     expect(res.body.error.details.code).toBe('NCR_MISSING_AFTER_EVIDENCE');
-    expect(
-      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
-    ).toMatchObject({ status: 'verification' });
+    await expectStatus(ncr.id, 'verification');
   });
 
-  it('allows the close once an after photo is attached', async () => {
-    const ncr = await createNcr('before-then-after', {}, { withEvidence: false });
+  it('never accepts legacy untagged evidence as the after photo on a gated NCR', async () => {
+    const ncr = await createGatedNcr('legacy-tag-on-new-ncr');
+    await addEvidence(ncr.id, 'photo');
+    await addEvidence(ncr.id, 'rectification_photo');
+
+    expect((await close(ncr.id, { verificationNotes: 'Verified' })).status).toBe(400);
+    await expectStatus(ncr.id, 'verification');
+  });
+
+  it('rejects a PDF mislabelled as an after photo', async () => {
+    const ncr = await createGatedNcr('after-pdf');
+    await addEvidence(ncr.id, 'after_photo', 'application/pdf');
+
+    const res = await close(ncr.id, { verificationNotes: 'Certificate is not a photo' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.code).toBe('NCR_MISSING_AFTER_EVIDENCE');
+    await expectStatus(ncr.id, 'verification');
+  });
+
+  it('allows the close once a qualifying after photo is attached', async () => {
+    const ncr = await createGatedNcr('before-then-after');
     await addEvidence(ncr.id, 'before_photo');
     expect((await close(ncr.id, { verificationNotes: 'Too early' })).status).toBe(400);
 
     await addEvidence(ncr.id, 'after_photo');
 
     expect((await close(ncr.id, { verificationNotes: 'Rectification verified' })).status).toBe(200);
-    expect(
-      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
-    ).toMatchObject({ status: 'closed' });
+    await expectStatus(ncr.id, 'closed');
   });
 
-  it('still closes a legacy NCR whose evidence predates the before/after split', async () => {
-    // `createNcr` attaches plain `photo` evidence, exactly as pre-T6 records carry.
-    const ncr = await createNcr('legacy-evidence');
+  it('exempts an NCR raised before the rollout marker, whatever its evidence', async () => {
+    const ncr = await createNcr('pre-rollout', { createdAt: PRE_ROLLOUT }, { withEvidence: false });
+    await addEvidence(ncr.id, 'photo');
 
     expect((await close(ncr.id, { verificationNotes: 'Verified' })).status).toBe(200);
-    expect(
-      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
-    ).toMatchObject({ status: 'closed' });
+    await expectStatus(ncr.id, 'closed');
   });
 
   it('exempts a concession close — an accepted defect has no rectification photo', async () => {
-    const ncr = await createNcr('concession-before-only', {}, { withEvidence: false });
+    const ncr = await createGatedNcr('concession-before-only');
     await addEvidence(ncr.id, 'before_photo');
 
     const res = await close(ncr.id, {
@@ -638,8 +668,46 @@ describe('close: after-evidence gate', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(
-      await prisma.nCR.findUniqueOrThrow({ where: { id: ncr.id }, select: { status: true } }),
-    ).toMatchObject({ status: 'closed_concession' });
+    await expectStatus(ncr.id, 'closed_concession');
+  });
+
+  it('rejects the close when the after photo is deleted mid-decision', async () => {
+    const ncr = await createGatedNcr('after-evidence-race');
+    await addEvidence(ncr.id, 'after_photo');
+
+    // The gate predicate rides inside the transactional updateMany, so a delete
+    // landing after the pre-transaction read still cannot let the close through.
+    const spy = pauseAfterPreTransactionRead(ncr.id, async () => {
+      await prisma.nCREvidence.deleteMany({
+        where: { ncrId: ncr.id, evidenceType: 'after_photo' },
+      });
+    });
+
+    let res;
+    try {
+      res = await close(ncr.id, { verificationNotes: 'Evidence pulled underneath us' });
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect([400, 409]).toContain(res.status);
+    await expectStatus(ncr.id, 'verification');
+    expect(await auditRows(ncr.id, AuditAction.NCR_STATUS_CHANGED)).toHaveLength(0);
+  });
+
+  it('unblocks a deadlocked NCR once a mistagged photo is reclassified', async () => {
+    const ncr = await createGatedNcr('reclassify-unblocks');
+    const mistagged = await addEvidence(ncr.id, 'before_photo');
+
+    expect((await close(ncr.id, { verificationNotes: 'Blocked' })).status).toBe(400);
+
+    const patch = await request(app)
+      .patch(`/api/ncrs/${ncr.id}/evidence/${mistagged.id}`)
+      .set('Authorization', `Bearer ${closerToken}`)
+      .send({ evidenceType: 'after_photo' });
+    expect(patch.status).toBe(200);
+
+    expect((await close(ncr.id, { verificationNotes: 'Rectification verified' })).status).toBe(200);
+    await expectStatus(ncr.id, 'closed');
   });
 });

@@ -203,6 +203,7 @@ export const AuditAction = {
   NCR_STATUS_CHANGED: 'ncr_status_changed',
   NCR_EVIDENCE_ADDED: 'ncr_evidence_added',
   NCR_EVIDENCE_REMOVED: 'ncr_evidence_removed',
+  NCR_EVIDENCE_RECLASSIFIED: 'ncr_evidence_reclassified',
   NCR_CLIENT_NOTIFIED: 'ncr_client_notified',
   NCR_QM_APPROVED: 'ncr_qm_approved',
   DOCKET_SUBMITTED: 'docket_submitted',

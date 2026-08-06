@@ -59,7 +59,7 @@ function EvidenceRow({ item }: { item: EvidenceItem }) {
   );
 }
 
-function EvidenceColumn({
+function EvidenceSection({
   heading,
   hint,
   items,
@@ -110,23 +110,24 @@ export function NCREvidenceList({
       {evidence.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       ) : isPhased ? (
-        <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <EvidenceColumn
-              heading="Before"
-              hint="the defect"
-              items={before}
-              emptyLabel="No before photos."
-            />
-            <EvidenceColumn
-              heading="After"
-              hint="the fix"
-              items={after}
-              emptyLabel="No after photos yet."
-            />
-          </div>
+        // Stacked sections, never side-by-side rows: the record carries a phase
+        // per item and no pair identifier, so a two-column layout would invent a
+        // before/after correspondence that does not exist in the data.
+        <div className="space-y-4">
+          <EvidenceSection
+            heading="Before"
+            hint="the defect"
+            items={before}
+            emptyLabel="No before photos."
+          />
+          <EvidenceSection
+            heading="After"
+            hint="the fix"
+            items={after}
+            emptyLabel="No after photos yet."
+          />
           {unphased.length > 0 && (
-            <EvidenceColumn
+            <EvidenceSection
               heading="Other evidence"
               hint="certificates and untagged files"
               items={unphased}

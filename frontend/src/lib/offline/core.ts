@@ -260,6 +260,12 @@ export interface OfflinePhoto {
   completionId?: string;
   checklistItemId?: string;
   attachAs?: 'itp_completion_attachment' | 'ncr_evidence' | 'delivery_evidence' | 'document_only';
+  /**
+   * NCR before/after phase, carried through sync so a photo queued offline
+   * attaches with the phase it was captured as. Omitted = unphased legacy
+   * 'photo', which never satisfies the after-photo close gate on its own.
+   */
+  ncrEvidenceType?: string;
   documentType: string;
   category?: string;
   fileName: string;

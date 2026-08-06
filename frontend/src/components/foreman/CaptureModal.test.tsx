@@ -148,7 +148,7 @@ describe('CaptureModal defect mode', () => {
         method: 'POST',
         body: JSON.stringify({
           documentId: 'doc-1',
-          evidenceType: 'photo',
+          evidenceType: 'before_photo',
         }),
       }),
     );
@@ -196,7 +196,7 @@ describe('CaptureModal defect mode', () => {
         method: 'POST',
         body: JSON.stringify({
           documentId: 'doc-1',
-          evidenceType: 'photo',
+          evidenceType: 'before_photo',
           caption: 'Cracked kerb face',
         }),
       }),

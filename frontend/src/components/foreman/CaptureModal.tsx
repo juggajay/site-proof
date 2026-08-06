@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { apiFetch, authFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
+import { NCR_EVIDENCE_BEFORE_PHOTO } from '@/pages/ncr/ncrEvidencePhase';
 
 type CaptureType = 'photo' | 'ncr' | 'note';
 
@@ -238,7 +239,8 @@ export function CaptureModal({
             method: 'POST',
             body: JSON.stringify({
               documentId: uploadedNcrEvidenceDocumentId,
-              evidenceType: 'photo',
+              // Raising an issue photographs the defect, so this is the before phase.
+              evidenceType: NCR_EVIDENCE_BEFORE_PHOTO,
               ...(caption ? { caption } : {}),
             }),
           });
@@ -258,6 +260,7 @@ export function CaptureModal({
               entityType,
               entityId: raisedNcr?.id ?? queuedOfflineNcrId ?? linkedItp ?? undefined,
               attachAs: captureType === 'ncr' ? 'ncr_evidence' : undefined,
+              ncrEvidenceType: captureType === 'ncr' ? NCR_EVIDENCE_BEFORE_PHOTO : undefined,
               documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
               category: captureType === 'ncr' ? 'ncr_evidence' : undefined,
               caption,

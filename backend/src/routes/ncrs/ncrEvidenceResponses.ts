@@ -60,6 +60,13 @@ export function buildNcrEvidenceListResponse(evidence: NcrEvidenceRecord[]) {
   };
 }
 
+export function buildNcrEvidenceReclassifiedResponse(evidence: unknown) {
+  return {
+    evidence: stripNcrEvidenceDocumentFileUrl(evidence),
+    message: 'Evidence reclassified',
+  };
+}
+
 export function buildNcrEvidenceRemovedResponse() {
   return { message: 'Evidence removed successfully' };
 }

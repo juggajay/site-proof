@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NCREvidenceList } from './NCREvidenceList';
-import { MISSING_AFTER_EVIDENCE_MESSAGE, hasAfterEvidence } from '../ncrEvidencePhase';
+import { MISSING_AFTER_EVIDENCE_MESSAGE, hasRequiredAfterEvidence } from '../ncrEvidencePhase';
 
 const closeNCRSchema = z.object({
   verificationNotes: z.string().trim().optional().default(''),
@@ -55,8 +55,9 @@ function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNC
 
   if (!isOpen || !ncr) return null;
 
-  // Mirrors the server gate in ncrEvidencePhase.assertAfterEvidencePresent.
-  const canClose = hasAfterEvidence(ncr.ncrEvidence ?? []);
+  // Mirrors the server gate in ncrEvidencePhase.assertAfterEvidencePresent,
+  // including the rollout exemption for NCRs raised before phases existed.
+  const canClose = hasRequiredAfterEvidence(ncr);
 
   const footer = (
     <>

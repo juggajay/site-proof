@@ -13,9 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NCREvidenceList } from './NCREvidenceList';
 import {
+  MISSING_AFTER_EVIDENCE_SUBMIT_MESSAGE,
   NCR_EVIDENCE_AFTER_PHOTO,
   NCR_EVIDENCE_BEFORE_PHOTO,
-  evidencePhaseCaption,
+  hasRequiredAfterEvidence,
   isPhotoEvidenceType,
 } from '../ncrEvidencePhase';
 
@@ -80,10 +81,9 @@ function RectifyNCRModalInner({
       formData.append('projectId', uploadProjectId);
       formData.append('documentType', isPhotoEvidenceType(evidenceType) ? 'photo' : 'ncr_evidence');
       formData.append('category', 'ncr_evidence');
-      formData.append(
-        'caption',
-        `NCR evidence for ${ncr.ncrNumber}${evidencePhaseCaption(evidenceType)}`,
-      );
+      // Caption stays phase-free: it is document-wide and feeds register filters,
+      // search and exports. The phase belongs on evidenceType alone.
+      formData.append('caption', `NCR evidence for ${ncr.ncrNumber}`);
 
       const uploadResponse = await authFetch('/api/documents/upload', {
         method: 'POST',
@@ -153,6 +153,10 @@ function RectifyNCRModalInner({
 
   const existingEvidenceCount = ncr.ncrEvidence?.length ?? 0;
   const hasEvidence = existingEvidenceCount > 0 || evidenceFiles.length > 0;
+  // Mirrors the server gate on submit-for-verification. `ncr.ncrEvidence` is
+  // refetched by onEvidenceUploaded, so this flips as soon as an after photo lands.
+  const hasAfterPhoto = hasRequiredAfterEvidence(ncr);
+  const canSubmit = hasEvidence && hasAfterPhoto;
 
   const footer = (
     <>
@@ -169,9 +173,13 @@ function RectifyNCRModalInner({
         type="submit"
         form="rectify-ncr-form"
         className="min-h-[44px]"
-        disabled={submittingRectification || !hasEvidence}
+        disabled={submittingRectification || !canSubmit}
         title={
-          !hasEvidence ? 'Please upload at least one piece of evidence' : 'Submit for verification'
+          !hasEvidence
+            ? 'Please upload at least one piece of evidence'
+            : !hasAfterPhoto
+              ? MISSING_AFTER_EVIDENCE_SUBMIT_MESSAGE
+              : 'Submit for verification'
         }
       >
         {submittingRectification ? 'Submitting...' : 'Submit for Verification'}
@@ -296,11 +304,18 @@ function RectifyNCRModalInner({
           )}
         </div>
 
-        <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-3" role="alert">
           <p className="text-sm text-warning">
-            <strong>Note:</strong> Please upload or link at least one piece of evidence (photo or
-            re-test certificate) before submitting for verification. An <strong>after</strong> photo
-            of the completed rectification is required before this NCR can be closed.
+            {!hasAfterPhoto ? (
+              <>
+                <strong>Note:</strong> {MISSING_AFTER_EVIDENCE_SUBMIT_MESSAGE}
+              </>
+            ) : (
+              <>
+                <strong>Note:</strong> Please upload or link at least one piece of evidence (photo
+                or re-test certificate) before submitting for verification.
+              </>
+            )}
           </p>
         </div>
       </form>

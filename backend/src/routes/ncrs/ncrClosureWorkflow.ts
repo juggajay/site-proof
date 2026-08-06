@@ -41,7 +41,12 @@ import {
 } from './ncrWorkflowValidation.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
 import { getLotStatusAfterNcrClosure } from './ncrLotStatus.js';
-import { assertAfterEvidencePresent } from './ncrEvidencePhase.js';
+import {
+  AFTER_EVIDENCE_WHERE,
+  afterEvidenceGateApplies,
+  assertAfterEvidencePresent,
+  qualifiesAsAfterEvidence,
+} from './ncrEvidencePhase.js';
 
 export const ncrClosureWorkflowRouter = Router();
 
@@ -101,6 +106,7 @@ async function ensureCloseClaimed(
   ncrId: string,
   updateCount: number,
   client: Pick<typeof prisma, 'nCR'> = prisma,
+  withConcession?: boolean,
 ) {
   if (updateCount === 1) {
     return;
@@ -108,17 +114,26 @@ async function ensureCloseClaimed(
 
   const currentNcr = await client.nCR.findUnique({
     where: { id: ncrId },
-    select: { status: true, _count: { select: { ncrEvidence: true } } },
+    select: {
+      status: true,
+      createdAt: true,
+      _count: { select: { ncrEvidence: true } },
+      ncrEvidence: closeGateEvidenceSelect,
+    },
   });
 
-  // The close guard also requires evidence to exist; distinguish that cause so
-  // the caller isn't told the status is wrong when it is actually evidence that
-  // is missing (e.g. the last evidence was pulled during verification).
-  if (currentNcr?.status === 'verification' && currentNcr._count.ncrEvidence === 0) {
-    throw AppError.badRequest(
-      'This NCR has no rectification evidence attached and cannot be closed.',
-      { evidenceCount: 0 },
-    );
+  // The close guard also requires evidence; distinguish that cause so the caller
+  // isn't told the status is wrong when evidence is what is actually missing
+  // (e.g. the after photo was pulled between the decision read and the write).
+  if (currentNcr?.status === 'verification') {
+    if (currentNcr._count.ncrEvidence === 0) {
+      throw AppError.badRequest(
+        'This NCR has no rectification evidence attached and cannot be closed.',
+        { evidenceCount: 0 },
+      );
+    }
+
+    assertAfterEvidencePresent(currentNcr, { withConcession });
   }
 
   throw AppError.badRequest('NCR must be in verification status to close', {
@@ -145,8 +160,17 @@ interface NcrCloseState extends NcrQmApprovalState {
   qmApprovedById: string | null;
   clientNotificationRequired: boolean;
   clientNotifiedAt: Date | null;
-  ncrEvidence: ReadonlyArray<{ evidenceType: string }>;
+  createdAt: Date;
+  ncrEvidence: ReadonlyArray<{
+    evidenceType: string;
+    document?: { mimeType: string | null } | null;
+  }>;
 }
+
+/** Everything the close guard needs to identify a qualifying after photo. */
+const closeGateEvidenceSelect = {
+  select: { evidenceType: true, document: { select: { mimeType: true } } },
+} as const;
 
 /**
  * The QM-approval gates that read NCR STATE. Called twice (F0.4b PR 2): once on
@@ -202,9 +226,9 @@ function assertNcrClosable(
     });
   }
 
-  // The rectification must be evidenced by something that isn't a "before" photo.
-  // Concession closes are exempt — see assertAfterEvidencePresent.
-  assertAfterEvidencePresent(ncr.ncrEvidence, { withConcession: options.withConcession });
+  // The rectification must be evidenced by a qualifying after photo. Concession
+  // closes and pre-rollout NCRs are exempt — see assertAfterEvidencePresent.
+  assertAfterEvidencePresent(ncr, { withConcession: options.withConcession });
 
   // CRITICAL: For major NCRs, require independent QM approval before closing.
   if (ncr.severity === 'major' && ncr.qmApprovalRequired) {
@@ -267,7 +291,8 @@ async function evaluateNcrClosure(
       qmApprovedById: true,
       clientNotificationRequired: true,
       clientNotifiedAt: true,
-      ncrEvidence: { select: { evidenceType: true } },
+      createdAt: true,
+      ncrEvidence: closeGateEvidenceSelect,
       ncrLots: { select: { lotId: true, lot: { select: { status: true } } } },
     },
   });
@@ -502,7 +527,8 @@ ncrClosureWorkflowRouter.post(
         qmApprovedById: true,
         clientNotificationRequired: true,
         clientNotifiedAt: true,
-        ncrEvidence: { select: { evidenceType: true } },
+        createdAt: true,
+        ncrEvidence: closeGateEvidenceSelect,
         _count: { select: { ncrLots: true } },
       },
     });
@@ -532,6 +558,13 @@ ncrClosureWorkflowRouter.post(
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
     const closedAt = new Date();
 
+    // The evidence predicate rides INSIDE the write, so evidence deleted between
+    // the decision read and the update cannot slip a close through. `createdAt`
+    // is immutable, so deciding gate applicability outside the transaction is safe.
+    const closeEvidenceGuard = afterEvidenceGateApplies(ncr, { withConcession })
+      ? AFTER_EVIDENCE_WHERE
+      : { some: {} };
+
     const decision = await recordDecision({
       projectId: ncr.projectId,
       entityType: 'ncr',
@@ -560,7 +593,7 @@ ncrClosureWorkflowRouter.post(
       // cheap second line inside the transaction.
       mutate: async (tx, evaluation) => {
         const closeUpdate = await tx.nCR.updateMany({
-          where: { id, status: 'verification', ncrEvidence: { some: {} } },
+          where: { id, status: 'verification', ncrEvidence: closeEvidenceGuard },
           data: {
             status: closeStatus,
             verifiedById: user.userId,
@@ -574,7 +607,7 @@ ncrClosureWorkflowRouter.post(
             clientApprovalReference: withConcession ? (clientApprovalReference ?? null) : null,
           },
         });
-        await ensureCloseClaimed(id, closeUpdate.count, tx);
+        await ensureCloseClaimed(id, closeUpdate.count, tx, withConcession);
 
         for (const { lotId, nextStatus } of evaluation.cascade) {
           await tx.lot.update({ where: { id: lotId }, data: { status: nextStatus } });
@@ -874,7 +907,7 @@ ncrClosureWorkflowRouter.post(
     const ncr = await prisma.nCR.findUnique({
       where: { id },
       include: {
-        ncrEvidence: true,
+        ncrEvidence: { include: { document: { select: { mimeType: true } } } },
       },
     });
 
@@ -900,6 +933,16 @@ ncrClosureWorkflowRouter.post(
       throw AppError.badRequest(
         'Please upload at least one piece of evidence before submitting for verification',
         { evidenceCount: 0 },
+      );
+    }
+
+    // Fail here rather than only at closure: discovering the missing after photo
+    // at the verifier's desk strands a rectification that was already submitted.
+    // The close gate stays the authoritative backstop.
+    if (afterEvidenceGateApplies(ncr) && !ncr.ncrEvidence.some(qualifiesAsAfterEvidence)) {
+      throw AppError.badRequest(
+        'Add at least one photo of the completed rectification before submitting for verification.',
+        { code: 'NCR_MISSING_AFTER_EVIDENCE' },
       );
     }
 

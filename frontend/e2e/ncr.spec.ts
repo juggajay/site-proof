@@ -112,7 +112,10 @@ function buildMajorNcr(options: MajorNcrOptions) {
     raisedBy: { fullName: 'E2E Inspector', email: 'inspector@example.com' },
     responsibleUser: { fullName: 'E2E Concrete Subcontractor', email: 'concrete@example.com' },
     dueDate: '2026-05-22',
-    createdAt: '2026-05-02T00:00:00.000Z',
+    // Raised after the phase rollout marker, so the close path here genuinely
+    // exercises the after-photo gate rather than the legacy exemption. The
+    // standard NCR above stays pre-rollout and covers the exempt path.
+    createdAt: '2026-09-02T00:00:00.000Z',
     project: buildProject(),
     ncrLots: [
       {

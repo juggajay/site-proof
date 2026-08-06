@@ -92,7 +92,15 @@ function makeNcr(overrides: Partial<NCR> = {}): NCR {
   };
 }
 
-function makeEvidence(id: string, evidenceType: string): NonNullable<NCR['ncrEvidence']>[number] {
+// The after-photo gate only applies to NCRs raised on or after the rollout
+// marker in ncrEvidencePhase.ts; `makeNcr` defaults to a pre-rollout date.
+const POST_ROLLOUT_CREATED_AT = '2026-09-01T00:00:00.000Z';
+
+function makeEvidence(
+  id: string,
+  evidenceType: string,
+  mimeType: string | null = 'image/jpeg',
+): NonNullable<NCR['ncrEvidence']>[number] {
   return {
     id,
     evidenceType,
@@ -100,7 +108,7 @@ function makeEvidence(id: string, evidenceType: string): NonNullable<NCR['ncrEvi
     document: {
       id: `doc-${id}`,
       filename: `${id}.jpg`,
-      mimeType: 'image/jpeg',
+      mimeType,
       uploadedAt: '2026-05-02T00:00:00.000Z',
     },
   };
@@ -266,6 +274,32 @@ describe('RectifyNCRModal', () => {
     expect(submitBtn).toBeDisabled();
   });
 
+  it('keeps Submit disabled on a post-rollout NCR with only a before photo', () => {
+    const ncr = makeNcr({
+      createdAt: POST_ROLLOUT_CREATED_AT,
+      ncrEvidence: [makeEvidence('before-1', 'before_photo')],
+    });
+    render(<RectifyNCRModal {...defaultProps} ncr={ncr} />);
+
+    expect(screen.getByRole('button', { name: 'Submit for Verification' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Add at least one photo of the completed rectification before submitting for verification.',
+    );
+  });
+
+  it('enables Submit once a qualifying after photo is attached', () => {
+    const ncr = makeNcr({
+      createdAt: POST_ROLLOUT_CREATED_AT,
+      ncrEvidence: [
+        makeEvidence('before-1', 'before_photo'),
+        makeEvidence('after-1', 'after_photo'),
+      ],
+    });
+    render(<RectifyNCRModal {...defaultProps} ncr={ncr} />);
+
+    expect(screen.getByRole('button', { name: 'Submit for Verification' })).toBeEnabled();
+  });
+
   it('calls onClose when Cancel is clicked', () => {
     const onClose = vi.fn();
     render(<RectifyNCRModal {...defaultProps} onClose={onClose} />);
@@ -345,7 +379,10 @@ describe('CloseNCRModal', () => {
   });
 
   it('blocks closing until an after photo exists, and says why', () => {
-    const ncr = makeNcr({ ncrEvidence: [makeEvidence('before-1', 'before_photo')] });
+    const ncr = makeNcr({
+      createdAt: POST_ROLLOUT_CREATED_AT,
+      ncrEvidence: [makeEvidence('before-1', 'before_photo')],
+    });
     render(<CloseNCRModal {...defaultProps} ncr={ncr} />);
 
     expect(screen.getByRole('button', { name: 'Close NCR' })).toBeDisabled();
@@ -354,7 +391,28 @@ describe('CloseNCRModal', () => {
     );
   });
 
-  it('allows closing a legacy NCR whose evidence predates the before/after split', () => {
+  it('does not accept legacy untagged evidence as the after photo on a post-rollout NCR', () => {
+    const ncr = makeNcr({
+      createdAt: POST_ROLLOUT_CREATED_AT,
+      ncrEvidence: [makeEvidence('legacy-1', 'photo')],
+    });
+    render(<CloseNCRModal {...defaultProps} ncr={ncr} />);
+
+    expect(screen.getByRole('button', { name: 'Close NCR' })).toBeDisabled();
+  });
+
+  it('does not accept a PDF mislabelled as an after photo', () => {
+    const ncr = makeNcr({
+      createdAt: POST_ROLLOUT_CREATED_AT,
+      ncrEvidence: [makeEvidence('after-pdf', 'after_photo', 'application/pdf')],
+    });
+    render(<CloseNCRModal {...defaultProps} ncr={ncr} />);
+
+    expect(screen.getByRole('button', { name: 'Close NCR' })).toBeDisabled();
+  });
+
+  it('allows closing an NCR raised before the phase rollout, whatever its evidence', () => {
+    // makeNcr defaults createdAt to 2026-05-01, before the marker.
     const ncr = makeNcr({ ncrEvidence: [makeEvidence('legacy-1', 'photo')] });
     render(<CloseNCRModal {...defaultProps} ncr={ncr} />);
 
