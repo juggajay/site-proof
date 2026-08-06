@@ -1,7 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DocumentAccessUrl } from '@/lib/documentAccess';
 import { DocumentGrid, type DocumentGridDoc } from './DocumentGrid';
+
+// Radix's DropdownMenu calls the Pointer Capture API and scrollIntoView, neither
+// of which jsdom implements. Stubbing them is what lets the menu actually open.
+beforeAll(() => {
+  const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
+  proto.hasPointerCapture ??= () => false;
+  proto.setPointerCapture ??= () => {};
+  proto.releasePointerCapture ??= () => {};
+  proto.scrollIntoView ??= () => {};
+});
 
 const imageDocument: DocumentGridDoc = {
   id: 'doc-1',
@@ -74,6 +84,104 @@ describe('DocumentGrid thumbnails', () => {
       expect(image).toBeVisible();
       expect(image).toHaveAttribute('src', '/signed/fresh-photo.jpg');
     });
+  });
+});
+
+describe('DocumentGrid row actions', () => {
+  it('reaches all five actions: preview and download inline, the rest in the overflow menu', () => {
+    const handlers = {
+      onToggleFavourite: vi.fn(),
+      onOpenViewer: vi.fn(),
+      onDownload: vi.fn(),
+      onViewVersions: vi.fn(),
+      onMarkPendingDelete: vi.fn(),
+    };
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[imageDocument]}
+        showFavouritesOnly={false}
+        canManageDocuments
+        documentUrls={{}}
+        {...handlers}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View site-photo.jpg' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download site-photo.jpg' }));
+
+    // Enter on the trigger, not a synthetic pointerdown: jsdom has no
+    // PointerEvent so Radix never sees a real button-0 press.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions for site-photo.jpg' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add to favourites' }));
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions for site-photo.jpg' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Version history' }));
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions for site-photo.jpg' }), {
+      key: 'Enter',
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+    expect(handlers.onOpenViewer).toHaveBeenCalledWith(imageDocument);
+    expect(handlers.onDownload).toHaveBeenCalledWith(imageDocument);
+    expect(handlers.onToggleFavourite).toHaveBeenCalledWith(imageDocument);
+    expect(handlers.onViewVersions).toHaveBeenCalledWith(imageDocument);
+    expect(handlers.onMarkPendingDelete).toHaveBeenCalledWith(imageDocument);
+  });
+
+  it('keeps caption-less and captioned rows the same height', () => {
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[imageDocument, { ...imageDocument, id: 'doc-2', caption: 'Pier 3' }]}
+        showFavouritesOnly={false}
+        canManageDocuments
+        documentUrls={{}}
+        onToggleFavourite={vi.fn()}
+        onOpenViewer={vi.fn()}
+        onDownload={vi.fn()}
+        onViewVersions={vi.fn()}
+        onMarkPendingDelete={vi.fn()}
+      />,
+    );
+
+    // The caption line is rendered either way; only its text differs, so the
+    // register cannot go ragged when some documents carry a caption.
+    const captionLines = screen.getAllByTestId('document-row').map((row) => row.querySelector('p'));
+    expect(captionLines).toHaveLength(2);
+    expect(captionLines[0]).toBeEmptyDOMElement();
+    expect(captionLines[1]).toHaveTextContent('Pier 3');
+    expect(captionLines[0]?.className).toEqual(captionLines[1]?.className);
+  });
+
+  it('separates the metadata line with middots', () => {
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[{ ...imageDocument, lot: { lotNumber: 'LOT-001' } }]}
+        showFavouritesOnly={false}
+        canManageDocuments
+        documentUrls={{}}
+        onToggleFavourite={vi.fn()}
+        onOpenViewer={vi.fn()}
+        onDownload={vi.fn()}
+        onViewVersions={vi.fn()}
+        onMarkPendingDelete={vi.fn()}
+      />,
+    );
+
+    // The lot keeps its own emphasised span, so it sits after the last middot
+    // rather than inside the joined text.
+    expect(screen.getByText(/^1\.0 KB · .+ · by QA User ·$/)).toBeInTheDocument();
+    expect(screen.getByText('Lot LOT-001')).toBeInTheDocument();
   });
 });
 

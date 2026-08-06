@@ -124,6 +124,17 @@ export function DocumentCategorySummary({
 
   return (
     <div className="flex flex-wrap gap-2">
+      {/* The counts come back scoped to the applied filter, so once a chip is on
+          it is the only chip left. This is the way back to the whole register. */}
+      {activeCategory && (
+        <button
+          type="button"
+          onClick={() => onSelectCategory('')}
+          className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          All categories
+        </button>
+      )}
       {Object.entries(categories).map(([category, count]) => {
         const filterValue = category === 'Uncategorized' ? 'uncategorized' : category;
         const isActive = activeCategory === filterValue;

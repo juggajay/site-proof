@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import {
   type FilterValues,
 } from '@/components/mobile/FilterBottomSheet';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { cn } from '@/lib/utils';
 import { CATEGORIES, DOCUMENT_TYPES } from '../documentsUploadData';
 import { DocumentCategorySummary } from './DocumentsPageChrome';
 
@@ -67,6 +68,56 @@ function countAppliedFilters({
     (filterLot ? 1 : 0) +
     (dateFrom || dateTo ? 1 : 0) +
     (showFavouritesOnly ? 1 : 0)
+  );
+}
+
+/**
+ * Filters that live behind desktop's "More filters" disclosure. Category is not
+ * one of them — the count chips ARE the category filter, so counting it here
+ * would badge the disclosure for a control it does not contain.
+ */
+function countAdvancedFilters({
+  filterType,
+  filterLot,
+  dateFrom,
+  dateTo,
+}: Pick<DocumentFiltersPanelProps, 'filterType' | 'filterLot' | 'dateFrom' | 'dateTo'>): number {
+  return (filterType ? 1 : 0) + (filterLot ? 1 : 0) + (dateFrom || dateTo ? 1 : 0);
+}
+
+/** Search stays inline on every breakpoint; only the height changes. */
+function DocumentSearchField({
+  searchQuery,
+  onSearchQueryChange,
+  onTriggerSearch,
+  className,
+}: Pick<DocumentFiltersPanelProps, 'searchQuery' | 'onSearchQueryChange' | 'onTriggerSearch'> & {
+  className?: string;
+}) {
+  return (
+    // A real form so the phone keyboard offers a "Search" key.
+    <form
+      role="search"
+      className="relative min-w-[220px] flex-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onTriggerSearch();
+      }}
+    >
+      <Search
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <Input
+        id="document-search"
+        type="search"
+        className={className}
+        value={searchQuery}
+        onChange={(event) => onSearchQueryChange(event.target.value)}
+        placeholder="Search documents..."
+        aria-label="Search documents by filename or caption"
+      />
+    </form>
   );
 }
 
@@ -190,29 +241,12 @@ function MobileDocumentFilters(props: DocumentFiltersPanelProps) {
   return (
     <div className="rounded-lg border bg-card p-3">
       <div className="flex items-center gap-3">
-        {/* A real form so the phone keyboard offers a "Search" key. */}
-        <form
-          role="search"
-          className="relative flex-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onTriggerSearch();
-          }}
-        >
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            id="document-search"
-            type="search"
-            className="h-12 pl-9"
-            value={searchQuery}
-            onChange={(event) => onSearchQueryChange(event.target.value)}
-            placeholder="Search documents..."
-            aria-label="Search documents by filename or caption"
-          />
-        </form>
+        <DocumentSearchField
+          searchQuery={searchQuery}
+          onSearchQueryChange={onSearchQueryChange}
+          onTriggerSearch={onTriggerSearch}
+          className="h-12 pl-9"
+        />
         <FilterTriggerButton
           onClick={() => setSheetOpen(true)}
           activeCount={countAppliedFilters(props)}
@@ -242,6 +276,11 @@ function MobileDocumentFilters(props: DocumentFiltersPanelProps) {
 // presentation-only.
 export function DocumentFiltersPanel(props: DocumentFiltersPanelProps) {
   const isMobile = useIsMobile();
+  const advancedPanelId = useId();
+  const advancedCount = countAdvancedFilters(props);
+  // Open when the register arrives with one of these already applied (a `lotId`
+  // deep link, say) — a badge counting filters you cannot see is a puzzle.
+  const [showAdvanced, setShowAdvanced] = useState(() => advancedCount > 0);
   const {
     filterType,
     filterCategory,
@@ -268,97 +307,38 @@ export function DocumentFiltersPanel(props: DocumentFiltersPanelProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <Label htmlFor="document-type-filter" className="mb-1">
-            Document Type
-          </Label>
-          <NativeSelect
-            id="document-type-filter"
-            value={filterType}
-            onChange={(e) => onFilterTypeChange(e.target.value)}
-          >
-            <option value="">All Types</option>
-            {DOCUMENT_TYPES.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div>
-          <Label htmlFor="document-category-filter" className="mb-1">
-            Category
-          </Label>
-          <NativeSelect
-            id="document-category-filter"
-            value={filterCategory}
-            onChange={(e) => onFilterCategoryChange(e.target.value)}
-          >
-            <option value="">All Categories</option>
-            <option value="uncategorized">Uncategorized</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div>
-          <Label htmlFor="document-lot-filter" className="mb-1">
-            Lot
-          </Label>
-          <NativeSelect
-            id="document-lot-filter"
-            value={filterLot}
-            onChange={(e) => onFilterLotChange(e.target.value)}
-          >
-            <option value="">All Lots</option>
-            {lots.map((lot) => (
-              <option key={lot.id} value={lot.id}>
-                {lot.lotNumber}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div>
-          <Label htmlFor="document-date-from-filter" className="mb-1">
-            Date From
-          </Label>
-          <Input
-            id="document-date-from-filter"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => onDateFromChange(e.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor="document-date-to-filter" className="mb-1">
-            Date To
-          </Label>
-          <Input
-            id="document-date-to-filter"
-            type="date"
-            value={dateTo}
-            onChange={(e) => onDateToChange(e.target.value)}
-          />
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <Label htmlFor="document-search" className="mb-1">
-            Search
-          </Label>
-          <Input
-            id="document-search"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchQueryChange(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onTriggerSearch()}
-            placeholder="Search by filename, caption..."
-          />
-        </div>
+    <div className="rounded-lg border bg-card p-4" data-testid="document-filters">
+      <div className="flex flex-wrap items-center gap-2">
+        <DocumentSearchField
+          searchQuery={searchQuery}
+          onSearchQueryChange={onSearchQueryChange}
+          onTriggerSearch={onTriggerSearch}
+          className="pl-9"
+        />
         <Button variant="secondary" onClick={onTriggerSearch}>
           Search
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          aria-expanded={showAdvanced}
+          aria-controls={advancedPanelId}
+          // Same phrasing as the phone filter trigger, so the count is spoken
+          // rather than run into the label as "More filters1".
+          aria-label={`More filters${advancedCount > 0 ? `, ${advancedCount} active` : ''}`}
+          onClick={() => setShowAdvanced((open) => !open)}
+        >
+          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          More filters
+          {advancedCount > 0 && (
+            <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+              {advancedCount}
+            </span>
+          )}
+          <ChevronDown
+            className={cn('h-4 w-4 transition-transform', showAdvanced && 'rotate-180')}
+            aria-hidden="true"
+          />
         </Button>
         <FavouritesButton
           showFavouritesOnly={showFavouritesOnly}
@@ -371,22 +351,85 @@ export function DocumentFiltersPanel(props: DocumentFiltersPanelProps) {
           dateTo ||
           searchQuery ||
           showFavouritesOnly) && (
-          <Button variant="destructive" size="sm" onClick={onClearAll}>
+          <Button variant="ghost" size="sm" onClick={onClearAll}>
             Clear All
           </Button>
         )}
       </div>
 
-      {/* Quick category filters, folded in from the row that used to sit
-          between this card and the grid. Two stacked filter systems saying the
-          same thing cost ~250px of chrome before the first document. */}
+      {/* The quick filter. These chips ARE the category control — the Category
+          select they replaced said the same thing one row up, and two filter
+          systems stacked cost ~250px of chrome before the first document. */}
       {Object.keys(categories).length > 0 && (
-        <div className="mt-4 border-t pt-3">
+        <div className="mt-3">
           <DocumentCategorySummary
             categories={categories}
             activeCategory={filterCategory}
             onSelectCategory={onFilterCategoryChange}
           />
+        </div>
+      )}
+
+      {/* Everything people filter by occasionally. Collapsed by default so the
+          register starts with rows, not controls. */}
+      {showAdvanced && (
+        <div id={advancedPanelId} className="mt-3 flex flex-wrap items-end gap-4 border-t pt-3">
+          <div>
+            <Label htmlFor="document-type-filter" className="mb-1">
+              Document Type
+            </Label>
+            <NativeSelect
+              id="document-type-filter"
+              value={filterType}
+              onChange={(e) => onFilterTypeChange(e.target.value)}
+            >
+              <option value="">All Types</option>
+              {DOCUMENT_TYPES.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.label}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <div>
+            <Label htmlFor="document-lot-filter" className="mb-1">
+              Lot
+            </Label>
+            <NativeSelect
+              id="document-lot-filter"
+              value={filterLot}
+              onChange={(e) => onFilterLotChange(e.target.value)}
+            >
+              <option value="">All Lots</option>
+              {lots.map((lot) => (
+                <option key={lot.id} value={lot.id}>
+                  {lot.lotNumber}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <div>
+            <Label htmlFor="document-date-from-filter" className="mb-1">
+              Date From
+            </Label>
+            <Input
+              id="document-date-from-filter"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => onDateFromChange(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="document-date-to-filter" className="mb-1">
+              Date To
+            </Label>
+            <Input
+              id="document-date-to-filter"
+              type="date"
+              value={dateTo}
+              onChange={(e) => onDateToChange(e.target.value)}
+            />
+          </div>
         </div>
       )}
     </div>
