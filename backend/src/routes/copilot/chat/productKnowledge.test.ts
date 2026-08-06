@@ -146,11 +146,11 @@ describe('product knowledge — test sufficiency facts', () => {
   it('keeps undrawn lots counted-not-coloured and the overlay internal-only', () => {
     // projectTestCoverage.ts: `requireInternalProjectAccess` (J3, spec §10.1) and
     // `lotsWithoutGeometry`, rendered as "N lots not on the map — not drawn, so
-    // not coloured." LotMapView hides both toggles while History is armed.
+    // not coloured." LotMapView hides both toggles while Past view is armed.
     const map = body('site-map');
     expect(map).toContain('Lots that are not drawn are counted, not coloured');
     expect(map).toContain('internal layer that subcontractors never see');
-    expect(map).toContain('unavailable in History');
+    expect(map).toContain('unavailable in Past view');
   });
 
   it('states that no sample location is ever derived — the [C3S-B1] honesty rule', () => {
@@ -322,17 +322,21 @@ describe('product knowledge — getting started walkthrough', () => {
 
   it('uses the shipped map label — Past view, not History', () => {
     // MapToolbar.tsx:279-288 `label={historyArmed ? 'Exit Past view' : 'Past
-    // view'}`. "History" survives only as the lucide icon name. NOTE: the
-    // site-map topic still says History and is wrong — tracked separately.
+    // view'}`. "History" survives only as the lucide icon name. The site-map
+    // topic was renamed to match in the same PR, so both topics agree.
     expect(body('getting-started')).toContain("the map's Past view replays the job");
   });
 
-  it('never calls the subcontractor portal free — no billing code exists', () => {
-    // There is no billing in the codebase at all, and TIER_QUOTA_ENFORCEMENT_
-    // ENABLED is false (tierLimits.ts:14). Portal accounts escape the seat
-    // count only as a side effect of a null companyId, not by a pricing rule.
-    // A price is a commercial decision Clancy must not state as product fact.
-    expect(body('getting-started')).not.toContain('free');
+  it('states the free subcontractor portal as PRICING POLICY, not a code fact', () => {
+    // Grounding: pricing policy per owner, not derived from code. There is no
+    // billing in this codebase at all and TIER_QUOTA_ENFORCEMENT_ENABLED is
+    // false (tierLimits.ts:14) — portal accounts escape the seat count only as
+    // a side effect of a null companyId. So do NOT "verify" this against
+    // tierLimits or the seat check: if the policy changes, the owner changes
+    // it here, and no code test will ever catch the drift.
+    expect(body('getting-started')).toContain(
+      'Subcontractor portal accounts are free — inviting a subbie never costs them or you anything',
+    );
   });
 
   it('does not promise a one-click handover export', () => {

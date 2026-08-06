@@ -80,7 +80,7 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['site-map', 'grey for No rule'],
   ['site-map', 'Lots that are not drawn are counted, not coloured'],
   ['site-map', 'internal layer that subcontractors never see'],
-  ['site-map', 'unavailable in History'],
+  ['site-map', 'unavailable in Past view'],
   ['site-map', 'shows a pin only where someone captured a sample point'],
   ['site-map', 'counted toward the frequency but never drawn'],
   ['itp-holdpoints-tests', 'optional and blocks nothing'],
