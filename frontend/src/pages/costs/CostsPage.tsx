@@ -113,17 +113,17 @@ export function CostsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold">Project Costs</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">Project Costs</h1>
             <ContextHelp title={HELP_CONTENT.costs.title} content={HELP_CONTENT.costs.content} />
           </div>
           <p className="text-muted-foreground mt-1">
             Track labour, plant, and budget across all subcontractors
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"
@@ -131,11 +131,17 @@ export function CostsPage() {
             aria-expanded={showFilters}
             aria-controls="cost-filters"
             disabled={hasNoLoadedCostData}
+            className="flex-1 md:flex-none"
           >
             <Filter className="h-4 w-4" />
             Filter
           </Button>
-          <Button type="button" onClick={exportToExcel} disabled={!summary}>
+          <Button
+            type="button"
+            onClick={exportToExcel}
+            disabled={!summary}
+            className="flex-1 md:flex-none"
+          >
             <Download className="h-4 w-4" />
             Export Report
           </Button>

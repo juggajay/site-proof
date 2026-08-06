@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ActivityRow } from './ProjectDashboardParts';
+import { ActivityRow, StatPill } from './ProjectDashboardParts';
 import {
   formatAttentionAge,
   formatRelativeTime,
@@ -119,5 +119,19 @@ describe('ProjectDashboardParts helpers', () => {
 
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText('Diary submitted')).toBeInTheDocument();
+  });
+
+  // The stat ribbon goes 2-across on phones (~185px cells). Value and label
+  // used to be inline spans in one <p>, so a narrow cell broke the phrase
+  // mid-word and clipped it ("17 documents" rendering as "17 document"). They
+  // must stay in separate blocks, with the value itself never wrapping.
+  it('keeps a stat pill value and label in separate blocks', () => {
+    render(<StatPill label="documents" value={17} icon={null} color="text-muted-foreground" />);
+
+    const value = screen.getByText('17');
+    const label = screen.getByText('documents');
+
+    expect(value.closest('p')).not.toBe(label.closest('p'));
+    expect(value.closest('p')).toHaveClass('truncate');
   });
 });

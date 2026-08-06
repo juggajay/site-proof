@@ -158,10 +158,14 @@ export function ProjectDashboard() {
   return (
     <div className="space-y-5 p-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{project.name}</h1>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          {/* Below md the chip wraps to its own line (h1 takes the full row) so a
+              long project name cannot strand it mid-wrap. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="w-full text-xl font-bold line-clamp-2 md:w-auto md:text-2xl md:line-clamp-none">
+              {project.name}
+            </h1>
             <span
               className={cn(
                 'px-2.5 py-0.5 rounded-full text-xs font-medium',
@@ -177,15 +181,21 @@ export function ProjectDashboard() {
             {project.state && ` \u2022 ${project.state}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex-1 md:flex-none"
+          >
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
             Refresh
           </Button>
           {canOpenProjectSettings && (
             <Link
               to={`${projectRouteBase}/settings`}
-              className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
+              className="flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted md:flex-none"
             >
               <Settings className="h-4 w-4" />
               Settings
@@ -274,7 +284,7 @@ export function ProjectDashboard() {
       )}
 
       {/* Compact Stat Ribbon */}
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-px bg-border rounded-lg overflow-hidden border">
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-px bg-border rounded-lg overflow-hidden border">
         <StatPill
           label="lots complete"
           value={`${stats.lots.progressPct}%`}

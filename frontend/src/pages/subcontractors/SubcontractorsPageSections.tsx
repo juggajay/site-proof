@@ -15,10 +15,10 @@ export function SubcontractorsPageHeader({
   onInviteSubcontractor,
 }: SubcontractorsPageHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold">Subcontractors</h1>
+          <h1 className="text-2xl font-bold md:text-3xl">Subcontractors</h1>
           <ContextHelp
             title={HELP_CONTENT.subcontractors.title}
             content={HELP_CONTENT.subcontractors.content}
@@ -28,7 +28,7 @@ export function SubcontractorsPageHeader({
           Manage subcontractor companies, employees, and rates
         </p>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <label className="flex items-center gap-2 cursor-pointer text-sm">
           <button
             type="button"
@@ -42,14 +42,14 @@ export function SubcontractorsPageHeader({
               className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform ${showRemoved ? 'translate-x-[18px]' : 'translate-x-[3px]'}`}
             />
           </button>
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground whitespace-nowrap">
             Show removed{removedCount > 0 && showRemoved ? ` (${removedCount})` : ''}
           </span>
         </label>
         <button
           type="button"
           onClick={onInviteSubcontractor}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:w-auto"
         >
           <Plus className="h-4 w-4" />
           Invite Subcontractor

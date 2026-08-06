@@ -29,15 +29,17 @@ export function StatPill({
   return (
     <div
       className={cn(
-        'bg-card px-3 py-2.5 text-center',
+        'bg-card px-3 py-2.5 text-center sm:px-4',
         alert && 'ring-1 ring-inset ring-destructive/30',
       )}
     >
       <div className={cn('flex items-center justify-center mb-1', color)}>{icon}</div>
-      <p className={cn('text-lg font-bold leading-tight', alert && 'text-destructive')}>
-        <span>{value}</span>
-        {labelText && <span className="ml-1 text-sm font-semibold"> {labelText}</span>}
+      {/* Value and label are separate blocks: inline they used to break mid-phrase
+          in narrow cells ("17 documents" rendering as "17 document"). */}
+      <p className={cn('truncate text-lg font-bold leading-tight', alert && 'text-destructive')}>
+        {value}
       </p>
+      {labelText && <p className="text-sm font-semibold leading-tight line-clamp-2">{labelText}</p>}
       {sub && <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</p>}
     </div>
   );
