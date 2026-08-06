@@ -5,11 +5,15 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { RefreshCw, WifiOff, CloudOff, Printer, Unlink } from 'lucide-react';
+import { RefreshCw, WifiOff, CloudOff, Unlink } from 'lucide-react';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findFirstIncompleteItpCategory } from '@/components/foreman/mobileItpChecklistHelpers';
+import { RequestReleaseFlow } from '@/pages/holdpoints/components/RequestReleaseFlow';
+import { HoldPointReleaseQrModal } from '@/pages/holdpoints/components/HoldPointReleaseQrModal';
+import { useItpHoldPointActions } from './useItpHoldPointActions';
+import { ITPAssignTemplateSection } from './ITPAssignTemplateSection';
+import { ITPRejectItemModal } from './ITPRejectItemModal';
 import type { ITPInstance, ITPTemplate, ITPAttachment, Lot } from '../types';
 import { ITPChecklistItemRow } from './ITPChecklistItemRow';
 import { PhotoLightbox } from './ITPPhotoLightbox';
@@ -20,8 +24,6 @@ import {
   getItpCategoryProgress,
   getItpChecklistProgress,
   groupItpChecklistItemsByCategory,
-  isItpTemplateActivityMatch,
-  sortItpTemplatesForLotActivity,
   toggleExpandedItpCategory,
   type ItpStatusFilter,
 } from './itpChecklistTabHelpers';
@@ -119,8 +121,14 @@ export function ITPChecklistTab({
   canCreateTests = false,
   onAddTestResult,
 }: ITPChecklistTabProps) {
-  const navigate = useNavigate();
   const assignTemplateCardRef = useRef<HTMLDivElement>(null);
+  // T1/T2: hold-point state per row, the release-request sheet and the QR link.
+  const holdPointActions = useItpHoldPointActions({
+    lot,
+    projectId,
+    holdPoints: itpInstance?.holdPoints,
+    onRefreshItp: onRetryItp,
+  });
 
   // Local state for ITP tab
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
@@ -139,7 +147,6 @@ export function ITPChecklistTab({
   } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [submittingReject, setSubmittingReject] = useState(false);
-
   const handleVerifyCompletion = async (completionId: string) => {
     if (!onVerifyCompletion) return;
     setReviewingCompletionId(completionId);
@@ -352,15 +359,6 @@ export function ITPChecklistTab({
                   <span>Unassign</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors print:hidden"
-                title="Print ITP Checklist"
-              >
-                <Printer className="h-4 w-4" />
-                <span>Print Checklist</span>
-              </button>
             </div>
           </div>
           {/* Wave G G2 §2.2(a),(b): what this lot was inspected against. Read
@@ -507,6 +505,10 @@ export function ITPChecklistTab({
                           onRequestReject={handleRequestReject}
                           canCreateTests={canCreateTests}
                           onAddTestResult={onAddTestResult}
+                          holdPoint={holdPointActions.holdPointsByItemId.get(item.id)}
+                          canRequestHoldPointRelease={holdPointActions.canRequestRelease}
+                          onRequestHoldPointRelease={holdPointActions.openReleaseRequest}
+                          onShowHoldPointQrCode={holdPointActions.showQrCode}
                         />
                       );
                     })}
@@ -532,52 +534,39 @@ export function ITPChecklistTab({
           />
         )}
 
+        {/* T1: request a hold point release without leaving the checklist —
+            the same sheet and the same endpoint the register uses. */}
+        {holdPointActions.releaseRequestHoldPoint && (
+          <RequestReleaseFlow
+            holdPoint={holdPointActions.releaseRequestHoldPoint}
+            onClose={holdPointActions.closeReleaseRequest}
+            onRequested={holdPointActions.handleReleaseRequested}
+          />
+        )}
+
+        {/* T2: hand the approver standing next to you a scannable release link. */}
+        {holdPointActions.qrHoldPoint && (
+          <HoldPointReleaseQrModal
+            holdPointId={holdPointActions.qrHoldPoint.id}
+            lotNumber={lot?.lotNumber || ''}
+            description={holdPointActions.qrHoldPoint.description}
+            onClose={holdPointActions.closeQrCode}
+          />
+        )}
+
         {/* H4: reject-reason modal (reason required, max 3000) */}
         {rejectModal && (
-          <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Reject ITP item"
-          >
-            <div className="bg-background rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-lg font-semibold mb-1">Reject ITP item</h2>
-              <p className="text-sm text-muted-foreground mb-3">{rejectModal.itemDescription}</p>
-              <label htmlFor="itp-reject-reason" className="block text-sm font-medium mb-1">
-                Reason for rejection <span className="text-destructive">*</span>
-              </label>
-              <textarea
-                id="itp-reject-reason"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                maxLength={3000}
-                rows={4}
-                className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
-                placeholder="Explain what needs to be corrected before this item can be verified..."
-              />
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRejectModal(null);
-                    setRejectReason('');
-                  }}
-                  disabled={submittingReject}
-                  className="px-4 py-2 border rounded-lg hover:bg-muted disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitReject}
-                  disabled={submittingReject || !rejectReason.trim()}
-                  className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-                >
-                  {submittingReject ? 'Rejecting...' : 'Reject item'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ITPRejectItemModal
+            itemDescription={rejectModal.itemDescription}
+            reason={rejectReason}
+            submitting={submittingReject}
+            onReasonChange={setRejectReason}
+            onCancel={() => {
+              setRejectModal(null);
+              setRejectReason('');
+            }}
+            onSubmit={handleSubmitReject}
+          />
         )}
 
         <ConfirmDialog
@@ -607,99 +596,16 @@ export function ITPChecklistTab({
 
   // No ITP assigned - show assignment UI for managers, execution guidance for field roles.
   return (
-    <>
-      <div ref={assignTemplateCardRef} className="rounded-lg border p-6 text-center">
-        <div className="text-4xl mb-2">ITP</div>
-        <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
-        {canAssignITPTemplate ? (
-          <>
-            <p className="text-muted-foreground mb-4">
-              No ITP template assigned to this lot yet. Assign an ITP template to track quality
-              checkpoints.
-            </p>
-            {templates.length > 0 ? (
-              <button
-                onClick={() => setShowAssignModal(true)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-              >
-                Assign ITP Template
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/itp`)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-              >
-                Create ITP Template First
-              </button>
-            )}
-          </>
-        ) : (
-          <p className="text-muted-foreground mb-0">
-            An ITP template needs to be assigned before this lot can be checked off. Ask your
-            project manager or site engineer to assign one, then complete checklist items from the
-            lot.
-          </p>
-        )}
-      </div>
-
-      {/* Assign Template Modal */}
-      {canAssignITPTemplate && showAssignModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Assign ITP Template</h2>
-            {lot.activityType && (
-              <p className="text-sm text-muted-foreground mb-3">
-                Templates matching{' '}
-                <span className="font-medium text-foreground">{lot.activityType}</span> are
-                suggested first. Other active templates remain available if this lot needs a
-                different checklist.
-              </p>
-            )}
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {/* Sort templates: matching activity type first, then others */}
-              {sortItpTemplatesForLotActivity(templates, lot.activityType).map((template) => {
-                const isMatch = isItpTemplateActivityMatch(template, lot.activityType);
-                return (
-                  <button
-                    key={template.id}
-                    onClick={async () => {
-                      const assigned = await onAssignTemplate(template.id);
-                      if (assigned) {
-                        setShowAssignModal(false);
-                      }
-                    }}
-                    disabled={assigningTemplate}
-                    className={`w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 ${
-                      isMatch ? 'border-primary/40 bg-muted' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{template.name}</span>
-                      {isMatch && (
-                        <span className="text-xs bg-foreground/10 text-foreground px-2 py-0.5 rounded-full">
-                          Suggested
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {template.activityType} - {template.checklistItems.length} items
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={() => setShowAssignModal(false)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={assigningTemplate}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    <ITPAssignTemplateSection
+      lot={lot}
+      projectId={projectId}
+      templates={templates}
+      canAssignITPTemplate={canAssignITPTemplate}
+      assigningTemplate={assigningTemplate}
+      onAssignTemplate={onAssignTemplate}
+      cardRef={assignTemplateCardRef}
+      showAssignModal={showAssignModal}
+      onShowAssignModal={setShowAssignModal}
+    />
   );
 }

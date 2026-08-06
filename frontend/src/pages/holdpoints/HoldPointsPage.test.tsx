@@ -7,6 +7,7 @@ import {
   waitFor,
 } from '@/test/renderWithProviders';
 import userEvent from '@testing-library/user-event';
+import { within } from '@testing-library/react';
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import type { HoldPoint } from './types';
@@ -493,6 +494,78 @@ describe('HoldPointsPage register data layer', () => {
 
     await waitFor(() => {
       expect(queryClient.getQueryState(DASHBOARD_STATS_KEY)?.isInvalidated).toBe(true);
+    });
+  });
+});
+
+// The single request-release path moved into the shared RequestReleaseFlow
+// (benchmark T1) so the register and the lot ITP checklist row drive one
+// request. It had no register-level coverage before that move; this is it.
+describe('HoldPointsPage single request release', () => {
+  function mockSingleRequestApi(register: HoldPoint[]) {
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      const url = new URL(path, 'http://localhost');
+      const response = getHoldPointsApiResponse(path, register);
+      if (response) {
+        return response;
+      }
+      if (url.pathname === '/api/holdpoints/lot/lot-1/item/item-1') {
+        return Promise.resolve({
+          holdPoint: register[0],
+          prerequisites: [],
+          incompletePrerequisites: [],
+          canRequestRelease: true,
+          defaultRecipients: ['super@example.com'],
+        });
+      }
+      if (url.pathname === '/api/holdpoints/request-release') {
+        return Promise.resolve({ success: true, receivedBody: options?.body });
+      }
+      return Promise.reject(new Error(`Unhandled apiFetch path in test: ${path}`));
+    });
+  }
+
+  it('requests a release for the selected hold point and refreshes the register', async () => {
+    const register = [
+      makeHoldPoint({ id: 'hp-1', lotNumber: 'LOT-001', description: 'Formation inspection' }),
+    ];
+    mockSingleRequestApi(register);
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+
+    renderPage('/projects/p1/hold-points', queryClient);
+
+    await findLotCard('LOT-001');
+    await user.click(screen.getByRole('button', { name: /^Request Release$/i }));
+
+    await user.type(await screen.findByLabelText(/Scheduled Date/i), FUTURE_SCHEDULED_DATE);
+    await user.type(screen.getByLabelText(/Scheduled Time/i), '09:30');
+    // The register card's button and the sheet's submit share a label; the
+    // submit is the one inside the dialog.
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^Request Release$/i }));
+
+    await waitFor(() => {
+      const call = apiFetchMock.mock.calls.find(
+        ([path]) => path === '/api/holdpoints/request-release',
+      );
+      expect(call).toBeDefined();
+      expect(JSON.parse((call![1] as RequestInit).body as string)).toMatchObject({
+        lotId: 'lot-1',
+        itpChecklistItemId: 'item-1',
+        scheduledTime: '09:30',
+        notificationSentTo: 'super@example.com',
+      });
+    });
+
+    // The register must re-read after the request, or the row the user just
+    // actioned keeps showing "Request Release".
+    await waitFor(() => {
+      const registerReads = apiFetchMock.mock.calls.filter(
+        ([path]) =>
+          new URL(path as string, 'http://localhost').pathname === '/api/holdpoints/project/p1',
+      );
+      expect(registerReads.length).toBeGreaterThan(1);
     });
   });
 });

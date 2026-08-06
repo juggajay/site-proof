@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { Link2, Check, Download, QrCode, RefreshCw, ClipboardCheck } from 'lucide-react';
 import type { HoldPoint, HoldPointSortDirection, HoldPointSortField, StatusFilter } from '../types';
 import {
   buildFilterEmptyStateMessage,
@@ -33,6 +33,7 @@ interface HoldPointsTableProps {
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
+  onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
   onClearFilter: () => void;
@@ -101,6 +102,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
   onRequestRelease,
   onRecordRelease,
   onChase,
+  onShowQrCode,
   onGenerateEvidence,
   onToggleBatchSelection,
   onClearFilter,
@@ -255,6 +257,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
                 onRequestRelease={onRequestRelease}
                 onRecordRelease={onRecordRelease}
                 onChase={onChase}
+                onShowQrCode={onShowQrCode}
                 onGenerateEvidence={onGenerateEvidence}
                 onToggleBatchSelection={onToggleBatchSelection}
               />
@@ -295,6 +298,7 @@ interface HoldPointRowProps {
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
+  onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
 }
@@ -313,6 +317,7 @@ function HoldPointRow({
   onRequestRelease,
   onRecordRelease,
   onChase,
+  onShowQrCode,
   onGenerateEvidence,
   onToggleBatchSelection,
 }: HoldPointRowProps) {
@@ -413,6 +418,7 @@ function HoldPointRow({
           onRequestRelease={onRequestRelease}
           onRecordRelease={onRecordRelease}
           onChase={onChase}
+          onShowQrCode={onShowQrCode}
           onGenerateEvidence={onGenerateEvidence}
         />
       </td>
@@ -432,6 +438,7 @@ function HoldPointRowActions({
   onRequestRelease,
   onRecordRelease,
   onChase,
+  onShowQrCode,
   onGenerateEvidence,
 }: Pick<
   HoldPointRowProps,
@@ -443,6 +450,7 @@ function HoldPointRowActions({
   | 'onRequestRelease'
   | 'onRecordRelease'
   | 'onChase'
+  | 'onShowQrCode'
   | 'onGenerateEvidence'
 >) {
   return (
@@ -479,6 +487,14 @@ function HoldPointRowActions({
               >
                 <ClipboardCheck className="h-3 w-3" />
                 <span>Record Manual Release</span>
+              </button>
+              <button
+                onClick={() => onShowQrCode(hp)}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/5 text-primary border border-primary/20 rounded hover:bg-primary/10"
+                title="Show a QR code the approver can scan on the spot"
+              >
+                <QrCode className="h-3 w-3" />
+                <span>QR Release</span>
               </button>
               <button
                 onClick={() => onChase(hp)}

@@ -55,6 +55,7 @@ function renderList(highlightedHpId: string | null) {
       onRequestRelease={vi.fn()}
       onRecordRelease={vi.fn()}
       onChase={vi.fn()}
+      onShowQrCode={vi.fn()}
       onGenerateEvidence={vi.fn()}
       onToggleBatchSelection={vi.fn()}
       onClearFilter={vi.fn()}

@@ -21,6 +21,7 @@ import {
 } from './helpers/access.js';
 import { requireSubcontractorPortalModuleAccess } from '../../lib/projectAccess.js';
 import { buildItpInstanceResponse } from './instances/responses.js';
+import { buildChecklistHoldPointStates } from './instances/checklistHoldPoints.js';
 import { sanitizeItpCompletionResponse } from './completionResponses.js';
 import { deriveItpVerificationFlags } from './completionWorkflow.js';
 import { findLinkedNcrsForChecklistItems, type NcrLinkClient } from './instances/ncrLinks.js';
@@ -452,24 +453,37 @@ instancesRouter.get(
       failedChecklistItemIds,
     );
 
-    // I1-core: surface hold-point release attribution on each ITP item. One
-    // scoped, batched query for the released hold points on this lot, keyed by
+    // I1-core: surface hold-point release attribution on each ITP item, and
+    // (benchmark T1) the requested/rejected state the checklist row needs so a
+    // foreman can see "already asked, due Friday" without opening the register.
+    // One scoped, batched query for every hold point on this lot, keyed by
     // itpChecklistItemId (mirrors the linked-NCR batch lookup style above).
-    const releasedHoldPoints = await prisma.holdPoint.findMany({
-      where: { lotId, status: 'released' },
+    const lotHoldPoints = await prisma.holdPoint.findMany({
+      where: { lotId },
       select: {
+        id: true,
         itpChecklistItemId: true,
+        status: true,
+        scheduledDate: true,
+        scheduledTime: true,
+        notificationSentAt: true,
+        notificationSentTo: true,
         releasedByName: true,
         releasedByOrg: true,
         releaseMethod: true,
         releasedAt: true,
+        releaseNotes: true,
       },
-      // Oldest-first so that when several released hold points share a checklist
-      // item, the Map below keeps the most-recent release deterministically.
-      orderBy: { releasedAt: 'asc' },
+      // Oldest-first so that when several hold points share a checklist item,
+      // the Maps below keep the most-recent one deterministically.
+      orderBy: { createdAt: 'asc' },
     });
     const holdPointReleaseByItem = new Map(
-      releasedHoldPoints.map((hp) => [hp.itpChecklistItemId, hp]),
+      lotHoldPoints
+        .filter((hp) => hp.status === 'released')
+        // Released ordering stays keyed on releasedAt, as it was before T1.
+        .sort((a, b) => (a.releasedAt?.getTime() ?? 0) - (b.releasedAt?.getTime() ?? 0))
+        .map((hp) => [hp.itpChecklistItemId, hp]),
     );
 
     // Transform to frontend-friendly format
@@ -477,6 +491,12 @@ instancesRouter.get(
       ...instance,
       templateSnapshot: useSubcontractorView ? undefined : instance.templateSnapshot,
       template: templateData,
+      // Benchmark T1: per-item hold-point state (requested / rejected /
+      // released) for the lot ITP tab. Internal view only — it carries the
+      // authority's notification address.
+      holdPoints: useSubcontractorView
+        ? []
+        : buildChecklistHoldPointStates(lotHoldPoints, filteredItemIds),
       completions: visibleCompletions.map((c) =>
         sanitizeItpCompletionResponse({
           ...c,

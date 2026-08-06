@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
@@ -16,6 +16,7 @@ import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionRespons
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
+import { holdPointReleaseLinkRouter } from './holdpoints/releaseLinkRoutes.js';
 import { holdPointPublicBatchRouter } from './holdpoints/publicBatchRoutes.js';
 import { holdPointUnsubscribeRouter } from './holdpoints/unsubscribeRoutes.js';
 import { recordHoldPointLinkOpen } from '../lib/holdPointMailConsent.js';
@@ -62,10 +63,30 @@ holdpointsRouter.use(holdPointRequestReleaseRouter);
 // routes so route order and per-route authentication are unchanged.
 holdpointsRouter.use(holdPointActionRouter);
 
+// Benchmark T2 — POST /:id/release-link mints a short-lived secure link for a
+// co-located approver to scan. Authenticated and role-gated like the other
+// mutation routes; mounted after them and before the public token routes so
+// its /:id path cannot shadow /public/:token.
+holdpointsRouter.use(holdPointReleaseLinkRouter);
+
 // ============================================================================
 // PUBLIC ENDPOINTS - No authentication required (Feature #23)
 // These endpoints use secure time-limited tokens for superintendent access
 // ============================================================================
+
+// The bearer credential for every route below is IN THE URL, and the responses
+// carry the evidence package plus the invited recipient's email. A shared cache
+// keyed on that URL would hand both to the next reader of the same link, so the
+// whole public section is `no-store` — one `use` rather than a header line per
+// route, because the property belongs to the section, not to any one handler.
+//
+// `Referrer-Policy: no-referrer` is NOT repeated here: helmet already sets it
+// globally in server.ts (verified against the installed version), and a second
+// per-route copy would drift from it.
+holdpointsRouter.use('/public', (_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  next();
+});
 
 // Wave E2.1 — the unsubscribe door for an external recipient with no CIVOS
 // account. Mounted at the head of the public section so its two-segment

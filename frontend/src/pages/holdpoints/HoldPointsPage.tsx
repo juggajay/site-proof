@@ -6,25 +6,13 @@ import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
 import { getAuthToken } from '@/lib/auth';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
-import {
-  extractErrorMessage,
-  extractErrorDetails,
-  extractErrorCode,
-  handleApiError,
-} from '@/lib/errorHandling';
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { formatDateKey } from '@/lib/localDate';
 import { logError } from '@/lib/logger';
 
 // Types
-import type {
-  HoldPoint,
-  HoldPointDetails,
-  HoldPointSortField,
-  PrerequisiteItem,
-  RequestError,
-  StatusFilter,
-} from './types';
+import type { HoldPoint, HoldPointDetails, HoldPointSortField, StatusFilter } from './types';
 
 interface EvidencePackageResponse {
   evidencePackage: HPEvidencePackageData;
@@ -64,7 +52,8 @@ import {
   sortHoldPoints,
 } from './holdPointsPageData';
 import { fetchAllProjectHoldPoints } from './holdPointsApi';
-import { RequestReleaseModal } from './components/RequestReleaseModal';
+import { RequestReleaseFlow } from './components/RequestReleaseFlow';
+import { HoldPointReleaseQrModal } from './components/HoldPointReleaseQrModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import {
   BatchRequestReleaseModal,
@@ -104,17 +93,19 @@ export function HoldPointsPage() {
   const currentProjectRole = useCurrentProjectRole(projectId);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showRequestModal, setShowRequestModal] = useState(false);
   const [showBatchRequestModal, setShowBatchRequestModal] = useState(false);
+  // The single request-release interaction lives in RequestReleaseFlow, shared
+  // with the lot ITP checklist row, so both doors drive one request path.
+  const [releaseRequestHoldPoint, setReleaseRequestHoldPoint] = useState<HoldPoint | null>(null);
+  // T2: the scannable release link for an approver standing in front of you.
+  const [qrHoldPoint, setQrHoldPoint] = useState<HoldPoint | null>(null);
   const [selectedHoldPoint, setSelectedHoldPoint] = useState<HoldPoint | null>(null);
   const [selectedBatchHoldPointIds, setSelectedBatchHoldPointIds] = useState<Set<string>>(
     () => new Set(),
   );
   const [holdPointDetails, setHoldPointDetails] = useState<HoldPointDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [requesting, setRequesting] = useState(false);
   const [batchRequesting, setBatchRequesting] = useState(false);
-  const [requestError, setRequestError] = useState<RequestError | null>(null);
   const [batchRequestError, setBatchRequestError] = useState<string | null>(null);
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
@@ -124,7 +115,6 @@ export function HoldPointsPage() {
   const [recordReleaseError, setRecordReleaseError] = useState<string | null>(null);
   const generatingPdfRef = useRef<string | null>(null);
   const chasingHpRef = useRef<string | null>(null);
-  const requestingRef = useRef(false);
   const batchRequestingRef = useRef(false);
   const recordingReleaseRef = useRef(false);
 
@@ -191,9 +181,11 @@ export function HoldPointsPage() {
     void refetchHoldPoints();
   }, [refetchHoldPoints]);
 
+  // Serves the record-release sheet, which needs the project's approval
+  // requirement. The request sheet loads its own details inside
+  // RequestReleaseFlow.
   const fetchHoldPointDetails = useCallback(async (hp: HoldPoint) => {
     setLoadingDetails(true);
-    setRequestError(null);
     setHoldPointDetails(null);
     try {
       const data = await apiFetch<HoldPointDetails>(
@@ -202,7 +194,7 @@ export function HoldPointsPage() {
       setHoldPointDetails(data);
     } catch (err) {
       logError('Failed to fetch hold point details:', err);
-      setRequestError({ message: extractErrorMessage(err, 'Could not load hold point details.') });
+      setRecordReleaseError(extractErrorMessage(err, 'Could not load hold point details.'));
     } finally {
       setLoadingDetails(false);
     }
@@ -366,15 +358,14 @@ export function HoldPointsPage() {
     [projectId],
   );
 
-  const handleRequestRelease = useCallback(
-    (hp: HoldPoint) => {
-      setSelectedHoldPoint(hp);
-      setHoldPointDetails(null);
-      setShowRequestModal(true);
-      fetchHoldPointDetails(hp);
-    },
-    [fetchHoldPointDetails],
-  );
+  const handleRequestRelease = useCallback((hp: HoldPoint) => {
+    setReleaseRequestHoldPoint(hp);
+  }, []);
+
+  const handleShowQrCode = useCallback((hp: HoldPoint) => {
+    if (hp.id.startsWith('virtual-')) return;
+    setQrHoldPoint(hp);
+  }, []);
 
   const handleToggleBatchSelection = useCallback(
     (hp: HoldPoint) => {
@@ -405,7 +396,6 @@ export function HoldPointsPage() {
     (hp: HoldPoint) => {
       setSelectedHoldPoint(hp);
       setHoldPointDetails(null);
-      setRequestError(null);
       setRecordReleaseError(null);
       setShowRecordReleaseModal(true);
       fetchHoldPointDetails(hp);
@@ -436,65 +426,6 @@ export function HoldPointsPage() {
       }
     },
     [refreshHoldPoints],
-  );
-
-  const handleSubmitRequest = useCallback(
-    async (
-      scheduledDate: string,
-      scheduledTime: string,
-      notificationSentTo: string,
-      overrideNoticePeriod?: boolean,
-      overrideReason?: string,
-      evidenceDocumentIds?: string[],
-    ) => {
-      if (!selectedHoldPoint || requestingRef.current) return;
-      requestingRef.current = true;
-      setRequesting(true);
-      setRequestError(null);
-      try {
-        await apiFetch(`/api/holdpoints/request-release`, {
-          method: 'POST',
-          body: JSON.stringify({
-            lotId: selectedHoldPoint.lotId,
-            itpChecklistItemId: selectedHoldPoint.itpChecklistItemId,
-            scheduledDate: scheduledDate || null,
-            scheduledTime: scheduledTime || null,
-            notificationSentTo: notificationSentTo.trim() || null,
-            evidenceDocumentIds: evidenceDocumentIds || [],
-            noticePeriodOverride: overrideNoticePeriod || false,
-            noticePeriodOverrideReason: overrideReason?.trim() || null,
-          }),
-        });
-        await refreshHoldPoints();
-        setShowRequestModal(false);
-        setSelectedHoldPoint(null);
-        setHoldPointDetails(null);
-      } catch (err) {
-        const details = extractErrorDetails(err);
-        const code = extractErrorCode(err);
-        const incompleteItems = Array.isArray(details?.incompleteItems)
-          ? (details.incompleteItems as PrerequisiteItem[])
-          : undefined;
-        if (incompleteItems) {
-          setRequestError({
-            message: extractErrorMessage(err, 'Failed to request release'),
-            incompleteItems,
-          });
-        } else if (code === 'NOTICE_PERIOD_WARNING') {
-          setRequestError({
-            message: extractErrorMessage(err, 'Failed to request release'),
-            code,
-            details: details || undefined,
-          });
-        } else {
-          setRequestError({ message: extractErrorMessage(err, 'Failed to request release') });
-        }
-      } finally {
-        requestingRef.current = false;
-        setRequesting(false);
-      }
-    },
-    [selectedHoldPoint, refreshHoldPoints],
   );
 
   const handleSubmitBatchRequest = useCallback(
@@ -667,10 +598,7 @@ export function HoldPointsPage() {
   }, [holdPoints, projectId, csvBranding]);
 
   const handleCloseRequestModal = useCallback(() => {
-    setShowRequestModal(false);
-    setSelectedHoldPoint(null);
-    setHoldPointDetails(null);
-    setRequestError(null);
+    setReleaseRequestHoldPoint(null);
   }, []);
 
   const handleCloseBatchRequestModal = useCallback(() => {
@@ -682,7 +610,6 @@ export function HoldPointsPage() {
     setShowRecordReleaseModal(false);
     setSelectedHoldPoint(null);
     setHoldPointDetails(null);
-    setRequestError(null);
     setRecordReleaseError(null);
   }, []);
 
@@ -780,6 +707,7 @@ export function HoldPointsPage() {
             onRequestRelease={handleRequestRelease}
             onRecordRelease={handleRecordRelease}
             onChase={handleChaseHoldPoint}
+            onShowQrCode={handleShowQrCode}
             onGenerateEvidence={handleGenerateEvidencePackage}
             onToggleBatchSelection={handleToggleBatchSelection}
             onClearFilter={handleClearFilter}
@@ -804,6 +732,7 @@ export function HoldPointsPage() {
             onRequestRelease={handleRequestRelease}
             onRecordRelease={handleRecordRelease}
             onChase={handleChaseHoldPoint}
+            onShowQrCode={handleShowQrCode}
             onGenerateEvidence={handleGenerateEvidencePackage}
             onToggleBatchSelection={handleToggleBatchSelection}
             onClearFilter={handleClearFilter}
@@ -817,15 +746,20 @@ export function HoldPointsPage() {
         />
       )}
 
-      {showRequestModal && selectedHoldPoint && (
-        <RequestReleaseModal
-          holdPoint={selectedHoldPoint}
-          details={holdPointDetails}
-          loading={loadingDetails}
-          requesting={requesting}
-          error={requestError}
+      {qrHoldPoint && (
+        <HoldPointReleaseQrModal
+          holdPointId={qrHoldPoint.id}
+          lotNumber={qrHoldPoint.lotNumber}
+          description={qrHoldPoint.description}
+          onClose={() => setQrHoldPoint(null)}
+        />
+      )}
+
+      {releaseRequestHoldPoint && (
+        <RequestReleaseFlow
+          holdPoint={releaseRequestHoldPoint}
           onClose={handleCloseRequestModal}
-          onSubmit={handleSubmitRequest}
+          onRequested={refreshHoldPoints}
         />
       )}
 
