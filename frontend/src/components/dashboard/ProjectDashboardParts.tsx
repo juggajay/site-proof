@@ -28,6 +28,7 @@ export function StatPill({
 
   return (
     <div
+      data-testid="stat-pill"
       className={cn(
         'bg-card px-3 py-2.5 text-center sm:px-4',
         alert && 'ring-1 ring-inset ring-destructive/30',
