@@ -292,6 +292,61 @@ describe('chat tool executor', () => {
     expect(outcome.result).toContain('Unknown help topic');
     expect(outcome.result).toContain('list_help_topics');
   });
+
+  it('searches the UI knowledge without project or database access', async () => {
+    const execute = createChatToolExecutor(user);
+    const parsed = JSON.parse(
+      (
+        await execute('search_ui_knowledge', {
+          query: 'What is the Views button for in Test Results?',
+        })
+      ).result,
+    );
+    expect(parsed.results).toHaveLength(3);
+    expect(parsed.results[0]).toMatchObject({
+      route: 'projects/<projectId>/tests',
+      title: 'Test Results',
+    });
+    expect(parsed.results[0].snippet).toContain('Views');
+    expect(hasInternalProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('requires a query for UI knowledge search', async () => {
+    const execute = createChatToolExecutor(user);
+    expect((await execute('search_ui_knowledge', {})).result).toBe('A query is required.');
+  });
+
+  it('returns the full guide for a known canonical or concrete route', async () => {
+    const execute = createChatToolExecutor(user);
+    const canonical = JSON.parse(
+      (await execute('get_page_guide', { route: 'projects/<projectId>/tests' })).result,
+    );
+    const concrete = JSON.parse(
+      (await execute('get_page_guide', { route: '/projects/project-1/tests?status=verified' }))
+        .result,
+    );
+    expect(canonical).toMatchObject({ title: 'Test Results', surface: 'office' });
+    expect(canonical.body).toContain('Views');
+    expect(concrete.route).toBe('projects/<projectId>/tests');
+  });
+
+  it('returns the valid route list for an unknown page guide', async () => {
+    const execute = createChatToolExecutor(user);
+    const parsed = JSON.parse(
+      (await execute('get_page_guide', { route: '/projects/project-1/invoices' })).result,
+    );
+    expect(parsed.error).toContain('Unknown page guide');
+    expect(parsed.routes).toHaveLength(91);
+    expect(parsed.routes).toContainEqual({
+      route: 'projects/<projectId>/tests',
+      title: 'Test Results',
+    });
+  });
+
+  it('requires a route for a page guide', async () => {
+    const execute = createChatToolExecutor(user);
+    expect((await execute('get_page_guide', {})).result).toBe('A route is required.');
+  });
 });
 
 describe('summariseHoldPoints', () => {

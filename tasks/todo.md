@@ -116,3 +116,27 @@ productionReadiness, fallow verdict in body) → `gh pr checks --watch` green �
 - Strongest risks: capability tokens in telemetry, failed ITP/NCR split commit, claim/payment replay, release-time HP prerequisite bypass, NCR evidence lifecycle bypass.
 - Tenancy result: no additional conventional cross-tenant IDOR verified; HP hash/expiry/single-use logic otherwise held up.
 - Verification: focused frontend suites 58/58 passed; synthetic-token helper checks reproduced F-01. Focused backend tests were stopped by the non-local database safety guard and were not bypassed.
+# Clancy UI knowledge wiki — 2026-08-06
+
+- [x] Inventory every route in `frontend/src/App.tsx`, the foreman shell and the subbie portal.
+- [x] Trace every page into child components and record controls, visibility gates and concepts.
+- [x] Add typed per-domain UI knowledge modules and deterministic top-three retrieval.
+- [x] Add `search_ui_knowledge` and `get_page_guide` to Clancy's tool contract and executor.
+- [x] Add the compact system-prompt retrieval instruction.
+- [x] Add route drift, retrieval-quality and tool-contract tests.
+- [x] Run backend type-check, focused/existing chat suites and `npm run fallow:audit`.
+- [ ] Commit, push and open the requested PR; stop without merging.
+
+## Review
+
+- Coverage: 91 authenticated product routes found / 91 mapped; reverse coverage also passes.
+- Retrieval: all five natural-language proof questions rank the intended guide first and return
+  a snippet centred on the requested control.
+- Tests: required Clancy suites 107/107 passed; backend type-check passed.
+- Broader chat-directory run: 114 tests passed and the DB-backed suite could not start without a
+  `DATABASE_URL`; production credentials were not imported into the clean worktree.
+- Fallow: pass — no issues in 13 changed files; four inherited findings excluded by the gate.
+- Mapping note: the current `/p/docs` implementation is project-level within the subcontractor's
+  permitted document scope, including when opened from a lot hub; it is not filtered to that lot.
+
+---
