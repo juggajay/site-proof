@@ -116,9 +116,9 @@ async function mockHeaderApis(page: Page) {
       return;
     }
 
-    // The triaged, repeat-collapsed read model the page and the bell dropdown
-    // use. These three fixtures point at three different entities, so each is
-    // its own group of one — mirroring the real backend's grouping.
+    // NotificationsPage reads the triaged, repeat-collapsed model. These three
+    // fixtures point at three different entities, so each is its own group of
+    // one — mirroring how the real backend groups them.
     if (url.pathname === '/api/notifications/grouped' && method === 'GET') {
       const category = (notification: (typeof notifications)[number]) => {
         if (notification.isRead) return 'read';
@@ -141,11 +141,6 @@ async function mockHeaderApis(page: Page) {
         windowSize: 200,
         truncated: false,
       });
-      return;
-    }
-
-    if (url.pathname === '/api/notifications/unread-count' && method === 'GET') {
-      await json({ count: notifications.filter((notification) => !notification.isRead).length });
       return;
     }
 
@@ -205,12 +200,7 @@ test.describe('Header notifications', () => {
       )
       .toEqual({ hasNotificationMenuText: false, hasUserMenuText: false });
 
-    // The bell opens a triaged dropdown; needs-action groups come first.
-    await page.getByRole('button', { name: 'Notifications' }).click();
-    const bellMenu = page.getByRole('menu', { name: 'Recent notifications' });
-    await expect(bellMenu.getByRole('menuitem').first()).toContainText('Overdue NCR');
-
-    await page.getByRole('link', { name: 'View all notifications' }).click();
+    await page.getByRole('link', { name: 'Notifications' }).click();
     await expect(page).toHaveURL('/notifications');
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
 
@@ -222,7 +212,7 @@ test.describe('Header notifications', () => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.goto('/notifications');
+    await page.getByRole('link', { name: 'Notifications' }).click();
 
     await page.getByRole('button', { name: 'Alerts' }).click();
     await expect(page.getByRole('button', { name: /Overdue NCR/ })).toBeVisible();
@@ -247,7 +237,7 @@ test.describe('Header notifications', () => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.goto('/notifications');
+    await page.getByRole('link', { name: 'Notifications' }).click();
     await page.getByRole('button', { name: /External destination/ }).click();
 
     await expect(page).toHaveURL('/notifications');
