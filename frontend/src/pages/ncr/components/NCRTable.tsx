@@ -1,10 +1,11 @@
 import { memo, useEffect, useRef, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
+import { RowActions } from '@/components/ui/RowActions';
 import { getStatusBadgeColor } from '../constants';
 import { buildNcrDetailPdfData } from '../ncrDetailPdfData';
 import { getAvailableNcrActions } from '../ncrActions';
+import { buildNcrRowActions } from '../ncrRowActions';
 import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
 import { fetchPdfBranding } from '@/lib/pdf/fetchBranding';
@@ -110,7 +111,7 @@ function NCRTableInner({
   // Sortable column header (same affordance as the lot register).
   const renderSortableHeader = (field: NcrSortField, children: ReactNode) => (
     <th
-      className="px-4 py-3 text-left text-sm font-medium cursor-pointer hover:bg-muted/70 select-none group"
+      className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium cursor-pointer hover:bg-muted/70 select-none group"
       aria-sort={
         sortField === field ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined
       }
@@ -143,16 +144,22 @@ function NCRTableInner({
       <table className="w-full">
         <thead className="bg-muted/50 sticky top-0 z-10">
           <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium">NCR #</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Lots</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Category</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">NCR #</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">Lots</th>
+            {/* Description takes the slack the actions column gave back — the
+                only column that grows, capped so it cannot push the register
+                wider than the screen on its own. */}
+            <th className="w-full px-4 py-3 text-left text-sm font-medium">Description</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">Category</th>
             {renderSortableHeader('severity', 'Severity')}
             {renderSortableHeader('status', 'Status')}
-            <th className="px-4 py-3 text-left text-sm font-medium">Responsible</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">
+              Responsible
+            </th>
             {renderSortableHeader('due', 'Due')}
             {renderSortableHeader('raised', 'Age')}
-            <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+            {/* Fixed width: one primary action + the overflow trigger. */}
+            <th className="w-[150px] px-4 py-3 text-left text-sm font-medium">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y">
@@ -172,13 +179,6 @@ function NCRTableInner({
             const ncr = ncrs[virtualRow.index];
             if (!ncr) return null;
             const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
-            const closeBlocked =
-              actions.closeBlockedPendingQmApproval || actions.closeBlockedSameQmApprover;
-            const closeBlockedTitle = actions.closeBlockedPendingQmApproval
-              ? 'Requires QM approval first'
-              : actions.closeBlockedSameQmApprover
-                ? 'A different user must close after QM approval'
-                : undefined;
             const ageInDays = Math.floor(
               (Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24),
             );
@@ -187,6 +187,25 @@ function NCRTableInner({
               new Date(ncr.dueDate) < new Date() &&
               ncr.status !== 'closed' &&
               ncr.status !== 'closed_concession';
+            const lotNumbers = ncr.ncrLots.map((nl) => nl.lot.lotNumber).join(', ');
+            const { primary, overflow } = buildNcrRowActions(
+              ncr,
+              actions,
+              { canAssign, actionLoading, copied: copiedNcrId === ncr.id },
+              {
+                onCopyLink,
+                onPrint: (target) => void handlePrintPdf(target),
+                onAssign,
+                onRespond,
+                onReviewResponse,
+                onQmApprove,
+                onNotifyClient,
+                onRectify,
+                onRejectRectification,
+                onClose,
+                onConcession,
+              },
+            );
 
             return (
               <tr
@@ -196,48 +215,59 @@ function NCRTableInner({
                 className={`hover:bg-muted/50 ${ncr.id === highlightedNcrId ? 'bg-primary/10' : ''}`}
                 data-deep-linked={ncr.id === highlightedNcrId ? 'true' : undefined}
               >
-                <td className="px-4 py-3 font-mono text-sm">{ncr.ncrNumber}</td>
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-sm">{ncr.ncrNumber}</td>
                 <td className="px-4 py-3 text-sm">
-                  {ncr.ncrLots.length > 0 ? (
-                    <span className="text-muted-foreground">
-                      {ncr.ncrLots.map((nl) => nl.lot.lotNumber).join(', ')}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
+                  <div
+                    className="max-w-[160px] truncate text-muted-foreground"
+                    title={lotNumbers || undefined}
+                  >
+                    {lotNumbers || '-'}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="max-w-xs truncate" title={ncr.description}>
+                  <div className="max-w-[420px] truncate" title={ncr.description}>
                     {ncr.description}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm">
+                <td className="whitespace-nowrap px-4 py-3 text-sm">
                   <span className="capitalize">{ncr.category.replace(/_/g, ' ')}</span>
                 </td>
-                <td className="px-4 py-3 text-sm">
+                <td className="whitespace-nowrap px-4 py-3 text-sm">
                   <span
                     className={`capitalize ${ncr.severity === 'major' ? 'text-destructive font-medium' : ''}`}
                   >
                     {ncr.severity}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="whitespace-nowrap px-4 py-3">
                   <span
                     className={`px-2 py-1 rounded-full text-xs ${getStatusBadgeColor(ncr.status)}`}
                   >
                     {formatStatusLabel(ncr.status)}
                   </span>
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {ncr.responsibleUser ? (
-                    ncr.responsibleUser.fullName || ncr.responsibleUser.email
-                  ) : ncr.responsibleSubcontractor ? (
-                    ncr.responsibleSubcontractor.companyName
-                  ) : (
-                    <span className="text-muted-foreground">Unassigned</span>
+                  {/* A fact about the NCR, not an action — it belongs with the
+                      status, not in the actions column it used to widen. */}
+                  {ncr.clientNotifiedAt && (
+                    <div
+                      className="mt-0.5 text-xs text-muted-foreground"
+                      title={`Client notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString('en-AU')}`}
+                    >
+                      ✓ Client Notified
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">
+                  <div className="max-w-[160px] truncate">
+                    {ncr.responsibleUser ? (
+                      ncr.responsibleUser.fullName || ncr.responsibleUser.email
+                    ) : ncr.responsibleSubcontractor ? (
+                      ncr.responsibleSubcontractor.companyName
+                    ) : (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </div>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm">
                   {ncr.dueDate ? (
                     <span className={isOverdue ? 'text-destructive font-medium' : ''}>
                       {new Date(ncr.dueDate).toLocaleDateString('en-AU')}
@@ -246,162 +276,17 @@ function NCRTableInner({
                     <span className="text-muted-foreground">-</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-sm">
+                <td className="whitespace-nowrap px-4 py-3 text-sm">
                   <span className={ageInDays > 14 ? 'text-warning font-medium' : ''}>
                     {ageInDays}d
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    {/* Copy Link Button */}
-                    <button
-                      onClick={() => onCopyLink(ncr.id, ncr.ncrNumber)}
-                      className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
-                      title="Copy link to this NCR"
-                      aria-label={`Copy link to NCR ${ncr.ncrNumber}`}
-                    >
-                      {copiedNcrId === ncr.id ? (
-                        <Check className="h-3.5 w-3.5 text-success" />
-                      ) : (
-                        <Link2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    {/* Print NCR Button */}
-                    <button
-                      onClick={() => void handlePrintPdf(ncr)}
-                      className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors print:hidden"
-                      title="Print NCR details"
-                      aria-label={`Print NCR ${ncr.ncrNumber}`}
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                    </button>
-                    {/* Assign / Reassign Button (management roles) */}
-                    {canAssign && (
-                      <button
-                        onClick={() => onAssign(ncr)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs border rounded hover:bg-muted/50 disabled:opacity-50"
-                        title="Assign or reassign this NCR"
-                      >
-                        {ncr.responsibleUser || ncr.responsibleSubcontractor
-                          ? 'Reassign'
-                          : 'Assign'}
-                      </button>
-                    )}
-                    {/* Respond Button for open NCRs */}
-                    {actions.respond && (
-                      <button
-                        onClick={() => onRespond(ncr)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        Respond
-                      </button>
-                    )}
-
-                    {/* QM Review Button for NCRs in investigating status */}
-                    {actions.reviewResponse && (
-                      <button
-                        onClick={() => onReviewResponse(ncr)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                        title="Review the submitted response"
-                      >
-                        Review Response
-                      </button>
-                    )}
-
-                    {/* QM Approval Button for major NCRs */}
-                    {actions.qmApprove && (
-                      <button
-                        onClick={() => onQmApprove(ncr.id)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        QM Approve
-                      </button>
-                    )}
-
-                    {/* Notify Client Button for major NCRs */}
-                    {actions.notifyClient && (
-                      <button
-                        onClick={() => onNotifyClient(ncr)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                        title="Notify client about this major NCR"
-                      >
-                        Notify Client
-                      </button>
-                    )}
-
-                    {/* Client Notified Badge */}
-                    {ncr.clientNotifiedAt && (
-                      <span
-                        className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded"
-                        title={`Client notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString('en-AU')}`}
-                      >
-                        ✓ Client Notified
-                      </span>
-                    )}
-
-                    {/* Rectify Button */}
-                    {actions.rectify && (
-                      <button
-                        onClick={() => onRectify(ncr)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        Submit Rectification
-                      </button>
-                    )}
-
-                    {/* Reject Rectification Button */}
-                    {actions.rejectRectification && (
-                      <button
-                        onClick={() => onRejectRectification(ncr)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
-                        title="Reject rectification and return to responsible party"
-                      >
-                        Reject
-                      </button>
-                    )}
-
-                    {/* Close Button */}
-                    {actions.close && (
-                      <button
-                        onClick={() => onClose(ncr)}
-                        disabled={actionLoading || closeBlocked}
-                        className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
-                          closeBlocked
-                            ? 'bg-muted-foreground text-muted cursor-not-allowed'
-                            : 'bg-success text-success-foreground hover:bg-success/90'
-                        }`}
-                        title={closeBlockedTitle ?? 'Close NCR'}
-                      >
-                        Close
-                      </button>
-                    )}
-
-                    {/* Close with Concession Button */}
-                    {actions.concession && (
-                      <button
-                        onClick={() => onConcession(ncr)}
-                        disabled={actionLoading || closeBlocked}
-                        className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
-                          closeBlocked
-                            ? 'bg-muted-foreground text-muted cursor-not-allowed'
-                            : 'bg-warning text-warning-foreground hover:bg-warning/90'
-                        }`}
-                        title={
-                          closeBlockedTitle ??
-                          'Close with concession when full rectification is not possible'
-                        }
-                      >
-                        Concession
-                      </button>
-                    )}
-                  </div>
+                  <RowActions
+                    primary={primary}
+                    actions={overflow}
+                    menuLabel={`More actions for NCR ${ncr.ncrNumber}`}
+                  />
                 </td>
               </tr>
             );

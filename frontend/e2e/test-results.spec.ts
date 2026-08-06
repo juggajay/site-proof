@@ -1,5 +1,13 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
+
+// Register rows/cards show one promoted action; everything else lives behind
+// the row's "…" menu, which Radix portals to the body (so it is a page-level
+// locator, not a descendant of the row).
+async function openTestRowMenu(page: Page, row: Locator, testType: string) {
+  await row.getByRole('button', { name: `More actions for ${testType}` }).click();
+  return page.getByRole('menu');
+}
 
 const E2E_TEST_ID = 'e2e-test-result';
 const E2E_REJECT_TEST_ID = 'e2e-reject-test-result';
@@ -436,13 +444,14 @@ test.describe('Test results seeded quality evidence contract', () => {
     // exact: the row also carries a "Read with AI" attach action (#1634), which a
     // substring match would collide with. This asserts the extraction badge only.
     await expect(densityRow.getByText('AI', { exact: true })).toBeVisible();
-    await expect(
-      densityRow.getByRole('button', {
-        name: 'Print material conformance record for Density Ratio',
-      }),
-    ).toHaveCount(0);
     await expect(densityRow.getByRole('button', { name: 'Verify' })).toBeVisible();
-    await expect(densityRow.getByRole('button', { name: 'Reject' })).toBeVisible();
+
+    const densityMenu = await openTestRowMenu(page, densityRow, 'Density Ratio');
+    await expect(
+      densityMenu.getByRole('menuitem', { name: 'Print conformance record' }),
+    ).toHaveCount(0);
+    await expect(densityMenu.getByRole('menuitem', { name: 'Reject' })).toBeVisible();
+    await page.keyboard.press('Escape');
 
     const cbrRow = page.getByRole('row').filter({ hasText: 'CBR Laboratory' });
     await expect(cbrRow).toBeVisible();
@@ -463,13 +472,14 @@ test.describe('Test results seeded quality evidence contract', () => {
     expect(api.getVerifyRequest()).toMatchObject({ status: 'verified' });
     await expect(densityRow.getByText('Verified')).toBeVisible();
     await expect(densityRow.getByText('Complete')).toBeVisible();
+    const verifiedMenu = await openTestRowMenu(page, densityRow, 'Density Ratio');
     await expect(
-      densityRow.getByRole('button', {
-        name: 'Print material conformance record for Density Ratio',
-      }),
+      verifiedMenu.getByRole('menuitem', { name: 'Print conformance record' }),
     ).toBeVisible();
+    await page.keyboard.press('Escape');
 
-    await cbrRow.getByRole('button', { name: 'Reject' }).click();
+    const cbrMenu = await openTestRowMenu(page, cbrRow, 'CBR Laboratory');
+    await cbrMenu.getByRole('menuitem', { name: 'Reject' }).click();
 
     const rejectModal = page.getByRole('dialog').filter({ hasText: 'Reject Test Verification' });
     await expect(
@@ -659,35 +669,36 @@ test.describe('Test results mobile card layout', () => {
       .locator('xpath=ancestor::*[contains(@class,"rounded-xl")][1]');
     await expect(densityCard).toBeVisible();
     await expect(densityCard.getByText('98.2 % DDR')).toBeVisible();
-    await expect(densityCard.getByText('pass', { exact: true })).toBeVisible();
+    await expect(densityCard.getByText('Pass', { exact: true })).toBeVisible();
     await expect(densityCard.getByText('Entered')).toBeVisible();
     await expect(densityCard.getByText('AI', { exact: true })).toBeVisible();
     await expect(densityCard.getByRole('button', { name: 'LOT-TEST-001' })).toBeVisible();
-    await expect(
-      densityCard.getByRole('button', {
-        name: 'Print material conformance record for Density Ratio',
-      }),
-    ).toHaveCount(0);
-    await expect(densityCard.getByRole('button', { name: 'Reject' })).toBeVisible();
 
-    // The next-status workflow action is a full-width primary button on the card.
+    const densityMenu = await openTestRowMenu(page, densityCard, 'Density Ratio');
+    await expect(
+      densityMenu.getByRole('menuitem', { name: 'Print conformance record' }),
+    ).toHaveCount(0);
+    await expect(densityMenu.getByRole('menuitem', { name: 'Reject' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // The next-status workflow action is the card's primary button; it shares
+    // the action row only with the fixed-width overflow trigger.
     const verifyButton = densityCard.getByRole('button', { name: 'Verify' });
     await expect(verifyButton).toBeVisible();
     const cardBox = await densityCard.boundingBox();
     const verifyBox = await verifyButton.boundingBox();
     expect(cardBox).not.toBeNull();
     expect(verifyBox).not.toBeNull();
-    expect(verifyBox!.width).toBeGreaterThan(cardBox!.width * 0.8);
+    expect(verifyBox!.width).toBeGreaterThan(cardBox!.width * 0.6);
 
     // The status workflow still drives the real handler/API from the card.
     await verifyButton.click();
     expect(api.getVerifyRequest()).toMatchObject({ status: 'verified' });
     await expect(densityCard.getByText('Verified')).toBeVisible();
     await expect(densityCard.getByText('Complete')).toBeVisible();
+    const verifiedMenu = await openTestRowMenu(page, densityCard, 'Density Ratio');
     await expect(
-      densityCard.getByRole('button', {
-        name: 'Print material conformance record for Density Ratio',
-      }),
+      verifiedMenu.getByRole('menuitem', { name: 'Print conformance record' }),
     ).toBeVisible();
   });
 });

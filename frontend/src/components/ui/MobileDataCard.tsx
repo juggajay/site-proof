@@ -19,6 +19,12 @@ interface MobileDataCardProps {
   onClick?: () => void;
   actions?: ReactNode;
   className?: string;
+  /**
+   * Replaces the subtitle's default single-line `truncate` — pass
+   * `line-clamp-2` where the subtitle carries real content (a description)
+   * rather than a short label.
+   */
+  subtitleClassName?: string;
 }
 
 const statusColors = {
@@ -38,6 +44,7 @@ export function MobileDataCard({
   onClick,
   actions,
   className,
+  subtitleClassName,
 }: MobileDataCardProps) {
   const primaryFields = fields.filter((f) => f.priority === 'primary');
   const secondaryFields = fields.filter((f) => f.priority === 'secondary');
@@ -67,7 +74,11 @@ export function MobileDataCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-base truncate">{title}</h3>
-          {subtitle && <p className="text-sm text-muted-foreground truncate">{subtitle}</p>}
+          {subtitle && (
+            <p className={cn('text-sm text-muted-foreground', subtitleClassName ?? 'truncate')}>
+              {subtitle}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {status && (

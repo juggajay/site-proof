@@ -1,31 +1,21 @@
 import { useEffect, useRef } from 'react';
-import { Printer, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
-import { Button } from '@/components/ui/button';
+import { RowActions } from '@/components/ui/RowActions';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { formatCoordinate, formatProvenance, readSamplePoint } from '@/lib/samplePoint';
 import type { TestResult } from '../types';
 import {
   statusColors,
   testStatusLabels,
-  nextStatusMap,
-  nextStatusButtonLabels,
-  canAdvanceTestStatus,
-  canSendToLab,
-  AT_LAB_STATUS,
-  SEND_TO_LAB_LABEL,
-  isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
   getLabWait,
   formatLabWait,
   isAiExtractionReviewDraft,
 } from '../constants';
-import {
-  canGenerateTestResultCertificate,
-  generateTestResultCertificate,
-} from '../testResultCertificate';
-import { AttachCertificateButton } from './AttachCertificateButton';
+import { useTestRowActions } from './useTestRowActions';
 
 interface TestResultsMobileListProps {
   projectId: string;
@@ -47,9 +37,9 @@ interface TestResultsMobileListProps {
 
 // Mobile (<768px) card layout for the test results register. Mirrors the desktop
 // TestResultsTable's empty / filter-empty states and its exact per-status action
-// gating (next-status workflow, reject, certificate print), but renders each test
-// as a tap-friendly card. Reuses the page's existing status/reject handlers and
-// the shared certificate generator — no API or workflow changes.
+// gating (shared via useTestRowActions), but renders each test as a tap-friendly
+// card. Reuses the page's existing status/reject handlers and the shared
+// certificate generator — no API or workflow changes.
 export function TestResultsMobileList({
   projectId,
   filteredTestResults,
@@ -157,6 +147,16 @@ function TestResultMobileCard({
 }: TestResultMobileCardProps) {
   const navigate = useNavigate();
   const cardRef = useRef<HTMLDivElement>(null);
+  const { fileInput, primary, actions } = useTestRowActions({
+    test,
+    projectId,
+    updatingStatusId,
+    onUpdateStatus,
+    onOpenEnterResults,
+    onRejectTest,
+    onAttachCertificate,
+    onLinkItpItem,
+  });
 
   // Scroll the deep-linked card into view while its highlight pulse is active.
   useEffect(() => {
@@ -173,8 +173,6 @@ function TestResultMobileCard({
     test.resultValue != null
       ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
       : '—';
-  const nextStatus = nextStatusMap[test.status];
-  const canAdvance = canAdvanceTestStatus(test);
   const samplePoint = readSamplePoint(test);
 
   return (
@@ -212,7 +210,7 @@ function TestResultMobileCard({
               <span
                 className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}
               >
-                {test.passFail}
+                {formatStatusLabel(test.passFail)}
               </span>
             ),
             priority: 'primary',
@@ -281,93 +279,19 @@ function TestResultMobileCard({
             : []),
         ]}
         actions={
-          <div className="flex w-full flex-col gap-2">
-            {nextStatus &&
-              canAdvance &&
-              (isEnterResultsStep(test.status) ? (
-                // Ticket T2: record the result before entering.
-                <Button size="lg" className="w-full" onClick={() => onOpenEnterResults(test)}>
-                  {nextStatusButtonLabels[test.status]}
-                </Button>
-              ) : (
-                <Button
-                  size="lg"
-                  className="w-full"
-                  disabled={updatingStatusId === test.id}
-                  onClick={() => onUpdateStatus(test.id, nextStatus)}
-                >
-                  {updatingStatusId === test.id
-                    ? 'Updating...'
-                    : nextStatusButtonLabels[test.status]}
-                </Button>
-              ))}
-
-            {/* Wave C2 Phase 2: record that the sample went to the lab.
-              Secondary action — the lab hop is optional. */}
-            {canSendToLab(test) && (
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full"
-                disabled={updatingStatusId === test.id}
-                onClick={() => onUpdateStatus(test.id, AT_LAB_STATUS)}
-              >
-                {updatingStatusId === test.id ? 'Updating...' : SEND_TO_LAB_LABEL}
-              </Button>
-            )}
-
-            {/* Feature B2: attach/replace a certificate so a manual test can
-              reach 'verified'. */}
-            {test.status !== 'verified' && (
-              <AttachCertificateButton
-                testId={test.id}
-                hasCertificate={!!test.certificateDocId}
-                onAttachCertificate={onAttachCertificate}
-                variant="mobile"
-              />
-            )}
-
-            {/* Migration: link this test to one of its lot's ITP items. */}
-            {onLinkItpItem && test.lotId && (
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full"
-                onClick={() => onLinkItpItem(test)}
-              >
-                Link to ITP item
-              </Button>
-            )}
-
-            {test.status === 'entered' && (
-              <Button
-                variant="destructive"
-                size="lg"
-                className="w-full"
-                onClick={() => onRejectTest(test.id)}
-              >
-                Reject
-              </Button>
-            )}
-
+          <div className="flex w-full items-center gap-2">
+            {fileInput}
+            <RowActions
+              variant="mobile"
+              primary={primary}
+              actions={actions}
+              menuLabel={`More actions for ${test.testType}`}
+            />
             {test.status === 'verified' && (
-              <p className="flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground">
+              <p className="flex flex-1 items-center justify-center gap-1 text-sm font-medium text-muted-foreground">
                 <Check className="h-4 w-4" />
                 Complete
               </p>
-            )}
-
-            {canGenerateTestResultCertificate(test) && (
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full"
-                onClick={() => generateTestResultCertificate(test, projectId)}
-                aria-label={`Print material conformance record for ${test.testType}`}
-              >
-                <Printer className="h-4 w-4" />
-                Conformance Record
-              </Button>
             )}
           </div>
         }
