@@ -18,7 +18,9 @@ const PINNED_SECTIONS: ReadonlyArray<[id: string, title: string]> = [
   ['subbie-dockets', 'Subcontractor portal and dockets'],
   ['documents-drawings', 'Documents, drawings, and photos'],
   ['ncr-diary', 'NCRs and daily diary'],
+  ['deliveries', 'Deliveries and materials'],
   ['claims-reports', 'Claims, variations, costs, and reports'],
+  ['handover', 'Handover and the evidence folio'],
   ['admin', 'Admin, audit, and settings'],
   ['ai-copilot', 'AI in CIVOS: setup copilot and Clancy'],
   ['integrations', 'Integrations: API keys and webhooks'],
@@ -126,6 +128,39 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   // costed and deferred (`[E-g]`) — no HoldPointReviewQueue model exists — and
   // a cross-project outstanding list is the exact thing Clancy would invent.
   ['itp-holdpoints-tests', 'no list of everything they owe you across projects'],
+  // Deliveries and handover — written first in the backend mirror and pinned
+  // there against the shipped code (routes/deliveries, evidenceReadiness/
+  // deliveryItems.ts, routes/folio, routes/handoverExports). This is the
+  // frontend half. The two that must never soften: a typed docket number is not
+  // filed evidence, and the folio LISTS documents and photos rather than
+  // embedding them.
+  [
+    'deliveries',
+    'means the actual supplier docket document is attached. A typed docket number alone does not count',
+  ],
+  ['deliveries', 'project-wide totals that filters never shrink'],
+  ['deliveries', 'only those three evidence fields, and every change is written to the audit log'],
+  ['deliveries', 'raises a support-level readiness prompt. It never blocks conformance or a claim'],
+  ['deliveries', 'The link is set at creation only'],
+  ['deliveries', 'sorts by the diary date the delivery was recorded against'],
+  ['deliveries', 'Deliveries are internal. Subcontractors never see'],
+  ['handover', 'a listing of the documents and photos held'],
+  ['handover', 'SHA-256 hash shown in the app'],
+  ['handover', 'Version numbers are never reused and old versions are never'],
+  ['handover', 'above 5,000 evidence rows it refuses to issue rather than silently omit records'],
+  ['handover', 'nudges when lots lack an evidence folio, but it never'],
+  [
+    'handover',
+    'Requesting an export and issuing folios is owner, admin, project manager, and quality manager',
+  ],
+  [
+    'handover',
+    'Downloading a handover export is owner, admin, and project manager — plus the person who requested that export',
+  ],
+  [
+    'handover',
+    'expires on its stated date and can no longer be downloaded after that — unless a legal hold has been placed on it, which keeps it downloadable',
+  ],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

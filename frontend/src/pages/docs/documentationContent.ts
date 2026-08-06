@@ -14,9 +14,11 @@ import {
   GitPullRequest,
   Map as MapIcon,
   MapPin,
+  Package,
   Plug,
   Sparkles,
   TestTube,
+  Truck,
   Upload,
 } from 'lucide-react';
 
@@ -284,6 +286,7 @@ export const documentationSections: DocumentationSection[] = [
       'Avoid uploading credentials, private keys, or unrelated personal data.',
       'Photo capture and the daily diary pre-select the lot you are standing in from GPS — you can still change it.',
       'GPS-tagged photos appear as pins on the site map when the Photos layer is on.',
+      'Documents filed under a commercial category are never visible in the subcontractor portal, even on work a subcontractor can otherwise see.',
     ],
   },
   {
@@ -314,6 +317,38 @@ export const documentationSections: DocumentationSection[] = [
       'Diary submission locks the main record and uses addendums for later notes.',
       'Docket approval can feed diary labour and plant where configured.',
       'Tap the mic on diary and docket note fields to dictate instead of type (Australian English).',
+    ],
+  },
+  {
+    id: 'deliveries',
+    title: 'Deliveries and materials',
+    summary:
+      'Track every material delivery from the daily diary to the lot, with the supplier docket attached as evidence.',
+    icon: Truck,
+    steps: [
+      {
+        title: 'Log deliveries in the daily diary',
+        description:
+          'The foreman records a delivery with a photo of the supplier docket — or adds the photo later; the delivery saves either way. Dictation and offline capture work the same as the rest of the diary.',
+      },
+      {
+        title: 'Review the delivery register',
+        description:
+          'Deliveries shows every delivery across the project with its lot link, batch or mix reference, and whether the supplier docket is on file. Supplier, lot-linked, docket-filed, and date filters all run on the server, so the counts are the truth.',
+      },
+      {
+        title: 'Attach evidence after the diary locks',
+        description:
+          'The supplier docket, batch reference, and lot link can be attached to a delivery after the diary has locked — only those three evidence fields, and every change is written to the audit log.',
+      },
+    ],
+    tips: [
+      '"Docket filed" means the actual supplier docket document is attached. A typed docket number alone does not count.',
+      'The unlinked-delivery and missing-docket counters are project-wide totals that filters never shrink — they are the numbers to drive to zero before handover.',
+      'An unlinked delivery raises a support-level readiness prompt. It never blocks conformance or a claim.',
+      'An NCR can name the delivery that supplied the bad material — pick the delivery on the NCR create form and the link shows on the NCR and its PDF. The link is set at creation only.',
+      'The register sorts by the diary date the delivery was recorded against, so a late back-entry files where it happened, not at the top.',
+      'Deliveries are internal. Subcontractors never see the register.',
     ],
   },
   {
@@ -351,6 +386,37 @@ export const documentationSections: DocumentationSection[] = [
       'The Costs page tracks labour and plant spend from approved dockets against lot budgets, broken down by subcontractor and by lot.',
       'Reports can be scheduled to arrive by email on a recurring basis on Professional and Enterprise plans.',
       'Reports are strongest when field teams maintain lots, dockets, tests, and diaries daily.',
+    ],
+  },
+  {
+    id: 'handover',
+    title: 'Handover and the evidence folio',
+    summary:
+      'Issue per-lot evidence folios and export the whole project as a verified handover package.',
+    icon: Package,
+    steps: [
+      {
+        title: 'Issue a lot evidence folio',
+        description:
+          'From the lot page, issue a versioned folio PDF that brings together the lot tests, hold points, ITP completions, NCRs, deliveries, and a listing of the documents and photos held, with its SHA-256 hash shown in the app.',
+      },
+      {
+        title: 'Request the project handover export',
+        description:
+          'Handover Exports assembles the whole project into one download — the snapshot is sized up front and refused if it is too large, then frozen in a single transaction, and the ZIP is hash-verified.',
+      },
+      {
+        title: 'Check closeout readiness first',
+        description:
+          'The export page nudges when lots lack an evidence folio, but it never blocks the export.',
+      },
+    ],
+    tips: [
+      'Re-issuing a folio mints a new version. Version numbers are never reused and old versions are never overwritten.',
+      'A folio prints what is expected, present, and missing — and above 5,000 evidence rows it refuses to issue rather than silently omit records.',
+      'Requesting an export and issuing folios is owner, admin, project manager, and quality manager. Downloading a handover export is owner, admin, and project manager — plus the person who requested that export.',
+      'A handover export expires on its stated date and can no longer be downloaded after that — unless a legal hold has been placed on it, which keeps it downloadable.',
+      'Reports are the day-to-day review surface; the handover export is the end-of-job evidence package for the principal.',
     ],
   },
   {

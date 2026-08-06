@@ -42,9 +42,19 @@ export const PROJECT_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   { path: 'ncr', label: 'non-conformance reports' },
   { path: 'tests', label: 'test results' },
   { path: 'diary', label: 'daily diaries' },
+  {
+    path: 'deliveries',
+    label:
+      'delivery register — every diary-logged delivery with lot links and supplier dockets, with after-lock evidence fix-up',
+  },
   { path: 'dockets', label: 'dockets' },
   { path: 'documents', label: 'project documents' },
   { path: 'reports', label: 'reports' },
+  {
+    path: 'handover-exports',
+    label:
+      'project handover export — request the verified whole-project evidence package (owner/admin/PM/quality manager only)',
+  },
   { path: 'claims', label: 'progress claims' },
   { path: 'variations', label: 'variation register' },
   { path: 'users', label: 'project team' },
