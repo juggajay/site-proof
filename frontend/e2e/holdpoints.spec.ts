@@ -550,7 +550,7 @@ test.describe('Hold points seeded release contract', () => {
     await expect(
       page.getByText('Track and release hold points requiring third-party inspection'),
     ).toBeVisible();
-    await expect(page.getByText('Total HPs')).toBeVisible();
+    await expect(page.getByTestId('hp-summary-line')).toBeVisible();
     await expect(page.getByLabel('Filter hold points by status')).toContainText('Awaiting Release');
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
 
@@ -670,7 +670,7 @@ test.describe('Hold points seeded release contract', () => {
 
     await expect(page.getByRole('alert')).toBeHidden();
     await expect(page.getByRole('cell', { name: 'LOT-HP-001', exact: true })).toBeVisible();
-    await expect(page.getByText('Total HPs')).toBeVisible();
+    await expect(page.getByTestId('hp-summary-line')).toBeVisible();
   });
 
   test('loads the bounded backend register before treating the hold point register as complete', async ({
@@ -683,8 +683,32 @@ test.describe('Hold points seeded release contract', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
 
     await expect(page.getByRole('cell', { name: 'LOT-HP-001', exact: true })).toBeVisible();
-    await expect(page.getByText('Total HPs').locator('..').getByText('25')).toBeVisible();
+    await expect(page.getByTestId('hp-summary-line')).toHaveText('25 pending');
     expect(api.getHoldPointRegisterRequests()).toEqual(['?all=true']);
+  });
+
+  // The register used to open on five bands of chrome — KPI cards, a permanent
+  // batch bar and two 260px charts — with the first hold point at y≈815 on a
+  // 1440x900 screen. This is the guard that keeps rows above the fold.
+  test('opens on hold point rows, not chrome, at 1440x900', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockSeededHoldPointsApi(page, { paginatedHoldPoints: buildManyHoldPoints(25) });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
+
+    const firstRow = page.locator('tbody tr[data-index]').first();
+    await expect(firstRow).toBeVisible();
+
+    const firstRowTop = (await firstRow.boundingBox())?.y ?? Number.POSITIVE_INFINITY;
+    expect(firstRowTop).toBeLessThan(500);
+
+    // No batch bar until a lot is filtered, and nothing released in the window,
+    // so the charts collapse to their one quiet line — below the rows.
+    await expect(page.getByTestId('hp-batch-bar')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /HP Releases/i })).toHaveCount(0);
+
+    const trendsTop = (await page.getByTestId('hp-trends-empty').boundingBox())?.y ?? 0;
+    expect(trendsTop).toBeGreaterThan(firstRowTop);
   });
 
   test('guards duplicate chase notifications from rapid clicks', async ({ page }) => {
@@ -970,7 +994,7 @@ test.describe('Hold points mobile card layout', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
 
     await expect(page.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
-    await expect(page.getByText('Total HPs')).toBeVisible();
+    await expect(page.getByTestId('hp-summary-line')).toBeVisible();
 
     // Mobile drops the desktop table and the CSV export.
     await expect(page.getByRole('table')).toHaveCount(0);
