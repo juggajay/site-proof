@@ -131,6 +131,17 @@ File paths and evidence screenshots are in the per-flow reports (ticket IDs refe
 - **Email log** (platform P6): persist every outbound email + delivery status; the dispute answer
   to "we never got the hold-point request".
 - **Client-role result gating** (tests T8): record intent now, build when a client role ships.
+- **Hold-point rejection / conditional-release lifecycle** — **APPROVED by Jay 2026-08-06; needs
+  design before build.** Added after the Wave-2 SOL review cut Reject / Release-with-conditions /
+  Raise-NCR from the public release page: `HoldPointReleaseToken` and the release path only model an
+  unconditional "yes" (the execution path always writes `released`), so a knock-back or a "yes,
+  but…" currently has no record at all. Scope: schema for a rejection decision (who/when/why, HP
+  returns to a re-requestable state, foreman notified) and for conditional release (condition text
+  as first-class items with a close-out step, not a notes field that vanishes), register + checklist
+  display of both states, and the re-request cycle. The two most dispute-valuable moments on a job —
+  a failed inspection and a conditional pass — become records instead of phone calls. ~2–3 days incl.
+  one reviewed migration. Raise-NCR from the release page stays cut unless it requires
+  authentication — anonymous NCR creation is an abuse surface, not a feature.
 
 ### Deliberately not adopting
 Schedule-of-rates register (second spine vs our lot spine) · floating quantities · claim snapshots
