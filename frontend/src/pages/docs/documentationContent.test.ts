@@ -157,6 +157,10 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
     'handover',
     'Downloading a handover export is owner, admin, and project manager — plus the person who requested that export',
   ],
+  [
+    'handover',
+    'expires on its stated date and can no longer be downloaded after that — unless a legal hold has been placed on it, which keeps it downloadable',
+  ],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

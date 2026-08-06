@@ -415,6 +415,7 @@ export const documentationSections: DocumentationSection[] = [
       'Re-issuing a folio mints a new version. Version numbers are never reused and old versions are never overwritten.',
       'A folio prints what is expected, present, and missing — and above 5,000 evidence rows it refuses to issue rather than silently omit records.',
       'Requesting an export and issuing folios is owner, admin, project manager, and quality manager. Downloading a handover export is owner, admin, and project manager — plus the person who requested that export.',
+      'A handover export expires on its stated date and can no longer be downloaded after that — unless a legal hold has been placed on it, which keeps it downloadable.',
       'Reports are the day-to-day review surface; the handover export is the end-of-job evidence package for the principal.',
     ],
   },

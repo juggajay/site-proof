@@ -381,6 +381,17 @@ describe('product knowledge — deliveries and handover facts', () => {
     expect(body('handover')).toContain('nudges when lots lack an evidence folio, but it never');
   });
 
+  it('states expiry as a download-time refusal that a legal hold overrides', () => {
+    // download.ts:161-168 — expiry is consulted ON READ, not only by the
+    // sweeper, and `!(await isOnHold('handover_export', row.id))` is the last
+    // conjunct, so a held export skips the check and still streams. Copy that
+    // said "expires" without the hold would send someone hunting for a file
+    // they can still download.
+    expect(body('handover')).toContain(
+      'expires on its stated date and can no longer be downloaded after that — unless a legal hold has been placed on it, which keeps it downloadable',
+    );
+  });
+
   it('separates who can request an export from who can download one', () => {
     // folio/access.ts:23 FOLIO_ISSUERS and handoverExports/access.ts:27
     // HANDOVER_EXPORT_REQUESTERS are the same four. Downloading is NARROWER:
