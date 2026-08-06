@@ -44,6 +44,21 @@ describe('HoldPointsPageHeader', () => {
     expect(screen.getByRole('button', { name: 'Export CSV' })).toBeInTheDocument();
   });
 
+  it('stacks the filters full-width and 44px tall below md', () => {
+    renderHeader();
+
+    // Wrapped side by side they split across three ragged rows, squeezing the
+    // status select to ~110px — narrower than the option text naming it.
+    for (const control of [
+      screen.getByRole('combobox', { name: 'Filter hold points by status' }),
+      screen.getByRole('combobox', { name: 'Filter hold points by lot' }),
+      screen.getByRole('textbox', { name: 'Search hold points by lot or description' }),
+    ]) {
+      expect(control).toHaveClass('h-11');
+      expect(control).toHaveClass('w-full');
+    }
+  });
+
   it('hides CSV export on mobile', () => {
     renderHeader({ isMobile: true });
 

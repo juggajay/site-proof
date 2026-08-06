@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
+import { cn } from '@/lib/utils';
+import { getDocumentCategoryLabel } from '../documentsDisplayData';
 
 interface DeleteDocument {
   id: string;
@@ -50,7 +52,7 @@ export function DocumentsPageHeader({
   onUpload: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">Documents & Photos</h1>
@@ -62,7 +64,7 @@ export function DocumentsPageHeader({
         <p className="text-muted-foreground">Upload and manage project documents and photos</p>
       </div>
       {canUploadDocuments && (
-        <Button onClick={onUpload}>
+        <Button onClick={onUpload} className="h-11 w-full md:h-9 md:w-auto">
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -102,29 +104,49 @@ export function DocumentsLoadErrorAlert({
   );
 }
 
+/**
+ * Quick category filters. Lives inside the filter card so the register has ONE
+ * filter mechanism rather than a chip row stacked under a control row saying
+ * the same thing — `activeCategory` is what makes the chip and the Category
+ * select read as the same control.
+ */
 export function DocumentCategorySummary({
   categories,
+  activeCategory,
   onSelectCategory,
 }: {
   categories: Record<string, number>;
+  /** Currently applied category filter value, so the matching chip reads as on. */
+  activeCategory?: string;
   onSelectCategory: (category: string) => void;
 }) {
   if (Object.keys(categories).length === 0) return null;
 
   return (
     <div className="flex flex-wrap gap-2">
-      {Object.entries(categories).map(([category, count]) => (
-        <button
-          type="button"
-          key={category}
-          onClick={() =>
-            onSelectCategory(category === 'Uncategorized' ? 'uncategorized' : category)
-          }
-          className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {category}: {count}
-        </button>
-      ))}
+      {Object.entries(categories).map(([category, count]) => {
+        const filterValue = category === 'Uncategorized' ? 'uncategorized' : category;
+        const isActive = activeCategory === filterValue;
+
+        return (
+          <button
+            type="button"
+            key={category}
+            aria-pressed={isActive}
+            // Clicking the active chip clears it — otherwise the only way back
+            // to "all categories" is the select the chips are meant to replace.
+            onClick={() => onSelectCategory(isActive ? '' : filterValue)}
+            className={cn(
+              'cursor-pointer rounded-full px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted hover:bg-primary hover:text-primary-foreground',
+            )}
+          >
+            {getDocumentCategoryLabel(category)}: {count}
+          </button>
+        );
+      })}
     </div>
   );
 }

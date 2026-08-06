@@ -6,7 +6,9 @@ import {
   canPreviewDocument as canPreview,
   formatDocumentDate as formatDate,
   formatDocumentFileSize as formatFileSize,
+  getDocumentCategoryLabel as getCategoryLabel,
   getDocumentTypeLabel as getTypeLabel,
+  isRedundantDocumentCategory,
   isExcelDocument as isExcel,
   isImageDocument as isImage,
   isPdfDocument as isPdf,
@@ -137,10 +139,18 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
       ) : (
         <div className="divide-y">
           {visibleDocuments.map((doc) => (
-            <div key={doc.id} className="flex items-center gap-4 p-4 hover:bg-muted/30">
+            // Wraps below md so the actions take their own line: on one line at
+            // 390px the `truncate` filename collapsed to zero width, and the one
+            // thing identifying the document was invisible on the device it is
+            // filed from.
+            <div
+              key={doc.id}
+              data-testid="document-row"
+              className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/30 md:flex-nowrap md:gap-4"
+            >
               {/* Icon or Thumbnail */}
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted overflow-hidden"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted overflow-hidden"
                 data-testid={`file-icon-${doc.id}`}
               >
                 {isImage(doc.mimeType) ? (
@@ -215,8 +225,8 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
               </div>
 
               {/* Document Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 basis-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium truncate">{doc.filename}</span>
                   {doc.version && doc.version > 1 && (
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
@@ -226,13 +236,13 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
                     {getTypeLabel(doc.documentType)}
                   </span>
-                  {doc.category && (
+                  {doc.category && !isRedundantDocumentCategory(doc.documentType, doc.category) && (
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      {doc.category}
+                      {getCategoryLabel(doc.category)}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <span>{formatFileSize(doc.fileSize)}</span>
                   <span>{formatDate(doc.uploadedAt)}</span>
                   {doc.uploadedBy && <span>by {doc.uploadedBy.fullName}</span>}
@@ -245,8 +255,8 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                 )}
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2">
+              {/* Actions — own full-width row below md (44px targets there). */}
+              <div className="flex w-full items-center justify-end gap-1 md:w-auto md:gap-2 [&_button]:h-11 [&_button]:w-11 md:[&_button]:h-9 md:[&_button]:w-9">
                 {canManageDocuments && (
                   <Button
                     variant="ghost"

@@ -27,23 +27,29 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
   onExportCSV,
   showExport = true,
 }: HoldPointStatusFilterProps) {
+  // Below md every control is full-width and 44px tall on its own row. Wrapped
+  // side by side they split across three ragged rows with the status select
+  // squeezed to ~110px, which hid the option text that names the filter.
+  const controlClass =
+    'h-11 w-full rounded-lg border border-border bg-card px-3 text-sm md:h-auto md:w-auto md:py-2';
+
   return (
     <>
       {/* Header filter/export row */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:gap-3">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search lot or description..."
           aria-label="Search hold points by lot or description"
-          className="w-56 rounded-lg border border-border px-3 py-2 text-sm bg-card"
+          className={`${controlClass} md:w-56`}
         />
         <select
           value={selectedLotId}
           onChange={(e) => onLotFilterChange(e.target.value)}
           aria-label="Filter hold points by lot"
-          className="rounded-lg border border-border px-3 py-2 text-sm bg-card"
+          className={controlClass}
         >
           <option value="all">All lots</option>
           {lotOptions.map((lot) => (
@@ -56,7 +62,7 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
           aria-label="Filter hold points by status"
-          className="rounded-lg border border-border px-3 py-2 text-sm bg-card"
+          className={controlClass}
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>

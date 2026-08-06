@@ -21,7 +21,6 @@ import { DocumentViewerModal } from './components/DocumentViewerModal';
 import { DocumentVersionsModal } from './components/DocumentVersionsModal';
 import {
   DeleteDocumentDialog,
-  DocumentCategorySummary,
   DocumentDragOverlay,
   DocumentsPagination,
   DocumentsLoadErrorAlert,
@@ -499,6 +498,7 @@ export function DocumentsPage() {
         searchQuery={searchQuery}
         showFavouritesOnly={showFavouritesOnly}
         lots={lots}
+        categories={categories}
         onFilterTypeChange={updateFilterType}
         onFilterCategoryChange={updateFilterCategory}
         onFilterLotChange={updateFilterLot}
@@ -521,8 +521,6 @@ export function DocumentsPage() {
       />
 
       <DocumentsLoadErrorAlert error={error} onRetry={() => void refetchDocuments()} />
-
-      <DocumentCategorySummary categories={categories} onSelectCategory={updateFilterCategory} />
 
       {/* Documents Grid */}
       <DocumentGrid

@@ -1,4 +1,5 @@
-import { DOCUMENT_TYPES } from './documentsUploadData';
+import { formatStatusLabel } from '@/lib/statusLabels';
+import { CATEGORIES, DOCUMENT_TYPES } from './documentsUploadData';
 
 export const EXCEL_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -35,8 +36,51 @@ export function formatDocumentDate(dateStr: string | null | undefined): string {
   }
 }
 
+/**
+ * Acronyms the Title Case fallback gets wrong. Both values are written by
+ * backend auto-filing (`routes/ncrs.ts`, `routes/itp/*`), not by the upload
+ * form, so neither appears in DOCUMENT_TYPES / CATEGORIES.
+ */
+const ACRONYM_LABELS: Record<string, string> = {
+  ncr_evidence: 'NCR Evidence',
+  itp_evidence: 'ITP Evidence',
+};
+
 export function getDocumentTypeLabel(type: string): string {
-  return DOCUMENT_TYPES.find((documentType) => documentType.id === type)?.label || type;
+  return (
+    DOCUMENT_TYPES.find((documentType) => documentType.id === type)?.label ||
+    ACRONYM_LABELS[type] ||
+    // Auto-filed types (delivery_docket, ncr_evidence, …) have no option entry;
+    // Title Case them rather than leaking the raw enum to the register.
+    formatStatusLabel(type, { fallback: '' })
+  );
+}
+
+/**
+ * Category counterpart to `getDocumentTypeLabel`. Categories are a mix of the
+ * upload form's CATEGORIES ids, backend auto-filed enums, and free text typed
+ * by an operator — the lookup chain covers all three.
+ */
+export function getDocumentCategoryLabel(category: string): string {
+  return (
+    CATEGORIES.find((option) => option.id === category)?.label ||
+    ACRONYM_LABELS[category] ||
+    formatStatusLabel(category, { fallback: '' })
+  );
+}
+
+/**
+ * A document auto-filed by another surface carries the same value as its type
+ * and its category (a delivery docket is `delivery_docket` twice), which
+ * rendered as two identical chips. The category chip only earns its place when
+ * it says something the type chip did not.
+ */
+export function isRedundantDocumentCategory(
+  documentType: string,
+  category: string | null,
+): boolean {
+  if (!category) return true;
+  return getDocumentCategoryLabel(category) === getDocumentTypeLabel(documentType);
 }
 
 export function isImageDocument(mimeType: string | null): boolean | undefined {
