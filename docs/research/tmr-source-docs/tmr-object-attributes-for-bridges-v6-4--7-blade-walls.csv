@@ -1,0 +1,27 @@
+,Table 7: Blade walls,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-P3-P-BW
+,,Concrete Quantity (m3) - Design,9.0
+,,Element Depth ,3.0
+,,Element Length,5.0
+,,Element Width ,0.6
+,As-Con Information,Full BIM Object Code,43614-P3-P-BW
+,,Concrete Quantity (m3) - As-Con,8.9
+,,Contractor Lot Number,WA03
+,Asset Management Information,Full BIM Object Code ,43614-P3-P-BW
+,,Comments ,comment
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,PW
+,,SIM Exposure Classification Code,4
+,,SIM Group Code,P
+,,SIM Group Number,3
+,,SIM Modification Status Code,L1
+,,"SIM Quantity (m2, elevation both sides)",30
+,,SIM Standard Material Code,C
+,,SIM Standard Number Code,58

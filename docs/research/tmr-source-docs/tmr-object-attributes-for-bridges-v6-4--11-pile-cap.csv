@@ -1,0 +1,27 @@
+,Table 11: Pile caps,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-P1-F-PC-2
+,,Concrete Quantity (m3) - Design,13.5
+,,Element Depth ,1.0
+,,Element Length,9.0
+,,Element Width ,1.5
+,As-Con Information,Full BIM Object Code,43614-P1-F-PC-2
+,,Concrete Quantity (m3) - As-Con,14.0
+,,Contractor Lot Number,PC 03
+,Asset Management Information,Full BIM Object Code ,43614-P1-F-PC-2
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,CAP
+,,SIM Exposure Classification Code,1
+,,SIM Group Code,P
+,,SIM Group Number,1
+,,SIM Modification Status Code,St
+,,SIM Quantity (each),1
+,,SIM Standard Material Code,C
+,,SIM Standard Number Code,59

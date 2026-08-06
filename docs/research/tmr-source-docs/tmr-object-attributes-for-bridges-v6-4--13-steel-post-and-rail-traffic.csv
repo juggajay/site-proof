@@ -1,0 +1,23 @@
+,Table 13: Steel post and rail traffic barriers,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-S1-T-TR-1
+,,Element Length,5.1
+,As-Con Information,Full BIM Object Code,43614-S1-T-TR-1
+,,Contractor Lot Number,0B 71
+,Asset Management Information,Full BIM Object Code ,43614-S1-T-TR-1
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,BR
+,,SIM Exposure Classification Code,3
+,,SIM Group Code,S
+,,SIM Group Number,1
+,,SIM Modification Status Code,WR1
+,,SIM Quantity (lin/m),21
+,,SIM Standard Material Code,S
+,,SIM Standard Number Code,2

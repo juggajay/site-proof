@@ -1,0 +1,23 @@
+,Table 18: Noise Barriers,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-S3-T-NB
+,,Element Length,3.2
+,As-Con Information,Full BIM Object Code,43614-S3-T-NB
+,,Contractor Lot Number,SC 12
+,Asset Management Information,Full BIM Object Code ,43614-S3-T-NB
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,BR
+,,SIM Exposure Classification Code,2
+,,SIM Group Code,S
+,,SIM Group Number,3
+,,SIM Modification Status Code,O
+,,SIM Quantity (lin/m),11
+,,SIM Standard Material Code,O
+,,SIM Standard Number Code,2

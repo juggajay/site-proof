@@ -1,0 +1,47 @@
+,,Table 4. Road Signs,
+,IFC Property Set,Attribute Name,Example
+,Project,District,Far North
+,,AssetOwner,MR
+,,RoadSectionID,41E
+,,Datum,GDA2020
+,,Zone,56
+,,ModelCertifiedIssuedForConstructionRPEQ,Bob Person - 12346
+,,ModelCertifiedAsConstructedSurveyor,Jane Citizen - Reg Surv 3322
+,Design,UniqueObjectCode,IPMWR2D-MC1A0-RF-SIGN-0001
+,,Specification,MRTS14
+,,StandardDrawing,SD1363
+,,ControlLine,MC01A
+,,Chainage,31750
+,,Offset,"10.5L, 12.1R"
+,,MUTCDSignID,G1-4
+,,NumberOfPosts,2
+,,PostType,"Standard, Slipbase"
+,,SignHeight,1500 mm
+,,SignSize,1000mm x 900mm
+,,KerbPostLength,3250 mm
+,,Post2Length,4500 mm
+,,Location,"X coordinate, Y coordinate"
+,,Tdist,8.078 km
+,,DesignVerifiedBy,Jane Citizen 12346
+,,DesignVerifiedDate,DD-MON-YYYY
+,Construction,UniqueObjectCode,IPMWR2D-MC1A0-RF-SIGN-0001
+,,InstallationDate,DD-MON-YYYY
+,,InstalledBy,Jane Citizen
+,,StiffenerRails,4
+,,ConnectionStraps,4
+,,PostFixing,Dovetail
+,Asset Management ,UniqueObjectCode,IPMWR2D-MC1A0-RF-SIGN-0001
+,,Feature,SGN
+,,FeatureSubType,STD (Standard) NSD (Non standard)
+,,Position,"LHS, RHS"
+,,Carriageway,3 (ARMIS Carriageway code)
+,,FeatureLength,0 m
+,,VerticalClearance,4.5 m
+,,HorizontalClearance,10.5 m
+,,AssetID,SIR30001
+,,InitialCost,$
+,,Condition,GC
+,,DateInspected,DD-MON-YYYY
+,,InspectedBy,Bob Person
+,,WarrantyPeriod,60
+,,MaintenanceInterval,12

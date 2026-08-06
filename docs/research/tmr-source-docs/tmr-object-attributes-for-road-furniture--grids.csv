@@ -1,0 +1,31 @@
+,,Table 5. Grids,
+,IFC Property Set,Attribute Name,Example
+,Project,District,Far North
+,,AssetOwner,TMR
+,,RoadSectionID,41E
+,,Datum,GDA2020
+,,Zone,56
+,,ModelCertifiedIssuedForConstructionRPEQ,Bob Person - 12346
+,,ModelCertifiedAsConstructedSurveyor,Jane Citizen - Reg Surv 3322
+,Design,UniqueObjectCode,IPMWR2D-MC1A0-RF-GRID-0001
+,,Specification,MRTS14
+,,StandardDrawing,SD1561
+,,Type,Motor Grid
+,,ControlLine,MC01A
+,,Chainage,31750
+,,TdistStart,8.078 km
+,,Location,"X coordinate, Y coordinate"
+,,Depth,450 mm
+,,Width,8 m
+,,Length,4 m
+,,DesignVerifiedBy,Jane Citizen 12346
+,,DesignVerifiedDate,DD-MON-YYYY
+,Construction,UniqueObjectCode,IPMWR2D-MC1A0-RF-GRID-0001
+,,Abutment,Cast insitu
+,,BaseSlab,Precast
+,,InstallationDate,DD-MON-YYYY
+,,InstalledBy,Jane Citizen
+,Asset Management ,UniqueObjectCode,IPMWR2D-MC1A0-RF-GRID-0001
+,,AssetID,GR0001
+,,WarrantyPeriod,60
+,,MaintenanceInterval,12

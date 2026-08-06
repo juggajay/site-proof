@@ -1,0 +1,49 @@
+,,Table 8. Noise Barriers,
+,IFC Property Set,Attribute Name,Example
+,Project,District,Far North
+,,AssetOwner,RoadTek
+,,RoadSectionID,41E
+,,Datum,GDA2020
+,,Zone,56
+,,ModelCertifiedIssuedForConstructionRPEQ,Bob Person - 12346
+,,ModelCertifiedAsConstructedSurveyor,Jane Citizen - Reg Surv 3322
+,Design,UniqueObjectCode,IPMWR2D-MC1A0-RF-NBPC-0001
+,,Specification,MRTS15
+,,StandardDrawing,SD1606
+,,ControlLine ,MC01A
+,,StartChainage,31056
+,,EndChainage,38750
+,,StartLatitudeLongitude,-16.9781033 145.53226448
+,,EndLatitudeLongitude,-27.40757 152.995518
+,,TdistStart,8.078 km
+,,TdistEnd,14.749 km
+,,(for each Span),
+,,SpanNumber,1
+,,SpanHeight,4.6 m
+,,SpanLength,5 m
+,,PanelType,Concrete
+,,NumberOfPanels,4
+,,PostType,Steel 
+,,PostSize,400 mm
+,,PostLatLong,-16.9781033 145.53226448
+,,FootingDepth,2 m
+,,DesignVerifiedBy,Jane Citizen 12346
+,,DesignVerifiedDate,42130
+,Construction,UniqueObjectCode,IPMWR2D-MC1A0-RF-NBPC-0001
+,,InstallationDate,2012-12-20 00:00:00
+,,InstalledBy,Some Body
+,,ConstructionDate,DD-MON-YYYY
+,,ConstructedBy,Fenco
+,Asset Management ,UniqueObjectCode,IPMWR2D-MC1A0-RF-NBPC-0001
+,,AssetID,NBPC0001
+,,InspectionDate,DD-MON-YYYY
+,,InspectionLevel,"1, 2"
+,,InspectedBy,"SLR, Projex Partners, Noise Team, Region, RoadTek"
+,,OverallCondition,"CRL0, CRL1, CRL2"
+,,InspectComment,Free text
+,,InspectReport,Record
+,,MaintenanceDate,DD-MON-YYYY
+,,MaintenanceBy,RoadTek
+,,MaintenanceDetails,Free text
+,,MaintenanceReport,Record
+,,DisposalDate,DD-MON-YYYY

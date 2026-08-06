@@ -1,0 +1,27 @@
+,Table 24: Cast insitu kerbs,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-S1-D-KE-1
+,,Concrete Quantity (m3) - Design,7.0
+,,Element Depth ,.360 midspan
+,,Element Length,9.0
+,,Element Width ,0.55
+,As-Con Information,Full BIM Object Code,43614-S1-D-KE-1
+,,Concrete Quantity (m3) - As-Con,7.1
+,,Contractor Lot Number,CK 22
+,Asset Management Information,Full BIM Object Code ,43614-S1-D-KE-1
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,K
+,,SIM Exposure Classification Code,1
+,,SIM Group Code,S
+,,SIM Group Number,1
+,,SIM Modification Status Code,L1
+,,SIM Quantity (Lin/m),30.7
+,,SIM Standard Material Code,C
+,,SIM Standard Number Code,3

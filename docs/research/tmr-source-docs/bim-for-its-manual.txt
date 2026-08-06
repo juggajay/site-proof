@@ -1,0 +1,1023 @@
+ 
+Manual 
+ 
+Building Information Modelling (BIM) for Intelligent 
+Transport Systems (ITS) Manual 
+ 
+June 2025 
+ 
+
+ 
+Manual, Transport and Main Roads, June 2025 
+ 
+Copyright 
+© The State of Queensland (Department of Transport and Main Roads) 2025. 
+Licence 
+ 
+This work is licensed by the State of Queensland (Department of Transport and Main Roads) under 
+a Creative Commons Attribution (CC BY) 4.0 International licence. 
+CC BY licence summary statement 
+In essence, you are free to copy, communicate and adapt this work, as long as you attribute the 
+work to the State of Queensland (Department of Transport and Main Roads). To view a copy of this 
+licence, visit: https://creativecommons.org/licenses/by/4.0/ 
+Translating and interpreting assistance 
+ 
+The Queensland Government is committed to providing accessible services to 
+Queenslanders from all cultural and linguistic backgrounds. If you have difficulty 
+understanding this publication and need a translator, please call the Translating and 
+Interpreting Service (TIS National) on 13 14 50 and ask them to telephone the 
+Queensland Department of Transport and Main Roads on 13 74 68. 
+Disclaimer 
+While every care has been taken in preparing this publication, the State of Queensland accepts no 
+responsibility for decisions or actions taken as a result of any data, information, statement or 
+advice, expressed or implied, contained within. To the best of our knowledge, the content was 
+correct at the time of publishing. 
+Feedback 
+Please send your feedback regarding this document to: tmr.techdocs@tmr.qld.gov.au 
+ 
+
+ 
+Manual, Transport and Main Roads, June 2025 
+i 
+Contents 
+1 
+Introduction ....................................................................................................................................1 
+1.1 Purpose of this manual ................................................................................................................... 1 
+1.2 Principles and objectives for Operations and Maintenance ........................................................... 1 
+2 
+Definition of terms .........................................................................................................................2 
+3 
+Referenced documents .................................................................................................................3 
+4 
+How to use this manual .................................................................................................................3 
+5 
+ITS model preparation ...................................................................................................................3 
+5.1 TMR file naming convention ........................................................................................................... 4 
+5.2 ITS BIM model software ................................................................................................................. 4 
+5.3 Model geographical location ........................................................................................................... 4 
+6 
+ITS BIM model objects ..................................................................................................................4 
+6.1 ROAR captured assets ................................................................................................................... 6 
+6.2 TMR Unique object code ................................................................................................................ 6 
+7 
+ITS BIM model attributes ...............................................................................................................7 
+7.1 Transport and Main Roads’ ITS object property sets ..................................................................... 7 
+7.2 Multiple assets in one location ........................................................................................................ 8 
+7.3 Multiple disciplines in one model .................................................................................................. 12 
+8 
+ITS BIM model interface with ROAR ......................................................................................... 12 
+9 
+ITS BIM model Level of Development ....................................................................................... 13 
+Appendix A: Unique object code breakdown ................................................................................... 14 
+Appendix B: Road infrastructure ITS asset classification hierarchy ............................................. 19 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+1 
+1 
+Introduction 
+1.1 
+Purpose of this manual 
+The Department of Transport and Main Roads (the department) has implemented Digital Engineering 
+processes, specifically relating to Building Information Modelling (BIM) methodologies. This manual 
+complements the existing suite of BIM documents published by the department and outlines the 
+typical asset dataset for the department’s Intelligent Transport Systems (ITS) infrastructure. This 
+document is intended to be integral in the BIM activities that complement the Building Information 
+Modelling (BIM) Exchange Information Requirements (EIR) document for asset description and 
+information collected for major projects across Queensland. To ensure compliance, download the 
+latest version of the EIR and associated templates and manuals. 
+The purpose of this manual is to ensure a standard process, notation, and level of detail is established 
+and executed for all asset types within the context of this manual’s discipline (ITS). This manual is one 
+of a series of manuals covering multiple disciplines. If your project includes works outside of ITS, you 
+should also use the relevant guides for those areas in the project contract documentation. 
+The purpose of the ITS model is to provide an asset model containing relevant information and data 
+captured throughout the delivery stages, allowing the department to manage the asset efficiently and 
+effectively. The preparation of the ITS model will also assist the department in construction planning, 
+design verification and coordination, throughout delivery of the project. The ITS model aids in the 
+collaboration and interface management between the road design, and other technical disciplines. 
+The ITS model shall encompass the design of the asset, in a complete three-dimensional (3D) 
+electronic model, that is progressively developed through the design stages, inclusive of project 
+attributes, and suitable for construction coordination and field set out. 
+This manual applies to the design development, construction, and presentation of As Constructed 
+information of departmental ITS assets following the completion of the project. 
+This document must be read in conjunction with the Building Information Modelling (BIM) for Transport 
+and Main Roads Guideline and the Building Information Modelling (BIM) Exchange Information 
+Requirements included in the contract documentation. 
+Technical Support 
+The content of this manual has been developed by the Transport and Main Roads BIM team. 
+Technical support is available for application of the content of this manual at: 
+TMR_BIM_Team@tmr.qld.gov.au 
+1.2 
+Principles and objectives for Operations and Maintenance 
+The information collected throughout any project serves a greater purpose after the project is 
+completed, supporting financial administration and the operations and maintenance (O&M) functions 
+within the department. The asset attributes and their specific datasets originate from the department’s 
+recognised ITS asset management system, Road Operations Asset Register (ROAR). However, 
+specific delivery areas may require additional information. It is recommended to consult your O&M 
+representative for their advice when preparing the EIR and the asset requirements documentation. 
+Project managers should be responsible for sourcing the latest ROAR Asset Data Format (ADF) 
+template files and providing them to the relevant engineers for collecting site and asset data related to 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+2 
+the infrastructure being constructed. They should work closely with the district asset owners to ensure 
+data accuracy and to resolve any queries. 
+2 
+Definition of terms 
+The following is a definition of terms used in this manual. 
+Table 2 – Definition of terms 
+Term 
+Definition 
+3D model 
+Three-dimensional digital model made of surfaces, solids and/or 
+features representing project objects. 
+ADF 
+Asset Data Format (ADF) Files are Excel-formatted files for Site 
+and Asset data entry into ROAR, following the ACH-approved 
+nomenclature (31 October 2022). They enable rapid, automated 
+data loading, reducing manual entry time. ADF files use a 
+standardised format and include a user guide for support. 
+ACH 
+Asset Clarification Hierarchy is a formative data framework 
+across the asset lifecycle is required to develop the maturity of 
+the road infrastructure ITS asset management ecosystem. The 
+Strategic Asset Management team has developed the asset 
+classification hierarchy for ITS assets 
+Asset 
+An item or entity with potential or actual value to an 
+organisation. Assets can be grouped into hierarchies for 
+classification based on function. 
+Attribute 
+Data or information associated to an object, such as its name, 
+unique identifier or material. 
+BEP 
+BIM Execution Plan (BEP). A document that outlines how a 
+construction project will use Building Information Modelling. It 
+includes the project’s goals, team roles, data management 
+strategies, standards, schedules, and technology requirements. 
+BIM 
+Building Information Model (BIM). BIM is a process for creating 
+and managing information of a built asset throughout its whole 
+life cycle from planning, design, construction, operations, 
+maintenance through to demolition. Information containers may 
+take the form of 2D, 3D, or other structured or unstructured data 
+sources. The effective and efficient use of BIM for decision 
+support and achievement of desired project outcomes is 
+impacted by "when" and "why" information is used and shared. 
+BIM model 
+Building Information Modelling model. A 3D digital model made 
+of surfaces, solids and/or features representing project objects 
+carrying attribute data. 
+Component 
+The physical, tangible object that is a part of the ITS object, 
+such as ITS enclosure, field processor or camera. 
+GIS 
+Geographic Information System (GIS). A system that integrates 
+hardware, software, and data for capturing, managing, 
+analysing, and displaying all forms of geographically referenced 
+information. 
+.ifc 
+Industry Foundation Classes (.ifc). An open source, international 
+standard (ISO 16739-1), which is vendor-neutral and usable 
+across a wide range of hardware devices and software 
+platforms. 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+3 
+Term 
+Definition 
+ITS asset 
+An asset classified at Level 7 of the International Organisation 
+for Standardization (ISO) asset hierarchy (ISO 55000) that 
+provides benefits to the department in terms of economic, 
+safety, or environmental outcomes. 
+PTU 
+Permission To Use (PTU) model. This can be granted pending 
+or granted unconditional. 
+ROAR 
+Road Operations Asset Register (ROAR). The department’s 
+recognised asset management system for ITS assets. 
+Site 
+A location where assets are installed or managed, including 
+details such as coordinates, district, type, and description. 
+Unique object code 
+The ITS objects in the BIM model are to be named and 
+identified using a unique object code that contains several parts. 
+This object code can be used to display and share important 
+information about the asset throughout the asset’s lifecycle. 
+3 
+Referenced documents 
+The following is a list of documents referenced in this manual. 
+Table 3 – Referenced documents 
+Reference 
+Title 
+Exchange Information 
+Requirements (EIR) 
+Transport and Main Roads Building Information Modelling (BIM) 
+Exchange Information Requirements 
+ISO 19650-1 
+Organization and digitization of information about buildings and 
+civil engineering works, including building information modelling 
+(BIM) – Information management using building information 
+modelling 
+MRTS50 
+Specific Quality System Requirements 
+MRTS56 
+Construction Surveying 
+TMR Surveying Standards 
+TMR Surveying Standards Part 1 – General Information 
+- 
+Building Information Modelling (BIM) for Transport and Main 
+Roads Guideline 
+- 
+Transport and Main Roads object attributes for ITS 
+4 
+How to use this manual 
+This manual serves as a resource to manage the ITS elements within a project. It provides an 
+overview of the required ITS infrastructure assets along with their respective attributes, which will 
+make up the final project completion documentation. The creation of the 3D model is a fundamental 
+element of the project design process. The data behind the 3D model is equal to if not more important 
+than the model itself. This manual outlines the information requirements at each stage of the project 
+throughout the project life. 
+5 
+ITS model preparation 
+The major deliverable is a complete component-based 3D model which is adequately attributed and 
+outlines the final design geometry. The design consultant or contractor shall progressively develop the 
+BIM model throughout the design and construction stages for the department's review at each of the 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+4 
+specific checkpoints (submission gates) in the project as outlined and agreed to in either the Design or 
+Construction BIM Execution Plan (BEP). 
+5.1 
+TMR file naming convention 
+The department has developed a system for naming and organising information. More information on 
+this system can be found in the Building Information Modelling (BIM) for Transport and Main Roads 
+Guideline, Section 6.3 and Section 6.4 for the department’s unique object coding naming convention. 
+5.2 
+ITS BIM model software 
+The department does not dictate the design software to be used to develop the BIM model, thereby 
+allowing flexibility in efficiencies with already established work practices. The design consultant shall 
+provide the model in the following formats: 
+• 
+Industry Foundation Class files (IFC) 
+• 
+Navisworks file (NWD) 
+• 
+Navisworks Cache file (NWC), and 
+• 
+Native files in the software package used to develop the model. 
+The design consultant may choose to use alternative software to streamline the design process. The 
+design consultant shall provide all native modelling files used to produce the design model to the 
+department at each submission gate. 
+5.3 
+Model geographical location 
+Geographic location is to conform to the requirements for Survey Datum as outlined in TMR Surveying 
+Standards. 
+6 
+ITS BIM model objects 
+The ITS model shall encompass all elements necessary to outline the complete design and 
+functionality of the system (refer to Figure 6.2) interface with other technical disciplines such as road 
+design and facilitate the implementation of the project works. The components to be included in the 
+ITS model are outlined in Appendix A. 
+The department will integrate the ITS model with GIS project systems, cost estimating, scheduling, 
+component tracking, and asset management systems. To achieve this integration with a wide range of 
+departmental systems, the objects within the ITS model shall be developed and modelled as closed 
+surfaces and solids. Each object shall be uniquely identified (Figure 6) and organised into a logical 
+system representing the ITS components. 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+5 
+Figure 6 – Object naming convention of a typical model of an intersection (Note: not all objects are labelled in this figure) 
+ 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+6 
+6.1 
+ROAR captured assets 
+The full list of assets to be captured in the ROAR database are listed in Appendix A, to align with the 
+ITS asset classification hierarchy depicted in Appendix B. It is expected that for asset management 
+purposes, all asset attribute data (refer to Transport and Main Roads object attributes for ITS) is 
+collected and included within the model for each asset under the ACH. 
+6.2 
+TMR Unique object code 
+As explained in Building Information Modelling (BIM) for Transport and Main Roads Guideline, 
+components within specific discipline model files should be clearly identified by the use of a unique 
+object code, as outlined below in Figure 6.2. 
+Refer to Appendix A for a detailed breakdown and example ITS unique object codes. 
+Figure 6.2 – Example of the Transport and Main Roads BIM object coding for civil infrastructure 
+ 
+Project ID = Ipswich Motorway Rocklea 2 Darra (IPMWR2D) 
+Control Line = MC1A0 
+Discipline = ITS (ITS) 
+Object Code = POWGEN (Power Generator) 
+Unique ID = 0001 
+Notes and string part definitions 
+1. The full unique object code shall be a continuous string with no spaces. 
+2. The full unique object code parts shall be combined using hyphens (-) to form the continuous 
+string. 
+The objects in ITS model shall be numbered such that the first instance of an object along the gazettal 
+is identified as unique number 0001. The same object shall be numbered sequentially along the 
+gazettal. For example, the first mounting structure along the gazettal will have the unique object code: 
+IPMWR2D-MC1A0-ITS-MTSPOL-0001, the second IPMWR2D-MC1A0-ITS-MTSPOL-0002 and so on. 
+The luminaire installed in the first mounting structure will have the unique object code: IPMWR2D-
+MC1A0-ITS-LMRLED-0001, the second IPMWR2D-MC1A0-ITS-LMRLED-0002 and so on, continuing 
+in this sequential manner. 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+7 
+7 
+ITS BIM model attributes 
+The ITS model shall be developed to allow the incorporation and attachment of Project Level, Design, 
+Construction, Manufacturer and Asset information and records to each ITS object. The minimum 
+information required to be attributed to an ITS object is outlined within this section. The design 
+consultant or Contractor shall prepare procedures and demonstrate the capability to attach the 
+relevant design, construction, manufacturer and asset management information to the ITS model in 
+the BEP. The design consultant or Contractor shall prepare procedures and demonstrate the 
+capability to attach the relevant As Constructed (Construction) information to the ITS model in the 
+Contractor's BEP. 
+7.1 
+Transport and Main Roads’ ITS object property sets 
+All ITS assets modelled shall include custom TMR .ifc property sets, which can be displayed in the 
+properties window within an IFC model file viewer (refer to Transport and Main Roads object attributes 
+for ITS). The attributes to be contained within the property set are defined for each object in the 
+Transport and Main Roads object attributes for ITS, published on the department’s website. The 
+Transport and Main Roads object attributes for ITS outlines the data requirements throughout the 
+Design, Construction, and Asset information phases. It is preferred that all construction and 
+manufacturer attributes be included as placeholders through the design submissions and all design 
+attributes are carried over into the As Constructed (Construction) model. 
+Objects within the ITS model shall be developed to have the following property sets: 
+• 
+Project Level 
+• 
+Design 
+• 
+Construction 
+• 
+Manufacture, and 
+• 
+Asset Management. 
+The property sets shall be created and displayed as separate tabs in the properties window within an 
+IFC model file viewer for selected objects, see Figure 7.1. The property sets are defined in the 
+Transport and Main Roads object attributes for ITS, published on the departmental BIM website. For 
+objects not listed in the Transport and Main Roads object attributes for ITS, the design consultant or 
+Contractor shall prepare and submit attribute schedules for these objects to suit the needs of the 
+project, as part of their BIM execution plan. 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+8 
+Figure 7.1 – Example property set tabs in an ITS model 
+ 
+7.2 
+Multiple assets in one location 
+For instances where there may be multiple assets in one location, such as a traffic signal controller 
+within an enclosure, it is not expected that both assets be modelled as separate objects. It is, 
+however, required that the attribute data still be captured for each asset within the model. This shall be 
+represented by additional property sets for a single object, with the asset type included in the property 
+set name as outlined in Figure 7.2(a) to Figure 7.2(c). 
+Each object will have varying asset data requirements as per the Transport and Main Roads object 
+attributes for ITS. Any deviation or variation of this process would need to be clearly outlined in the 
+BEP so it can be assessed by the department. 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+9 
+Figure 7.2(a) – Object naming convention for mounting structures and luminaires 
+ 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+10 
+Figure 7.2(b) – Object naming convention for lighting site indicating ITS assets 
+ 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+11 
+Figure 7.2(c) – Object naming convention for roundel aspect traffic signal, pedestrian aspect and lantern on post with traffic signal controller in an enclosure 
+ 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+12 
+7.3 
+Multiple disciplines in one model 
+For instances where an ITS model includes another discipline asset, such as a structural gantry 
+supporting a Variable Message Sign, modelling of that asset is necessary. While this structural asset 
+falls outside the scope of the ITS model and does not require asset data, it should still be modelled to 
+ensure the Variable Message Sign appears complete (see Figure 7.3). However, as the gantry is a 
+structural asset, data for the ITS model will not be required. 
+Figure 7.3 – Gantry Supporting a Variable Message Sign – Scope Overview 
+ 
+8 
+ITS BIM model interface with ROAR 
+The department intends to utilise the ITS model data to improve the efficiency of managing the state’s 
+ITS assets. ITS objects in the BIM model shall contain asset management data that aligns with the 
+Transport and Main Roads object attributes for ITS. This data will be extracted from the 
+As Constructed models and drawings and uploaded into the ROAR database. 
+The ROAR district user is responsible for the data within the asset management system and should be 
+included in the delivery process of the ITS models to facilitate the data upload. 
+In order to facilitate this integration with the department's ROAR, objects of the ITS model shall be 
+assigned to .ifc class IfcDistributionControlElement. 
+Out of Scope for ITS Assets 
+IPMWR2D-MC1A0-ITS-DYNVMS-0001 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+13 
+Any deviation or variation of this process would need to be clearly outlined in the BEP so that it can be 
+assessed by the department. 
+9 
+ITS BIM model Level of Development 
+Table 9 – Level of model per development stage 
+Development Stage 
+Required BIM Model Level of Development 
+Preliminary Design 
+Initial inclusion of ITS design elements within object model. 
+Unique object code assigned to all objects. 
+Demonstration of development of TMR custom property sets as 
+per Transport and Main Roads object attributes for ITS. 
+Project Level property set and attributes applied to all ITS 
+objects as per Transport and Main Roads object attributes for 
+ITS. 
+Detailed Design 
+Finalisation of all ITS models and drawings. 
+Unique object code assigned to all ITS objects. 
+Design property set and attributes applied to all ITS objects as 
+per Transport and Main Roads object attributes for ITS. 
+Issued for Construction 
+Resolution and close-out of any modelling, drawing, 
+documentation issues raised in the detailed design submission 
+that are required to undertake the final set-out, construction, and 
+information exchange requirements under the contract. 
+Model is certified Issued for Construction. 
+RPEQ Certification Statement that the design model is 
+produced accurately and is ready for handover for survey set-
+out. The data contained in the model is to be read in conjunction 
+with the information supplied on the design drawings. 
+RPEQ Certification attribute value completed as per Transport 
+and Main Roads object attributes for ITS. 
+Certified As Constructed 
+Object based model that presents all ITS assets constructed 
+and adheres to MRTS56 Construction Surveying. 
+Delivered in .ifc format containing construction, manufacturer, 
+and asset management property sets as per Transport and 
+Main Roads object attributes for ITS. 
+All commissioning attributes in the construction property set fully 
+populated. 
+The contractor shall provide certification that the ITS model is 
+an accurate representation of the constructed ITS assets, in 
+accordance with the As Constructed drawing requirements of 
+MRTS50 Specific Quality System Requirements. 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+14 
+Appendix A: Unique object code breakdown 
+Object Category 
+Design Object 
+Discipline 
+Object Code 
+Unique Object Code Example 
+Power 
+POW 
+Point of Supply 
+ITS 
+PWRPOS 
+IPMWR2D-MC1A0-ITS-PWRPOS-0001 
+Generator 
+ITS 
+PWRGEN 
+IPMWR2D-MC1A0-ITS-PWRGEN-0001 
+Uninterruptible Power Supply 
+ITS 
+PWRUPS 
+IPMWR2D-MC1A0-ITS-PWRUPS-0001 
+Battery 
+ITS 
+PWRBAT 
+IPMWR2D-MC1A0-ITS-PWRBAT-0001 
+Solar Panel 
+ITS 
+PWRSOL 
+IPMWR2D-MC1A0-ITS-PWRSOL-0001 
+Solar Regulator 
+ITS 
+PWRREG 
+IPMWR2D-MC1A0-ITS-PWRREG-0001 
+Networking 
+NET 
+Network Server 
+ITS 
+NETSER 
+IPMWR2D-MC1A0-ITS-NETSER-0001 
+Network Switch 
+ITS 
+NETSWI 
+IPMWR2D-MC1A0-ITS-NETSWI-0001 
+Network Line Card 
+ITS 
+NETLIN 
+IPMWR2D-MC1A0-ITS-NETLIN-0001 
+Ethernet Extender 
+ITS 
+NETEXT 
+IPMWR2D-MC1A0-ITS-NETEXT-0001 
+Network Media Converter 
+ITS 
+NETNMC 
+IPMWR2D-MC1A0-ITS-NETNMC-0001 
+Network Firewall 
+ITS 
+NETFIR 
+IPMWR2D-MC1A0-ITS-NETFIR-0001 
+Power over Ethernet Injector 
+ITS 
+NETPOE 
+IPMWR2D-MC1A0-ITS-NETPOE-0001 
+Network Modem 
+ITS 
+NETMOD 
+IPMWR2D-MC1A0-ITS-NETMOD-0001 
+Network Router 
+ITS 
+NETROU 
+IPMWR2D-MC1A0-ITS-NETROU-0001 
+Fibre Optic Breakout Terminal 
+ITS 
+NETFOB 
+IPMWR2D-MC1A0-ITS-NETFOB-0001 
+Fixed Wireless Device 
+ITS 
+NETFWD 
+IPMWR2D-MC1A0-ITS-NETFWD-0001 
+Cabling and 
+Containment 
+CAC 
+Pits 
+ITS 
+CACPIT 
+IPMWR2D-MC1A0-ITS-CACPIT-0001 
+Conduits 
+ITS 
+CACCON 
+IPMWR2D-MC1A0-ITS-CACCON-0001 
+Cables 
+ITS 
+CACCAB 
+IPMWR2D-MC1A0-ITS-CACCAB-0001 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+15 
+Object Category 
+Design Object 
+Discipline 
+Object Code 
+Unique Object Code Example 
+Enclosures 
+ENC 
+Traffic Signal Controller Enclosure 
+ITS 
+ENCTSC 
+IPMWR2D-MC1A0-ITS-ENCTSC-0001 
+Intelligent Transport System Enclosure 
+ITS 
+ENCITS 
+IPMWR2D-MC1A0-ITS-ENCITS-0001 
+Network Node Enclosure 
+ITS 
+ENCNOD 
+IPMWR2D-MC1A0-ITS-ENCNOD-0001 
+Enclosure Containing Network Assets 
+ITS 
+ENCNET 
+IPMWR2D-MC1A0-ITS-ENCNET-0001 
+Enclosure for Variable Message Sign 
+ITS 
+ENCVMS 
+IPMWR2D-MC1A0-ITS-ENCVMS-0001 
+Enclosure for Lane Use Management Sign 
+ITS 
+ENCLUM 
+IPMWR2D-MC1A0-ITS-ENCLUM-0001 
+Enclosure for Dynamic Message Sign 
+ITS 
+ENCDMS 
+IPMWR2D-MC1A0-ITS-ENCDMS-0001 
+Enclosure for Speed Warning Sign 
+ITS 
+ENCSWS 
+IPMWR2D-MC1A0-ITS-ENCSWS-0001 
+Enclosure for Fibre Optic Breakout 
+ITS 
+ENCFOB 
+IPMWR2D-MC1A0-ITS-ENCFOB-0001 
+Post Top Box Enclosure for Switchboard 
+ITS 
+ENCPTB 
+IPMWR2D-MC1A0-ITS-ENCPTB-0001 
+Pillar Box Enclosure for Switchboard 
+ITS 
+ENCPIL 
+IPMWR2D-MC1A0-ITS-ENCPIL-0001 
+Top Hat Enclosure 
+ITS 
+ENCTOP 
+IPMWR2D-MC1A0-ITS-ENCTOP-0001 
+Processors 
+PRO 
+Field Processor 
+ITS 
+PROFPR 
+IPMWR2D-MC1A0-ITS-PROFPR-0001 
+Traffic Signal Controller 
+ITS 
+PROTSC 
+IPMWR2D-MC1A0-ITS-PROTSC-0001 
+Ramp Signal Controller 
+ITS 
+PRORSC 
+IPMWR2D-MC1A0-ITS-PRORSC-0001 
+Dynamic Sign Controller 
+ITS 
+PRODSC 
+IPMWR2D-MC1A0-ITS-PRODSC-0001 
+Detector Unit 
+ITS 
+PRODET 
+IPMWR2D-MC1A0-ITS-PRODET-0001 
+Classifier Unit 
+ITS 
+PROCLS 
+IPMWR2D-MC1A0-ITS-PROCLS-0001 
+Weigh in Motion Unit 
+ITS 
+PROWIM 
+IPMWR2D-MC1A0-ITS-PROWIM-0001 
+Network Video Recorder 
+ITS 
+PRONVR 
+IPMWR2D-MC1A0-ITS-PRONVR-0001 
+Digital Video Recorder 
+ITS 
+PRODVR 
+IPMWR2D-MC1A0-ITS-PRODVR-0001 
+Camera Encoder 
+ITS 
+PROCAM 
+IPMWR2D-MC1A0-ITS-PROCAM-0001 
+Industrial Media Converter 
+ITS 
+PROIMC 
+IPMWR2D-MC1A0-ITS-PROIMC-0001 
+Programmable Logic Controller 
+ITS 
+PROPLC 
+IPMWR2D-MC1A0-ITS-PROPLC-0001 
+Cooperative-ITS Vehicle Station 
+ITS 
+PROCVS 
+IPMWR2D-MC1A0-ITS-PROCVS-0001 
+Cooperative-ITS Roadside Station 
+ITS 
+PROCRS 
+IPMWR2D-MC1A0-ITS-PROCRS-0001 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+16 
+Object Category 
+Design Object 
+Discipline 
+Object Code 
+Unique Object Code Example 
+Mounting Structures 
+MTS 
+Pole 
+ITS 
+MTSPOL 
+IPMWR2D-MC1A0-ITS-MTSPOL-0001 
+Post 
+ITS 
+MTSPST 
+IPMWR2D-MC1A0-ITS-MTSPST-0001 
+Traffic Signal Mast Arm 
+ITS 
+MTSTSM 
+IPMWR2D-MC1A0-ITS-MTSTSM-0001 
+Intelligent Transport System Pole 
+ITS 
+MTSITS 
+IPMWR2D-MC1A0-ITS-MTSITS-0001 
+Outreach Arm 
+ITS 
+MTSOUT 
+IPMWR2D-MC1A0-ITS-MTSOUT-0001 
+Bracket 
+ITS 
+MTSBKT 
+IPMWR2D-MC1A0-ITS-MTSBKT-0001 
+Tower 
+ITS 
+MTSTOW 
+IPMWR2D-MC1A0-ITS-MTSTOW-0001 
+Luminaires 
+LMR 
+Light Emitting Diode 
+ITS 
+LMRLED 
+IPMWR2D-MC1A0-ITS-LMRLED-0001 
+High Pressure Sodium 
+ITS 
+LMRHPS 
+IPMWR2D-MC1A0-ITS-LMRHPS-0001 
+Metal Halide 
+ITS 
+LMRMHL 
+IPMWR2D-MC1A0-ITS-LMRMHL-0001 
+Compact Fluorescent 
+ITS 
+LMRCFL 
+IPMWR2D-MC1A0-ITS-LMRCFL-0001 
+Linear Fluorescent 
+ITS 
+LMRLFL 
+IPMWR2D-MC1A0-ITS-LMRLFL-0001 
+Mercury Vapour 
+ITS 
+LMRMVP 
+IPMWR2D-MC1A0-ITS-LMRMVP-0001 
+Low Pressure Sodium 
+ITS 
+LMRLPS 
+IPMWR2D-MC1A0-ITS-LMRLPS-0001 
+Smart Lighting Controller 
+ITS 
+LEDSLC 
+IPMWR2D-MC1A0-ITS-LEDSLC-0001 
+Dynamic Signs 
+DYN 
+Variable Message Sign 
+ITS 
+DYNVMS 
+IPMWR2D-MC1A0-ITS-DYNVMS-0001 
+Lane Use Management Sign 
+ITS 
+DYNLUM 
+IPMWR2D-MC1A0-ITS-DYNLUM-0001 
+Variable Speed Limit Sign 
+ITS 
+DYNVSL 
+IPMWR2D-MC1A0-ITS-DYNVSL-0001 
+Road Condition Information Sign 
+ITS 
+DYNRCS 
+IPMWR2D-MC1A0-ITS-DYNRCS-0001 
+Travel Time Sign 
+ITS 
+DYNTTS 
+IPMWR2D-MC1A0-ITS-DYNTTS-0001 
+Changeable Message Sign 
+ITS 
+DYNCMS 
+IPMWR2D-MC1A0-ITS-DYNCMS-0001 
+Flashing Warning Sign 
+ITS 
+DYNFWS 
+IPMWR2D-MC1A0-ITS-DYNFWS-0001 
+Vehicle Activated Sign 
+ITS 
+DYNVAS 
+IPMWR2D-MC1A0-ITS-DYNVAS-0001 
+Enhanced School Zone Vehicle Activated Sign 
+ITS 
+DYNSVA 
+IPMWR2D-MC1A0-ITS-DYNSVA-0001 
+Enhanced School Zone Speed Limit Sign 
+ITS 
+DYNESZ 
+IPMWR2D-MC1A0-ITS-DYNESZ-0001 
+Ramp Information Sign 
+ITS 
+DYNRIS 
+IPMWR2D-MC1A0-ITS-DYNRIS-0001 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+17 
+Object Category 
+Design Object 
+Discipline 
+Object Code 
+Unique Object Code Example 
+Cameras 
+CAM 
+Detection Camera 
+ITS 
+CAMDET 
+IPMWR2D-MC1A0-ITS-CAMDET-0001 
+Fixed Camera (Non-Web) 
+ITS 
+CAMFIX 
+IPMWR2D-MC1A0-ITS-CAMFIX-0001 
+Automatic Number Plate Recognition Camera 
+ITS 
+CAMNPR 
+IPMWR2D-MC1A0-ITS-CAMNPR-0001 
+Pan, Tilt and Zoom Camera 
+ITS 
+CAMPTZ 
+IPMWR2D-MC1A0-ITS-CAMPTZ-0001 
+Fixed Web Camera 
+ITS 
+CAMWEB 
+IPMWR2D-MC1A0-ITS-CAMWEB-0001 
+Detectors 
+DET 
+Loop Detector for Vehicles 
+ITS 
+DETLDV 
+IPMWR2D-MC1A0-ITS-DETLDV-0001 
+Loop Detector for Cyclists 
+ITS 
+DETLDC 
+IPMWR2D-MC1A0-ITS-DETLDC-0001 
+Piezoelectric Detector 
+ITS 
+DETPEZ 
+IPMWR2D-MC1A0-ITS-DETPEZ-0001 
+Strain Gauge Detector 
+ITS 
+DETSTR 
+IPMWR2D-MC1A0-ITS-DETSTR-0001 
+Wireless Traffic Sensor 
+ITS 
+DETWTS 
+IPMWR2D-MC1A0-ITS-DETWTS-0001 
+Infrared Detector 
+ITS 
+DETINF 
+IPMWR2D-MC1A0-ITS-DETINF-0001 
+Radar Detector for Vehicles 
+ITS 
+DETRAV 
+IPMWR2D-MC1A0-ITS-DETRAV-0001 
+Radar Detector for Pedestrians 
+ITS 
+DETRAP 
+IPMWR2D-MC1A0-ITS-DETRAP-0001 
+Push Button Detector for Pedestrians 
+ITS 
+DETPBP 
+IPMWR2D-MC1A0-ITS-DETPBP-0001 
+Push Button Detector for Cyclists 
+ITS 
+DETPBC 
+IPMWR2D-MC1A0-ITS-DETPBC-0001 
+Push Button Detector for Vehicle Access 
+ITS 
+DETPBV 
+IPMWR2D-MC1A0-ITS-DETPBV-0001 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+18 
+Object Category 
+Design Object 
+Discipline 
+Object Code 
+Unique Object Code Example 
+Environmental 
+ENV 
+Weather Station 
+ITS 
+ENVWTS 
+IPMWR2D-MC1A0-ITS-ENVWTS-0001 
+Gas Bubbler Station 
+ITS 
+ENVGBS 
+IPMWR2D-MC1A0-ITS-ENVGBS-0001 
+Pressure Transducer Sensor 
+ITS 
+ENVPTS 
+IPMWR2D-MC1A0-ITS-ENVPTS-0001 
+Ultrasonic Level Sensor 
+ITS 
+ENVULS 
+IPMWR2D-MC1A0-ITS-ENVULS-0001 
+Radar Level Sensor 
+ITS 
+ENVRLS 
+IPMWR2D-MC1A0-ITS-ENVRLS-0001 
+Float Level Sensor 
+ITS 
+ENVFLS 
+IPMWR2D-MC1A0-ITS-ENVFLS-0001 
+Data Logger 
+ITS 
+ENVDAT 
+IPMWR2D-MC1A0-ITS-ENVDAT-0001 
+Wind Speed Sensor 
+ITS 
+ENVWSS 
+IPMWR2D-MC1A0-ITS-ENVWSS-0001 
+Wind Direction Sensor 
+ITS 
+ENVWDS 
+IPMWR2D-MC1A0-ITS-ENVWDS-0001 
+Rainfall Sensor 
+ITS 
+ENVRFS 
+IPMWR2D-MC1A0-ITS-ENVRFS-0001 
+Visibility Sensor 
+ITS 
+ENVVIS 
+IPMWR2D-MC1A0-ITS-ENVVIS-0001 
+Remote Road Sensor 
+ITS 
+ENVRRS 
+IPMWR2D-MC1A0-ITS-ENVRRS-0001 
+Temperature Sensor 
+ITS 
+ENVTMP 
+IPMWR2D-MC1A0-ITS-ENVTMP-0001 
+Humidity Sensor 
+ITS 
+ENVHUM 
+IPMWR2D-MC1A0-ITS-ENVHUM-0001 
+Solar Radiation Sensor 
+ITS 
+ENVSRS 
+IPMWR2D-MC1A0-ITS-ENVSRS-0001 
+Lanterns 
+LAN 
+Vehicle Roundel Aspect 
+ITS 
+LANVRA 
+IPMWR2D-MC1A0-ITS-LANVRA-0001 
+Vehicle Arrow Aspect 
+ITS 
+LANVAA 
+IPMWR2D-MC1A0-ITS-LANVAA-0001 
+U-Turn Aspect 
+ITS 
+LANUTA 
+IPMWR2D-MC1A0-ITS-LANUTA-0001 
+Bus Lane Aspect 
+ITS 
+LANBLA 
+IPMWR2D-MC1A0-ITS-LANBLA-0001 
+Emergency Aspect 
+ITS 
+LANEMA 
+IPMWR2D-MC1A0-ITS-LANEMA-0001 
+Pedestrian Aspect 
+ITS 
+LANPDA 
+IPMWR2D-MC1A0-ITS-LANPDA-0001 
+Bicycle Aspect 
+ITS 
+LANBYA 
+IPMWR2D-MC1A0-ITS-LANBYA-0001 
+Communications 
+COM 
+Handset Help Phone 
+ITS 
+COMHHP 
+IPMWR2D-MC1A0-ITS-COMHHP-0001 
+Push-to-Talk Help Phone 
+ITS 
+COMPHP 
+IPMWR2D-MC1A0-ITS-COMPHP-0001 
+Loud Speaking Help Phone 
+ITS 
+COMLHP 
+IPMWR2D-MC1A0-ITS-COMLHP-0001 
+ 
+
+Building Information Modelling (BIM) for Intelligent Transport Systems (ITS) Manual 
+Transport and Main Roads, June 2025 
+19 
+Appendix B: Road infrastructure ITS asset classification hierarchy 
+ 
+ 
+
+ 
+ 
+ 

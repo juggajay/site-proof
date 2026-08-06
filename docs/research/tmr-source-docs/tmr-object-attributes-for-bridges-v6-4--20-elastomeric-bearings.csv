@@ -1,0 +1,23 @@
+,Table 20: Elastomeric bearings,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code ,43614-P1-B-BE-2
+,,Element Depth ,0.3
+,,Element Length,0.4
+,,Element Width ,25.0
+,Asset Management Information,Full BIM Object Code ,43614-P1-B-BE-2
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,B
+,,SIM Exposure Classification Code,3
+,,SIM Group Code,P
+,,SIM Group Number,1
+,,SIM Modification Status Code,WL1
+,,SIM Quantity (each),1
+,,SIM Standard Material Code,O
+,,SIM Standard Number Code,42
