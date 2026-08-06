@@ -1,10 +1,12 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIONS_COLUMN_WIDTH,
   COLUMN_WIDTH_STORAGE_KEY,
   DEFAULT_COLUMN_WIDTHS,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
+  SELECT_COLUMN_WIDTH,
   formatChainage,
   highlightSearchTerm,
   parseColumnWidthsPreference,
@@ -31,7 +33,9 @@ function renderHighlight(text: string, searchTerm: string) {
 
 describe('column width constants', () => {
   it('preserves the persisted storage key and clamp bounds', () => {
-    expect(COLUMN_WIDTH_STORAGE_KEY).toBe('siteproof_lot_column_widths');
+    // v2 — bumping the key drops widths saved against the pre-rebalance
+    // defaults, which would otherwise keep the overflowing layout alive.
+    expect(COLUMN_WIDTH_STORAGE_KEY).toBe('siteproof_lot_column_widths_v2');
     expect(MIN_COLUMN_WIDTH).toBe(60);
     expect(MAX_COLUMN_WIDTH).toBe(600);
   });
@@ -39,13 +43,31 @@ describe('column width constants', () => {
   it('keeps a default width for every table column', () => {
     expect(DEFAULT_COLUMN_WIDTHS).toEqual({
       lotNumber: 140,
-      description: 200,
-      chainage: 100,
-      activityType: 130,
+      description: 130,
+      chainage: 110,
+      activityType: 180,
       status: 110,
-      subcontractor: 140,
+      subcontractor: 120,
       budget: 100,
     });
+  });
+
+  it('leaves the select column room for the chevron and the checkbox', () => {
+    // At 40px the checkbox overflowed into the lot-number cell and rendered as
+    // a missing-glyph box before every lot number.
+    expect(SELECT_COLUMN_WIDTH).toBeGreaterThanOrEqual(24 + 8 + 16 + 24);
+  });
+
+  it('fits the whole default table inside a 1440px window', () => {
+    // The scroll container measures 1086px at a 1440px viewport with the nav
+    // rail expanded (measured in e2e). The clipped "Cl" in the actions column
+    // was this sum overflowing it.
+    const total =
+      SELECT_COLUMN_WIDTH +
+      ACTIONS_COLUMN_WIDTH +
+      Object.values(DEFAULT_COLUMN_WIDTHS).reduce((sum, width) => sum + width, 0);
+
+    expect(total).toBeLessThanOrEqual(1086);
   });
 });
 

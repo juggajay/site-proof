@@ -37,6 +37,19 @@ interface MockSeededLotsOptions {
   lot?: typeof E2E_LOT;
 }
 
+/**
+ * Register-level tools (export, print, import, bulk create) live behind the
+ * header overflow menu so "Create Lot" reads as the single primary action.
+ */
+async function openRegisterMenu(page: Page) {
+  await page.getByRole('button', { name: 'More register actions' }).click();
+}
+
+/** Per-row Edit / Clone / Delete live behind the row's overflow kebab. */
+async function openRowActions(row: Locator) {
+  await row.getByRole('button', { name: /More actions for lot/ }).click();
+}
+
 async function getTextContrastRatio(locator: Locator) {
   return locator.evaluate((element) => {
     const parseRgb = (color: string) => {
@@ -361,7 +374,8 @@ test.describe('Lots seeded UI contract', () => {
 
     await expect(page.getByRole('row').filter({ hasText: 'LOT-001' })).toBeVisible();
     await expect(page.getByText('Manage lots for E2E Highway Upgrade')).toBeVisible();
-    await page.getByRole('button', { name: 'Export CSV' }).click();
+    await openRegisterMenu(page);
+    await page.getByRole('menuitem', { name: 'Export CSV' }).click();
 
     const modal = page.getByRole('dialog', { name: /Export Lots to CSV/ });
     await expect(modal).toBeVisible();
@@ -475,7 +489,8 @@ test.describe('Lots seeded UI contract', () => {
     const api = await mockSeededLotsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
-    await page.getByRole('button', { name: 'Bulk Create Lots' }).click();
+    await openRegisterMenu(page);
+    await page.getByRole('menuitem', { name: 'Bulk Create Lots' }).click();
 
     await expect(page.getByText('Step 1: Define Chainage Range')).toBeVisible();
     await page.getByLabel('Start Chainage (m)').fill('1e2');
@@ -512,7 +527,8 @@ test.describe('Lots seeded UI contract', () => {
     const api = await mockSeededLotsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
-    await page.getByRole('button', { name: 'Bulk Create Lots' }).click();
+    await openRegisterMenu(page);
+    await page.getByRole('menuitem', { name: 'Bulk Create Lots' }).click();
 
     await page.getByLabel('Start Chainage (m)').fill('0');
     await page.getByLabel('End Chainage (m)').fill('501');
@@ -528,7 +544,8 @@ test.describe('Lots seeded UI contract', () => {
     const api = await mockSeededLotsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
-    await page.getByRole('button', { name: 'Bulk Create Lots' }).click();
+    await openRegisterMenu(page);
+    await page.getByRole('menuitem', { name: 'Bulk Create Lots' }).click();
 
     await page.getByLabel('Start Chainage (m)').fill('0');
     await page.getByLabel('End Chainage (m)').fill('0.0000003');
@@ -549,7 +566,8 @@ test.describe('Lots seeded UI contract', () => {
     await mockSeededLotsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
-    await page.getByRole('button', { name: 'Import Register' }).click();
+    await openRegisterMenu(page);
+    await page.getByRole('menuitem', { name: 'Import Register' }).click();
 
     await expect(page.getByText('Import lots from a register')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Choose file' })).toBeVisible();
@@ -628,9 +646,68 @@ test.describe('Lots seeded UI contract', () => {
     const lotRow = page.getByRole('row').filter({ hasText: 'LOT-001' });
     await expect(lotRow).toBeVisible();
 
-    await lotRow.getByRole('button', { name: 'Clone' }).dblclick();
+    await openRowActions(lotRow);
+    await page.getByRole('menuitem', { name: 'Clone' }).dblclick();
 
     await expect(page.getByRole('row').filter({ hasText: 'LOT-001-COPY' })).toBeVisible();
     expect(api.getCloneRequestCount()).toBe(1);
+  });
+});
+
+test.describe('Lot register layout', () => {
+  /** Eight neighbouring chainage lots — the shape the register actually holds. */
+  async function seedRegister(page: Page) {
+    const lots = Array.from({ length: 8 }, (_, index) => ({
+      ...E2E_LOT,
+      id: `layout-lot-${index}`,
+      lotNumber: `LOT-${String(index + 1).padStart(3, '0')}`,
+      description: `LOT-${2000 + index * 100}-${2100 + index * 100}`,
+      activityType: 'earthworks_general',
+      chainageStart: 2000 + index * 100,
+      chainageEnd: 2100 + index * 100,
+      status: 'not_started',
+      budgetAmount: null,
+      assignedSubcontractorId: null,
+      assignedSubcontractor: null,
+    }));
+    await mockSeededLotsApi(page, { paginatedLotPages: [lots] });
+  }
+
+  test('keeps the whole table inside its container at 1440px', async ({ page }) => {
+    // The register used to overflow here, clipping the last row action to "Cl".
+    await seedRegister(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+    await expect(page.getByRole('row').filter({ hasText: 'LOT-001' })).toBeVisible();
+
+    const overflow = await page
+      .getByTestId('scrollable-table-container')
+      .evaluate((el) => el.scrollWidth - el.clientWidth);
+
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('keeps the last lot card clear of the create-lot FAB on a phone', async ({ page }) => {
+    await seedRegister(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+    await expect(page.getByText('LOT-001').first()).toBeVisible();
+
+    const list = page.getByTestId('card-view-container');
+    await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+    await expect(page.getByText('Showing all 8 lots')).toBeVisible();
+
+    const { lastCardBottom, fabTop } = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('[data-testid^="lot-card-"]'));
+      const fab = document.querySelector('[aria-label="Open actions"]');
+      return {
+        lastCardBottom: Math.max(...cards.map((card) => card.getBoundingClientRect().bottom)),
+        fabTop: fab!.getBoundingClientRect().top,
+      };
+    });
+
+    expect(lastCardBottom).toBeLessThanOrEqual(fabTop);
   });
 });

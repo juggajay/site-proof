@@ -37,21 +37,27 @@ function renderMobileBar(overrides: { viewMode?: 'list' | 'card' | 'linear' | 'm
 }
 
 describe('LotFiltersBar (mobile)', () => {
-  it('offers the map views on mobile with 44px touch targets', () => {
-    const { onToggleViewMode } = renderMobileBar();
+  it('spends one row on search and the filter trigger', () => {
+    renderMobileBar();
 
-    const mapButton = screen.getByTestId('view-toggle-map');
-    expect(mapButton).toHaveAttribute('aria-label', 'Satellite map view');
-    expect(mapButton.className).toMatch(/\bh-11\b/);
-    expect(mapButton.className).toMatch(/\bw-11\b/);
-    expect(screen.getByTestId('view-toggle-linear')).toBeInTheDocument();
-
-    fireEvent.click(mapButton);
-    expect(onToggleViewMode).toHaveBeenCalledWith('map');
+    expect(screen.getByPlaceholderText('Search lots...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Filters/i })).toBeInTheDocument();
   });
 
-  it("marks the card toggle active for 'list' (mobile renders list as cards)", () => {
-    renderMobileBar({ viewMode: 'list' });
-    expect(screen.getByTestId('view-toggle-card').className).toMatch(/bg-background/);
+  it('leaves the view switcher to the page header, which hosts it on the title row', () => {
+    // Moved in the lot-register layout fix: the switcher used to own a whole
+    // row here, pushing the first lot card off a phone screen. Its behaviour is
+    // covered by LotsPageHeader.test.tsx.
+    renderMobileBar();
+
+    expect(screen.queryByTestId('view-toggle-map')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('view-toggle-linear')).not.toBeInTheDocument();
+  });
+
+  it('opens the filter bottom sheet from the trigger', () => {
+    renderMobileBar();
+
+    fireEvent.click(screen.getByRole('button', { name: /Filters/i }));
+    expect(screen.getByText('Filter Lots')).toBeInTheDocument();
   });
 });
