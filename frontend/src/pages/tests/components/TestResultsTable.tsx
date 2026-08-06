@@ -1,29 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate } from 'react-router-dom';
+import { RowActions } from '@/components/ui/RowActions';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import type { TestResult } from '../types';
 import {
   statusColors,
   testStatusColors,
   testStatusLabels,
-  nextStatusMap,
-  nextStatusButtonLabels,
-  canAdvanceTestStatus,
-  canSendToLab,
-  AT_LAB_STATUS,
-  SEND_TO_LAB_LABEL,
-  isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
   getLabWait,
   formatLabWait,
   isAiExtractionReviewDraft,
 } from '../constants';
-import {
-  canGenerateTestResultCertificate,
-  generateTestResultCertificate,
-} from '../testResultCertificate';
-import { AttachCertificateButton } from './AttachCertificateButton';
+import { useTestRowActions } from './useTestRowActions';
 
 interface TestResultsTableProps {
   projectId: string;
@@ -60,7 +51,6 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   onLinkItpItem,
   highlightedTestId,
 }: TestResultsTableProps) {
-  const navigate = useNavigate();
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -80,7 +70,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   if (filteredTestResults.length === 0 && !hasActiveFilters) {
     return (
       <div className="rounded-lg border p-8 text-center">
-        <div className="text-5xl mb-4">{'\uD83E\uDDEA'}</div>
+        <div className="text-5xl mb-4">{'🧪'}</div>
         <h3 className="text-lg font-semibold mb-2">No Test Results</h3>
         <p className="text-muted-foreground mb-4">
           No test results have been recorded yet. Add test results to track quality compliance.
@@ -101,7 +91,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   return (
     // Single <table> inside the scroll container with top/bottom spacer rows
     // (the lots/NCR register virtualization idiom) so header and body columns
-    // share one column model and screen readers see one coherent table \u2014 the
+    // share one column model and screen readers see one coherent table — the
     // previous header-table + per-row tables broke both alignment and semantics.
     <div
       ref={parentRef}
@@ -112,21 +102,29 @@ export const TestResultsTable = React.memo(function TestResultsTable({
       <table className="w-full">
         <thead className="bg-muted/50 sticky top-0 z-10">
           <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium">Test Type</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Request #</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Linked Lot</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Laboratory</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Result</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Pass/Fail</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+            {/* Test Type absorbs the slack; every other column sizes to its own
+                content so lot numbers, lab names and results stop wrapping. */}
+            <th className="w-full px-4 py-3 text-left text-sm font-medium">Test Type</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">Request #</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">
+              Linked Lot
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">
+              Laboratory
+            </th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">Result</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">Pass/Fail</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-medium">Status</th>
+            {/* Fixed width: one primary action + the overflow trigger, so the
+                column reads the same on every row. */}
+            <th className="w-[150px] px-4 py-3 text-left text-sm font-medium">Actions</th>
           </tr>
         </thead>
         <tbody>
           {showFilterEmpty ? (
             <tr>
               <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                <div className="text-3xl mb-2">{'\uD83D\uDD0D'}</div>
+                <div className="text-3xl mb-2">{'🔍'}</div>
                 <p>No test results match your filters.</p>
                 <button
                   onClick={onClearFilters}
@@ -154,181 +152,21 @@ export const TestResultsTable = React.memo(function TestResultsTable({
               {virtualItems.map((virtualRow) => {
                 const test = filteredTestResults[virtualRow.index];
                 if (!test) return null;
-                const overdue = isTestOverdue(test);
-                const labWait = getLabWait(test);
-                const daysSince = getDaysSince(test.sampleDate, test.createdAt);
-                const aiExtractionReviewDraft = isAiExtractionReviewDraft(test);
-                const statusLabel = aiExtractionReviewDraft
-                  ? 'Draft review'
-                  : testStatusLabels[test.status] || test.status;
-                const statusClass = aiExtractionReviewDraft
-                  ? 'bg-warning/10 text-warning'
-                  : testStatusColors[test.status] || 'bg-muted';
                 return (
-                  <tr
+                  <TestResultRow
                     key={virtualRow.key}
-                    ref={virtualizer.measureElement}
-                    data-index={virtualRow.index}
-                    data-deep-linked={test.id === highlightedTestId ? 'true' : undefined}
-                    className={`hover:bg-muted/30 border-b ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${test.id === highlightedTestId ? 'bg-primary/10' : ''}`}
-                  >
-                    <td className="px-4 py-3 text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        {test.testType}
-                        {/* Feature #200: AI extracted indicator */}
-                        {test.aiExtracted && (
-                          <span
-                            className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded font-bold"
-                            title="AI Extracted from certificate"
-                          >
-                            AI
-                          </span>
-                        )}
-                        {aiExtractionReviewDraft && (
-                          <span
-                            className="px-1.5 py-0.5 text-[10px] bg-warning/10 text-warning rounded font-bold"
-                            title="Draft extraction review. Confirm the AI review dialog before treating this as an official test result."
-                          >
-                            Draft extraction review
-                          </span>
-                        )}
-                        {overdue && (
-                          <span className="px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground rounded font-bold">
-                            OVERDUE
-                          </span>
-                        )}
-                      </div>
-                      {/* Feature #197: Show days since sample/created */}
-                      <div
-                        className={`text-xs mt-0.5 ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}
-                      >
-                        {daysSince} days since {test.sampleDate ? 'sample' : 'request'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">{test.testRequestNumber || '\u2014'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {test.lot ? (
-                        <button
-                          onClick={() =>
-                            navigate(
-                              `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(test.lot?.id || test.lotId || '')}`,
-                            )
-                          }
-                          className="text-primary hover:underline"
-                        >
-                          {test.lot.lotNumber}
-                        </button>
-                      ) : (
-                        <span className="text-muted-foreground">{'\u2014'}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">{test.laboratoryName || '\u2014'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {test.resultValue != null
-                        ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
-                        : '\u2014'}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}
-                      >
-                        {test.passFail}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${statusClass}`}>
-                        {statusLabel}
-                      </span>
-                      {/* Wave C2 Phase 3: the lab wait. Elapsed is a fact and is
-                          always shown once the sample was sent; "overdue" only
-                          appears where a human supplied an expected date. */}
-                      {labWait && (
-                        <div
-                          className={`text-xs mt-0.5 ${labWait.overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
-                        >
-                          {formatLabWait(labWait)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2 items-center">
-                        {/* Feature #668: Print material conformance record */}
-                        {canGenerateTestResultCertificate(test) && (
-                          <button
-                            onClick={() => generateTestResultCertificate(test, projectId)}
-                            className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
-                            title="Print Material Conformance Record"
-                            aria-label={`Print material conformance record for ${test.testType}`}
-                          >
-                            {'\uD83D\uDDA8\uFE0F'}
-                          </button>
-                        )}
-                        {canAdvanceTestStatus(test) &&
-                          (isEnterResultsStep(test.status) ? (
-                            // Ticket T2: record the result before entering.
-                            <button
-                              onClick={() => onOpenEnterResults(test)}
-                              className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                            >
-                              {nextStatusButtonLabels[test.status]}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => onUpdateStatus(test.id, nextStatusMap[test.status])}
-                              disabled={updatingStatusId === test.id}
-                              className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                            >
-                              {updatingStatusId === test.id
-                                ? 'Updating...'
-                                : nextStatusButtonLabels[test.status]}
-                            </button>
-                          ))}
-                        {/* Wave C2 Phase 2: record that the sample went to the
-                                lab. Secondary, never the primary advance. */}
-                        {canSendToLab(test) && (
-                          <button
-                            onClick={() => onUpdateStatus(test.id, AT_LAB_STATUS)}
-                            disabled={updatingStatusId === test.id}
-                            className="px-3 py-1 text-xs rounded border hover:bg-muted/50 transition-colors disabled:opacity-50"
-                          >
-                            {updatingStatusId === test.id ? 'Updating...' : SEND_TO_LAB_LABEL}
-                          </button>
-                        )}
-                        {/* Feature B2: attach/replace a certificate so a
-                                manual test can reach 'verified'. */}
-                        {test.status !== 'verified' && (
-                          <AttachCertificateButton
-                            testId={test.id}
-                            hasCertificate={!!test.certificateDocId}
-                            onAttachCertificate={onAttachCertificate}
-                          />
-                        )}
-                        {/* Migration: link this test to one of its lot's ITP items. */}
-                        {onLinkItpItem && test.lotId && (
-                          <button
-                            onClick={() => onLinkItpItem(test)}
-                            className="px-3 py-1 text-xs rounded border hover:bg-muted/50 transition-colors"
-                          >
-                            Link to ITP item
-                          </button>
-                        )}
-                        {/* Feature #204: Reject button for tests in "entered" status */}
-                        {test.status === 'entered' && (
-                          <button
-                            onClick={() => onRejectTest(test.id)}
-                            className="px-3 py-1 text-xs rounded bg-destructive/10 text-destructive hover:bg-destructive/20"
-                          >
-                            Reject
-                          </button>
-                        )}
-                        {test.status === 'verified' && (
-                          <span className="text-muted-foreground text-xs font-medium">
-                            {'\u2713'} Complete
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    test={test}
+                    index={virtualRow.index}
+                    measureRef={virtualizer.measureElement}
+                    projectId={projectId}
+                    updatingStatusId={updatingStatusId}
+                    onUpdateStatus={onUpdateStatus}
+                    onOpenEnterResults={onOpenEnterResults}
+                    onRejectTest={onRejectTest}
+                    onAttachCertificate={onAttachCertificate}
+                    onLinkItpItem={onLinkItpItem}
+                    isHighlighted={test.id === highlightedTestId}
+                  />
                 );
               })}
               {/* Bottom spacer: keeps total scroll height correct below the window. */}
@@ -351,3 +189,159 @@ export const TestResultsTable = React.memo(function TestResultsTable({
     </div>
   );
 });
+
+interface TestResultRowProps {
+  test: TestResult;
+  index: number;
+  measureRef: (node: HTMLTableRowElement | null) => void;
+  projectId: string;
+  updatingStatusId: string | null;
+  onUpdateStatus: (testId: string, newStatus: string) => void;
+  onOpenEnterResults: (test: TestResult) => void;
+  onRejectTest: (testId: string) => void;
+  onAttachCertificate: (testId: string, file: File, extract?: boolean) => Promise<void>;
+  onLinkItpItem?: (test: TestResult) => void;
+  isHighlighted: boolean;
+}
+
+// Its own component because the row's action set comes from a hook, which a
+// `.map()` inside the table body cannot call.
+function TestResultRow({
+  test,
+  index,
+  measureRef,
+  projectId,
+  updatingStatusId,
+  onUpdateStatus,
+  onOpenEnterResults,
+  onRejectTest,
+  onAttachCertificate,
+  onLinkItpItem,
+  isHighlighted,
+}: TestResultRowProps) {
+  const navigate = useNavigate();
+  const { fileInput, primary, actions } = useTestRowActions({
+    test,
+    projectId,
+    updatingStatusId,
+    onUpdateStatus,
+    onOpenEnterResults,
+    onRejectTest,
+    onAttachCertificate,
+    onLinkItpItem,
+  });
+
+  const overdue = isTestOverdue(test);
+  const labWait = getLabWait(test);
+  const daysSince = getDaysSince(test.sampleDate, test.createdAt);
+  const aiExtractionReviewDraft = isAiExtractionReviewDraft(test);
+  const statusLabel = aiExtractionReviewDraft
+    ? 'Draft review'
+    : testStatusLabels[test.status] || test.status;
+  const statusClass = aiExtractionReviewDraft
+    ? 'bg-warning/10 text-warning'
+    : testStatusColors[test.status] || 'bg-muted';
+
+  return (
+    <tr
+      ref={measureRef}
+      data-index={index}
+      data-deep-linked={isHighlighted ? 'true' : undefined}
+      className={`hover:bg-muted/30 border-b ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${isHighlighted ? 'bg-primary/10' : ''}`}
+    >
+      <td className="px-4 py-3 text-sm font-medium">
+        <div className="flex items-center gap-2">
+          {test.testType}
+          {/* Feature #200: AI extracted indicator */}
+          {test.aiExtracted && (
+            <span
+              className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded font-bold"
+              title="AI Extracted from certificate"
+            >
+              AI
+            </span>
+          )}
+          {aiExtractionReviewDraft && (
+            <span
+              className="px-1.5 py-0.5 text-[10px] bg-warning/10 text-warning rounded font-bold"
+              title="Draft extraction review. Confirm the AI review dialog before treating this as an official test result."
+            >
+              Draft extraction review
+            </span>
+          )}
+          {overdue && (
+            <span className="px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground rounded font-bold">
+              OVERDUE
+            </span>
+          )}
+        </div>
+        {/* Feature #197: Show days since sample/created */}
+        <div className={`text-xs mt-0.5 ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+          {daysSince} days since {test.sampleDate ? 'sample' : 'request'}
+        </div>
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm">{test.testRequestNumber || '—'}</td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm">
+        {test.lot ? (
+          <button
+            onClick={() =>
+              navigate(
+                `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(test.lot?.id || test.lotId || '')}`,
+              )
+            }
+            className="text-primary hover:underline"
+          >
+            {test.lot.lotNumber}
+          </button>
+        ) : (
+          <span className="text-muted-foreground">{'—'}</span>
+        )}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm">{test.laboratoryName || '—'}</td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm">
+        {test.resultValue != null
+          ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
+          : '—'}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm">
+        {/* Same Title Case as the workflow Status chip beside it — the two read
+            as one vocabulary instead of `pending` next to `Requested`. */}
+        <span
+          className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}
+        >
+          {formatStatusLabel(test.passFail)}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 text-sm">
+        <span className={`px-2 py-1 rounded text-xs font-medium ${statusClass}`}>
+          {statusLabel}
+        </span>
+        {/* Wave C2 Phase 3: the lab wait. Elapsed is a fact and is always shown
+            once the sample was sent; "overdue" only appears where a human
+            supplied an expected date. */}
+        {labWait && (
+          <div
+            className={`text-xs mt-0.5 ${labWait.overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
+          >
+            {formatLabWait(labWait)}
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-3 text-sm">
+        {fileInput}
+        <div className="flex items-center gap-2">
+          <RowActions
+            primary={primary}
+            actions={actions}
+            menuLabel={`More actions for ${test.testType}`}
+          />
+          {test.status === 'verified' && (
+            <span className="whitespace-nowrap text-muted-foreground text-xs font-medium">
+              {'✓'} Complete
+            </span>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}

@@ -20,6 +20,10 @@ interface NCRMobileListProps {
   onCopyLink: (ncrId: string, ncrNumber: string) => void;
 }
 
+// Scroll room under the last card so the "Raise NCR" FAB (bottom-right, above
+// the bottom nav) never sits on top of a card's Due/Age row.
+const FAB_CLEARANCE_PX = 96;
+
 function NCRMobileListInner({
   ncrs,
   containerRef,
@@ -66,7 +70,10 @@ function NCRMobileListInner({
       />
 
       <div
-        style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}
+        style={{
+          height: `${rowVirtualizer.getTotalSize() + FAB_CLEARANCE_PX}px`,
+          position: 'relative',
+        }}
         className="space-y-0"
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -122,6 +129,9 @@ function NCRMobileListInner({
                 <MobileDataCard
                   title={ncr.ncrNumber}
                   subtitle={ncr.description}
+                  // The description is the card's substance — two lines, not a
+                  // 40-character stub.
+                  subtitleClassName="line-clamp-2"
                   status={{
                     label: formatStatusLabel(ncr.status),
                     variant: statusVariant,

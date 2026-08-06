@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -9,7 +9,23 @@ import type { TestResult } from '../types';
 const scrollIntoView = vi.fn();
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  // Radix positions the overflow menu with floating-ui, which observes its
+  // anchor. jsdom ships no ResizeObserver.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
 });
+
+/** Opens a card's "…" menu and returns it. */
+async function openCardMenu(user: ReturnType<typeof userEvent.setup>, testType = 'Density Ratio') {
+  await user.click(screen.getByRole('button', { name: `More actions for ${testType}` }));
+  return screen.getByRole('menu');
+}
 
 function makeTest(overrides: Partial<TestResult> = {}): TestResult {
   return {
@@ -44,10 +60,12 @@ function renderList({
   tests = [makeTest()],
   onLinkItpItem = vi.fn(),
   onUpdateStatus = vi.fn(),
+  onRejectTest = vi.fn(),
 }: {
   tests?: TestResult[];
   onLinkItpItem?: (test: TestResult) => void;
   onUpdateStatus?: (testId: string, newStatus: string) => void;
+  onRejectTest?: (testId: string) => void;
 } = {}) {
   render(
     <MemoryRouter>
@@ -58,7 +76,7 @@ function renderList({
         updatingStatusId={null}
         onUpdateStatus={onUpdateStatus}
         onOpenEnterResults={vi.fn()}
-        onRejectTest={vi.fn()}
+        onRejectTest={onRejectTest}
         onAttachCertificate={vi.fn().mockResolvedValue(undefined)}
         onClearFilters={vi.fn()}
         onOpenCreateModal={vi.fn()}
@@ -66,22 +84,27 @@ function renderList({
       />
     </MemoryRouter>,
   );
-  return { onLinkItpItem, onUpdateStatus };
+  return { onLinkItpItem, onUpdateStatus, onRejectTest };
 }
 
 describe('TestResultsMobileList ITP link action', () => {
-  it('shows Link to ITP item for a test with a linked lot', () => {
+  it('shows Link to ITP item for a test with a linked lot', async () => {
+    const user = userEvent.setup();
     renderList();
 
-    const action = screen.getByRole('button', { name: 'Link to ITP item' });
-    expect(action).toBeInTheDocument();
-    expect(action).toHaveClass('w-full');
+    const menu = await openCardMenu(user);
+    expect(within(menu).getByRole('menuitem', { name: 'Link to ITP item' })).toBeInTheDocument();
   });
 
-  it('hides Link to ITP item when the test has no linked lot', () => {
-    renderList({ tests: [makeTest({ lotId: null, lot: null })] });
+  it('hides Link to ITP item when the test has no linked lot', async () => {
+    const user = userEvent.setup();
+    // Not verified, so the card still has an overflow menu to look in.
+    renderList({ tests: [makeTest({ status: 'entered', lotId: null, lot: null })] });
 
-    expect(screen.queryByRole('button', { name: 'Link to ITP item' })).not.toBeInTheDocument();
+    const menu = await openCardMenu(user);
+    expect(
+      within(menu).queryByRole('menuitem', { name: 'Link to ITP item' }),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the linker with the card test that was tapped', async () => {
@@ -95,10 +118,40 @@ describe('TestResultsMobileList ITP link action', () => {
     });
     const { onLinkItpItem } = renderList({ tests: [firstTest, secondTest] });
 
-    const actions = screen.getAllByRole('button', { name: 'Link to ITP item' });
-    await user.click(actions[1]);
+    const menu = await openCardMenu(user, 'CBR Laboratory');
+    await user.click(within(menu).getByRole('menuitem', { name: 'Link to ITP item' }));
 
     expect(onLinkItpItem).toHaveBeenCalledWith(secondTest);
+  });
+});
+
+// The audit found one phone card stacking five full-width buttons (~450px
+// tall). One primary button + the overflow menu replaces that, with nothing
+// dropped.
+describe('TestResultsMobileList card actions', () => {
+  it('renders the next step as the only button and the rest in the menu', async () => {
+    const user = userEvent.setup();
+    renderList({ tests: [makeTest({ status: 'requested', passFail: 'pending' })] });
+
+    expect(screen.getByRole('button', { name: 'Enter Results' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send to lab' })).not.toBeInTheDocument();
+
+    const menu = await openCardMenu(user);
+    for (const label of ['Send to lab', 'Attach certificate', 'Read with AI', 'Link to ITP item']) {
+      expect(within(menu).getByRole('menuitem', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('keeps reject reachable for an entered test', async () => {
+    const user = userEvent.setup();
+    const { onRejectTest } = renderList({
+      tests: [makeTest({ id: 'test-5', status: 'entered' })],
+    });
+
+    const menu = await openCardMenu(user);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Reject' }));
+
+    expect(onRejectTest).toHaveBeenCalledWith('test-5');
   });
 });
 
@@ -110,19 +163,25 @@ describe('TestResultsMobileList send-to-lab action', () => {
       tests: [makeTest({ id: 'test-9', status: 'requested', passFail: 'pending' })],
     });
 
-    await user.click(screen.getByRole('button', { name: 'Send to lab' }));
+    const menu = await openCardMenu(user);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Send to lab' }));
 
     expect(onUpdateStatus).toHaveBeenCalledWith('test-9', 'at_lab');
   });
 
-  it('hides the action once the test has left "requested"', () => {
+  it('hides the action once the test has left "requested"', async () => {
+    const user = userEvent.setup();
     renderList({
       tests: ['at_lab', 'results_received', 'entered', 'verified'].map((status) =>
-        makeTest({ id: `test-${status}`, status }),
+        makeTest({ id: `test-${status}`, testType: `Test ${status}`, status }),
       ),
     });
 
-    expect(screen.queryAllByRole('button', { name: 'Send to lab' })).toHaveLength(0);
+    for (const status of ['at_lab', 'results_received', 'entered', 'verified']) {
+      const menu = await openCardMenu(user, `Test ${status}`);
+      expect(within(menu).queryByRole('menuitem', { name: 'Send to lab' })).not.toBeInTheDocument();
+      await user.keyboard('{Escape}');
+    }
   });
 
   // C3 Phase B2 §5.7 `[C3R-A5]`. The card is the per-test detail surface, and it

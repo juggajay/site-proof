@@ -447,6 +447,14 @@ async function openSeededNcrRegister(page: Page) {
   return { api, openRow, majorRow };
 }
 
+// Register rows show one promoted action; everything else lives behind the
+// row's "…" menu, which Radix portals to the body (so it is a page-level
+// locator, not a descendant of the row).
+async function openNcrRowMenu(page: Page, row: Locator, ncrNumber: string) {
+  await row.getByRole('button', { name: `More actions for NCR ${ncrNumber}` }).click();
+  return page.getByRole('menu');
+}
+
 async function submitNcrResponse(
   page: Page,
   openRow: Locator,
@@ -516,9 +524,9 @@ test.describe('NCR seeded lifecycle contract', () => {
     await expect(openRow.getByText('open')).toBeVisible();
     await expect(openRow.getByText('E2E Foreman')).toBeVisible();
     await expect(openRow.getByRole('button', { name: 'Respond' })).toBeVisible();
-    await expect(
-      openRow.getByRole('button', { name: 'Copy link to NCR NCR-E2E-001' }),
-    ).toBeVisible();
+    const openRowMenu = await openNcrRowMenu(page, openRow, 'NCR-E2E-001');
+    await expect(openRowMenu.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+    await page.keyboard.press('Escape');
 
     const majorRow = page.getByRole('row').filter({ hasText: 'NCR-E2E-002' });
     await expect(majorRow).toBeVisible();
@@ -528,8 +536,10 @@ test.describe('NCR seeded lifecycle contract', () => {
     await expect(majorRow.getByText('verification')).toBeVisible();
     await expect(majorRow.getByText('E2E Concrete Subcontractor')).toBeVisible();
     await expect(majorRow.getByRole('button', { name: 'QM Approve' })).toBeVisible();
-    await expect(majorRow.getByRole('button', { name: 'Notify Client' })).toBeVisible();
-    await expect(majorRow.getByRole('button', { name: 'Close' })).toBeDisabled();
+    const majorRowMenu = await openNcrRowMenu(page, majorRow, 'NCR-E2E-002');
+    await expect(majorRowMenu.getByRole('menuitem', { name: 'Notify Client' })).toBeVisible();
+    await expect(majorRowMenu.getByRole('menuitem', { name: 'Close' })).toBeDisabled();
+    await page.keyboard.press('Escape');
 
     await page.getByLabel('Category').selectOption('workmanship');
     await expect(page.getByText('Showing 1 of 2 NCRs')).toBeVisible();
@@ -625,7 +635,8 @@ test.describe('NCR seeded lifecycle contract', () => {
     await approveMajorNcr(page, majorRow);
     await expect(majorRow.getByRole('button', { name: 'Close' })).toBeEnabled();
 
-    await majorRow.getByRole('button', { name: 'Notify Client' }).click();
+    const notifyMenu = await openNcrRowMenu(page, majorRow, 'NCR-E2E-002');
+    await notifyMenu.getByRole('menuitem', { name: 'Notify Client' }).click();
     const notifyModal = page.getByRole('dialog', { name: 'Notify Client - Major NCR' });
     await notifyModal.getByPlaceholder('Enter client email address').fill('client@example.com');
     await notifyModal
@@ -738,9 +749,9 @@ test.describe('NCR seeded lifecycle contract', () => {
       rectificationNotes: 'Rework completed and compaction retest attached.',
     });
     await expect(openRow.getByText('Verification', { exact: true })).toBeVisible();
-    await expect(openRow.getByRole('button', { name: 'Reject' })).toBeVisible();
 
-    await openRow.getByRole('button', { name: 'Reject' }).click();
+    const rejectMenu = await openNcrRowMenu(page, openRow, 'NCR-E2E-001');
+    await rejectMenu.getByRole('menuitem', { name: 'Reject' }).click();
     const rejectDialog = page.getByRole('dialog').filter({ hasText: 'Reject Rectification' });
     await rejectDialog
       .getByPlaceholder(
@@ -780,7 +791,8 @@ test.describe('NCR seeded lifecycle contract', () => {
 
     await approveMajorNcr(page, majorRow);
 
-    await majorRow.getByRole('button', { name: 'Concession' }).click();
+    const concessionMenu = await openNcrRowMenu(page, majorRow, 'NCR-E2E-002');
+    await concessionMenu.getByRole('menuitem', { name: 'Concession' }).click();
     const concessionDialog = page.getByRole('dialog', { name: 'Close NCR with Concession' });
     await concessionDialog
       .getByPlaceholder('Describe why the non-conformance cannot be fully rectified...')
