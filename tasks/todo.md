@@ -125,7 +125,7 @@ productionReadiness, fallow verdict in body) â†’ `gh pr checks --watch` green â†
 - [x] Add the compact system-prompt retrieval instruction.
 - [x] Add route drift, retrieval-quality and tool-contract tests.
 - [x] Run backend type-check, focused/existing chat suites and `npm run fallow:audit`.
-- [ ] Commit, push and open the requested PR; stop without merging.
+- [x] Commit, push and open PR #1777; stop without merging.
 
 ## Review
 
