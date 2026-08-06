@@ -6,7 +6,7 @@ import type {
   HoldPointStats,
   StatusFilter,
 } from './types';
-import { isNoticeExpired, isOverdue } from './components/holdPointTableUtils';
+import { getWaitingSince, isNoticeExpired, isOverdue } from './components/holdPointTableUtils';
 
 export interface HoldPointChartData {
   releasesOverTime: { date: string; releases: number }[];
@@ -26,6 +26,7 @@ const STATUS_FILTER_VALUES: readonly StatusFilter[] = [
 const SORT_FIELD_VALUES: readonly HoldPointSortField[] = [
   'lot',
   'status',
+  'waiting',
   'notified',
   'scheduled',
   'released',
@@ -119,7 +120,8 @@ function getSortTimestamp(value: string | null): number | null {
  * Date columns ('notified', 'scheduled', 'released') sort missing values last
  * regardless of direction, so "Notified asc" is the chase ordering: the hold
  * point that has been awaiting release the longest is on top and never hidden
- * behind never-notified rows.
+ * behind never-notified rows. 'waiting' (the ageing column) follows the same
+ * rule: released hold points wait for nobody and always sort last.
  */
 export function sortHoldPoints(
   holdPoints: HoldPoint[],
@@ -134,6 +136,16 @@ export function sortHoldPoints(
         return direction * compareLotOrder(a, b);
       case 'status':
         return direction * a.status.localeCompare(b.status);
+      case 'waiting': {
+        // More days waited === older start timestamp, so ascending days is
+        // descending timestamp.
+        const aTime = getSortTimestamp(getWaitingSince(a));
+        const bTime = getSortTimestamp(getWaitingSince(b));
+        if (aTime === null && bTime === null) return 0;
+        if (aTime === null) return 1;
+        if (bTime === null) return -1;
+        return direction * (bTime - aTime);
+      }
       case 'notified':
       case 'scheduled':
       case 'released': {

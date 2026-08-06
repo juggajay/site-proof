@@ -7,6 +7,7 @@ import {
   formatHoldPointDate,
   getStatusBadge,
   getStatusLabel,
+  getWaitingDays,
   isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
@@ -191,6 +192,14 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
               Status
             </SortableHeader>
             <SortableHeader
+              field="waiting"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Days Waiting
+            </SortableHeader>
+            <SortableHeader
               field="notified"
               sortField={sortField}
               sortDirection={sortDirection}
@@ -222,7 +231,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
           {virtualItems.length > 0 && (
             <tr>
               <td
-                colSpan={8}
+                colSpan={9}
                 style={{ height: `${virtualItems[0]?.start ?? 0}px`, padding: 0, border: 'none' }}
               />
             </tr>
@@ -255,7 +264,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
           {virtualItems.length > 0 && (
             <tr>
               <td
-                colSpan={8}
+                colSpan={9}
                 style={{
                   height: `${virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)}px`,
                   padding: 0,
@@ -310,6 +319,7 @@ function HoldPointRow({
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
   const releaseIdentity = hp.releasedAt ? getReleaseIdentityParts(hp) : null;
+  const waitingDays = getWaitingDays(hp);
 
   return (
     <tr
@@ -325,7 +335,15 @@ function HoldPointRow({
           disabled={!canSelectForBatch}
           onChange={() => onToggleBatchSelection(hp)}
           aria-label={`Select ${hp.description} for batch release`}
-          className="h-4 w-4 rounded border-border"
+          // A disabled tick with no explanation reads as broken. Batch release
+          // goes to one superintendent for one lot, so only pending hold points
+          // in the filtered lot can join a batch.
+          title={
+            canSelectForBatch
+              ? undefined
+              : 'Filter to this lot to batch-request its pending hold points'
+          }
+          className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
         />
       </td>
       <td className="px-4 py-3 font-medium">
@@ -343,6 +361,11 @@ function HoldPointRow({
         <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(hp.status)}`}>
           {getStatusLabel(hp.status)}
         </span>
+      </td>
+      <td
+        className={`px-4 py-3 text-sm tabular-nums ${overdue || noticeExpired ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+      >
+        {waitingDays === null ? '-' : `${waitingDays}d`}
       </td>
       <td className="px-4 py-3 text-sm text-muted-foreground">
         {hp.notificationSentAt ? (
@@ -381,89 +404,129 @@ function HoldPointRow({
         )}
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onCopyLink(hp.id, hp.lotNumber, hp.description)}
-            className="p-1.5 border rounded hover:bg-muted/50 transition-colors"
-            title="Copy link to this hold point"
-            aria-label={`Copy link to hold point ${hp.lotNumber}`}
-          >
-            {copiedHpId === hp.id ? (
-              <Check className="h-3.5 w-3.5 text-success" />
-            ) : (
-              <Link2 className="h-3.5 w-3.5" />
-            )}
-          </button>
-          {hp.status === 'pending' && (
-            <button
-              onClick={() => onRequestRelease(hp)}
-              className="text-sm text-primary hover:underline"
-            >
-              Request Release
-            </button>
-          )}
-          {hp.status === 'notified' && (
-            <>
-              <span className="text-sm text-warning">Awaiting...</span>
-              {!hp.id.startsWith('virtual-') && (
-                <>
-                  <button
-                    onClick={() => onRecordRelease(hp)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-success/10 text-success border border-success/20 rounded hover:bg-success/15"
-                    title="Record hold point release"
-                  >
-                    <ClipboardCheck className="h-3 w-3" />
-                    <span>Record Manual Release</span>
-                  </button>
-                  <button
-                    onClick={() => onChase(hp)}
-                    disabled={chasingHpId === hp.id}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-warning/10 text-warning border border-warning/20 rounded hover:bg-warning/15 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Send follow-up notification"
-                  >
-                    {chasingHpId === hp.id ? (
-                      <>
-                        <RefreshCw className="h-3 w-3 animate-spin" />
-                        <span>Chasing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-3 w-3" />
-                        <span>Chase</span>
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-            </>
-          )}
-          {hp.status === 'released' && (
-            <>
-              <span className="text-sm text-muted-foreground">&#x2713; Released</span>
-              {!hp.id.startsWith('virtual-') && (
-                <button
-                  onClick={() => onGenerateEvidence(hp)}
-                  disabled={generatingPdf === hp.id}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/5 text-primary border border-primary/20 rounded hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Generate Evidence Package PDF"
-                >
-                  {generatingPdf === hp.id ? (
-                    <>
-                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      <span>Generating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-3 w-3" />
-                      <span>Evidence PDF</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        <HoldPointRowActions
+          hp={hp}
+          copiedHpId={copiedHpId}
+          generatingPdf={generatingPdf}
+          chasingHpId={chasingHpId}
+          onCopyLink={onCopyLink}
+          onRequestRelease={onRequestRelease}
+          onRecordRelease={onRecordRelease}
+          onChase={onChase}
+          onGenerateEvidence={onGenerateEvidence}
+        />
       </td>
     </tr>
+  );
+}
+
+// The per-status action cluster, lifted out of HoldPointRow: three mutually
+// exclusive verb sets plus their pending/disabled states carried most of that
+// function's branching while none of it touches the row's own cells.
+function HoldPointRowActions({
+  hp,
+  copiedHpId,
+  generatingPdf,
+  chasingHpId,
+  onCopyLink,
+  onRequestRelease,
+  onRecordRelease,
+  onChase,
+  onGenerateEvidence,
+}: Pick<
+  HoldPointRowProps,
+  | 'hp'
+  | 'copiedHpId'
+  | 'generatingPdf'
+  | 'chasingHpId'
+  | 'onCopyLink'
+  | 'onRequestRelease'
+  | 'onRecordRelease'
+  | 'onChase'
+  | 'onGenerateEvidence'
+>) {
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => onCopyLink(hp.id, hp.lotNumber, hp.description)}
+        className="p-1.5 border rounded hover:bg-muted/50 transition-colors"
+        title="Copy link to this hold point"
+        aria-label={`Copy link to hold point ${hp.lotNumber}`}
+      >
+        {copiedHpId === hp.id ? (
+          <Check className="h-3.5 w-3.5 text-success" />
+        ) : (
+          <Link2 className="h-3.5 w-3.5" />
+        )}
+      </button>
+      {hp.status === 'pending' && (
+        <button
+          onClick={() => onRequestRelease(hp)}
+          className="text-sm text-primary hover:underline"
+        >
+          Request Release
+        </button>
+      )}
+      {hp.status === 'notified' && (
+        <>
+          <span className="text-sm text-warning">Awaiting...</span>
+          {!hp.id.startsWith('virtual-') && (
+            <>
+              <button
+                onClick={() => onRecordRelease(hp)}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-success/10 text-success border border-success/20 rounded hover:bg-success/15"
+                title="Record hold point release"
+              >
+                <ClipboardCheck className="h-3 w-3" />
+                <span>Record Manual Release</span>
+              </button>
+              <button
+                onClick={() => onChase(hp)}
+                disabled={chasingHpId === hp.id}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-warning/10 text-warning border border-warning/20 rounded hover:bg-warning/15 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Send follow-up notification"
+              >
+                {chasingHpId === hp.id ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    <span>Chasing...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3 w-3" />
+                    <span>Chase</span>
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </>
+      )}
+      {hp.status === 'released' && (
+        <>
+          <span className="text-sm text-muted-foreground">&#x2713; Released</span>
+          {!hp.id.startsWith('virtual-') && (
+            <button
+              onClick={() => onGenerateEvidence(hp)}
+              disabled={generatingPdf === hp.id}
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/5 text-primary border border-primary/20 rounded hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Generate Evidence Package PDF"
+            >
+              {generatingPdf === hp.id ? (
+                <>
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-3 w-3" />
+                  <span>Evidence PDF</span>
+                </>
+              )}
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }

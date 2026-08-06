@@ -65,8 +65,17 @@ export interface RequestError {
  */
 export type StatusFilter = 'all' | 'pending' | 'notified' | 'released' | 'notice-expired';
 
-/** Sortable register columns. 'lot' is the server order (lot number, then sequence). */
-export type HoldPointSortField = 'lot' | 'status' | 'notified' | 'scheduled' | 'released';
+/**
+ * Sortable register columns. 'lot' is the server order (lot number, then
+ * sequence); 'waiting' is the derived ageing column (see getWaitingDays).
+ */
+export type HoldPointSortField =
+  | 'lot'
+  | 'status'
+  | 'waiting'
+  | 'notified'
+  | 'scheduled'
+  | 'released';
 
 export type HoldPointSortDirection = 'asc' | 'desc';
 

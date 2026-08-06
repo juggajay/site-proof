@@ -10,7 +10,7 @@ import {
   parseStatusFilterParam,
   sortHoldPoints,
 } from './holdPointsPageData';
-import { isNoticeExpired } from './components/holdPointTableUtils';
+import { getWaitingDays, isNoticeExpired } from './components/holdPointTableUtils';
 
 function makeHoldPoint(overrides: Partial<HoldPoint>): HoldPoint {
   return {
@@ -331,6 +331,21 @@ describe('sortHoldPoints', () => {
     ]);
   });
 
+  it('sorts the ageing column by days waited, released hold points last', () => {
+    // b-1 has waited since createdAt (never notified), a-1 since its
+    // notification; b-2 is released and waits for nobody.
+    expect(sortHoldPoints(register, 'waiting', 'asc').map((hp) => hp.id)).toEqual([
+      'a-1',
+      'b-1',
+      'b-2',
+    ]);
+    expect(sortHoldPoints(register, 'waiting', 'desc').map((hp) => hp.id)).toEqual([
+      'b-1',
+      'a-1',
+      'b-2',
+    ]);
+  });
+
   it('sorts by status with lot order as the tie-breaker, without mutating the input', () => {
     const input = [...register];
 
@@ -340,6 +355,44 @@ describe('sortHoldPoints', () => {
       'b-2',
     ]);
     expect(input.map((hp) => hp.id)).toEqual(['b-2', 'a-1', 'b-1']);
+  });
+});
+
+describe('getWaitingDays', () => {
+  const now = '2026-06-10T02:00:00.000Z';
+
+  it('counts from the release request once one has been sent', () => {
+    const hp = makeHoldPoint({
+      status: 'notified',
+      notificationSentAt: '2026-06-04T01:00:00.000Z',
+    });
+
+    expect(getWaitingDays(hp, now)).toBe(6);
+  });
+
+  it('counts from the register entry while nobody has been asked yet', () => {
+    const hp = makeHoldPoint({ status: 'pending', createdAt: '2026-06-08T01:00:00.000Z' });
+
+    expect(getWaitingDays(hp, now)).toBe(2);
+  });
+
+  it('reports no wait once released', () => {
+    const hp = makeHoldPoint({
+      status: 'released',
+      notificationSentAt: '2026-06-01T01:00:00.000Z',
+      releasedAt: '2026-06-02T01:00:00.000Z',
+    });
+
+    expect(getWaitingDays(hp, now)).toBeNull();
+  });
+
+  it('never reports a negative wait for a future timestamp', () => {
+    const hp = makeHoldPoint({
+      status: 'notified',
+      notificationSentAt: '2026-06-20T01:00:00.000Z',
+    });
+
+    expect(getWaitingDays(hp, now)).toBe(0);
   });
 });
 

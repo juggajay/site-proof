@@ -453,7 +453,7 @@ describe('HoldPointsPage register data layer', () => {
       name: /Select Basecourse inspection for batch release/i,
     });
     expect(blockedCheckbox).toBeEnabled();
-    expect(screen.getByText(/2 pending hold points in this lot/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 pending hold points in LOT-001/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Select all pending/i }));
     await sendBatchReleaseRequest(user, /Request selected \(2\)/i);

@@ -231,14 +231,24 @@ function HoldPointMobileCard({
       ]}
       actions={
         <div className="flex w-full flex-col gap-2">
-          <label className="flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm">
+          <label
+            className={`flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm ${canSelectForBatch ? '' : 'opacity-50'}`}
+            // A disabled tick with no explanation reads as broken. Batch release
+            // goes to one superintendent for one lot, so only pending hold points
+            // in the filtered lot can join a batch.
+            title={
+              canSelectForBatch
+                ? undefined
+                : 'Filter to this lot to batch-request its pending hold points'
+            }
+          >
             <input
               type="checkbox"
               checked={isSelectedForBatch}
               disabled={!canSelectForBatch}
               onChange={() => onToggleBatchSelection(hp)}
               aria-label={`Select ${hp.description} for batch release`}
-              className="h-4 w-4 rounded border-border"
+              className="h-4 w-4 rounded border-border disabled:cursor-not-allowed"
             />
             <span>Batch request</span>
           </label>

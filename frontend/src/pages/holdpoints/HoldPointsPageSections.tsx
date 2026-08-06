@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
+import { LazyHoldPointsChart } from '@/components/charts/LazyCharts';
 import type { HoldPointLotOption, StatusFilter } from './types';
+import type { HoldPointChartData } from './holdPointsPageData';
 import { HoldPointStatusFilter } from './components/HoldPointStatusFilter';
 
 interface HoldPointsPageHeaderProps {
@@ -56,6 +58,123 @@ export function HoldPointsPageHeader({
         />
       )}
     </div>
+  );
+}
+
+interface HoldPointsBatchSelectionBarProps {
+  /** Pending hold points in the currently filtered lot — the batch candidates. */
+  eligibleCount: number;
+  selectedCount: number;
+  /** Lot number the selection belongs to; null while no single lot is filtered. */
+  selectedLotNumber: string | null;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onRequestSelected: () => void;
+}
+
+/**
+ * Batch release controls, contextual. This used to be a permanent band between
+ * the filters and the first row whose default state was three disabled buttons
+ * and a filled-grey "Request selected (0)" — a live-looking action that could
+ * never fire. Batch release needs one lot, so the bar has nothing to say until
+ * a lot is filtered, and nothing to offer until rows are ticked.
+ */
+export function HoldPointsBatchSelectionBar({
+  eligibleCount,
+  selectedCount,
+  selectedLotNumber,
+  onSelectAll,
+  onClear,
+  onRequestSelected,
+}: HoldPointsBatchSelectionBarProps) {
+  if (selectedCount === 0 && eligibleCount === 0) return null;
+
+  const lotSuffix = selectedLotNumber ? ` in ${selectedLotNumber}` : '';
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="hp-batch-bar"
+    >
+      <div className="text-sm">
+        {selectedCount > 0 ? (
+          <span className="font-medium">
+            {selectedCount} hold point{selectedCount === 1 ? '' : 's'} selected{lotSuffix}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            {eligibleCount} pending hold point{eligibleCount === 1 ? '' : 's'}
+            {lotSuffix} can be sent for superintendent review.
+          </span>
+        )}
+      </div>
+      {/* 44px touch targets below sm — these are the batch controls a foreman
+          taps with gloves on. */}
+      <div className="flex flex-wrap gap-2">
+        {selectedCount < eligibleCount && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 flex-1 sm:h-9 sm:flex-none"
+            onClick={onSelectAll}
+          >
+            Select all pending
+          </Button>
+        )}
+        {selectedCount > 0 && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 sm:h-9 sm:flex-none"
+              onClick={onClear}
+            >
+              Clear
+            </Button>
+            <Button
+              type="button"
+              className="h-11 w-full sm:h-9 sm:w-auto"
+              onClick={onRequestSelected}
+            >
+              Request selected ({selectedCount})
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface HoldPointsTrendsProps {
+  chartData: HoldPointChartData;
+  releasedCount: number;
+}
+
+/**
+ * Release trends, below the register rather than in front of it. With no
+ * releases in the window the bar chart was a bare labelled grid, so the empty
+ * case is one line of text instead of 260px of chart chrome.
+ */
+export function HoldPointsTrends({ chartData, releasedCount }: HoldPointsTrendsProps) {
+  const releasesInWindow = chartData.releasesOverTime.reduce(
+    (total, day) => total + day.releases,
+    0,
+  );
+
+  if (releasesInWindow === 0) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="hp-trends-empty">
+        No hold point releases in the last 7 days.
+      </p>
+    );
+  }
+
+  return (
+    <LazyHoldPointsChart
+      releasesOverTime={chartData.releasesOverTime}
+      avgTimeToRelease={chartData.avgTimeToRelease}
+      releasedCount={releasedCount}
+    />
   );
 }
 
