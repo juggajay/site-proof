@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
@@ -12,7 +12,12 @@ import {
   requireTestResultReadAccess,
 } from './testResults/accessControl.js';
 import { buildLotTestRequirements } from './testResults/lotRequirements.js';
-import { loadRaiseLot, planBatchRaise, writeRaisedTests } from './testResults/batchRaise.js';
+import {
+  loadRaiseLot,
+  planBatchRaise,
+  writeRaisedTests,
+  type BatchRaiseCreated,
+} from './testResults/batchRaise.js';
 import { certificateUpload } from './testResults/certificateStorage.js';
 import { buildCertificateExtractionResponse } from './testResults/extractionResponse.js';
 import {
@@ -66,6 +71,32 @@ testResultsRouter.get(
   }),
 );
 
+/**
+ * One audit row per raised test, matching what the single-create path writes —
+ * a batch is a convenience for the user, not a reason for the trail to get
+ * coarser. `raisedForRule` records which frequency rule asked for the row.
+ */
+async function auditRaisedTests(
+  created: BatchRaiseCreated[],
+  lot: { id: string; projectId: string },
+  userId: string,
+  req: Request,
+): Promise<void> {
+  for (const group of created) {
+    for (const testResultId of group.testResultIds) {
+      await createAuditLog({
+        projectId: lot.projectId,
+        userId,
+        entityType: 'test_result',
+        entityId: testResultId,
+        action: AuditAction.TEST_RESULT_CREATED,
+        changes: { testType: group.testType, lotId: lot.id, raisedForRule: group.ruleId },
+        req,
+      });
+    }
+  }
+}
+
 // POST /api/test-results/batch-raise — raise every outstanding test for the
 // named frequency rules of one lot, all-or-nothing.
 testResultsRouter.post(
@@ -86,20 +117,7 @@ testResultsRouter.post(
 
     const planned = await planBatchRaise(lotId, req.body?.requests);
     const created = await writeRaisedTests(planned, lot);
-
-    for (const group of created) {
-      for (const testResultId of group.testResultIds) {
-        await createAuditLog({
-          projectId: lot.projectId,
-          userId: user.id,
-          entityType: 'test_result',
-          entityId: testResultId,
-          action: AuditAction.TEST_RESULT_CREATED,
-          changes: { testType: group.testType, lotId: lot.id, raisedForRule: group.ruleId },
-          req,
-        });
-      }
-    }
+    await auditRaisedTests(created, lot, user.id, req);
 
     res.status(201).json({
       lotId,

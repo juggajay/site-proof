@@ -37,6 +37,73 @@ interface LotTestRequirementsProps {
   canRaise?: boolean;
 }
 
+/** The fraction, or — when the count is not computable — the reason and the fix. */
+function RuleCount({
+  rule,
+  scaleLabel,
+}: {
+  rule: LotTestRequirementRule;
+  scaleLabel: string | null;
+}) {
+  if (rule.requiredCount === null) {
+    return (
+      <span className="ml-2 font-normal text-muted-foreground">
+        {unknownHelpText(rule.unknownCauses, scaleLabel)}
+      </span>
+    );
+  }
+
+  return (
+    <span className={`ml-2 ${rule.state === 'satisfied' ? 'text-success' : 'text-foreground'}`}>
+      {rule.passingCount} of {rule.requiredCount} passing
+    </span>
+  );
+}
+
+/** The working: which clause of which edition produced this number. */
+function RuleCitation({ rule }: { rule: LotTestRequirementRule }) {
+  const citation = citationText(rule);
+  if (!citation) return null;
+
+  return (
+    <details className="mt-1">
+      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+        Show the working
+      </summary>
+      <p className="mt-1 text-xs text-muted-foreground" title={citation}>
+        {citation}
+        {rule.citation?.confirmed === false
+          ? ' — this edition has not been confirmed against the published document yet'
+          : ''}
+      </p>
+    </details>
+  );
+}
+
+function RaiseButton({
+  rule,
+  onRaise,
+  raising,
+}: {
+  rule: LotTestRequirementRule;
+  onRaise?: (rule: LotTestRequirementRule) => void;
+  raising: boolean;
+}) {
+  if (!onRaise || rule.outstandingCount < 1) return null;
+
+  const plural = rule.outstandingCount === 1 ? '' : 's';
+  return (
+    <button
+      type="button"
+      onClick={() => onRaise(rule)}
+      disabled={raising}
+      className="rounded-lg border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+    >
+      {raising ? 'Raising…' : `Raise ${rule.outstandingCount} test${plural}`}
+    </button>
+  );
+}
+
 function RuleLine({
   rule,
   scaleLabel,
@@ -48,7 +115,6 @@ function RuleLine({
   onRaise?: (rule: LotTestRequirementRule) => void;
   raising: boolean;
 }) {
-  const citation = citationText(rule);
   const progress = progressText(rule);
 
   return (
@@ -56,45 +122,12 @@ function RuleLine({
       <div className="min-w-0">
         <div className="text-sm font-medium">
           <span className="capitalize">{rule.testType}</span>
-          {rule.requiredCount === null ? (
-            <span className="ml-2 font-normal text-muted-foreground">
-              {unknownHelpText(rule.unknownCauses, scaleLabel)}
-            </span>
-          ) : (
-            <span
-              className={`ml-2 ${rule.state === 'satisfied' ? 'text-success' : 'text-foreground'}`}
-            >
-              {rule.passingCount} of {rule.requiredCount} passing
-            </span>
-          )}
+          <RuleCount rule={rule} scaleLabel={scaleLabel} />
         </div>
         {progress && <div className="mt-0.5 text-xs text-muted-foreground">{progress}</div>}
-        {citation && (
-          <details className="mt-1">
-            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-              Show the working
-            </summary>
-            <p className="mt-1 text-xs text-muted-foreground" title={citation}>
-              {citation}
-              {rule.citation && !rule.citation.confirmed
-                ? ' — this edition has not been confirmed against the published document yet'
-                : ''}
-            </p>
-          </details>
-        )}
+        <RuleCitation rule={rule} />
       </div>
-      {onRaise && rule.outstandingCount > 0 && (
-        <button
-          type="button"
-          onClick={() => onRaise(rule)}
-          disabled={raising}
-          className="rounded-lg border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
-        >
-          {raising
-            ? 'Raising…'
-            : `Raise ${rule.outstandingCount} test${rule.outstandingCount === 1 ? '' : 's'}`}
-        </button>
-      )}
+      <RaiseButton rule={rule} onRaise={onRaise} raising={raising} />
     </li>
   );
 }
