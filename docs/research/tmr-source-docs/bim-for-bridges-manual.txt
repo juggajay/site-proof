@@ -1,0 +1,2914 @@
+ 
+Manual 
+ 
+Building Information Modelling (BIM) for Bridges 
+Manual 
+ 
+September 2025 
+ 
+
+ 
+Transport and Main Roads, September 2025  
+ 
+Copyright 
+© The State of Queensland (Department of Transport and Main Roads) 2025. 
+Licence 
+ 
+This work is licensed by the State of Queensland (Department of Transport and Main 
+Roads) under a Creative Commons Attribution (CC BY) 4.0 International licence. 
+CC BY licence summary statement 
+In essence, you are free to copy, communicate and adapt this work, as long as you 
+attribute the work to the State of Queensland (Department of Transport and Main Roads). 
+To view a copy of this licence, visit: https://creativecommons.org/licenses/by/4.0/ 
+Translating and interpreting assistance 
+ 
+The Queensland Government is committed to providing 
+accessible services to Queenslanders from all cultural and 
+linguistic backgrounds. If you have difficulty understanding this 
+publication and need a translator, please call the Translating and 
+Interpreting Service (TIS National) on 13 14 50 and ask them to 
+telephone the Queensland Department of Transport and Main 
+Roads on 13 74 68. 
+Disclaimer 
+While every care has been taken in preparing this publication, the State of Queensland 
+accepts no responsibility for decisions or actions taken as a result of any data, 
+information, statement or advice, expressed or implied, contained within. To the best of 
+our knowledge, the content was correct at the time of publishing. 
+Feedback 
+Please send your feedback regarding this document to: tmr.techdocs@tmr.qld.gov.au 
+ 
+ 
+
+ 
+Transport and Main Roads, September 2025 
+i 
+Contents 
+1 
+Introduction .................................................................................................................. 1 
+2 
+Definition of terms ........................................................................................................ 2 
+3 
+Referenced documents ................................................................................................. 3 
+4 
+Bridge BIM model preparation .................................................................................... 4 
+4.1 Bridge BIM model development and collaboration ............................................................ 4 
+4.1.1 
+Bridge BIM model software ........................................................................................... 5 
+4.2 Model geographical location ................................................................................................. 5 
+4.3 Modelling units ........................................................................................................................ 5 
+5 
+Bridge BIM model objects ............................................................................................ 5 
+5.1 Bridge BIM model object identification and nomenclature ............................................... 8 
+5.1.1 
+Bridge BIM model component codes ............................................................................ 8 
+5.1.2 
+Bridge BIM model object identification – full BIM object code ................................ 10 
+5.2 Bridge BIM model object naming convention ................................................................... 12 
+5.2.1 
+General and orientation of the bridge BIM model ................................................... 12 
+5.2.2 
+Substructure elements ................................................................................................. 13 
+5.2.3 
+Superstructure .............................................................................................................. 20 
+5.2.4 
+Miscellaneous items ..................................................................................................... 26 
+6 
+Bridge BIM model interface with the Bridge Information System ......................... 27 
+7 
+Bridge BIM model Level of Development for design development phases ........... 29 
+8 
+Bridge BIM model attributes ...................................................................................... 30 
+8.1 Transport and Main Road's bridge object property sets .................................................. 31 
+Appendix A – BIM Schedule example ................................................................................ 32 
+ 
+Tables 
+Table 2 – Definition of terms ......................................................................................................... 2 
+Table 3 – Referenced documents .................................................................................................. 3 
+Table 5 – Bridge BIM Model inclusions ........................................................................................ 7 
+Table 5.1.1 – Bridge component code identifiers ........................................................................ 8 
+Table 5.1.2 – Bridge component group locations ..................................................................... 11 
+Table 6(a) – Bridge BIM model object IFC 2x3 assignment ..................................................... 27 
+Table 6(b) – Bridge BIM model object IFC 4x3 assignment ..................................................... 27 
+Table 7 – Bridge BIM model required Level of Development .................................................. 29 
+ 
+
+ 
+Transport and Main Roads, September 2025 
+ii 
+Figures 
+Figure 1 – Typical bridge BIM model for a girder bridge ........................................................... 2 
+Figure 5(a) – Typical structure model of bridge objects for a girder bridge ............................ 6 
+Figure 5(b) – Typical structure model of bridge objects for a deck unit bridge ...................... 6 
+Figure 5.1.2(a) – Bridge object identification string – full BIM object code ........................... 10 
+Figure 5.1.2(b) – Full BIM object code example for a deck unit ............................................... 12 
+Figure 5.1.2(c) – Full BIM object code example for a precast pile ........................................... 12 
+Figure 5.2.2.1(a) – Object naming convention for PSC pile foundations ................................ 14 
+Figure 5.2.2.1(b) – Object naming convention for piled and pad foundations ...................... 14 
+Figure 5.2.2.2(a) – Object naming convention for abutments ................................................. 15 
+Figure 5.2.2.2(b) – Object naming convention for abutments with multiple wingwalls ....... 16 
+Figure 5.2.2.3(a) – Object naming convention for piers with headstock on PSC piles .......... 16 
+Figure 5.2.2.3(b) – Object naming convention for piers with columns ................................... 17 
+Figure 5.2.2.4(a) – Object naming convention for bearings on piers ..................................... 18 
+Figure 5.2.2.4(b) – Object naming convention for bearings on abutments ........................... 19 
+Figure 5.2.2.4(c) – Naming convention for bearing objects ..................................................... 19 
+Figure 5.2.3.1(a) – Naming convention for deck unit objects .................................................. 21 
+Figure 5.2.3.1(b) – Naming convention for concrete girder (Super-T) objects ...................... 22 
+Figure 5.2.3.2(a) – Naming convention for deck objects of a transversely stressed bridge 23 
+Figure 5.2.3.2(b) – Naming convention for bridge deck objects ............................................. 24 
+Figure 5.2.3.3 – Naming convention for bridge barrier objects .............................................. 25 
+Figure 5.2.4 – Naming convention for expansion joint objects ............................................... 26 
+Figure 8.1 – Example of attribute properties for a concrete girder ........................................ 31 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+1 
+1 Introduction 
+The Department of Transport and Main Roads (the department) aims to realise the 
+advantages which can be gained through the implementation of Digital Engineering 
+processes during the design, delivery, and management of the asset. Digital Engineering 
+implements Building Information Modelling (BIM) technologies and methodologies to 
+create and manage a collaboration platform for all project stakeholders. The collaborative 
+exchange of information between all project stakeholders enables data visualisation, 
+improves planning and cost estimation, develops safety in design considerations, and 
+provides the opportunity to present data throughout the lifecycle of the asset. 
+The purpose of the bridge BIM model is to provide an asset model of the structure, 
+containing relevant information and data captured throughout the delivery stages, 
+allowing the department to efficiently and effectively manage the asset. The preparation 
+of the bridge BIM model will also assist the department in construction planning, design 
+verification and coordination, throughout delivery of the project. The bridge BIM model 
+aids in the collaboration and interface management between the road design, and other 
+technical disciplines. 
+The bridge BIM model shall encompass the structural design of the bridge asset, in a 
+complete three dimensional (3D) electronic model, that is progressively developed 
+through the design stages, inclusive of project attributes, and suitable for construction 
+coordination and field set out. Figure 1 provides an example of a typical bridge BIM model 
+for a girder bridge. 
+This manual applies to the design development, construction, and presentation of As 
+Constructed information of departmental bridges following the completion of the project. 
+This document must be read in conjunction with the Building Information Modelling (BIM) 
+for Transport and Main Roads guideline and the Exchange Information Requirements 
+(EIR) included in the contract documentation. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+2 
+Figure 1 – Typical bridge BIM model for a girder bridge 
+ 
+Technical Support 
+The content of this manual has been developed by the Transport and Main Roads 
+BIM team. Technical support is available for application of the content of this manual at: 
+TMR_BIM_Team@tmr.qld.gov.au 
+2 Definition of terms 
+The following is a glossary of terms used in this manual. 
+Table 2 – Definition of terms 
+Term 
+Definition 
+Component 
+The physical, tangible object that is a part of the bridge, such 
+as, precast girders, piles and headstocks. 
+3D model 
+Three dimensional digital model made of surfaces, solids 
+and/or features representing project objects. 
+BIM 
+Building Information Model. 3D model with additional non 
+spatial attributes about the objects and features. 
+GIS 
+Geographic Information System. A system that integrates 
+hardware, software, and data for capturing, managing, 
+analysing, and displaying all forms of geographically referenced 
+information. 
+Closed surface 
+3D surface describing the complete envelope of a single object 
+to allow volume calculation, clash detection and so on. 
+Solid 
+3D representation of an object often equivalent to a closed 
+surface with filling in plan and cross sections. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+3 
+Term 
+Definition 
+Object 
+The 3D closed surfaced solid, developed in the bridge 
+BIM model that represents the bridge component. The object 
+contains additional attributes capturing design, construction 
+and asset management information. 
+Full BIM object code 
+The bridge objects in the bridge BIM model are to be named 
+and identified using an object string that contains a number of 
+parts which can be concatenated into shorter identification 
+codes for displaying and presenting various information 
+throughout the bridge’s lifecycle. 
+Attribute 
+Data or information associated to an object, such as its name, 
+unique identifier or material. 
+IFC 
+An open source, international standard (ISO 16739-1), which is 
+vendor-neutral, and usable across a wide range of hardware 
+devices and software platforms. 
+BAMS 
+Bridge Asset Management System. The department’s system to 
+effectively and efficiently manage bridge assets across 
+Queensland. 
+BIS 
+Bridge Information System. The department's established 
+system of integrated and accessible information for bridge 
+inventory, condition, load capacity, and inspection and works 
+history. 
+SIM 
+Structures Inspection Manual 
+3 Referenced documents 
+Table 3 lists documents referenced in this manual. 
+Table 3 – Referenced documents 
+Reference 
+Title 
+Design Criteria 
+Design Criteria for Bridges and Other Structures 
+Drafting and Design 
+Presentation Standards 
+Manual 
+Drafting and Design Presentation Standards Manual, 
+Volume 3, Structural Drafting Standards 
+Structures Inspection Manual 
+Structures Inspection Manual 
+TMR object attributes for 
+bridges 
+Transport and Main Roads object attributes for bridges 
+MRTS50 
+Specific Quality System Requirements 
+MRTS56 
+Construction Surveying 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+4 
+Reference 
+Title 
+TMR BIM Guideline 
+Building Information Modelling (BIM) for Transport and Main 
+Roads guideline 
+EIR 
+Transport and Main Roads Building Information Modelling 
+(BIM) Exchange Information Requirements 
+4 Bridge BIM model preparation 
+The major deliverable from the design consultant is a complete component based 
+3D electronic model which adequately outlines the final design geometry and structural 
+objects of the bridge. The design consultant shall progressively develop the bridge 
+BIM model throughout the design development of the bridge. The bridge BIM model shall 
+be submitted for the department's review with the corresponding design drawings at 
+each of the design development phases outlined in the Design Criteria for Bridges and 
+Other Structures, and as requested by the department throughout the design period. 
+4.1 Bridge BIM model development and collaboration 
+The bridge BIM model shall be used for collaboration and interfacing with the road design 
+and other technical disciplines. In all design scenarios, whether the design consultant is 
+responsible for the bridge design only, or responsible for the bridge design and multiple 
+other technical disciplines, the design consultant shall maintain the bridge BIM model that 
+represents the current design status of the bridge. Where the bridge BIM model includes 
+design details from other technical disciplines, for example the road design, ITS and 
+drainage, these details shall be included in separate discipline models. 
+Where multiple bridges are included in a contract, the design consultant shall develop and 
+maintain a separate bridge BIM model for each bridge asset. Each separate bridge 
+BIM model shall be submitted to the department at each of the design development 
+phases outlined in the Design Criteria for Bridges and Other Structures. In addition, the 
+design consultant shall develop a master model federating each of the bridge 
+BIM models, in real world coordinates, throughout the design process. 
+All model design levels must refer to the Australian Heights Datum (AHD), and all plan 
+coordinates must refer to the Map Grid of Australia (MGA). 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+5 
+4.1.1 Bridge BIM model software 
+The department does not dictate the structural design software to be used to develop the 
+bridge BIM model, thereby allowing flexibility in efficiencies with already established work 
+practices. For efficiencies in work effort, and where capability exists within the 
+consultant’s organisation, it is preferred that when submitting the bridge BIM model, the 
+design consultant shall provide the model in the following formats: 
+• 
+Industry Foundation Class files (IFC) 
+• 
+Navisworks File (NWD) 
+• 
+Navisworks Cache File (NWC), and 
+• 
+Native files in the software package used to develop the model. 
+The design consultant may choose to use alternative software to achieve efficiencies in the 
+design process, automation, and utilise office based developments. The design consultant 
+shall provide all native modelling files used to produce the design model to the 
+department. 
+4.2 Model geographical location 
+Geographic location is to conform to the requirements for Survey Datum as outlined in 
+the TMR Surveying Standards Part 1 – General Information. 
+4.3 Modelling units 
+The native bridge BIM model shall be developed so that dimensions are presented in 
+millimetres. 
+5 Bridge BIM model objects 
+The bridge BIM model shall contain all objects necessary to outline the complete 
+structural design (refer to Figure 5(a) and Figure 5(b)), interface with other technical 
+disciplines, such as road design, and enable the construction of the project works. The 
+minimum objects to be included in the bridge BIM model, are outlined in Table 5. 
+The department will integrate the bridge BIM model with GIS project systems, cost 
+estimating, scheduling, component tracking, and asset management systems. To achieve 
+this integration with a wide range of departmental systems, the objects within the bridge 
+BIM model shall be developed and modelled as closed surfaces and solids. The objects 
+shall be uniquely identified (Section 5.1) and organised into a logical system representing 
+the structural bridge components. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+6 
+Figure 5(a) – Typical structure model of bridge objects for a girder bridge 
+ 
+Figure 5(b) – Typical structure model of bridge objects for a deck unit bridge 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+7 
+Table 5 – Bridge BIM Model inclusions 
+Design Component 
+Bridge Component 
+Superstructure 
+• Deck surface 
+• Deck units and transverse bars / girders (with assumed hog – to be 
+confirmed) 
+• Diaphragms 
+• Drainage penetrations 
+• Kerbs 
+• Traffic barriers (with precast / fabrication unit breakdown and cast in 
+place elements such as hold down bolts) 
+• Parapets and fascia panels 
+• Deck joints and cover plates (to indicate location on bridge deck. No 
+detail required for finger joints and so on.) 
+• Deck wearing surface 
+• Balustrades and safety rails (including fabrication unit breakdown 
+and cast in place elements such as hold down bolts) 
+• Safety screens (including fabrication unit breakdown and cast-in 
+place elements such as hold down bolts) 
+• Public utility plant (PUP) 
+Substructure 
+• Abutments (including relieving slabs) 
+• Abutment protection defining and detailing the toe levels 
+• Piles and pile caps 
+• Headstocks 
+• Wing walls 
+• Columns and pier walls 
+• Taper plates, mortar pads, pedestals and bearings 
+• Lateral restraint blocks 
+• Wingwalls 
+• Reinforced soil structure (RSS) walls 
+Approach 
+• For each approach 25 m minimum of road alignment and 
+embankment / cutting approaching the bridge abutment 
+Overpass bridge 
+• Minimum 40 m of road alignment of the road that is positioned under 
+the bridge centred about the centreline of the overpass bridge 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+8 
+5.1 Bridge BIM model object identification and nomenclature 
+In order to integrate the bridge BIM model into the department's network of bridge 
+BIM models and future GIS network of bridges, unique identifiers shall be applied to each 
+of the objects. These objects collectively form the bridge BIM model Schedule of 
+Objects (SoO), representing the components of the bridge structure. An example of this 
+bridge BIM model SoO and the identification of each object is shown in Appendix A: 
+BIM Schedule example. 
+5.1.1 Bridge BIM model component codes 
+The bridge components are organised into groups representing their general location on 
+the bridge. The BIM component code includes the single letter group code and the dual 
+letter component code. Table 5.1.1 outlines the BIM code identifiers for each bridge 
+component. 
+Table 5.1.1 – Bridge component code identifiers 
+Group 
+Group 
+code 
+Component 
+Component 
+code 
+BIM Component 
+code 
+Abutments 
+A 
+Headstocks 
+HS 
+A-HS 
+Wing walls 
+WW 
+A-WW 
+Abutment protections 
+AP 
+A-AP 
+Relieving slabs 
+RS 
+A-RS 
+Retaining walls (includes 
+RSS walls) 
+RW 
+A-RW 
+Blade walls 
+BW 
+A-BW 
+Deflection walls 
+DW 
+A-DW 
+Piers 
+P 
+Headstocks 
+HS 
+P-HS 
+Pier columns 
+CO 
+P-CO 
+Blade walls 
+BW 
+P-BW 
+Deflection walls 
+DW 
+P-DW 
+Foundations 
+F 
+Precast piles 
+PP 
+F-PP 
+Cast in place piles 
+CP 
+F-CP 
+Pile caps 
+PC 
+F-PC 
+Driven tubular steel piles 
+SP 
+F-SP 
+Pad (spread) footings 
+PF 
+F-PF 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+9 
+Group 
+Group 
+code 
+Component 
+Component 
+code 
+BIM Component 
+code 
+Bridge Traffic 
+Barriers 
+T 
+Steel post and rail types 
+TR 
+T-TR 
+Concrete parapet types 
+TC 
+T-TC 
+Pedestrian / shared balustrades 
+BA 
+T-BA 
+Safety rails 
+SR 
+T-SR 
+Safety screens / Anti throw 
+screens 
+SS 
+T-SS 
+Noise barriers 
+NB 
+T-NB 
+Guard rails 
+GR 
+T-GR 
+Bridge bearings 
+B 
+Elastomeric bearings 
+BE 
+B-BE 
+Pot bearings 
+BP 
+B-BP 
+Spherical bearings 
+BS 
+B-BS 
+Thrust bearings 
+BT 
+B-BT 
+Rocker bearings 
+BR 
+B-BR 
+Bearing pedestals 
+PE 
+B-PE 
+Restraint angles 
+RA 
+B-RA 
+Restraint blocks 
+RB 
+B-RB 
+Restraint plates 
+RP 
+B-RP 
+Mortar pads 
+MP 
+B-MP 
+Decks 
+D 
+Cast insitu kerbs 
+KE 
+D-KE 
+Cast insitu decks 
+DK 
+D-DK 
+Holding down bolts 
+HB 
+D-HB 
+Anchorages 
+AN 
+D-AN 
+Deck wearing surfaces 
+AC 
+D-AC 
+Shared paths / footways 
+FW 
+D-FW 
+Fascia panels 
+FP 
+D-FP 
+Cross girders 
+XG 
+D-XG 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+10 
+Group 
+Group 
+code 
+Component 
+Component 
+code 
+BIM Component 
+code 
+Girders 
+G 
+Deck units 
+DU 
+G-DU 
+Transverse bars 
+TB 
+G-TB 
+Concrete girders 
+CG 
+G-CG 
+Winged planks 
+WP 
+G-WP 
+Fibre composite girders 
+FC 
+G-FC 
+Steel girders 
+SG 
+G-SG 
+Timber girders 
+TG 
+G-TG 
+Diaphragms 
+DI 
+G-DI 
+Miscellaneous 
+M 
+Drainage scuppers 
+DS 
+M-DS 
+Drainage pipes 
+DP 
+M-DP 
+PUP communication conduits 
+CC 
+M-CC 
+PUP electrical conduits 
+CE 
+M-CE 
+Joints 
+JT 
+M-JT 
+Expansion joints 
+EJ 
+M-EJ 
+Cover plates 
+CV 
+M-CV 
+Lighting brackets 
+LB 
+M-LB 
+Anchorages 
+AN 
+M-AN 
+5.1.2 Bridge BIM model object identification – full BIM object code 
+The bridge objects in the bridge BIM model are to be named and identified using the 
+object string outlined in Figure 5.1.2(a). This is defined as the full BIM object code. The full 
+BIM object code contains a number of parts which can be concatenated into shorter 
+identification codes for displaying and presenting various information throughout the 
+bridge’s lifecycle. 
+Figure 5.1.2(a) – Bridge object identification string – full BIM object code 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+11 
+Notes and string part definitions 
+1. The full BIM object code shall be a continuous string with no spaces. 
+2. The full BIM object code parts shall be combined using hyphens (-) to form the 
+continuous string. 
+3. The BIS structure identification number shall be provided by Transport and Main 
+Roads. The department acknowledges the BIS structure identification number may 
+not be available due to the following: 
+a) the development of the bridge BIM model may be for concept planning, 
+business case development, or preliminary design stages 
+b) the BIS structure identification number may be provided after the bridge design 
+has well progressed, and 
+c) in large projects where, in instances, the BIS structure identification number is 
+generated upon the completion of the project, and bridges are identified with 
+internal project numbers such as, BR01, BR02, and so on. 
+In these scenarios, a generic place holder is acceptable to be used for the bridge 
+BIS structure identification number part of the object identification string, such 
+as, BR01, BR02, and so on. It is the responsibility of the design consultant 
+developing the bridge BIM model to ensure the place holder can be easily and 
+seamlessly amended to the BIS structure identification number. 
+4. Span / pier location: the objects are located at either an abutment / pier or a span. 
+The component groups identified by piers / abutments and spans are outlined in 
+Table 5.1.2. 
+Table 5.1.2 – Bridge component group locations 
+Object Location 
+Bridge Component Groups 
+Pier and Abutment 
+• Abutment 
+• Relieving slabs 
+• Pier 
+• Foundation 
+• Bridge bearings 
+• Miscellaneous (joints and expansion joints) 
+Span 
+• Girders 
+• Bridge traffic barriers 
+• Deck 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+12 
+5. BIM component code: the BIM code identifier for each bridge component, outlined 
+in Section 5.1.1. 
+6. Number: the object number in the location sequence, for example, 001. 
+7. Type: used to distinguish different varieties of a bridge component. For example, 
+internal and edge deck units, different bridge bearings, different precast fascia 
+panels, and various fabricated steel components. The type is an alphabetical letter. 
+Figure 5.1.2(b) and Figure 5.1.2(c), provide examples of the full BIM object code for a deck 
+unit and a precast pile respectively. 
+Figure 5.1.2(b) – Full BIM object code example for a deck unit 
+ 
+Figure 5.1.2(c) – Full BIM object code example for a precast pile 
+ 
+5.2 Bridge BIM model object naming convention 
+5.2.1 General and orientation of the bridge BIM model 
+Bridge BIM model objects are generally identified and named following the 
+methodologies outlined in the department's Drafting and Design Presentation Standards 
+Manual. The bridge BIM model shall be orientated such that the first abutment 
+substructure along the gazettal is identified as ABUTMENT A, and the other abutment is 
+identified as ABUTMENT B. Pier and span numbers shall be numbered sequentially along 
+the gazettal. 
+The designation of substructure and superstructure objects generally adopts the object 
+locations outlined in Table 5.1.2. Miscellaneous items are an exception to this general 
+designation. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+13 
+5.2.2 Substructure elements 
+5.2.2.1 Foundation 
+Figure 5.2.2.1(a) and Figure 5.2.2.1(b) show the naming convention for foundation objects 
+in the bridge BIM model. The naming convention adopts the following methodology: 
+• Piled foundations (including precast piles and cast in place piles) are numbered 
+sequentially left-to-right along a section looking 'up chainage' (increasing 
+chainage). 
+• Where a pier contains multiple lines of piled foundations, the piles of the first line 
+(lowermost chainage where the centreline of the pile line intersects the gazettal) 
+shall be numbered sequentially left-to-right along a section looking ‘up chainage’. 
+Succeeding lines of piled foundations for the pier shall be numbered in a similar 
+manner, with the number sequence continued from the previous line. 
+• It is common for abutments to contain piles under the wing walls. In these cases, 
+the piled foundations for ABUTMENT B shall be named in a similar manner to a pier 
+with multiple lines of piled foundations. However, for ABUTMENT A, the piled 
+foundations shall be numbered right-to-left looking 'down chainage' (decreasing 
+chainage). 
+• Pile caps and pad (spread) footings are identified and numbered at their respective 
+pier or abutment location. In cases where there are multiple pile caps or pad 
+(spread footings) at a single pier or abutment location, the pile caps or pad (spread) 
+footings shall be numbered sequentially left-to-right along a section looking 'up 
+chainage'. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+14 
+Figure 5.2.2.1(a) – Object naming convention for PSC pile foundations 
+ 
+Figure 5.2.2.1(b) – Object naming convention for piled and pad foundations 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+15 
+5.2.2.2 Abutment 
+Figure 5.2.2.2(a) and Figure 5.2.2.2(b) show the naming convention for abutment objects 
+in the bridge BIM model. The naming convention adopts the following methodology: 
+• Headstocks, relieving slabs and abutment protection are identified and numbered 
+at the respective location, and 
+• Abutment wing walls are numbered sequentially left-to-right along a section 
+looking 'up chainage' (increasing chainage). This results in the wing walls of each 
+abutment numbered the same on the same side of the bridge. 
+Figure 5.2.2.2(a) – Object naming convention for abutments 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+16 
+Figure 5.2.2.2(b) – Object naming convention for abutments with multiple wingwalls 
+ 
+5.2.2.3 Pier 
+Figure 5.2.2.3(a) and Figure 5.2.2.3(b) show the naming convention for pier objects in the 
+bridge BIM model. The naming convention adopts the following methodology: 
+• Headstocks are identified and numbered at the respective location. Headstock side 
+walls (also referred to as keeper walls) do not need to be separated from the main 
+headstock object, and 
+• Pier columns and blade walls are numbered sequentially left-to-right along a 
+section looking 'up chainage' (increasing chainage). 
+Figure 5.2.2.3(a) – Object naming convention for piers with headstock on PSC piles 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+17 
+Figure 5.2.2.3(b) – Object naming convention for piers with columns 
+ 
+5.2.2.4 Bridge bearings 
+Figure 5.2.2.4(a), Figure 5.2.2.4(b) and Figure 5.2.2.4(c) show the naming convention for 
+the group of bridge bearing objects in the bridge BIM model. The naming convention 
+adopts the following methodology: 
+• The group of bridge bearing objects are located at the respective abutment or pier. 
+• Bearings (elastomeric, pot, spherical, thrust, and rocker), pedestals and restraint 
+angles at abutments and piers are numbered sequentially left-to-right along a 
+section looking 'up chainage' (increasing chainage). 
+• Where there are 2 lines of bearings on a pier, the first line (lowermost chainage 
+where the centreline of the line intersects the gazettal) of bearings, pedestals and 
+restraint angles shall be numbered sequentially left-to-right along a section looking 
+'up chainage'. The second line shall be numbered in a similar manner, with the 
+number sequence continued from the previous line. 
+• Restraint angles are numbered as a group attached to the girder at the bearing 
+location, i.e. there are 2 restraint angles to the group. The different types of 
+restraint angles to be fabricated are identified using the 'type' part of the full 
+BIM object code outlined in Section 5.1.2. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+18 
+• Restraint blocks are identified and numbered at the respective abutment or pier 
+location. 
+• Mortar pads can either be numbered as a complete object over the headstock 
+supporting 2 spans of girders, or can be separated into 2 objects representing the 
+mortar pad supporting each span of girders. This shall be adopted for stepped 
+headstocks supporting girders with different depths. 
+Figure 5.2.2.4(a) – Object naming convention for bearings on piers 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+19 
+Figure 5.2.2.4(b) – Object naming convention for bearings on abutments 
+ 
+Figure 5.2.2.4(c) – Naming convention for bearing objects 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+20 
+5.2.3 Superstructure 
+5.2.3.1 Girders 
+Figure 5.2.3.1(a) and Figure 5.2.3.1(b) show the naming convention for girder objects in 
+the bridge BIM model. The naming convention adopts the following methodology: 
+• Girders (deck units, concrete girders, steel girders, and timber girders) are 
+numbered sequentially left-to-right along a section through the respective span 
+looking 'up chainage' (increasing chainage). 
+• Transverse stressing bars for deck unit bridges are to be numbered sequentially 
+along the span with increasing chainage. 
+• Concrete diaphragms and cross girders are to be numbered sequentially along the 
+span with increasing chainage. 
+• The 'type' identifier distinguishes between different varieties of the girder objects. 
+For example, precast concrete girders, distinguishing outside and insider girders. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+21 
+Figure 5.2.3.1(a) – Naming convention for deck unit objects 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+22 
+Figure 5.2.3.1(b) – Naming convention for concrete girder (Super-T) objects 
+ 
+ 
+5.2.3.2 Bridge deck 
+Figure 5.2.3.2(a) and Figure 5.2.3.2(b) show the naming convention for deck objects in the 
+bridge BIM model. The naming convention adopts the following methodology: 
+• Cast insitu decks are identified and numbered at the respective span location. Infill 
+pours, for link slabs / spans over continuous joints may be separated from the main 
+span cast insitu deck object, if elected. 
+• Cast insitu kerbs are numbered sequentially left-to-right along a section through 
+the respective span looking 'up chainage' (increasing chainage). Cast insitu kerbs 
+objects are separated and defined for each span. 
+• Shared paths / footways are identified and numbered at the respective span 
+location. Where there are multiple shared paths / footways on a bridge (for 
+example, either side of the bridge), the objects are numbered sequentially 
+left-to-right along a section through the respective span looking 'up chainage' 
+(increasing chainage). 
+• Fascia panels are identified at the respective span location. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+23 
+− The objects are numbered sequentially along the entire length of one side, 
+followed by the other side of the structure with the number sequence continued. 
+− Fascia panels on the left-hand-side (section through the bridge looking 'up 
+chainage') are numbered first. 
+− The 'type' identifier distinguishes between different varieties. For example, 
+different lengths, and geometric arrangements of precast panels. 
+• The Deck Wearing Surface (DWS) object can be developed, identified and numbered 
+in either of the following: 
+− as a complete object for the entire length of the bridge, or 
+− as separate objects on the respective spans, as per cast insitu deck objects. 
+Figure 5.2.3.2(a) – Naming convention for deck objects of a transversely stressed bridge 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+24 
+Figure 5.2.3.2(b) – Naming convention for bridge deck objects 
+ 
+ 
+5.2.3.3 Bridge traffic barriers 
+Figure 5.2.3.3 shows the naming convention for the group of bridge traffic barriers objects 
+in the bridge BIM model. The naming convention adopts the following methodology: 
+• Steel post and rail type, concrete parapet type, balustrade, safety rail, and anti-
+throw screen objects are: 
+− Identified at the respective span location. 
+− Numbered sequentially left-to-right along a section through the respective span 
+looking 'up chainage' (increasing chainage), and the object shall encompass the 
+entire length of the span. 
+− All objects in the traffic barrier assembly are to be grouped as one object on 
+export to IFC. This enables the department to format the data assigned to the 
+traffic barrier for import into asset management systems. 
+− For steel components (steel post and rail type barrier, balustrade, safety rail, and 
+anti-throw screens) the object can encompass all the components including, 
+posts, rails, and hold-down bolts. 
+− For concrete barrier components, the object shall be separated from the fascia 
+panel object in the bridge BIM model. 
+• Guard rail (and thrie beam) bridge barriers shall be identified and numbered in a 
+similar manner to a steel post and rail type barrier. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+25 
+Figure 5.2.3.3 – Naming convention for bridge barrier objects 
+ 
+ 
+ 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+26 
+5.2.4 Miscellaneous items 
+Figure 5.2.4 shows the naming convention for some miscellaneous objects (expansion 
+joints) in the bridge BIM model. The naming convention adopts the following 
+methodology: 
+• Joints and expansion joints shall be identified at the respective abutment or pier. 
+• Light poles can be identified at either the abutment / pier or along a span. These 
+objects shall be numbered in a manner that reflects the schedules on the project 
+specific drawings. 
+• Drainage pipes are identified and numbered along spans, and piers with the object 
+boundary usually defined by change in direction or material. For example, along a 
+span as one object and down a pier as another object. 
+• PUP conduits that are cast in, or hanging from the structure, shall be numbered 
+sequentially reflecting the details on the project specific drawings, and 
+• Other miscellaneous items shall be identified and numbered in a manner reflecting 
+the details on the project specific drawings, and enables the attachment of 
+As Constructed and fabrication records in a logical manner. 
+Figure 5.2.4 – Naming convention for expansion joint objects 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+27 
+6 Bridge BIM model interface with the Bridge Information System 
+Transport and Main Road's intends to integrate the bridge BIM model into the 
+department's established Bridge Asset Management System (BAMS) and Bridge 
+Information System (BIS), in order to increase the efficiency of managing Queensland’s 
+bridge assets. Bridge BIM models integrated with BIS will increase the accessibility of 
+bridge inventory, As Constructed records, asset condition, load capacity, and inspection 
+history for bridge assets. 
+In order to facilitate this integration with the department's BIS, objects of the bridge 
+BIM model shall be assigned an IFC Class and IFC Type as outlined in Table 6(a) and 
+Table 6(b). 
+Table 6(a) – Bridge BIM model object IFC 2 x 3 assignment 
+Group 
+Group 
+code 
+IFC Class 
+IFC Type 
+Abutments 
+A 
+IfcSlab 
+IfcSlabType 
+Piers 
+P 
+IfcMember 
+IfcMemberType 
+Foundations 
+F 
+IfcPile 
+N/A 
+Bridge traffic barriers 
+T 
+IfcRailing 
+IfcRailingType 
+Bearings 
+B 
+IfcPlate 
+IfcPlateType 
+Decks 
+D 
+IfcCovering 
+IfcCoveringType 
+Girders 
+G 
+IfcBeam 
+IfcBeamType 
+Miscellaneous 
+M 
+IfcBuildingElementProxy 
+IfcBuildingElementProxyType 
+Project Level 
+Information Attributes 
+N/A 
+IfcSite 
+N/A 
+Table 6(b) – Bridge BIM model object IFC 4 x 3 assignment 
+Group 
+Group 
+code 
+IFC Class 
+IFC Type 
+Abutments 
+A 
+IfcElementAssembly 
+IfcElementAssemblyABUTMENT 
+Piers 
+P 
+IfcElementAssembly 
+IfcElementAssemblyPIER 
+Foundations 
+F 
+IfcPile 
+IfcPileBORED 
+IfcPileDRIVEN 
+Bridge traffic barriers 
+T 
+IfcRailing 
+IfcRailingGUARDRAIL 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+28 
+Group 
+Group 
+code 
+IFC Class 
+IFC Type 
+Bearings 
+B 
+IfcBearing 
+IfcBearingELASTOMERIC, 
+IfcBearingPOT, 
+IfcBearingROCKER, 
+IfcBearingROLLER 
+Decks 
+D 
+IfcElementAssembly 
+IfcElementAssemblyDECK 
+Girders 
+G 
+IfcBeam 
+IfcBeamGIRDER_SEGMENT 
+Miscellaneous 
+M 
+IfcElementComponent 
+IfcBuildingElementPart 
+Project Level 
+Information Attributes 
+N/A 
+IfcSite 
+N/A 
+Note: 
+For information on IFC class and type assignment to Revit parameters, refer to how to notes for Transport and 
+Main Roads Revit to IFC Export pack. 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+29 
+7 Bridge BIM model Level of Development for design development 
+phases 
+The required Level of Development for the bridge BIM model for each design 
+development phase is outlined in Table 7. 
+Table 7 – Bridge BIM model required Level of Development 
+Design Development Phase 
+Required Bridge BIM model Level of Development 
+50% Design Development 
+• General arrangement including: 
+− span arrangement 
+− articulation 
+− selection of substructure type, including preliminary 
+founding levels 
+− selection of superstructure type, including number of 
+deck units / girders 
+− general abutment and pier headstocks 
+• Ground profile 
+• Approach embankments / cuttings 
+• Road under the structure for overpass bridges 
+• All bridge object concrete geometric and design details 
+• Deck units, girders 
+• Bearings details, bearing support systems and restraint 
+blocks 
+• Set out, and modelling of bridge traffic barriers, and kerbs 
+• Interfacing with road design and other technical disciplines, 
+including ITS, drainage and so on. including deck wearing 
+surfaces, drainage penetrations and so on. 
+• Abutment and abutment protection details, RSS walls 
+• Demonstration of development of TMR custom property 
+sets as per TMR object attributes for bridges. 
+85% Design Development 
+• All fabricated steel work, balustrades, safety screens, and 
+cast in place elements including hold down bolts 
+• Design and asset management property sets and attributes 
+applied to all bridge objects 
+• Full BIM object code assigned to all relevant bridge objects 
+100% Design Development 
+• Inclusion of final review details and required adjustments 
+• All details required to undertake the final set out and 
+construction of the bridge 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+30 
+• All property sets and attributes assigned to all bridge 
+elements as per TMR object attributes for bridges. 
+• RPEQ Certification Statement that the design model is 
+produced accurately and is ready for handover for survey 
+setout. The data contained in the model is to be read in 
+conjunction with the information supplied on the design 
+drawings. 
+• RPEQ Certification attribute value completed as per TMR 
+object attributes for bridges. 
+Construction Phase 
+Required Bridge BIM model Level of Development 
+Certified As Constructed (CAC) 
+• Object based model that presents all bridge components 
+constructed and adheres to MRTS56 Construction 
+Surveying. 
+• Delivered in IFC format containing As Constructed property 
+sets as per TMR object attributes for bridges 
+• The contractor shall provide certification that the bridge 
+BIM model is an accurate representation of the constructed 
+bridge, in accordance with the As Constructed drawing 
+requirements of MRTS50 Specific Quality System 
+Requirements. 
+• The Administrator must have documentation to prove As 
+Constructed details are true and correct, and shall issue a 
+statement of conformity that the bridge BIM model is 
+accurate 
+8 Bridge BIM model attributes 
+The bridge BIM model shall be developed to allow the incorporation and attachment of 
+design, As Constructed, and asset management information and records to each bridge 
+object. The minimum information required to be attributed to a bridge object is outlined 
+within this section. The design consultant shall prepare procedures and demonstrate the 
+capability to attach the relevant design and asset management information to the bridge 
+BIM model, in the consultant’s BIM execution plan. The contractor shall prepare 
+procedures and demonstrate the capability to attach the relevant As Constructed 
+information to the bridge BIM model in the contractor's BIM execution plan. 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+31 
+8.1 Transport and Main Road's bridge object property sets 
+Objects within the bridge BIM model shall be developed to have the following property 
+sets: 
+• Design information (TMR) 
+• As Constructed information (TMR) 
+• Asset management information (TMR) (Refer to Structures Inspection Manual (SIM)) 
+The property sets shall be created and displayed as separate tabs in the properties 
+window within a model file viewer, for selected objects (as shown in Figure 8.1). The 
+property sets are defined in the TMR object attributes for bridges, published on the 
+departmental website. For asset management attribute values, refer to the Structures 
+Inspection Manual (SIM) Part 3: Procedures and Appendix B: Standard Component Schedule. 
+For objects not listed in the TMR object attributes for bridges, the design consultant or 
+contractor shall prepare and submit attribute schedules for these objects to suit the needs 
+of the project, as part of their BIM execution plan. 
+Figure 8.1 – Example of attribute properties for a concrete girder 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+32 
+Appendix A – BIM Schedule example 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AA 
+F 
+PP 
+1 
+ 
+51151-AA-F-PP-1 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AA 
+F 
+PP 
+2 
+ 
+51151-AA-F-PP-2 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AA 
+F 
+PP 
+3 
+ 
+51151-AA-F-PP-3 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AA 
+F 
+PP 
+4 
+ 
+51151-AA-F-PP-4 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AA 
+F 
+PP 
+5 
+ 
+51151-AA-F-PP-5 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AA 
+F 
+PP 
+6 
+ 
+51151-AA-F-PP-6 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P1 
+F 
+PP 
+1 
+ 
+51151-P1-F-PP-1 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P1 
+F 
+PP 
+2 
+ 
+51151-P1-F-PP-2 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P1 
+F 
+PP 
+3 
+ 
+51151-P1-F-PP-3 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P1 
+F 
+PP 
+4 
+ 
+51151-P1-F-PP-4 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P1 
+F 
+PP 
+5 
+ 
+51151-P1-F-PP-5 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P1 
+F 
+PP 
+6 
+ 
+51151-P1-F-PP-6 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P2 
+F 
+PP 
+1 
+ 
+51151-P2-F-PP-1 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P2 
+F 
+PP 
+2 
+ 
+51151-P2-F-PP-2 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P2 
+F 
+PP 
+3 
+ 
+51151-P2-F-PP-3 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P2 
+F 
+PP 
+4 
+ 
+51151-P2-F-PP-4 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+33 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P2 
+F 
+PP 
+5 
+ 
+51151-P2-F-PP-5 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+P2 
+F 
+PP 
+6 
+ 
+51151-P2-F-PP-6 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AB 
+F 
+PP 
+1 
+ 
+51151-AB-F-PP-1 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AB 
+F 
+PP 
+2 
+ 
+51151-AB-F-PP-2 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AB 
+F 
+PP 
+3 
+ 
+51151-AB-F-PP-3 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AB 
+F 
+PP 
+4 
+ 
+51151-AB-F-PP-4 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AB 
+F 
+PP 
+5 
+ 
+51151-AB-F-PP-5 
+ 
+Bridge 
+Foundation 
+Precast Pile 
+51151 
+AB 
+F 
+PP 
+6 
+ 
+51151-AB-F-PP-6 
+ 
+Bridge 
+Abutment 
+Headstock 
+51151 
+AA 
+A 
+HS 
+ 
+ 
+51151-AA-A-HS 
+ 
+Bridge 
+Abutment 
+Wing Wall 
+51151 
+AA 
+A 
+WW 
+1 
+ 
+51151-AA-A-WW-1 
+ 
+Bridge 
+Abutment 
+Wing Wall 
+51151 
+AA 
+A 
+WW 
+2 
+ 
+51151-AA-A-WW-2 
+ 
+Bridge 
+Abutment 
+Relieving Slab 
+51151 
+AA 
+A 
+RS 
+ 
+ 
+51151-AA-A-RS 
+ 
+Bridge 
+Abutment 
+Abutment 
+Protection 
+51151 
+AA 
+A 
+AP 
+ 
+ 
+51151-AA-A-AP 
+ 
+Bridge 
+Abutment 
+Headstock 
+51151 
+AB 
+A 
+HS 
+ 
+ 
+51151-AB-A-HS 
+ 
+Bridge 
+Abutment 
+Wing Wall 
+51151 
+AB 
+A 
+WW 
+1 
+ 
+51151-AB-A-WW-1 
+ 
+Bridge 
+Abutment 
+Wing Wall 
+51151 
+AB 
+A 
+WW 
+2 
+ 
+51151-AB-A-WW-2 
+ 
+Bridge 
+Abutment 
+Relieving Slab 
+51151 
+AB 
+A 
+RS 
+ 
+ 
+51151-AB-A-RS 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+34 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Abutment 
+Abutment 
+Protection 
+51151 
+AB 
+A 
+AP 
+ 
+ 
+51151-AB-A-AP 
+ 
+Bridge 
+Pier 
+Headstock 
+51151 
+P1 
+P 
+HS 
+ 
+ 
+51151-P1-P-HS 
+ 
+Bridge 
+Pier 
+Headstock 
+51151 
+P2 
+P 
+HS 
+ 
+ 
+51151-P2-P-HS 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+1 
+B 
+51151-S1-G-DU-1-B 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+2 
+A 
+51151-S1-G-DU-2-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+3 
+A 
+51151-S1-G-DU-3-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+4 
+A 
+51151-S1-G-DU-4-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+5 
+A 
+51151-S1-G-DU-5-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+6 
+A 
+51151-S1-G-DU-6-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+7 
+A 
+51151-S1-G-DU-7-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+8 
+A 
+51151-S1-G-DU-8-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+9 
+A 
+51151-S1-G-DU-9-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+10 
+A 
+51151-S1-G-DU-10-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+11 
+A 
+51151-S1-G-DU-11-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+12 
+A 
+51151-S1-G-DU-12-
+A 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+35 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+13 
+A 
+51151-S1-G-DU-13-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+14 
+A 
+51151-S1-G-DU-14-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+15 
+A 
+51151-S1-G-DU-15-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S1 
+G 
+DU 
+16 
+B 
+51151-S1-G-DU-16-
+B 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+1 
+B 
+51151-S2-G-DU-1-B 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+2 
+A 
+51151-S2-G-DU-2-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+3 
+A 
+51151-S2-G-DU-3-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+4 
+A 
+51151-S2-G-DU-4-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+5 
+A 
+51151-S2-G-DU-5-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+6 
+A 
+51151-S2-G-DU-6-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+7 
+A 
+51151-S2-G-DU-7-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+8 
+A 
+51151-S2-G-DU-8-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+9 
+A 
+51151-S2-G-DU-9-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+10 
+A 
+51151-S2-G-DU-10-
+A 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+36 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+11 
+A 
+51151-S2-G-DU-11-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+12 
+A 
+51151-S2-G-DU-12-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+13 
+A 
+51151-S2-G-DU-13-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+14 
+A 
+51151-S2-G-DU-14-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+15 
+A 
+51151-S2-G-DU-15-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S2 
+G 
+DU 
+16 
+B 
+51151-S2-G-DU-16-
+B 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+1 
+B 
+51151-S3-G-DU-1-B 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+2 
+A 
+51151-S3-G-DU-2-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+3 
+A 
+51151-S3-G-DU-3-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+4 
+A 
+51151-S3-G-DU-4-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+5 
+A 
+51151-S3-G-DU-5-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+6 
+A 
+51151-S3-G-DU-6-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+7 
+A 
+51151-S3-G-DU-7-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+8 
+A 
+51151-S3-G-DU-8-A 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+37 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+9 
+A 
+51151-S3-G-DU-9-A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+10 
+A 
+51151-S3-G-DU-10-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+11 
+A 
+51151-S3-G-DU-11-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+12 
+A 
+51151-S3-G-DU-12-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+13 
+A 
+51151-S3-G-DU-13-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+14 
+A 
+51151-S3-G-DU-14-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+15 
+A 
+51151-S3-G-DU-15-
+A 
+ 
+Bridge 
+Girders 
+Deck Units 
+51151 
+S3 
+G 
+DU 
+16 
+B 
+51151-S3-G-DU-16-
+B 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+1 
+ 
+51151-S1-G-TB-1 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+2 
+ 
+51151-S1-G-TB-2 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+3 
+ 
+51151-S1-G-TB-3 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+38 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+4 
+ 
+51151-S1-G-TB-4 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+5 
+ 
+51151-S1-G-TB-5 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+6 
+ 
+51151-S1-G-TB-6 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+7 
+ 
+51151-S1-G-TB-7 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+8 
+ 
+51151-S1-G-TB-8 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+9 
+ 
+51151-S1-G-TB-9 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+10 
+ 
+51151-S1-G-TB-10 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S1 
+G 
+TB 
+11 
+ 
+51151-S1-G-TB-11 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+1 
+ 
+51151-S2-G-TB-1 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+2 
+ 
+51151-S2-G-TB-2 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+39 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+3 
+ 
+51151-S2-G-TB-3 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+4 
+ 
+51151-S2-G-TB-4 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+5 
+ 
+51151-S2-G-TB-5 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+6 
+ 
+51151-S2-G-TB-6 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+7 
+ 
+51151-S2-G-TB-7 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+8 
+ 
+51151-S2-G-TB-8 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+9 
+ 
+51151-S2-G-TB-9 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+10 
+ 
+51151-S2-G-TB-10 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S2 
+G 
+TB 
+11 
+ 
+51151-S2-G-TB-11 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+1 
+ 
+51151-S3-G-TB-1 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+40 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+2 
+ 
+51151-S3-G-TB-2 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+3 
+ 
+51151-S3-G-TB-3 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+4 
+ 
+51151-S3-G-TB-4 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+5 
+ 
+51151-S3-G-TB-5 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+6 
+ 
+51151-S3-G-TB-6 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+7 
+ 
+51151-S3-G-TB-7 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+8 
+ 
+51151-S3-G-TB-8 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+9 
+ 
+51151-S3-G-TB-9 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+10 
+ 
+51151-S3-G-TB-10 
+ 
+Bridge 
+Girders 
+Transverse 
+Bars 
+51151 
+S3 
+G 
+TB 
+11 
+ 
+51151-S3-G-TB-11 
+ 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+41 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Deck 
+Cast Insitu 
+Kerb 
+51151 
+S1 
+D 
+KE 
+1 
+ 
+51151-S1-D-KE-1 
+1 is left looking abut a 
+to b 
+Bridge 
+Deck 
+Cast Insitu 
+Kerb 
+51151 
+S1 
+D 
+KE 
+2 
+ 
+51151-S1-D-KE-2 
+2 is right looking abut a 
+to b 
+Bridge 
+Deck 
+Cast Insitu 
+Kerb 
+51151 
+S2 
+D 
+KE 
+1 
+ 
+51151-S2-D-KE-1 
+1 is left looking abut a 
+to b 
+Bridge 
+Deck 
+Cast Insitu 
+Kerb 
+51151 
+S2 
+D 
+KE 
+2 
+ 
+51151-S2-D-KE-2 
+2 is right looking abut a 
+to b 
+Bridge 
+Deck 
+Cast Insitu 
+Kerb 
+51151 
+S3 
+D 
+KE 
+1 
+ 
+51151-S3-D-KE-1 
+1 is left looking abut a 
+to b 
+Bridge 
+Deck 
+Cast Insitu 
+Kerb 
+51151 
+S3 
+D 
+KE 
+2 
+ 
+51151-S3-D-KE-2 
+2 is right looking abut a 
+to b 
+Bridge 
+Deck 
+Deck Wearing 
+Surface 
+51151 
+S1 
+D 
+AC 
+ 
+ 
+51151-S1-D-AC 
+ 
+Bridge 
+Deck 
+Deck Wearing 
+Surface 
+51151 
+S2 
+D 
+AC 
+ 
+ 
+51151-S2-D-AC 
+ 
+Bridge 
+Deck 
+Deck Wearing 
+Surface 
+51151 
+S3 
+D 
+AC 
+ 
+ 
+51151-S3-D-AC 
+ 
+Bridge 
+Bridge 
+Traffic 
+Barriers 
+Steel Post and 
+Rail Type 
+51151 
+S1 
+T 
+TR 
+1 
+ 
+51151-S1-T-TR-1 
+1 is left looking abut a 
+to b 
+
+Building Information Modelling (BIM) for Bridges Manual 
+Transport and Main Roads, September 2025 
+ 
+42 
+Component 
+Component Identification 
+Category 
+Description 
+Group 
+Component 
+BIS 
+structure 
+ID 
+Location 
+Group ID 
+Component ID 
+Number 
+Type 
+Full Code 
+Comments 
+Bridge 
+Bridge 
+Traffic 
+Barriers 
+Steel Post and 
+Rail Type 
+51151 
+S1 
+T 
+TR 
+2 
+ 
+51151-S1-T-TR-2 
+2 is right looking abut a 
+to b 
+Bridge 
+Bridge 
+Traffic 
+Barriers 
+Steel Post and 
+Rail Type 
+51151 
+S2 
+T 
+TR 
+1 
+ 
+51151-S2-T-TR-1 
+1 is left looking abut a 
+to b 
+Bridge 
+Bridge 
+Traffic 
+Barriers 
+Steel Post and 
+Rail Type 
+51151 
+S2 
+T 
+TR 
+2 
+ 
+51151-S2-T-TR-2 
+2 is right looking abut a 
+to b 
+Bridge 
+Bridge 
+Traffic 
+Barriers 
+Steel Post and 
+Rail Type 
+51151 
+S3 
+T 
+TR 
+1 
+ 
+51151-S3-T-TR-1 
+1 is left looking abut a 
+to b 
+Bridge 
+Bridge 
+Traffic 
+Barriers 
+Steel Post and 
+Rail Type 
+51151 
+S3 
+T 
+TR 
+2 
+ 
+51151-S3-T-TR-2 
+2 is right looking abut a 
+to b 
+
+ 
+ 
+ 
+ 
+ 

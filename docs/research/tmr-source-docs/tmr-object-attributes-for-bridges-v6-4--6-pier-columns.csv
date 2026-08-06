@@ -1,0 +1,28 @@
+,Table 6: Pier columns,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-P2-P-CO-2
+,,Concrete Quantity (m3) - Design,7.56
+,,Element Depth ,0.9
+,,Element Diameter,.12
+,,Element Length,7.0
+,,Element Width ,1.2
+,As-Con Information,Full BIM Object Code,43614-P2-P-CO-2
+,,Concrete Quantity (m3) - As-Con,7.66
+,,Contractor Lot Number,CO02
+,Asset Management Information,Full BIM Object Code ,43614-P2-P-CO-2
+,,Comments ,comment
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,C
+,,SIM Exposure Classification Code,3
+,,SIM Group Code,P
+,,SIM Group Number,2
+,,SIM Modification Status Code,WR1
+,,SIM Quantity (each),1
+,,SIM Standard Material Code,C
+,,SIM Standard Number Code,56

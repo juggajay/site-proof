@@ -1,0 +1,1064 @@
+ 
+Manual 
+ 
+Building Information Modelling (BIM) for Road Furniture 
+ 
+May 2026 
+ 
+
+ 
+Transport and Main Roads, May 2026 
+ 
+Copyright 
+© The State of Queensland (Department of Transport and Main Roads) 2026. 
+Licence 
+ 
+This work is licensed by the State of Queensland (Department of Transport and Main 
+Roads) under a Creative Commons Attribution (CC BY) 4.0 International licence. 
+CC BY licence summary statement 
+In essence, you are free to copy, communicate and adapt this work, as long as you 
+attribute the work to the State of Queensland (Department of Transport and Main Roads). 
+To view a copy of this licence, visit: https://creativecommons.org/licenses/by/4.0/ 
+Translating and interpreting assistance 
+ 
+The Queensland Government is committed to providing 
+accessible services to Queenslanders from all cultural and 
+linguistic backgrounds. If you have difficulty understanding this 
+publication and need a translator, please call the Translating and 
+Interpreting Service (TIS National) on 13 14 50 and ask them to 
+telephone the Queensland Department of Transport and Main 
+Roads on 13 74 68. 
+Disclaimer 
+While every care has been taken in preparing this publication, the State of Queensland 
+accepts no responsibility for decisions or actions taken as a result of any data, 
+information, statement or advice, expressed or implied, contained within. To the best of 
+our knowledge, the content was correct at the time of publishing. 
+Feedback 
+Please send your feedback regarding this document to: tmr.techdocs@tmr.qld.gov.au 
+ 
+ 
+
+ 
+Transport and Main Roads, May 2026 
+ 
+i 
+Contents 
+1 
+Introduction ................................................................................................................... 1 
+1.1 Purpose of this manual ......................................................................................................... 1 
+1.2 Principles and objectives for Operations and Maintenance ............................................. 2 
+1.3 Definition of terms ................................................................................................................. 2 
+2 
+Referenced documents ................................................................................................. 4 
+3 
+How to use this manual ................................................................................................ 4 
+4 
+Road Furniture model preparation.............................................................................. 5 
+4.1 Transport and Main Roads file naming convention ........................................................... 5 
+4.2 Model geographical location ................................................................................................ 5 
+5 
+Road Furniture model objects ...................................................................................... 6 
+5.1 Unique object code ................................................................................................................ 6 
+5.1.1 
+Road Furniture property sets .......................................................................................... 7 
+5.2 Road Edge Guide Posts ......................................................................................................... 7 
+5.3 Fencing and Gates ................................................................................................................. 8 
+5.4 Road Sign ................................................................................................................................ 9 
+5.5 Grids ...................................................................................................................................... 10 
+5.5.1 
+Fencing adjoining a grid ................................................................................................ 11 
+5.6 Roadside Safety Barrier ....................................................................................................... 11 
+5.6.1 
+Road Safety Barriers on structures ............................................................................... 12 
+5.7 Tactile Ground Surface Indicators (TGSI) .......................................................................... 12 
+5.8 Noise Barriers ....................................................................................................................... 13 
+6 
+Road Furniture BIM model interface with Asset Information Management 
+System ................................................................................................................................... 14 
+7 
+Road Furniture BIM model level of information need ............................................ 15 
+8 
+Road Furniture model attributes ............................................................................... 16 
+8.1 Transport and Main Roads Road Furniture object property sets ................................... 16 
+9 
+Appendix A: Unique code breakdown ....................................................................... 18 
+Tables 
+Table 1.3 – Definition of terms 
+2 
+Table 2 – Referenced documents 
+4 
+Table 6 – Road furniture model object Industry Foundation Classes assignment 
+15 
+
+ 
+Transport and Main Roads, May 2026 
+ 
+ii 
+Figures 
+Figure 5.1 – Example of the Transport and Main Roads unique object coding for civil 
+infrastructure .................................................................................................................................. 6 
+Figure 5.2 – Object naming convention for Road Edge Guide Posts along gazettal ............... 8 
+Figure 5.3 – Object naming convention for Chainwire fence with steel posts along gazettal
+ .......................................................................................................................................................... 9 
+Figure 5.4 – Object naming convention for Road sign model along gazettal with 
+corresponding sign numbering (example sign type Queensland MUTCD) ........................... 10 
+Figure 5.5.1 – Object naming convention for Grid in roadway with cast insitu base slab .... 11 
+Figure 5.6.1 – Object naming convention for concrete road safety barrier ........................... 12 
+Figure 5.7 – Object naming convention for TGSI on a pedestrian crossing ........................... 13 
+Figure 5.8 – Object naming convention for transparent and plywood noise barriers along 
+gazettal .......................................................................................................................................... 14 
+Figure 6 – Noise Barrier data entered into Asset Information Management System .......... 15 
+Figure 8.1 – Example property set tabs in a Road Furniture road sign model ...................... 17 
+ 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+1 
+1 Introduction 
+1.1 Purpose of this manual 
+The Department of Transport and Main Roads (the department) has implemented Digital 
+Engineering processes specifically relating to Building Information Modelling (BIM) 
+methodologies. This manual complements the existing suite of BIM documents published 
+by the department and outlines the typical asset dataset for the department’s Road 
+Furniture. This document is intended to be integral in the Building Information 
+Modelling (BIM) activities that complement the Building Information Modelling (BIM) 
+Exchange Information Requirements (EIR) document for asset description and information 
+collected for major projects across Queensland. To ensure compliance, download the 
+latest version of the EIR and associated templates and manuals. 
+The purpose of this manual is to ensure a standard process, representation, and level of 
+detail is established and executed for all asset types within the context of this manual’s 
+discipline or category (Road Furniture). This manual is one of a series of manuals covering 
+multiple disciplines or categories. If your project includes works outside of Road Furniture, 
+you should also use the relevant guides for those disciplines or categories. 
+The purpose of the Road Furniture BIM models is to provide an asset model containing 
+relevant information and data captured throughout the delivery stages and 
+post-construction, allowing the department to manage the asset efficiently and effectively. 
+The preparation of the Road Furniture BIM models will also assist the department in 
+construction planning, design verification, and coordination throughout delivery of the 
+project. The Road Furniture BIM models assist in the collaboration and interface 
+management between the road design and other technical disciplines. 
+The Road Furniture BIM models shall encompass the design of the asset in complete 
+3-dimensional (3D) electronic models, which are progressively developed through the 
+design stages, inclusive of project attributes, and are suitable for construction 
+coordination and field set out. 
+This manual applies to the design development, construction, and presentation of 
+As Constructed information of departmental Road Furniture elements following the 
+completion of the project. 
+This document must be read in conjunction with the Building Information Modelling (BIM) 
+for Transport and Main Roads Guideline and the Building Information Modelling Exchange 
+Information Requirements (EIR) included in the contract documentation suite. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+2 
+Technical Support 
+The content of this manual has been developed by the Transport and Main Roads 
+BIM team. Technical support is available for application of the content of this manual at: 
+TMR_BIM_Team@tmr.qld.gov.au. 
+1.2 Principles and objectives for Operations and Maintenance 
+The data collected throughout any project serves an additional purpose after the project is 
+completed, supporting financial administration and the management of the assets in the 
+areas of Operations and Maintenance (O&M) across the department. 
+1.3 Definition of terms 
+The following is a glossary of terms used in this manual. 
+Table 1.3 – Definition of terms 
+Term 
+Definition 
+AIMS 
+Asset Information Management System (AIMS). 
+Attribute 
+Data or information associated to an object, such as its name, 
+unique identifier or material. 
+BEP 
+BIM Execution Plan (BEP). A document that outlines how a 
+design or construction project will use Building Information 
+Modelling. It includes the project’s goals, team roles, data 
+management strategies, standards, schedules, and 
+technology requirements. 
+BIM 
+Building Information Modelling (BIM). BIM is a process for 
+creating and managing information of a built asset 
+throughout its whole life cycle from planning, design, 
+construction, operations, maintenance through to demolition. 
+Information containers may take the form of 2D, 3D, or other 
+structured or unstructured data sources. The effective and 
+efficient use of BIM for decision support and achievement of 
+desired project outcomes is impacted by "when" and "why" 
+information is used and shared. 
+BIM model 
+A 3-dimensional digital model made of surfaces, solids, 
+and/or features representing project objects carrying 
+attribute data. 
+Component 
+The physical, tangible object that is a part of the Road 
+Furniture object, such as sign face, safety barrier rail, or fence 
+post. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+3 
+Term 
+Definition 
+GIS 
+Geographic Information System (GIS). A system that 
+integrates hardware, software, and data for capturing, 
+managing, analysing, and displaying all forms of 
+geographically-referenced information. 
+IFC 
+Industry Foundation Classes (.ifc). 3D file export, which is a 
+platform-neutral, open format specification. 
+iMaps 
+Transport and Main Roads Interactive Mapping 
+Solution (iMaps) – A Transport and Main Roads-facing, 
+browser-based interactive mapping solution which integrates 
+spatial and non-spatial data from both internal and external 
+suppliers. 
+PTU 
+Permission to Use (PTU) model. This can be granted pending 
+or granted unconditional. 
+Reference Point (RP) 
+A Reference Point (RP) provides a convenient way of 
+referencing or locating points on a road section. Reference 
+points are commonly located at identifiable features, such as 
+an intersection or bridge abutment. They are given a code 
+that is usually allocated sequentially in the direction of the 
+road. Reference points provide convenient points of known 
+location, from which to locate other features or information 
+(by measuring distance from the reference point). 
+Road section 
+A road is divided into road sections over its length. A road 
+comprises one or a series of continuous road sections. 
+For example, the Bruce Highway is made up of continuous 
+road sections from 10A (Brisbane to Gympie) through to 
+10P (Innisfail to Cairns). 
+Tdist 
+The Tdist is the through distance or cumulative distance from 
+the start of the road section. It is reported in kilometres. 
+Unique object code 
+The unique object code provides a mechanism for identifying 
+every instance of an asset created during the design and 
+construction stages of a project that can be uniquely 
+identified and captured for translation of attribute data to the 
+departments asset management systems. 
+This object string, comprising fields that include a project ID, 
+a control line, a discipline code, an object code, and a unique 
+number, can be used to display and share important 
+information about the asset throughout the asset’s lifecycle. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+4 
+2 Referenced documents 
+The following is a list of documents referenced in this manual. 
+Table 2 – Referenced documents 
+Reference 
+Title 
+AS/NZS 1428.4.1 
+AS/NZS 1428.4.1: Design for access and mobility – Part 4.1: 
+Means to assist the orientation of people with vision 
+impairment – Tactile ground surface indicators 
+BIM for TMR Guideline 
+Building Information Modelling (BIM) for Transport and Main 
+Roads Guideline – A guide to enabling BIM on Road 
+Infrastructure Projects 
+DDPSM 
+Drafting and Design Presentation Standards Manual 
+EIR 
+Building Information Modelling (BIM) Exchange Information 
+Requirements (EIR) 
+ISO 19650 suite of documents 
+International Organization for Standardization – ISO 19650 – 
+Part 1 to Part 6 
+ISO 7817 
+International Organization for Standardization – ISO 7817-1 
+Building information modelling – Level of information need 
+MRTS14 
+Road Furniture 
+MRTS15 
+Noise Fences 
+MRTS50 
+Specific Quality System Requirements 
+MRTS56 
+Construction Surveying 
+TMR Surveying Standards 
+TMR Surveying Standards 
+3 How to use this manual 
+This manual serves as a resource to manage the Road Furniture elements within a project. 
+It provides an overview of the required Road Furniture infrastructure assets along with 
+their respective attributes, which will make up the final project completion documentation. 
+The creation of the 3D model is a fundamental element of the project design process. The 
+data behind the 3D model is equal to if not more important than the model itself. This 
+manual outlines the information requirements at each stage of the project throughout the 
+project life. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+5 
+4 Road Furniture model preparation 
+The major deliverable is a complete detailed component-based 3D digital model which is 
+appropriately attributed and outlines the final design geometry. The design consultant 
+shall progressively develop the BIM model throughout the design development and shall 
+submit the model for the department's review. The corresponding design drawings are to 
+be included at each of the specific submission gates in the project as outlined and agreed 
+to in the BIM Execution Plan (BEP). 
+The concept of a Road Furniture model is that it is an overarching term used to group 
+discipline specific IFC models of elements covered under MRTS14 Road Furniture and 
+MRTS15 Noise Fences and includes: 
+• Road Edge Guide Posts 
+• Fencing 
+• Gates 
+• Road Signs, Project Signs 
+• Grids 
+• Road Safety Barrier Systems 
+• Steel Beam guardrail and end treatments 
+• Tactile Ground Surface Indicators, and 
+• Noise Fences. 
+It expected that each of the components will be delivered as individual discipline-specific 
+IFC files that can be federated into a complete Road Furniture model. 
+4.1 Transport and Main Roads file naming convention 
+The department has developed a system for naming and organising information. For 
+more information on this system, refer to Building Information Modelling (BIM) for Transport 
+and Main Roads Guideline, Section 6.3. 
+4.2 Model geographical location 
+Geographic location is to conform to the requirements for Survey Datum as outlined in 
+the TMR Surveying Standards – Part 1. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+6 
+5 Road Furniture model objects 
+The Road Furniture models shall encompass all elements necessary to outline the 
+complete design and functionality of the system, interface with other technical disciplines 
+that make up the road design and facilitate the implementation of the project works. The 
+components to be included in the Road Furniture models are outlined in Appendix A. 
+The department will integrate the Road Furniture models with Geographic Information 
+System (GIS) project systems, cost estimating, scheduling, component tracking, and asset 
+management systems. To achieve this integration with a wide range of departmental 
+systems, the objects within the Road Furniture models shall be developed and modelled 
+as closed surfaces and solids. Each object shall be uniquely identified and organised into a 
+logical system representing the Road Furniture components. 
+It is expected that for asset management purposes, all asset attribute data (refer to 
+Transport and Main Roads Object Attributes for Road Furniture) is included within the model 
+for each asset element and able to be extracted for upload to the department’s Asset 
+Management Systems. 
+5.1 Unique object code 
+As outlined in the Building Information Modelling (BIM) for Transport and Main Roads 
+Guideline Section 6.4, asset object attributes within specific discipline model files should be 
+clearly identified by the use of a unique object code as shown in Figure 5 1. 
+Refer to Appendix A for a detailed breakdown and example of Road Furniture unique 
+object codes. 
+Figure 5.1 – Example of the Transport and Main Roads unique object coding for civil 
+infrastructure 
+ 
+Project ID = Ipswich Motorway Rocklea 2 Darra (IPMWR2D) 
+Control Line = MC1A0 
+Discipline = RF (Road Furniture) 
+Object Code = FNC (Fence – Chainwire) 
+Unique Number = 0001 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+7 
+Notes and string part definitions 
+1. The unique object code shall be a continuous string with no spaces. 
+2. The unique object code parts shall be combined using hyphens (-) to form the 
+continuous string. 
+5.1.1 Road Furniture property sets 
+All Road Furniture assets modelled shall include custom TMR IFC property sets which can 
+be displayed in the properties window within an IFC model file viewer. The attributes to be 
+contained within the property set are defined for each object in the Transport and Main 
+Roads object attributes for Road Furniture, published on the department’s website. The 
+Transport and Main Roads object attributes for Road Furniture outlines the data 
+requirements throughout the design, construction, and asset management phases. It is 
+preferred that all the construction attributes be included as placeholders through the 
+design submissions and that all the design attributes are carried over into the 
+As Constructed model. 
+Each object will have varying asset data requirements as per the Transport and Main Roads 
+object attributes for Road Furniture. Any deviation or variation of this process would need to 
+be clearly outlined in the BEP so that it can be assessed by the department. 
+The objects in the BIM model shall be orientated such that the first instance of an object 
+along the gazettal is identified as unique number 0001. 
+The same type of object shall be numbered sequentially along the gazettal. For example, 
+the first instance of a chainwire fence along the gazettal will have the unique object 
+code: IPMWR2D-MC1A0-RF-FNC-0001, the second instance IPMWR2D-MC1A0-RF-FNC-0002, 
+and so on, continuing in this sequential manner (see Figure 5 3). 
+It is recognised that where composite elements make up the object, each element may 
+carry the same unique object code depending on the authoring tool, e.g. a fence and its 
+posts will carry the same code if they cannot be modelled as a single object. 
+Preference is for only one element to carry the attribution in composite elements or for 
+the element to be modelled as a continuous solid rather than its individual parts. 
+5.2 Road Edge Guide Posts 
+Figure 5.2 shows the naming convention for Road Edge Guide Posts in a Road Furniture 
+BIM model. 
+Reference should be made to Standard Drawing SD1356 Road Edge Guide Posts – Post and 
+Installation Details. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+8 
+The naming convention adopts the following methodology: 
+• Road Edge Guide Posts modelled at the respective location, and 
+• Identify the start and end location (TdistStart, TdistEnd) of the Road Edge Guide 
+Posts sequence along the control line, marking the initial and final location of the 
+posts. Spacing shall conform to the requirements of the Queensland Manual of 
+Uniform Traffic Control Devices (Queensland MUTCD), Part 2 and MRTS14 Road 
+Furniture. 
+Figure 5.2 – Object naming convention for Road Edge Guide Posts along gazettal 
+ 
+5.3 Fencing and Gates 
+Figure 5.3 shows the naming convention for fencing in a Road Furniture BIM model. 
+Reference should be made to Standard Drawings found in the Fencing and noise barriers 
+combined set of drawings for various fence and gate examples. 
+The naming convention adopts the following methodology: 
+• Fencing posts and panels modelled at the respective location. 
+• Identify the start and end location (TdistStart, TdistEnd) of the fence along the 
+control line, marking the initial and final location of the fence. Post spacing shall 
+conform to manufacturers specifications and MRTS14 Road Furniture, and 
+• Gates identified at a single location (Tdist), approximate centre of gate. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+9 
+Figure 5.3 – Object naming convention for Chainwire fence with steel posts along gazettal 
+ 
+5.4 Road Sign 
+Figure 5 4 shows the naming convention for Road signs in a Road Furniture BIM model. 
+Reference should be made to Standard Drawings found in the Signs and guide posts 
+combined set of drawings for various sign types and details examples. 
+The naming convention adopts the following methodology: 
+• road signs identified and numbered at the respective location, and 
+• road signs are numbered in direction of gazettal. 
+For composite elements such as signs and sign posts, the attribution only needs to be 
+applied to one element but must carry all attribution applicable to the composite element, 
+e.g. MUTCDSignID, NumberOfPosts, PostType and so on. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+10 
+Figure 5.4 – Object naming convention for Road sign model along gazettal with 
+corresponding sign numbering (example sign type Queensland MUTCD) 
+ 
+ 
+5.5 Grids 
+Figure 5.5.1 shows the naming convention for a Grid in a Road Furniture BIM model. 
+The naming convention adopts the following methodology: 
+• grid identified and numbered at the respective location 
+• base slab identified and numbered at the respective location, and 
+• grids are numbered sequentially in direction of gazettal. 
+Refer to Standard Drawings for Grids to determine the base slab type when assigning the 
+attributes for the base slabs within the models. 
+Regulatory Signs R1 = Movement series (R1-2) 
+ 
+Regulatory Signs R4 = Speed series (R4-1) 
+ 
+Regulatory Signs R2 = Movement series (R2-19)  
+ 
+Guide Signs G10 = Kilometre posts (G10-3) 
+ 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+11 
+5.5.1 Fencing adjoining a grid 
+For naming convention for Fencing adjoining a grid, refer to Section 5.3. 
+Figure 5.5.1 – Object naming convention for Grid in roadway with cast insitu base slab 
+ 
+5.6 Roadside Safety Barrier 
+Figure 5.6.1 shows the naming convention for a Road Safety Barrier in a Road Furniture 
+BIM model. 
+Reference should be made to Standard Drawings found in the concrete barriers and 
+guardrails combined set of drawings for various concrete barriers and guardrails 
+examples. 
+The naming convention adopts the following methodology: 
+• Roadside safety barriers to be modelled at the respective location. 
+• Identify the start and end location (TdistStart, TdistEnd) of the barrier including end 
+treatment along the control line, marking the initial and final location of the barrier 
+including end treatment. Barrier posts and lengths shall conform to manufacturers 
+specifications. 
+• Start and End treatments to be modelled at the respective location. 
+• Roadside safety barrier transitions to be modelled and numbered sequentially 
+along a section looking 'up chainage' (increasing chainage), and 
+• Motorcycle protection devices to be modelled and numbered sequentially 
+left-to-right along a section looking 'up chainage' (increasing chainage). 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+12 
+5.6.1 Road Safety Barriers on structures 
+For naming convention for Road Safety Barriers on bridges and structures, refer to 
+Building Information Modelling (BIM) for Bridges Manual. 
+Figure 5.6.1 – Object naming convention for concrete road safety barrier 
+ 
+5.7 Tactile Ground Surface Indicators (TGSI) 
+Figure 5.7 shows the naming convention for Tactile Ground Surface Indicators (TGSI) in a 
+Road Furniture BIM model. 
+The naming convention adopts the following methodology: 
+• TGSIs are identified and numbered at the respective location and are numbered 
+sequentially left-to-right along a section looking 'up chainage' (increasing 
+chainage) in direction of gazettal, and 
+• TGSI location to be identified by Tdist from project start Reference Point. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+13 
+Figure 5.7 – Object naming convention for TGSI on a pedestrian crossing 
+ 
+Requirements of compliant kerb ramps and TGSI installation are set out in the drawings 
+within the Transport and Main Roads Standard Drawings – Roadworks, drainage, culverts 
+and geotechnical. 
+5.8 Noise Barriers 
+Figure 5.8 in a Road Furniture BIM model. 
+Reference should be made to Standard Drawings SD1606 Noise Barriers – Structural Detail 
+RHS and SHS Steel Posts Plywood Panels, SD1607 Noise Barriers – Structural Detail Universal 
+Beam Posts Plywood Panels, and SD1608 Noise Barriers – Structural Detail Universal Beam 
+Posts Concrete Panels Steel Panels for Noise Barrier examples. 
+The naming convention adopts the following methodology: 
+• Noise Barriers to be modelled at the respective location, and 
+• Identify the start and end location (TdistStart, TdistEnd) of the Noise Barrier along 
+the control line, marking the initial and final location of the Noise Barrier. Barrier 
+panel lengths shall conform to manufacturers’ specifications and MRTS15 Noise 
+Fences. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+14 
+Figure 5.8 – Object naming convention for transparent and plywood noise barriers along 
+gazettal 
+ 
+Given that the asset identifier numbers for an asset are created for noise barrier AIMS 
+after the completion of the project, use the unique object code to fill in all ID fields, such 
+as ‘ASSET ID’, throughout the design stages. 
+Any deviation or variation of this process would need to be clearly outlined in the BEP so 
+that it can be assessed by the department. 
+It is recognised that Noise Barriers are a composite element and, where possible, there is 
+no requirement to model every panel in a span with all of the attribution assigned to every 
+panel. 
+Modellers need to give consideration on how composite elements can be modelled as 
+continuous objects with all attributes assigned to the single element. 
+6 Road Furniture BIM model interface with Asset Information 
+Management System 
+The department intends to utilise the Road Furniture BIM model data to improve the 
+efficiency of managing the state’s assets. Road Furniture objects in the BIM models shall 
+contain asset management data that aligns with the Transport and Main Roads object 
+attributes for Road Furniture. This data will be extracted from the As Constructed models 
+and drawings and uploaded into the AIMS. This data can be shown in one of the 
+Department’s AIMS in Figure 6. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+15 
+Figure 6 – Noise Barrier data entered into Asset Information Management System 
+ 
+In order to facilitate the integration with the department's Asset Information 
+Management Systems, objects of the Road Furniture BIM models shall be assigned to the 
+following IFC class as shown in Table 6. 
+Table 6 – Road furniture model object Industry Foundation Classes assignment 
+Object group 
+IFC class 
+IFC type 
+Road Furniture 
+IfcTransportElement 
+IfcTransportElementType 
+7 Road Furniture BIM model level of information need 
+The required level of information need for the Road Furniture BIM models follows the 
+process as defined in the department’s Building Information Modelling (BIM) Exchange 
+Information Requirements (EIR) Section 9.4, which outlines how the level of geometric detail 
+and level of attribute information increases at each submission gate. 
+The following is a guide for the level of geometrical detail and information at project 
+submission gates: 
+• Initial Design submission – 3D linear string, 3D object, or point geometrical 
+information with a BIM object code as a minimum 
+• Developed Design submission – 3D object or point geometrical information with 
+demonstrated application of attribute codes or attribute placeholders for the major 
+disciplines of the project 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+16 
+• Certified Design submission – 3D objects with accurate geometrical information 
+carrying all element attributes, and 
+• As Constructed submission – 3D objects with field verified geometrical information 
+and all element attributes. 
+8 Road Furniture model attributes 
+The Road Furniture BIM models shall be developed to allow the incorporation and 
+attachment of Project, Design, Construction, and Asset Management information and 
+records to each Road Furniture object. The minimum information required to be 
+attributed to a Road Furniture object is outlined within this section. The design consultant 
+shall outline procedures that demonstrate the capability to attach the relevant design and 
+asset management information to the Road Furniture BIM models in the consultant’s 
+BIM execution plan. 
+The Contractor shall outline procedures that demonstrate the capability to attach the 
+relevant Construction information to the Road Furniture BIM models in the Contractor's 
+BIM execution plan. 
+8.1 Transport and Main Roads Road Furniture object property sets 
+Objects within the Road Furniture BIM models shall be developed to have the following 
+property sets: 
+• project attributes 
+• design attributes 
+• construction attributes, and 
+• asset management attributes. 
+The property sets shall be created and displayed as separate tabs in the properties 
+window within an IFC model file viewer for Road Furniture objects (see Figure 8 1). The 
+property sets are defined in the Transport and Main Roads object attributes for Road 
+Furniture, published on the departmental website. For objects not listed in the Transport 
+and Main Roads object attributes for Road Furniture, the design consultant or Contractor 
+shall prepare and submit attribute schedules for these objects to suit the needs of the 
+project, as part of their BIM execution plan. 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+17 
+Figure 8.1 – Example property set tabs in a Road Furniture road sign model 
+ 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+18 
+9 Appendix A: Unique code breakdown 
+Object category 
+Design object 
+Discipline 
+Object code 
+Unique object code example 
+Road edge guide post 
+GP 
+Rigid timber posts – Hardwood 
+RF 
+GPH 
+IPMWR2D-MC1A0-RF-GPH-0001 
+Rigid timber posts – Softwood 
+RF 
+GPS 
+IPMWR2D-MC1A0-RF-GPS-0001 
+Rigid posts other than timber 
+RF 
+GPO 
+IPMWR2D-MC1A0-RF-GPO-0001 
+Flexible posts 
+RF 
+GPF 
+IPMWR2D-MC1A0-RF-GPF-0001 
+Delineators 
+RF 
+GPD 
+IPMWR2D-MC1A0-RF-GPD-0001 
+Fencing 
+FN 
+Timber posts – Hardwood 
+RF 
+FNPH 
+IPMWR2D-MC1A0-RF-FNPH-0001 
+Timber posts – Softwood 
+RF 
+FNPS 
+IPMWR2D-MC1A0-RF-FNSH-0001 
+Steel posts, stays, and rails 
+RF 
+FNPST 
+IPMWR2D-MC1A0-RF-FNPST-0001 
+Fencing wire – Galvanised (plain and barbed) 
+RF 
+FNW 
+IPMWR2D-MC1A0-RF-FNW-0001 
+Chainwire – Galvanised 
+RF 
+FNC 
+IPMWR2D-MC1A0-RF-FNC-0001 
+Welded mesh 
+RF 
+FNWM 
+IPMWR2D-MC1A0-RF- FNWM-0001 
+Gates 
+RF 
+FNG 
+IPMWR2D-MC1A0-RF-FNG-0001 
+Road sign 
+SI 
+Sign face 
+Include sign code in object code – Sign R3 
+RF 
+SI** 
+SIR3 
+IPMWR2D-MC1A0-RF-SI**-0001 
+IPMWR2D-MC1A0-RF-SIR3-0001 
+Sign post 
+RF 
+SIP 
+IPMWR2D-MC1A0-RF-SIP-0001 
+Regulatory signs 
+R1 = Movement series 
+RF 
+SIR1 
+IPMWR2D-MC1A0-RF-SIR1-0001 
+R2 = Direction series 
+RF 
+SIR2 
+IPMWR2D-MC1A0-RF-SIR2-0001 
+R3 = Pedestrian series 
+RF 
+SIR3 
+IPMWR2D-MC1A0-RF-SIR3-0001 
+R4 = Speed series 
+RF 
+SIR4 
+IPMWR2D-MC1A0-RF-SIR4-0001 
+R5 = Parking series 
+RF 
+SIR5 
+IPMWR2D-MC1A0-RF-SIR5-0001 
+R6 = Miscellaneous series 
+RF 
+SIR6 
+IPMWR2D-MC1A0-RF-SIR6-0001 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+19 
+Object category 
+Design object 
+Discipline 
+Object code 
+Unique object code example 
+R9 = Supplementary plates for general use 
+RF 
+SIR9 
+IPMWR2D-MC1A0-RF-SIR9-0001 
+RX = Railway crossing flashing signal 
+assembly 
+RF 
+SIRX 
+IPMWR2D-MC1A0-RF-SIRX-0001 
+Warning signs 
+W1 = Intersection series 
+RF 
+SIW1 
+IPMWR2D-MC1A0-RF-SIW1-0001 
+W2 = Intersection series 
+RF 
+SIW2 
+IPMWR2D-MC1A0-RF-SIW2-0001 
+W3 = Advance warning of traffic control 
+device series 
+RF 
+SIW3 
+IPMWR2D-MC1A0-RF-SIW3-0001 
+W5 = Road Obstacle series 
+RF 
+SIW5 
+IPMWR2D-MC1A0-RF-SIW5-0001 
+W6 = Pedestrian, bicycle and school series 
+RF 
+SIW6 
+IPMWR2D-MC1A0-RF-SIW6-0001 
+W7 = Railway crossing series 
+RF 
+SIW7 
+IPMWR2D-MC1A0-RF-SIW7-0001 
+W8 = Supplementary plate series 
+RF 
+SIW8 
+IPMWR2D-MC1A0-RF-SIW8-0001 
+Guide signs 
+G1 = Advanced direction series 
+RF 
+SIG1 
+IPMWR2D-MC1A0-RF-SIG1-0001 
+G2 = Major intersection direction (Type 1) 
+series 
+RF 
+SIG2 
+IPMWR2D-MC1A0-RF-SIG2-0001 
+G3 = Minor intersection direction (Type 2 and 
+Type 3) series 
+RF 
+SIG3 
+IPMWR2D-MC1A0-RF-SIG3-0001 
+G4 = Reassurance direction series 
+RF 
+SIG4 
+IPMWR2D-MC1A0-RF-SIG4-0001 
+G5 = Street name and pedestrian direction 
+series 
+RF 
+SIG5 
+IPMWR2D-MC1A0-RF-SIG5-0001 
+G6 = Geographical feature series 
+RF 
+SIG6 
+IPMWR2D-MC1A0-RF-SIG6-0001 
+G7 = Service series 
+RF 
+SIG7 
+IPMWR2D-MC1A0-RF-SIG7-0001 
+G8 = Route marker series 
+RF 
+SIG8 
+IPMWR2D-MC1A0-RF-SIG8-0001 
+G9 = Traffic instruction series 
+RF 
+SIG9 
+IPMWR2D-MC1A0-RF-SIG9-0001 
+G10 = Kilometre posts 
+RF 
+SIG10 
+IPMWR2D-MC1A0-RF-SIG10-0001 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+20 
+Object category 
+Design object 
+Discipline 
+Object code 
+Unique object code example 
+G11 = Tourist series 
+RF 
+SIG11 
+IPMWR2D-MC1A0-RF-SIG11-0001 
+GE1 = Expressway advanced direction series 
+RF 
+SIGE1 
+IPMWR2D-MC1A0-RF-SIGE1-0001 
+GE2 = Expressway exit direction series 
+RF 
+SIGE2 
+IPMWR2D-MC1A0-RF-SIGE2-0001 
+GE4 = Expressway reassurance direction 
+series 
+RF 
+SIGE3 
+IPMWR2D-MC1A0-RF-SIGE3-0001 
+GE6 = Expressway information series 
+RF 
+SIGE6 
+IPMWR2D-MC1A0-RF-SIGE6-0001 
+GE7 = Expressway service series 
+RF 
+SIGE7 
+IPMWR2D-MC1A0-RF-SIGE7-0001 
+GE9 = Expressway traffic instruction series 
+RF 
+SIGE9 
+IPMWR2D-MC1A0-RF-SIGE9-0001 
+GE11 = Expressway tourist series 
+RF 
+SIGE11 
+IPMWR2D-MC1A0-RF-SIGE11-0001 
+Temporary signs 
+T1 = Advance series – Index of signs for 
+works on roads and temporary hazards 
+RF 
+SIT1 
+IPMWR2D-MC1A0-RF-SIT1-0001 
+ 
+T2 = Position series 
+RF 
+SIT2 
+IPMWR2D-MC1A0-RF-SIT2-0001 
+ 
+T3 = Road condition series 
+RF 
+SIT3 
+IPMWR2D-MC1A0-RF-SIT3-0001 
+ 
+T4 = Special hazard series 
+RF 
+SIT4 
+IPMWR2D-MC1A0-RF-SIT4-0001 
+ 
+T5 = Traffic diversion series 
+RF 
+SIT5 
+IPMWR2D-MC1A0-RF-SIT5-0001 
+ 
+T6 = Vehicle mounted series 
+RF 
+SIT6 
+IPMWR2D-MC1A0-RF-SIT6-0001 
+ 
+T7 = Hand banner series 
+RF 
+SIT7 
+IPMWR2D-MC1A0-RF-SIT7-0001 
+ 
+T8 = Pedestrian series 
+RF 
+SIT8 
+IPMWR2D-MC1A0-RF-SIT8-0001 
+Electronic series 
+Multi-message series 
+TM1 = Advance signs 
+RF 
+SITM1 
+IPMWR2D-MC1A0-RF-SITM1-0001 
+TM2 = Position signs 
+RF 
+SITM2 
+IPMWR2D-MC1A0-RF-SITM2-0001 
+TM3 = Road condition signs 
+RF 
+SITM3 
+IPMWR2D-MC1A0-RF-SITM3-0001 
+Hazard markers 
+TM4 = Special hazard signs 
+RF 
+SITM4 
+IPMWR2D-MC1A0-RF-SITM4-0001 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+21 
+Object category 
+Design object 
+Discipline 
+Object code 
+Unique object code example 
+TM5 = Traffic diversion signs 
+RF 
+SITM5 
+IPMWR2D-MC1A0-RF-SITM5-0001 
+TM8 = Pedestrian and cyclist signs 
+RF 
+SITM8 
+IPMWR2D-MC1A0-RF-SITM8-0001 
+TM9 = Event signs 
+RF 
+SITM9 
+IPMWR2D-MC1A0-RF-SITM9-0001 
+TM10 = Lane status signs 
+RF 
+SITM10 
+IPMWR2D-MC1A0-RF-SITM10-0001 
+RM = Temporary regulatory signs 
+RF 
+SIRM 
+IPMWR2D-MC1A0-RF-SIRM-0001 
+WM = Temporary warning signs 
+RF 
+SIWM 
+IPMWR2D-MC1A0-RF-SIWM-0001 
+GM = Temporary direction signs 
+RF 
+SIGM 
+IPMWR2D-MC1A0-RF-SIGM-0001 
+Grids 
+GR 
+Grid 
+RF 
+GR 
+IPMWR2D-MC1A0-RF-GR-0001 
+Base slab 
+RF 
+GRBS 
+IPMWR2D-MC1A0-RF-GRBS-0001 
+Roadside safety barrier 
+SB 
+Roadside barrier – Concrete 
+RF 
+SBCO 
+IPMWR2D-MC1A0-RF-SBCO-0001 
+Roadside barrier – Steel beam 
+RF 
+SBSB 
+IPMWR2D-MC1A0-RF- SBSB-0001 
+Roadside barrier – Wire rope 
+RF 
+SBWR 
+IPMWR2D-MC1A0-RF- SBWR-0001 
+Roadside barrier – Steel strap 
+RF 
+SBSS 
+IPMWR2D-MC1A0-RF- SBSS-0001 
+End treatment – Gating 
+RF 
+SBET 
+IPMWR2D-MC1A0-RF- SBET-0001 
+End treatment – Extruded head cover 
+RF 
+SBET 
+IPMWR2D-MC1A0-RF- SBET-0001 
+End treatment – Redirective crash cushion 
+RF 
+SBET 
+IPMWR2D-MC1A0-RF- SBET-0001 
+Motorcycle protection 
+RF 
+SBMP 
+IPMWR2D-MC1A0-RF- SBET-0001 
+Transition 
+RF 
+SBTR 
+IPMWR2D-MC1A0-RF- SBTR-0001 
+Tactile ground surface 
+indicators 
+TGSI 
+Tactile ground surface indicators 
+RF 
+TGSI 
+IPMWR2D-MC1A0-RF-MTSPOL-0001 
+
+Building Information Modelling (BIM) for Road Furniture Manual 
+Transport and Main Roads, May 2026 
+ 
+22 
+Object category 
+Design object 
+Discipline 
+Object code 
+Unique object code example 
+Noise barrier 
+NB 
+Barrier panel – Plywood 
+RF 
+NBP 
+IPMWR2D-MC1A0-RF- NBP-0001 
+Barrier panel – Concrete 
+RF 
+NBCON 
+IPMWR2D-MC1A0-RF- NBCON-0001 
+Barrier panel – Composite 
+RF 
+NBCO 
+IPMWR2D-MC1A0-RF- NBCO-0001 
+Barrier panel – Steel 
+RF 
+BPS 
+IPMWR2D-MC1A0-RF- BPS-0001 
+Barrier panel – Aluminium 
+RF 
+NBA 
+IPMWR2D-MC1A0-RF-NBA-0001 
+Barrier panel – Transparent 
+RF 
+NBT 
+IPMWR2D-MC1A0-RF-NBT-0001 
+Posts – Steel 
+RF 
+NBPO 
+IPMWR2D-MC1A0-RF-NBPO-0001 
+
+ 
+ 
+ 
+ 

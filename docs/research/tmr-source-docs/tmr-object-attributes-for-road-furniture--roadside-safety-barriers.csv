@@ -1,0 +1,34 @@
+,,Table 6. Roadside Safety Barriers,
+,IFC Property Set,Attribute Name,Example
+,Project,District,Far North
+,,AssetOwner,TMR
+,,RoadSectionID,41E
+,,Datum,GDA2020
+,,Zone,56
+,,ModelCertifiedIssuedForConstructionRPEQ,Bob Person - 12346
+,,ModelCertifiedAsConstructedSurveyor,Jane Citizen - Reg Surv 3322
+,Design,UniqueObjectCode,IPMWR2D-MC1A0-RF-SBCB-0001
+,,Specification,MRTS14
+,,Standard Drawing,SD1458
+,,Type,Steel beam
+,,Name,Ezy-Guard High Containment (HC)
+,,ControlLine,MC01A
+,,StartChainage,31056
+,,EndChainage,38750
+,,TdistStart,8.078 km
+,,TdistEnd,14.749 km
+,,Length,35 m
+,,MashTestLevel,TL4
+,,EndTreatment,QUADGUARD M10 Crash Cushion
+,,MotorcyclistProtection,Ingal MPR
+,,DesignVerifiedBy,Jane Citizen 12346
+,,DesignVerifiedDate,DD-MON-YYYY
+,Construction,UniqueObjectCode,IPMWR2D-MC1A0-RF-SBCB-0001
+,,InstallationDate,DD-MON-YYYY
+,,InstalledBy,Frank Doe
+,,BarrierHeight,980
+,,PostSpacing,2
+,Asset Management ,UniqueObjectCode,IPMWR2D-MC1A0-RF-SBCB-0001
+,,MaintenanceDate,DD-MON-YYYY
+,,MaintenanceBy,RoadTek
+,,MaintenanceInterval,12

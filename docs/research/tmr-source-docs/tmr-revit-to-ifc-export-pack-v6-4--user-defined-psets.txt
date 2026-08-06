@@ -1,0 +1,41 @@
+﻿#
+# User Defined PropertySet Definition File
+#
+# Format:
+#    PropertySet:	<Pset Name>	I[nstance]/T[ype]	<element list separated by ','>
+#	<Property Name 1>	<Data type>	<[opt] Revit parameter name, if different from IFC>
+#	<Property Name 2>	<Data type>	<[opt] Revit parameter name, if different from IFC>
+#	...
+
+PropertySet:	Project Level Information	I/T	 IfcElementType,IfcProject,IfcBuilding,IfcSite
+	BIS Structure ID	TEXT	TMR_BIS Structure ID
+	Width between kerbs	TEXT	TMR_Width between kerbs
+	Minimum design clearance	TEXT	TMR_Minimum design clearance
+	Minimum As-Con clearance	TEXT	TMR_Minimum As-Con clearance
+	Model is certified issued for construction (RPEQ)	TEXT	TMR_Model is certified issued for construction (RPEQ)
+	Model is certified as-constructed (Name + Surveyors Accreditation)	TEXT	TMR_Model is certified as-constructed (Name + Surveyors Accreditation)
+PropertySet:	Design Information	I/T	 IfcBearing, IfcRailing, IfcElementAssembly, IfcBeam, IfcPile, IfcElementComponent
+	Full BIM Object Code	TEXT	TMR_Full BIM Object Code
+	Concrete Quantity (m3) - Design	TEXT	TMR_Concrete Quantity (m3) - Design
+	Element Depth	TEXT	TMR_Element Depth
+	Element Diameter	TEXT	TMR_Element Diameter
+	Element Length	TEXT	TMR_Element Length
+	Element Width	TEXT	TMR_Element Width
+	Element Width - Bottom	TEXT	TMR_Element Width - Bottom
+	Element Width - Top	TEXT	TMR_Element Width - Top
+PropertySet:	As-Con Information	I/T	 IfcBearing, IfcRailing, IfcElementAssembly, IfcBeam, IfcPile, IfcElementComponent
+	Full BIM Object Code	TEXT	TMR_Full BIM Object Code
+	Concrete Quantity (m3) - As-Con	TEXT	TMR_Concrete Quantity (m3) - As-Con
+	Contractor Lot Number	TEXT	TMR_Contractor Lot Number
+PropertySet:	Asset Management Information	I/T	IfcBearing, IfcRailing, IfcElementAssembly, IfcBeam, IfcPile, IfcElementComponent
+	Full BIM Object Code	TEXT	TMR_Full BIM Object Code
+	Comments	TEXT	Comments
+	Most Recent Level 2 Inspection	TEXT	TMR_Most Recent Level 2 Inspection
+	SIM Component Code	TEXT	TMR_SIM Component Code
+	SIM Exposure Classification Code	TEXT	TMR_SIM Exposure Classification Code
+	SIM Group Code	TEXT	TMR_SIM Group Code
+	SIM Group Number	TEXT	TMR_SIM Group Number
+	SIM Modification Status Code	TEXT	TMR_SIM Modification Status Code
+	SIM Quantity	TEXT	TMR_SIM Quantity
+	SIM Standard Material Code	TEXT	TMR_SIM Standard Material Code
+	SIM Standard Number Code	TEXT	TMR_SIM Standard Number Code

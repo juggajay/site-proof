@@ -1,0 +1,29 @@
+,,Table 7. Tactile Ground Surface Indicators (TGSI),
+,IFC Property Set,Attribute Name,Example
+,Project,District,Far North
+,,AssetOwner,TMR
+,,RoadSectionID,41E
+,,Datum,GDA2020
+,,Zone,56
+,,ModelCertifiedIssuedForConstructionRPEQ,Bob Person - 12346
+,,ModelCertifiedAsConstructedSurveyor,Jane Citizen - Reg Surv 3322
+,Design,UniqueObjectCode,IPMWR2D-MC1A0-RF-TGSI-0001
+,,Type,"Warning, Directional"
+,,Description,Metal P5
+,,ControlLine,MC01A
+,,Length,2400 mm
+,,Width,600 mm
+,,BaseThickeness,1.6 mm
+,,Location,"X coordinate, Y coordinate"
+,,TdistStart,48.078 km
+,,DesignVerifiedBy,Jane Citizen 12346
+,,DesignVerifiedDate,DD-MON-YYYY
+,Construction,UniqueObjectCode,IPMWR2D-MC1A0-RF-TGSI-0001
+,,InstallationDate,DD-MON-YYYY
+,,InstalledBy,Jane Citizen
+,Asset Management ,UniqueObjectCode,IPMWR2D-MC1A0-RF-TGSI-0001
+,,WarrantyPeriod,24
+,,UVResistanceWarrantyComments,May be affected by high UV exposure
+,,MaintenanceInterval,12
+,,Type,"Warning, Directional"
+,,Description,Metal P5

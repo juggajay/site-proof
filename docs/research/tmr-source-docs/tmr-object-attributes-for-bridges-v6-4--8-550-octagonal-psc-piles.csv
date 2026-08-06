@@ -1,0 +1,23 @@
+,Table 8: 550 Octagonal PSC piles,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-AA-F-PP-1
+,,Element Length,14.0
+,As-Con Information,Full BIM Object Code,43614-AA-F-PP-1
+,,Contractor Lot Number,BsPP01
+,Asset Management Information,Full BIM Object Code ,43614-AA-F-PP-1
+,,Comments ,comment
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,C
+,,SIM Exposure Classification Code,1
+,,SIM Group Code,A
+,,SIM Group Number,1
+,,SIM Modification Status Code,O
+,,SIM Quantity (each),1
+,,SIM Standard Material Code,P
+,,SIM Standard Number Code,56

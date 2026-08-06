@@ -1,0 +1,25 @@
+,Table 29: PSC deck Units,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-S1-G-DU-1-B
+,,Element Depth ,0.85
+,,Element Length,19.95
+,,Element Width ,0.596
+,As-Con Information,Full BIM Object Code,43614-S1-G-DU-1-B
+,,Contractor Lot Number,BsDU01
+,Asset Management Information,Full BIM Object Code ,43614-S1-G-DU-1-B
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,G
+,,SIM Exposure Classification Code,1
+,,SIM Group Code,S
+,,SIM Group Number,1
+,,SIM Modification Status Code,Ra
+,,SIM Quantity (lin/m),19.9
+,,SIM Standard Material Code,P
+,,SIM Standard Number Code,21

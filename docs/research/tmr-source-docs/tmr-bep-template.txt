@@ -1,0 +1,592 @@
+
+
+ FORMTEXT &lt;Insert Company Name&gt;
+ FORMTEXT &lt;Insert Project Name&gt;
+ FORMTEXT &lt;Insert Date&gt;
+
+Template
+
+Building Information Modelling Execution Plan (BEP)
+
+May 2026
+
+
+
+Contents
+ TOC \o "2-3" \h \z \t "Heading 1,1,Heading (Part / Chapter),1" 1Introduction PAGEREF _Toc228285353 \h 2
+2Purpose of this BEP PAGEREF _Toc228285354 \h 2
+3Definition of terms PAGEREF _Toc228285355 \h 3
+4Reference documents and standards PAGEREF _Toc228285356 \h 8
+5Building Information Modelling Execution Plan (BEP) PAGEREF _Toc228285357 \h 9
+6Organisation structure, roles, and responsibilities PAGEREF _Toc228285358 \h 10
+6.1Delivery team’s organisation structure PAGEREF _Toc228285359 \h 10
+6.2Delivery team PAGEREF _Toc228285360 \h 11
+7Collaboration PAGEREF _Toc228285361 \h 12
+7.1Meeting schedules PAGEREF _Toc228285362 \h 12
+7.2Common Data Environment (CDE) for information production PAGEREF _Toc228285363 \h 13
+8Model management PAGEREF _Toc228285364 \h 14
+8.1Information production and coordination PAGEREF _Toc228285365 \h 15
+8.2Survey control PAGEREF _Toc228285366 \h 15
+8.3File naming convention PAGEREF _Toc228285367 \h 15
+8.4Civil discipline model object codes PAGEREF _Toc228285368 \h 16
+8.5Model formats PAGEREF _Toc228285369 \h 16
+8.6Model quality checking PAGEREF _Toc228285370 \h 17
+9Information exchange PAGEREF _Toc228285371 \h 17
+9.1Development stages PAGEREF _Toc228285372 \h 18
+9.1.1Design PAGEREF _Toc228285373 \h 18
+9.1.2Construction PAGEREF _Toc228285374 \h 18
+9.2Model segregation and validation for exchange PAGEREF _Toc228285375 \h 19
+9.3Model Production Delivery Table (MPDT) PAGEREF _Toc228285376 \h 19
+9.4Level of information need PAGEREF _Toc228285377 \h 19
+10Specific uses of BIM PAGEREF _Toc228285378 \h 20
+10.1Model uses and outputs PAGEREF _Toc228285379 \h 20
+Appendix A – Roles and Responsibilities Matrix PAGEREF _Toc228285380 \h 21
+Appendix B – Model Production Delivery Table (MPDT) PAGEREF _Toc228285381 \h 22
+Appendix C – Model Object Attributes Matrix PAGEREF _Toc228285382 \h 23
+Appendix D – Master Information Delivery Plan (MIDP) PAGEREF _Toc228285383 \h 24
+Appendix E – Task Information Delivery Plans (TIDP) PAGEREF _Toc228285384 \h 25
+Appendix F – BIM Capability and Capacity Statement PAGEREF _Toc228285385 \h 26
+Appendix G – BIM Risk Register PAGEREF _Toc228285386 \h 27
+Appendix H – Clash Detection Matrix PAGEREF _Toc228285387 \h 28
+Tables
+ TOC \h \z \t "Table/Figure Caption 1 Tables" \c Table 3 – Definition of terms PAGEREF _Toc228285334 \h 3
+Table 4 – Reference documents and standards PAGEREF _Toc228285335 \h 8
+Table 6.2(a) – Key project team personnel PAGEREF _Toc228285336 \h 11
+Table 6.2(b) – Key project team roles and responsibilities PAGEREF _Toc228285337 \h 11
+Table 6.2(c) – Key project team personnel experience PAGEREF _Toc228285338 \h 11
+Table 7.1 – Schedule of BIM meetings PAGEREF _Toc228285339 \h 12
+Table 8.5 – Data exchange format PAGEREF _Toc228285340 \h 16
+Figures
+ TOC \h \z \t "Table/Figure Caption 2 Figures" \c "Figure" Figure 6.1 – An example of potential parties and their teams typically found in a design or construction project depending on the contract type PAGEREF _Toc228284586 \h 10
+Figure 7.2 – Common Data Environment workflow hierarchy for projects delivery PAGEREF _Toc228284587 \h 14
+
+
+Document control
+Project name
+
+Project reference
+
+Document title
+
+Document file name
+
+Appointing party
+
+Lead appointed party
+
+Revision schedule
+Revision
+Date
+Description
+Author
+Reviewed
+Approved
+
+DD/MM/YYYY
+
+
+
+
+
+
+Purpose of this document
+The tendering party / lead appointed party for the named project shall create a Building Information Modelling (BIM) Execution Plan (BEP) using the Transport and Main Roads BEP Word template (this document). This BEP template provides the basic information requirements and may be expanded to include additional information to support the tender.
+The structure of the BEP template corresponds directly with the sections within the department’s Building Information Modelling (BIM) Exchange Information Requirements (EIR) to provide consistency across both documents.
+Track changes must be used to highlight any changes between the original document and all subsequent revisions. Once agreed by the Department of Transport and Main Roads, accept changes and record a summary in the Revisions schedule table.
+Delete all guidance boxes, update the front page and header to reflect the project BEP details prior to submission to the Department of Transport and Main Roads. The tendering party / lead appointed party may customise the front page by inserting their company imagery in the available white space.
+The preappointment BEP will be used as part of the selection process in the tender evaluation. Not all sections need to be completed for the preappointment BEP.
+Pre‑appointment BEPs should focus on the proponent’s BIM experience highlighting their ability to meet the requirements of the ISO 19650 suite of documents.
+In particular, the response should focus on:
+nominating individuals who will undertake the information management functions
+outlining the delivery team’s capability, capacity, and experience, and
+outlining the delivery team’s mobilisation plan.
+Postappointment BEPs require much more detail and will need to respond to all sections of the EIR.
+Introduction
+In this section, the lead appointed party should provide a short description of the project, the scope of works, the contract type, e.g. Consultants for Engineering Projects (Design Only), Transport Infrastructure Contract – Construct Only (TICCO), Transport Infrastructure Contract – Design and Construct (TICD&amp;C), and any other details the appointed party wishes to provide about the project.
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Purpose of this BEP
+In this section, the lead appointed party should provide a highlevel description of the purpose of the BEP, including items such as:
+where the BEP fits within the suite of management plans developed for the project
+BIMrelated project goals
+the processes and practices the appointed parties intend to apply in the delivery of BIM objectives in both design and construction (if applicable), and
+more detailed information on particular processes or practices will be expanded on in following sections of this plan.
+A Compliance Matrix table may also be provided, that outlines where in this document a reviewer will find the lead appointed party’s responses to specific BIM requirements as outlined in the:
+Exchange Information Requirements
+Project Brief
+Functional Specifications
+Transport and Main Roads Technical Specifications
+Scope of Works and Technical Criteria, and
+Other relevant contract documents (if applicable).
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Definition of terms
+In this section, the lead appointed party should provide the definitions of terms used in this document. An example has been provided as per Table 3 below. Modify / replace the table based on project specifics.
+This section must be completed for preappointment BEPs.
+The following are terms used in this document or in common usage in discussion about BIM.
+Table 3 – Definition of terms
+Term
+Definition
+3D attributed model
+A 3D model that has attributes / data attached to objects. The attributes can be used to extract information into a database or table format. In relation to the ISO 196501 definition of an information model, Transport and Main Roads are focussed on the 3D attributed model component with respect to this EIR. All documentation requirements are as per contract and Transport and Main Roads requirements.
+A Road Management Information System (ARMIS)
+A bespoke Transport and Main Roads information management system made up of multiple subsystems, ARMIS provides a data warehouse and a number of presentation and analysis tools. The information within ARMIS includes road location, road inventory, pavement condition, traffic data, crash history, and routine maintenance performance contracts and so on. These systems capture and store the information, which is then fed into the data warehouse for retrieval using the presentation tools.
+Appointed party
+Is typically comprised of the task team commonly referred to as the subconsultant / subcontractor. A member of both the project team and a delivery team. The appointed party may include a number of task teams within it. According to ISO 196501, the appointed party is a provider of information concerning works, goods, or services.
+Appointed party – Task Team Discipline BIM Lead 
+Leads the BIM processes for their discipline.
+Appointing party
+Is the client, in this case Transport and Main Roads, responsible for owning the appointment / project? Primarily focused on providing the information requirements for the project and reviewing and approving the information supplied by the delivery team. The appointing party is considered a member of the project team. According to ISO 196501, the appointing party is a receiver of information concerning works, goods, or services from a lead appointed party.
+Asset Information Model (AIM)
+Information model relating to the operational phase. (Refer to ISO 196501.)
+Asset Information Requirement (AIR)
+Defines the specific information and data which must be delivered, along with the delivery format, to achieve Transport and Main Roads target state AIM. (Refer to ISO 196501.)
+Asset Information Management Systems (AIMS)
+A suite of departmental IT systems (i.e. ARMIS, ROAR, BIS, etc) that supports asset management.
+BIM Execution Plan (BEP)
+A formal document that is submitted by the proponents during a tender process outlining how they intend to meet the BIM requirements defined in Transport and Main Roads EIR. (Refer to ISO 196502.)
+The BEP must be updated in line with trigger events throughout the life of the project.
+Building Information Modelling (BIM) (Process)
+BIM is a process for creating and managing information of a built asset throughout its whole life cycle from planning, design, construction, operations, maintenance, through to demolition. Information containers may take the form of 2D, 3D, or other structured or unstructured data sources. The effective and efficient use of BIM for decision support and achievement of desired project outcomes is impacted by "when" and "why" information is used and shared.
+Bridge Information System (BIS)
+Bridge Information System. The department’s established system of integrated and accessible information for bridge inventory, condition, load capacity, and inspection and works history.
+Common Data Environment (CDE)
+A central repository where design and construction project information are housed. The contents of the CDE are not limited to information created in a 'BIM environment' and it will therefore include documentation, graphical models, and nongraphical assets.
+Computer Aided Design (CAD)
+A geometric / symbolbased computer drawing system that replicates hand drawing techniques.
+Container naming convention
+A standard structured, consistent, and understandable naming convention / information identification convention. The ISO 19650 series recommended principles are to be adopted:
+Each information container should have a unique identifier, based upon an agreed information identification convention, which comprises a string of data fields.
+Each information identification field is to be assigned a value from an agreed and documented codification standard.
+Deliverables
+The product of engineering and design efforts to be delivered to the appointing party as digital files and/or hardcopy documents.
+A deliverable may have multiple phases.
+Delivery team
+The delivery team is responsible for the production of the information requested by the appointing party under the contract and is comprised of resources from the lead appointed party and their appointed parties. (Refer to ISO 196501.)
+Exchange Information Requirements (EIR)
+A key document intended to be part of the wider tender document set for the procurement of the design team and the constructor.
+Federated model
+A single shared model resulting from combining the various individual discipline models and other data sources that do not lose their identity or integrity by being combined. The individual discipline models must remain the primary data source of information at all times throughout the contract.
+Geographical Information Systems (GIS)
+A computerbased system that captures, stores, analyses, and presents spatial and geographic data, aiding in the planning and management of various projects and resources.
+iMAPS
+Transport and Main Roads Interactive Mapping Solution (iMaps) – A Transport and Main Roads facing, browserbased interactive mapping solution which integrates spatial and nonspatial data from both internal and external suppliers. It is tightly integrated into a range of Transport and Main Roads business processes and utilises Oracle Spatial, the ESRI technology stack, and GeoCortex (by VertiGIS).
+Industry Foundation Class (IFC)
+A system of defining and representing standard architectural and constructionrelated graphic and nongraphic data as 3D virtual objects to allow data exchange among BIM tools, cost estimation systems, and other constructionrelated applications in a way that preserves the ability to perform analysis on those objects as they move from one BIM system to another. IFC files saved or exported from BIMauthoring software can be used for the following tasks:
+coordination of BIM models and related design disciplines
+carrying asset attributes for data extraction
+clash detection
+rulesbased checking
+sharing models between different BIMauthoring software
+energy testing data derived from BIM models, and
+systems simulation.
+Information
+Reinterpretable representation of data in a formalised manner suitable for communication, interpretation, or processing.
+Information management
+Supports the data standards and data requirements for BIM use. Data continuity allows for the reliable exchange of information in a context where both sender and receiver understand the information.
+Information model
+As defined by ISO 196501, an information model is a coordinated set of structured and unstructured information containers in the form or geometric models, attribute data, and/or documentation. The term ‘project model’ is also referenced on occasion, i.e. within the Drafting and Design Presentation Standard Manual and is relating to a 3D attributed model.
+Information modelling
+Information modelling is a subset of BIM and relates to the production and use of digital models that represent built assets.
+Interoperability
+The ability of 2 or more systems or components to exchange information and to use the information that has been exchanged.
+Lead appointed party
+Is the party responsible for coordinating information between the delivery team and the appointing party (client). The lead appointed party is a member of both the project team and a delivery team. Commonly referred to as the consultant / Contractor.
+Lead appointed party – BIM Manager 
+Responsible for leading and implementing the BIM systems and processes to meet the project exchange and information modelling requirements. 
+Lead appointed party – Discipline BIM Lead
+Leads and coordinates the BIM processes for the delivery team.
+Lead appointed party – Project Manager
+Retains overall control of the project program, deliverables, and communication with appointing party and appointed parties.
+Level of Development (LOD)
+The department has adopted the use of this term to define the level of geometric model detail, i.e. graphical representation of model geometry ranging from simplified (for space saving, e.g. LOD 200) to detailed (for visualisation, e.g. LOD 300).
+Level of Information (LOI)
+The department has adopted the use of this term to define the level of attribute data information, i.e. nongraphical information or data associated to model geometry, e.g. object name, object location, object material type, etc.
+Level of information need
+The level of information need helps to define the minimum information requirements of 3D attributed models with respect to requirements outlined for each Transport and Main Roads delivery phase.
+ISO 78171 provides a framework for describing information exchanged in terms of geometrical information, alphanumerical information, and documentation.
+The department has adopted the use of this term to consist of Level of Development (LOD) and Level of Information (LOI).
+Map Grid of Australia (MGA)
+A coordinate system based on the Universal Transverse Mercator projection and the Geocentric Datum of Australia. The unit of measure is the metre.
+Master Information Delivery Plan (MIDP)
+This is a term referred to in ISO 196502, which is a full schedule of information model deliverables for a project to be prepared by the lead appointed party. The MIDP should include all geometric, asset data, and documentation deliverables. For Transport and Main Roads, this is captured by the work breakdown structure for the schedule of activities to include key information delivery milestones.
+Model Production Delivery Table (MPDT)
+The MPDT is a schedule of models which the delivery team, including the task / discipline teams, intend to create. The MPDT is to be coordinated and issued to the appointing party by the lead appointed party prior to commencing with model production.
+Model Use
+A unique task or procedure on a project which can benefit from the application and integration of BIM into that process.
+Project Information Model (PIM)
+Information models including documentation, nongraphical information, and graphical information developed during the design and construction phases of a project in response to requirements set out in the EIR. Information model relating to the delivery phase. (Refer to ISO 196501.)
+Project Information Requirements (PIR)
+Defines the specific information requirements for the project (for example, specific requirements beyond the AIR / EIR, timing requirements, and any specifics relating to information delivery and transmission. (Refer to ISO 196501.)
+Project team
+The project team has responsibility for the overall management of the project and is comprised of resources from the appointing party, the lead appointed party, and all appointed parties. (Refer to ISO 196502.)
+Road Operations Asset Register (ROAR)
+A bespoke Transport and Main Roads asset register which holds assetrelated data for Intelligent Transport Systems and Electrical (ITS&amp;E), Traffic Survey Data Management (TSDM), busway and tunnel assets.
+Supplier
+The provider of information concerning works, goods, or services. 
+Task Information Delivery Plan (TIDP)
+The TIDP is a subset of the MIDP to be produced by all appointed parties and coordinated to form the MIDP. According to ISO 196502, TIDP is a schedule of information containers and delivery dates, for a specific task team.
+Task team
+Task teams are teams focused on undertaking particular packages of work relating to discipline or task and are comprised of resources from the appointed parties. (Refer to ISO 196501.)
+Technical Publications
+Are Transport and Main Roads documents published on the Technical Publications webpage, or Internal Publication Series.
+Transport and Main Roads
+Also referred to as Department of Transport and Main Roads, the department, the client, and the appointing party.
+Transport and Main Roads BIM delivery phases
+The 3 primary delivery phases, Procurement and Planning, Project Delivery, and Operations and Maintenance, that provide the overarching guidance to the 8 corresponding ISO 196502 Section 4 Information management during the delivery phase of assets aligned subphases.
+These BIM delivery phases are not to be confused with delivery stages / submission gates within the development phase of a project.
+Transport and Main Roads – BIM Information Manager
+Leads and coordinates the appointing party BIM processes for the project.
+Transport and Main Roads – BIM Reviewer
+Review and comment on the BEP.
+Ensure relevant discipline models comply with the EIR.
+Approve graphical models and design artefacts developed.
+Transport and Main Roads –Project Manager
+Retains overall control of the project program, deliverables, and communication for the appointing party.
+Reference documents and standards
+In this section, the lead appointed party should provide a list of the reference documents and standards used / referenced in the development of this document, as per Table 4 below. Some examples have been provided. Modify the table based on project specifics.
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Table 4 – Reference documents and standards
+Document name
+Version / date
+Transport and Main Roads Functional Specifications for Consultants for Engineering Projects (CFEP) relevant to project phase
+
+Transport and Main Roads Transport Infrastructure Contract (TIC) suite of contract documents relevant to contract type
+
+Transport and Main Roads Drafting and Design Presentation Standards Manual (DDPSM)
+
+Transport and Main Roads TMR Surveying Standards Manual
+
+Transport and Main Roads Technical Specification MRTS56 Construction Surveying
+
+Transport and Main Roads Building Information Modelling (BIM) for Transport and Main Roads Guideline
+
+Transport and Main Roads Building Information Modelling (BIM) for Bridges Manual
+
+Transport and Main Roads object attributes for bridges
+
+ISO 196501 Concepts and principles
+
+ISO 196502 Delivery phase of the assets
+
+ISO 196503 Operational phase of the assets
+
+ISO 196504 Information exchange
+
+ISO 196505 Securityminded approach to information management
+
+ISO 16739 Industry Foundation Classes (IFC) for data sharing in the construction and facility management industries
+
+ISO 78171 Building information modelling – Level of information need – Part 1: Concepts and principles
+
+Building Information Modelling Execution Plan (BEP)
+To meet the department’s BIM requirements, the lead appointed party must create and issue to the appointing party a BIM Execution Plan for the contracted scope of works. A BEP must be developed for both preappointment and postappointment tender submissions.
+This section aligns to ISO 196502:
+Section 5.3.2 Establish the delivery team’s BIM execution plan
+Section 5.3.3 Assess task team capability and capacity
+Section 5.3.5 Establish the delivery team’s mobilisation plan
+Section 5.3.6 Establish the delivery team’s risk register, and
+Section 5.3.7 Compile the delivery team’s tender response.
+The lead appointed party shall provide sufficient detail to fully respond to the requirements outlined in the Exchange Information Requirements (EIR) and other contractual documents that define project deliverables.
+The preappointment BEP will be used as part of the selection process in the tender evaluation. This BEP template provides the basic information requirements and maybe expanded to include additional information to support the tender.
+Preappointment BEPs should focus on the proponent’s BIM experience.
+In particular, the response should focus on:
+nominating individuals who will undertake the information management functions. (Include in Section 6, 6.1, 6.2, and Appendix F.)
+outlining the delivery team’s capability, capacity, and experience. (Include in Section 6, 6.1, 6.2 and Appendix F.), and
+outlining the delivery team’s mobilisation plan.
+This section must be partially completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Organisation structure, roles, and responsibilities
+The lead appointed party shall have regard to the effective management of information throughout the appointment by nominating individuals from within its own organisation to undertake the information management functions on behalf of the lead appointed party.
+In doing this, the lead appointed party shall provide:
+an overview of the delivery team’s organisational structure and commercial relationships
+the proposed names and roles of the key project personnel who will undertake the information management functions on behalf of the delivery team, and
+an overview of the delivery team’s composition, in the form of one or more task teams.
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Delivery team’s organisation structure
+In this section, the lead appointed party should provide an overview of the delivery team’s organisational structure and commercial relationships. A diagrammatic representation of the structure will suffice, as per example Figure 6.1 below. Modify the diagram based on organisation specifics.
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Figure 6.1 – An example of potential parties and their teams typically found in a design or construction project depending on the contract type
+
+Delivery team
+In this section, the lead appointed party should provide the proposed names and roles of the key project personnel who will undertake the information management functions on behalf of the delivery team, as per Table 6.2(a) below. This is a more detailed list of specific personnel assigned to the project in any of the design or construction task teams.
+Any modification to this list during the life of the project will trigger a new submission of the BEP.
+An outline of the experience of the individuals involved in key roles should also be provided as per example Table 6.2(b) below. Modify the table based on project specifics.
+Note: The BIM Capability and Capacity Statement can be included either within this section or in Appendix F.
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+Table 6.2(a) – Key project team personnel
+Role / Title
+Name
+Organisation
+Email
+
+
+
+
+
+
+
+
+
+Table 6.2(b) – Key project team roles and responsibilities
+BIM Role
+BIM Responsibility
+
+
+
+
+
+Table 6.2(c) – Key project team personnel experience
+Name
+Experience
+
+
+
+
+Collaboration
+Efficient and regular communication between the appointing party and the lead appointed party is essential to the running of the information modellingbased project review processes. Regular project collaboration between disciplines (virtual and in person) is required and must be incorporated into the lead appointed party’s BEP.
+ FORMTEXT &lt;Insert text&gt;
+Meeting schedules
+In this section, the lead appointed party should provide an overview and purpose of the different BIM collaboration meetings that will be undertaken during the life of the project as per example Table 7.1 below. Modify the table based on project specifics.
+It is expected that the lead appointed party will schedule BIM Review meetings with the department as required, to inform the appointing party's project team of progress and identify any issues or concerns with the model or design.
+ FORMTEXT &lt;Insert text&gt;
+Table 7.1 – Schedule of BIM meetings
+Name
+Purpose
+Attendees
+Schedule / Date
+Initial BIM kick start meeting
+Lead appointed party to outline their approach for executing BIM in collaboration with Transport and Main Roads.
+Lead appointed party, appointed party, and appointing party BIM representatives
+Project start up.
+BIM coordination meetings
+To review and inform the delivery team of progress and identify any issues or concerns with the model.
+Lead appointed party – BIM Manager
+Lead appointed party – Discipline BIM Lead
+Appointed party – Task Team Discipline BIM Lead
+Transport and Main Roads – BIM Information Manager
+Arranged ahead of each submission milestone (Initial Design, Preliminary Design, Detailed Design, Issued for Construction, and As Constructed) with Transport and Main Roads.
+BIM progress meetings
+Overall highlevel project team progress meeting.
+Lead appointed party – BIM Manager
+Lead appointed party – Discipline BIM Lead
+Appointed party – Task Team Discipline BIM Lead
+Transport and Main Roads – BIM Information Manager
+Additional project team meetings as required.
+ FORMTEXT &lt;Insert text&gt;
+Common Data Environment (CDE) for information production
+In this section, the lead appointed party should provide an overview of the CDE solution and workflow that shall be used for managing information during project delivery.
+A diagrammatic representation of the information workflows internally within the lead appointed party CDE environment linking to the appointing party CDE must be provided to demonstrate how the information exchange will occur. An example is shown in Figure 7.2.
+In doing this, the lead appointed party shall:
+outline how the discipline and federated information models are developed through the WIP and Shared states within the CDE and finally submitted for appointing party acceptance
+outline the approval workflows and compliance with any of the enabling technologies that form part of the CDE for the project, and
+outline how information will be exchanged between the lead appointed party's task teams and the appointing party's CDE.
+ FORMTEXT &lt;Insert text&gt;
+Figure 7.2 – CDE workflow hierarchy for projects delivery
+
+Model management
+Transport and Main Roads do not specify the methodology the appointed parties use to create design and construction information but require clarity in relation to the methods and enabling technologies to be utilised to support interoperability and collaboration where required.
+In doing this, the lead appointed party shall address the following requirements:
+Information production and coordination
+Survey control
+File naming convention
+Civil discipline model object codes
+Model formats
+Model quality checking, and
+As Constructed survey capture in accordance with MRTS56 Construction Surveying.
+ FORMTEXT &lt;Insert text&gt;
+Information production and coordination
+In this section, the lead appointed party should provide an outline of the methods and enabling technologies that will be used in the production and coordination of the 3D attributed models during the delivery of the contracted scope of works for the project.
+ FORMTEXT &lt;Insert text&gt;
+Survey control
+The Horizontal coordinate datum for all new Transport and Main Roads surveys shall be the Geocentric Datum of Australia 2020 (GDA2020) and implemented in the relevant zone of the Map Grid of Australia (for example, GDA2020 / MGA Zone 56).
+All survey heights shall be based on the Australian Height Datum.
+The lead appointed party shall outline the spatial coordinate datum adopted for the project and needs to be accepted by the appointing party.
+ FORMTEXT &lt;Insert text&gt;
+File naming convention
+All files and models should be consistently identified as per the agreed project information standards for file transfers to the appointing party under the client shared / published arrangements of the CDE.
+The department has developed an information container naming convention and structure based on the concept of "containerbased collaborative working". An explanation of the structure is outlined in the department’s EIR.
+In this sense it should be noted that a "container" can be a 3D model, a drawing, a document, a database, also known in general terms as a file.
+All files must follow the department's naming convention throughout each design submission stage and during construction.
+ FORMTEXT &lt;Insert text&gt;
+Civil discipline model object codes
+Where possible, civil infrastructure components within specific discipline model files should be clearly identified by the use of unique object codes.
+The unique object codes should be included as an attribute to the modelled object.
+Refer to the Building Information Modelling (BIM) for Transport and Main Roads Guideline for the department's unique object codes.
+Note: Bridge infrastructure components are identified by the use of full BIM object codes. The full BIM object codes for bridges can be found in the Building Information Modelling (BIM) for Bridges Manual.
+ FORMTEXT &lt;Insert text&gt;
+Model formats
+The department has adopted the use of open data exchange formats for interoperability.
+The lead appointed party shall outline the model authoring, information transfer, and model file viewing formats to be used in the development and delivery of all models, drawings, and associated documents necessary to meet the BIM requirements for the project.
+A table showing the design discipline, native application, native file format, and exchange formats shall be included in the BEP, as per example Table 8.5 below. Modify the table based on project specifics.
+ FORMTEXT &lt;Insert text&gt;
+Table 8.5 – Data exchange format
+Discipline
+Design Authoring Software
+Native Format
+Exchange Formats
+Civil
+12d (version)
+.12da
+.ifc, .12da, .nwd, .pdf, .dwg
+Drainage
+12d (version)
+.12da
+.ifc, .12da, .nwd, .pdf, .dwg
+Electrical / ITS
+AutoCAD / Civil3D (version)
+.dwg
+.ifc, .nwd, .pdf, .dwg
+PUP
+12d (version)
+.12da
+.ifc, .12da, .nwd, .pdf, .dwg
+Bridge 
+Autodesk Revit (version)
+.rvt
+.ifc, .rvt, .nwd, .pdf, .dwg
+BIM
+Autodesk Navisworks (version)
+.nwd, .nwc
+.nwd
+Model quality checking
+The lead appointed party is responsible for ensuring that information models produced by the delivery team are coordinated and controlled prior to delivery to Transport and Main Roads.
+In this section, the lead appointed party should provide an outline of the methodology or processes that will be implemented to ensure the information models supplied to the appointing party have been reviewed internally to meet all the requirements defined in the EIR and other contract documents.
+In doing this, the lead appointed party should outline how they will ensure model quality through the application of review processes including:
+design coordination meetings
+interdisciplinary design reviews
+level of information data requirements checking
+clash detection, and
+issue tracking and resolution.
+ FORMTEXT &lt;Insert text&gt;
+Information exchange
+The lead appointed party shall provide the delivery team’s information delivery strategy, including an outline of both the TIDPs and MIDP aligned with the appointing party's schedule for deliverables.
+At each submission, the lead appointed party must provide a model file register that outlines the names of the models delivered and a description of the model objects that they contain.
+A Clash Detection Matrix should be developed and included in the BEP that outlines the disciplinespecific clash detection schedule planned for the project and at what stage this will be undertaken. A Clash Detection Report is to be provided as part of the model file submissions.
+Note: The Clash Detection Matrix can be included either within this section or in Appendix H.
+In doing this, the lead appointed party shall address the following requirements:
+Development stages:
+Design
+Construction
+Model segregation and validation for exchange
+Model Production Delivery Table (MPDT), and
+Level of information need.
+The department’s required object attributes to be assigned to the objects in the models are outlined in the Building Information Modelling (BIM) for Transport and Main Roads Guideline or disciplinespecific Information Delivery Manuals and object attribute tables published on the Transport and Main Roads BIM webpage
+The department’s required object attributes should be displayed on a dedicated Project, Design, Construction, or Asset Management tab for each of the property sets associated with the selected object, e.g. pavement, drainage etc, in the Properties window configuration of the model file viewer used to display the individual *.ifc discipline models or the federated model containing a number of related discipline models.
+ FORMTEXT &lt;Insert text&gt;
+Development stages
+Design
+The lead appointed party shall provide an outline of the proposed deliverables adhering to the appointing party’s level of information need requirements for each submission milestone.
+To provide guidance, the following milestones are to be generally applied during the nominated design delivery stages:
+Initial Design
+Developed Design
+Certified Design
+Issued for Construction / Permission to Use.
+ FORMTEXT &lt;Insert text&gt;
+Construction
+The lead appointed party shall provide an outline of the proposed schedule of As Constructed attributed models’ deliverables, as negotiated with the appointing party.
+ FORMTEXT &lt;Insert text&gt;
+Model segregation and validation for exchange
+The lead appointed party must provide a model file register that outlines the names of the models delivered and a description of the model objects that they contain.
+The lead appointed party shall provide an outline of the procedures for model data validation for both issuing and receiving building information modelling data.
+ FORMTEXT &lt;Insert text&gt;
+Model Production Delivery Table (MPDT)
+The lead appointed party must provide a MPDT that is consistent with the information exchange requirements and be accepted by the appointing party. The purpose of this matrix is to plan and communicate the collective information modelling deliverables to the appointing party. It must address the following items:
+what is the information model that will be delivered
+when each model object is being modelled and delivered
+the level of detail to which each object shall be modelled, and
+who the responsible project team members are for model objects at each stage.
+Note: The MPDT can be included either within this section or in Appendix B.
+ FORMTEXT &lt;Insert text&gt;
+Level of information need
+The appointing party shall define the level of information need at each stage gate to guide the development of the MPDT.
+Level of information need consists of:
+Level of Development (LOD) – Level of geometric model detail, i.e. graphical representation of model geometry ranging from “simplified” (for space saving) to “detailed” (for construction), and
+Level of Information (LOI) – Level of attribute data information, i.e. nongraphical information or data associated to model geometry, e.g. object name, object location, object material type, etc.
+ FORMTEXT &lt;Insert text&gt;
+Specific uses of BIM
+Model uses and outputs
+The following are model uses which Transport and Main Roads deem valuable to enhance the delivery of projects and to support better outcomes into operations and maintenance:
+Existing conditions modelling
+Design authoring and development
+Design / construction review and communication
+Design visualisation
+Spatial coordination for clash avoidance / detection
+Design and engineering modelling for functional analysis
+Quantity takeoff and cost planning
+2D drawing production
+As Constructed models
+3D model attribution for asset handover, and
+Construction, operations, and maintenance planning and simulation.
+The lead appointed party should consider which model uses are relevant for their scope of works (including any additional model uses) and document how they propose to manage each model use.
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix A – Roles and Responsibilities Matrix
+The lead appointed party shall provide a Roles and Responsibilities Matrix in relation to the delivery and management of BIM by the lead appointed party throughout the contracted scope of works.
+Note: The Roles and Responsibilities Matrix can be included either within Section 6 or within this appendix.
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix B – Model Production Delivery Table (MPDT)
+The lead appointed party shall provide a Model Production Delivery Table (MPDT) to clarify specific models to be produced, their discipline or subdiscipline, model author, and the Level of Development (LOD) of objects within the model.
+The MPDT outlines the Level of Development (LOD) that will be provided to the appointing party at each submission gate.
+Note: The MPDT can be included either within Section 9.3 or within this appendix.
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix C – Model Object Attributes Matrix
+The lead appointed party shall provide a Model Object Attributes Matrix clarifying what attributes will be included and associated with disciplinespecific 3D models at each stage of the project.
+The Model Object Attributes Matrix outlines the Level of Information (LOI) that will be provided to the appointing party at each submission gate.
+The purpose of this Model Object Attributes Matrix is to ensure that the right information is captured to feed into the departmental asset management systems.
+The department’s required object attributes should be displayed on a dedicated Project, Design, Construction, or Asset Management tabs for each of the property sets associated with the selected object, e.g. pavement, drainage etc, in the Properties window configuration of the model file viewer used to display the individual *.ifc discipline models or the federated model containing a number of related discipline models.
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix D – Master Information Delivery Plan (MIDP)
+The lead appointed party shall provide a MIDP that outlines when project information is to be prepared, who is the responsible officer, what information will be delivered at each milestone, and incorporate all relevant task information delivery plans.
+The MIDP should reflect the work breakdown structure for the highlevel schedule of activities including key information delivery milestones. This can be provided in any project management scheduling software (for example, MS Project, Primavera, Excel, etc).
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix E – Task Information Delivery Plans (TIDP)
+The lead appointed party shall provide a TIDP that outlines a list of deliverables by each discipline lead, including format, who is the responsible officer, and when the task will be delivered. This plan should be developed by the discipline leads of each task.
+The TIDPs should reflect the work breakdown structure for the highlevel schedule of activities including key information delivery milestones for each task team. This can be provided in any project management scheduling software (for example, MS Project, Primavera, Excel, etc).
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix F – BIM Capability and Capacity Statement
+The lead appointed party shall provide a delivery team BIM Capability and Capacity Statement to provide assurances around the lead appointed party’s ability to deliver and manage information throughout the contracted scope of works.
+Note: The BIM Capability and Capacity Statement can be included either within Section 6.2 or within this appendix.
+This section must be completed for preappointment BEPs.
+ FORMTEXT &lt;Insert text&gt;
+
+
+Appendix G – BIM Risk Register
+The lead appointed party shall provide a BIM Risk Register to communicate key BIMrelated risks identified by the lead appointed party, including how they will be managed.
+ FORMTEXT &lt;Insert text&gt;
+The lead appointed party BIM Risk Register should include the key risks associated with the timely production, management, and delivery of BIM deliverables for the project scope. The lead appointed party BIM Risk Register should be issued alongside the lead appointed party Post‑Appointment BIM Execution Plan (BEP) following contract award.
+Key areas of risk to be considered should include:
+Capacity and capability and support of workforce
+Capacity and capability and support of systems
+Mobilisation and support of Information Communication Technologies
+Level of Development / Level of Information and suitability for re‑use
+Completeness of information
+Compatibility of systems and information
+Coordination of design and construction information
+Approval, Assurances, and Compliance, and
+Closeout and archiving of systems and information.
+
+
+Appendix H – Clash Detection Matrix
+The lead appointed party shall provide a Clash Detection Matrix that outlines the disciplinespecific clash detection schedule planned for the project and at what stage this will be undertaken.
+A Clash Detection Report is to be provided as part of the model file submissions.
+Note: The Clash Detection Matrix can be included either within Section 8.6 or within this appendix of the BEP.
+ FORMTEXT &lt;Insert text&gt;
+
+
+

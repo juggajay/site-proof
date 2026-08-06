@@ -1,0 +1,23 @@
+,Table 19: Guard rails,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-S2-T-GR
+,,Element Length,7.0
+,As-Con Information,Full BIM Object Code,43614-S2-T-GR
+,,Contractor Lot Number,GR 23
+,Asset Management Information,Full BIM Object Code ,43614-S2-T-GR
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,BR
+,,SIM Exposure Classification Code,3
+,,SIM Group Code,S
+,,SIM Group Number,2
+,,SIM Modification Status Code,S2
+,,SIM Quantity (lin/m),7
+,,SIM Standard Material Code,S
+,,SIM Standard Number Code,2

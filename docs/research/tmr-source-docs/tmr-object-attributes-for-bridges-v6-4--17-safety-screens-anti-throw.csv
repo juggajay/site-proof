@@ -1,0 +1,23 @@
+,Table 17: Safety screens / Anti throw screens,,
+,IFC Property Set,Attribute Name,Example 
+,Project Level Information,BIS Structure ID,43614
+,,Width between kerbs,9.2m
+,,Minimum design clearance,5.33m
+,,Minimum as constructed clearance,5.44m
+,,Model is certified issued for construction (RPEQ),7274
+,,Model is certified as constructed (Name + Surveyors Accreditation),DK Lillee Reg Surv 3322
+,Design Information,Full BIM Object Code,43614-S1-T-SS
+,,Element Length,4.0
+,As-Con Information,Full BIM Object Code,43614-S1-T-SS
+,,Contractor Lot Number,SC 12
+,Asset Management Information,Full BIM Object Code ,43614-S1-T-SS
+,,Comments ,comment'
+,,Most Recent Level 2 Inspection,date'
+,,SIM Component Code,BR
+,,SIM Exposure Classification Code,2
+,,SIM Group Code,S
+,,SIM Group Number,1
+,,SIM Modification Status Code,S1
+,,SIM Quantity (lin/m),21
+,,SIM Standard Material Code,S
+,,SIM Standard Number Code,2

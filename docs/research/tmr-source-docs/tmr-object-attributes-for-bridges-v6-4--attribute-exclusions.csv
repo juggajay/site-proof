@@ -1,0 +1,12 @@
+,The TMR attributes for bridges is published to provide example attributes for bridge elements as listed in table 5.1.1 of the TMR BIM for bridges manual 
+,The list of elements below do not require asset mangement attributes assigned to them. TMR requests that they are modelled and delivered in .IFC carrying a unique Full BIM object code only
+,Holding down bolts 
+,Transverse bars
+,Relieving slabs
+,Facia panels
+,Drainage scuppers
+,Drainage pipes 
+,PUP communication conduits 
+,PUP electrical conduits 
+,Cover Plates
+,Lighting brackets / anchors
