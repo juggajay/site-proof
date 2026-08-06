@@ -390,12 +390,16 @@ test.describe('Projects seeded account contract', () => {
     await expect(
       page.getByRole('heading', { name: 'Quality Overview' }).locator('..').locator('..'),
     ).toContainText('2');
-    await expect(page.getByText('40% lots complete')).toBeVisible();
-    await expect(page.getByText('Draft diary entry today')).toBeVisible();
-    await expect(page.getByText('8 ITPs complete')).toBeVisible();
+    // Each stat pill renders its numeral and its label as sibling blocks (they
+    // used to be inline spans in one <p>, which broke mid-phrase in a narrow
+    // phone cell), so assert the pair within a single cell.
+    const statPill = (label: string) => page.getByTestId('stat-pill').filter({ hasText: label });
+    await expect(statPill('lots complete')).toContainText('40%');
+    await expect(statPill('diary entry today')).toContainText('Draft');
+    await expect(statPill('ITPs complete')).toContainText('8');
     await expect(page.getByText('4 in progress')).toBeVisible();
     await expect(page.getByText('4 pending')).toHaveCount(0);
-    await expect(page.getByText('12 test results')).toBeVisible();
+    await expect(statPill('test results')).toContainText('12');
 
     await expect(page.getByRole('link', { name: /NCR E2E-NCR-1 overdue/ })).toHaveAttribute(
       'href',

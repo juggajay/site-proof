@@ -319,10 +319,10 @@ export function ITPPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold">Inspection & Test Plans</h1>
+            <h1 className="text-2xl font-bold md:text-3xl">Inspection & Test Plans</h1>
             <ContextHelp title={HELP_CONTENT.itp.title} content={HELP_CONTENT.itp.content} />
           </div>
           <p className="text-muted-foreground mt-1">
@@ -336,20 +336,20 @@ export function ITPPage() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canManage ? (
             <>
               <button
                 type="button"
                 onClick={() => setShowImportModal(true)}
-                className="rounded-lg border px-4 py-2 hover:bg-muted"
+                className="flex-1 whitespace-nowrap rounded-lg border px-4 py-2 hover:bg-muted md:flex-none"
               >
                 Import from Project
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(true)}
-                className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                className="flex-1 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:flex-none"
               >
                 Create ITP Template
               </button>
@@ -358,7 +358,7 @@ export function ITPPage() {
             projectId && (
               <Link
                 to={`/projects/${projectId}/lots`}
-                className="rounded-lg border px-4 py-2 hover:bg-muted"
+                className="flex-1 whitespace-nowrap rounded-lg border px-4 py-2 text-center hover:bg-muted md:flex-none"
               >
                 Back to Lots
               </Link>
@@ -374,13 +374,13 @@ export function ITPPage() {
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-6 pb-2 border-b">
+      <div className="flex flex-col gap-3 pb-2 border-b sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={includeGlobalTemplates}
             onChange={(e) => setIncludeGlobalTemplates(e.target.checked)}
-            className="rounded border-border accent-primary"
+            className="shrink-0 rounded border-border accent-primary"
           />
           {/* Spec set is legitimately nullable; fall back to neutral wording
               (matching the 'Library' template badge below) instead of a
@@ -392,11 +392,11 @@ export function ITPPage() {
 
         {/* Activity Type Filter */}
         <div className="flex items-center gap-2">
-          <label className="text-sm text-muted-foreground">Activity Type:</label>
+          <label className="shrink-0 text-sm text-muted-foreground">Activity Type:</label>
           <select
             value={activityTypeFilter}
             onChange={(e) => setActivityTypeFilter(e.target.value)}
-            className="text-sm border border-border bg-background text-foreground rounded px-2 py-1"
+            className="min-w-0 flex-1 text-sm border border-border bg-background text-foreground rounded px-2 py-1 sm:flex-none"
           >
             <option value="">All Activities</option>
             {[...new Set(templates.map((t) => t.activityType))].sort().map((type) => (
@@ -409,11 +409,11 @@ export function ITPPage() {
 
         {/* Responsible Party Filter - Feature #711 */}
         <div className="flex items-center gap-2">
-          <label className="text-sm text-muted-foreground">Responsible:</label>
+          <label className="shrink-0 text-sm text-muted-foreground">Responsible:</label>
           <select
             value={responsiblePartyFilter}
             onChange={(e) => setResponsiblePartyFilter(e.target.value)}
-            className="text-sm border border-border bg-background text-foreground rounded px-2 py-1"
+            className="min-w-0 flex-1 text-sm border border-border bg-background text-foreground rounded px-2 py-1 sm:flex-none"
           >
             <option value="">All Parties</option>
             <option value="contractor">Contractor</option>

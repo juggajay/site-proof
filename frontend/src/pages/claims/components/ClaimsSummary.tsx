@@ -15,22 +15,26 @@ export const ClaimsSummary = React.memo(function ClaimsSummary({
   outstanding,
 }: ClaimsSummaryProps) {
   return (
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
       <div className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">Total Claimed</p>
-        <p className="text-2xl font-bold">{formatCurrency(totalClaimed)}</p>
+        <p className="text-lg font-bold tabular-nums md:text-2xl">{formatCurrency(totalClaimed)}</p>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">Total Certified</p>
-        <p className="text-2xl font-bold">{formatCurrency(totalCertified)}</p>
+        <p className="text-lg font-bold tabular-nums md:text-2xl">
+          {formatCurrency(totalCertified)}
+        </p>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">Total Paid</p>
-        <p className="text-2xl font-bold">{formatCurrency(totalPaid)}</p>
+        <p className="text-lg font-bold tabular-nums md:text-2xl">{formatCurrency(totalPaid)}</p>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">Outstanding</p>
-        <p className="text-2xl font-bold text-warning">{formatCurrency(outstanding)}</p>
+        <p className="text-lg font-bold tabular-nums text-warning md:text-2xl">
+          {formatCurrency(outstanding)}
+        </p>
       </div>
     </div>
   );

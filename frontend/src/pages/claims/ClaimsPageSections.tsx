@@ -27,10 +27,10 @@ export function ClaimsPageHeader({
   onCreateClaim,
 }: ClaimsPageHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold">Progress Claims</h1>
+          <h1 className="text-2xl font-bold md:text-3xl">Progress Claims</h1>
           <ContextHelp title={HELP_CONTENT.claims.title} content={HELP_CONTENT.claims.content} />
         </div>
         <p className="text-muted-foreground mt-1">
@@ -38,12 +38,12 @@ export function ClaimsPageHeader({
           contract.
         </p>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {claimCount > 0 && (
           <button
             type="button"
             onClick={onExportCSV}
-            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
+            className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50 md:flex-none"
           >
             Export CSV
           </button>
@@ -51,7 +51,7 @@ export function ClaimsPageHeader({
         <button
           type="button"
           onClick={onCreateClaim}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 md:flex-none"
         >
           <Plus className="h-4 w-4" /> New Claim
         </button>

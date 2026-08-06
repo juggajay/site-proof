@@ -312,13 +312,18 @@ export function ProjectAreasPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Project Areas</h1>
           <p className="text-muted-foreground">Define areas or zones within the project chainage</p>
         </div>
         {canManageAreas && (
-          <Button type="button" onClick={openAddModal} disabled={readOnly}>
+          <Button
+            type="button"
+            onClick={openAddModal}
+            disabled={readOnly}
+            className="w-full md:w-auto"
+          >
             <Plus className="h-4 w-4" />
             Add Area
           </Button>
