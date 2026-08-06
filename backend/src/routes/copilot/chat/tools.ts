@@ -1,7 +1,7 @@
-// Clancy's tool surface. Every tool is READ-ONLY: three read the project state,
-// two queue a client-side action (navigate / open_stage) that Clancy cannot
-// execute himself. Access failures return an error string to the model rather
-// than throwing, so one bad projectId doesn't abort the turn.
+// Clancy's tool surface. Every tool is READ-ONLY or queues a client-side action
+// (navigate / open_stage) that Clancy cannot execute himself. Access failures
+// return an error string to the model rather than throwing, so one bad
+// projectId doesn't abort the turn.
 
 import { prisma } from '../../../lib/prisma.js';
 import {
@@ -13,6 +13,7 @@ import { matchTemplatesForProject } from '../../../lib/itpMatcher.js';
 import { getDashboardProjectAccess, type AuthUser } from '../../dashboard/access.js';
 import { buildHoldPointListItems } from '../../holdpoints/listPresentation.js';
 import { getProjectStageStatus, hasInternalProjectAccess } from './projectStatus.js';
+import { PAGE_KNOWLEDGE, getPageKnowledge, searchPageKnowledge } from './knowledge/index.js';
 import { HELP_TOPICS, HELP_TOPIC_SLUGS, getHelpTopic } from './productKnowledge.js';
 import { isAllowedNavigateTarget, isChatStage, type ChatStage } from './prompt.js';
 
@@ -161,6 +162,38 @@ export const CHAT_TOOLS = [
         },
       },
       required: ['topic'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_ui_knowledge',
+    description:
+      'Search the complete CIVOS page and control guide. Call this whenever the user asks what a button, column, filter, icon, chip, or page element does or where something is on screen. Returns up to three best page matches with concise snippets.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Plain-language control, indicator, page, role, or workflow question',
+        },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_page_guide',
+    description:
+      'Get the full control and behaviour guide for one CIVOS route returned by search_ui_knowledge. Route parameters use placeholders such as <projectId> and <lotId>; a real matching app path also works.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        route: {
+          type: 'string',
+          description: 'Knowledge route, for example projects/<projectId>/lots or p/docket',
+        },
+      },
+      required: ['route'],
       additionalProperties: false,
     },
   },
@@ -748,6 +781,30 @@ export function createChatToolExecutor(user: AuthUser): ToolExecutor {
         return {
           result: JSON.stringify({ slug: found.slug, title: found.title, body: found.body }),
         };
+      }
+
+      case 'search_ui_knowledge': {
+        const query = readString(input, 'query');
+        if (!query) return { result: 'A query is required.' };
+        return { result: JSON.stringify({ results: searchPageKnowledge(query) }) };
+      }
+
+      case 'get_page_guide': {
+        const route = readString(input, 'route');
+        if (!route) return { result: 'A route is required.' };
+        const page = getPageKnowledge(route);
+        if (!page) {
+          return {
+            result: JSON.stringify({
+              error: `Unknown page guide: ${route.slice(0, 120)}`,
+              routes: PAGE_KNOWLEDGE.map(({ route: knownRoute, title }) => ({
+                route: knownRoute,
+                title,
+              })),
+            }),
+          };
+        }
+        return { result: JSON.stringify(page) };
       }
 
       case 'navigate': {
