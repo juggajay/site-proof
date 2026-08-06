@@ -149,7 +149,14 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   ['handover', 'Version numbers are never reused and old versions are never'],
   ['handover', 'above 5,000 evidence rows it refuses to issue rather than silently omit records'],
   ['handover', 'nudges when lots lack an evidence folio, but it never'],
-  ['handover', 'limited to owner, admin, project manager, and quality manager'],
+  [
+    'handover',
+    'Requesting an export and issuing folios is owner, admin, project manager, and quality manager',
+  ],
+  [
+    'handover',
+    'Downloading a handover export is owner, admin, and project manager — plus the person who requested that export',
+  ],
 ];
 
 describe('documentationSections — test sufficiency facts', () => {

@@ -218,7 +218,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       'Tips:',
       '- Re-issuing a folio mints a new version. Version numbers are never reused and old versions are never overwritten.',
       '- A folio prints what is expected, present, and missing — and above 5,000 evidence rows it refuses to issue rather than silently omit records.',
-      '- Folio issuance and the handover export are limited to owner, admin, project manager, and quality manager.',
+      '- Requesting an export and issuing folios is owner, admin, project manager, and quality manager. Downloading a handover export is owner, admin, and project manager — plus the person who requested that export.',
       '- Reports are the day-to-day review surface; the handover export is the end-of-job evidence package for the principal.',
     ].join('\n'),
   },

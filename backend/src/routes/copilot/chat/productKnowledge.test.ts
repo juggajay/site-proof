@@ -381,11 +381,20 @@ describe('product knowledge — deliveries and handover facts', () => {
     expect(body('handover')).toContain('nudges when lots lack an evidence folio, but it never');
   });
 
-  it('names the four roles that can issue a folio and request an export', () => {
+  it('separates who can request an export from who can download one', () => {
     // folio/access.ts:23 FOLIO_ISSUERS and handoverExports/access.ts:27
-    // HANDOVER_EXPORT_REQUESTERS are the same four.
-    expect(body('handover')).toContain(
-      'limited to owner, admin, project manager, and quality manager',
+    // HANDOVER_EXPORT_REQUESTERS are the same four. Downloading is NARROWER:
+    // download.ts:50 HANDOVER_EXPORT_DOWNLOADERS omits quality_manager, and
+    // :145 admits the requester by id — `row.requestedById !== user.id &&
+    // !DOWNLOADERS.includes(role)` is the 403. Collapsing the two into one
+    // four-role sentence tells a QM they can take the package away when they
+    // cannot, unless they requested it themselves.
+    const handover = body('handover');
+    expect(handover).toContain(
+      'Requesting an export and issuing folios is owner, admin, project manager, and quality manager',
+    );
+    expect(handover).toContain(
+      'Downloading a handover export is owner, admin, and project manager — plus the person who requested that export',
     );
   });
 });

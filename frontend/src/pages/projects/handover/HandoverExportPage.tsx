@@ -1,10 +1,12 @@
 // Wave D `D1c.3` — the handover export screen (spec §4.7.6, §4.7.1, §9).
 //
 // ONE SCREEN, because the request and the preflight are ONE ROUND TRIP: the
-// backend estimates and freezes in a single transaction and refuses before it
-// writes anything (`routes/handoverExports/snapshot.ts:392`). There is no
-// dry-run endpoint to build a separate "check first" step against, and faking
-// one client-side would report numbers the server never agreed to.
+// backend sizes the export and refuses before it writes anything, and only
+// then freezes the export row and its member ledger in a single transaction
+// (`routes/handoverExports/snapshot.ts:392` — the estimate runs ahead of the
+// `$transaction`, not inside it). There is no dry-run endpoint to build a
+// separate "check first" step against, and faking one client-side would
+// report numbers the server never agreed to.
 //
 // The archive COLLECTS, it never renders (`[DH-B2]`, §4.7.1). So the folio line
 // below is a nudge with a link to where folios are issued, and it is never a
