@@ -254,14 +254,19 @@ function InnerHeader({
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background px-5 pb-[14px] pt-3">
       <div className="flex min-h-[40px] items-center gap-1.5">
-        {/* Back button — 40px circle, 48px hit area via .shell-tap48 (gloved
-            hands); navigates to the declared parent. */}
+        {/* Back button — a real 48x48 box (gloved hands). It previously relied
+            on .shell-tap48, whose ::after grows only the HIT area: the element
+            itself still measured 40x40, so audits (and anything reading
+            getBoundingClientRect) saw an under-size target. Padding it out to
+            48 makes the measured box and the tappable box the same thing.
+            -ml-3.5 offsets the extra 8px so the chevron stays exactly where it
+            was. Navigates to the declared parent. */}
         <button
           type="button"
           aria-label="Go back"
           onClick={() => navigate(parent)}
           className={[
-            'shell-tap48 -ml-2.5 flex h-10 w-10 items-center justify-center',
+            '-ml-3.5 flex h-12 w-12 items-center justify-center',
             'rounded-[10px] border-none bg-transparent text-foreground',
             'transition-[transform,background] duration-150',
             'active:translate-x-[-3px] active:bg-secondary',

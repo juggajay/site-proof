@@ -1,13 +1,17 @@
 /**
- * Tests for HomeScreen.
+ * Tests for HomeScreen — the diary hero, the tile set, and the camera bar.
+ *
+ * This file drives the screen by SEEDING THE QUERY CACHE (queries disabled),
+ * which is why the hero-state coverage lives here. The chip grammar itself —
+ * which counts produce which chip, and the rule that a zero count produces NO
+ * chip — is covered in src/shell/screens/HomeScreen.test.tsx against the
+ * apiFetch boundary; it is not duplicated here.
  *
  * Covers:
  *   - Renders hero in "start" state (no diary) with correct copy
  *   - Renders hero in "in-progress" state with progress percentage
  *   - Renders hero in "submitted" state
- *   - Tiles render: Lots, Dockets, Issues; Drawings is demoted off home cards
- *   - Live counts shown when data available
- *   - Tiles render without chip when count not available (no fake data)
+ *   - The four permanent tiles render: Lots, Dockets, Issues, Drawings & Docs
  *   - Camera button present + opens CaptureModal
  */
 
@@ -138,7 +142,11 @@ describe('HomeScreen — hub tiles', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the daily-work tiles and keeps Drawings demoted off home cards', async () => {
+  // Four permanent cards = four permanent jobs. "Drawings & Docs" is the one
+  // added in hub v2: finding the detail on a pit is a real standalone site job
+  // that previously had no path off this screen. Photos is deliberately NOT a
+  // card — capture is the camera bar, and filing is a notice card.
+  it('renders the four permanent hub tiles', async () => {
     const HomeScreen = await getHomeScreen();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
 
@@ -147,67 +155,8 @@ describe('HomeScreen — hub tiles', () => {
     expect(screen.getByRole('button', { name: /lots/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /dockets/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /issues/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /drawings/i })).not.toBeInTheDocument();
-  });
-
-  it('shows ITP checks due count when seeded', async () => {
-    const HomeScreen = await getHomeScreen();
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
-
-    qc.setQueryData(['foreman-badges', 'proj-abc'], {
-      blocking: [],
-      dueToday: [{ id: '1' }, { id: '2' }, { id: '3' }],
-    });
-
-    renderWithQueryClient(qc, <HomeScreen />);
-
-    expect(screen.getByText('3 due')).toBeInTheDocument();
-  });
-
-  it('shows pending dockets count when seeded', async () => {
-    const HomeScreen = await getHomeScreen();
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
-
-    qc.setQueryData(['dockets', 'proj-abc', 'pending_approval'], {
-      data: [{ status: 'pending_approval' }, { status: 'pending_approval' }],
-    });
-
-    renderWithQueryClient(qc, <HomeScreen />);
-
-    expect(screen.getByText('2 waiting')).toBeInTheDocument();
-  });
-
-  it('shows open NCR count when seeded', async () => {
-    const HomeScreen = await getHomeScreen();
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
-
-    qc.setQueryData(['ncrs', 'proj-abc', 'open'], {
-      data: [{ status: 'open' }],
-    });
-
-    renderWithQueryClient(qc, <HomeScreen />);
-
-    expect(screen.getByText('1 open')).toBeInTheDocument();
-  });
-
-  it('shows 0 open NCR when list is empty', async () => {
-    const HomeScreen = await getHomeScreen();
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
-
-    qc.setQueryData(['ncrs', 'proj-abc', 'open'], { data: [] });
-
-    renderWithQueryClient(qc, <HomeScreen />);
-
-    expect(screen.getByText('0 open')).toBeInTheDocument();
-  });
-
-  it('does not show a Drawings card or fake count chip', async () => {
-    const HomeScreen = await getHomeScreen();
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
-
-    renderWithQueryClient(qc, <HomeScreen />);
-
-    expect(screen.queryByRole('button', { name: /drawings/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /drawings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^photos/i })).not.toBeInTheDocument();
   });
 });
 

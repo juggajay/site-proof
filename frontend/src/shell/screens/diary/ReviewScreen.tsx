@@ -276,8 +276,28 @@ export function ReviewScreen() {
     : false;
 
   if (!diary) {
+    // Nothing to review is not a dead end — it means the day hasn't been
+    // started. Offer step 1 (weather, which creates the diary) rather than
+    // leaving the back chevron as the only control.
     return (
-      <ShellScreen variant="inner" title="Review & Submit" parent={backPath} sub={sub}>
+      <ShellScreen
+        variant="inner"
+        title="Review & Submit"
+        parent={backPath}
+        sub={sub}
+        bottom={
+          <div className="shell-cambar">
+            <button
+              type="button"
+              onClick={() => navigate(withProjectQuery('/m/diary/weather', projectId))}
+              className="shell-cambar-btn"
+              aria-label="Start today's diary"
+            >
+              Start today&rsquo;s diary
+            </button>
+          </div>
+        }
+      >
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
           <AlertTriangle size={32} className="text-muted-foreground" />
           <p className="text-[14px] text-muted-foreground">No diary for today yet.</p>
