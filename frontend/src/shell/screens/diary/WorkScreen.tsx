@@ -92,15 +92,21 @@ export function WorkScreen() {
       parent={backPath}
       sub={sub}
       bottom={
-        !isSubmitted && workEntries.length > 0 ? (
+        // Step 3 of 4 always needs a way forward. Gating this on
+        // `workEntries.length > 0` stranded any day that legitimately has no
+        // work to log (rained out, stood down) with no control but the back
+        // chevron — the diary could never be reviewed or submitted.
+        !isSubmitted ? (
           <div className="shell-cambar">
             <button
               type="button"
               onClick={navToReview}
               className="shell-cambar-btn"
-              aria-label="Done — review and submit"
+              aria-label={
+                workEntries.length > 0 ? 'Done — review and submit' : 'Next: review and submit'
+              }
             >
-              Done — review &amp; submit
+              {workEntries.length > 0 ? 'Done — review & submit' : 'Next: Review & submit'}
             </button>
           </div>
         ) : undefined

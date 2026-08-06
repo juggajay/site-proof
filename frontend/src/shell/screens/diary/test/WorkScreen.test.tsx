@@ -81,6 +81,7 @@ function renderScreen() {
       <Routes>
         <Route path="/m/diary/work" element={<WorkScreen />} />
         <Route path="/m/diary/work/:type" element={<LocationProbe />} />
+        <Route path="/m/diary/review" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -114,6 +115,45 @@ describe('WorkScreen entry rows', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete Activity' }));
     expect(handleDeleteEntry).toHaveBeenCalledWith(expect.objectContaining({ id: 'e1' }));
+  });
+});
+
+// ── Step 3 of 4 always has a way forward ─────────────────────────────────────
+
+describe('WorkScreen forward control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _diaryStatus = 'draft';
+    _queuedDocketPhotos = new Map();
+    _isOnline = true;
+  });
+
+  // The dead end this closes: a legitimately empty work day (rained out, stood
+  // down) left the back chevron as the only control, so the diary could never
+  // be reviewed or submitted.
+  it('offers Next on an empty work day and lands on review', () => {
+    _timeline = [];
+    renderScreen();
+
+    const next = screen.getByRole('button', { name: /next: review and submit/i });
+    fireEvent.click(next);
+
+    expect(screen.getByTestId('loc').textContent).toContain('/m/diary/review');
+  });
+
+  it('keeps the "Done" wording once work has been logged', () => {
+    _timeline = [entry()];
+    renderScreen();
+
+    expect(screen.getByRole('button', { name: /done — review and submit/i })).toBeInTheDocument();
+  });
+
+  it('offers no forward control once the diary is submitted', () => {
+    _timeline = [entry()];
+    _diaryStatus = 'submitted';
+    renderScreen();
+
+    expect(screen.queryByRole('button', { name: /review and submit/i })).not.toBeInTheDocument();
   });
 });
 

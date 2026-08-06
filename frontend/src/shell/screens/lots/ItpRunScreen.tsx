@@ -101,6 +101,20 @@ export function ItpRunScreen() {
         title="Inspection"
         parent={`/m/lots/${lotId}`}
         sub={<span>No checklist</span>}
+        // There is nothing to do on this screen without a template, so give the
+        // way out as a real button rather than only the header chevron.
+        bottom={
+          <div className="shell-cambar">
+            <button
+              type="button"
+              onClick={() => navigate(`/m/lots/${lotId}`)}
+              className="shell-cambar-btn"
+              aria-label="Back to lot"
+            >
+              Back to lot
+            </button>
+          </div>
+        }
       >
         <div className="py-16 text-center text-[14px] leading-relaxed text-muted-foreground">
           {run.loadError ?? 'No ITP is assigned to this lot yet.'}

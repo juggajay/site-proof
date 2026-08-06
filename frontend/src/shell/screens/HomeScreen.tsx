@@ -1,16 +1,27 @@
 /**
  * HomeScreen — the hub entry point for the foreman mobile shell.
  *
- * Implements docs/design-foreman-shell-mock-v4.html § HOME screen exactly.
+ * Implements docs/design-foreman-home-hub-mock-v2-2026-08-06.html exactly.
+ *
+ * Hub-and-spoke, no bottom nav. The screen encodes one rule: PERMANENT CARDS =
+ * PERMANENT JOBS (Lots, Dockets, Issues, Drawings & Docs — always present, in
+ * that order), OCCASIONAL JOBS = NOTICE CARDS that appear only while the job
+ * exists (unfiled photos). A zero count is ABSENT, not grey — silence means
+ * "nothing needs you", so no chip ever renders at zero.
  *
  * Real data sources:
  *   - Diary hero state: reuses the /api/dashboard/projects/:id/foreman/today
  *     endpoint (same query ForemanBottomNavV2 uses for badges) to derive diary
  *     step progress. Steps: weather, crew/plant, work entries, submitted.
- *   - ITP checks due: from the same foreman/today payload (.dueToday count).
+ *   - Lots chip: the same foreman/today payload — .blocking (hold points ready
+ *     for the foreman) and .dueToday (ITP checks due).
  *   - Dockets pending: from /api/dockets?status=pending_approval (counts items
  *     with status pending_approval; foreman has DOCKET_APPROVER rights).
  *   - NCR open count: from /api/ncrs?projectId=... with status filter.
+ *   - Unfiled photos: usePhotosShellData — the SAME hook (and TanStack query
+ *     key) the /m/photos surface uses, so the notice and that screen can never
+ *     disagree and navigating there hits a warm cache.
+ *   - Drawings & Docs NEVER carries a chip: a reference doesn't demand anything.
  *
  * Where a count isn't cheaply available the tile renders without a chip rather
  * than showing fake data.
@@ -28,6 +39,8 @@ import {
   FileText,
   AlertTriangle,
   ClipboardCheck,
+  Folder,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '../components/ShellScreen';
@@ -38,6 +51,7 @@ import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
 import { withProjectQuery } from '../shellPaths';
 import { deriveDiaryStepState } from './diary/diaryStepState';
+import { usePhotosShellData } from './photos/usePhotosShellData';
 import type { DailyDiary } from '@/pages/diary/types';
 
 // ── Types matching the foreman/today endpoint ─────────────────────────────────
@@ -94,6 +108,23 @@ function computeDiaryHero(diary: DailyDiary | null | undefined): DiaryHeroState 
     totalSteps: TOTAL_STEPS,
     missing,
   };
+}
+
+// ── Lots "what does today expect of me" chip ─────────────────────────────────
+
+/**
+ * The one real upgrade in v2: the backend already computes the foreman's day
+ * (hold points ready to inspect, ITP checks due) but that never reached this
+ * screen. A hold point ready to lift outranks a routine check — it is what
+ * stalls a pour — so it leads the chip.
+ *
+ * Returns undefined when the day asks nothing: no chip at all, never "0 due".
+ */
+function lotsDayChip(blocking: number, dueToday: number): string | undefined {
+  const checks = dueToday === 1 ? '1 check' : `${dueToday} checks`;
+  if (blocking > 0) return dueToday > 0 ? `HP ready · ${checks}` : 'HP ready';
+  if (dueToday > 0) return `${checks} today`;
+  return undefined;
 }
 
 // ── Hero tile ─────────────────────────────────────────────────────────────────
@@ -198,8 +229,10 @@ export function HomeScreen() {
     refetchInterval: 5 * 60_000,
   });
 
-  // ITP checks due — from the worklist dueToday
-  const itpChecksDue = (todayData?.dueToday?.length ?? 0) + (todayData?.blocking?.length ?? 0);
+  // The foreman's day, split: hold points ready to lift vs routine checks due.
+  const blockingCount = todayData?.blocking?.length ?? 0;
+  const dueTodayCount = todayData?.dueToday?.length ?? 0;
+  const lotsChip = lotsDayChip(blockingCount, dueTodayCount);
 
   // ── Today's diary: the canonical by-date endpoint (full relations), the
   // same one the diary path uses — `?missing=null` returns null (not 404)
@@ -241,6 +274,15 @@ export function HomeScreen() {
   });
   const openNcrCount = ncrData?.data?.length;
 
+  // ── Unfiled photos ────────────────────────────────────────────────────────
+  // Same hook + query key as /m/photos, so the notice can never disagree with
+  // that screen and tapping through lands on a warm cache.
+  // ponytail: this pages the whole photo register client-side (no server-side
+  // "unfiled" filter exists). Fine at project scale today; if photo counts grow,
+  // add `lotId=null` support + a count to GET /api/documents/:projectId rather
+  // than approximating here.
+  const { unfiledCount } = usePhotosShellData(projectId);
+
   // ── Navigation helpers ────────────────────────────────────────────────────
   const navTo = (sub: string) => {
     if (projectId) {
@@ -255,6 +297,7 @@ export function HomeScreen() {
     return (
       <ShellScreen variant="home">
         <div className="h-32 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
         <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
         <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
         <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
@@ -311,32 +354,70 @@ export function HomeScreen() {
         {/* Diary hero tile — navigates to the shell diary path */}
         <DiaryHero state={diaryHeroState} onPress={() => navigate(diaryPath)} />
 
+        {/* Occasional job: photos captured without a lot. Appears only while the
+            job exists and vanishes when the last one is filed. */}
+        {unfiledCount > 0 && (
+          <button
+            type="button"
+            className="shell-notice shell-notice-warn items-center"
+            onClick={() => navTo('photos')}
+            aria-label={`${unfiledCount} ${unfiledCount === 1 ? 'photo is' : 'photos are'} not on a lot yet — file them`}
+          >
+            <ImageIcon
+              size={20}
+              strokeWidth={1.8}
+              className="shrink-0 text-warning"
+              aria-hidden="true"
+            />
+            <span>
+              <b className="font-semibold">
+                {unfiledCount} {unfiledCount === 1 ? 'photo' : 'photos'}{' '}
+                {unfiledCount === 1 ? "isn't" : "aren't"} on a lot yet.
+              </b>{' '}
+              Tap to file them.
+            </span>
+            <span
+              className="ml-auto whitespace-nowrap font-mono text-[11px] font-bold tracking-[0.08em]"
+              aria-hidden="true"
+            >
+              FILE →
+            </span>
+          </button>
+        )}
+
         {/* Lots tile */}
         <HubTile
           icon={MapPin}
           title="Lots"
-          chip={itpChecksDue > 0 ? `${itpChecksDue} due` : undefined}
+          chip={lotsChip}
           onPress={() => navTo('lots')}
-          ariaLabel={`Lots${itpChecksDue > 0 ? ` — ${itpChecksDue} checks due` : ''}`}
+          ariaLabel={`Lots${lotsChip ? ` — ${lotsChip}` : ''}`}
         />
 
-        {/* Dockets tile */}
+        {/* Dockets tile — a chip only while dockets actually await approval. */}
         <HubTile
           icon={FileText}
           title="Dockets"
-          chip={pendingDockets !== undefined ? `${pendingDockets} waiting` : undefined}
+          chip={pendingDockets ? `${pendingDockets} to approve` : undefined}
           onPress={() => navTo('dockets')}
-          ariaLabel={`Dockets${pendingDockets !== undefined ? ` — ${pendingDockets} waiting for approval` : ''}`}
+          ariaLabel={`Dockets${pendingDockets ? ` — ${pendingDockets} to approve` : ''}`}
         />
 
         {/* Issues tile */}
         <HubTile
           icon={AlertTriangle}
           title="Issues"
-          chip={openNcrCount !== undefined ? `${openNcrCount} open` : undefined}
-          chipOk={openNcrCount === 0}
+          chip={openNcrCount ? `${openNcrCount} open` : undefined}
           onPress={() => navTo('issues')}
-          ariaLabel={`Issues${openNcrCount !== undefined ? ` — ${openNcrCount} open` : ''}`}
+          ariaLabel={`Issues${openNcrCount ? ` — ${openNcrCount} open` : ''}`}
+        />
+
+        {/* Drawings & Docs — a reference, never a demand: no chip, ever. */}
+        <HubTile
+          icon={Folder}
+          title="Drawings & Docs"
+          onPress={() => navTo('docs')}
+          ariaLabel="Drawings and documents"
         />
       </ShellScreen>
 

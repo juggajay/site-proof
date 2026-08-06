@@ -113,3 +113,38 @@ describe('ShellScreen sign out', () => {
     expect(screen.getByTestId('path').textContent).toBe('/m');
   });
 });
+
+// ── Back chevron tap target ──────────────────────────────────────────────────
+
+describe('ShellScreen back chevron', () => {
+  // jsdom applies no Tailwind, so the box cannot be measured here — this pins
+  // the sizing utilities instead. The chevron used to be a 40x40 element with a
+  // 48px ::after hit area (.shell-tap48): tappable, but every tool that
+  // measures the element itself saw an under-size target. h-12/w-12 makes the
+  // measured box and the tappable box the same 48x48; -ml-3.5 absorbs the extra
+  // 8px so the icon does not move.
+  it('is a real 48x48 box, not a 40px box with a pseudo-element hit area', () => {
+    renderShell(
+      <ShellScreen variant="inner" title="Lots" parent="/m">
+        body
+      </ShellScreen>,
+    );
+
+    const back = screen.getByRole('button', { name: /go back/i });
+    expect(back.className).toContain('h-12');
+    expect(back.className).toContain('w-12');
+    expect(back.className).toContain('-ml-3.5');
+    expect(back.className).not.toContain('shell-tap48');
+  });
+
+  it('navigates to the declared parent', () => {
+    renderShell(
+      <ShellScreen variant="inner" title="Lots" parent="/login">
+        body
+      </ShellScreen>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /go back/i }));
+    expect(screen.getByTestId('path').textContent).toBe('/login');
+  });
+});

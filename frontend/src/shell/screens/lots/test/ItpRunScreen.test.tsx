@@ -643,4 +643,15 @@ describe('ItpRunScreen — finished + empty', () => {
     renderRun();
     expect(screen.getByText(/No ITP is assigned/i)).toBeInTheDocument();
   });
+
+  // Nothing can be done on this screen without a template, so the way out is a
+  // real button — not just the header chevron a gloved thumb has to find.
+  it('offers a Back to lot button out of the no-checklist dead end', () => {
+    _run = makeRun(null);
+    renderRun();
+
+    fireEvent.click(screen.getByRole('button', { name: /back to lot/i }));
+
+    expect(screen.getByText('lot hub')).toBeInTheDocument();
+  });
 });

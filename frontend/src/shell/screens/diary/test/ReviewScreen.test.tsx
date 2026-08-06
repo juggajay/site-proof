@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { DailyDiary } from '@/pages/diary/types';
@@ -31,15 +31,18 @@ vi.mock('../../../components/ShellScreen', () => ({
     title,
     sub,
     children,
+    bottom,
   }: {
     title: string;
     sub?: React.ReactNode;
     children: React.ReactNode;
+    bottom?: React.ReactNode;
   }) => (
     <div>
       <h1>{title}</h1>
       {sub}
       <main>{children}</main>
+      {bottom}
     </div>
   ),
 }));
@@ -83,6 +86,7 @@ function renderReviewScreen() {
       <MemoryRouter initialEntries={['/m/diary/review?projectId=proj-1']}>
         <Routes>
           <Route path="/m/diary/review" element={<ReviewScreen />} />
+          <Route path="/m/diary/weather" element={<div data-testid="weather-step" />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -100,6 +104,18 @@ describe('ReviewScreen', () => {
 
     expect(screen.getByRole('button', { name: /submit diary/i })).toBeInTheDocument();
     expect(screen.getByText(/Slide to lock the diary/i)).toBeInTheDocument();
+  });
+
+  // "No diary for today yet" used to be a dead end: nothing to review, and the
+  // back chevron the only control. It means the day hasn't been started, so
+  // offer step 1 (weather, which creates the diary).
+  it('offers a way to start the day instead of a dead empty state', () => {
+    _diary = null;
+    renderReviewScreen();
+
+    fireEvent.click(screen.getByRole('button', { name: /start today's diary/i }));
+
+    expect(screen.getByTestId('weather-step')).toBeInTheDocument();
   });
 
   it('shows a locked submitted state instead of submit controls for submitted diaries', () => {
