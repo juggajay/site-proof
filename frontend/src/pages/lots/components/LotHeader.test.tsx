@@ -137,8 +137,12 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
     // The retired legacy "Assign Subcontractor" header button must never appear.
     expect(screen.queryByRole('button', { name: /Assign Subcontractor/i })).not.toBeInTheDocument();
-    // Modern subcontractor management (the Add button in the assignments section) is gated too.
-    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+    // Modern subcontractor management is gated too — with nothing assigned and
+    // no permission, the whole assignments surface is absent.
+    expect(
+      screen.queryByRole('button', { name: /Assign a subcontractor/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Assigned Subcontractors')).not.toBeInTheDocument();
 
     // Field/non-configuration controls stay available to every non-viewer,
     // now behind the overflow.
@@ -152,15 +156,36 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
     renderHeader({ canManageLot: true });
 
     expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
-    // No legacy assign button; subcontractors are managed via the assignments section.
-    expect(screen.queryByRole('button', { name: /Assign Subcontractor/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
+    // No legacy assign button; with nothing assigned the empty card collapses to
+    // the assign affordance itself.
+    expect(
+      screen.queryByRole('button', { name: /^Assign Subcontractor$/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assign a subcontractor' })).toBeInTheDocument();
   });
 
   it('can manage subcontractors without showing Edit Lot', () => {
     renderHeader({ canManageLot: true, canEditLot: false });
 
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Assign a subcontractor' })).toBeInTheDocument();
+  });
+
+  it('keeps the full assignments card once a subcontractor is assigned', () => {
+    renderHeader({
+      canManageLot: true,
+      assignments: [
+        {
+          id: 'assignment-1',
+          canCompleteITP: true,
+          itpRequiresVerification: false,
+          subcontractorCompany: { id: 'sub-1', companyName: 'Acme Civil' },
+        } as LotHeaderProps['assignments'][number],
+      ],
+    });
+
+    expect(screen.getByText('Assigned Subcontractors')).toBeInTheDocument();
+    expect(screen.getByText('Acme Civil')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 });
@@ -179,6 +204,31 @@ describe('LotHeader desktop layout', () => {
     // Title block and actions stack vertically on mobile, side-by-side on >= sm.
     expect(headerRow).toHaveClass('flex-col');
     expect(headerRow).toHaveClass('sm:flex-row');
+  });
+
+  it('renders the status chip beside the title, not inside the action cluster', () => {
+    renderHeader({ canManageLot: true });
+
+    const badge = screen.getByText('In Progress');
+    const heading = screen.getByRole('heading', { name: 'LOT-001' });
+    expect(heading.parentElement).toContainElement(badge);
+
+    const actionCluster = screen.getByRole('button', { name: 'More actions' }).parentElement
+      ?.parentElement;
+    expect(actionCluster).not.toContainElement(badge);
+  });
+
+  it('renders lot metadata and timestamps as one inline row, not stat cards', () => {
+    renderHeader();
+
+    // Chainage 0-100 is a real value and stays; the three unset fields are gone.
+    expect(screen.getByText('Chainage')).toBeInTheDocument();
+    expect(screen.getByText('0 - 100')).toBeInTheDocument();
+    expect(screen.queryByText('Layer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Area/Zone')).not.toBeInTheDocument();
+    // Timestamps folded into the same row — no separate "Last Updated" strip.
+    expect(screen.getByText('Updated')).toBeInTheDocument();
+    expect(screen.queryByText('Last Updated:')).not.toBeInTheDocument();
   });
 });
 
@@ -476,8 +526,8 @@ describe('LotHeader mobile overflow menu', () => {
 
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
     // The legacy Assign Subcontractor sheet action is retired; managing
-    // subcontractors happens through the assignments section's Add button.
-    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
+    // subcontractors happens through the assignments surface below the header.
+    expect(screen.getByRole('button', { name: 'Assign a subcontractor' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();

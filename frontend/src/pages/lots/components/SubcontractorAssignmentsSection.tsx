@@ -20,6 +20,24 @@ export function SubcontractorAssignmentsSection({
   onEditAssignment,
   onRemoveAssignment,
 }: SubcontractorAssignmentsSectionProps) {
+  // Most lots have no subcontractor. A bordered card whose only content is
+  // "No subcontractors assigned" pushed the workspace tabs below the fold, so
+  // the empty case collapses to the affordance itself — or to nothing at all
+  // for roles that cannot assign.
+  if (assignments.length === 0 && !lot.assignedSubcontractor) {
+    if (!canManageLot) return null;
+    return (
+      <button
+        type="button"
+        onClick={onAddSubcontractor}
+        className="flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+      >
+        <Plus className="h-4 w-4" />
+        Assign a subcontractor
+      </button>
+    );
+  }
+
   return (
     <div className="rounded-lg border p-4">
       <div className="flex items-center justify-between mb-4">
@@ -52,9 +70,7 @@ export function SubcontractorAssignmentsSection({
           </div>
         )}
 
-      {assignments.length === 0 && !lot.assignedSubcontractor ? (
-        <p className="text-sm text-muted-foreground">No subcontractors assigned</p>
-      ) : assignments.length > 0 ? (
+      {assignments.length > 0 && (
         <div className="space-y-2">
           {assignments.map((assignment) => (
             <div
@@ -97,7 +113,7 @@ export function SubcontractorAssignmentsSection({
             </div>
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

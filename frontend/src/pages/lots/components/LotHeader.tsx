@@ -10,7 +10,7 @@ import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
 import { pickPrimaryReadinessAction } from '../lib/readinessActions';
 import { getLotStatusBadgeClass } from '@/lib/lotStatusOverview';
 import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection';
-import { LotSummaryCards } from './LotSummaryCards';
+import { LotMetaRow } from './LotMetaRow';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
 import { useIsMobile } from '@/hooks/useMediaQuery';
@@ -242,30 +242,8 @@ export function LotHeader({
           </div>
         </div>
 
-        {/* Lot Summary Cards */}
-        <LotSummaryCards lot={lot} />
-
-        {/* Timestamps */}
-        <div className="flex flex-wrap gap-6 text-sm text-muted-foreground border-t pt-4">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">Created:</span>
-            <time dateTime={lot.createdAt} title={new Date(lot.createdAt).toISOString()}>
-              {new Date(lot.createdAt).toLocaleString('en-AU', {
-                dateStyle: 'medium',
-                timeStyle: 'medium',
-              })}
-            </time>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium">Last Updated:</span>
-            <time dateTime={lot.updatedAt} title={new Date(lot.updatedAt).toISOString()}>
-              {new Date(lot.updatedAt).toLocaleString('en-AU', {
-                dateStyle: 'medium',
-                timeStyle: 'medium',
-              })}
-            </time>
-          </div>
-        </div>
+        {/* Lot metadata + timestamps, one inline row */}
+        <LotMetaRow lot={lot} />
 
         {/* Subcontractor Assignments Section */}
         <SubcontractorAssignmentsSection
@@ -303,18 +281,22 @@ export function LotHeader({
         <div className="flex items-start gap-4">
           {/* QR Code */}
           <LotQRCode lotId={lotId} lotNumber={lot.lotNumber} projectId={projectId} size="medium" />
-          <div>
-            <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
+          <div className="min-w-0">
+            {/* The status chip belongs to the lot, not to the action cluster —
+                sitting between the buttons it read as a third button. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
+              {statusBadge}
+            </div>
             <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
           </div>
         </div>
-        {/* One primary action, the status chip, then everything else behind the
-            overflow (A4 spec §7). Subcontractor assignment lives in the
-            Subcontractor Assignments section below; the legacy single-assignment
-            header button is retired. */}
+        {/* One primary action, then everything else behind the overflow (A4
+            spec §7). Subcontractor assignment lives in the Subcontractor
+            Assignments section below; the legacy single-assignment header
+            button is retired. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {primaryButton('')}
-          {statusBadge}
           <div className="relative print:hidden" ref={menuRef}>
             <button
               type="button"
@@ -347,30 +329,8 @@ export function LotHeader({
         </div>
       </div>
 
-      {/* Lot Summary Cards */}
-      <LotSummaryCards lot={lot} />
-
-      {/* Timestamps */}
-      <div className="flex flex-wrap gap-6 text-sm text-muted-foreground border-t pt-4">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Created:</span>
-          <time dateTime={lot.createdAt} title={new Date(lot.createdAt).toISOString()}>
-            {new Date(lot.createdAt).toLocaleString('en-AU', {
-              dateStyle: 'medium',
-              timeStyle: 'medium',
-            })}
-          </time>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Last Updated:</span>
-          <time dateTime={lot.updatedAt} title={new Date(lot.updatedAt).toISOString()}>
-            {new Date(lot.updatedAt).toLocaleString('en-AU', {
-              dateStyle: 'medium',
-              timeStyle: 'medium',
-            })}
-          </time>
-        </div>
-      </div>
+      {/* Lot metadata + timestamps, one inline row */}
+      <LotMetaRow lot={lot} />
 
       {/* Subcontractor Assignments Section */}
       <SubcontractorAssignmentsSection

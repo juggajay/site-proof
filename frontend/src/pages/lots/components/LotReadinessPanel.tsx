@@ -242,6 +242,54 @@ function ReadinessBucketView({
   );
 }
 
+// Blocked before needs-attention before clear. Three equal columns gave a
+// cleared bucket the same weight as a blocking one; severity decides the order
+// and the space now.
+function bucketRank(bucket: ReadinessBucket): number {
+  if (bucket.blockers.some((item) => item.blocksAction)) return 0;
+  if (bucket.blockers.length > 0 || bucket.warnings.length > 0) return 1;
+  return 2;
+}
+
+// A bucket with nothing outstanding is one line. Its supporting proof is still
+// reachable — <details> keeps it one click away without spending a panel on it.
+function ClearBucketLine({
+  bucket,
+  kind,
+  onTabChange,
+}: {
+  bucket: ReadinessBucket;
+  kind: ReadinessBucketKind;
+  onTabChange: (tab: LotTab, actionCode?: string) => void;
+}) {
+  const label = stateLabel(bucket, kind);
+  const summary = (
+    <>
+      <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-success" />
+      <span className="font-medium">{label}</span>
+      {bucket.support.length > 0 && (
+        <span className="text-muted-foreground">
+          {bucket.support.length} supporting item{bucket.support.length === 1 ? '' : 's'}
+        </span>
+      )}
+    </>
+  );
+
+  if (bucket.support.length === 0) {
+    return <p className="flex items-center gap-2 text-sm">{summary}</p>;
+  }
+
+  return (
+    <details>
+      {/* list-none covers Chrome/Firefox; Safari still needs its own marker rule. */}
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm [&::-webkit-details-marker]:hidden">
+        {summary}
+      </summary>
+      <ItemList items={bucket.support} onTabChange={onTabChange} />
+    </details>
+  );
+}
+
 export function LotReadinessPanel({
   readiness,
   loading,
@@ -316,6 +364,14 @@ export function LotReadinessPanel({
     );
   }
 
+  const ranked: { kind: ReadinessBucketKind; bucket: ReadinessBucket }[] = [
+    { kind: 'conformance' as const, bucket: readiness.conformance },
+    { kind: 'claim' as const, bucket: readiness.claim },
+    ...(readiness.managementPrep
+      ? [{ kind: 'managementPrep' as const, bucket: readiness.managementPrep }]
+      : []),
+  ].sort((a, b) => bucketRank(a.bucket) - bucketRank(b.bucket));
+
   return (
     <section className="rounded-lg border bg-card p-4" aria-label="Evidence Readiness">
       <div className="flex items-start justify-between gap-4">
@@ -333,20 +389,19 @@ export function LotReadinessPanel({
         <ShieldCheck className="h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        <ReadinessBucketView
-          bucket={readiness.conformance}
-          kind="conformance"
-          onTabChange={onTabChange}
-          onAddTestForItem={onAddTestForItem}
-        />
-        <ReadinessBucketView bucket={readiness.claim} kind="claim" onTabChange={onTabChange} />
-        {readiness.managementPrep && (
-          <ReadinessBucketView
-            bucket={readiness.managementPrep}
-            kind="managementPrep"
-            onTabChange={onTabChange}
-          />
+      <div className="mt-4 space-y-3">
+        {ranked.map(({ kind, bucket }) =>
+          bucketRank(bucket) === 2 ? (
+            <ClearBucketLine key={kind} bucket={bucket} kind={kind} onTabChange={onTabChange} />
+          ) : (
+            <ReadinessBucketView
+              key={kind}
+              bucket={bucket}
+              kind={kind}
+              onTabChange={onTabChange}
+              onAddTestForItem={kind === 'conformance' ? onAddTestForItem : undefined}
+            />
+          ),
         )}
       </div>
     </section>

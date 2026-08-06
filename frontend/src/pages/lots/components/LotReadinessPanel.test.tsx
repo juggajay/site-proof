@@ -256,4 +256,89 @@ describe('LotReadinessPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
     expect(screen.queryByText('Test 3')).not.toBeInTheDocument();
   });
+
+  // ── Severity ranking (blocked first, cleared compressed) ──────────────────
+
+  const clearedBucket = {
+    state: 'ready' as const,
+    blockers: [],
+    warnings: [],
+    support: [
+      {
+        code: 'ready_to_claim',
+        severity: 'support' as const,
+        area: 'claim',
+        title: 'Ready to claim',
+        detail: 'This lot can be added to a progress claim.',
+        blocksAction: false,
+      },
+    ],
+  };
+
+  it('orders buckets by severity — an action blocker outranks a warning outranks a clear bucket', () => {
+    const mixed = {
+      ...readiness,
+      // Conformance carries only a warning; claim carries the action blocker.
+      conformance: {
+        state: 'warning',
+        blockers: [],
+        warnings: [
+          {
+            code: 'test_frequency_unknown',
+            severity: 'warning',
+            area: 'test',
+            title: 'Test frequency cannot be checked',
+            detail: 'Record this lot quantity.',
+            blocksAction: false,
+          },
+        ],
+        support: [],
+      },
+      managementPrep: clearedBucket,
+    } as unknown as LotEvidenceReadiness;
+
+    renderPanel({ readiness: mixed });
+
+    const order = screen
+      .getAllByText(/^(Conformance|Claim|Management prep): /)
+      .map((node) => node.textContent);
+    expect(order).toEqual([
+      'Claim: Not ready',
+      'Conformance: Needs attention',
+      'Management prep: Ready',
+    ]);
+  });
+
+  it('compresses a cleared bucket to one line, with its supporting proof one click away', () => {
+    const withClearedClaim = {
+      ...readiness,
+      claim: clearedBucket,
+    } as unknown as LotEvidenceReadiness;
+
+    renderPanel({ readiness: withClearedClaim });
+
+    // The cleared bucket keeps its label and item count on a single summary line...
+    const summary = screen.getByText('Claim: Ready').closest('summary');
+    expect(summary).not.toBeNull();
+    expect(summary?.textContent).toContain('1 supporting item');
+    // ...and the supporting item itself stays reachable inside the disclosure.
+    expect(summary?.closest('details')).toContainElement(screen.getByText('Ready to claim'));
+
+    // The blocking bucket still renders as a full panel with its blocker visible.
+    expect(screen.getByText('ITP checklist incomplete')).toBeInTheDocument();
+  });
+
+  it('renders a cleared bucket with no supporting items as a plain line, not a disclosure', () => {
+    const emptyCleared = {
+      ...readiness,
+      claim: { ...clearedBucket, support: [] },
+    } as unknown as LotEvidenceReadiness;
+
+    renderPanel({ readiness: emptyCleared });
+
+    const label = screen.getByText('Claim: Ready');
+    expect(label.closest('details')).toBeNull();
+    // The old "No blockers found for this part of the workflow." filler is gone.
+    expect(screen.queryByText(/No blockers found/)).not.toBeInTheDocument();
+  });
 });
