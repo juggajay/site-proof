@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react';
-import { MobileDataCard } from '@/components/ui/MobileDataCard';
+import { Link2, Check, Download, QrCode, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { MobileDataCard, type MobileDataCardStatusVariant } from '@/components/ui/MobileDataCard';
 import { Button } from '@/components/ui/button';
 import type { HoldPoint, StatusFilter } from '../types';
 import {
@@ -29,6 +29,7 @@ interface HoldPointsMobileListProps {
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
+  onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
   onClearFilter: () => void;
@@ -55,6 +56,7 @@ export function HoldPointsMobileList({
   onRequestRelease,
   onRecordRelease,
   onChase,
+  onShowQrCode,
   onGenerateEvidence,
   onToggleBatchSelection,
   onClearFilter,
@@ -126,6 +128,7 @@ export function HoldPointsMobileList({
               onRequestRelease={onRequestRelease}
               onRecordRelease={onRecordRelease}
               onChase={onChase}
+              onShowQrCode={onShowQrCode}
               onGenerateEvidence={onGenerateEvidence}
               onToggleBatchSelection={onToggleBatchSelection}
             />
@@ -147,14 +150,16 @@ interface HoldPointMobileCardProps {
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
   onChase: (hp: HoldPoint) => void;
+  onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
 }
 
-const statusVariants: Record<string, 'default' | 'warning' | 'success'> = {
+const statusVariants: Record<string, MobileDataCardStatusVariant> = {
   pending: 'default',
   notified: 'warning',
   released: 'default',
+  rejected: 'error',
 };
 
 function HoldPointMobileCard({
@@ -168,6 +173,7 @@ function HoldPointMobileCard({
   onRequestRelease,
   onRecordRelease,
   onChase,
+  onShowQrCode,
   onGenerateEvidence,
   onToggleBatchSelection,
 }: HoldPointMobileCardProps) {
@@ -274,6 +280,15 @@ function HoldPointMobileCard({
                 variant="outline"
                 size="lg"
                 className="w-full"
+                onClick={() => onShowQrCode(hp)}
+              >
+                <QrCode className="h-4 w-4" />
+                Release by QR code
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
                 disabled={chasingHpId === hp.id}
                 onClick={() => onChase(hp)}
               >
@@ -290,6 +305,12 @@ function HoldPointMobileCard({
                 )}
               </Button>
             </>
+          )}
+
+          {hp.status === 'rejected' && (
+            <Button size="lg" className="w-full" onClick={() => onRequestRelease(hp)}>
+              Request Release Again
+            </Button>
           )}
 
           {hp.status === 'released' && !isVirtual && (

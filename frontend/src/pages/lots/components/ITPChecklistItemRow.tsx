@@ -1,6 +1,6 @@
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
-import type { ITPInstance, ITPAttachment, ITPCompletion } from '../types';
+import type { ITPInstance, ITPAttachment, ITPCompletion, ItpHoldPointState } from '../types';
 import {
   canReviewItpItem,
   getItpVerificationDisplay,
@@ -8,17 +8,7 @@ import {
   type ItpVerificationTone,
 } from './itpChecklistTabHelpers';
 import { ITPChecklistStatusActions } from './ITPChecklistStatusActions';
-
-// I1-core: human-readable hold-point release method for the attribution line.
-const RELEASE_METHOD_LABELS: Record<string, string> = {
-  secure_link: 'secure link',
-  email: 'email',
-  in_person: 'in person',
-  phone: 'phone',
-};
-function formatReleaseMethod(method: string): string {
-  return RELEASE_METHOD_LABELS[method] ?? method.replace(/_/g, ' ');
-}
+import { getHoldPointRowState, ITPChecklistHoldPointState } from './ITPChecklistHoldPointState';
 
 // M15: badge styling per head-contractor verification state.
 const VERIFICATION_TONE_CLASSES: Record<ItpVerificationTone, string> = {
@@ -55,6 +45,12 @@ export interface ITPChecklistItemRowProps {
   // Requirement-first test entry: offered on test-required, unsatisfied items.
   canCreateTests?: boolean;
   onAddTestResult?: (item: { id: string; description: string; testType?: string | null }) => void;
+  // T1: the hold point behind this row, when the item is release-gated. Drives
+  // the requested/rejected/released states and the on-row request action.
+  holdPoint?: ItpHoldPointState;
+  canRequestHoldPointRelease?: boolean;
+  onRequestHoldPointRelease?: (item: { id: string; description: string }) => void;
+  onShowHoldPointQrCode?: (holdPoint: ItpHoldPointState, itemDescription: string) => void;
 }
 
 export function ITPChecklistItemRow({
@@ -76,6 +72,10 @@ export function ITPChecklistItemRow({
   onRequestReject,
   canCreateTests = false,
   onAddTestResult,
+  holdPoint,
+  canRequestHoldPointRelease = false,
+  onRequestHoldPointRelease,
+  onShowHoldPointQrCode,
 }: ITPChecklistItemRowProps) {
   const isAcceptedCompletion = isItpCompletionAcceptedForProgress(completion);
   const isTestRequired = item.evidenceRequired === 'test' || Boolean(item.testType);
@@ -90,7 +90,14 @@ export function ITPChecklistItemRow({
   // it must go through the hold-point release flow (which records attribution).
   // Once released, the completion mirrors that and the row reads as released.
   const isHoldPoint = isReleaseGatedChecklistItem(item);
-  const isReleased = !!completion?.holdPointRelease?.releasedByName;
+  // T1: the row now knows the whole hold-point lifecycle, not just released-or-
+  // not. The completion's release attribution stays as the fallback source, so
+  // surfaces served without the hold-point payload behave exactly as before.
+  const holdPointRowState = getHoldPointRowState(
+    holdPoint,
+    !!completion?.holdPointRelease?.releasedByName,
+  );
+  const isReleased = holdPointRowState === 'released';
   const isHoldPointLocked = isHoldPoint && !isReleased && !isNotApplicable && !isFailed;
   // M15: head-contractor verification field-state (verified / pending / rejected).
   const verification = getItpVerificationDisplay(completion);
@@ -370,16 +377,17 @@ export function ITPChecklistItemRow({
               </button>
             </div>
           )}
-          {isHoldPoint && completion?.holdPointRelease?.releasedByName ? (
-            <p className="text-xs text-muted-foreground mt-1">
-              Released by {completion.holdPointRelease.releasedByName}
-              {completion.holdPointRelease.releasedByOrg &&
-                `, ${completion.holdPointRelease.releasedByOrg}`}
-              {completion.holdPointRelease.releasedAt &&
-                ` on ${new Date(completion.holdPointRelease.releasedAt).toLocaleDateString('en-AU')}`}
-              {completion.holdPointRelease.releaseMethod &&
-                ` via ${formatReleaseMethod(completion.holdPointRelease.releaseMethod)}`}
-            </p>
+          {isHoldPoint && !isNotApplicable && !isFailed ? (
+            <ITPChecklistHoldPointState
+              state={holdPointRowState}
+              holdPoint={holdPoint}
+              releaseAttribution={completion?.holdPointRelease}
+              canRequestRelease={canRequestHoldPointRelease}
+              onRequestRelease={() =>
+                onRequestHoldPointRelease?.({ id: item.id, description: item.description })
+              }
+              onShowQrCode={() => holdPoint && onShowHoldPointQrCode?.(holdPoint, item.description)}
+            />
           ) : completion?.completedBy ? (
             <p className="text-xs text-muted-foreground mt-1">
               Completed by {completion.completedBy.fullName || completion.completedBy.email}

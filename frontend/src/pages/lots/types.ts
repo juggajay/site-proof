@@ -141,6 +141,29 @@ export interface ITPCompletion {
   } | null;
 }
 
+/**
+ * Benchmark T1 — the hold point behind a release-gated checklist item, as the
+ * lot ITP tab needs it: not only "released or not" but whether a release has
+ * been requested, of whom, and when it is due. Served by the internal
+ * (head-contractor) instance view only; the subcontractor portal view gets an
+ * empty list because this carries the authority's notification address.
+ */
+export interface ItpHoldPointState {
+  id: string;
+  itpChecklistItemId: string;
+  /** 'pending' | 'notified' | 'released' | 'rejected' (server-owned). */
+  status: string;
+  scheduledDate: string | null;
+  scheduledTime: string | null;
+  notificationSentAt: string | null;
+  notificationSentTo: string | null;
+  releasedByName: string | null;
+  releasedByOrg: string | null;
+  releaseMethod: string | null;
+  releasedAt: string | null;
+  releaseNotes: string | null;
+}
+
 export interface ITPInstance {
   id: string;
   // Optional: surfaced by the subcontractor portal's instance fetch; unused by
@@ -166,6 +189,7 @@ export interface ITPInstance {
     annexureWarning?: boolean;
   };
   completions: ITPCompletion[];
+  holdPoints?: ItpHoldPointState[];
 }
 
 export interface PhotoDocument {

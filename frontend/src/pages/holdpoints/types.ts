@@ -59,11 +59,17 @@ export interface RequestError {
 }
 
 /**
- * Register filter views. The first four mirror backend hold-point statuses;
+ * Register filter views. All but the last mirror backend hold-point statuses;
  * 'notice-expired' is a derived view — awaiting release ('notified') with the
  * minimum notice window already elapsed (see isNoticeExpired).
  */
-export type StatusFilter = 'all' | 'pending' | 'notified' | 'released' | 'notice-expired';
+export type StatusFilter =
+  | 'all'
+  | 'pending'
+  | 'notified'
+  | 'released'
+  | 'rejected'
+  | 'notice-expired';
 
 /**
  * Sortable register columns. 'lot' is the server order (lot number, then

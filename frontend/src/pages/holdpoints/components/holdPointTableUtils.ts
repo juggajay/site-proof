@@ -80,6 +80,9 @@ export function getStatusBadge(status: string): string {
     pending: 'bg-muted text-muted-foreground',
     notified: 'bg-warning/10 text-warning',
     released: 'bg-muted text-muted-foreground',
+    // The authority said no: the loudest state on the register, because the
+    // lot is blocked until the work is fixed and the release re-requested.
+    rejected: 'bg-destructive/10 text-destructive',
   };
   return styles[status] || styles.pending;
 }
@@ -89,6 +92,7 @@ export function getStatusLabel(status: string): string {
     pending: 'Pending',
     notified: 'Awaiting Release',
     released: 'Released',
+    rejected: 'Rejected',
     // Register-only view (StatusFilter), never a backend hold-point status:
     // awaiting release with the notice window elapsed.
     'notice-expired': 'Notice Expired',

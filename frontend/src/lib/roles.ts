@@ -174,6 +174,20 @@ export const ROLE_GROUPS = {
     ROLES.SITE_MANAGER,
   ] as const,
 
+  // Can request a hold point release and produce a secure release link for a
+  // co-located approver. MUST mirror the backend HP_REQUEST_ROLES in
+  // backend/src/routes/holdpoints/access.ts so the checklist row never offers
+  // an action the API would reject with 403.
+  HOLD_POINT_REQUESTERS: [
+    ROLES.OWNER,
+    ROLES.ADMIN,
+    ROLES.PROJECT_MANAGER,
+    ROLES.SITE_MANAGER,
+    ROLES.SITE_ENGINEER,
+    ROLES.FOREMAN,
+    ROLES.QUALITY_MANAGER,
+  ] as const,
+
   // Subcontractor roles
   SUBCONTRACTOR: [ROLES.SUBCONTRACTOR, ROLES.SUBCONTRACTOR_ADMIN] as const,
 
@@ -213,6 +227,14 @@ export function hasRoleInGroup(
  */
 export function hasCommercialAccess(role: string | undefined | null): boolean {
   return hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL);
+}
+
+/**
+ * Check if the user may request a hold point release (and mint a QR release
+ * link) on this project. The backend enforces the same set.
+ */
+export function canRequestHoldPointRelease(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.HOLD_POINT_REQUESTERS);
 }
 
 /**
