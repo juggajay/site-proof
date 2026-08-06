@@ -4,10 +4,17 @@
  * Covers:
  *   - enableShellFlag / disableShellFlag / isShellFlagSet
  *   - applyShellFlagFromUrl (?shell=v2, ?shell=off)
- *   - useShellV2Enabled gating (flag + mobile + role)
+ *   - useShellV2Enabled / useSubbieShellActive gating (flag + device + role)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
+
+const authMock = vi.hoisted(() => ({ user: null as unknown }));
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ user: authMock.user }),
+}));
+
 import {
   enableShellFlag,
   disableShellFlag,
@@ -19,7 +26,10 @@ import {
   getActiveShellHomePath,
   SUBBIE_SHELL_DEFAULT_ROLES,
   applyShellFlagFromUrl,
+  useShellV2Enabled,
+  useSubbieShellActive,
 } from '../shellFlag';
+import { installMatchMedia, DEVICES } from '@/test/stubs/matchMedia';
 import {
   writeLocalStorageItem,
   readLocalStorageItem,
@@ -235,6 +245,67 @@ describe('active shell home path', () => {
         { isMobile: false, override: null },
       ),
     ).toBeNull();
+  });
+});
+
+describe('shell gate is device-class, not viewport width', () => {
+  const foreman = { role: 'foreman', roleInCompany: 'foreman', companyId: 'company-1' };
+  const subbie = {
+    role: 'subcontractor',
+    roleInCompany: 'subcontractor',
+    companyId: null,
+    hasSubcontractorPortalAccess: true,
+  };
+
+  beforeEach(() => {
+    removeLocalStorageItem(FLAG_KEY);
+  });
+
+  afterEach(() => {
+    removeLocalStorageItem(FLAG_KEY);
+    authMock.user = null;
+    vi.restoreAllMocks();
+  });
+
+  // The bug: at 844x390 the width-only gate flipped false mid-rotation and
+  // swapped the whole tree to the desktop UI, dumping in-progress form state.
+  it('keeps a foreman in the /m shell on a phone in landscape', () => {
+    authMock.user = foreman;
+    installMatchMedia(DEVICES.phoneLandscape);
+    expect(renderHook(() => useShellV2Enabled()).result.current).toBe(true);
+  });
+
+  it('keeps a subcontractor in the /p shell on a phone in landscape', () => {
+    authMock.user = subbie;
+    installMatchMedia(DEVICES.phoneLandscape);
+    expect(renderHook(() => useSubbieShellActive()).result.current).toBe(true);
+  });
+
+  it('still gives a foreman the shell in portrait', () => {
+    authMock.user = foreman;
+    installMatchMedia(DEVICES.phonePortrait);
+    expect(renderHook(() => useShellV2Enabled()).result.current).toBe(true);
+  });
+
+  it('still keeps a foreman out of the shell on a wide desktop', () => {
+    authMock.user = foreman;
+    installMatchMedia(DEVICES.desktopWide);
+    expect(renderHook(() => useShellV2Enabled()).result.current).toBe(false);
+  });
+
+  it('?shell=off still wins on a landscape phone', () => {
+    authMock.user = foreman;
+    disableShellFlag();
+    installMatchMedia(DEVICES.phoneLandscape);
+    expect(renderHook(() => useShellV2Enabled()).result.current).toBe(false);
+  });
+
+  it('getActiveShellHomePath defaults to the device check when isMobile is omitted', () => {
+    // Post-login redirect decides outside React and relies on this fallback.
+    installMatchMedia(DEVICES.phoneLandscape);
+    expect(getActiveShellHomePath(foreman, { override: null })).toBe('/m');
+    installMatchMedia(DEVICES.desktopWide);
+    expect(getActiveShellHomePath(foreman, { override: null })).toBeNull();
   });
 });
 

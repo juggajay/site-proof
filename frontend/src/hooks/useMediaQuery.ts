@@ -25,11 +25,33 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+export const MOBILE_QUERY = '(max-width: 767px)';
+/** Touch-primary device with a short viewport — i.e. a phone held sideways. */
+export const LANDSCAPE_PHONE_QUERY = '(pointer: coarse) and (max-height: 767px)';
+
 /**
  * Hook to detect if viewport is mobile-sized (< 768px)
  */
 export function useIsMobile(): boolean {
-  return useMediaQuery('(max-width: 767px)');
+  return useMediaQuery(MOBILE_QUERY);
+}
+
+/**
+ * Hook to detect a phone-class device in EITHER orientation: the existing
+ * narrow-viewport check, OR a touch-primary device whose viewport is short
+ * (a phone in landscape, ~850x390).
+ *
+ * Additive on purpose — narrow-viewport behaviour (including desktop narrow
+ * windows and width-based E2E) is unchanged; only landscape phones are newly
+ * included. Use this for device-class decisions (which app shell to render);
+ * keep using useIsMobile() for responsive layout, which is about width.
+ */
+export function useIsPhone(): boolean {
+  const narrow = useIsMobile();
+  // ponytail: two queries composed in JS — Media Queries Level 4 `or` inside a
+  // single query string is not supported widely enough to rely on.
+  const landscapePhone = useMediaQuery(LANDSCAPE_PHONE_QUERY);
+  return narrow || landscapePhone;
 }
 
 /**
