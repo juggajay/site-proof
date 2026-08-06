@@ -11,7 +11,11 @@
  *   absent — role default: foreman → ON, everyone else → OFF
  *
  * Active only when (regardless of override):
- *   1. useIsMobile() is true (viewport < 768 px)
+ *   1. useIsPhone() is true — a phone-class DEVICE, not merely a narrow
+ *      viewport: either the viewport is < 768 px wide, or the pointer is
+ *      coarse and the viewport is < 768 px tall (a phone in landscape).
+ *      Keying on width alone dumped a rotating phone into the desktop UI
+ *      mid-form; the device class does not change when the phone turns.
  *   2. The user is authenticated AND has an internal (non-subcontractor) role
  *
  * Design consequence (foreman profile §Design consequences):
@@ -20,7 +24,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useIsPhone, MOBILE_QUERY, LANDSCAPE_PHONE_QUERY } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/lib/auth';
 import {
   getCompanyRole,
@@ -31,7 +35,6 @@ import { isSubcontractorRole } from '@/lib/roles';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 
 const FLAG_KEY = 'siteproof.shell.v2';
-const MOBILE_QUERY = '(max-width: 767px)';
 type ShellUser = Parameters<typeof getCompanyRole>[0];
 
 /** Roles that get the shell with no flag set. */
@@ -139,11 +142,18 @@ export function isSubbieShellActiveForRole(
   return SUBBIE_SHELL_DEFAULT_ROLES.has(role);
 }
 
-function isMobileViewport(): boolean {
+/**
+ * Non-hook mirror of useIsPhone() for the callers that decide outside React
+ * (post-login redirect). Must stay in step with the hook — a foreman logging
+ * in on a landscape phone has to land on /m, same as one who rotates there.
+ */
+function isPhoneDevice(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false;
   }
-  return window.matchMedia(MOBILE_QUERY).matches;
+  return (
+    window.matchMedia(MOBILE_QUERY).matches || window.matchMedia(LANDSCAPE_PHONE_QUERY).matches
+  );
 }
 
 export function isForemanShellActiveForUser(user: ShellUser, override: ShellOverride): boolean {
@@ -157,7 +167,7 @@ export function getActiveShellHomePath(
   user: ShellUser,
   options: { isMobile?: boolean; override?: ShellOverride } = {},
 ): '/m' | '/p' | null {
-  const isMobile = options.isMobile ?? isMobileViewport();
+  const isMobile = options.isMobile ?? isPhoneDevice();
   if (!isMobile || !user) return null;
 
   const override = options.override ?? getShellOverride();
@@ -170,14 +180,14 @@ export function getActiveShellHomePath(
 
 /**
  * Returns true when the shell should render:
- *  - viewport is mobile-width
+ *  - the device is phone-class (either orientation)
  *  - authenticated internal (non-subcontractor) role
  *  - and: forced on, OR (no override AND the role defaults to the shell)
  *
  * Also reads ?shell= on mount so the URL param is honoured on first render.
  */
 export function useShellV2Enabled(): boolean {
-  const isMobile = useIsMobile();
+  const isMobile = useIsPhone();
   const { user } = useAuth();
 
   // Sync the URL param on mount, then track the override reactively so a
@@ -197,7 +207,7 @@ export function useShellV2Enabled(): boolean {
 
 /**
  * Returns true when the SUBBIE shell (/p) should render:
- *  - viewport is mobile-width
+ *  - the device is phone-class (either orientation)
  *  - authenticated subcontractor portal role
  *  - and: forced on, OR (no override AND the role defaults to the subbie shell)
  *
@@ -206,7 +216,7 @@ export function useShellV2Enabled(): boolean {
  * without a full reload.
  */
 export function useSubbieShellActive(): boolean {
-  const isMobile = useIsMobile();
+  const isMobile = useIsPhone();
   const { user } = useAuth();
 
   const [override, setOverride] = useState<ShellOverride>(() => {
