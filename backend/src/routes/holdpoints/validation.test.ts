@@ -186,3 +186,70 @@ describe('hold point release signature validation (pure, DB-free)', () => {
     ).toBe(true);
   });
 });
+
+describe('public release decision verbs (benchmark T3, pure, DB-free)', () => {
+  const validSignature = 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=';
+  const base = {
+    releasedByName: 'External Superintendent',
+    signatureDataUrl: validSignature,
+  };
+  const longEnoughComment = 'Subject to the 28-day break being retested before overlay.';
+
+  it('defaults to a plain release so an existing client is unchanged', () => {
+    const result = publicReleaseSchema.safeParse(base);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.decision).toBe('release');
+  });
+
+  it('lets a plain release carry no comment at all', () => {
+    expect(publicReleaseSchema.safeParse({ ...base, decision: 'release' }).success).toBe(true);
+  });
+
+  it('requires a 25-character comment on a conditional release', () => {
+    expect(
+      publicReleaseSchema.safeParse({
+        ...base,
+        decision: 'release_with_conditions',
+        releaseNotes: 'too short',
+      }).success,
+    ).toBe(false);
+
+    expect(
+      publicReleaseSchema.safeParse({
+        ...base,
+        decision: 'release_with_conditions',
+        releaseNotes: longEnoughComment,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('requires a 25-character reason on a rejection, and says so', () => {
+    const result = publicReleaseSchema.safeParse({ ...base, decision: 'reject' });
+    expect(result.success).toBe(false);
+    expect(result.success === false && result.error.issues[0].message).toContain(
+      'rejection reason of at least 25 characters',
+    );
+
+    expect(
+      publicReleaseSchema.safeParse({
+        ...base,
+        decision: 'reject',
+        releaseNotes: 'Compaction results do not meet the specified 95% RDD.',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('measures the comment minimum after trimming, so whitespace cannot pad it', () => {
+    expect(
+      publicReleaseSchema.safeParse({
+        ...base,
+        decision: 'reject',
+        releaseNotes: `  short  ${' '.repeat(40)}`,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an unknown verb rather than falling back to releasing', () => {
+    expect(publicReleaseSchema.safeParse({ ...base, decision: 'raise_ncr' }).success).toBe(false);
+  });
+});

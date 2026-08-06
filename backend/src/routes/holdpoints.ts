@@ -12,10 +12,14 @@ import {
 import { holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
 import { requireSuperintendentApprovalRecipients } from './holdpoints/superintendentRecipients.js';
 import { buildPublicHoldPointEvidencePackageResponse } from './holdpoints/evidencePackage.js';
-import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionResponses.js';
+import {
+  buildPublicHoldPointRejectedResponse,
+  buildPublicHoldPointReleasedResponse,
+} from './holdpoints/actionResponses.js';
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
+import { holdPointReleaseLinkRouter } from './holdpoints/releaseLinkRoutes.js';
 import { holdPointPublicBatchRouter } from './holdpoints/publicBatchRoutes.js';
 import { holdPointUnsubscribeRouter } from './holdpoints/unsubscribeRoutes.js';
 import { recordHoldPointLinkOpen } from '../lib/holdPointMailConsent.js';
@@ -28,11 +32,13 @@ import {
 } from './holdpoints/publicReleasePayload.js';
 import {
   buildHoldPointPublicReleaseAuditChanges,
+  executeHoldPointTokenRejection,
   executeHoldPointTokenRelease,
   rejectTerminalPublicHoldPointRelease,
+  runHoldPointRejectionPostCommit,
   runHoldPointReleasePostCommit,
 } from './holdpoints/publicReleaseExecution.js';
-import { AuditAction } from '../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
 import { recordDecision } from '../lib/readiness/recordDecision.js';
 import {
   evaluateHoldPointReleaseReadiness,
@@ -61,6 +67,12 @@ holdpointsRouter.use(holdPointRequestReleaseRouter);
 // mounted after the request-release route and before the public token-release
 // routes so route order and per-route authentication are unchanged.
 holdpointsRouter.use(holdPointActionRouter);
+
+// Benchmark T2 — POST /:id/release-link mints a short-lived secure link for a
+// co-located approver to scan. Authenticated and role-gated like the other
+// mutation routes; mounted after them and before the public token routes so
+// its /:id path cannot shadow /public/:token.
+holdpointsRouter.use(holdPointReleaseLinkRouter);
 
 // ============================================================================
 // PUBLIC ENDPOINTS - No authentication required (Feature #23)
@@ -151,7 +163,13 @@ holdpointsRouter.post(
       throw AppError.fromZodError(parseResult.error);
     }
 
-    const { releasedByName, releasedByOrg, releaseNotes, signatureDataUrl } = parseResult.data;
+    const {
+      releasedByName,
+      releasedByOrg,
+      releaseNotes,
+      signatureDataUrl,
+      decision: approverDecision,
+    } = parseResult.data;
 
     // Find the token and validate it
     const releaseToken = await prisma.holdPointReleaseToken.findFirst({
@@ -212,6 +230,54 @@ holdpointsRouter.post(
         },
       ],
     );
+
+    // Benchmark T3 — the approver said no. Handled before the release machinery
+    // because nothing about a rejection is a release: no readiness decision is
+    // recorded (nothing became conformant), no ITP completion is reconciled and
+    // no release column is written. The token claim, the status flip and the
+    // audit row still commit as one transaction.
+    if (approverDecision === 'reject') {
+      const rejectedAt = new Date();
+      const { holdPoint } = await prisma.$transaction(async (tx) => {
+        const result = await executeHoldPointTokenRejection(tx, {
+          tokenId: releaseToken.id,
+          holdPointId: releaseToken.holdPoint.id,
+          rejectedAt,
+          effectiveRejectedByName: effectiveReleasedByName,
+          rejectedByOrg: releasedByOrg,
+          rejectionReason: releaseNotes!,
+          signatureDataUrl,
+        });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId: releaseToken.holdPoint.lot.projectId,
+          entityType: 'hold_point',
+          entityId: releaseToken.holdPoint.id,
+          action: AuditAction.HP_PUBLIC_REJECTED,
+          changes: {
+            rejectedByName: effectiveReleasedByName,
+            submittedRejectedByName: releasedByName,
+            rejectedByOrg: releasedByOrg,
+            // Redacted by sanitizeAuditChanges' /token/i pattern — see
+            // buildHoldPointPublicReleaseAuditChanges for why the key matters.
+            tokenRecipient: releaseToken.recipientEmail,
+            tokenRecipientName: releaseToken.recipientName,
+          },
+          req,
+        });
+
+        return result;
+      });
+
+      await runHoldPointRejectionPostCommit({
+        holdPoint,
+        projectId: releaseToken.holdPoint.lot.projectId,
+        rejectionReason: releaseNotes!,
+      });
+
+      res.json(buildPublicHoldPointRejectedResponse(holdPoint));
+      return;
+    }
 
     const releasedAt = new Date();
     // Wave C1.2 (§5.2, §3.4.3 `[C1R-B7]`): the sufficiency advisory is resolved

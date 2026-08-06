@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, WifiOff, CloudOff, Printer, Unlink } from 'lucide-react';
+import { RefreshCw, WifiOff, CloudOff, Unlink } from 'lucide-react';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { findFirstIncompleteItpCategory } from '@/components/foreman/mobileItpChecklistHelpers';
@@ -352,15 +352,6 @@ export function ITPChecklistTab({
                   <span>Unassign</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors print:hidden"
-                title="Print ITP Checklist"
-              >
-                <Printer className="h-4 w-4" />
-                <span>Print Checklist</span>
-              </button>
             </div>
           </div>
           {/* Wave G G2 §2.2(a),(b): what this lot was inspected against. Read

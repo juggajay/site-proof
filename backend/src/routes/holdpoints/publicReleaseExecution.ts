@@ -14,6 +14,7 @@ import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 import {
   buildHoldPointReleaseEmailNotification,
   buildHoldPointReleaseNotifications,
+  buildHoldPointRejectionNotifications,
 } from './releaseNotifications.js';
 import {
   buildHoldPointReleaseConfirmationEmail,
@@ -197,6 +198,109 @@ export async function executeHoldPointTokenRelease(
   return { holdPoint: updatedHoldPoint, releasedItpInstanceId };
 }
 
+export interface ExecuteHoldPointTokenRejectionParams {
+  tokenId: string;
+  holdPointId: string;
+  rejectedAt: Date;
+  /** The token recipient's identity — the same lock the release path applies. */
+  effectiveRejectedByName: string;
+  rejectedByOrg?: string | null;
+  rejectionReason: string;
+  signatureDataUrl?: string | null;
+}
+
+// Benchmark T3 — the "no" door. Deliberately NOT a mirror of the release:
+//
+//   * the hold point moves to `rejected`, which is neither released nor
+//     terminal, so the lot stays blocked and the contractor may fix the work
+//     and request release again (the re-request guards exclude only
+//     released/completed);
+//   * NO release column is written. `releasedByName` / `releasedAt` /
+//     `releaseSignatureUrl` on a rejected hold point would make every evidence
+//     document that prints "Released by ..." state something untrue. Who
+//     rejected, their signature and their comment are recorded on the TOKEN row
+//     (the record of what this link was used to do) and in the audit row;
+//   * the ITP completion is untouched — a rejected hold point has not satisfied
+//     its checklist item.
+export async function executeHoldPointTokenRejection(
+  tx: Prisma.TransactionClient,
+  {
+    tokenId,
+    holdPointId,
+    rejectedAt,
+    effectiveRejectedByName,
+    rejectedByOrg,
+    rejectionReason,
+    signatureDataUrl,
+  }: ExecuteHoldPointTokenRejectionParams,
+): Promise<{ holdPoint: ReleasedHoldPoint }> {
+  const tokenUpdate = await tx.holdPointReleaseToken.updateMany({
+    where: {
+      id: tokenId,
+      usedAt: null,
+      expiresAt: { gt: rejectedAt },
+    },
+    data: {
+      usedAt: rejectedAt,
+      releasedByName: effectiveRejectedByName,
+      releasedByOrg: rejectedByOrg || null,
+      releaseSignatureUrl: signatureDataUrl || null,
+      releaseNotes: rejectionReason,
+    },
+  });
+
+  if (tokenUpdate.count !== 1) {
+    const currentToken = await tx.holdPointReleaseToken.findUnique({
+      where: { id: tokenId },
+      select: { usedAt: true, expiresAt: true },
+    });
+
+    if (!currentToken || currentToken.expiresAt <= rejectedAt) {
+      throw new AppError(
+        410,
+        'This secure release link has expired. Please contact the site team for a new link.',
+        'TOKEN_EXPIRED',
+      );
+    }
+
+    throw new AppError(410, 'This secure link has already been used.', 'TOKEN_USED');
+  }
+
+  const holdPointUpdate = await tx.holdPoint.updateMany({
+    where: {
+      id: holdPointId,
+      status: { notIn: ['released', 'completed'] },
+    },
+    data: {
+      status: 'rejected',
+      releaseNotes: rejectionReason,
+    },
+  });
+
+  if (holdPointUpdate.count !== 1) {
+    const currentHoldPoint = await tx.holdPoint.findUnique({
+      where: { id: holdPointId },
+      select: { status: true },
+    });
+    rejectTerminalPublicHoldPointRelease(currentHoldPoint?.status);
+    throw AppError.badRequest('This hold point can no longer be actioned.');
+  }
+
+  const updatedHoldPoint = await tx.holdPoint.findUnique({
+    where: { id: holdPointId },
+    include: {
+      lot: true,
+      itpChecklistItem: true,
+    },
+  });
+
+  if (!updatedHoldPoint) {
+    throw AppError.notFound('Hold point');
+  }
+
+  return { holdPoint: updatedHoldPoint };
+}
+
 export interface HoldPointReleaseProject {
   id: string;
   name: string;
@@ -239,6 +343,48 @@ export function buildHoldPointPublicReleaseAuditChanges({
     tokenRecipient: tokenRecipientEmail,
     tokenRecipientName,
   };
+}
+
+export interface RunHoldPointRejectionPostCommitParams {
+  holdPoint: ReleasedHoldPoint;
+  projectId: string;
+  rejectionReason: string;
+}
+
+// Benchmark T3 — after a rejection commits, the crew has to find out. In-app
+// only, and deliberately NOT behind the project's hold-point-release
+// notification toggle: that switch governs a status broadcast ("it was
+// released"), whereas this is a work item ("it was sent back, here is why").
+// Swallows its own errors so a notification failure never surfaces as a failed
+// rejection that has, in fact, already committed.
+export async function runHoldPointRejectionPostCommit({
+  holdPoint,
+  projectId,
+  rejectionReason,
+}: RunHoldPointRejectionPostCommitParams): Promise<void> {
+  try {
+    const projectUsers = await prisma.projectUser.findMany({
+      where: { projectId, status: 'active' },
+      select: { userId: true },
+    });
+
+    const notifications = buildHoldPointRejectionNotifications(projectUsers, {
+      projectId,
+      holdPointId: holdPoint.id,
+      holdPointDescription: holdPoint.description,
+      lotNumber: holdPoint.lot.lotNumber,
+      rejectionReason,
+    });
+
+    if (notifications.length > 0) {
+      await prisma.notification.createMany({ data: notifications });
+    }
+  } catch (notificationError) {
+    logError('[HP Secure Release] Failed to notify the team of a hold point rejection:', {
+      holdPointId: holdPoint.id,
+      error: notificationError instanceof Error ? notificationError.message : notificationError,
+    });
+  }
 }
 
 export interface RunHoldPointReleasePostCommitParams {

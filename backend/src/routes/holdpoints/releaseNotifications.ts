@@ -76,6 +76,33 @@ export function buildHoldPointReleaseNotifications(
   }));
 }
 
+// Benchmark T3 — the "no" outcome. A rejection is a work item, not a status
+// broadcast: the crew has to learn that the authority sent the work back and
+// why, so the in-app record carries the reason inline.
+export type HoldPointRejectionNotificationContext = {
+  projectId: string;
+  holdPointId: string;
+  holdPointDescription: string | null;
+  lotNumber: string;
+  rejectionReason: string;
+};
+
+export function buildHoldPointRejectionNotifications(
+  recipients: HoldPointReleaseNotificationRecipient[],
+  context: HoldPointRejectionNotificationContext,
+): Prisma.NotificationCreateManyInput[] {
+  const message = `Hold point "${context.holdPointDescription}" on lot ${context.lotNumber} was NOT released. Reason: ${context.rejectionReason}`;
+
+  return recipients.map((recipient) => ({
+    userId: recipient.userId,
+    projectId: context.projectId,
+    type: 'hold_point_rejected',
+    title: 'Hold Point Rejected',
+    message,
+    linkUrl: buildProjectEntityLink('hold_point', context.holdPointId, context.projectId),
+  }));
+}
+
 // Build the immediate email payload passed to sendNotificationIfEnabled. The
 // payload is the same for every recipient, so the route builds it once.
 export function buildHoldPointReleaseEmailNotification(
