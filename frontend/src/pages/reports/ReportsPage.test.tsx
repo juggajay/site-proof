@@ -261,18 +261,12 @@ describe('ReportsPage stale report handling', () => {
   });
 });
 
-describe('ReportsPage print action', () => {
+describe('ReportsPage print action (retired)', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
   });
 
-  it('shows a print/save PDF action when a report has loaded', async () => {
-    const printMock = vi.fn();
-    Object.defineProperty(window, 'print', {
-      configurable: true,
-      value: printMock,
-    });
-
+  it('offers no screen-print action once a report has loaded', async () => {
     apiFetchMock.mockImplementation((path) => {
       if (path === '/api/company') {
         return Promise.resolve({
@@ -297,8 +291,9 @@ describe('ReportsPage print action', () => {
 
     expect(await screen.findByText('LOT-STALE-001')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
-    expect(printMock).toHaveBeenCalledTimes(1);
+    // Screen-print is retired product-wide; paper comes from generated PDFs.
+    expect(screen.queryByRole('button', { name: 'Print / Save PDF' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
   });
 
   it('does not send a referrer when rendering an external company logo in the print header', async () => {

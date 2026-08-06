@@ -22,7 +22,6 @@ function renderHeader(overrides: Overrides = {}) {
     viewMode: 'list',
     onToggleViewMode: vi.fn(),
     onOpenExport: vi.fn(),
-    onPrintRegister: vi.fn(),
     onOpenImport: vi.fn(),
     onOpenBulkWizard: vi.fn(),
     onOpenCreate: vi.fn(),
@@ -46,15 +45,17 @@ describe('LotsPageHeader (desktop)', () => {
     renderHeader();
 
     expect(screen.getByRole('button', { name: 'Create Lot' })).toBeInTheDocument();
-    // The four register tools must not sit beside it at equal weight.
+    // The register tools must not sit beside it at equal weight.
     expect(screen.queryByRole('button', { name: 'Export CSV' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Bulk Create Lots' })).not.toBeInTheDocument();
 
     openRegisterMenu();
 
-    for (const name of ['Export CSV', 'Print Register', 'Import Register', 'Bulk Create Lots']) {
+    for (const name of ['Export CSV', 'Import Register', 'Bulk Create Lots']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
+    // Screen-print is retired product-wide; paper comes from generated PDFs.
+    expect(screen.queryByRole('menuitem', { name: 'Print Register' })).not.toBeInTheDocument();
   });
 
   it('fires each register tool from the menu', () => {
@@ -65,10 +66,6 @@ describe('LotsPageHeader (desktop)', () => {
     expect(props.onOpenExport).toHaveBeenCalled();
 
     openRegisterMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Print Register' }));
-    expect(props.onPrintRegister).toHaveBeenCalled();
-
-    openRegisterMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Import Register' }));
     expect(props.onOpenImport).toHaveBeenCalled();
 
@@ -77,13 +74,12 @@ describe('LotsPageHeader (desktop)', () => {
     expect(props.onOpenBulkWizard).toHaveBeenCalled();
   });
 
-  it('hides the import tools from subcontractors but keeps export and print', () => {
+  it('hides the import tools from subcontractors but keeps export', () => {
     renderHeader({ isSubcontractor: true });
 
     openRegisterMenu();
 
     expect(screen.getByRole('menuitem', { name: 'Export CSV' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Print Register' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Import Register' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create Lot' })).not.toBeInTheDocument();
   });
