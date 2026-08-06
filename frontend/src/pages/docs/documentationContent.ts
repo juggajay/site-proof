@@ -16,6 +16,7 @@ import {
   MapPin,
   Package,
   Plug,
+  Rocket,
   Sparkles,
   TestTube,
   Truck,
@@ -77,6 +78,58 @@ export const workflowSteps: DocumentationStep[] = [
 ];
 
 export const documentationSections: DocumentationSection[] = [
+  {
+    id: 'getting-started',
+    title: 'Getting started: your first project',
+    summary:
+      'The whole path from a new account to a finished job — set up, inspect, claim, and hand over.',
+    icon: Rocket,
+    route: '/projects',
+    routeLabel: 'Open projects',
+    steps: [
+      {
+        title: 'Create the project',
+        description:
+          "Add the project workspace with its number, client and state, then put your team on it from the project's Users page — field crew as foremen, office staff as project or quality managers. Someone who has never used CIVOS is invited to the company first, under Company Settings, Team Members.",
+      },
+      {
+        title: 'Bring in the survey',
+        description:
+          "Import the surveyor's alignment (LandXML or DXF) under Control Lines, and register the drawings under Plan Sheets — a GeoPDF registers itself; any other PDF is placed by matching control points to their grid coordinates.",
+      },
+      {
+        title: 'Create lots',
+        description:
+          'Use Bulk Create Lots to generate lots along a control line from chainage and offsets, assigning an ITP template to every lot in the same pass. Switch the register to Map to see the job on satellite.',
+      },
+      {
+        title: 'Run the quality loop',
+        description:
+          'Complete ITP checks with photo evidence, request hold point releases — the superintendent releases from a secure email link — and upload lab certificates, which CIVOS reads into test results for your review.',
+      },
+      {
+        title: 'Keep the daily record',
+        description:
+          'The diary captures weather, crew, plant and work, with deliveries logged from the phone. The foreman shell is phone-first, and field capture keeps working offline.',
+      },
+      {
+        title: 'Bring subbies on',
+        description:
+          'Invite subcontractor companies from the Subcontractors page. They work in their own portal, and their dockets flow to your Docket Approvals queue.',
+      },
+      {
+        title: 'Claim and hand over',
+        description:
+          'Conform finished lots, build progress claims from them and generate an evidence package to send with each one, then finish with per-lot evidence folios and the project handover export.',
+      },
+    ],
+    tips: [
+      'Lot budgets must be set before a lot can be claimed — add them early.',
+      'The Evidence Readiness panel on every lot lists what still blocks conformance or claiming. When in doubt, start there.',
+      "Once work starts moving, the map's Past view replays the job as it was on any date.",
+      'Ask Clancy at any step — it can explain any module and take you to the right page.',
+    ],
+  },
   {
     id: 'projects-lots',
     title: 'Projects and lots',
