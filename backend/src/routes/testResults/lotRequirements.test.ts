@@ -161,6 +161,11 @@ describe('ruleset status is exposed, not asserted away', () => {
       evaluation({ ruleset: { id: 'pack.v1', status: 'draft', revalidationLapsed: true } }),
     );
 
-    expect(summary.ruleset).toEqual({ id: 'pack.v1', status: 'draft', revalidationLapsed: true });
+    expect(summary.ruleset).toEqual({
+      id: 'pack.v1',
+      status: 'draft',
+      revalidationLapsed: true,
+      scaleLabel: null,
+    });
   });
 });

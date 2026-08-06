@@ -17,6 +17,8 @@ export const queryKeys = {
   projectCloseoutReadiness: (projectId: string) =>
     ['project-closeout-readiness', projectId] as const,
   lotReadiness: (id: string) => ['lot-readiness', id] as const,
+  // The lot's per-rule test requirement summary ("N of M passing").
+  lotTestRequirements: (lotId: string) => ['lot-test-requirements', lotId] as const,
   // Wave D `D1b` — issued evidence folios for a lot.
   lotFolios: (lotId: string) => ['lot-folios', lotId] as const,
   // Wave C5-c — the lot's survey records (history included) and its deliveries.

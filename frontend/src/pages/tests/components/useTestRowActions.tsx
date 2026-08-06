@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { FileText, FlaskConical, Link2, Printer, Sparkles, XCircle } from 'lucide-react';
+import { Download, FileText, FlaskConical, Link2, Printer, Sparkles, XCircle } from 'lucide-react';
 import type { RowAction } from '@/components/ui/RowActions';
 import type { TestResult } from '../types';
 import {
@@ -15,6 +15,7 @@ import {
   canGenerateTestResultCertificate,
   generateTestResultCertificate,
 } from '../testResultCertificate';
+import { downloadTestRequestForm } from '../testRequestForm';
 import { useAttachCertificate } from './useAttachCertificate';
 
 interface UseTestRowActionsOptions {
@@ -93,6 +94,18 @@ export function useTestRowActions({
       onSelect: () => onUpdateStatus(test.id, AT_LAB_STATUS),
     });
   }
+
+  // The printable lab request form. Document generation only — it changes no
+  // status and stamps nothing, which is why it sits apart from "Send to lab".
+  actions.push({
+    key: 'download-request-form',
+    label: 'Download request form',
+    icon: <Download className="h-4 w-4" />,
+    title: 'Download the printable lab request form for this test',
+    onSelect: () => {
+      void downloadTestRequestForm(test);
+    },
+  });
 
   // Feature B2: attach/replace a certificate so a manual test can reach 'verified'.
   if (test.status !== 'verified') {

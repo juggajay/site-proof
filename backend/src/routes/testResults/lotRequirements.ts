@@ -68,7 +68,18 @@ export interface LotTestRequirements {
   state: SufficiencyState;
   /** `off` means the project turned the check off — the caller renders nothing. */
   mode: SufficiencyMode;
-  ruleset: { id: string; status: string; revalidationLapsed: boolean } | null;
+  ruleset: {
+    id: string;
+    status: string;
+    revalidationLapsed: boolean;
+    /**
+     * What this authority CALLS the thing `Lot.testScale` carries — VicRoads
+     * regiments by "Compaction Scale A/B/C", TfNSW Q6 by specified relative
+     * compaction. Null = the shipped default wording stands. Carried so the
+     * `scale_not_selected` help text names the control the user must fill in.
+     */
+    scaleLabel: string | null;
+  } | null;
   rules: LotTestRequirementRule[];
   /** Lot-level causes, populated only when NO rule resolved. */
   unknownCauses: UnknownCause[];
@@ -123,6 +134,7 @@ export function toLotTestRequirements(
           id: sufficiency.ruleset.id,
           status: sufficiency.ruleset.status,
           revalidationLapsed: sufficiency.ruleset.revalidationLapsed === true,
+          scaleLabel: sufficiency.ruleset.scaleLabel ?? null,
         }
       : null,
     rules: sufficiency.rules.map(toRequirementRule),

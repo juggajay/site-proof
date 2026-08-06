@@ -186,6 +186,7 @@ describe('GET /lots/:lotId/requirements', () => {
       id: 'vicroads-204.v2',
       status: 'confirmed',
       revalidationLapsed: false,
+      scaleLabel: null,
     });
     expect(body.rules).toEqual([
       expect.objectContaining({
