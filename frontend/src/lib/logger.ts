@@ -15,8 +15,30 @@ export function devWarn(...args: unknown[]) {
   }
 }
 
+// A document that navigates away cancels its in-flight fetches, and each one
+// rejects with `TypeError: Failed to fetch` (net::ERR_ABORTED) inside whichever
+// catch block was waiting on it. That is the browser doing its job, not a
+// failure: nothing logged once the page is being torn down can be read or acted
+// on. Track the unload so those rejections stop masquerading as errors.
+let pageUnloading = false;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    pageUnloading = true;
+  });
+  // A bfcache restore reuses the same document, so the flag has to clear.
+  window.addEventListener('pageshow', () => {
+    pageUnloading = false;
+  });
+}
+
+/** True once the current document has begun unloading. */
+export function isPageUnloading(): boolean {
+  return pageUnloading;
+}
+
 export function logError(message: string, error?: unknown) {
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && !pageUnloading) {
     if (error !== undefined) {
       console.error(message, error);
     } else {
