@@ -116,6 +116,39 @@ async function mockHeaderApis(page: Page) {
       return;
     }
 
+    // The triaged, repeat-collapsed read model the page and the bell dropdown
+    // use. These three fixtures point at three different entities, so each is
+    // its own group of one — mirroring the real backend's grouping.
+    if (url.pathname === '/api/notifications/grouped' && method === 'GET') {
+      const category = (notification: (typeof notifications)[number]) => {
+        if (notification.isRead) return 'read';
+        return notification.type === 'alert_overdue_ncr' || notification.type === 'mention'
+          ? 'needs_action'
+          : 'fyi';
+      };
+      const rank = { needs_action: 0, fyi: 1, read: 2 } as const;
+
+      await json({
+        groups: notifications
+          .map((notification) => ({
+            key: `${notification.type} ${notification.id}`,
+            type: notification.type,
+            category: category(notification),
+            notifications: [notification],
+          }))
+          .sort((a, b) => rank[a.category] - rank[b.category]),
+        unreadCount: notifications.filter((notification) => !notification.isRead).length,
+        windowSize: 200,
+        truncated: false,
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications/unread-count' && method === 'GET') {
+      await json({ count: notifications.filter((notification) => !notification.isRead).length });
+      return;
+    }
+
     const readMatch = /^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname);
     if (readMatch && method === 'PUT') {
       const notification = notifications.find((item) => item.id === readMatch[1]);
@@ -172,7 +205,12 @@ test.describe('Header notifications', () => {
       )
       .toEqual({ hasNotificationMenuText: false, hasUserMenuText: false });
 
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    // The bell opens a triaged dropdown; needs-action groups come first.
+    await page.getByRole('button', { name: 'Notifications' }).click();
+    const bellMenu = page.getByRole('menu', { name: 'Recent notifications' });
+    await expect(bellMenu.getByRole('menuitem').first()).toContainText('Overdue NCR');
+
+    await page.getByRole('link', { name: 'View all notifications' }).click();
     await expect(page).toHaveURL('/notifications');
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
 
@@ -184,7 +222,7 @@ test.describe('Header notifications', () => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await page.goto('/notifications');
 
     await page.getByRole('button', { name: 'Alerts' }).click();
     await expect(page.getByRole('button', { name: /Overdue NCR/ })).toBeVisible();
@@ -209,7 +247,7 @@ test.describe('Header notifications', () => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('link', { name: 'Notifications' }).click();
+    await page.goto('/notifications');
     await page.getByRole('button', { name: /External destination/ }).click();
 
     await expect(page).toHaveURL('/notifications');
