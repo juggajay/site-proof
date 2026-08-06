@@ -810,6 +810,42 @@ test.describe('Lot detail ITP workflow', () => {
     await expect(page.getByRole('button', { name: /E2E Earthworks ITP/ })).toBeVisible();
   });
 
+  /**
+   * The whole first screen of the highest-traffic page used to be preamble: QR +
+   * title + four stat cards mostly showing em-dashes + a created/updated line +
+   * an empty subcontractors card + three equal readiness panels, which put the
+   * tab strip at y≈866 of a 900px viewport. Where the strip lands is a layout
+   * property, so it is measured in a real browser rather than inferred from
+   * class names.
+   */
+  test('keeps the workspace tabs and their content above the fold at 1440x900', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockLotDetailApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    const strip = await page
+      .getByRole('tablist', { name: 'Lot detail tabs' })
+      .boundingBox({ timeout: 10_000 });
+    const panel = await page.getByTestId('lot-tab-panel').boundingBox({ timeout: 10_000 });
+    if (!strip || !panel) throw new Error('tab strip or panel not laid out');
+
+    // Reported so a regression says how far it slipped, not just that it did.
+    console.log(
+      `fold@1440x900: tab strip top=${Math.round(strip.y)} bottom=${Math.round(strip.y + strip.height)}, panel top=${Math.round(panel.y)}`,
+    );
+
+    // Nothing here may depend on the user having scrolled first.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(strip.y + strip.height).toBeLessThan(900);
+    // The default tab's content has to be visible too, not just its label —
+    // 120px is roughly the first checklist row.
+    expect(panel.y + 120).toBeLessThan(900);
+  });
+
   test('shows all five workspace tabs on-screen at 390px with 48px targets', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockLotDetailApi(page);
@@ -968,14 +1004,10 @@ test.describe('Lot detail ITP workflow', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
 
-    // The legacy header "Assign Subcontractor" button was retired; assignment now
-    // lives in the lot header's "Assigned Subcontractors" section via its Add button.
-    const assignmentsSection = page
-      .locator('.rounded-lg.border')
-      .filter({ hasText: 'Assigned Subcontractors' })
-      .first();
-    await expect(assignmentsSection.getByText('No subcontractors assigned')).toBeVisible();
-    await assignmentsSection.getByRole('button', { name: 'Add' }).click();
+    // With nothing assigned there is no card to hold an empty state — the whole
+    // section collapses to the assign affordance itself.
+    await expect(page.getByText('Assigned Subcontractors')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Assign a subcontractor' }).click();
 
     const modal = page.getByRole('dialog').filter({ hasText: 'Subcontractor Company' });
     await expect(modal.getByRole('heading', { name: /Assign Subcontractor/ })).toBeVisible();
