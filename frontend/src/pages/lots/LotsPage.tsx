@@ -36,11 +36,7 @@ import {
 } from './components/lotRegisterQueue';
 import { LotMobileList } from './components/LotMobileList';
 import { LotsPageModals } from './components/LotsPageModals';
-import {
-  LotTableSkeleton,
-  LotsLoadErrorBanner,
-  LotsPrintHeader,
-} from './components/LotsPageChrome';
+import { LotTableSkeleton, LotsLoadErrorBanner } from './components/LotsPageChrome';
 import { useGoverningRuleset } from '@/hooks/useGoverningRuleset';
 
 // Extracted hooks
@@ -229,8 +225,6 @@ export function LotsPage() {
   // =====================
   return (
     <div className="space-y-6 p-6">
-      <LotsPrintHeader projectName={projectName} />
-
       {/* Page Header */}
       <LotsPageHeader
         isMobile={isMobile}

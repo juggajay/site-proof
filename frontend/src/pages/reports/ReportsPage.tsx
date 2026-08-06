@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { apiFetch, apiUrl } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { Lock, Mail, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
@@ -19,9 +19,6 @@ import { ROLE_GROUPS, hasRoleInGroup, isAdminRole } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { useDateFormat } from '@/lib/dateFormat';
-import { useTimezone } from '@/lib/timezone';
-import { formatReportDateTime } from './reportFormatting';
 
 // Lazy-loaded tab components
 const LotStatusTab = lazy(() =>
@@ -212,8 +209,6 @@ interface ProjectNameResponse {
 export function ReportsPage() {
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { dateFormat } = useDateFormat();
-  const { timezone } = useTimezone();
   const { user } = useAuth();
   const requestedTab = searchParams.get('tab') || 'lot-status';
   const activeTab: ReportTab = isReportTab(requestedTab) ? requestedTab : 'lot-status';
@@ -229,18 +224,12 @@ export function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
-  // Feature #702: Company logo on reports
-  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState<string>('');
   const [reportFilterParams, setReportFilterParams] = useState<ReportFilterParams>({});
-  const [printRequestedAt, setPrintRequestedAt] = useState(() => new Date());
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showScheduleUpgradePrompt, setShowScheduleUpgradePrompt] = useState(false);
 
-  // Project name for print header
-  const [projectName, setProjectName] = useState<string>('');
   const [currentProjectRole, setCurrentProjectRole] = useState<string | null | undefined>(
     undefined,
   );
@@ -275,45 +264,6 @@ export function ReportsPage() {
   );
   const canManageCompanySettings = isAdminRole(user?.roleInCompany || user?.role || '');
   const canManageScheduledReports = canViewClaimsReport;
-  const hasPrintableReport =
-    (activeTab === 'lot-status' && Boolean(lotReport)) ||
-    (activeTab === 'ncr' && Boolean(ncrReport)) ||
-    (activeTab === 'test' && Boolean(testReport)) ||
-    (activeTab === 'diary' && Boolean(diaryReport)) ||
-    (activeTab === 'claims' && Boolean(claimsReport));
-  const activeReportGeneratedAt =
-    activeTab === 'lot-status'
-      ? lotReport?.generatedAt
-      : activeTab === 'ncr'
-        ? ncrReport?.generatedAt
-        : activeTab === 'test'
-          ? testReport?.generatedAt
-          : activeTab === 'diary'
-            ? diaryReport?.generatedAt
-            : activeTab === 'claims'
-              ? claimsReport?.generatedAt
-              : null;
-  const printReportGeneratedAt = useMemo(
-    () =>
-      activeReportGeneratedAt
-        ? formatReportDateTime(activeReportGeneratedAt, dateFormat, timezone)
-        : null,
-    [activeReportGeneratedAt, dateFormat, timezone],
-  );
-  const printPrintedAt = useMemo(
-    () => formatReportDateTime(printRequestedAt, dateFormat, timezone),
-    [dateFormat, printRequestedAt, timezone],
-  );
-
-  const refreshPrintTimestamp = useCallback(() => {
-    setPrintRequestedAt(new Date());
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener('beforeprint', refreshPrintTimestamp);
-    return () => window.removeEventListener('beforeprint', refreshPrintTimestamp);
-  }, [refreshPrintTimestamp]);
-
   const clearReportState = useCallback((reportType?: ReportDataTab) => {
     if (!reportType || reportType === 'lot-status') {
       setLotReport(null);
@@ -364,13 +314,6 @@ export function ReportsPage() {
       try {
         const data = await apiFetch<CompanyResponse>(`/api/company`);
         setSubscriptionTier(data.company?.subscriptionTier || 'basic');
-        // Feature #702: Company logo on reports
-        if (data.company?.logoUrl) {
-          setCompanyLogo(data.company.logoUrl);
-        }
-        if (data.company?.name) {
-          setCompanyName(data.company.name);
-        }
       } catch (err) {
         logError('Failed to fetch subscription tier:', err);
         setSubscriptionTier('basic');
@@ -380,9 +323,9 @@ export function ReportsPage() {
     fetchSubscriptionTier();
   }, []);
 
-  // Fetch project name for print header
+  // Resolves the caller's project role, which gates the claims tab.
   useEffect(() => {
-    const fetchProjectName = async () => {
+    const fetchProjectRole = async () => {
       setCurrentProjectRole(undefined);
       if (!projectId) {
         setCurrentProjectRole(null);
@@ -393,15 +336,14 @@ export function ReportsPage() {
         const data = await apiFetch<ProjectNameResponse>(
           `/api/projects/${encodeURIComponent(projectId)}`,
         );
-        setProjectName(data.name || data.project?.name || 'Project');
         setCurrentProjectRole(data.project?.currentUserRole ?? null);
       } catch (err) {
-        logError('Failed to fetch project name:', err);
+        logError('Failed to fetch the project role:', err);
         setCurrentProjectRole(null);
       }
     };
 
-    fetchProjectName();
+    fetchProjectRole();
   }, [projectId]);
 
   const fetchReport = useCallback(
@@ -714,45 +656,6 @@ export function ReportsPage() {
       )}
 
       <>
-        {/* Print-only Header - Hidden on screen, shown when printing */}
-        <div className="hidden print:block report-header mb-6">
-          <div className="flex items-center justify-between border-b-2 border-foreground pb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                {activeTab === 'lot-status' && 'Lot Status Report'}
-                {activeTab === 'ncr' && 'NCR Report'}
-                {activeTab === 'test' && 'Test Results Report'}
-                {activeTab === 'diary' && 'Daily Diary Report'}
-                {activeTab === 'claims' && 'Claims Report'}
-              </h1>
-              <p className="text-lg text-foreground mt-1">{projectName}</p>
-            </div>
-            {/* Feature #702: Company logo on reports */}
-            <div className="text-right flex items-center gap-3">
-              {companyLogo ? (
-                <img
-                  src={companyLogo.startsWith('http') ? companyLogo : apiUrl(companyLogo)}
-                  alt={companyName || 'Company Logo'}
-                  referrerPolicy="no-referrer"
-                  className="h-12 w-auto object-contain"
-                />
-              ) : null}
-              <div>
-                <div className="text-xl font-semibold text-primary">{companyName || 'CIVOS'}</div>
-                <div className="text-sm text-muted-foreground">Quality Management System</div>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-between text-sm text-muted-foreground mt-3">
-            <span>
-              Report data:{' '}
-              {printReportGeneratedAt ?? (hasPrintableReport ? 'Not available' : 'Not loaded')}
-            </span>
-            <span>Printed: {printPrintedAt}</span>
-            <span>Report ID: {projectId?.slice(0, 8)}</span>
-          </div>
-        </div>
-
         {/* Tab Content */}
         <Suspense
           fallback={
@@ -794,16 +697,6 @@ export function ReportsPage() {
             )}
           </div>
         </Suspense>
-
-        {/* Print-only Footer - Hidden on screen, shown when printing */}
-        <div className="hidden print:block mt-8 pt-4 border-t border-border text-center">
-          <p className="text-sm text-muted-foreground">
-            This report was generated by CIVOS Quality Management System.
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {new Date().getFullYear()} CIVOS. Confidential - For internal use only.
-          </p>
-        </div>
       </>
 
       {/* Schedule Report Modal */}

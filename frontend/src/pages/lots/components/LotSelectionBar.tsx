@@ -53,7 +53,7 @@ export function LotSelectionBar({
 
   return (
     <div
-      className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 print:hidden"
+      className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
       role="region"
       aria-label="Bulk actions for selected lots"
       data-testid="lot-selection-bar"

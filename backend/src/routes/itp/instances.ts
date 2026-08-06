@@ -24,6 +24,7 @@ import { buildItpInstanceResponse } from './instances/responses.js';
 import { sanitizeItpCompletionResponse } from './completionResponses.js';
 import { deriveItpVerificationFlags } from './completionWorkflow.js';
 import { findLinkedNcrsForChecklistItems, type NcrLinkClient } from './instances/ncrLinks.js';
+import { toChecklistItemResponse } from './helpers/checklistItemResponse.js';
 import {
   assertItpInstanceUnassignable,
   type ItpInstanceUnassignGuardClient,
@@ -233,17 +234,7 @@ instancesRouter.post(
       ...instance,
       template: {
         ...instance.template,
-        checklistItems: instance.template.checklistItems.map((item) => ({
-          id: item.id,
-          description: item.description,
-          category: item.responsibleParty || 'general',
-          responsibleParty: item.responsibleParty || 'contractor',
-          isHoldPoint: item.pointType === 'hold_point',
-          pointType: item.pointType || 'standard',
-          evidenceRequired: item.evidenceRequired || 'none',
-          order: item.sequenceNumber,
-          acceptanceCriteria: item.acceptanceCriteria,
-        })),
+        checklistItems: instance.template.checklistItems.map(toChecklistItemResponse),
       },
     };
 

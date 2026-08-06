@@ -43,6 +43,9 @@ export function EditTemplateModal({
         verificationMethod: item.verificationMethod,
         acceptanceCriteria: item.acceptanceCriteria,
         testType: item.testType,
+        // Carried, never edited: dropping it here would null out the clause
+        // citation on save (PATCH replaces every item).
+        notes: item.notes,
         order: item.order,
       }))
       .sort((a, b) => a.order - b.order),

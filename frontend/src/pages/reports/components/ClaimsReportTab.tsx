@@ -74,7 +74,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      <div className="rounded-lg border bg-card p-6 print:hidden">
+      <div className="rounded-lg border bg-card p-6">
         <h3 className="mb-4 text-lg font-medium">Report Options</h3>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div>

@@ -286,7 +286,7 @@ export function LotHeader({
             button is retired. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {primaryButton('')}
-          <div className="relative print:hidden" ref={menuRef}>
+          <div className="relative" ref={menuRef}>
             <button
               type="button"
               onClick={() => setMoreOpen((open) => !open)}

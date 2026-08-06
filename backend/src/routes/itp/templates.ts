@@ -27,6 +27,7 @@ import {
 } from './templateAccess.js';
 import { assertTemplateItemsReplaceable } from './templateUsage.js';
 import { templateLifecycleRouter } from './templateLifecycleRoutes.js';
+import { toChecklistItemResponse } from './helpers/checklistItemResponse.js';
 
 export const templatesRouter = Router();
 
@@ -150,17 +151,7 @@ templatesRouter.get(
       isGlobalTemplate: t.projectId === null,
       isActive: t.isActive,
       stateSpec: t.stateSpec,
-      checklistItems: t.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: t.checklistItems.map(toChecklistItemResponse),
     }));
 
     res.json(buildTemplateListResponse(transformedTemplates, project?.specificationSet || null));
@@ -195,17 +186,7 @@ templatesRouter.get(
     // Transform to frontend-friendly format
     const transformedTemplate = {
       ...template,
-      checklistItems: template.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: template.checklistItems.map(toChecklistItemResponse),
     };
 
     res.json(buildTemplateResponse(transformedTemplate));
@@ -270,17 +251,7 @@ templatesRouter.post(
     // Transform to frontend-friendly format
     const transformedTemplate = {
       ...template,
-      checklistItems: template.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: template.checklistItems.map(toChecklistItemResponse),
     };
 
     res.status(201).json(buildTemplateResponse(transformedTemplate));
@@ -404,17 +375,7 @@ templatesRouter.post(
     const transformedTemplate = {
       ...clonedTemplate,
       isActive: clonedTemplate.isActive,
-      checklistItems: clonedTemplate.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: clonedTemplate.checklistItems.map(toChecklistItemResponse),
     };
 
     res.status(201).json(buildTemplateResponse(transformedTemplate));
@@ -488,17 +449,7 @@ templatesRouter.patch(
     const transformedTemplate = {
       ...template,
       isActive: template.isActive,
-      checklistItems: template.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: template.checklistItems.map(toChecklistItemResponse),
     };
 
     res.json(buildTemplateResponse(transformedTemplate));

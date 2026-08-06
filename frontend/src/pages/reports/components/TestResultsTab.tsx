@@ -78,7 +78,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Feature #208: Report Filters */}
-      <div className="bg-card border rounded-lg p-6 print:hidden">
+      <div className="bg-card border rounded-lg p-6">
         <h3 className="text-lg font-medium mb-4">Report Options</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Date Range */}

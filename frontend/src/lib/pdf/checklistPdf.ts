@@ -52,16 +52,55 @@ function requiresAuthorityApproval(item: ITPChecklistItem): boolean {
   return item.pointType === 'hold_point' || item.isHoldPoint || item.pointType === 'witness';
 }
 
-/** `Amos Soo` -> `AS`; falls back to the email local part when there is no name. */
-export function personInitials(name: string | null | undefined, email?: string | null): string {
-  const source = (name ?? '').trim();
-  if (source) {
-    const parts = source.split(/\s+/).filter(Boolean);
-    const letters = parts.slice(0, 2).map((part) => part[0]);
-    return letters.join('').toUpperCase();
-  }
-  const local = (email ?? '').split('@')[0];
-  return local ? local.slice(0, 2).toUpperCase() : '--';
+/**
+ * Neutral marker for a cell whose provenance the record does not hold: an
+ * import, a deleted user, a release with no captured name. It is NOT a
+ * signature and must never be mistaken for one, so it gets a dash rather than
+ * a plausible-looking pair of letters.
+ */
+export const UNKNOWN_PROVENANCE = '—';
+
+/** Printed where a persisted field is blank, so absence is stated, not implied. */
+export const NOT_SPECIFIED = 'Not specified';
+
+/** Key label for a name the document's fonts cannot print. */
+export const UNPRINTABLE_NAME = 'Name cannot be printed in this document — see the CIVOS record';
+
+/**
+ * jsPDF's built-in Helvetica is WinAnsi-encoded. A character outside that set
+ * is not dropped or substituted — it is emitted as a different glyph, so
+ * `李明` prints as `gNf`. On an inspection record that is worse than printing
+ * nothing: it is a mark that looks like someone's initials and belongs to no
+ * one. Embedding a CJK font would cost megabytes in a lazily-loaded PDF chunk,
+ * so the honest move is to detect the case and say so.
+ *
+ * WinAnsi is Latin-1 plus the 0x80–0x9F block of typographic extras.
+ */
+const WIN_ANSI_EXTRAS = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+
+export function isPrintable(text: string): boolean {
+  return [...text].every(
+    (character) => character.codePointAt(0)! < 0x100 || WIN_ANSI_EXTRAS.has(character),
+  );
+}
+
+/**
+ * `Amos Soo` -> `AS`, from the recorded full name ONLY.
+ *
+ * Never from the email address: `j.smith@` and `jsmith@` would produce
+ * different marks for one person, and an address is not a signature — deriving
+ * initials from it manufactures attribution the record never captured. No name,
+ * or a name this document cannot print, means no initials.
+ */
+export function personInitials(name: string | null | undefined): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return UNKNOWN_PROVENANCE;
+  const initials = parts
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+  return isPrintable(initials) ? initials : UNKNOWN_PROVENANCE;
 }
 
 /** `25/10/21` — short enough for a 21mm cell, pinned to the app timezone. */
@@ -93,45 +132,81 @@ type StateCell =
   | { kind: 'empty' }
   | { kind: 'signed'; initials: string; date: string; who: string; org?: string | null };
 
-type Signatory = { fullName: string | null; email?: string | null } | null | undefined;
+type Signatory = { fullName: string | null } | null | undefined;
 
 function signedBy(person: Signatory, date: string | null | undefined): StateCell {
   return {
     kind: 'signed',
-    initials: personInitials(person?.fullName, person?.email),
+    initials: personInitials(person?.fullName),
     date: cellDate(date),
-    who: person?.fullName || person?.email || '',
+    who: person?.fullName ?? '',
   };
 }
 
 /**
- * A not-applicable item keeps the initials of whoever called it — the
- * accountability is the point — and prints `N/A` where the date would go, so
- * the state is legible without a second glance at the notes.
+ * The state a cell reports where the date would go. Each outcome gets its own
+ * mark so a reviewer scanning the column can separate an accepted item from
+ * one that was excused, failed, or is still waiting on a second pair of eyes —
+ * an inspection record where all four look alike is not a record.
  */
+const MARK_NOT_APPLICABLE = 'N/A';
+const MARK_FAILED = 'FAIL';
+const MARK_PENDING_VERIFICATION = 'PEND';
+const MARK_REJECTED = 'REJ';
+
 function checkCell(completion: ITPCompletion | undefined): StateCell {
-  if (!completion || !(completion.isCompleted || completion.isNotApplicable)) {
-    return { kind: 'empty' };
-  }
+  if (!completion) return { kind: 'empty' };
+  const signed = completion.isCompleted || completion.isNotApplicable || completion.isFailed;
+  if (!signed) return { kind: 'empty' };
+
   const cell = signedBy(completion.completedBy, completion.completedAt);
-  return completion.isNotApplicable && cell.kind === 'signed' ? { ...cell, date: 'N/A' } : cell;
+  if (cell.kind !== 'signed') return cell;
+  if (completion.isNotApplicable) return { ...cell, date: MARK_NOT_APPLICABLE };
+  if (completion.isFailed) return { ...cell, date: MARK_FAILED };
+  return cell;
 }
 
 function verifyCell(completion: ITPCompletion | undefined): StateCell {
-  if (!completion?.isVerified || !completion.verifiedBy) return { kind: 'empty' };
+  if (!completion) return { kind: 'empty' };
+  // Rejected and awaiting-review are states the reader must see. A blank cell
+  // reads as "nobody has got to it yet", which is a different fact.
+  if (completion.isRejected || completion.verificationStatus === 'rejected') {
+    return { kind: 'signed', initials: MARK_REJECTED, date: '', who: '' };
+  }
+  if (
+    completion.isPendingVerification ||
+    completion.verificationStatus === 'pending_verification'
+  ) {
+    return { kind: 'signed', initials: MARK_PENDING_VERIFICATION, date: '', who: '' };
+  }
+  if (!completion.isVerified || !completion.verifiedBy) return { kind: 'empty' };
   return signedBy(completion.verifiedBy, completion.verifiedAt);
+}
+
+/**
+ * A release captured through the public token page is signed by an invited
+ * recipient, not by a CIVOS user — the key says so rather than letting the
+ * initials imply an account behind them.
+ */
+function releaseProvenance(method: string | null | undefined): string | null {
+  if (!method) return null;
+  return method === 'secure_link' ? 'released via secure link' : `released via ${method}`;
 }
 
 function approvalCell(item: ITPChecklistItem, completion: ITPCompletion | undefined): StateCell {
   if (!requiresAuthorityApproval(item)) return { kind: 'not-required' };
   const release = completion?.holdPointRelease;
-  if (!release?.releasedByName) return { kind: 'empty' };
+  if (!release) return { kind: 'empty' };
+  // A release with no captured name still happened — print the date under the
+  // neutral marker rather than an empty cell that reads as outstanding.
+  const provenance = releaseProvenance(release.releaseMethod);
+  const org = [release.releasedByOrg, provenance].filter(Boolean).join(', ') || null;
   return {
     kind: 'signed',
     initials: personInitials(release.releasedByName),
     date: cellDate(release.releasedAt),
-    who: release.releasedByName,
-    org: release.releasedByOrg,
+    who: release.releasedByName ?? '',
+    org,
   };
 }
 
@@ -162,21 +237,36 @@ function stateCells(
   return [checkCell(completion), verifyCell(completion), approval, ncrCell(completion)];
 }
 
-/** Initials -> "Full Name (Organisation)", in first-seen order. */
+/**
+ * Initials -> "Full Name (Organisation, provenance)", in first-seen order.
+ *
+ * Marker cells (`REJ`, `PEND`, an NCR number) carry no person and are explained
+ * by the fixed legend instead. A cell with provenance but no name still earns
+ * an entry, so a secure-link release is attributed as one rather than reading
+ * as a missing signature.
+ */
 function buildAbbreviationKey(
   items: ITPChecklistItem[],
   completions: ITPCompletion[],
 ): { initials: string; label: string }[] {
-  const key = new Map<string, string>();
+  // Keyed by initials AND label: every unknown-provenance cell carries the same
+  // neutral marker but for different reasons (a deleted user, an unprintable
+  // name, a nameless token release). Collapsing them on the marker alone would
+  // drop all but the first explanation.
+  const key = new Map<string, { initials: string; label: string }>();
   items.forEach((item) => {
     const completion = findCompletion(item, completions);
     stateCells(item, completion, 'electronic').forEach((cell) => {
-      if (cell.kind !== 'signed' || !cell.who) return;
-      const label = cell.org ? `${cell.who} (${cell.org})` : cell.who;
-      if (!key.has(cell.initials)) key.set(cell.initials, label);
+      if (cell.kind !== 'signed') return;
+      if (!cell.who && !cell.org) return;
+      const printableWho = cell.who && !isPrintable(cell.who) ? UNPRINTABLE_NAME : cell.who;
+      const who = printableWho || 'Name not recorded';
+      const label = cell.org ? `${who} (${cell.org})` : who;
+      const entryKey = `${cell.initials}|${label}`;
+      if (!key.has(entryKey)) key.set(entryKey, { initials: cell.initials, label });
     });
   });
-  return [...key.entries()].map(([initials, label]) => ({ initials, label }));
+  return [...key.values()];
 }
 
 /**
@@ -338,14 +428,18 @@ export async function downloadChecklistPdf(
     yPos = rowTop + ROW_HEIGHT;
 
     // Indented, italic detail under the row: what the item is tested by and
-    // what it must achieve. Nothing is invented — a template that never
-    // captured a criterion simply prints no line.
+    // what it must achieve. Only persisted fields appear, and a blank one says
+    // "Not specified" rather than going silent — an inspector must be able to
+    // tell a template that set no criterion from a row that has none to meet.
+    // Test FREQUENCY and minimum-tests-per-lot are deliberately absent: no
+    // column holds them, and inventing one on an inspection record is worse
+    // than omitting it (see the PR body).
     const detail: string[] = [];
-    if (item.testType) detail.push(`Test: ${item.testType}`);
+    if (item.testType) detail.push(`Test method: ${item.testType}`);
     if (item.evidenceRequired && item.evidenceRequired !== 'none') {
       detail.push(`Evidence: ${item.evidenceRequired}`);
     }
-    if (item.acceptanceCriteria) detail.push(`Acceptance: ${item.acceptanceCriteria}`);
+    detail.push(`Acceptance: ${item.acceptanceCriteria || NOT_SPECIFIED}`);
     if (detail.length > 0) {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(7);
@@ -384,11 +478,23 @@ export async function downloadChecklistPdf(
   );
   yPos += 4;
   doc.text(
-    'Grey cell = not required for this item.   N/A in a cell = marked not applicable.',
+    `Grey cell = not required for this item.   ${MARK_NOT_APPLICABLE} = marked not applicable   ·   ${MARK_FAILED} = failed inspection   ·   ${MARK_PENDING_VERIFICATION} = awaiting verification   ·   ${MARK_REJECTED} = verification rejected.`,
     MARGIN,
     yPos,
   );
   yPos += 4;
+  // Say plainly what the initials are. They are generated from the name the
+  // system recorded — they are not a captured signature, and a document
+  // controller must not read them as one. The wet-ink sheet has no initials to
+  // qualify: its signature blocks are the attestation.
+  if (variant === 'electronic') {
+    doc.text(
+      `Initials are derived from the recorded name, not a captured signature.   ${UNKNOWN_PROVENANCE} = no name recorded against the entry.`,
+      MARGIN,
+      yPos,
+    );
+    yPos += 4;
+  }
 
   const people = variant === 'field' ? [] : buildAbbreviationKey(items, data.itp.completions);
   people.forEach((entry) => {

@@ -16,6 +16,7 @@ import {
   propagateTemplateSchema,
 } from './templateValidation.js';
 import { requireProjectTemplateAccess, requireTemplateProjectAccess } from './templateAccess.js';
+import { toChecklistItemResponse } from './helpers/checklistItemResponse.js';
 
 export const templateLifecycleRouter = Router();
 
@@ -126,17 +127,7 @@ templateLifecycleRouter.post(
     const transformedTemplate = {
       ...template,
       isActive: template.isActive,
-      checklistItems: template.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: template.checklistItems.map(toChecklistItemResponse),
     };
 
     res.json(buildTemplateArchivedResponse(transformedTemplate));
@@ -167,17 +158,7 @@ templateLifecycleRouter.post(
     const transformedTemplate = {
       ...template,
       isActive: template.isActive,
-      checklistItems: template.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
-        isHoldPoint: item.pointType === 'hold_point',
-        pointType: item.pointType || 'standard',
-        evidenceRequired: item.evidenceRequired || 'none',
-        order: item.sequenceNumber,
-        acceptanceCriteria: item.acceptanceCriteria,
-      })),
+      checklistItems: template.checklistItems.map(toChecklistItemResponse),
     };
 
     res.json(buildTemplateRestoredResponse(transformedTemplate));

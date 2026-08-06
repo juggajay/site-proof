@@ -106,7 +106,7 @@ export function LotsPageHeader({
   return (
     // On phones the actions stack under the title instead of competing with it
     // for the same row.
-    <div className="flex flex-col items-stretch gap-3 print:hidden sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {/* text-lg on phones so the title, its help affordance, and the view
