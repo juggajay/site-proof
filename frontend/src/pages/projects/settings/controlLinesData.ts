@@ -21,6 +21,13 @@ export interface ControlLine {
   updatedAt: string;
 }
 
+/** "12,000 – 13,450" chainage span of a line's points, shared by the desktop table and the phone cards. */
+export function chainageRange(points: ControlPoint[]): string {
+  if (points.length === 0) return '-';
+  const chainages = points.map((p) => p.chainage);
+  return `${Math.min(...chainages).toLocaleString()} – ${Math.max(...chainages).toLocaleString()}`;
+}
+
 export interface ControlLineInput {
   name: string;
   coordinateSystem: string;

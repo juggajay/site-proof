@@ -490,11 +490,9 @@ test.describe('Project users seeded admin contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
 
-    const usersRegion = page.getByRole('region', { name: 'Project users table' });
-    await expect(usersRegion).toBeVisible();
-    await usersRegion.evaluate((element) => {
-      element.scrollLeft = element.scrollWidth;
-    });
+    // Phone renders a card per member instead of the table, so role editing and
+    // removal are reachable without scrolling a clipped table sideways.
+    await expect(page.getByRole('region', { name: 'Project users table' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Change role for E2E Engineer' }).click();
     await page.getByRole('combobox', { name: 'Role for E2E Engineer' }).selectOption('foreman');
@@ -509,14 +507,11 @@ test.describe('Project users seeded admin contract', () => {
         }),
       );
 
-    await usersRegion.evaluate((element) => {
-      element.scrollLeft = element.scrollWidth;
-    });
     await confirmProjectUserRemoval(page);
 
     expect(api.getRemoveUserId()).toBe('e2e-viewer-user');
     await expect(page.getByText('E2E Viewer has been removed from the project.')).toBeVisible();
-    await expect(usersRegion.locator('tbody tr').filter({ hasText: 'E2E Viewer' })).toBeHidden();
+    await expect(page.getByText('E2E Viewer', { exact: true })).toBeHidden();
   });
 
   test('locks the remove confirmation while project user removal is in flight', async ({

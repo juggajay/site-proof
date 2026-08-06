@@ -520,12 +520,13 @@ test.describe('Audit log seeded admin contract', () => {
     await page.goto('/audit-log');
 
     await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
-    const scrollRegion = page.getByTestId('audit-log-table-scroll');
-    await expect(scrollRegion).toBeVisible();
-    await scrollRegion.evaluate((element) => {
-      element.scrollLeft = element.scrollWidth;
-    });
-    await page.getByRole('button', { name: /View details for Lot created Lot e2e-lot/ }).click();
+    // Phone renders a card per log instead of the table — every column is on
+    // the card, and tapping it opens the details modal.
+    await expect(page.getByTestId('audit-log-table-scroll')).toHaveCount(0);
+    const card = page.getByRole('button').filter({ hasText: 'Lot #e2e-lot-' }).first();
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Lot created');
+    await card.click();
     await expect(page.getByRole('dialog').filter({ hasText: 'Audit Log Details' })).toBeVisible();
   });
 });

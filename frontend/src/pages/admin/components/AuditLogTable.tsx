@@ -34,7 +34,7 @@ export function AuditLogTable({ logs, onViewDetails }: AuditLogTableProps) {
 
               return (
                 <tr key={log.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-3 text-sm whitespace-nowrap">
                     <span className="text-muted-foreground">{formatDateTime(log.createdAt)}</span>
                   </td>
                   <td className="px-4 py-3">

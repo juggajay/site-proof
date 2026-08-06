@@ -28,6 +28,8 @@ import { DEFAULT_COORDINATE_SYSTEM } from '@/lib/spatial/coordinateSystems';
 import { PlanSheetUploadModal } from './PlanSheetUploadModal';
 import { PlanSheetRegistrationModal } from './PlanSheetRegistrationModal';
 import { PlanSheetPerimeterModal } from './PlanSheetPerimeterModal';
+import { PlanSheetsMobileList } from './PlanSheetsMobileList';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 function RegistrationBadge({ sheet }: { sheet: PlanSheetListItem }) {
   if (sheet.hasRegistration) {
@@ -140,9 +142,9 @@ function PlanSheetsTable({
           <tbody className="divide-y">
             {sheets.map((sheet) => (
               <tr key={sheet.id} className="hover:bg-muted/25">
-                <td className="px-4 py-3 font-medium">{sheet.name}</td>
+                <td className="px-4 py-3 font-medium whitespace-nowrap">{sheet.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{sheet.pageNumber}</td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                   {sheet.imageWidth} × {sheet.imageHeight}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
@@ -218,6 +220,7 @@ export function PlanSheetsPage() {
   const [renameSheet, setRenameSheet] = useState<PlanSheetListItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PlanSheetListItem | null>(null);
 
+  const isMobile = useIsMobile();
   const { project, canManage, readOnly, loading: accessLoading } = usePlanSheetsAccess(projectId);
   const sheetsQuery = usePlanSheets(projectId);
   const controlLinesQuery = useControlLines(projectId);
@@ -276,7 +279,7 @@ export function PlanSheetsPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Plan Sheets</h1>
           <p className="text-muted-foreground">
@@ -284,7 +287,12 @@ export function PlanSheetsPage() {
           </p>
         </div>
         {canManage && (
-          <Button type="button" onClick={openUpload} disabled={readOnly}>
+          <Button
+            type="button"
+            onClick={openUpload}
+            disabled={readOnly}
+            className="self-start md:self-auto"
+          >
             <Plus className="h-4 w-4" />
             Add plan sheets
           </Button>
@@ -311,6 +319,19 @@ export function PlanSheetsPage() {
       <ProjectAdminResourceGate loading={loading} loadError={loadError} canManage={true}>
         {sheets.length === 0 ? (
           <PlanSheetsEmptyState readOnly={readOnly || !canManage} onAdd={openUpload} />
+        ) : isMobile ? (
+          <PlanSheetsMobileList
+            sheets={sheets}
+            showActions={canManage && !readOnly}
+            deletingId={deleteMutation.isLoading ? (pendingDelete?.id ?? null) : null}
+            onRegister={setRegisterSheet}
+            onPerimeter={(sheet) => {
+              setPerimeterGuided(false);
+              setPerimeterSheet(sheet);
+            }}
+            onRename={setRenameSheet}
+            onRequestDelete={setPendingDelete}
+          />
         ) : (
           <PlanSheetsTable
             sheets={sheets}

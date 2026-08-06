@@ -6,8 +6,10 @@ import { queryKeys } from '@/lib/queryKeys';
 import { downloadBrandedCsv } from '@/lib/csv';
 import { useAuth } from '@/lib/auth';
 import { formatDateKey } from '@/lib/localDate';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { type AuditLog, formatAuditAction, formatChanges, formatDateTime } from './auditLogDisplay';
 import { AuditLogDetailsModal } from './components/AuditLogDetailsModal';
+import { AuditLogMobileList } from './components/AuditLogMobileList';
 import { AuditLogTable } from './components/AuditLogTable';
 import {
   AuditLogDismissibleErrorAlert,
@@ -48,6 +50,7 @@ export function AuditLogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const exportInFlightRef = useRef(false);
   const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -314,7 +317,11 @@ export function AuditLogPage() {
         <AuditLogEmptyState hasActiveFilters={hasActiveFilters} />
       ) : (
         <>
-          <AuditLogTable logs={logs} onViewDetails={(log) => setSelectedLog(log)} />
+          {isMobile ? (
+            <AuditLogMobileList logs={logs} onViewDetails={(log) => setSelectedLog(log)} />
+          ) : (
+            <AuditLogTable logs={logs} onViewDetails={(log) => setSelectedLog(log)} />
+          )}
           {paginationControls}
         </>
       )}

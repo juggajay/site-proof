@@ -23,6 +23,14 @@ vi.mock('@/components/ui/toaster', () => ({
   toast: toastMock,
 }));
 
+// jsdom has no matchMedia; drive the viewport branch explicitly (desktop table
+// vs phone card list) instead of relying on a polyfill default.
+const viewport = vi.hoisted(() => ({ isMobile: false }));
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useMediaQuery')>();
+  return { ...actual, useIsMobile: () => viewport.isMobile };
+});
+
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>();
   return {
@@ -35,6 +43,51 @@ describe('ProjectUsersPage project member picker', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     toastMock.mockReset();
+    viewport.isMobile = false;
+  });
+
+  it('renders team members as cards instead of the table on a phone', async () => {
+    viewport.isMobile = true;
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/projects/project-1') {
+        return {
+          project: { id: 'project-1', name: 'Bridgeworks', currentUserRole: 'project_manager' },
+        };
+      }
+      if (path === '/api/projects/project-1/users') {
+        return {
+          users: [
+            {
+              id: 'membership-1',
+              userId: 'other-1',
+              email: 'sam.foreman@example.com',
+              fullName: 'Sam Foreman',
+              role: 'foreman',
+              status: 'active',
+              joinedAt: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected apiFetch call: ${String(path)}`);
+    });
+
+    render(
+      <MemoryRouter>
+        <ProjectUsersPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Sam Foreman')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    // Columns clipped off-screen by the raw table are on the card.
+    expect(screen.getByText('sam.foreman@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Foreman')).toBeInTheDocument();
+    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Change role for Sam Foreman/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Remove Sam Foreman from project/ }),
+    ).toBeInTheDocument();
   });
 
   it('assigns an existing company user by selected user ID', async () => {
