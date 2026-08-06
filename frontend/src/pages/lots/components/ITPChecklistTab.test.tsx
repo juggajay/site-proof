@@ -8,6 +8,22 @@ afterEach(() => {
   cleanup();
 });
 
+// Checklist PDF download (field-flow T5 wiring): the generator is dynamically
+// imported by the hook, so the mock intercepts that import; project + branding
+// fetches are stubbed at their module boundaries.
+const mockDownloadChecklistPdf = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/pdfGenerator', () => ({
+  downloadChecklistPdf: (...args: unknown[]) => mockDownloadChecklistPdf(...args),
+}));
+const mockApiFetch = vi.fn();
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
+  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
+}));
+vi.mock('@/lib/pdf/fetchBranding', () => ({
+  fetchPdfBranding: vi.fn().mockResolvedValue(null),
+}));
+
 const lot: Lot = {
   id: 'lot-1',
   lotNumber: 'EW-001',
@@ -556,5 +572,50 @@ describe('ITPChecklistTab no-assignment state', () => {
     expect(
       screen.queryByRole('button', { name: 'Create ITP Template First' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('ITPChecklistTab checklist PDF download (T5 wiring)', () => {
+  it('downloads the electronic checklist PDF mapped from the loaded instance', async () => {
+    mockApiFetch.mockImplementation((url: string) =>
+      url.includes('/api/projects/')
+        ? Promise.resolve({ project: { name: 'Pacific Highway Upgrade', projectNumber: 'PH-22' } })
+        : Promise.resolve({}),
+    );
+    renderChecklist({ itpInstance });
+
+    fireEvent.click(screen.getByRole('button', { name: /checklist pdf/i }));
+
+    await waitFor(() => expect(mockDownloadChecklistPdf).toHaveBeenCalledTimes(1));
+    const [data, variant] = mockDownloadChecklistPdf.mock.calls[0]!;
+    expect(variant).toBe('electronic');
+    expect(data).toMatchObject({
+      project: { name: 'Pacific Highway Upgrade', projectNumber: 'PH-22' },
+      lot: { lotNumber: 'EW-001' },
+      itp: { templateName: 'Earthworks ITP' },
+    });
+    expect(data.itp.checklistItems).toHaveLength(2);
+    expect(data.itp.completions).toHaveLength(1);
+  });
+
+  it('downloads the blank Field Complete variant from the field-copy button', async () => {
+    mockApiFetch.mockImplementation((url: string) =>
+      url.includes('/api/projects/')
+        ? Promise.resolve({ project: { name: 'Pacific Highway Upgrade' } })
+        : Promise.resolve({}),
+    );
+    renderChecklist({ itpInstance });
+
+    fireEvent.click(screen.getByRole('button', { name: /field copy/i }));
+
+    await waitFor(() => expect(mockDownloadChecklistPdf).toHaveBeenCalled());
+    expect(mockDownloadChecklistPdf.mock.calls.at(-1)![1]).toBe('field');
+  });
+
+  it('offers no download buttons before an ITP is assigned', () => {
+    renderChecklist({ itpInstance: null });
+
+    expect(screen.queryByRole('button', { name: /checklist pdf/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /field copy/i })).not.toBeInTheDocument();
   });
 });
