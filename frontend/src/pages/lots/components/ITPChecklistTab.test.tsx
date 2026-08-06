@@ -587,6 +587,11 @@ describe('ITPChecklistTab checklist PDF download (T5 wiring)', () => {
     fireEvent.click(screen.getByRole('button', { name: /checklist pdf/i }));
 
     await waitFor(() => expect(mockDownloadChecklistPdf).toHaveBeenCalledTimes(1));
+    // Wait for the whole chain (toast + state reset) to settle so no state
+    // update lands after teardown — that race flakes CI under coverage load.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /checklist pdf/i })).toBeEnabled(),
+    );
     const [data, variant] = mockDownloadChecklistPdf.mock.calls[0]!;
     expect(variant).toBe('electronic');
     expect(data).toMatchObject({
@@ -609,6 +614,7 @@ describe('ITPChecklistTab checklist PDF download (T5 wiring)', () => {
     fireEvent.click(screen.getByRole('button', { name: /field copy/i }));
 
     await waitFor(() => expect(mockDownloadChecklistPdf).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: /field copy/i })).toBeEnabled());
     expect(mockDownloadChecklistPdf.mock.calls.at(-1)![1]).toBe('field');
   });
 
