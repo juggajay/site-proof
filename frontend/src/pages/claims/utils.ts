@@ -47,6 +47,21 @@ export function formatCurrency(amount: number | null): string {
 }
 
 /**
+ * Format integer CENTS from the API as AUD. Dividing an integer by 100 is exact
+ * at any amount this product will ever hold, and — unlike `formatCurrency` —
+ * nothing is summed on the way in: the server already did every addition on
+ * Prisma Decimal. Never add cents from two cells and pass the result here; ask
+ * the server for the total instead.
+ */
+export function formatCents(cents: number): string {
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    minimumFractionDigits: 2,
+  }).format(cents / 100);
+}
+
+/**
  * Add N business days to a date.
  * Without `state`, "business day" means weekends-only (the original behaviour).
  * With `state`, it also skips that jurisdiction's public holidays and statutory

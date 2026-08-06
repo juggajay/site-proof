@@ -199,6 +199,7 @@ describe('buildClaimBands', () => {
         { lotId: 'lot-1', amountClaimed: decimal('8400.00'), percentageComplete: decimal('20') },
       ],
       priorClaimCount: 1,
+      claim: { totalClaimedAmount: null, certifiedAmount: null, paidAmount: null },
     });
 
     const [line] = bands.lines;
@@ -216,6 +217,7 @@ describe('buildClaimBands', () => {
       claimedLots: [lotRow({ amountClaimed: null, percentageComplete: null })],
       priorRows: [],
       priorClaimCount: 0,
+      claim: { totalClaimedAmount: null, certifiedAmount: null, paidAmount: null },
     });
 
     const [line] = bands.lines;
@@ -230,7 +232,12 @@ describe('buildClaimBands', () => {
   });
 
   it('produces no lot lines and no fabricated totals for a variation-only claim', () => {
-    const bands = buildClaimBands({ claimedLots: [], priorRows: [], priorClaimCount: 0 });
+    const bands = buildClaimBands({
+      claimedLots: [],
+      priorRows: [],
+      priorClaimCount: 0,
+      claim: { totalClaimedAmount: null, certifiedAmount: null, paidAmount: null },
+    });
 
     expect(bands.lines).toEqual([]);
     // The lot-line subtotal is a true zero: there are no lot lines. It is NOT
@@ -245,6 +252,7 @@ describe('buildClaimBands', () => {
       claimedLots: [lotRow()],
       priorRows: [],
       priorClaimCount: 0,
+      claim: { totalClaimedAmount: null, certifiedAmount: null, paidAmount: null },
     });
 
     expect(Object.keys(bands.lines[0])).not.toContain('certified');

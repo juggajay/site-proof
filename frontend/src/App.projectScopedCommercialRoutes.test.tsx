@@ -117,6 +117,7 @@ vi.mock('./appLazyPages', () => ({
   DeliveryRegisterPage: () => <div>Deliveries</div>,
   DocketApprovalsPage: () => <div>Docket approvals</div>,
   ClaimsPage: () => <div>Claims route reached</div>,
+  ClaimDetailPage: () => <div>Claim detail route reached</div>,
   VariationsPage: () => <div>Variations route reached</div>,
   CostsPage: () => <div>Costs route reached</div>,
   DocumentsPage: () => <div>Documents</div>,
@@ -187,6 +188,7 @@ beforeEach(() => {
 describe('project-scoped commercial routes', () => {
   it.each([
     ['/projects/project-1/claims', 'Claims route reached'],
+    ['/projects/project-1/claims/claim-1', 'Claim detail route reached'],
     ['/projects/project-1/variations', 'Variations route reached'],
     ['/projects/project-1/costs', 'Costs route reached'],
     ['/projects/project-1/lots/lot-1/edit', 'Lot edit'],
@@ -206,6 +208,29 @@ describe('project-scoped commercial routes', () => {
     expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
     expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
   });
+
+  // The claim detail route must be gated exactly like the register it hangs off:
+  // a role that cannot see the claims list must not reach the lines behind a
+  // claim by typing its URL.
+  it.each(['viewer', 'quality_manager', 'site_manager'])(
+    'blocks project-scoped %s users from opening a claim detail page',
+    async (dashboardRole) => {
+      authState.user = {
+        id: `project-${dashboardRole}-detail`,
+        email: `${dashboardRole}-detail@example.com`,
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole,
+        companyId: 'company-1',
+      };
+      projectAccessState.role = dashboardRole;
+
+      renderAppAt('/projects/project-1/claims/claim-1');
+
+      expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+      expect(screen.queryByText('Claim detail route reached')).not.toBeInTheDocument();
+    },
+  );
 
   it('allows project-scoped viewers to open project documents read-only', async () => {
     projectAccessState.role = 'viewer';

@@ -684,6 +684,11 @@ export function createClaimReadRouter({
         })),
         priorRows,
         priorClaimCount: new Set(priorRows.map((row) => row.claimId)).size,
+        claim: {
+          totalClaimedAmount: claim.totalClaimedAmount,
+          certifiedAmount: claim.certifiedAmount,
+          paidAmount: claim.paidAmount,
+        },
       });
 
       res.json(

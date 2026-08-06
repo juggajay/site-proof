@@ -80,11 +80,37 @@ function mapReadinessLot(lot: ClaimReadinessLot): ClaimableLot {
     selected: false,
     // Default to whatever is left to claim on this lot, not always 100%.
     percentComplete: String(Number(remainingPercentage.toFixed(2))),
+    // ponytail: no separate "computed value" field — the computed value IS
+    // `remainingPercentage`, so `computedPercentage(lot)` derives it and there
+    // is nothing extra to keep in sync.
     claimedPercentage,
     remainingPercentage,
     actionBlocked: lot.claim.blockers.some((item) => item.blocksAction),
     readinessItems: items,
   };
+}
+
+/**
+ * The percentage the row is pre-filled with, and the value the "Claim
+ * remaining" shortcut and the revert control restore.
+ *
+ * IMPORTANT — this is `remainingPercentage` from the claim-readiness endpoint,
+ * which is derived from the RESERVATION rule (`cumulativeClaims.ts`: every
+ * claim including drafts). That is deliberately NOT the claim-history rule the
+ * claim detail page's "Previously claimed" band uses, which excludes drafts.
+ * Here the number has to match what the server will accept: claim create
+ * validates the increment against the reservation rule and returns
+ * `OVER_CLAIM`, so a shortcut offering the history-derived remainder would
+ * hand the user a value the save then rejects. Reservation answers "what can I
+ * still claim"; history answers "what has been claimed".
+ */
+function computedPercentage(lot: ClaimableLot): string {
+  return String(Number(lot.remainingPercentage.toFixed(2)));
+}
+
+/** True when the user has typed something other than the computed default. */
+function isOverridden(lot: ClaimableLot): boolean {
+  return lot.percentComplete.trim() !== computedPercentage(lot);
 }
 
 function getSelectedLotClaimIncrementError(
@@ -419,6 +445,8 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                     lot.percentComplete,
                     lot.remainingPercentage,
                   );
+                  const computedValue = computedPercentage(lot);
+                  const overridden = isOverridden(lot);
 
                   return (
                     <div key={lot.id} className="p-3 hover:bg-muted/30">
@@ -472,45 +500,86 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           </p>
                         )}
                       {lot.selected && (
-                        <div className="mt-2 ml-7 flex flex-wrap items-center gap-3">
-                          <label
-                            htmlFor={percentageInputId}
-                            className="text-sm text-muted-foreground"
-                          >
-                            % to claim this time:
-                            <span className="sr-only"> for {lot.lotNumber}</span>
-                          </label>
-                          <Input
-                            id={percentageInputId}
-                            type="number"
-                            min={0.01}
-                            max={lot.remainingPercentage}
-                            step="0.01"
-                            required
-                            aria-invalid={Boolean(percentageError)}
-                            aria-describedby={
-                              percentageError ? `${percentageInputId}-error` : undefined
-                            }
-                            value={lot.percentComplete}
-                            onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
-                            className={`w-20 h-8 text-sm text-center ${
-                              percentageError ? 'border-destructive' : ''
-                            }`}
-                          />
-                          <span className="text-sm">%</span>
-                          <span className="ml-auto font-semibold text-primary">
-                            {lotClaimAmount === null ? 'No budget' : formatCurrency(lotClaimAmount)}
-                          </span>
-                          {percentageError && (
-                            <span
-                              id={`${percentageInputId}-error`}
-                              className="text-sm text-destructive"
-                              role="alert"
-                              aria-live="assertive"
+                        <div className="mt-2 ml-7 space-y-2">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label
+                              htmlFor={percentageInputId}
+                              className="text-sm text-muted-foreground"
                             >
-                              {percentageError}
+                              % to claim this time:
+                              <span className="sr-only"> for {lot.lotNumber}</span>
+                            </label>
+                            <Input
+                              id={percentageInputId}
+                              type="number"
+                              min={0.01}
+                              max={lot.remainingPercentage}
+                              step="0.01"
+                              required
+                              aria-invalid={Boolean(percentageError)}
+                              aria-describedby={
+                                percentageError ? `${percentageInputId}-error` : undefined
+                              }
+                              value={lot.percentComplete}
+                              onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
+                              className={`w-20 h-8 text-sm text-center ${
+                                percentageError
+                                  ? 'border-destructive'
+                                  : overridden
+                                    ? 'border-warning text-warning'
+                                    : ''
+                              }`}
+                            />
+                            <span className="text-sm">%</span>
+                            {/* Colour is never the only carrier of meaning: the
+                                amber border is reinforced by a text chip and a
+                                named revert control. */}
+                            {overridden && (
+                              <>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                                  Edited
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => updateLotPercentage(lot.id, computedValue)}
+                                  className="text-xs text-primary underline-offset-2 hover:underline"
+                                >
+                                  Revert to {computedValue}%
+                                </button>
+                              </>
+                            )}
+                            <span className="ml-auto font-semibold text-primary">
+                              {lotClaimAmount === null
+                                ? 'No budget'
+                                : formatCurrency(lotClaimAmount)}
                             </span>
-                          )}
+                            {percentageError && (
+                              <span
+                                id={`${percentageInputId}-error`}
+                                className="text-sm text-destructive"
+                                role="alert"
+                                aria-live="assertive"
+                              >
+                                {percentageError}
+                              </span>
+                            )}
+                          </div>
+                          {/* The value lives IN the label, so the number is
+                              readable without clicking to find out. */}
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateLotPercentage(lot.id, computedValue)}
+                              className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
+                            >
+                              Claim remaining ({computedValue}%)
+                            </button>
+                            {lot.budgetAmount !== null && (
+                              <span className="self-center text-xs text-muted-foreground">
+                                {formatCurrency(lot.budgetAmount)} lot budget
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

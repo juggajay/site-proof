@@ -173,6 +173,7 @@ export function ClaimsMainContent({
       <ClaimBlockedValuePanel projectId={projectId} />
       <ClaimsTable
         claims={claims}
+        projectId={projectId}
         loadingCompleteness={loadingCompleteness}
         showCompletenessModal={showCompletenessModal}
         generatingEvidence={generatingEvidence}

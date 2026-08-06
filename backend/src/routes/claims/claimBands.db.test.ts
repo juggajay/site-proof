@@ -185,8 +185,13 @@ describe('GET /api/projects/:projectId/claims/:claimId — band projection', () 
 
     expect(line).not.toHaveProperty('certified');
     expect(claim.bands.lineTotals).not.toHaveProperty('certified');
-    // Certification lives on the claim, where it was actually recorded.
-    expect(claim).toHaveProperty('certifiedAmount');
+    // Certification lives on the claim, where it was actually recorded, and is
+    // shipped in cents alongside the claim's own recorded total.
+    expect(claim.bands.claimLevel).toEqual({
+      totalClaimedCents: 2730000,
+      certifiedCents: null,
+      paidCents: null,
+    });
   });
 
   it('states which statuses count as claim history', async () => {

@@ -309,12 +309,25 @@ export interface ClaimBandTotals {
   claimedToDate: ClaimBandAmount;
 }
 
+/**
+ * The claim's own recorded figures, in cents. Certified and paid are recorded
+ * at CLAIM level and are reproduced here verbatim — they are never spread
+ * across the lot lines. `totalClaimedCents` may exceed the lot-line subtotal
+ * because it also carries variation value.
+ */
+export interface ClaimLevelAmounts {
+  totalClaimedCents: number | null;
+  certifiedCents: number | null;
+  paidCents: number | null;
+}
+
 export interface ClaimBandsProjection {
   lines: ClaimBandLine[];
   /** Totals of the LOT LINES only — a claim's recorded total may also include
    * variations, so these are labelled as a lot-line subtotal and never
    * presented as reconciling to `totalClaimedAmount`. */
   lineTotals: ClaimBandTotals;
+  claimLevel: ClaimLevelAmounts;
   /** How many distinct earlier claims fed the "Previously claimed" band, so the
    * page can state its derivation basis instead of implying a frozen ledger. */
   priorClaimCount: number;
@@ -342,6 +355,11 @@ export function buildClaimBands(input: {
   priorRows: PriorClaimedLotRow[];
   /** Distinct earlier claims that contributed any prior row. */
   priorClaimCount: number;
+  claim: {
+    totalClaimedAmount: Prisma.Decimal | string | number | null;
+    certifiedAmount: Prisma.Decimal | string | number | null;
+    paidAmount: Prisma.Decimal | string | number | null;
+  };
 }): ClaimBandsProjection {
   const priorByLotId = new Map<string, PriorClaimedLotRow[]>();
   for (const row of input.priorRows) {
@@ -389,6 +407,11 @@ export function buildClaimBands(input: {
       previouslyClaimed: totalBand(lines.map((line) => line.previouslyClaimed)),
       thisClaim: totalBand(lines.map((line) => line.thisClaim)),
       claimedToDate: totalBand(lines.map((line) => line.claimedToDate)),
+    },
+    claimLevel: {
+      totalClaimedCents: amountToCents(input.claim.totalClaimedAmount),
+      certifiedCents: amountToCents(input.claim.certifiedAmount),
+      paidCents: amountToCents(input.claim.paidAmount),
     },
     priorClaimCount: input.priorClaimCount,
     historyStatuses: [...CLAIM_HISTORY_STATUSES],
