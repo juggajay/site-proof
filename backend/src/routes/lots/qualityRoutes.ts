@@ -8,6 +8,7 @@ import { checkConformancePrerequisites } from '../../lib/conformancePrerequisite
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { buildConformanceBlockerItems } from '../../lib/evidenceReadiness/conformanceItems.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import { transitionLotStatus } from '../../lib/lotStatusTransition.js';
 import { holdPointTerminal } from '../../lib/readiness/predicates.js';
 import { prismaRegimeStreamFetcher } from '../../lib/readiness/sufficiency/prismaStream.js';
 import { recordDecision, type DecisionSnapshotInput } from '../../lib/readiness/recordDecision.js';
@@ -506,31 +507,23 @@ lotQualityRouter.post(
       // normal path never sets these columns (a not-yet-conformed lot has them
       // null).
       mutate: (tx) =>
-        tx.lot
-          .update({
-            where: { id, status: { notIn: ['conformed', 'claimed'] } },
-            data: {
-              status: 'conformed',
-              conformedAt: now,
-              conformedBy: {
-                connect: { id: user.id },
-              },
-              ...(force
-                ? {
-                    conformanceOverriddenAt: now,
-                    conformanceOverriddenBy: { connect: { id: user.id } },
-                    conformanceOverrideReason: forceReason,
-                  }
-                : {}),
-            },
-            select: {
-              id: true,
-              lotNumber: true,
-              status: true,
-              conformedAt: true,
-            },
-          })
-          .catch(conflictIfGuardMissed),
+        transitionLotStatus(tx, {
+          lotId: id,
+          to: 'conformed',
+          guard: { status: { notIn: ['conformed', 'claimed'] } },
+          extraData: {
+            conformedAt: now,
+            conformedById: user.id,
+            ...(force
+              ? {
+                  conformanceOverriddenAt: now,
+                  conformanceOverriddenById: user.id,
+                  conformanceOverrideReason: forceReason,
+                }
+              : {}),
+          },
+          event: { actorId: user.id, source: 'user' },
+        }).catch(conflictIfGuardMissed),
       snapshots: (evaluation) =>
         lotConformanceSnapshot(id, evaluation, {
           overridden: Boolean(force),
@@ -645,29 +638,23 @@ lotQualityRouter.post(
       // concurrent transition (a claim, a re-conform) loses instead of being
       // silently overwritten.
       mutate: (tx) =>
-        tx.lot
-          .update({
-            where: { id, status: previousStatus },
-            data: {
-              status,
-              ...(clearsConformance
-                ? {
-                    conformedAt: null,
-                    conformedById: null,
-                    conformanceOverriddenAt: null,
-                    conformanceOverriddenById: null,
-                    conformanceOverrideReason: null,
-                  }
-                : {}),
-            },
-            select: {
-              id: true,
-              lotNumber: true,
-              status: true,
-              updatedAt: true,
-            },
-          })
-          .catch(conflictIfGuardMissed),
+        transitionLotStatus(tx, {
+          lotId: id,
+          to: status,
+          guard: { status: previousStatus },
+          extraData: {
+            ...(clearsConformance
+              ? {
+                  conformedAt: null,
+                  conformedById: null,
+                  conformanceOverriddenAt: null,
+                  conformanceOverriddenById: null,
+                  conformanceOverrideReason: null,
+                }
+              : {}),
+          },
+          event: { actorId: user.id, source: 'user' },
+        }).catch(conflictIfGuardMissed),
       snapshots: (evaluation) =>
         lotConformanceSnapshot(id, evaluation, { overridden: true, reason: reason.trim() }),
     });

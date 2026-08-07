@@ -3,6 +3,7 @@ import type { Request } from 'express';
 
 import { AppError } from '../../lib/AppError.js';
 import { AuditAction } from '../../lib/auditLog.js';
+import { transitionLotStatusesWhere } from '../../lib/lotStatusTransition.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import { prisma } from '../../lib/prisma.js';
@@ -381,13 +382,19 @@ export async function executePublicHoldPointRejection(input: {
           },
           select: { id: true, ncrNumber: true, status: true },
         });
-        await tx.lot.updateMany({
+        await transitionLotStatusesWhere(tx, {
           where: {
             id: token.holdPoint.lotId,
             projectId: token.holdPoint.lot.projectId,
             status: { notIn: ['conformed', 'claimed'] },
           },
-          data: { status: 'ncr_raised' },
+          to: 'ncr_raised',
+          event: {
+            actorId: null,
+            source: 'system',
+            sourceEntityType: 'ncr',
+            sourceEntityId: ncr.id,
+          },
         });
         await tx.holdPointDecisionRound.update({
           where: { id: round.id },

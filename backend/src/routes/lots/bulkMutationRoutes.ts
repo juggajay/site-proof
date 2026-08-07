@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { transitionLotStatusesWhere } from '../../lib/lotStatusTransition.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireProjectRole } from './access.js';
 import {
@@ -103,16 +104,16 @@ lotBulkMutationRouter.post(
     assertLotsBulkMutable(lotsToUpdate);
 
     // Update all lots
-    const result = await prisma.lot.updateMany({
-      where: {
-        id: { in: uniqueLotIds },
-        status: { notIn: ['conformed', 'claimed'] },
-      },
-      data: {
-        status: status,
-        updatedAt: new Date(),
-      },
-    });
+    const result = await prisma.$transaction((tx) =>
+      transitionLotStatusesWhere(tx, {
+        where: {
+          id: { in: uniqueLotIds },
+          status: { notIn: ['conformed', 'claimed'] },
+        },
+        to: status,
+        event: { actorId: user.id, source: 'user' },
+      }),
+    );
 
     // Audit each mutated lot (all requested lots are mutable here —
     // assertLotsBulkMutable rejects the request if any are conformed/claimed).
@@ -452,10 +453,6 @@ lotBulkMutationRouter.post(
 
       return tx.lot.update({
         where: { id },
-        data: {
-          assignedSubcontractorId: subcontractorId ? undefined : null,
-          updatedAt: new Date(),
-        },
         select: {
           id: true,
           lotNumber: true,
@@ -468,6 +465,10 @@ lotBulkMutationRouter.post(
               companyName: true,
             },
           },
+        },
+        data: {
+          assignedSubcontractorId: subcontractorId ? undefined : null,
+          updatedAt: new Date(),
         },
       });
     });

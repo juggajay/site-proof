@@ -99,6 +99,7 @@ model User {
   documentSignedUrlTokens     DocumentSignedUrlToken[]
   notifications               Notification[]
   auditLogs                   AuditLog[]
+  lotStatusEvents             LotStatusEvent[]
   productEvents               ProductEvent[]
   syncQueues                  SyncQueue[]
   preparedClaims              ProgressClaim[]
@@ -660,6 +661,7 @@ model Lot {
   variations               Variation[]
   subcontractorAssignments LotSubcontractorAssignment[]
   geometries               LotGeometry[]
+  statusEvents             LotStatusEvent[]
   folioSnapshots           FolioSnapshot[]
   folioIssueReservations   FolioIssueReservation[]
   folioIssues              FolioIssue[]
@@ -674,6 +676,34 @@ model Lot {
   // The existing @@index([projectId, conformedAt]) cannot serve it.
   @@index([projectId, activitySlug, conformedAt], map: "lots_project_activity_slug_conformed_idx")
   @@map("lots")
+}
+
+model LotStatusEvent {
+  id                       String   @id @default(uuid())
+  lotId                    String   @map("lot_id")
+  fromStatus               String?  @map("from_status")
+  toStatus                 String   @map("to_status")
+  // When the transition happened in the world vs when this row was written.
+  // Identical for live transitions; backfilled rows carry the audit timestamp.
+  effectiveAt              DateTime @map("effective_at")
+  recordedAt               DateTime @default(now()) @map("recorded_at")
+  actorId                  String?  @map("actor_id")
+  // 'user' | 'system' | 'import' | 'backfill' — string, not enum, matching Lot.status.
+  source                   String
+  // e.g. 'ncr'/'claim'/'audit_log' + the row id that caused the flip.
+  sourceEntityType         String?  @map("source_entity_type")
+  sourceEntityId           String?  @map("source_entity_id")
+  // Only on backfilled rows: how trustworthy the reconstruction is.
+  reconstructionConfidence String?  @map("reconstruction_confidence")
+  metadata                 Json?
+
+  lot   Lot   @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([lotId, effectiveAt])
+  @@index([lotId, recordedAt])
+  @@index([sourceEntityType, sourceEntityId])
+  @@map("lot_status_events")
 }
 
 // ============================================================================
