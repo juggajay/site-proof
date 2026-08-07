@@ -216,6 +216,33 @@ export async function sendDesignModelVersionParts(
   return (await completed.json()) as DesignModelVersion;
 }
 
+/** One approved element→lot link (Wave 6 — the 4D playback join input). */
+export interface ModelElementLink {
+  ifcGuid: string;
+  lotId: string;
+}
+
+export interface ModelElementLinksResponse {
+  links: ModelElementLink[];
+  counts: {
+    elements: number;
+    linked: number;
+    unlinked: number;
+    /** Ambiguous count at the last linking proposal, when one exists. */
+    ambiguousAtLastProposal?: number;
+  };
+}
+
+export async function fetchModelElementLinks(
+  projectId: string,
+  modelId: string,
+  versionId: string,
+): Promise<ModelElementLinksResponse> {
+  return apiFetch<ModelElementLinksResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/models/${encodeURIComponent(modelId)}/versions/${encodeURIComponent(versionId)}/element-links`,
+  );
+}
+
 /**
  * Download a ready version's fragments as an ArrayBuffer through the app's
  * authed fetch. `timeoutMs: 0` is the documented long-stream exception — the
