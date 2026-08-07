@@ -12,6 +12,7 @@ import {
   isConversionPending,
   isQuarantined,
   VERSION_STATUS_LABELS,
+  type DesignModelVersion,
 } from '@/lib/models/designModelsApi';
 import {
   MOBILE_FRAG_BUDGET_BYTES,
@@ -97,77 +98,119 @@ export function ModelViewerPage() {
         )}
       </div>
 
-      {versionQuery.isLoading && <PageSkeleton />}
+      <ViewerBody
+        projectId={projectId}
+        modelId={modelId}
+        versionId={versionId}
+        version={version}
+        loading={versionQuery.isLoading}
+        loadFailed={versionQuery.isError}
+        blockedOnMobile={blockedOnMobile}
+        backHref={backHref}
+        fragSizeBytes={fragSizeBytes}
+      />
+    </div>
+  );
+}
 
-      {versionQuery.isError && (
-        <CenteredPanel>
-          <h2 className="text-base font-semibold">Model version not found</h2>
+function ViewerBody({
+  projectId,
+  modelId,
+  versionId,
+  version,
+  loading,
+  loadFailed,
+  blockedOnMobile,
+  backHref,
+  fragSizeBytes,
+}: {
+  projectId: string;
+  modelId: string;
+  versionId: string;
+  version: DesignModelVersion | undefined;
+  loading: boolean;
+  loadFailed: boolean;
+  blockedOnMobile: boolean;
+  backHref: string;
+  fragSizeBytes: number | null;
+}) {
+  const backButton = (
+    <Button type="button" variant="outline" className="mt-4" asChild>
+      <Link to={backHref}>Back to design models</Link>
+    </Button>
+  );
+
+  if (loading) return <PageSkeleton />;
+
+  if (loadFailed || !version) {
+    return (
+      <CenteredPanel>
+        <h2 className="text-base font-semibold">Model version not found</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This version may have been deleted, or you may not have access to it.
+        </p>
+        {backButton}
+      </CenteredPanel>
+    );
+  }
+
+  if (isConversionPending(version.status)) {
+    return (
+      <CenteredPanel>
+        <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+        <h2 className="mt-3 text-base font-semibold">{VERSION_STATUS_LABELS[version.status]}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The model is being converted for 3D viewing. This page updates automatically — most models
+          are ready in under a minute.
+        </p>
+      </CenteredPanel>
+    );
+  }
+
+  if (version.status === 'failed') {
+    return (
+      <CenteredPanel>
+        <h2 className="text-base font-semibold">Conversion failed</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {version.lastFailureReason ?? 'The IFC file could not be converted.'}
+        </p>
+        {isQuarantined(version) && (
           <p className="mt-2 text-sm text-muted-foreground">
-            This version may have been deleted, or you may not have access to it.
+            This file failed twice and will not be retried. Check it opens in your authoring
+            software, then upload a new version.
           </p>
-          <Button type="button" variant="outline" className="mt-4" asChild>
-            <Link to={backHref}>Back to design models</Link>
-          </Button>
-        </CenteredPanel>
-      )}
+        )}
+        {backButton}
+      </CenteredPanel>
+    );
+  }
 
-      {version && isConversionPending(version.status) && (
-        <CenteredPanel>
-          <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
-          <h2 className="mt-3 text-base font-semibold">{VERSION_STATUS_LABELS[version.status]}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The model is being converted for 3D viewing. This page updates automatically — most
-            models are ready in under a minute.
-          </p>
-        </CenteredPanel>
-      )}
+  if (blockedOnMobile) {
+    return (
+      <CenteredPanel>
+        <Monitor className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h2 className="mt-3 text-base font-semibold">Too large for this device</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This model is {formatDocumentFileSize(fragSizeBytes)}. Phones and tablets run out of
+          memory and crash on models over {Math.round(MOBILE_FRAG_BUDGET_BYTES / 1_000_000)} MB, so
+          3D viewing for this model needs a desktop browser.
+        </p>
+        {backButton}
+      </CenteredPanel>
+    );
+  }
 
-      {version?.status === 'failed' && (
-        <CenteredPanel>
-          <h2 className="text-base font-semibold">Conversion failed</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {version.lastFailureReason ?? 'The IFC file could not be converted.'}
-          </p>
-          {isQuarantined(version) && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              This file failed twice and will not be retried. Check it opens in your authoring
-              software, then upload a new version.
-            </p>
-          )}
-          <Button type="button" variant="outline" className="mt-4" asChild>
-            <Link to={backHref}>Back to design models</Link>
-          </Button>
-        </CenteredPanel>
-      )}
-
-      {version?.status === 'ready' && blockedOnMobile && (
-        <CenteredPanel>
-          <Monitor className="mx-auto h-8 w-8 text-muted-foreground" />
-          <h2 className="mt-3 text-base font-semibold">Too large for this device</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This model is {formatDocumentFileSize(fragSizeBytes)}. Phones and tablets run out of
-            memory and crash on models over {Math.round(MOBILE_FRAG_BUDGET_BYTES / 1_000_000)} MB,
-            so 3D viewing for this model needs a desktop browser.
-          </p>
-          <Button type="button" variant="outline" className="mt-4" asChild>
-            <Link to={backHref}>Back to design models</Link>
-          </Button>
-        </CenteredPanel>
-      )}
-
-      {version?.status === 'ready' && !blockedOnMobile && (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-lg border bg-card">
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            }
-          >
-            <ModelViewerCanvas projectId={projectId} modelId={modelId} versionId={versionId} />
-          </Suspense>
-        </div>
-      )}
+  return (
+    <div className="min-h-0 flex-1 overflow-hidden rounded-lg border bg-card">
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        }
+      >
+        <ModelViewerCanvas projectId={projectId} modelId={modelId} versionId={versionId} />
+      </Suspense>
     </div>
   );
 }
