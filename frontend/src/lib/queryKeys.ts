@@ -289,6 +289,9 @@ export const queryKeys = {
   copilotProposal: (projectId: string, proposalId: string) =>
     ['copilot-proposal', projectId, proposalId] as const,
   copilotLotPresence: (projectId: string) => ['copilot-lot-presence', projectId] as const,
+  // Wave 6 — id→lotNumber options for the linking review's ambiguous picker.
+  // Own key so it can never collide with (or invalidate) the register's cache.
+  modelLinkingLotOptions: (projectId: string) => ['model-linking-lot-options', projectId] as const,
 
   // Wave 5 — 3D design models. The list carries each model's latest version
   // (status included), so upload/convert polling invalidates the list key; a

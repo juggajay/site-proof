@@ -31,7 +31,12 @@ export interface PaintLayer {
 export interface PaintPlan {
   /** Applied in order: ghost-everything first, then one layer per status. */
   layers: PaintLayer[];
-  /** Painted element count per status, in legend order (zero counts omitted). */
+  /**
+   * Linked-element count per status, in legend order (zero counts omitted).
+   * Counts come from the ledger join, NOT the geometry join — an element whose
+   * GUID has no geometry in the frag still counts (and the counts render before
+   * the 3D stack finishes booting).
+   */
   statusCounts: Map<string, number>;
   /**
    * Linked elements with no QA record at the date (lot not yet created) —
@@ -76,12 +81,11 @@ export function buildPaintPlan(
   currentByLot?: Map<string, string>,
 ): PaintPlan {
   const byStatus = new Map<string, number[]>();
+  const countByStatus = new Map<string, number>();
   let noRecordCount = 0;
   let changedCount = 0;
 
   for (const link of links) {
-    const localId = guidToLocalId.get(link.ifcGuid);
-    if (localId === undefined) continue; // element has no geometry in the frag
     const then = statusAtDate.get(link.lotId) ?? null;
 
     let painted: string | null;
@@ -93,30 +97,34 @@ export function buildPaintPlan(
       painted = then;
       if (painted === null) noRecordCount += 1;
     }
+    if (painted === null) continue;
 
-    if (painted !== null) {
-      const bucket = byStatus.get(painted);
-      if (bucket) bucket.push(localId);
-      else byStatus.set(painted, [localId]);
-    }
+    countByStatus.set(painted, (countByStatus.get(painted) ?? 0) + 1);
+    const localId = guidToLocalId.get(link.ifcGuid);
+    if (localId === undefined) continue; // element has no geometry in the frag
+    const bucket = byStatus.get(painted);
+    if (bucket) bucket.push(localId);
+    else byStatus.set(painted, [localId]);
   }
 
   const orderedStatuses = [
-    ...STATUS_ORDER.filter((status) => byStatus.has(status)),
+    ...STATUS_ORDER.filter((status) => countByStatus.has(status)),
     // Unknown statuses still paint (fallback swatch) rather than silently ghost.
-    ...[...byStatus.keys()].filter((status) => !STATUS_ORDER.includes(status)),
+    ...[...countByStatus.keys()].filter((status) => !STATUS_ORDER.includes(status)),
   ];
 
   const layers: PaintLayer[] = [
     GHOST_LAYER,
-    ...orderedStatuses.map((status) => ({
-      localIds: byStatus.get(status)!,
-      color: getLotStatusSwatch(status),
-      opacity: paintOpacityForStatus(status),
-    })),
+    ...orderedStatuses
+      .filter((status) => byStatus.has(status))
+      .map((status) => ({
+        localIds: byStatus.get(status)!,
+        color: getLotStatusSwatch(status),
+        opacity: paintOpacityForStatus(status),
+      })),
   ];
   const statusCounts = new Map(
-    orderedStatuses.map((status) => [status, byStatus.get(status)!.length]),
+    orderedStatuses.map((status) => [status, countByStatus.get(status)!]),
   );
 
   return {

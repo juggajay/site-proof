@@ -51,6 +51,16 @@ export const STAGE_META: StageMeta[] = [
     readLabel: 'Break into lots',
     requiresAi: false,
   },
+  {
+    stage: 'model_lot_linking',
+    title: 'Model lot links',
+    description:
+      'Link 3D model elements to lots by their lot numbers, so QA status can paint the model.',
+    active: true,
+    readLabel: 'Link model to lots',
+    // Deterministic lot-number matching server-side — works with AI unconfigured.
+    requiresAi: false,
+  },
 ];
 
 /**

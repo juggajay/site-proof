@@ -38,9 +38,11 @@ describe('buildPaintPlan', () => {
       { localIds: [3], color: '#56B4E9', opacity: 0.6 },
       { localIds: [1, 2], color: '#009E73', opacity: 1 },
     ]);
+    // Counts are ledger-driven: guid-missing (lot-1) counts even though it has
+    // no geometry to paint.
     expect([...plan.statusCounts.entries()]).toEqual([
       ['in_progress', 1],
-      ['conformed', 2],
+      ['conformed', 3],
     ]);
     expect(plan.noRecordCount).toBe(1);
     expect(plan.changedCount).toBeNull();
@@ -74,10 +76,11 @@ describe('buildPaintPlan', () => {
 
     const plan = buildPaintPlan(links, guidIndex, statusAtDate, current);
 
-    expect(plan.changedCount).toBe(3);
+    // lot-1's three linked elements (incl. the geometry-less one) + lot-3's.
+    expect(plan.changedCount).toBe(4);
     expect([...plan.statusCounts.entries()]).toEqual([
       ['in_progress', 1],
-      ['conformed', 2],
+      ['conformed', 3],
     ]);
     // lot-2's element (localId 3) is unchanged: ghosted, not painted.
     const paintedIds = plan.layers.slice(1).flatMap((layer) => layer.localIds ?? []);
