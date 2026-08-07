@@ -1,15 +1,23 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { getEffectiveProjectRole } from '../lib/projectAccess.js';
+import { getEffectiveProjectRole, requireInternalProjectAccess } from '../lib/projectAccess.js';
+import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import {
   TEST_CREATORS,
   TEST_VERIFIERS,
   requireTestProjectRole,
   requireTestResultReadAccess,
 } from './testResults/accessControl.js';
+import { buildLotTestRequirements } from './testResults/lotRequirements.js';
+import {
+  loadRaiseLot,
+  planBatchRaise,
+  writeRaisedTests,
+  type BatchRaiseCreated,
+} from './testResults/batchRaise.js';
 import { certificateUpload } from './testResults/certificateStorage.js';
 import { buildCertificateExtractionResponse } from './testResults/extractionResponse.js';
 import {
@@ -37,6 +45,88 @@ export const testResultsRouter = Router();
 testResultsRouter.use(requireAuth);
 
 testResultsRouter.use('/specifications', specificationRoutes);
+
+// GET /api/test-results/lots/:lotId/requirements — the lot's per-rule "N of M
+// passing" summary. Registered before `crudRoutes` so the literal prefix wins
+// over its `/:id`.
+//
+// INTERNAL project roles only, mirroring
+// `projectTestCoverage.ts` (`GET /api/projects/:projectId/lots/test-coverage`):
+// a frequency shortfall is CIVOS's advisory judgement about whether work has
+// been tested enough, and that is a conversation with a subcontractor, not a
+// number in their portal (C3 spec §10.1, J3).
+testResultsRouter.get(
+  '/lots/:lotId/requirements',
+  asyncHandler(async (req, res) => {
+    const lotId = parseTestResultRouteParam(req.params.lotId, 'lotId');
+    const lot = await prisma.lot.findUnique({ where: { id: lotId }, select: { projectId: true } });
+    if (!lot) throw AppError.notFound('Lot');
+
+    await requireInternalProjectAccess(req.user!, lot.projectId);
+
+    const requirements = await buildLotTestRequirements(lotId);
+    if (!requirements) throw AppError.notFound('Lot');
+
+    res.json(requirements);
+  }),
+);
+
+/**
+ * One audit row per raised test, matching what the single-create path writes —
+ * a batch is a convenience for the user, not a reason for the trail to get
+ * coarser. `raisedForRule` records which frequency rule asked for the row.
+ */
+async function auditRaisedTests(
+  created: BatchRaiseCreated[],
+  lot: { id: string; projectId: string },
+  userId: string,
+  req: Request,
+): Promise<void> {
+  for (const group of created) {
+    for (const testResultId of group.testResultIds) {
+      await createAuditLog({
+        projectId: lot.projectId,
+        userId,
+        entityType: 'test_result',
+        entityId: testResultId,
+        action: AuditAction.TEST_RESULT_CREATED,
+        changes: { testType: group.testType, lotId: lot.id, raisedForRule: group.ruleId },
+        req,
+      });
+    }
+  }
+}
+
+// POST /api/test-results/batch-raise — raise every outstanding test for the
+// named frequency rules of one lot, all-or-nothing.
+testResultsRouter.post(
+  '/batch-raise',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const lotId = parseTestResultRouteParam(req.body?.lotId, 'lotId');
+
+    const lot = await loadRaiseLot(lotId);
+    if (!lot) throw AppError.notFound('Lot');
+
+    await requireTestProjectRole(
+      lot.projectId,
+      user,
+      TEST_CREATORS,
+      'You do not have permission to create test results',
+    );
+
+    const planned = await planBatchRaise(lotId, req.body?.requests);
+    const created = await writeRaisedTests(planned, lot);
+    await auditRaisedTests(created, lot, user.id, req);
+
+    res.status(201).json({
+      lotId,
+      created,
+      totalCreated: created.reduce((sum, group) => sum + group.count, 0),
+    });
+  }),
+);
+
 testResultsRouter.use(listRoutes);
 testResultsRouter.use(crudRoutes);
 

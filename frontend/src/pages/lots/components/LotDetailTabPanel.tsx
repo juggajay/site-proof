@@ -219,6 +219,8 @@ export function LotDetailTabPanel({
             testResults={testResults}
             loading={loadingTests}
             isMobile={isMobile}
+            lotId={lotId}
+            canRaiseTests={canCreateTests}
           />
         </div>
       )}

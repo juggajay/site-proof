@@ -611,6 +611,7 @@ export function LotDetailPage() {
         onSuccess={createTestResult}
         lots={lot ? [{ id: lot.id, lotNumber: lot.lotNumber }] : []}
         projectState=""
+        projectId={projectId}
         initialValues={addTestPrefill.initialValues}
         satisfiesItem={addTestPrefill.satisfiesItem}
       />

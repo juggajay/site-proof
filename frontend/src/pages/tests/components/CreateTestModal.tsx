@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { useLotItpTestItems } from '../hooks/useLotItpTestItems';
 import { SampleLocationCapture, type CapturedSamplePoint } from './SampleLocationCapture';
+import { LotTestRequirements } from './LotTestRequirements';
 
 const createTestSchema = z.object({
   testType: z.string().trim().min(1, 'Test type is required'),
@@ -55,6 +56,12 @@ interface CreateTestModalProps {
   onSuccess: (formData: CreateTestFormData) => Promise<void>;
   lots: Lot[];
   projectState: string;
+  /**
+   * Enables the requirement summary once a lot is chosen — "how many of these
+   * does this lot actually need?" is the question the user is answering while
+   * this form is open. Optional so a caller without it simply omits the panel.
+   */
+  projectId?: string;
   /** Prefill some fields (e.g. from an ITP-item "add test" entry point). */
   initialValues?: Partial<CreateTestFormData>;
   /**
@@ -71,6 +78,7 @@ export const CreateTestModal = React.memo(function CreateTestModal({
   onSuccess,
   lots,
   projectState,
+  projectId,
   initialValues,
   satisfiesItem,
 }: CreateTestModalProps) {
@@ -244,6 +252,11 @@ export const CreateTestModal = React.memo(function CreateTestModal({
               ))}
             </NativeSelect>
           </div>
+
+          {/* What this lot actually needs, once one is chosen. Read-only here —
+              raising a batch is an action for the lot's own Tests tab, not a
+              side effect of filling in a single test. */}
+          {projectId && lotId && <LotTestRequirements lotId={lotId} projectId={projectId} />}
 
           <div>
             <Label htmlFor="test-type">Test Type *</Label>

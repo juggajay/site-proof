@@ -858,6 +858,7 @@ export function TestResultsPage() {
         onSuccess={handleCreateTestResult}
         lots={lots}
         projectState={projectState}
+        projectId={projectId}
       />
 
       <LinkItpItemModal
