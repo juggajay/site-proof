@@ -193,68 +193,75 @@ export async function runHpDecisionRoundBackfill(
   let tokensBound = 0;
 
   for (const holdPointIds of chunk(plan.holdPointIdsToBackfill, batchSize)) {
-    const batchResult = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(
-        Prisma.sql`SELECT id FROM hold_points WHERE id IN (${Prisma.join(holdPointIds)}) FOR UPDATE`,
-      );
+    const batchResult = await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM hold_points WHERE id IN (${Prisma.join(holdPointIds)}) FOR UPDATE`,
+        );
 
-      const holdPoints = (await loadZeroRoundHoldPoints(tx, now, holdPointIds)).filter(
-        (holdPoint) => isBackfillStatus(holdPoint.status),
-      );
-      let batchClassRemediated = 0;
-      let batchTokensBound = 0;
+        const holdPoints = (await loadZeroRoundHoldPoints(tx, now, holdPointIds)).filter(
+          (holdPoint) => isBackfillStatus(holdPoint.status),
+        );
+        let batchClassRemediated = 0;
+        let batchTokensBound = 0;
 
-      for (const holdPoint of holdPoints) {
-        const authorityClass = authorityClassForProjectSettings(holdPoint.lot.project.settings);
-        const isDecided = holdPoint.status === 'released' || holdPoint.status === 'completed';
-        const primaryLiveToken = holdPoint.releaseTokens[0];
-        const round = await tx.holdPointDecisionRound.create({
-          data: {
-            holdPointId: holdPoint.id,
-            roundNumber: 1,
-            authorityClass,
-            requestedAt: holdPoint.notificationSentAt ?? holdPoint.createdAt,
-            requestedById: null,
-            recipientEmail:
-              holdPoint.status === 'notified' ? primaryLiveToken?.recipientEmail : null,
-            recipientName: holdPoint.status === 'notified' ? primaryLiveToken?.recipientName : null,
-            outcome: isDecided ? 'released' : null,
-            decidedAt: isDecided ? (holdPoint.releasedAt ?? holdPoint.updatedAt) : null,
-            decidedByName: isDecided ? holdPoint.releasedByName : null,
-            decidedByOrg: isDecided ? holdPoint.releasedByOrg : null,
-            decisionMethod: isDecided ? 'backfill_synthetic' : null,
-          },
-        });
-
-        await tx.holdPoint.update({
-          where: { id: holdPoint.id },
-          data: { currentRoundId: round.id, authorityClass },
-        });
-
-        if (holdPoint.authorityClass !== authorityClass) {
-          batchClassRemediated += 1;
-        }
-
-        if (holdPoint.status === 'notified' && holdPoint.releaseTokens.length > 0) {
-          const binding = await tx.holdPointReleaseToken.updateMany({
-            where: {
-              id: { in: holdPoint.releaseTokens.map((token) => token.id) },
+        for (const holdPoint of holdPoints) {
+          const authorityClass = authorityClassForProjectSettings(holdPoint.lot.project.settings);
+          const isDecided = holdPoint.status === 'released' || holdPoint.status === 'completed';
+          const primaryLiveToken = holdPoint.releaseTokens[0];
+          const round = await tx.holdPointDecisionRound.create({
+            data: {
               holdPointId: holdPoint.id,
-              usedAt: null,
-              expiresAt: { gt: now },
+              roundNumber: 1,
+              authorityClass,
+              requestedAt: holdPoint.notificationSentAt ?? holdPoint.createdAt,
+              requestedById: null,
+              recipientEmail:
+                holdPoint.status === 'notified' ? primaryLiveToken?.recipientEmail : null,
+              recipientName:
+                holdPoint.status === 'notified' ? primaryLiveToken?.recipientName : null,
+              outcome: isDecided ? 'released' : null,
+              decidedAt: isDecided ? (holdPoint.releasedAt ?? holdPoint.updatedAt) : null,
+              decidedByName: isDecided ? holdPoint.releasedByName : null,
+              decidedByOrg: isDecided ? holdPoint.releasedByOrg : null,
+              decisionMethod: isDecided ? 'backfill_synthetic' : null,
             },
-            data: { decisionRoundId: round.id },
           });
-          batchTokensBound += binding.count;
-        }
-      }
 
-      return {
-        created: holdPoints.length,
-        classRemediated: batchClassRemediated,
-        tokensBound: batchTokensBound,
-      };
-    });
+          await tx.holdPoint.update({
+            where: { id: holdPoint.id },
+            data: { currentRoundId: round.id, authorityClass },
+          });
+
+          if (holdPoint.authorityClass !== authorityClass) {
+            batchClassRemediated += 1;
+          }
+
+          if (holdPoint.status === 'notified' && holdPoint.releaseTokens.length > 0) {
+            const binding = await tx.holdPointReleaseToken.updateMany({
+              where: {
+                id: { in: holdPoint.releaseTokens.map((token) => token.id) },
+                holdPointId: holdPoint.id,
+                usedAt: null,
+                expiresAt: { gt: now },
+              },
+              data: { decisionRoundId: round.id },
+            });
+            batchTokensBound += binding.count;
+          }
+        }
+
+        return {
+          created: holdPoints.length,
+          classRemediated: batchClassRemediated,
+          tokensBound: batchTokensBound,
+        };
+        // Remote databases (the primary target of this operator script) pay a
+        // network round-trip per row write; Prisma's default 5s interactive
+        // transaction timeout aborts a 100-row batch against Railway.
+      },
+      { timeout: 120_000, maxWait: 15_000 },
+    );
 
     created += batchResult.created;
     classRemediated += batchResult.classRemediated;
