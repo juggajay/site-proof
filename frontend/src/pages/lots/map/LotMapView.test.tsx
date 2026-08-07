@@ -49,6 +49,10 @@ vi.mock('react-leaflet', () => {
       return <div data-testid="tile-layer" data-url={String(props.url)} />;
     },
     ScaleControl: () => <div data-testid="scale-control" />,
+    ZoomControl: (props: { position?: string }) => (
+      <div data-testid="zoom-control" data-position={props.position} />
+    ),
+    ImageOverlay: () => <div data-testid="image-overlay" />,
     LayersControl,
     // `data-fill` exposes the resolved fill so the C3 `fillOverride` recolour is
     // assertable without a real Leaflet layer.
@@ -778,12 +782,16 @@ describe('LotMapView', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
     expect(mapContainerProps.current.zoomControl).toBe(false);
+    expect(screen.queryByTestId('zoom-control')).not.toBeInTheDocument();
   });
 
-  it('keeps the +/- zoom control on desktop', () => {
+  it('desktop: the +/- control lives bottom-right, out from under the toolbar column', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
-    expect(mapContainerProps.current.zoomControl).toBe(true);
+    // The default top-left control is off (the toolbar spans both top corners);
+    // an explicit control is re-added clear of it.
+    expect(mapContainerProps.current.zoomControl).toBe(false);
+    expect(screen.getByTestId('zoom-control')).toHaveAttribute('data-position', 'bottomright');
   });
 
   it('isolates the map stacking context so leaflet z-indexes cannot paint over app chrome', () => {

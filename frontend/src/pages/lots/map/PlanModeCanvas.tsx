@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { ImageOverlay, MapContainer } from 'react-leaflet';
+import { ImageOverlay, MapContainer, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 
 import type { PlanSheetListItem } from '@/pages/projects/settings/planSheetsData';
@@ -24,6 +24,8 @@ interface PlanModeCanvasProps {
   onSelect: (event: LotSelectEvent) => void;
   /** Receives the Leaflet instance (snapshot capture, fit control). */
   onMapRef: (map: L.Map | null) => void;
+  /** Desktop gets the +/- control bottom-right (same slot as the map canvas). */
+  showZoom?: boolean;
   /** The selection popup, rendered inside the map context. */
   children?: React.ReactNode;
 }
@@ -50,6 +52,7 @@ export function PlanModeCanvas({
   selectedLotId,
   onSelect,
   onMapRef,
+  showZoom = false,
   children,
 }: PlanModeCanvasProps) {
   // The whole sheet, unclipped and unblended — the paper is the canvas.
@@ -119,6 +122,7 @@ export function PlanModeCanvas({
       className="civos-plan-canvas"
       style={{ height: '100%', width: '100%' }}
     >
+      {showZoom && <ZoomControl position="bottomright" />}
       {url && <ImageOverlay url={url} bounds={sheetBounds} pane="tilePane" />}
       {error && (
         <div className="absolute inset-x-0 top-1/2 z-[500] mx-auto w-fit rounded bg-background/90 px-3 py-2 text-sm text-destructive shadow">

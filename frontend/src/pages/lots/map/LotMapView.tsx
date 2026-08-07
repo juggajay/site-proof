@@ -17,6 +17,7 @@ import {
   Tooltip,
   useMap,
   useMapEvents,
+  ZoomControl,
 } from 'react-leaflet';
 import L from 'leaflet';
 import { useQueryClient } from '@tanstack/react-query';
@@ -24,7 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Navigation } from 'lucide-react';
 
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
-import { getStatusColor, LOT_STATUS_LEGEND } from '@/components/lots/linearMapViewHelpers';
+import { getStatusColor } from '@/components/lots/linearMapViewHelpers';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import {
   formatCoordinate,
@@ -62,12 +63,8 @@ import {
   type MapPanelId,
   type MapPinLayerId,
 } from './mapLayerRows';
-import {
-  getTestCoverageColor,
-  testCoverageByLot,
-  useTestCoverage,
-  TEST_COVERAGE_LEGEND,
-} from './testCoverageData';
+import { getTestCoverageColor, testCoverageByLot, useTestCoverage } from './testCoverageData';
+import { MapLegend } from './MapLegend';
 import { useSpatialSearch, type SpatialPhoto, type SpatialTestResult } from './spatialSearchData';
 import { historicalStatusByLot, useLotStatusTimeline } from './statusTimelineData';
 import {
@@ -390,39 +387,6 @@ function TestPin({
         </div>
       </Popup>
     </Marker>
-  );
-}
-
-function StatusLegend({ testing }: { testing: boolean }) {
-  if (testing) {
-    return (
-      <div
-        className="flex flex-wrap items-center gap-3 p-3 border-t bg-muted/20 text-xs"
-        data-testid="testing-legend"
-      >
-        <span className="font-medium">Testing:</span>
-        {TEST_COVERAGE_LEGEND.map(({ state, label }) => (
-          <div key={state} className="flex items-center gap-1">
-            <span
-              className="w-3 h-3 rounded"
-              style={{ backgroundColor: getTestCoverageColor(state) }}
-            />
-            <span>{label}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-3 p-3 border-t bg-muted/20 text-xs">
-      <span className="font-medium">Status:</span>
-      {LOT_STATUS_LEGEND.map(({ key, label }) => (
-        <div key={key} className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded" style={{ backgroundColor: getStatusColor(key) }} />
-          <span>{label}</span>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -1238,6 +1202,20 @@ export function LotMapView({
     if (b) map.fitBounds(b, { padding: [24, 24], maxZoom: 18 });
   }, [map, mapMode, filteredLotIds, filteredGeometries]);
 
+  // Legend counts: what is actually drawn (post-filter, post-history).
+  const statusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const g of displayGeometries) counts.set(g.status, (counts.get(g.status) ?? 0) + 1);
+    return counts;
+  }, [displayGeometries]);
+  const testingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const verdict of testCoverageLots.values()) {
+      counts.set(verdict.state, (counts.get(verdict.state) ?? 0) + 1);
+    }
+    return counts;
+  }, [testCoverageLots]);
+
   // Zoom-tiered labels: one candidate per displayed lot with a usable centroid.
   const labelLots = useMemo<LabelLot[]>(
     () =>
@@ -1559,6 +1537,7 @@ export function LotMapView({
                   selectedLotId={selectedLot?.lotId ?? null}
                   onSelect={setSelectedLot}
                   onMapRef={setMap}
+                  showZoom={!isMobile}
                 >
                   {selectedLot && selectedGeometry && (
                     <LotPopup
@@ -1576,12 +1555,12 @@ export function LotMapView({
                 center={AU_DEFAULT_CENTER}
                 zoom={AU_DEFAULT_ZOOM}
                 scrollWheelZoom
-                // No +/- control on mobile: pinch covers zoom, and the control's
-                // top-left corner is exactly where the toolbar's first button sits
-                // at phone width (it hid "Find by area" under itself on a real
-                // device). Creation-time Leaflet option — set from the viewport at
-                // mount, which is when it matters.
-                zoomControl={!isMobile}
+                // The default +/- control is OFF everywhere: its top-left corner
+                // sat exactly under the toolbar column (inset-x-3 spans both top
+                // corners), covering the "+" on desktop and "Find by area" on a
+                // phone. Desktop re-adds the control bottom-right below; mobile
+                // pinches.
+                zoomControl={false}
                 // Mobile: cap at 60% of the (dynamic) viewport so toolbar + legend
                 // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
                 style={
@@ -1621,6 +1600,7 @@ export function LotMapView({
                 )}
 
                 <ScaleControl position="bottomleft" imperial={false} />
+                {!isMobile && <ZoomControl position="bottomright" />}
                 <NorthArrow />
 
                 {controlLines.map((line) => {
@@ -1768,6 +1748,12 @@ export function LotMapView({
               </MapContainer>
             )}
 
+            <MapLegend
+              statusCounts={statusCounts}
+              testing={testingArmed && testCoverageLots.size > 0}
+              testingCounts={testingCounts}
+            />
+
             {searchBounds && (
               <FindByAreaPanel
                 linkPaths={linkPaths}
@@ -1811,7 +1797,6 @@ export function LotMapView({
               />
             )}
           </div>
-          <StatusLegend testing={testingArmed && testCoverageLots.size > 0} />
 
           {pendingDraw && (
             <AssignDrawnLotDialog
