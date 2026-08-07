@@ -101,7 +101,9 @@ export interface TemplateRevisionProposal {
   proposedAt: string;
   decidedAt: string | null;
   decisionNote: string | null;
-  template: { id: string; name: string } | null;
+  // `supersededById` is already selected server-side; a proposal whose target
+  // has acquired a successor can no longer be accepted against it.
+  template: { id: string; name: string; supersededById?: string | null } | null;
   checklistItem: { id: string; description: string } | null;
   resultingTemplate: { id: string; name: string } | null;
   proposedBy: { id: string; fullName: string | null; email: string } | null;

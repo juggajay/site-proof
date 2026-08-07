@@ -20,6 +20,7 @@ import { EditTemplateModal } from './components/EditTemplateModal';
 import { PropagateTemplateModal } from './components/PropagateTemplateModal';
 import { ImportFromProjectModal } from './components/ImportFromProjectModal';
 import { PendingItpVerificationsSection } from './components/PendingItpVerificationsSection';
+import { TemplateProposalsSection } from './components/TemplateProposalsSection';
 import { TemplateCompareModal } from './components/TemplateCompareModal';
 import { TemplateProvenance } from './components/TemplateProvenance';
 import { queryKeys } from '@/lib/queryKeys';
@@ -192,6 +193,23 @@ export function ITPPage() {
     setShowEditModal(true);
   };
 
+  // Wave G G5: accepting a proposal creates the new revision as an unchanged
+  // COPY, so the edit is the half that actually makes the change. Refetch so
+  // the just-created revision is in the list, then open the same editor the
+  // page already uses on it — rather than leaving the reviewer to find it.
+  const handleOpenRevision = async (templateId: string) => {
+    const refreshed = await templatesQuery.refetch();
+    const revision = refreshed.data?.templates.find((t) => t.id === templateId);
+    if (revision) {
+      handleEditTemplate(revision);
+      return;
+    }
+    toast({
+      title: 'Revision created',
+      description: 'Open it from the list below to make the change.',
+    });
+  };
+
   // Feature #128 - Update template after edit
   const handleUpdateTemplate = async (
     templateId: string,
@@ -199,7 +217,9 @@ export function ITPPage() {
       name: string;
       description: string;
       activityType: string;
-      checklistItems: Omit<ChecklistItem, 'id'>[];
+      // Rows carry their persisted id so the server can preserve checklist
+      // lineage across the update's delete-and-recreate.
+      checklistItems: ChecklistItem[];
     },
   ) => {
     if (!token || creating) return;
@@ -371,6 +391,17 @@ export function ITPPage() {
           reviewers; the endpoint 403s for everyone else). */}
       {projectId && (
         <PendingItpVerificationsSection projectId={projectId} currentUserId={user?.id} />
+      )}
+
+      {/* Wave G G5: NCR-driven template change proposals. Self-hides when the
+          learning loop is off (every /api/ncr-learning route 404s) and when the
+          viewer is not an office role. */}
+      {projectId && (
+        <TemplateProposalsSection
+          projectId={projectId}
+          canReview={canManage}
+          onOpenRevision={handleOpenRevision}
+        />
       )}
 
       {/* Filters */}

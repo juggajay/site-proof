@@ -185,7 +185,9 @@ The tab strip opens **General**, **Modules**, **Team**, **Areas**, **Control Lin
     surface: 'office',
     body: `AI Setup Copilot prepares cited proposals for project facts, control lines, plan registration and lot breakdown; nothing is applied without human review.
 
-Each stage card's main action starts or resumes its review. **Upload/choose source** selects a drawing or import file. Review panes let the user correct extracted values, include or skip rows, resolve activity and point types, use a corporate master where offered, and inspect source sheets. **Apply** validates and writes the reviewed proposal; **Dismiss** rejects it. **Rollback** reverses an applied proposal only while dependent work has not made that unsafe. Import batches have Resume and Rollback controls. The page link back to project settings returns to manual setup.`,
+Each stage card's main action starts or resumes its review. **Upload/choose source** selects a drawing or import file. Review panes let the user correct extracted values, include or skip rows, resolve activity and point types, use a corporate master where offered, and inspect source sheets. **Apply** validates and writes the reviewed proposal; **Dismiss** rejects it. **Rollback** reverses an applied proposal only while dependent work has not made that unsafe. Import batches have Resume and Rollback controls. The page link back to project settings returns to manual setup.
+
+The proposals here are AI **setup** proposals only—project facts, control lines, plan sheets, lot breakdown and imports. **Template change proposals raised from NCR trends never appear on this page**; those are a separate system and are reviewed on the project ITP Templates page.`,
   },
   {
     route: 'invitations',

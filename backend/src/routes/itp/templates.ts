@@ -450,24 +450,46 @@ templatesRouter.patch(
     if (description !== undefined) updateData.description = description;
     if (activityType !== undefined) updateData.activityType = activityType;
     if (isActive !== undefined) updateData.isActive = isActive;
-    if (checklistItems !== undefined) {
-      updateData.checklistItems = {
-        create: checklistItems.map((item, index: number) => ({
-          description: item.description,
-          sequenceNumber: index + 1,
-          pointType: item.pointType || 'standard',
-          responsibleParty: item.responsibleParty || item.category || 'contractor',
-          evidenceRequired: item.evidenceRequired || 'none',
-          acceptanceCriteria: item.acceptanceCriteria || null,
-          testType: item.testType || null,
-          notes: item.notes || null,
-        })),
-      };
-    }
-
     const template = await prisma.$transaction(async (tx) => {
       // Replace checklist items atomically so validation/database failures cannot leave a template empty.
       if (checklistItems !== undefined) {
+        // Wave G G5 — carry `sourceChecklistItemId` across the delete-recreate.
+        //
+        // Editing a template rebuilds every row from scratch, and the rebuilt
+        // rows used to be created with no lineage pointer at all. That silently
+        // broke the NCR learning loop at its last step: accepting a proposal
+        // opens a revision whose items DO point back at their parents, but the
+        // mandatory next act — editing that revision to make the change — cut
+        // every pointer, so the next NCR raised against the revised item no
+        // longer aggregated with the failures that justified the revision.
+        //
+        // The client echoes back the id of each row it is editing. That id is
+        // looked up ONLY in this template's own rows and ONLY to read the
+        // lineage forward; an unknown or foreign id contributes nothing and the
+        // row is created as genuinely new (null), which is also what a newly
+        // added row gets.
+        const existingItems = await tx.iTPChecklistItem.findMany({
+          where: { templateId: id },
+          select: { id: true, sourceChecklistItemId: true },
+        });
+        const lineageByItemId = new Map(
+          existingItems.map((item) => [item.id, item.sourceChecklistItemId]),
+        );
+
+        updateData.checklistItems = {
+          create: checklistItems.map((item, index: number) => ({
+            description: item.description,
+            sequenceNumber: index + 1,
+            pointType: item.pointType || 'standard',
+            responsibleParty: item.responsibleParty || item.category || 'contractor',
+            evidenceRequired: item.evidenceRequired || 'none',
+            acceptanceCriteria: item.acceptanceCriteria || null,
+            testType: item.testType || null,
+            notes: item.notes || null,
+            sourceChecklistItemId: (item.id ? lineageByItemId.get(item.id) : undefined) ?? null,
+          })),
+        };
+
         await tx.iTPChecklistItem.deleteMany({
           where: { templateId: id },
         });

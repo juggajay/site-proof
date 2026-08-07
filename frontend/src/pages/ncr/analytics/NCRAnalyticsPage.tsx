@@ -42,6 +42,8 @@ import {
   YAxis,
 } from '@/components/charts';
 
+import { useTemplateProposalsQuery } from '@/pages/itp/templateProposals';
+
 import {
   RecurringItemsSection,
   RepeatIssuesSection,
@@ -114,6 +116,12 @@ export function NCRAnalyticsPage() {
     enabled: Boolean(projectId),
   });
 
+  // Proposals are raised here but DECIDED on the ITP Templates page, so a
+  // reviewer who raises one has no way to know a queue is building. Same
+  // status-scoped key that page reads, so the count cannot disagree with it.
+  const openProposalsQuery = useTemplateProposalsQuery(projectId, 'open');
+  const openProposalCount = openProposalsQuery.data?.total ?? 0;
+
   if (!projectId) {
     return <p className="text-sm text-muted-foreground">Open this page from inside a project.</p>;
   }
@@ -164,6 +172,16 @@ export function NCRAnalyticsPage() {
           </Link>
         </Button>
       </div>
+
+      {openProposalCount > 0 ? (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <Link to={`/projects/${projectId}/itp`} className="font-medium hover:underline">
+            {openProposalCount} open template-change proposal
+            {openProposalCount === 1 ? '' : 's'}
+          </Link>{' '}
+          <span className="text-muted-foreground">waiting for a decision on ITP Templates.</span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryTile label="Total NCRs" value={String(summary.total)} />

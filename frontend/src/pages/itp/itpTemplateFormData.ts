@@ -12,8 +12,18 @@ import type { ChecklistItem } from './itpPageData';
 /** A checklist row being created — no persisted id or server-assigned order. */
 export type NewChecklistItem = Omit<ChecklistItem, 'id' | 'order'>;
 
-/** A checklist row being edited — keeps its order, drops only the persisted id. */
-export type EditableChecklistItem = Omit<ChecklistItem, 'id'>;
+/**
+ * A checklist row being edited — keeps its order AND its persisted id.
+ *
+ * The id used to be dropped here, which looked harmless because the update
+ * route addresses rows by template, not individually. It was not: that route
+ * rebuilds every row, and with no id in the payload it could not tell an edited
+ * row from a brand-new one, so it recreated all of them with no
+ * `sourceChecklistItemId`. Editing a template therefore severed the lineage the
+ * NCR learning loop aggregates on. The id travels so the server can carry that
+ * pointer forward; it is never used to address a row for write.
+ */
+export type EditableChecklistItem = ChecklistItem;
 
 /**
  * The fields the shared checklist editor reads and writes. Both

@@ -31,8 +31,12 @@ export const queryKeys = {
   ncrRole: (projectId: string) => ['ncr-role', projectId] as const,
   // Wave G G5 — the analytics surface and its template-revision proposals.
   ncrAnalytics: (projectId: string) => ['ncr-analytics', projectId] as const,
-  templateRevisionProposals: (projectId: string) =>
-    ['template-revision-proposals', projectId] as const,
+  // Status is part of the key: the review surface loads the open queue and the
+  // decided list as separate scoped requests, and without it they would share
+  // one cache entry and overwrite each other. `undefined` (every status) stays
+  // a distinct key rather than colliding with any single-status list.
+  templateRevisionProposals: (projectId: string, status?: 'open' | 'accepted' | 'rejected') =>
+    ['template-revision-proposals', projectId, status ?? 'all'] as const,
   ncrEvidence: (ncrId: string) => ['ncr-evidence', ncrId] as const,
 
   // Hold Points
