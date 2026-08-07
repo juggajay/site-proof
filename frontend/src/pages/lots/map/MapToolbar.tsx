@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   ImageDown,
   Layers,
+  Maximize,
   PencilRuler,
   Square,
   type LucideIcon,
@@ -112,6 +113,10 @@ interface MapToolbarProps {
   /** False until the Leaflet instance exists — Locate has nothing to fly. */
   canLocate: boolean;
   onLocate: () => void;
+  /** False until the map and some fit-able extent both exist. */
+  canFit: boolean;
+  /** The explicit camera-policy escape hatch: fit the visible lot set. */
+  onFit: () => void;
   photosArmed: boolean;
   onTogglePhotos: () => void;
   layersOpen: boolean;
@@ -151,6 +156,8 @@ export function MapToolbar({
   locating,
   canLocate,
   onLocate,
+  canFit,
+  onFit,
   photosArmed,
   onTogglePhotos,
   layersOpen,
@@ -202,6 +209,19 @@ export function MapToolbar({
           tile={isMobile}
           testId="locate-me-button"
         />
+        {/* The camera policy's explicit escape hatch — desktop only: the phone
+            row is at its seven-tile budget and pinch already covers recovery. */}
+        {!isMobile && (
+          <ToolbarButton
+            icon={Maximize}
+            label="Fit lots"
+            text="Fit"
+            onClick={onFit}
+            disabled={!canFit}
+            tile={false}
+            testId="fit-lots-button"
+          />
+        )}
         {/* Photos earns a top-level tile on the phone and only there: it is the
             layer a foreman reaches for most, and burying it one tap deeper is
             the whole failure the tiles fix. On desktop the pointer makes the

@@ -43,6 +43,7 @@ import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
 import { LotsGeoJsonLayer, POLYGON_STROKE_COLOR, type LotSelectEvent } from './LotsGeoJsonLayer';
+import { chooseCamera, readSavedViewport, writeSavedViewport } from './cameraPolicy';
 import { FindByAreaPanel } from './FindByAreaPanel';
 import { CoveragePanel } from './CoveragePanel';
 import { PlansPanel } from './PlansPanel';
@@ -1146,6 +1147,71 @@ export function LotMapView({
     ]);
   }, [filteredGeometries, controlLines, registeredSheets]);
 
+  // ── Camera policy (plan consensus #3) ────────────────────────────────────
+  // Applied ONCE when the map and its data are both ready: saved viewport →
+  // filtered lots → active work fronts → project extent (the `bounds` memo,
+  // which already knows the registered-sheet fallback). After that the camera
+  // belongs to the user; the explicit Fit control re-fits on demand.
+  const dataReady =
+    !geometriesQuery.isLoading && !controlLinesQuery.isLoading && !planSheetsQuery.isLoading;
+  const cameraAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!map || !dataReady || cameraAppliedRef.current) return;
+    cameraAppliedRef.current = true;
+    const target = chooseCamera({
+      saved: readSavedViewport(projectId),
+      isFiltered: filteredGeometries.length < (allGeometries?.length ?? 0),
+      filteredGeometries,
+      allGeometries: allGeometries ?? [],
+      extentFeatures: controlLines.map((c) => c.geometryWgs84),
+    });
+    if (target?.kind === 'viewport') {
+      map.setView(target.center, target.zoom);
+    } else if (target?.kind === 'bounds') {
+      map.fitBounds(target.bounds, { padding: [24, 24], maxZoom: 18 });
+    } else if (bounds) {
+      // Nothing but a registered sheet — open on the drawing.
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
+    }
+  }, [map, dataReady, projectId, filteredGeometries, allGeometries, controlLines, bounds]);
+
+  // Persist the viewport per project/device so reopening the map resumes where
+  // the user left off (tier 1 of the policy). Debounced against pan momentum.
+  useEffect(() => {
+    if (!map) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const save = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const center = map.getCenter();
+        writeSavedViewport(projectId, { lat: center.lat, lng: center.lng, zoom: map.getZoom() });
+      }, 600);
+    };
+    map.on('moveend', save);
+    return () => {
+      clearTimeout(timer);
+      map.off('moveend', save);
+    };
+  }, [map, projectId]);
+
+  // A register-filter change after open is an explicit "show me these" — refit
+  // to the new subset (the pre-workspace map did the same via its fit effect).
+  const prevFilterRef = useRef(filteredLotIds);
+  useEffect(() => {
+    if (prevFilterRef.current === filteredLotIds) return;
+    prevFilterRef.current = filteredLotIds;
+    if (!map || !cameraAppliedRef.current) return;
+    const b = computeBounds(filteredGeometries.map((g) => g.geometryWgs84));
+    if (b) map.fitBounds(b, { padding: [24, 24], maxZoom: 18 });
+  }, [map, filteredLotIds, filteredGeometries]);
+
+  // The explicit Fit control: filtered lots + control lines, or the first
+  // registered sheet when nothing else has geometry (the `bounds` memo).
+  const handleFit = useCallback(() => {
+    if (!map || !bounds) return;
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
+  }, [map, bounds]);
+
   const coverageLines = useMemo(() => coverageQuery.data?.controlLines ?? [], [coverageQuery.data]);
 
   // Gap polygons for each line's currently-selected work type (default "All work
@@ -1359,6 +1425,8 @@ export function LotMapView({
                 locating={locating}
                 canLocate={Boolean(map)}
                 onLocate={handleLocate}
+                canFit={Boolean(map && bounds)}
+                onFit={handleFit}
                 photosArmed={photosArmed}
                 onTogglePhotos={togglePhotos}
                 layersOpen={layersOpen}
@@ -1451,8 +1519,6 @@ export function LotMapView({
 
               <ScaleControl position="bottomleft" imperial={false} />
               <NorthArrow />
-
-              <FitBounds bounds={bounds} />
 
               {controlLines.map((line) => {
                 const shape = featureToShape(line.geometryWgs84);
