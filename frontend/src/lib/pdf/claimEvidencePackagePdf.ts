@@ -775,7 +775,18 @@ export async function generateClaimEvidencePackagePDF(
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
     doc.text('VARIATIONS', margin, yPos);
-    yPos += 10;
+    yPos += 8;
+
+    // Same pass-through label the activity summary carries — every dollar
+    // section states its provenance on the page, not just in code.
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text(
+      'Amounts are pass-through from this claim’s approved variations. Refer payment claim.',
+      margin,
+      yPos,
+    );
+    yPos += 6;
 
     const headers = ['VAR #', 'Title', 'Client ref', 'Amount'];
     const colWidths = [28, 72, 45, 35];
@@ -948,8 +959,12 @@ export async function generateClaimEvidencePackagePDF(
       yPos,
     );
     yPos += 5;
+    // No amount in the declaration sentence: a declared figure makes this
+    // ancillary record assert a payable amount (Wave F boundary §0.3 —
+    // "never imply evidence = payable amount"). The labelled cover total
+    // already carries the number as pass-through.
     doc.text(
-      `#${data.claim.claimNumber} in the amount of ${formatCurrency(data.summary.totalClaimedAmount)}.`,
+      `#${data.claim.claimNumber}. Refer to the payment claim for the claimed amount.`,
       margin,
       yPos,
     );

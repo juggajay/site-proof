@@ -614,7 +614,7 @@ describe('pdfGenerator characterization', () => {
       expect.arrayContaining([
         'DECLARATION',
         'This evidence package contains the supporting documentation for Progress Claim',
-        '#7 in the amount of $248,500.',
+        '#7. Refer to the payment claim for the claimed amount.',
         'knowledge. It describes the work claimed in this package and the evidence available',
         // Declaration no longer lies: physical progress % IS now rendered per lot.
         'at generation time. Lot status and physical progress (previous, this claim, and',
@@ -730,7 +730,13 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).toContain('VAR-001-client-approval.pdf');
     expect(textContent).toContain('client_approval');
     expect(textContent).toContain('Document ID: doc-var-1');
-    expect(textContent).toContain('#7 in the amount of $260,500.');
+    expect(textContent).toContain(
+      'Amounts are pass-through from this claim’s approved variations. Refer payment claim.',
+    );
+    // The declaration names the claim, never a figure — a declared amount would
+    // make the evidence pack assert a payable total (Wave F boundary §0.3).
+    expect(textContent).toContain('#7. Refer to the payment claim for the claimed amount.');
+    expect(textContent).not.toContain('in the amount of');
   });
 
   it('omits claim variations and their manifest evidence when the option is disabled', async () => {
