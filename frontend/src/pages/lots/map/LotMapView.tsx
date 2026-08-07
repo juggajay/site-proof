@@ -1,7 +1,6 @@
 import 'leaflet/dist/leaflet.css';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatActivityLabel } from '@/lib/activityTaxonomy';
 import {
   Circle,
   CircleMarker,
@@ -22,7 +21,7 @@ import {
 import L from 'leaflet';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ExternalLink, Navigation } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { getStatusColor } from '@/components/lots/linearMapViewHelpers';
@@ -43,6 +42,7 @@ import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePrefer
 import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
+import { LotInspector } from './LotInspector';
 import { LotsGeoJsonLayer, POLYGON_STROKE_COLOR, type LotSelectEvent } from './LotsGeoJsonLayer';
 import { chooseCamera, readSavedViewport, writeSavedViewport } from './cameraPolicy';
 import { LotLabelsLayer, type LabelLot } from './LotLabelsLayer';
@@ -228,82 +228,10 @@ function NorthArrow() {
   );
 }
 
-// The ONE lot popup, opened by selection on the collapsed GeoJSON layer (there
-// is no per-lot Popup component any more — that per-feature React overhead was
-// the measured map bottleneck).
-function LotPopup({
-  geometry,
-  position,
-  onViewDetails,
-  onClose,
-}: {
-  geometry: ProjectLotGeometry;
-  position: LatLng;
-  onViewDetails: () => void;
-  onClose: () => void;
-}) {
-  const destination = featureCentroid(geometry.geometryWgs84);
-  return (
-    <Popup position={position} eventHandlers={{ remove: onClose }}>
-      <div className="min-w-[180px]" data-testid={`lot-popup-${geometry.lotId}`}>
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-block w-3 h-3 rounded"
-            style={{ backgroundColor: getStatusColor(geometry.status) }}
-          />
-          <span className="font-semibold">{geometry.lotNumber}</span>
-        </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {formatStatusLabel(geometry.status)}
-          {geometry.activityType ? ` · ${formatActivityLabel(geometry.activityType)}` : ''}
-          {(() => {
-            // With dozens of identical strips, the chainage range is what tells a
-            // human WHICH bit of road this is — the number alone doesn't.
-            const ch = chainageLabel(geometry.chainageStart, geometry.chainageEnd);
-            return ch ? ` · ${ch}` : '';
-          })()}
-        </div>
-        {(geometry.areaM2 != null || geometry.lengthM != null) && (
-          <div className="mt-1 text-xs text-muted-foreground">
-            {geometry.areaM2 != null && (
-              <span>{Math.round(geometry.areaM2).toLocaleString()} m²</span>
-            )}
-            {geometry.areaM2 != null && geometry.lengthM != null && <span> · </span>}
-            {geometry.lengthM != null && (
-              <span>{Math.round(geometry.lengthM).toLocaleString()} m</span>
-            )}
-          </div>
-        )}
-        <div className="mt-2 flex flex-col items-start gap-1.5">
-          <button
-            type="button"
-            onClick={onViewDetails}
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            data-testid={`lot-popup-view-${geometry.lotId}`}
-          >
-            <ExternalLink className="h-3.5 w-3.5" /> View Details
-          </button>
-          {/* Turn-by-turn to the lot in the phone's native maps app. The Google
-              Maps universal URL opens the app on iOS/Android and the web on
-              desktop. It is a genuine external link (not in-app nav), so it is
-              identical in the classic map and the foreman shell — no linkPaths
-              plumbing. Only shown when the geometry yields a destination. */}
-          {destination && (
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${destination[0]},${destination[1]}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-              data-testid={`lot-popup-directions-${geometry.lotId}`}
-            >
-              <Navigation className="h-3.5 w-3.5" /> Directions
-            </a>
-          )}
-        </div>
-      </div>
-    </Popup>
-  );
-}
+// The lot popup was superseded by the Wave 2 inspector (LotInspector.tsx):
+// selection on the collapsed GeoJSON layer now opens the one selection-driven
+// panel instead of a Leaflet popup — two competing selection surfaces would be
+// a design bug.
 
 // One GPS-tagged photo as a map marker with a thumbnail popup. Coords are
 // guaranteed non-null by the caller. `onView` navigates through linkPaths.photo
@@ -1073,8 +1001,9 @@ export function LotMapView({
     [testingArmed, testCoverageQuery.data],
   );
 
-  // Selection drives the ONE popup over the collapsed lots layer. A selected lot
-  // that leaves the display set (filter change, history replay) closes it.
+  // Selection drives the ONE inspector panel over the collapsed lots layer. A
+  // selected lot that leaves the display set (filter change, history replay)
+  // closes it.
   const [selectedLot, setSelectedLot] = useState<LotSelectEvent | null>(null);
   const selectedGeometry = useMemo(
     () =>
@@ -1119,6 +1048,26 @@ export function LotMapView({
       setMapMode(mode);
     },
     [mapMode, clearSearch],
+  );
+
+  // Inspector-driven re-target (next/prev along the alignment, search): the
+  // SAME selection state a map click writes — one selection source — plus a
+  // camera move on the geographic canvas so the chosen lot is on screen. Plan
+  // mode skips the camera (its coordinate space is sheet pixels, and the
+  // highlighted footprint plus the panel is the feedback).
+  const handleInspectorSelect = useCallback(
+    (lotId: string) => {
+      const g = (allGeometries ?? []).find((x) => x.lotId === lotId);
+      const centre = g ? featureCentroid(g.geometryWgs84) : null;
+      setSelectedLot({
+        lotId,
+        latlng: centre ? { lat: centre[0], lng: centre[1] } : { lat: 0, lng: 0 },
+      });
+      if (map && mapMode === 'map' && centre) {
+        map.flyTo(centre, Math.max(map.getZoom(), 17));
+      }
+    },
+    [allGeometries, map, mapMode],
   );
 
   const earliestKey = timelineQuery.data?.earliest
@@ -1593,16 +1542,7 @@ export function LotMapView({
                   onSelect={setSelectedLot}
                   onMapRef={setMap}
                   showZoom={!isMobile}
-                >
-                  {selectedLot && selectedGeometry && (
-                    <LotPopup
-                      geometry={selectedGeometry}
-                      position={[selectedLot.latlng.lat, selectedLot.latlng.lng]}
-                      onViewDetails={() => navigate(linkPaths.lot(selectedGeometry.lotId))}
-                      onClose={() => setSelectedLot(null)}
-                    />
-                  )}
-                </PlanModeCanvas>
+                />
               </div>
             ) : (
               <MapContainer
@@ -1683,14 +1623,6 @@ export function LotMapView({
                   colorFor={colorForLot}
                   selectedLotId={selectedLot?.lotId ?? null}
                 />
-                {selectedLot && selectedGeometry && (
-                  <LotPopup
-                    geometry={selectedGeometry}
-                    position={[selectedLot.latlng.lat, selectedLot.latlng.lng]}
-                    onViewDetails={() => navigate(linkPaths.lot(selectedGeometry.lotId))}
-                    onClose={() => setSelectedLot(null)}
-                  />
-                )}
 
                 {/* `drawnPhotos` is already the located subset — the same array the
                   chooser counts, so "51 in view" can never disagree with what is
@@ -1808,6 +1740,23 @@ export function LotMapView({
               testing={testingArmed && testCoverageLots.size > 0}
               testingCounts={testingCounts}
             />
+
+            {/* Wave 2: the selection-driven inspector (supersedes the old
+                popup). Inside the stacking root so its z-index stays contained;
+                works over both the geographic map and the plan canvas. */}
+            {selectedLot && selectedGeometry && (
+              <LotInspector
+                projectId={projectId}
+                geometry={selectedGeometry}
+                geometries={displayGeometries}
+                controlLines={controlLines}
+                linkPaths={linkPaths}
+                isMobile={isMobile}
+                pastView={historyArmed}
+                onClose={() => setSelectedLot(null)}
+                onSelectLot={handleInspectorSelect}
+              />
+            )}
 
             {searchBounds && (
               <FindByAreaPanel
