@@ -43,6 +43,9 @@ function usePlayback(
   const [compare, setCompare] = useState(false);
   const [guidIndex, setGuidIndex] = useState<Map<string, number> | null>(null);
 
+  // A different version = a different fragments model = new localIds.
+  useEffect(() => setGuidIndex(null), [versionId]);
+
   const timelineQuery = useLotStatusTimeline(projectId, open);
   const linksQuery = useQuery({
     queryKey: queryKeys.modelElementLinks(versionId),
