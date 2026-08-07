@@ -996,6 +996,15 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/holdpoints/PublicHoldPointReleasePage.tsx', import.meta.url),
       'utf8',
     );
+    // The decision submission (release / reject / release-with-conditions)
+    // lives in the extracted form component the page renders.
+    const publicDecisionForm = await readFile(
+      new URL(
+        '../src/pages/holdpoints/components/PublicHoldPointDecisionForm.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
     const holdPointRequestReleaseRoute = await readFile(
       new URL('../../backend/src/routes/holdpoints/requestReleaseRoutes.ts', import.meta.url),
       'utf8',
@@ -1009,9 +1018,12 @@ test.describe('production readiness guardrails', () => {
       '<Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />',
     );
     expect(publicReleasePage).toContain('/api/holdpoints/public/${encodeURIComponent(token)}');
-    expect(publicReleasePage).toContain(
-      '/api/holdpoints/public/${encodeURIComponent(token)}/release',
+    expect(publicReleasePage).toContain('PublicHoldPointDecisionForm');
+    expect(publicDecisionForm).toContain(
+      '/api/holdpoints/public/${encodeURIComponent(token)}/${endpoint}',
     );
+    expect(publicDecisionForm).toContain("outcome === 'release'");
+    expect(publicDecisionForm).toContain("'release-with-conditions'");
   });
 
   test('copied quality register links resolve to mounted project routes', async () => {
