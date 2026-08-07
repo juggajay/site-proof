@@ -19,6 +19,12 @@ const mocks = vi.hoisted(() => {
     holdPointReleaseBatch: {
       create: vi.fn(),
     },
+    holdPointDecisionRound: {
+      count: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
     document: {
       findMany: vi.fn(),
     },
@@ -43,6 +49,7 @@ const mocks = vi.hoisted(() => {
     sendHPReleaseRequestEmail: vi.fn(),
     sendEmail: vi.fn(),
     createAuditLog: vi.fn(),
+    writeAuditLogInTransaction: vi.fn(),
     requireLotReadAccess: vi.fn(),
     requireProjectRole: vi.fn(),
     requireSuperintendentApprovalRecipients: vi.fn(),
@@ -77,6 +84,7 @@ vi.mock('../../lib/auditLog.js', () => ({
     HP_RELEASE_REQUESTED: 'hp_release_requested',
   },
   createAuditLog: mocks.createAuditLog,
+  writeAuditLogInTransaction: mocks.writeAuditLogInTransaction,
 }));
 
 vi.mock('./access.js', () => ({
@@ -238,6 +246,10 @@ describe('hold point request-release delivery failure', () => {
     mocks.tx.holdPointReleaseToken.deleteMany.mockResolvedValue({ count: 1 });
     mocks.tx.holdPointReleaseToken.createMany.mockResolvedValue({ count: 1 });
     mocks.tx.holdPointReleaseBatch.create.mockResolvedValue({ id: 'batch-1' });
+    mocks.tx.holdPointDecisionRound.count.mockResolvedValue(0);
+    mocks.tx.holdPointDecisionRound.findFirst.mockResolvedValue(null);
+    mocks.tx.holdPointDecisionRound.create.mockResolvedValue({ id: 'round-1', roundNumber: 1 });
+    mocks.tx.holdPointDecisionRound.updateMany.mockResolvedValue({ count: 1 });
     mocks.tx.document.findMany.mockResolvedValue([]);
     mocks.tx.iTPCompletion.upsert.mockResolvedValue({ id: 'completion-1' });
     mocks.tx.iTPCompletionAttachment.createMany.mockResolvedValue({ count: 0 });
@@ -342,6 +354,29 @@ describe('hold point request-release delivery failure', () => {
     expect(emailPayload.evidencePackageUrl).toBe(`${emailPayload.releaseUrl}#evidence-package`);
     expect(emailPayload.releaseUrl).not.toContain('/projects/');
     expect(emailPayload.secureReleaseUrl).toBeUndefined();
+    expect(mocks.tx.holdPointDecisionRound.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        holdPointId: 'hp-1',
+        roundNumber: 1,
+        authorityClass: 'contractor_internal',
+        recipientEmail: 'superintendent@example.com',
+      }),
+    });
+    expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ decisionRoundId: 'round-1' })],
+    });
+  });
+
+  it.each([
+    ['missing', {}],
+    ['blank', { reason: '   ' }],
+    ['overlong', { reason: 'x'.repeat(5001) }],
+  ])('rejects a %s withdrawal reason before loading the hold point', async (_label, body) => {
+    const res = await request(app).post('/api/holdpoints/hp-1/withdraw-request').send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('Validation failed');
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('attaches request evidence documents inside the committed request transaction', async () => {
@@ -392,11 +427,17 @@ describe('hold point request-release delivery failure', () => {
 
   it('does not re-notify a hold point that becomes released before the transaction writes', async () => {
     mocks.tx.holdPoint.updateMany.mockResolvedValueOnce({ count: 0 });
-    mocks.tx.holdPoint.findUnique.mockResolvedValueOnce({
-      id: 'hp-1',
-      status: 'released',
-      itpChecklistItem: { id: 'item-1' },
-    });
+    mocks.tx.holdPoint.findUnique
+      .mockResolvedValueOnce({
+        id: 'hp-1',
+        status: 'notified',
+        itpChecklistItem: { id: 'item-1' },
+      })
+      .mockResolvedValueOnce({
+        id: 'hp-1',
+        status: 'released',
+        itpChecklistItem: { id: 'item-1' },
+      });
 
     const res = await request(app).post('/api/holdpoints/request-release').send({
       lotId: 'lot-1',
@@ -442,9 +483,9 @@ describe('hold point request-release delivery failure', () => {
         itpChecklistItem: { id: 'item-1' },
       })
       .mockResolvedValueOnce({
-        id: 'hp-created-2',
+        id: 'hp-1',
         status: 'notified',
-        itpChecklistItem: { id: 'item-2' },
+        itpChecklistItem: { id: 'item-1' },
       });
     mocks.tx.holdPoint.create.mockResolvedValueOnce({
       id: 'hp-created-2',

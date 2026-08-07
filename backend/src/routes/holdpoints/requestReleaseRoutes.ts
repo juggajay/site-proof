@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { sendEmail, sendHPReleaseRequestEmail } from '../../lib/email.js';
 import { renderHoldPointBatchReleaseRequestEmail } from '../../lib/email/holdPointTemplates.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
-import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildSufficiencySnapshotV1 } from '../../lib/readiness/sufficiency/snapshot.js';
@@ -28,6 +28,8 @@ import {
   nullableTrimmedStringSchema,
   requiredIdSchema,
   requestReleaseSchema,
+  requiredTrimmedStringSchema,
+  MAX_NOTE_LENGTH,
 } from './validation.js';
 import { parseScheduledDateInput } from './dateParsing.js';
 import { HP_REQUEST_ROLES, requireLotReadAccess, requireProjectRole } from './access.js';
@@ -48,6 +50,12 @@ import {
 } from './itpSnapshot.js';
 import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
+import {
+  createDecisionRoundForReleaseRequest,
+  isLifecycleTerminal,
+  releaseRequestAllowed,
+  withdrawCurrentDecisionRound,
+} from './roundCore.js';
 
 // =============================================================================
 // Authenticated hold point RELEASE-REQUEST route. Moved verbatim from
@@ -152,11 +160,35 @@ function rejectTerminalHoldPointRequest(status: string): never {
   throw AppError.badRequest('This hold point can no longer be requested for release.');
 }
 
+const HP_WITHDRAW_REQUEST_ROLES = ['quality_manager', 'project_manager', 'site_manager'];
+const withdrawRequestSchema = z.object({
+  reason: requiredTrimmedStringSchema('reason', MAX_NOTE_LENGTH),
+});
+
 async function updateExistingHoldPointForReleaseRequest(
   tx: Prisma.TransactionClient,
   holdPointId: string,
   data: HoldPointRequestStateData,
 ) {
+  const currentHoldPoint = await tx.holdPoint.findUnique({
+    where: { id: holdPointId },
+    select: { id: true, status: true },
+  });
+
+  if (!currentHoldPoint) {
+    throw AppError.notFound('Hold point');
+  }
+
+  if (isLifecycleTerminal(currentHoldPoint.status)) {
+    rejectTerminalHoldPointRequest(currentHoldPoint.status);
+  }
+
+  if (!(await releaseRequestAllowed(currentHoldPoint, tx))) {
+    throw AppError.badRequest(
+      'This hold point cannot be requested again until its rejection NCR is closed.',
+    );
+  }
+
   const updateResult = await tx.holdPoint.updateMany({
     where: {
       id: holdPointId,
@@ -166,16 +198,16 @@ async function updateExistingHoldPointForReleaseRequest(
   });
 
   if (updateResult.count !== 1) {
-    const currentHoldPoint = await tx.holdPoint.findUnique({
+    const latestHoldPoint = await tx.holdPoint.findUnique({
       where: { id: holdPointId },
       select: { status: true },
     });
 
-    if (!currentHoldPoint) {
+    if (!latestHoldPoint) {
       throw AppError.notFound('Hold point');
     }
 
-    rejectTerminalHoldPointRequest(currentHoldPoint.status);
+    rejectTerminalHoldPointRequest(latestHoldPoint.status);
   }
 
   const savedHoldPoint = await tx.holdPoint.findUnique({
@@ -400,6 +432,16 @@ holdPointRequestReleaseRouter.post(
         }
 
         const releaseToken = buildReleaseRecipientToken(recipient.email, recipient.fullName);
+        const decisionRound = await createDecisionRoundForReleaseRequest(tx, {
+          holdPointId: savedHoldPoint.id,
+          projectSettings: lot.project.settings,
+          requestedAt: notificationSentAt,
+          requestedById: req.user!.userId,
+          recipient: {
+            email: recipient.email,
+            name: recipient.fullName,
+          },
+        });
 
         await tx.holdPointReleaseToken.deleteMany({
           where: {
@@ -413,6 +455,7 @@ holdPointRequestReleaseRouter.post(
             {
               holdPointId: savedHoldPoint.id,
               batchId: batch.id,
+              decisionRoundId: decisionRound.id,
               recipientEmail: releaseToken.email,
               recipientName: releaseToken.fullName,
               token: hashHoldPointReleaseToken(releaseToken.secureToken),
@@ -888,9 +931,22 @@ holdPointRequestReleaseRouter.post(
       });
 
       if (releaseTokenEntries.length > 0) {
+        const primaryRecipient = releaseTokenEntries[0];
+        const decisionRound = await createDecisionRoundForReleaseRequest(tx, {
+          holdPointId: savedHoldPoint.id,
+          projectSettings: lot.project.settings,
+          requestedAt: notificationSentAt,
+          requestedById: req.user!.userId,
+          recipient: {
+            email: primaryRecipient.email,
+            name: primaryRecipient.fullName,
+          },
+        });
+
         await tx.holdPointReleaseToken.createMany({
           data: releaseTokenEntries.map((recipient) => ({
             holdPointId: savedHoldPoint.id,
+            decisionRoundId: decisionRound.id,
             recipientEmail: recipient.email,
             recipientName: recipient.fullName,
             token: hashHoldPointReleaseToken(recipient.secureToken),
@@ -998,6 +1054,93 @@ holdPointRequestReleaseRouter.post(
           warning: 'Some release request emails could not be sent.',
         },
       }),
+    });
+  }),
+);
+
+holdPointRequestReleaseRouter.post(
+  '/:id/withdraw-request',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const idResult = requiredIdSchema('id').safeParse(req.params.id);
+    if (!idResult.success) {
+      throw AppError.fromZodError(idResult.error);
+    }
+    const holdPointId = idResult.data;
+
+    const parseResult = withdrawRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw AppError.fromZodError(parseResult.error);
+    }
+
+    const holdPoint = await prisma.holdPoint.findUnique({
+      where: { id: holdPointId },
+      select: {
+        status: true,
+        currentRoundId: true,
+        lot: { select: { projectId: true } },
+      },
+    });
+    if (!holdPoint) {
+      throw AppError.notFound('Hold point');
+    }
+
+    await requireProjectRole(
+      holdPoint.lot.projectId,
+      req.user!,
+      HP_WITHDRAW_REQUEST_ROLES,
+      'You do not have permission to withdraw hold point release requests',
+      { requireWritable: true },
+    );
+
+    if (!holdPoint.currentRoundId || holdPoint.status !== 'notified') {
+      throw AppError.badRequest('This release request has already been decided or withdrawn.');
+    }
+
+    const roundId = holdPoint.currentRoundId;
+    const withdrawnAt = new Date();
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          await withdrawCurrentDecisionRound(tx, {
+            holdPointId,
+            roundId,
+            withdrawnAt,
+            withdrawnById: req.user!.userId,
+            reason: parseResult.data.reason,
+          });
+
+          await writeAuditLogInTransaction(tx, {
+            projectId: holdPoint.lot.projectId,
+            userId: req.user!.userId,
+            entityType: 'hold_point',
+            entityId: holdPointId,
+            action: 'hp_request_withdrawn',
+            changes: {
+              decisionRoundId: roundId,
+              reason: parseResult.data.reason,
+            },
+            req,
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'ROUND_NOT_OPEN') {
+        throw AppError.badRequest('This release request has already been decided or withdrawn.');
+      }
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      message: 'Hold point release request withdrawn successfully',
+      holdPoint: {
+        id: holdPointId,
+        status: 'pending',
+        currentRoundId: roundId,
+      },
+      withdrawnAt,
     });
   }),
 );

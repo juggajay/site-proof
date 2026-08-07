@@ -1,4 +1,9 @@
 import { parseHPDefaultRecipients, type HPProjectSettings } from './validation.js';
+import {
+  projectLatestRound,
+  type LatestDecisionRoundSource,
+  type LatestRoundProjection,
+} from './roundCore.js';
 
 type HoldPointPrerequisite = {
   id: string;
@@ -24,6 +29,7 @@ type ExistingHoldPointDetail = {
     usedAt: Date | null;
   }>;
   releaseNotes: string | null;
+  decisionRounds?: LatestDecisionRoundSource[];
 };
 
 type HoldPointDetailItem = {
@@ -107,6 +113,7 @@ export function buildHoldPointDetailResponse({
     releaseMethod: string | null | undefined;
     releaseRecipientEmail: string | null | undefined;
     releaseNotes: string | null | undefined;
+    latestRound: LatestRoundProjection | null;
   };
   prerequisites: HoldPointPrerequisite[];
   incompletePrerequisites: HoldPointPrerequisite[];
@@ -132,6 +139,7 @@ export function buildHoldPointDetailResponse({
       releaseRecipientEmail:
         existingHoldPoint?.releaseTokens?.find((token) => token.usedAt)?.recipientEmail ?? null,
       releaseNotes: existingHoldPoint?.releaseNotes,
+      latestRound: projectLatestRound(existingHoldPoint?.decisionRounds),
     },
     prerequisites,
     incompletePrerequisites,

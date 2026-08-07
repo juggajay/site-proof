@@ -1616,6 +1616,252 @@ describe('Hold Points API access control', () => {
     expect(res.body.holdPoints.some((hp: any) => hp.id === unassignedHoldPointId)).toBe(true);
   });
 
+  it('creates and binds a denormalized principal round for every single release request', async () => {
+    clearEmailQueue();
+    const requester = await prisma.user.findUniqueOrThrow({
+      where: { id: adminUserId },
+      select: { email: true, fullName: true },
+    });
+    const priorRound = await prisma.holdPointDecisionRound.findFirst({
+      where: { holdPointId },
+      orderBy: { roundNumber: 'desc' },
+      select: { roundNumber: true },
+    });
+
+    for (let requestIndex = 1; requestIndex <= 2; requestIndex += 1) {
+      const res = await request(app)
+        .post('/api/holdpoints/request-release')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          lotId,
+          itpChecklistItemId: checklistItemId,
+          notificationSentTo: requester.email,
+        });
+
+      expect(res.status).toBe(200);
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: holdPointId },
+      });
+      const round = await prisma.holdPointDecisionRound.findUniqueOrThrow({
+        where: { id: holdPoint.currentRoundId! },
+      });
+      expect(round).toMatchObject({
+        holdPointId,
+        roundNumber: (priorRound?.roundNumber ?? 0) + requestIndex,
+        authorityClass: 'principal',
+        requestedById: adminUserId,
+        recipientEmail: requester.email,
+        recipientName: requester.fullName,
+      });
+      expect(holdPoint.authorityClass).toBe('principal');
+
+      const tokens = await prisma.holdPointReleaseToken.findMany({
+        where: { holdPointId, usedAt: null },
+      });
+      expect(tokens).toHaveLength(1);
+      expect(tokens[0].decisionRoundId).toBe(round.id);
+    }
+
+    const rounds = await prisma.holdPointDecisionRound.findMany({
+      where: { holdPointId },
+      orderBy: { roundNumber: 'asc' },
+    });
+    expect(rounds.slice(-2).map((round) => round.roundNumber)).toEqual([
+      (priorRound?.roundNumber ?? 0) + 1,
+      (priorRound?.roundNumber ?? 0) + 2,
+    ]);
+  });
+
+  it('creates a bound batch round, then withdraws it once with token and chase reset', async () => {
+    clearEmailQueue();
+    const requester = await prisma.user.findUniqueOrThrow({
+      where: { id: adminUserId },
+      select: { email: true, fullName: true },
+    });
+    const qualityManager = await registerTestUser(
+      'Hold Point Withdrawal Quality Manager',
+      'quality_manager',
+      companyId,
+    );
+    createdUserIds.push(qualityManager.userId);
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: qualityManager.userId,
+        role: 'quality_manager',
+        status: 'active',
+      },
+    });
+    const batchItem = await createExtraHoldPointItem('Batch round withdrawal', 90);
+    let batchHoldPointId: string | undefined;
+
+    try {
+      const batchRes = await request(app)
+        .post('/api/holdpoints/request-release/batch')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          lotId,
+          items: [{ itpChecklistItemId: batchItem.id }],
+          recipientEmail: requester.email,
+          recipientName: requester.fullName,
+        });
+
+      expect(batchRes.status).toBe(200);
+      batchHoldPointId = batchRes.body.holdPoints[0].id;
+      const requestedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: batchHoldPointId },
+      });
+      const round = await prisma.holdPointDecisionRound.findUniqueOrThrow({
+        where: { id: requestedHoldPoint.currentRoundId! },
+      });
+      expect(round).toMatchObject({
+        roundNumber: 1,
+        authorityClass: 'principal',
+        recipientEmail: requester.email,
+        recipientName: requester.fullName,
+      });
+      const requestToken = await prisma.holdPointReleaseToken.findFirstOrThrow({
+        where: { holdPointId: batchHoldPointId },
+      });
+      expect(requestToken.decisionRoundId).toBe(round.id);
+
+      await prisma.holdPoint.update({
+        where: { id: batchHoldPointId },
+        data: {
+          chaseCount: 3,
+          lastChasedAt: new Date(),
+          scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          scheduledTime: '09:30',
+        },
+      });
+
+      const withdrawRes = await request(app)
+        .post(`/api/holdpoints/${batchHoldPointId}/withdraw-request`)
+        .set('Authorization', `Bearer ${qualityManager.token}`)
+        .send({ reason: '  Evidence package needs correction before review.  ' });
+      expect(withdrawRes.status).toBe(200);
+      expect(withdrawRes.body.holdPoint).toMatchObject({
+        id: batchHoldPointId,
+        status: 'pending',
+        currentRoundId: round.id,
+      });
+
+      const withdrawnRound = await prisma.holdPointDecisionRound.findUniqueOrThrow({
+        where: { id: round.id },
+      });
+      expect(withdrawnRound).toMatchObject({
+        outcome: null,
+        withdrawnById: qualityManager.userId,
+        withdrawalReason: 'Evidence package needs correction before review.',
+      });
+      expect(withdrawnRound.withdrawnAt).not.toBeNull();
+
+      const resetHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: batchHoldPointId },
+      });
+      expect(resetHoldPoint).toMatchObject({
+        status: 'pending',
+        notificationSentAt: null,
+        notificationSentTo: null,
+        scheduledDate: null,
+        scheduledTime: null,
+        chaseCount: 0,
+        lastChasedAt: null,
+      });
+      await expect(
+        prisma.holdPointReleaseToken.count({ where: { holdPointId: batchHoldPointId } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            projectId,
+            entityId: batchHoldPointId,
+            action: 'hp_request_withdrawn',
+          },
+        }),
+      ).resolves.toBe(1);
+
+      const secondWithdraw = await request(app)
+        .post(`/api/holdpoints/${batchHoldPointId}/withdraw-request`)
+        .set('Authorization', `Bearer ${qualityManager.token}`)
+        .send({ reason: 'Attempting a second withdrawal.' });
+      expect(secondWithdraw.status).toBe(400);
+      expect(secondWithdraw.body.error.message).toContain('already been decided or withdrawn');
+
+      const reRequestRes = await request(app)
+        .post('/api/holdpoints/request-release/batch')
+        .set('Authorization', `Bearer ${qualityManager.token}`)
+        .send({
+          lotId,
+          items: [{ itpChecklistItemId: batchItem.id }],
+          recipientEmail: requester.email,
+          recipientName: requester.fullName,
+        });
+      expect(reRequestRes.status).toBe(200);
+      const reRequestedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: batchHoldPointId },
+      });
+      const reRequestRound = await prisma.holdPointDecisionRound.findUniqueOrThrow({
+        where: { id: reRequestedHoldPoint.currentRoundId! },
+      });
+      expect(reRequestRound).toMatchObject({
+        roundNumber: 2,
+        outcome: null,
+        withdrawnAt: null,
+        requestedById: qualityManager.userId,
+      });
+    } finally {
+      if (batchHoldPointId) {
+        await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId: batchHoldPointId } });
+        await prisma.holdPoint.delete({ where: { id: batchHoldPointId } }).catch(() => {});
+      }
+      await prisma.projectUser.deleteMany({ where: { userId: qualityManager.userId } });
+      await prisma.iTPChecklistItem.delete({ where: { id: batchItem.id } }).catch(() => {});
+    }
+  });
+
+  it('keeps legacy null-round tokens readable and returns null-safe latestRound projections', async () => {
+    const rawToken = `legacy-null-round-${Date.now()}`;
+    const legacyToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId,
+        decisionRoundId: null,
+        token: hashHoldPointReleaseTokenForTest(rawToken),
+        recipientEmail: 'legacy-reviewer@example.com',
+        recipientName: 'Legacy Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const publicRes = await request(app).get(`/api/holdpoints/public/${rawToken}`);
+      expect(publicRes.status).toBe(200);
+
+      const listRes = await request(app)
+        .get(`/api/holdpoints/project/${projectId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(listRes.status).toBe(200);
+      expect(
+        listRes.body.holdPoints.find((item: { id: string }) => item.id === holdPointId).latestRound,
+      ).toMatchObject({ outcome: null, openConditionCount: 0 });
+      expect(
+        listRes.body.holdPoints.find((item: { id: string }) => item.id === unassignedHoldPointId)
+          .latestRound,
+      ).toBeNull();
+
+      const detailRes = await request(app)
+        .get(`/api/holdpoints/lot/${lotId}/item/${checklistItemId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.holdPoint.latestRound).toMatchObject({
+        outcome: null,
+        openConditionCount: 0,
+      });
+    } finally {
+      await prisma.holdPointReleaseToken.delete({ where: { id: legacyToken.id } }).catch(() => {});
+    }
+  });
+
   it('scopes subcontractor hold point access to assigned lots without request-only metadata', async () => {
     const subcontractorCompany = await prisma.subcontractorCompany.create({
       data: {

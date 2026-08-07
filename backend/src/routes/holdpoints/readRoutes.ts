@@ -35,6 +35,7 @@ import {
   buildHoldPointListResponse,
 } from './listPresentation.js';
 import { buildHoldPointDetailResponse, resolveHoldPointDetailSettings } from './detailResponse.js';
+import { latestDecisionRoundInclude } from './roundCore.js';
 import {
   buildHoldPointEvidencePackage,
   buildHoldPointEvidencePackageResponse,
@@ -149,6 +150,7 @@ holdPointReadRouter.get(
                 usedAt: true,
               },
             },
+            decisionRounds: latestDecisionRoundInclude,
           },
         },
       },
@@ -216,6 +218,7 @@ holdPointReadRouter.get(
                 usedAt: true,
               },
             },
+            decisionRounds: latestDecisionRoundInclude,
           },
         },
       },
