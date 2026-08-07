@@ -1,4 +1,4 @@
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 import { AppError } from '../AppError.js';
 import {
@@ -141,15 +141,48 @@ function parseAlignment(alignment: OrderedNode): ImportedAlignment {
     throw AppError.badRequest(`"${name}" has no Line or Curve geometry`);
   }
 
-  return { name, points: segmentsToControlPoints(segments, staStart) };
+  const points = segmentsToControlPoints(segments, staStart);
+  const declaredLengthRaw = attrs['@_length'];
+  if (declaredLengthRaw !== undefined && Number.isFinite(Number(declaredLengthRaw))) {
+    const declared = Number(declaredLengthRaw);
+    const computed = points[points.length - 1].chainage - staStart;
+    if (Math.abs(computed - declared) > Math.max(1, declared * 0.001)) {
+      throw AppError.badRequest(
+        `"${name}" declares length ${declared.toFixed(2)} m but its geometry measures ${computed.toFixed(2)} m — the file appears incomplete`,
+      );
+    }
+  }
+
+  return { name, points };
 }
 
 export function parseLandXml(xml: string): ImportResult {
+  if (XMLValidator.validate(xml) !== true) {
+    throw AppError.badRequest('File is not valid XML — it may be a truncated or corrupted upload');
+  }
+
   let root: OrderedNode[];
   try {
     root = parser.parse(xml) as OrderedNode[];
   } catch {
     throw AppError.badRequest('File is not valid XML');
+  }
+
+  const unitsNode = findFirst(root, 'Units');
+  if (unitsNode) {
+    for (const child of childrenOf(unitsNode)) {
+      const tag = tagOf(child);
+      const linearUnit = attrsOf(child)['@_linearUnit'];
+      const isUnsupportedMetricUnit =
+        tag === 'Metric' &&
+        linearUnit !== undefined &&
+        !['meter', 'metre'].includes(linearUnit.toLowerCase());
+      if (tag === 'Imperial' || isUnsupportedMetricUnit) {
+        throw AppError.badRequest(
+          `File declares imperial units (linearUnit="${linearUnit ?? 'unknown'}"). SiteProof imports metre-based LandXML only — re-export the alignment in metres.`,
+        );
+      }
+    }
   }
 
   const alignmentsNode = findFirst(root, 'Alignments');
