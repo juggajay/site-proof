@@ -29,6 +29,11 @@ import {
   getPrecedingChecklistItems,
 } from './prerequisites.js';
 import type { ChecklistItem } from '../itp/helpers/templateSnapshot.js';
+import {
+  projectLatestRound,
+  type LatestDecisionRoundSource,
+  type LatestRoundProjection,
+} from './roundCore.js';
 
 // Shape of each item in the list response (formerly inline in holdpoints.ts).
 export interface HoldPointListItem {
@@ -47,6 +52,7 @@ export interface HoldPointListItem {
   releaseMethod: string | null | undefined;
   releaseRecipientEmail: string | null | undefined;
   releaseNotes: string | null | undefined;
+  latestRound: LatestRoundProjection | null;
   sequenceNumber: number;
   isCompleted: boolean;
   isVerified: boolean;
@@ -79,6 +85,7 @@ export type HoldPointListPersistedHoldPoint = {
     usedAt: Date | null;
   }>;
   releaseNotes: string | null;
+  decisionRounds?: LatestDecisionRoundSource[];
   createdAt: Date;
 };
 
@@ -153,6 +160,7 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
         releaseRecipientEmail:
           existingHP?.releaseTokens?.find((token) => token.usedAt)?.recipientEmail ?? null,
         releaseNotes: existingHP?.releaseNotes,
+        latestRound: projectLatestRound(existingHP?.decisionRounds),
         sequenceNumber: item.sequenceNumber,
         isCompleted: completion?.status === 'completed',
         isVerified: completion?.verificationStatus === 'verified',

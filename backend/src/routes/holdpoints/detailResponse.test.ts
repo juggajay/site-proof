@@ -96,6 +96,7 @@ describe('buildHoldPointDetailResponse', () => {
         releaseMethod: undefined,
         releaseRecipientEmail: null,
         releaseNotes: undefined,
+        latestRound: null,
       },
       prerequisites,
       incompletePrerequisites: prerequisites,
@@ -131,6 +132,15 @@ describe('buildHoldPointDetailResponse', () => {
           releaseMethod: 'secure_link',
           releaseTokens: [{ recipientEmail: 'super@example.com', usedAt: releasedAt }],
           releaseNotes: 'Released via email confirmation',
+          decisionRounds: [
+            {
+              outcome: 'released_with_conditions',
+              decidedAt: releasedAt,
+              decisionReason: 'Proceed once the two controls are recorded.',
+              linkedNcr: null,
+              _count: { conditions: 2 },
+            },
+          ],
         },
         prerequisites: [],
         incompletePrerequisites: [],
@@ -154,6 +164,15 @@ describe('buildHoldPointDetailResponse', () => {
       releaseMethod: 'secure_link',
       releaseRecipientEmail: 'super@example.com',
       releaseNotes: 'Released via email confirmation',
+      latestRound: {
+        outcome: 'released_with_conditions',
+        decidedAt: releasedAt,
+        decisionReason: 'Proceed once the two controls are recorded.',
+        ncrId: null,
+        ncrNumber: null,
+        ncrStatus: null,
+        openConditionCount: 2,
+      },
     });
   });
 });

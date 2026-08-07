@@ -153,6 +153,15 @@ describe('buildHoldPointListItems', () => {
       releaseMethod: 'secure_link',
       releaseTokens: [{ recipientEmail: 'jane@example.com', usedAt: HP_RELEASED_AT }],
       releaseNotes: 'All good',
+      decisionRounds: [
+        {
+          outcome: 'rejected',
+          decidedAt: HP_RELEASED_AT,
+          decisionReason: 'Evidence was incomplete.',
+          linkedNcr: { id: 'ncr-1', ncrNumber: 'NCR-0007', status: 'open' },
+          _count: { conditions: 0 },
+        },
+      ],
       createdAt: HP_CREATED_AT,
     };
 
@@ -188,6 +197,15 @@ describe('buildHoldPointListItems', () => {
       releaseMethod: 'secure_link',
       releaseRecipientEmail: 'jane@example.com',
       releaseNotes: 'All good',
+      latestRound: {
+        outcome: 'rejected',
+        decidedAt: HP_RELEASED_AT,
+        decisionReason: 'Evidence was incomplete.',
+        ncrId: 'ncr-1',
+        ncrNumber: 'NCR-0007',
+        ncrStatus: 'open',
+        openConditionCount: 0,
+      },
       sequenceNumber: 7,
       isCompleted: false,
       isVerified: false,
@@ -231,6 +249,7 @@ describe('buildHoldPointListItems', () => {
       releaseMethod: undefined,
       releaseRecipientEmail: null,
       releaseNotes: undefined,
+      latestRound: null,
       sequenceNumber: 3,
       isCompleted: false,
       isVerified: false,
