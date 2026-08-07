@@ -68,6 +68,7 @@ import { getTestCoverageColor, testCoverageByLot, useTestCoverage } from './test
 import { MapLegend } from './MapLegend';
 import { useSpatialSearch, type SpatialPhoto, type SpatialTestResult } from './spatialSearchData';
 import { historicalStatusByLot, useLotStatusTimeline } from './statusTimelineData';
+import { orthoTileUrl, readyOrthoLayers, useOrthoLayers } from './orthoData';
 import {
   ALL_WORK_TYPES,
   selectCoverageGroup,
@@ -525,6 +526,7 @@ export function LotMapView({
   const geometriesQuery = useProjectLotGeometries(projectId);
   const controlLinesQuery = useProjectControlLines(projectId);
   const planSheetsQuery = usePlanSheets(projectId);
+  const orthoLayersQuery = useOrthoLayers(projectId);
 
   const search = useSpatialSearch(projectId);
   const { mutate: runSearch, reset: resetSearch } = search;
@@ -590,6 +592,8 @@ export function LotMapView({
   const [plansOpen, setPlansOpen] = useState(false);
   const [planShown, setPlanShown] = useState<Record<string, boolean>>({});
   const [planOpacity, setPlanOpacity] = useState(0.85);
+  const [orthoShown, setOrthoShown] = useState<Record<string, boolean>>({});
+  const [orthoOpacity, setOrthoOpacity] = useState<Record<string, number>>({});
   // Blend keys the sheet's paper white to transparent so only the linework
   // overlays the imagery. Default on; persisted per project.
   const blendStorageKey = `siteproof.planBlend.${projectId}`;
@@ -692,6 +696,29 @@ export function LotMapView({
     () => (planSheetsQuery.data ?? []).filter((s) => s.hasRegistration && s.cornersWgs84),
     [planSheetsQuery.data],
   );
+  const readyOrthos = useMemo(
+    () => readyOrthoLayers(orthoLayersQuery.data),
+    [orthoLayersQuery.data],
+  );
+
+  const activeOrthoCount = readyOrthos.filter((ortho) => orthoShown[ortho.id]).length;
+  const toggleOrtho = useCallback(
+    (id: string) => {
+      if (!orthoShown[id] && activeOrthoCount >= 2) {
+        toast({
+          title: 'Two drone layers already shown',
+          description: 'Turn one off before showing another layer.',
+          variant: 'error',
+        });
+        return;
+      }
+      setOrthoShown((shown) => ({ ...shown, [id]: !shown[id] }));
+    },
+    [activeOrthoCount, orthoShown],
+  );
+  const changeOrthoOpacity = useCallback((id: string, opacity: number) => {
+    setOrthoOpacity((current) => ({ ...current, [id]: opacity }));
+  }, []);
 
   // Drawings-first projects: with no lot geometry yet, show the first registered
   // sheet automatically so the map opens on the drawing and lots can be traced
@@ -1054,6 +1081,9 @@ export function LotMapView({
         plansOpen,
         coverageArmed,
         testingArmed,
+        orthos: readyOrthos,
+        orthoShown,
+        orthoOpacity,
       }),
     [
       historyArmed,
@@ -1065,6 +1095,9 @@ export function LotMapView({
       plansOpen,
       coverageArmed,
       testingArmed,
+      readyOrthos,
+      orthoShown,
+      orthoOpacity,
     ],
   );
 
@@ -1134,14 +1167,22 @@ export function LotMapView({
     // Drawings-first fallback: no geometry or control line yet — open on the
     // first registered plan sheet so the drawing is in view.
     const corners = registeredSheets[0]?.cornersWgs84;
-    if (!corners) return null;
-    return cornersToLatLngBounds([
-      corners.topLeft,
-      corners.topRight,
-      corners.bottomRight,
-      corners.bottomLeft,
-    ]);
-  }, [filteredGeometries, controlLines, registeredSheets]);
+    if (corners) {
+      return cornersToLatLngBounds([
+        corners.topLeft,
+        corners.topRight,
+        corners.bottomRight,
+        corners.bottomLeft,
+      ]);
+    }
+    const orthoBounds = readyOrthos[0]?.boundsWgs84;
+    return orthoBounds
+      ? [
+          [orthoBounds[1], orthoBounds[0]],
+          [orthoBounds[3], orthoBounds[2]],
+        ]
+      : null;
+  }, [filteredGeometries, controlLines, registeredSheets, readyOrthos]);
 
   // ── Camera policy (plan consensus #3) ────────────────────────────────────
   // Applied ONCE when the map and its data are both ready: saved viewport →
@@ -1149,7 +1190,10 @@ export function LotMapView({
   // which already knows the registered-sheet fallback). After that the camera
   // belongs to the user; the explicit Fit control re-fits on demand.
   const dataReady =
-    !geometriesQuery.isLoading && !controlLinesQuery.isLoading && !planSheetsQuery.isLoading;
+    !geometriesQuery.isLoading &&
+    !controlLinesQuery.isLoading &&
+    !planSheetsQuery.isLoading &&
+    !orthoLayersQuery.isLoading;
   const cameraAppliedRef = useRef(false);
   useEffect(() => {
     if (mapMode !== 'map') return;
@@ -1390,7 +1434,7 @@ export function LotMapView({
     }
   }, [map, projectId, projectName]);
 
-  if (geometriesQuery.isLoading || controlLinesQuery.isLoading) {
+  if (geometriesQuery.isLoading || controlLinesQuery.isLoading || orthoLayersQuery.isLoading) {
     return (
       <div className="p-12 text-center text-sm text-muted-foreground" role="status">
         Loading map…
@@ -1452,7 +1496,10 @@ export function LotMapView({
     >
       {/* A registered plan sheet is a reason to render the map even with zero
           geometries — drawings-first projects trace their lots off the sheet. */}
-      {showEmptyState && (allGeometries?.length ?? 0) === 0 && registeredSheets.length === 0 ? (
+      {showEmptyState &&
+      (allGeometries?.length ?? 0) === 0 &&
+      registeredSheets.length === 0 &&
+      readyOrthos.length === 0 ? (
         <EmptyStateCallout
           projectId={projectId}
           hasControlLines={controlLines.length > 0}
@@ -1532,6 +1579,8 @@ export function LotMapView({
                 layerModel={layerMenuModel}
                 onTogglePin={handleTogglePin}
                 onOpenPanel={handleOpenPanel}
+                onToggleOrtho={toggleOrtho}
+                onOrthoOpacityChange={changeOrthoOpacity}
                 basemap={basemap}
                 onBasemapChange={changeBasemap}
                 satelliteAvailable={satelliteAvailable}
@@ -1653,6 +1702,27 @@ export function LotMapView({
                     </LayersControl.BaseLayer>
                   </LayersControl>
                 )}
+
+                {readyOrthos.map((ortho, index) => {
+                  if (!orthoShown[ortho.id]) return null;
+                  const [west, south, east, north] = ortho.boundsWgs84;
+                  return (
+                    <TileLayer
+                      key={ortho.id}
+                      url={orthoTileUrl(ortho)}
+                      bounds={[
+                        [south, west],
+                        [north, east],
+                      ]}
+                      minZoom={ortho.minZoom}
+                      maxZoom={ortho.maxZoom}
+                      opacity={orthoOpacity[ortho.id] ?? 0.85}
+                      zIndex={100 + index}
+                      crossOrigin="anonymous"
+                      eventHandlers={{ tileerror: handleTileError }}
+                    />
+                  );
+                })}
 
                 <ScaleControl position="bottomleft" imperial={false} />
                 {!isMobile && <ZoomControl position="bottomright" />}

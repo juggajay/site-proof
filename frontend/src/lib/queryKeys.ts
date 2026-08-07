@@ -280,6 +280,7 @@ export const queryKeys = {
   controlLines: (projectId: string) => ['control-lines', projectId] as const,
   planSheets: (projectId: string) => ['plan-sheets', projectId] as const,
   planSheet: (projectId: string, sheetId: string) => ['plan-sheets', projectId, sheetId] as const,
+  orthoLayers: (projectId: string) => ['ortho-layers', projectId] as const,
 
   // AI availability
   aiStatus: ['ai-status'] as const,

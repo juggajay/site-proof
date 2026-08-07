@@ -4,9 +4,11 @@ import { Readable } from 'node:stream';
 
 import {
   CopyObjectCommand,
+  DeleteObjectsCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 
@@ -23,12 +25,15 @@ import { ensureUploadSubdirectoryAsync, resolveUploadPath } from '../uploadPaths
 import { assertSafeStorageId } from '../scheduledReports/artifacts.js';
 
 export const DESIGN_MODEL_STORAGE_ROOT = 'design-models';
+export const ORTHO_STORAGE_ROOT = 'ortho';
 
 export interface ModelObjectStore {
   readonly kind: 's3' | 'local';
-  writeFromFile(localPath: string, ref: string): Promise<void>;
+  writeFromFile(localPath: string, ref: string, contentType?: string): Promise<void>;
   readStream(ref: string): Promise<Readable>;
   delete(ref: string): Promise<void>;
+  deleteMany(refs: readonly string[]): Promise<void>;
+  list(prefix: string): Promise<string[]>;
   sizeOf(ref: string): Promise<bigint>;
   copy(sourceRef: string, destinationRef: string): Promise<void>;
 }
@@ -40,7 +45,7 @@ export function assertDurableModelStorage(options: {
   if (options.s3Configured || options.nodeEnv !== 'production') return;
   throw new AppError(
     503,
-    'Durable design-model storage is not configured, so uploads and conversions are unavailable.',
+    'Durable model and orthophoto storage is not configured, so uploads and background processing are unavailable.',
     ErrorCodes.UPLOAD_FAILED,
   );
 }
@@ -51,6 +56,31 @@ export function sourceObjectRef(projectId: string, modelId: string, versionId: s
 
 export function fragmentObjectRef(projectId: string, modelId: string, versionId: string): string {
   return modelObjectRef(projectId, modelId, versionId, 'model.frag');
+}
+
+export function orthoSourceObjectRef(projectId: string, orthoId: string): string {
+  assertSafeStorageId(projectId, 'projectId');
+  assertSafeStorageId(orthoId, 'orthoId');
+  return `${ORTHO_STORAGE_ROOT}/${projectId}/${orthoId}/source.tif`;
+}
+
+export function orthoTileStorageRoot(projectId: string, orthoId: string): string {
+  assertSafeStorageId(projectId, 'projectId');
+  assertSafeStorageId(orthoId, 'orthoId');
+  return `${ORTHO_STORAGE_ROOT}/${projectId}/${orthoId}/tiles`;
+}
+
+export function orthoTileObjectRef(root: string, z: number, x: number, y: number): string {
+  assertObjectRef(root);
+  if (!root.startsWith(`${ORTHO_STORAGE_ROOT}/`) || !root.endsWith('/tiles')) {
+    throw AppError.badRequest('Invalid ortho tile storage root');
+  }
+  for (const [name, value] of Object.entries({ z, x, y })) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw AppError.badRequest(`${name} must be a non-negative integer`);
+    }
+  }
+  return `${root}/${z}/${x}/${y}.png`;
 }
 
 function modelObjectRef(
@@ -65,13 +95,15 @@ function modelObjectRef(
   return `${DESIGN_MODEL_STORAGE_ROOT}/${projectId}/${modelId}/${versionId}/${fileName}`;
 }
 
-function assertModelObjectRef(ref: string): void {
+function assertObjectRef(ref: string): void {
   if (
-    !ref.startsWith(`${DESIGN_MODEL_STORAGE_ROOT}/`) ||
+    ![`${DESIGN_MODEL_STORAGE_ROOT}/`, `${ORTHO_STORAGE_ROOT}/`].some((root) =>
+      ref.startsWith(root),
+    ) ||
     ref.includes('\\') ||
     ref.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')
   ) {
-    throw AppError.badRequest('Invalid design-model storage reference');
+    throw AppError.badRequest('Invalid model or ortho storage reference');
   }
 }
 
@@ -83,15 +115,19 @@ class S3ModelObjectStore implements ModelObjectStore {
     private readonly bucket = DOCUMENTS_BUCKET,
   ) {}
 
-  async writeFromFile(localPath: string, ref: string): Promise<void> {
-    assertModelObjectRef(ref);
+  async writeFromFile(
+    localPath: string,
+    ref: string,
+    contentType = 'application/octet-stream',
+  ): Promise<void> {
+    assertObjectRef(ref);
     const upload = new Upload({
       client: this.client,
       params: {
         Bucket: this.bucket,
         Key: ref,
         Body: fs.createReadStream(localPath),
-        ContentType: 'application/octet-stream',
+        ContentType: contentType,
       },
       partSize: MULTIPART_PART_SIZE_BYTES,
       queueSize: MULTIPART_QUEUE_SIZE,
@@ -101,7 +137,7 @@ class S3ModelObjectStore implements ModelObjectStore {
   }
 
   async readStream(ref: string): Promise<Readable> {
-    assertModelObjectRef(ref);
+    assertObjectRef(ref);
     const response = await this.client.send(
       new GetObjectCommand({ Bucket: this.bucket, Key: ref }),
     );
@@ -110,12 +146,44 @@ class S3ModelObjectStore implements ModelObjectStore {
   }
 
   async delete(ref: string): Promise<void> {
-    assertModelObjectRef(ref);
+    assertObjectRef(ref);
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: ref }));
   }
 
+  async deleteMany(refs: readonly string[]): Promise<void> {
+    for (let index = 0; index < refs.length; index += 1000) {
+      const batch = refs.slice(index, index + 1000);
+      for (const ref of batch) assertObjectRef(ref);
+      if (batch.length === 0) continue;
+      await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: { Objects: batch.map((Key) => ({ Key })) },
+        }),
+      );
+    }
+  }
+
+  async list(prefix: string): Promise<string[]> {
+    assertObjectRef(prefix);
+    const refs: string[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      for (const object of page.Contents ?? []) if (object.Key) refs.push(object.Key);
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return refs;
+  }
+
   async sizeOf(ref: string): Promise<bigint> {
-    assertModelObjectRef(ref);
+    assertObjectRef(ref);
     const response = await this.client.send(
       new HeadObjectCommand({ Bucket: this.bucket, Key: ref }),
     );
@@ -124,8 +192,8 @@ class S3ModelObjectStore implements ModelObjectStore {
   }
 
   async copy(sourceRef: string, destinationRef: string): Promise<void> {
-    assertModelObjectRef(sourceRef);
-    assertModelObjectRef(destinationRef);
+    assertObjectRef(sourceRef);
+    assertObjectRef(destinationRef);
     await this.client.send(
       new CopyObjectCommand({
         Bucket: this.bucket,
@@ -141,12 +209,15 @@ class LocalModelObjectStore implements ModelObjectStore {
   readonly kind = 'local' as const;
 
   private resolve(ref: string): string {
-    assertModelObjectRef(ref);
-    return resolveUploadPath(`uploads/${ref}`, DESIGN_MODEL_STORAGE_ROOT);
+    assertObjectRef(ref);
+    const expectedRoot = ref.startsWith(`${ORTHO_STORAGE_ROOT}/`)
+      ? ORTHO_STORAGE_ROOT
+      : DESIGN_MODEL_STORAGE_ROOT;
+    return resolveUploadPath(`uploads/${ref}`, expectedRoot);
   }
 
-  async writeFromFile(localPath: string, ref: string): Promise<void> {
-    assertModelObjectRef(ref);
+  async writeFromFile(localPath: string, ref: string, _contentType?: string): Promise<void> {
+    assertObjectRef(ref);
     const directory = await ensureUploadSubdirectoryAsync(path.posix.dirname(ref));
     await fs.promises.copyFile(localPath, path.join(directory, path.posix.basename(ref)));
   }
@@ -165,6 +236,37 @@ class LocalModelObjectStore implements ModelObjectStore {
     await fs.promises.rm(this.resolve(ref), { force: true });
   }
 
+  async deleteMany(refs: readonly string[]): Promise<void> {
+    await Promise.all(refs.map((ref) => this.delete(ref)));
+  }
+
+  async list(prefix: string): Promise<string[]> {
+    assertObjectRef(prefix);
+    const root = this.resolve(prefix);
+    const storageRoot = prefix.split('/')[0];
+    const storageRootPath = resolveUploadPath(`uploads/${storageRoot}`, storageRoot);
+    const refs: string[] = [];
+    const visit = async (directory: string): Promise<void> => {
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+        throw error;
+      }
+      for (const entry of entries) {
+        const absolute = path.join(directory, entry.name);
+        if (entry.isDirectory()) await visit(absolute);
+        else if (entry.isFile()) {
+          const relative = path.relative(storageRootPath, absolute).replaceAll('\\', '/');
+          refs.push(`${storageRoot}/${relative}`);
+        }
+      }
+    };
+    await visit(root);
+    return refs;
+  }
+
   async sizeOf(ref: string): Promise<bigint> {
     try {
       return BigInt((await fs.promises.stat(this.resolve(ref))).size);
@@ -174,7 +276,7 @@ class LocalModelObjectStore implements ModelObjectStore {
   }
 
   async copy(sourceRef: string, destinationRef: string): Promise<void> {
-    assertModelObjectRef(destinationRef);
+    assertObjectRef(destinationRef);
     const directory = await ensureUploadSubdirectoryAsync(path.posix.dirname(destinationRef));
     await fs.promises.copyFile(
       this.resolve(sourceRef),

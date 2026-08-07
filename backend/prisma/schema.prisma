@@ -109,8 +109,9 @@ model User {
   comments                    Comment[]
   apiKeys                     ApiKey[] // Feature #747: External API access
   consentRecords              ConsentRecord[] // Feature #776: Privacy consent tracking
-  createdDesignModels         DesignModel[]                  @relation("CreatedDesignModels")
-  uploadedDesignModelVersions DesignModelVersion[]           @relation("UploadedDesignModelVersions")
+  createdDesignModels         DesignModel[]                @relation("CreatedDesignModels")
+  uploadedDesignModelVersions DesignModelVersion[]         @relation("UploadedDesignModelVersions")
+  uploadedOrthoLayers         OrthoLayer[]                 @relation("UploadedOrthoLayers")
   assignedLotSubcontractors   LotSubcontractorAssignment[] @relation("AssignedByUser")
   subcontractorUsers          SubcontractorUser[]
   scheduledReports            ScheduledReport[]
@@ -386,37 +387,37 @@ model NotificationAlert {
 }
 
 model Project {
-  id                  String    @id @default(uuid())
-  companyId           String    @map("company_id")
-  name                String
-  projectNumber       String    @map("project_number")
-  clientName          String?   @map("client_name")
-  contractValue       Decimal?  @map("contract_value")
-  startDate           DateTime? @map("start_date")
-  targetCompletion    DateTime? @map("target_completion")
-  status              String    @default("active")
-  state               String
-  specificationSet    String    @map("specification_set")
+  id                    String    @id @default(uuid())
+  companyId             String    @map("company_id")
+  name                  String
+  projectNumber         String    @map("project_number")
+  clientName            String?   @map("client_name")
+  contractValue         Decimal?  @map("contract_value")
+  startDate             DateTime? @map("start_date")
+  targetCompletion      DateTime? @map("target_completion")
+  status                String    @default("active")
+  state                 String
+  specificationSet      String    @map("specification_set")
   // C1 gate strength (§5.1.2). Default 'warn' NEVER changes conformance
   // outcomes; 'block' is opt-in per project (§16 D1).
-  testSufficiencyMode String    @default("warn") @map("test_sufficiency_mode")
-  chainageStart       Decimal?  @map("chainage_start")
-  chainageEnd         Decimal?  @map("chainage_end")
-  lotPrefix           String?   @default("LOT-") @map("lot_prefix")
-  lotStartingNumber   Int?      @default(1) @map("lot_starting_number")
-  ncrPrefix           String?   @default("NCR-") @map("ncr_prefix")
-  ncrStartingNumber   Int?      @default(1) @map("ncr_starting_number")
-  settings            String? // Stored as JSON string for SQLite
-  hpInternalReleaserIds String[] @default([]) @map("hp_internal_releaser_ids")
+  testSufficiencyMode   String    @default("warn") @map("test_sufficiency_mode")
+  chainageStart         Decimal?  @map("chainage_start")
+  chainageEnd           Decimal?  @map("chainage_end")
+  lotPrefix             String?   @default("LOT-") @map("lot_prefix")
+  lotStartingNumber     Int?      @default(1) @map("lot_starting_number")
+  ncrPrefix             String?   @default("NCR-") @map("ncr_prefix")
+  ncrStartingNumber     Int?      @default(1) @map("ncr_starting_number")
+  settings              String? // Stored as JSON string for SQLite
+  hpInternalReleaserIds String[]  @default([]) @map("hp_internal_releaser_ids")
   // Location for weather API
-  latitude            Decimal?  @map("latitude")
-  longitude           Decimal?  @map("longitude")
+  latitude              Decimal?  @map("latitude")
+  longitude             Decimal?  @map("longitude")
   // Working hours for notification timing
-  workingHoursStart   String?   @default("07:00") @map("working_hours_start") // Format: HH:mm
-  workingHoursEnd     String?   @default("17:00") @map("working_hours_end") // Format: HH:mm
-  workingDays         String?   @default("1,2,3,4,5") @map("working_days") // Comma-separated: 0=Sun, 1=Mon, etc.
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  workingHoursStart     String?   @default("07:00") @map("working_hours_start") // Format: HH:mm
+  workingHoursEnd       String?   @default("17:00") @map("working_hours_end") // Format: HH:mm
+  workingDays           String?   @default("1,2,3,4,5") @map("working_days") // Comma-separated: 0=Sun, 1=Mon, etc.
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   company                     Company                            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   projectUsers                ProjectUser[]
@@ -446,6 +447,7 @@ model Project {
   requirementEvaluations      RequirementEvaluation[]
   importBatches               ImportBatch[]
   designModels                DesignModel[]
+  orthoLayers                 OrthoLayer[]
   importMappingProfiles       ImportMappingProfile[]
   folioSnapshots              FolioSnapshot[]
   folioIssueReservations      FolioIssueReservation[]
@@ -761,8 +763,8 @@ model ITPTemplate {
   // is what makes "traceable to its source document in ONE join" literally true.
   importBatchId       String?   @map("import_batch_id")
 
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   project        Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   checklistItems ITPChecklistItem[]
@@ -786,16 +788,16 @@ model ITPTemplate {
 }
 
 model ITPChecklistItem {
-  id                 String  @id @default(uuid())
-  templateId         String  @map("template_id")
-  sequenceNumber     Int     @map("sequence_number")
-  description        String
-  acceptanceCriteria String? @map("acceptance_criteria")
-  pointType          String  @default("standard") @map("point_type")
-  responsibleParty   String  @default("contractor") @map("responsible_party")
-  evidenceRequired   String  @default("none") @map("evidence_required")
-  testType           String? @map("test_type")
-  notes              String?
+  id                    String  @id @default(uuid())
+  templateId            String  @map("template_id")
+  sequenceNumber        Int     @map("sequence_number")
+  description           String
+  acceptanceCriteria    String? @map("acceptance_criteria")
+  pointType             String  @default("standard") @map("point_type")
+  responsibleParty      String  @default("contractor") @map("responsible_party")
+  evidenceRequired      String  @default("none") @map("evidence_required")
+  testType              String? @map("test_type")
+  notes                 String?
   // Wave G G2 (spec §2.2(c) [GR-A3]) — item-level lineage. Clone creates fresh
   // rows, so the same logical checklist item has a different id in every project
   // that adopted the template; without this, G5's cross-project recurrence
@@ -917,8 +919,8 @@ model HoldPoint {
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  lot              Lot                     @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  itpChecklistItem ITPChecklistItem        @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
+  lot              Lot                      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  itpChecklistItem ITPChecklistItem         @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
   releaseTokens    HoldPointReleaseToken[]
   decisionRounds   HoldPointDecisionRound[] @relation("HoldPointDecisionRounds")
   currentRound     HoldPointDecisionRound?  @relation("HoldPointCurrentRound", fields: [currentRoundId], references: [id], onDelete: SetNull)
@@ -954,8 +956,8 @@ model HoldPointReleaseToken {
   releaseNotes        String?   @map("release_notes")
   createdAt           DateTime  @default(now()) @map("created_at")
 
-  holdPoint HoldPoint              @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
-  batch     HoldPointReleaseBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  holdPoint     HoldPoint               @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
+  batch         HoldPointReleaseBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
   decisionRound HoldPointDecisionRound? @relation(fields: [decisionRoundId], references: [id], onDelete: SetNull)
 
   requirementEvaluations RequirementEvaluation[]
@@ -978,26 +980,26 @@ model HoldPointDecisionRound {
   requestedById            String?   @map("requested_by_id")
   responseToPriorRejection String?   @map("response_to_prior_rejection")
   // recipient provenance denormalized (D-H1)
-  recipientEmail            String?   @map("recipient_email")
-  recipientName             String?   @map("recipient_name")
+  recipientEmail           String?   @map("recipient_email")
+  recipientName            String?   @map("recipient_name")
   // outcome — all null until decided; immutable once outcome set
-  outcome                   String?   // 'released' | 'released_with_conditions' | 'rejected'
-  decidedAt                 DateTime? @map("decided_at")
-  decidedByName             String?   @map("decided_by_name")
-  decidedByOrg              String?   @map("decided_by_org")
-  decidedByTokenId          String?   @map("decided_by_token_id")
-  decisionReason            String?   @map("decision_reason")
-  decisionMethod            String?   @map("decision_method") // 'public_token' | 'authenticated'
-  signatureUrl              String?   @map("signature_url")
-  linkedNcrId               String?   @map("linked_ncr_id")
+  outcome                  String? // 'released' | 'released_with_conditions' | 'rejected'
+  decidedAt                DateTime? @map("decided_at")
+  decidedByName            String?   @map("decided_by_name")
+  decidedByOrg             String?   @map("decided_by_org")
+  decidedByTokenId         String?   @map("decided_by_token_id")
+  decisionReason           String?   @map("decision_reason")
+  decisionMethod           String?   @map("decision_method") // 'public_token' | 'authenticated'
+  signatureUrl             String?   @map("signature_url")
+  linkedNcrId              String?   @map("linked_ncr_id")
   // contractor-side recall (only while undecided)
-  withdrawnAt               DateTime? @map("withdrawn_at")
-  withdrawnById             String?   @map("withdrawn_by_id")
-  withdrawalReason          String?   @map("withdrawal_reason")
+  withdrawnAt              DateTime? @map("withdrawn_at")
+  withdrawnById            String?   @map("withdrawn_by_id")
+  withdrawalReason         String?   @map("withdrawal_reason")
 
-  holdPoint            HoldPoint                  @relation("HoldPointDecisionRounds", fields: [holdPointId], references: [id], onDelete: Cascade)
-  currentForHoldPoints HoldPoint[]                @relation("HoldPointCurrentRound")
-  linkedNcr            NCR?                       @relation(fields: [linkedNcrId], references: [id], onDelete: SetNull)
+  holdPoint            HoldPoint                   @relation("HoldPointDecisionRounds", fields: [holdPointId], references: [id], onDelete: Cascade)
+  currentForHoldPoints HoldPoint[]                 @relation("HoldPointCurrentRound")
+  linkedNcr            NCR?                        @relation(fields: [linkedNcrId], references: [id], onDelete: SetNull)
   conditions           HoldPointReleaseCondition[]
   releaseTokens        HoldPointReleaseToken[]
 
@@ -1010,7 +1012,7 @@ model HoldPointReleaseCondition {
   id                             String    @id @default(uuid())
   decisionRoundId                String    @map("decision_round_id")
   sequence                       Int
-  text                           String    // bounded by route validation (M3), not schema
+  text                           String // bounded by route validation (M3), not schema
   recordedSatisfiedAt            DateTime? @map("recorded_satisfied_at")
   recordedSatisfiedById          String?   @map("recorded_satisfied_by_id")
   recordedSatisfiedByName        String?   @map("recorded_satisfied_by_name") // survives user deletion
@@ -1268,8 +1270,8 @@ model NCR {
   closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id], onDelete: SetNull)
   qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id], onDelete: SetNull)
 
-  ncrLots     NCRLot[]
-  ncrEvidence NCREvidence[]
+  ncrLots                 NCRLot[]
+  ncrEvidence             NCREvidence[]
   holdPointDecisionRounds HoldPointDecisionRound[]
 
   @@unique([projectId, ncrNumber])
@@ -1443,38 +1445,38 @@ model DiaryDelay {
 }
 
 model DiaryDelivery {
-  id           String   @id @default(uuid())
-  diaryId      String   @map("diary_id")
-  description  String
-  supplier     String?
-  docketNumber String?  @map("docket_number")
-  quantity     Decimal?
-  unit         String?
-  lotId        String?  @map("lot_id")
-  notes        String?
+  id               String   @id @default(uuid())
+  diaryId          String   @map("diary_id")
+  description      String
+  supplier         String?
+  docketNumber     String?  @map("docket_number")
+  quantity         Decimal?
+  unit             String?
+  lotId            String?  @map("lot_id")
+  notes            String?
   // C5.1 evidence fields (spec §4.4). Written ONLY by
   // `PATCH /api/deliveries/:deliveryId/evidence`, which deliberately does not
   // take the diary-editable lock: the supplier's docket arrives the morning
   // after the diary was submitted (§4.4a). The foreman's account of the day —
   // description/quantity/unit/supplier/notes — stays locked with the diary.
-  docketDocumentId String? @map("docket_document_id")
+  docketDocumentId String?  @map("docket_document_id")
   // Transcribed from the docket. Free text, never parsed and never validated
   // against a vocabulary — structuring it is C5.4, behind RG-6.
-  batchRef         String? @map("batch_ref")
+  batchRef         String?  @map("batch_ref")
   // Client idempotency key (H5) — see NCR.requestKey.
-  requestKey   String?  @map("request_key")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  requestKey       String?  @map("request_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  diary          DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  lot            Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
   // Restrict, not SetNull like TestResult.certificateDoc: a delivery whose
   // docket silently detached is worse evidence than a document that refuses to
   // delete. Follows Drawing.document. The usable error message comes from the
   // `delivery_docket` EVIDENCE_LINK_GUARDS entry, not from this FK.
-  docketDocument Document? @relation(fields: [docketDocumentId], references: [id], onDelete: Restrict)
+  docketDocument Document?  @relation(fields: [docketDocumentId], references: [id], onDelete: Restrict)
   // C5.4a. Back-relation only; the FK and its index live on `ncrs`.
-  linkedNcrs     NCR[]     @relation("NcrLinkedDelivery")
+  linkedNcrs     NCR[]      @relation("NcrLinkedDelivery")
 
   @@unique([diaryId, requestKey])
   @@index([lotId])
@@ -2118,9 +2120,9 @@ model LotGoverningRevision {
 /// data said at the moment they wrote them, so a proposal reviewed six weeks
 /// later is judged against the trend that prompted it rather than a re-query.
 model TemplateRevisionProposal {
-  id         String @id @default(uuid())
-  projectId  String @map("project_id")
-  templateId String @map("template_id")
+  id              String  @id @default(uuid())
+  projectId       String  @map("project_id")
+  templateId      String  @map("template_id")
   // The checklist item the trend is about. Nullable: a proposal may be about a
   // template as a whole (an item that should EXIST has no id yet).
   checklistItemId String? @map("checklist_item_id")
@@ -2136,13 +2138,13 @@ model TemplateRevisionProposal {
   // 'open' | 'accepted' | 'rejected'
   status         String @default("open")
 
-  proposedById String?   @map("proposed_by_id")
-  proposedAt   DateTime  @default(now()) @map("proposed_at")
-  decidedById  String?   @map("decided_by_id")
-  decidedAt    DateTime? @map("decided_at")
-  decisionNote String?   @map("decision_note")
+  proposedById        String?   @map("proposed_by_id")
+  proposedAt          DateTime  @default(now()) @map("proposed_at")
+  decidedById         String?   @map("decided_by_id")
+  decidedAt           DateTime? @map("decided_at")
+  decisionNote        String?   @map("decision_note")
   // The revision the acceptance created. Null while open, and null on reject.
-  resultingTemplateId String? @map("resulting_template_id")
+  resultingTemplateId String?   @map("resulting_template_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -2154,8 +2156,8 @@ model TemplateRevisionProposal {
   // SetNull on both actors, matching `LotGoverningRevision.linkedBy`: a
   // proposal is an administrative act, and an account deletion must not delete
   // the decision. `proposedAt` / `decidedAt` survive intact.
-  proposedBy User? @relation("TemplateRevisionProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
-  decidedBy  User? @relation("TemplateRevisionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  proposedBy        User?             @relation("TemplateRevisionProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
+  decidedBy         User?             @relation("TemplateRevisionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
 
   @@index([projectId, status, proposedAt])
   @@index([templateId])
@@ -2756,20 +2758,20 @@ model DesignModel {
 }
 
 model DesignModelVersion {
-  id               String  @id @default(uuid())
-  modelId          String  @map("model_id")
-  versionNumber    Int     @map("version_number")
+  id                String    @id @default(uuid())
+  modelId           String    @map("model_id")
+  versionNumber     Int       @map("version_number")
   // 'uploading' | 'queued' | 'converting' | 'ready' | 'failed'
-  status           String  @default("uploading")
-  fileName         String  @map("file_name")
+  status            String    @default("uploading")
+  fileName          String    @map("file_name")
   // BigInt like HandoverExport.fileSize — Int caps at 2^31-1 bytes.
-  sourceSizeBytes  BigInt  @map("source_size_bytes")
-  sourceSha256     String  @map("source_sha256")
-  sourceStorageRef String? @map("source_storage_ref")
-  fragStorageRef   String? @map("frag_storage_ref")
-  fragSizeBytes    BigInt? @map("frag_size_bytes")
-  converterVersion String? @map("converter_version")
-  diagnostics      Json?
+  sourceSizeBytes   BigInt    @map("source_size_bytes")
+  sourceSha256      String    @map("source_sha256")
+  sourceStorageRef  String?   @map("source_storage_ref")
+  fragStorageRef    String?   @map("frag_storage_ref")
+  fragSizeBytes     BigInt?   @map("frag_size_bytes")
+  converterVersion  String?   @map("converter_version")
+  diagnostics       Json?
   // Lease columns — same names and semantics as HandoverExport (fencing token
   // regenerated on every claim; see schema.prisma HandoverExport comments).
   leaseOwner        String?   @map("lease_owner")
@@ -2791,6 +2793,44 @@ model DesignModelVersion {
   @@index([status, nextAttemptAt])
   @@index([sourceSha256])
   @@map("design_model_versions")
+}
+
+model OrthoLayer {
+  id                String    @id @default(uuid())
+  projectId         String    @map("project_id")
+  name              String
+  capturedAt        DateTime? @map("captured_at")
+  // 'uploading' | 'queued' | 'tiling' | 'ready' | 'failed'
+  status            String    @default("uploading")
+  fileName          String    @map("file_name")
+  sourceSizeBytes   BigInt    @map("source_size_bytes")
+  sourceSha256      String    @map("source_sha256")
+  sourceStorageRef  String?   @map("source_storage_ref")
+  tileStorageRoot   String?   @map("tile_storage_root")
+  boundsWgs84       Json?     @map("bounds_wgs84")
+  minZoom           Int?      @map("min_zoom")
+  maxZoom           Int?      @map("max_zoom")
+  tileCount         Int?      @map("tile_count")
+  diagnostics       Json?
+  // Lease columns — exact fencing semantics of DesignModelVersion.
+  leaseOwner        String?   @map("lease_owner")
+  leaseToken        String?   @map("lease_token")
+  leaseExpiresAt    DateTime? @map("lease_expires_at")
+  heartbeatAt       DateTime? @map("heartbeat_at")
+  nextAttemptAt     DateTime? @map("next_attempt_at")
+  failureCount      Int       @default(0) @map("failure_count")
+  lastFailureReason String?   @map("last_failure_reason")
+  uploadedById      String?   @map("uploaded_by")
+  tiledAt           DateTime? @map("tiled_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User?   @relation("UploadedOrthoLayers", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status, nextAttemptAt])
+  @@map("ortho_layers")
 }
 
 /// One archive generation request (§7.4). `D1c.1` creates it and freezes its
@@ -2974,7 +3014,7 @@ model SurveyRecord {
 
   /// `conforms|does_not_conform|qualified|not_stated`, CHECK-constrained.
   /// THE SURVEYOR'S, not CIVOS's. Every surface renders it attributed.
-  surveyorVerdict  String? @map("surveyor_verdict")
+  surveyorVerdict   String? @map("surveyor_verdict")
   /// Where in the report the verdict was read from, so a reader can check it.
   verdictSourceNote String? @map("verdict_source_note")
 
@@ -2989,14 +3029,14 @@ model SurveyRecord {
   /// accuracy, missing coverage, wrong datum, wrong design surface, content
   /// mismatch — and they demand different fixes, so a return with no reason is
   /// a state with no value (research §5.6).
-  returnReason    String? @map("return_reason")
-  supersededById  String? @map("superseded_by_id")
+  returnReason       String? @map("return_reason")
+  supersededById     String? @map("superseded_by_id")
   /// Wave C5-c. Why this record was replaced, written by whoever superseded it.
   /// Free text, not a vocabulary — the chain says *that* it was replaced, this
   /// says why, and a supersession chain a reader cannot explain is a chain they
   /// will not trust.
   supersessionReason String? @map("supersession_reason")
-  notes           String?
+  notes              String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

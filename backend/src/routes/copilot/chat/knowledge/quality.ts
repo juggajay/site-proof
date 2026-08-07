@@ -14,6 +14,7 @@ export const QUALITY_PAGE_KNOWLEDGE = [
       'columns',
       'saved filters',
       'draw lot',
+      'drone ortho',
     ],
     roles:
       'All internal project roles and viewers can read; write and bulk controls depend on the actual project role.',
@@ -24,7 +25,7 @@ export const QUALITY_PAGE_KNOWLEDGE = [
 
 The list/card/linear/map controls change presentation without changing data. List is the sortable table; Cards is the mobile-friendly register; Linear shows status along chainage; Map opens the spatial workspace. **Columns** shows or hides optional table columns. Row click/View opens the lot. Row **More** offers Edit, Clone and Delete only when the role and lot state allow them. Checkboxes select deletable lots; the bulk bar offers **Update status**, **Assign subcontractor**, test-rule attributes when the ruleset is available, **Print labels**, **Delete**, and **Clear selection**. Actions that cannot safely apply to every selected lot are disabled.
 
-On Map: **Find by area** draws a search box; **My location** flies to the device position; **Photos** toggles photo pins on mobile; **Layers** controls basemap, plan overlays, coverage/testing panels and pin layers; **Draw lot** lets managers trace a polygon and assign it to a lot; **Save map** stores a PNG in Documents; **Past view** replays lot state on a selected date. Layer errors are shown on-map, and pin layers cap at the first 500 until the user zooms in.`,
+On Map: **Find by area** draws a search box; **My location** flies to the device position; **Photos** toggles photo pins on mobile; **Layers** controls basemap, plan overlays, coverage/testing panels, pin layers and ready drone orthophotos. Up to two orthophotos can be shown together, each with its own opacity control. **Draw lot** lets managers trace a polygon and assign it to a lot; **Save map** stores a PNG in Documents; **Past view** replays lot state on a selected date but does not switch imagery by flight date. Layer errors are shown on-map, and pin layers cap at the first 500 until the user zooms in.`,
   },
   {
     route: 'projects/<projectId>/lots/<lotId>',

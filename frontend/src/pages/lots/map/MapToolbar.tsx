@@ -175,6 +175,8 @@ interface MapToolbarProps {
   layerModel: MapLayerMenuModel;
   onTogglePin: (id: MapPinLayerId) => void;
   onOpenPanel: (id: MapPanelId) => void;
+  onToggleOrtho: (id: string) => void;
+  onOrthoOpacityChange: (id: string, opacity: number) => void;
   /** Mobile only — the basemap the Layers sheet offers and the map draws. */
   basemap: MapBasemapId;
   onBasemapChange: (id: MapBasemapId) => void;
@@ -219,6 +221,8 @@ export function MapToolbar({
   layerModel,
   onTogglePin,
   onOpenPanel,
+  onToggleOrtho,
+  onOrthoOpacityChange,
   basemap,
   onBasemapChange,
   satelliteAvailable,
@@ -358,6 +362,8 @@ export function MapToolbar({
               model={layerModel}
               onTogglePin={onTogglePin}
               onOpenPanel={onOpenPanel}
+              onToggleOrtho={onToggleOrtho}
+              onOrthoOpacityChange={onOrthoOpacityChange}
               basemap={basemap}
               onBasemapChange={onBasemapChange}
               satelliteAvailable={satelliteAvailable}
