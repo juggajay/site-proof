@@ -11,6 +11,17 @@ export interface LatestHoldPointDecisionRound {
   ncrNumber: string | null;
   ncrStatus: string | null;
   openConditionCount: number;
+  conditions?: HoldPointReleaseCondition[];
+}
+
+export interface HoldPointReleaseCondition {
+  id: string;
+  sequence: number;
+  text: string;
+  recordedSatisfiedAt: string | null;
+  recordedSatisfiedByName: string | null;
+  satisfactionNote: string | null;
+  satisfactionEvidenceDocumentId: string | null;
 }
 
 export interface HoldPoint {

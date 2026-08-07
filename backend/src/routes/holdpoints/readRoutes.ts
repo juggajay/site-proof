@@ -34,7 +34,11 @@ import {
   buildHoldPointListItems,
   buildHoldPointListResponse,
 } from './listPresentation.js';
-import { buildHoldPointDetailResponse, resolveHoldPointDetailSettings } from './detailResponse.js';
+import {
+  buildHoldPointDetailResponse,
+  latestDecisionRoundDetailInclude,
+  resolveHoldPointDetailSettings,
+} from './detailResponse.js';
 import { latestDecisionRoundInclude } from './roundCore.js';
 import {
   buildHoldPointEvidencePackage,
@@ -51,6 +55,10 @@ import {
   getHoldPointChecklistItemsForInstance,
   resolveHoldPointChecklistItemForInstance,
 } from './itpSnapshot.js';
+import {
+  evidenceDecisionRoundsInclude,
+  withEvidenceDecisionRounds,
+} from './decisionRoundPresentation.js';
 
 // =============================================================================
 // Authenticated hold point READ routes: project list, lot/item detail,
@@ -218,7 +226,7 @@ holdPointReadRouter.get(
                 usedAt: true,
               },
             },
-            decisionRounds: latestDecisionRoundInclude,
+            decisionRounds: latestDecisionRoundDetailInclude,
           },
         },
       },
@@ -288,6 +296,7 @@ holdPointReadRouter.get(
       where: { id },
       include: {
         itpChecklistItem: true,
+        decisionRounds: evidenceDecisionRoundsInclude,
         lot: {
           include: {
             project: {
@@ -355,20 +364,23 @@ holdPointReadRouter.get(
       });
 
     const evidencePackage = await buildHoldPointEvidencePackage({
-      holdPoint: {
-        id: holdPoint.id,
-        description: holdPoint.description,
-        status: holdPoint.status,
-        notificationSentAt: holdPoint.notificationSentAt,
-        notificationSentTo: holdPoint.notificationSentTo,
-        scheduledDate: holdPoint.scheduledDate,
-        releasedAt: holdPoint.releasedAt,
-        releasedByName: holdPoint.releasedByName,
-        releasedByOrg: holdPoint.releasedByOrg,
-        releaseMethod: holdPoint.releaseMethod,
-        releaseSignatureUrl: holdPoint.releaseSignatureUrl,
-        releaseNotes: holdPoint.releaseNotes,
-      },
+      holdPoint: withEvidenceDecisionRounds(
+        {
+          id: holdPoint.id,
+          description: holdPoint.description,
+          status: holdPoint.status,
+          notificationSentAt: holdPoint.notificationSentAt,
+          notificationSentTo: holdPoint.notificationSentTo,
+          scheduledDate: holdPoint.scheduledDate,
+          releasedAt: holdPoint.releasedAt,
+          releasedByName: holdPoint.releasedByName,
+          releasedByOrg: holdPoint.releasedByOrg,
+          releaseMethod: holdPoint.releaseMethod,
+          releaseSignatureUrl: holdPoint.releaseSignatureUrl,
+          releaseNotes: holdPoint.releaseNotes,
+        },
+        holdPoint.decisionRounds,
+      ),
       lot,
       itpTemplate,
       checklistItems,
@@ -508,6 +520,13 @@ holdPointReadRouter.post(
             },
           },
         },
+        holdPoints: {
+          where: { itpChecklistItemId },
+          take: 1,
+          select: {
+            decisionRounds: evidenceDecisionRoundsInclude,
+          },
+        },
       },
     });
 
@@ -530,20 +549,23 @@ holdPointReadRouter.post(
       });
 
     const evidencePackage = await buildHoldPointEvidencePackage({
-      holdPoint: {
-        id: 'preview', // Placeholder for preview
-        description: holdPointItem.description,
-        status: 'pending',
-        notificationSentAt: null,
-        notificationSentTo: null,
-        scheduledDate: null,
-        releasedAt: null,
-        releasedByName: null,
-        releasedByOrg: null,
-        releaseMethod: null,
-        releaseSignatureUrl: null,
-        releaseNotes: null,
-      },
+      holdPoint: withEvidenceDecisionRounds(
+        {
+          id: 'preview', // Placeholder for preview
+          description: holdPointItem.description,
+          status: 'pending',
+          notificationSentAt: null,
+          notificationSentTo: null,
+          scheduledDate: null,
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+        lot.holdPoints[0]?.decisionRounds ?? [],
+      ),
       lot,
       itpTemplate,
       checklistItems,

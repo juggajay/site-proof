@@ -1,6 +1,7 @@
 import { QrCode } from 'lucide-react';
 import type { ItpHoldPointState } from '../types';
 import { formatHoldPointStatusLabel } from '@/lib/statusLabels';
+import { HoldPointConditions } from './HoldPointConditions';
 
 // Benchmark T1 — a hold-point row used to say one of two things: "released by
 // X" or a generic lock. A foreman standing at the work could not tell whether
@@ -81,6 +82,8 @@ interface ITPChecklistHoldPointStateProps {
   onRequestRelease: () => void;
   onShowQrCode: () => void;
   projectId?: string;
+  lotId?: string;
+  itemId?: string;
 }
 
 export function ITPChecklistHoldPointState({
@@ -91,6 +94,8 @@ export function ITPChecklistHoldPointState({
   onRequestRelease,
   onShowQrCode,
   projectId,
+  lotId,
+  itemId,
 }: ITPChecklistHoldPointStateProps) {
   if (state === 'refused' && holdPoint) {
     const round = holdPoint.latestRound;
@@ -134,6 +139,14 @@ export function ITPChecklistHoldPointState({
         <p className="mt-1 text-xs text-muted-foreground">
           Permission to proceed has been granted. The recorded conditions remain open.
         </p>
+        {projectId && lotId && itemId && (
+          <HoldPointConditions
+            projectId={projectId}
+            lotId={lotId}
+            itemId={itemId}
+            holdPointId={holdPoint.id}
+          />
+        )}
       </div>
     );
   }

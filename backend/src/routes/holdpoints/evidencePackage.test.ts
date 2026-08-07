@@ -19,6 +19,8 @@ import {
   type EvidenceSurveyInput,
   type EvidenceTestResultInput,
 } from './evidencePackage.js';
+import { withEvidenceDecisionRounds } from './decisionRoundPresentation.js';
+import { buildPublicEvidenceHoldPoint } from './publicReleasePayload.js';
 
 /**
  * Characterizes the pure hold-point evidence-package presentation helpers
@@ -38,6 +40,7 @@ const CREATED_AT = new Date('2026-03-03T02:00:00.000Z');
 const UPLOADED_AT = new Date('2026-03-04T02:00:00.000Z');
 const SURVEYED_AT = new Date('2026-03-05T02:00:00.000Z');
 const RECEIVED_AT = new Date('2026-03-06T02:00:00.000Z');
+const DECIDED_AT = new Date('2026-03-07T02:00:00.000Z');
 
 const items: EvidenceChecklistItemInput[] = [
   {
@@ -165,6 +168,110 @@ describe('buildHoldPointEvidenceChecklist', () => {
 });
 
 describe('hold point evidence-package response helpers', () => {
+  it('nests every decision round on the hold point with condition state intact', () => {
+    const holdPoint = withEvidenceDecisionRounds({ id: 'hp-round-history' }, [
+      {
+        id: 'round-1',
+        roundNumber: 1,
+        requestedAt: CREATED_AT,
+        responseToPriorRejection: null,
+        outcome: 'rejected',
+        decidedAt: DECIDED_AT,
+        decidedByName: 'Principal Reviewer',
+        decidedByOrg: 'Principal',
+        decisionReason: 'The proof roll evidence was incomplete.',
+        withdrawnAt: null,
+        withdrawalReason: null,
+        conditions: [],
+      },
+      {
+        id: 'round-2',
+        roundNumber: 2,
+        requestedAt: UPLOADED_AT,
+        responseToPriorRejection: 'The proof roll evidence has now been uploaded.',
+        outcome: 'released_with_conditions',
+        decidedAt: DECIDED_AT,
+        decidedByName: 'Principal Reviewer',
+        decidedByOrg: 'Principal',
+        decisionReason: 'Permission to proceed subject to the recorded controls.',
+        withdrawnAt: null,
+        withdrawalReason: null,
+        conditions: [
+          {
+            id: 'condition-1',
+            sequence: 1,
+            text: 'Upload the final survey.',
+            recordedSatisfiedAt: RECEIVED_AT,
+            recordedSatisfiedByName: 'Quality Manager',
+            satisfactionNote: 'Final survey uploaded.',
+            satisfactionEvidenceDocumentId: 'document-1',
+          },
+          {
+            id: 'condition-2',
+            sequence: 2,
+            text: 'Protect the exposed edge.',
+            recordedSatisfiedAt: null,
+            recordedSatisfiedByName: null,
+            satisfactionNote: null,
+            satisfactionEvidenceDocumentId: null,
+          },
+        ],
+      },
+    ]);
+
+    expect(holdPoint.decisionRounds.map((round) => round.outcome)).toEqual([
+      'rejected',
+      'released_with_conditions',
+    ]);
+    expect(holdPoint.decisionRounds[1].conditions).toEqual([
+      expect.objectContaining({
+        id: 'condition-1',
+        recordedSatisfiedAt: RECEIVED_AT,
+        satisfactionEvidenceDocumentId: 'document-1',
+      }),
+      expect.objectContaining({ id: 'condition-2', recordedSatisfiedAt: null }),
+    ]);
+  });
+
+  it('starves recipient provenance from public evidence decision rounds', () => {
+    const sourceRound = {
+      id: 'round-public',
+      roundNumber: 1,
+      requestedAt: CREATED_AT,
+      responseToPriorRejection: null,
+      outcome: 'released',
+      decidedAt: DECIDED_AT,
+      decidedByName: 'Principal Reviewer',
+      decidedByOrg: 'Principal',
+      decisionReason: null,
+      withdrawnAt: null,
+      withdrawalReason: null,
+      conditions: [],
+      recipientEmail: 'private-recipient@example.com',
+      recipientName: 'Private Recipient',
+    };
+
+    const publicHoldPoint = buildPublicEvidenceHoldPoint({
+      id: 'hp-public',
+      description: 'Proof roll hold point',
+      itpChecklistItemId: 'item-1',
+      status: 'released',
+      notificationSentAt: CREATED_AT,
+      scheduledDate: null,
+      scheduledTime: null,
+      releasedAt: DECIDED_AT,
+      releasedByName: 'Principal Reviewer',
+      releasedByOrg: 'Principal',
+      releaseMethod: 'secure_link',
+      releaseSignatureUrl: null,
+      releaseNotes: null,
+      decisionRounds: [sourceRound],
+    });
+
+    expect(publicHoldPoint.decisionRounds[0]).not.toHaveProperty('recipientEmail');
+    expect(publicHoldPoint.decisionRounds[0]).not.toHaveProperty('recipientName');
+  });
+
   it('wraps authenticated and preview evidence packages and strips raw storage locators', () => {
     const evidencePackage = {
       holdPoint: { id: 'hp-1' },

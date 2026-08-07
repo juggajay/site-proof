@@ -139,6 +139,26 @@ describe('buildHoldPointDetailResponse', () => {
               decisionReason: 'Proceed once the two controls are recorded.',
               linkedNcr: null,
               _count: { conditions: 2 },
+              conditions: [
+                {
+                  id: 'condition-1',
+                  sequence: 1,
+                  text: 'Record the final survey pickup.',
+                  recordedSatisfiedAt: releasedAt,
+                  recordedSatisfiedByName: 'Quality Manager',
+                  satisfactionNote: 'Survey uploaded.',
+                  satisfactionEvidenceDocumentId: 'document-1',
+                },
+                {
+                  id: 'condition-2',
+                  sequence: 2,
+                  text: 'Protect the exposed edge.',
+                  recordedSatisfiedAt: null,
+                  recordedSatisfiedByName: null,
+                  satisfactionNote: null,
+                  satisfactionEvidenceDocumentId: null,
+                },
+              ],
             },
           ],
         },
@@ -172,6 +192,26 @@ describe('buildHoldPointDetailResponse', () => {
         ncrNumber: null,
         ncrStatus: null,
         openConditionCount: 2,
+        conditions: [
+          {
+            id: 'condition-1',
+            sequence: 1,
+            text: 'Record the final survey pickup.',
+            recordedSatisfiedAt: releasedAt,
+            recordedSatisfiedByName: 'Quality Manager',
+            satisfactionNote: 'Survey uploaded.',
+            satisfactionEvidenceDocumentId: 'document-1',
+          },
+          {
+            id: 'condition-2',
+            sequence: 2,
+            text: 'Protect the exposed edge.',
+            recordedSatisfiedAt: null,
+            recordedSatisfiedByName: null,
+            satisfactionNote: null,
+            satisfactionEvidenceDocumentId: null,
+          },
+        ],
       },
     });
   });

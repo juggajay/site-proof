@@ -41,6 +41,7 @@ export const queryKeys = {
 
   // Hold Points
   holdPoints: (projectId: string) => ['hold-points', projectId] as const,
+  holdPointDetail: (lotId: string, itemId: string) => ['hold-point-detail', lotId, itemId] as const,
 
   // Test Results
   testResults: (projectId: string) => ['test-results', projectId] as const,

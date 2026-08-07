@@ -28,6 +28,7 @@ import {
   SettingsFeedbackMessages,
   SubcontractorVerificationSection,
 } from './NotificationsTabSections';
+import { InternalReleasersPicker } from './InternalReleasersPicker';
 
 interface NotificationsTabProps {
   projectId: string;
@@ -37,8 +38,10 @@ interface NotificationsTabProps {
   initialNotificationPreferences: ProjectNotificationPreferences;
   initialWitnessPointNotifications: WitnessPointNotificationSettings;
   initialHpMinimumNoticeDays: number;
+  initialHpInternalReleaserIds: string[];
   readOnly?: boolean;
   onSettingsSaved?: (settings: Record<string, unknown>) => void;
+  onInternalReleasersSaved?: (ids: string[]) => void;
 }
 
 function getHpRecipientValidationError({
@@ -67,8 +70,10 @@ export function NotificationsTab({
   initialNotificationPreferences,
   initialWitnessPointNotifications,
   initialHpMinimumNoticeDays,
+  initialHpInternalReleaserIds,
   readOnly = false,
   onSettingsSaved,
+  onInternalReleasersSaved,
 }: NotificationsTabProps) {
   const [hpRecipients, setHpRecipients] = useState<HpRecipient[]>(initialHpRecipients);
   const [showAddRecipientModal, setShowAddRecipientModal] = useState(false);
@@ -538,6 +543,13 @@ export function NotificationsTab({
             if (!readOnly) setShowAddRecipientModal(true);
           }}
           onRemoveRecipient={(index) => void handleRemoveRecipient(index)}
+        />
+
+        <InternalReleasersPicker
+          projectId={projectId}
+          initialSelectedIds={initialHpInternalReleaserIds}
+          readOnly={readOnly}
+          onSaved={onInternalReleasersSaved}
         />
 
         <SubcontractorVerificationSection

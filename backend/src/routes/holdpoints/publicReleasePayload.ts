@@ -6,6 +6,11 @@ import { holdPointReleaseTokenLookup } from './tokens.js';
 import { resolveHoldPointEvidenceInputs } from './evidencePackageInputs.js';
 import { buildHoldPointEvidencePackage } from './evidencePackage.js';
 import { loadHoldPointEvidenceSurveys } from './surveyEvidence.js';
+import {
+  evidenceDecisionRoundsInclude,
+  type EvidenceDecisionRoundSource,
+  withEvidenceDecisionRounds,
+} from './decisionRoundPresentation.js';
 
 // =============================================================================
 // Shared public hold-point release read helpers. Extracted verbatim from
@@ -19,6 +24,7 @@ const publicHoldPointReleaseTokenInclude = {
   holdPoint: {
     include: {
       itpChecklistItem: true,
+      decisionRounds: evidenceDecisionRoundsInclude,
       lot: {
         include: {
           project: {
@@ -108,20 +114,26 @@ export function assertPublicHoldPointTokenAvailable(
   }
 }
 
-export async function buildPublicHoldPointReleasePayload(
-  releaseToken: PublicHoldPointReleaseToken,
-) {
-  const holdPoint = releaseToken.holdPoint;
-  const lot = holdPoint.lot;
-  const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
-    resolveHoldPointEvidenceInputs({
-      itpInstance: lot.itpInstance,
-      checklistItemId: holdPoint.itpChecklistItemId,
-      liveFallback: holdPoint.itpChecklistItem,
-    });
+type PublicEvidenceHoldPointSource = {
+  id: string;
+  description: string | null;
+  itpChecklistItemId: string;
+  status: string;
+  notificationSentAt: Date | null;
+  scheduledDate: Date | null;
+  scheduledTime: string | null;
+  releasedAt: Date | null;
+  releasedByName: string | null;
+  releasedByOrg: string | null;
+  releaseMethod: string | null;
+  releaseSignatureUrl: string | null;
+  releaseNotes: string | null;
+  decisionRounds: readonly EvidenceDecisionRoundSource[];
+};
 
-  const evidencePackage = await buildHoldPointEvidencePackage({
-    holdPoint: {
+export function buildPublicEvidenceHoldPoint(holdPoint: PublicEvidenceHoldPointSource) {
+  return withEvidenceDecisionRounds(
+    {
       id: holdPoint.id,
       description: holdPoint.description,
       itpChecklistItemId: holdPoint.itpChecklistItemId,
@@ -142,6 +154,24 @@ export async function buildPublicHoldPointReleasePayload(
       // "Recipient of Record" row in the public evidence PDF, which renders
       // straight off this payload.
     },
+    holdPoint.decisionRounds,
+  );
+}
+
+export async function buildPublicHoldPointReleasePayload(
+  releaseToken: PublicHoldPointReleaseToken,
+) {
+  const holdPoint = releaseToken.holdPoint;
+  const lot = holdPoint.lot;
+  const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
+    resolveHoldPointEvidenceInputs({
+      itpInstance: lot.itpInstance,
+      checklistItemId: holdPoint.itpChecklistItemId,
+      liveFallback: holdPoint.itpChecklistItem,
+    });
+
+  const evidencePackage = await buildHoldPointEvidencePackage({
+    holdPoint: buildPublicEvidenceHoldPoint(holdPoint),
     lot,
     itpTemplate,
     checklistItems,

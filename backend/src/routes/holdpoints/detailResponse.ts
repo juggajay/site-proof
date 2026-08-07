@@ -5,6 +5,72 @@ import {
   type LatestRoundProjection,
 } from './roundCore.js';
 
+export const latestDecisionRoundDetailInclude = {
+  orderBy: { roundNumber: 'desc' as const },
+  take: 1,
+  select: {
+    outcome: true,
+    decidedAt: true,
+    decisionReason: true,
+    linkedNcr: {
+      select: {
+        id: true,
+        ncrNumber: true,
+        status: true,
+      },
+    },
+    _count: {
+      select: {
+        conditions: {
+          where: { recordedSatisfiedAt: null },
+        },
+      },
+    },
+    conditions: {
+      orderBy: { sequence: 'asc' as const },
+      select: {
+        id: true,
+        sequence: true,
+        text: true,
+        recordedSatisfiedAt: true,
+        recordedSatisfiedByName: true,
+        satisfactionNote: true,
+        satisfactionEvidenceDocumentId: true,
+      },
+    },
+  },
+} as const;
+
+export type HoldPointDetailCondition = {
+  id: string;
+  sequence: number;
+  text: string;
+  recordedSatisfiedAt: Date | null;
+  recordedSatisfiedByName: string | null;
+  satisfactionNote: string | null;
+  satisfactionEvidenceDocumentId: string | null;
+};
+
+type LatestDecisionRoundDetailSource = LatestDecisionRoundSource & {
+  conditions: HoldPointDetailCondition[];
+};
+
+export type LatestRoundDetailProjection = LatestRoundProjection & {
+  conditions: HoldPointDetailCondition[];
+};
+
+function projectLatestRoundDetail(
+  rounds: readonly LatestDecisionRoundDetailSource[] | null | undefined,
+): LatestRoundDetailProjection | null {
+  const projected = projectLatestRound(rounds);
+  if (!projected) return null;
+
+  return {
+    ...projected,
+    conditions: rounds?.[0]?.conditions ?? [],
+  };
+}
+
 type HoldPointPrerequisite = {
   id: string;
   description: string;
@@ -29,7 +95,7 @@ type ExistingHoldPointDetail = {
     usedAt: Date | null;
   }>;
   releaseNotes: string | null;
-  decisionRounds?: LatestDecisionRoundSource[];
+  decisionRounds?: LatestDecisionRoundDetailSource[];
 };
 
 type HoldPointDetailItem = {
@@ -113,7 +179,7 @@ export function buildHoldPointDetailResponse({
     releaseMethod: string | null | undefined;
     releaseRecipientEmail: string | null | undefined;
     releaseNotes: string | null | undefined;
-    latestRound: LatestRoundProjection | null;
+    latestRound: LatestRoundDetailProjection | null;
   };
   prerequisites: HoldPointPrerequisite[];
   incompletePrerequisites: HoldPointPrerequisite[];
@@ -139,7 +205,7 @@ export function buildHoldPointDetailResponse({
       releaseRecipientEmail:
         existingHoldPoint?.releaseTokens?.find((token) => token.usedAt)?.recipientEmail ?? null,
       releaseNotes: existingHoldPoint?.releaseNotes,
-      latestRound: projectLatestRound(existingHoldPoint?.decisionRounds),
+      latestRound: projectLatestRoundDetail(existingHoldPoint?.decisionRounds),
     },
     prerequisites,
     incompletePrerequisites,

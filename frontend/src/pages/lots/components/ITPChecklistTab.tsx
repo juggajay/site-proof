@@ -515,6 +515,7 @@ export function ITPChecklistTab({
                           item={item}
                           completion={completion}
                           projectId={projectId}
+                          lotId={lot.id}
                           updatingCompletion={updatingCompletion}
                           onToggleCompletion={(id, completed, notes) =>
                             onToggleCompletion(id, completed, notes)

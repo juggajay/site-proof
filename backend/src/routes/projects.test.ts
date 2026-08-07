@@ -2001,6 +2001,56 @@ describe('Projects API', () => {
       expect(res.body.project.name).toBe('Updated Project Name');
     });
 
+    it('persists nominated internal releasers in the dedicated column and returns it', async () => {
+      const before = await prisma.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { settings: true },
+      });
+      try {
+        const patchRes = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ hpInternalReleaserIds: [userId] });
+
+        expect(patchRes.status).toBe(200);
+        expect(patchRes.body.project.hpInternalReleaserIds).toEqual([userId]);
+
+        const stored = await prisma.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { hpInternalReleaserIds: true, settings: true },
+        });
+        expect(stored.hpInternalReleaserIds).toEqual([userId]);
+        expect(stored.settings).toBe(before.settings);
+
+        const getRes = await request(app)
+          .get(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.project.hpInternalReleaserIds).toEqual([userId]);
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { hpInternalReleaserIds: [] },
+        });
+      }
+    });
+
+    it('rejects internal releaser IDs that are not active project members', async () => {
+      const res = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ hpInternalReleaserIds: ['not-a-project-member'] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('active member of this project');
+      await expect(
+        prisma.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { hpInternalReleaserIds: true },
+        }),
+      ).resolves.toMatchObject({ hpInternalReleaserIds: [] });
+    });
+
     it('rejects API-key-authenticated project settings updates', async () => {
       const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
       const existing = await prisma.project.findUniqueOrThrow({
