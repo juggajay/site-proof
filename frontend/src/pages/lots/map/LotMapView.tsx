@@ -42,6 +42,7 @@ import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePrefer
 import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 
 import { AreaDrawLayer } from './AreaDrawLayer';
+import { LotsGeoJsonLayer, POLYGON_STROKE_COLOR, type LotSelectEvent } from './LotsGeoJsonLayer';
 import { FindByAreaPanel } from './FindByAreaPanel';
 import { CoveragePanel } from './CoveragePanel';
 import { PlansPanel } from './PlansPanel';
@@ -97,9 +98,6 @@ import {
 } from './lotMapHelpers';
 
 const CONTROL_LINE_COLOR = '#f59e0b'; // amber — neutral against status fills
-// Constant dark casing for lot boundaries so the status colour lives in the fill
-// only and the outline stays crisp on satellite imagery (see UX audit Q4).
-const POLYGON_STROKE_COLOR = '#1f2937';
 // Gap overlay: dashed red outline + light red fill (see PR note — SVG hatch
 // patterns fight react-leaflet, so a semi-transparent fill is the pragmatic tell).
 const GAP_COLOR = '#dc2626';
@@ -221,16 +219,23 @@ function NorthArrow() {
   );
 }
 
+// The ONE lot popup, opened by selection on the collapsed GeoJSON layer (there
+// is no per-lot Popup component any more — that per-feature React overhead was
+// the measured map bottleneck).
 function LotPopup({
   geometry,
+  position,
   onViewDetails,
+  onClose,
 }: {
   geometry: ProjectLotGeometry;
+  position: LatLng;
   onViewDetails: () => void;
+  onClose: () => void;
 }) {
   const destination = featureCentroid(geometry.geometryWgs84);
   return (
-    <Popup>
+    <Popup position={position} eventHandlers={{ remove: onClose }}>
       <div className="min-w-[180px]" data-testid={`lot-popup-${geometry.lotId}`}>
         <div className="flex items-center gap-2">
           <span
@@ -288,73 +293,6 @@ function LotPopup({
         </div>
       </div>
     </Popup>
-  );
-}
-
-// One lot geometry as the right Leaflet layer for its GeoJSON type, coloured by
-// canonical lot status. Popup content mirrors LinearMapView's.
-function LotGeometryLayer({
-  geometry,
-  onViewDetails,
-  fillOverride,
-}: {
-  geometry: ProjectLotGeometry;
-  onViewDetails: () => void;
-  /**
-   * C3 Phase A `[C3S-g]`. A RESOLVED colour for THIS geometry (never a Map the
-   * child looks itself up in), replacing exactly what `getStatusColor` fed and
-   * nothing else. Note the asymmetry it inherits: `Polygon` uses it as the fill
-   * behind a constant casing, `Polyline` uses it as the STROKE — which is how
-   * status already reaches a linear lot, so the testing colour lands the same way.
-   */
-  fillOverride?: string;
-}) {
-  const shape = featureToShape(geometry.geometryWgs84);
-  if (!shape) return null;
-
-  const color = fillOverride ?? getStatusColor(geometry.status);
-  const popup = <LotPopup geometry={geometry} onViewDetails={onViewDetails} />;
-
-  if (shape.kind === 'polygon') {
-    // Decouple stroke from fill: a constant dark casing keeps every lot boundary
-    // legible over satellite imagery, where the light Okabe-Ito fills (grey /
-    // yellow / sky) otherwise wash out. Fill still carries the status colour.
-    return (
-      <Polygon
-        positions={shape.positions}
-        pathOptions={{
-          color: POLYGON_STROKE_COLOR,
-          weight: 2,
-          opacity: 0.9,
-          fillColor: color,
-          fillOpacity: 0.45,
-        }}
-      >
-        {popup}
-      </Polygon>
-    );
-  }
-  if (shape.kind === 'line') {
-    return (
-      <Polyline positions={shape.positions} pathOptions={{ color, weight: 4 }}>
-        {popup}
-      </Polyline>
-    );
-  }
-  return (
-    <CircleMarker
-      center={shape.position}
-      radius={7}
-      pathOptions={{
-        color: POLYGON_STROKE_COLOR,
-        weight: 2,
-        opacity: 0.9,
-        fillColor: color,
-        fillOpacity: 0.45,
-      }}
-    >
-      {popup}
-    </CircleMarker>
   );
 }
 
@@ -1157,6 +1095,26 @@ export function LotMapView({
     [testingArmed, testCoverageQuery.data],
   );
 
+  // Selection drives the ONE popup over the collapsed lots layer. A selected lot
+  // that leaves the display set (filter change, history replay) closes it.
+  const [selectedLot, setSelectedLot] = useState<LotSelectEvent | null>(null);
+  const selectedGeometry = useMemo(
+    () =>
+      selectedLot ? (displayGeometries.find((g) => g.lotId === selectedLot.lotId) ?? null) : null,
+    [selectedLot, displayGeometries],
+  );
+
+  // C3 Phase A `[C3S-g]`: the testing overlay recolour, resolved per lot here so
+  // the layer stays dumb. Polygon/point use it as FILL behind the constant
+  // casing; a linear lot takes it as STROKE (how status always reached lines).
+  const colorForLot = useCallback(
+    (lotId: string, status: string) => {
+      const verdict = testCoverageLots.get(lotId);
+      return verdict ? getTestCoverageColor(verdict.state) : getStatusColor(status);
+    },
+    [testCoverageLots],
+  );
+
   const earliestKey = timelineQuery.data?.earliest
     ? formatDateKey(new Date(timelineQuery.data.earliest))
     : null;
@@ -1489,17 +1447,20 @@ export function LotMapView({
                 );
               })}
 
-              {displayGeometries.map((geometry) => {
-                const verdict = testCoverageLots.get(geometry.lotId);
-                return (
-                  <LotGeometryLayer
-                    key={geometry.id}
-                    geometry={geometry}
-                    onViewDetails={() => navigate(linkPaths.lot(geometry.lotId))}
-                    fillOverride={verdict ? getTestCoverageColor(verdict.state) : undefined}
-                  />
-                );
-              })}
+              <LotsGeoJsonLayer
+                geometries={displayGeometries}
+                colorFor={colorForLot}
+                selectedLotId={selectedLot?.lotId ?? null}
+                onSelect={setSelectedLot}
+              />
+              {selectedLot && selectedGeometry && (
+                <LotPopup
+                  geometry={selectedGeometry}
+                  position={[selectedLot.latlng.lat, selectedLot.latlng.lng]}
+                  onViewDetails={() => navigate(linkPaths.lot(selectedGeometry.lotId))}
+                  onClose={() => setSelectedLot(null)}
+                />
+              )}
 
               {/* `drawnPhotos` is already the located subset — the same array the
                   chooser counts, so "51 in view" can never disagree with what is

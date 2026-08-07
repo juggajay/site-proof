@@ -76,6 +76,54 @@ vi.mock('react-leaflet', () => {
       <div data-testid="marker">{children}</div>
     ),
     Popup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    // The collapsed lots layer. The mock re-renders each feature as a div with
+    // the SAME testids the per-lot components used ('polygon'/'polyline'/
+    // 'circle-marker'), exposes the resolved fill, and wires click through the
+    // layer-level eventHandlers exactly as Leaflet propagates it.
+    GeoJSON: ({
+      data,
+      style,
+      eventHandlers,
+    }: {
+      data?: { features?: GeoJSON.Feature[] };
+      style?: (f: GeoJSON.Feature) => { fillColor?: string; color?: string };
+      eventHandlers?: {
+        click?: (e: {
+          propagatedFrom: { feature: GeoJSON.Feature };
+          latlng: { lat: number; lng: number };
+        }) => void;
+      };
+    }) => (
+      <div data-testid="lots-geojson">
+        {(data?.features ?? []).map((f, i) => {
+          const opts = style?.(f) ?? {};
+          const type = f.geometry?.type;
+          const kind =
+            type === 'LineString' ? 'polyline' : type === 'Point' ? 'circle-marker' : 'polygon';
+          const geom = f.geometry as {
+            type: string;
+            coordinates: number[] | number[][] | number[][][];
+          };
+          const first =
+            type === 'Polygon'
+              ? (geom.coordinates as number[][][])[0]?.[0]
+              : type === 'LineString'
+                ? (geom.coordinates as number[][])[0]
+                : (geom.coordinates as number[]);
+          const latlng = { lat: (first?.[1] as number) ?? 0, lng: (first?.[0] as number) ?? 0 };
+          const props = f.properties as { lotId?: string } | undefined;
+          return (
+            <div
+              key={props?.lotId ?? i}
+              data-testid={kind}
+              data-lot-id={props?.lotId}
+              data-fill={opts.fillColor ?? opts.color}
+              onClick={() => eventHandlers?.click?.({ propagatedFrom: { feature: f }, latlng })}
+            />
+          );
+        })}
+      </div>
+    ),
     Tooltip: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Rectangle: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="rectangle">{children}</div>
@@ -343,7 +391,7 @@ beforeEach(() => {
 });
 
 describe('LotMapView', () => {
-  it('renders a polygon layer with a popup for each filtered geometry', () => {
+  it('renders a polygon for each filtered geometry and opens the popup on click', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
 
     render(
@@ -357,6 +405,9 @@ describe('LotMapView', () => {
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
     expect(screen.getByTestId('polygon')).toBeInTheDocument();
 
+    // One selection-driven popup now, not one per lot: nothing until a click.
+    expect(screen.queryByTestId('lot-popup-lot-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('polygon'));
     const popup = screen.getByTestId('lot-popup-lot-1');
     expect(within(popup).getByText('LOT-001')).toBeInTheDocument();
     // formatStatusLabel turns in_progress -> "In Progress"; the chainage range
@@ -375,6 +426,7 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
     const link = screen.getByTestId('lot-popup-directions-lot-1');
     // Centroid of the fixture ring [[151,-33.8],[151.001,-33.8],[151.001,-33.801],[151,-33.8]]
     // is a degenerate/triangular ring; assert the Google Maps universal URL shape.
@@ -405,6 +457,8 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
+    expect(screen.getByTestId('lot-popup-lot-1')).toBeInTheDocument();
     expect(screen.queryByTestId('lot-popup-directions-lot-1')).not.toBeInTheDocument();
   });
 
@@ -417,6 +471,7 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
     fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
     expect(navigate).toHaveBeenCalledWith('/projects/proj-1/lots/lot-1');
   });
@@ -431,6 +486,7 @@ describe('LotMapView', () => {
         linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
     fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
     expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
   });
