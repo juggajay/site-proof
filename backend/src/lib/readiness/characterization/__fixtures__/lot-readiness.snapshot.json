@@ -21,6 +21,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -124,6 +126,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -241,6 +245,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -349,6 +355,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -460,6 +468,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -588,6 +598,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -727,6 +739,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -866,6 +880,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -996,6 +1012,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1107,6 +1125,8 @@
               "status": "open"
             }
           ],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1223,6 +1243,8 @@
               "status": "open"
             }
           ],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1330,6 +1352,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1471,6 +1495,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1598,6 +1624,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1727,6 +1755,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 1,
           "noNaHoldPointBypass": false,
           "sufficiencyBlocks": false
@@ -1878,6 +1908,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -1979,6 +2011,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2091,6 +2125,8 @@
               "status": "open"
             }
           ],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2201,6 +2237,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2290,6 +2328,8 @@
           "testResults": [],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2445,6 +2485,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2600,6 +2642,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2745,6 +2789,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -2912,6 +2958,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false
@@ -3068,6 +3116,8 @@
           ],
           "noOpenNcrs": true,
           "openNcrs": [],
+          "noOpenHoldPointConditions": true,
+          "openHoldPointConditions": [],
           "naHoldPointBlockerCount": 0,
           "noNaHoldPointBypass": true,
           "sufficiencyBlocks": false

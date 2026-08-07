@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma.js';
 import { logError } from '../../../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../../../lib/auditLog.js';
 import { isReleaseGatedChecklistItem } from '../../../lib/holdPointReleaseGating.js';
+import { OPEN_HOLD_POINT_CONDITIONS_WHERE } from '../../../lib/readiness/predicates.js';
 import { getChecklistItemsForInstance, type ChecklistItem } from './templateSnapshot.js';
 
 /**
@@ -24,6 +25,11 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
                 status: true,
               },
             },
+            _count: {
+              select: {
+                holdPoints: { where: OPEN_HOLD_POINT_CONDITIONS_WHERE },
+              },
+            },
           },
         },
         template: {
@@ -43,6 +49,14 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
 
     // Don't auto-progress lots that are conformed, claimed, or have NCRs
     if (['conformed', 'claimed', 'ncr_raised'].includes(lot.status)) {
+      return;
+    }
+
+    // A conditional release permits work to proceed, but the lot must not
+    // auto-progress to completed while the CURRENT HP round still has an open
+    // condition. This is the same direct query predicate as conformance uses;
+    // ITP verificationStatus is deliberately not part of this decision.
+    if ((lot._count?.holdPoints ?? 0) > 0) {
       return;
     }
 

@@ -28,6 +28,7 @@ function makeInstance({
   items,
   completions,
   holdPoints = [],
+  openConditionHoldPointCount = 0,
 }: {
   lotStatus?: string;
   instanceStatus?: string;
@@ -47,11 +48,19 @@ function makeInstance({
     itpChecklistItemId: string;
     status: string;
   }>;
+  openConditionHoldPointCount?: number;
 }) {
   return {
     id: 'itp-1',
     status: instanceStatus,
-    lot: { id: 'lot-1', projectId: 'proj-1', lotNumber: 'LOT-001', status: lotStatus, holdPoints },
+    lot: {
+      id: 'lot-1',
+      projectId: 'proj-1',
+      lotNumber: 'LOT-001',
+      status: lotStatus,
+      holdPoints,
+      _count: { holdPoints: openConditionHoldPointCount },
+    },
     templateSnapshot: null,
     template: { checklistItems: items },
     completions,
@@ -118,6 +127,21 @@ describe('updateLotStatusFromITP', () => {
             verificationStatus: 'pending_verification',
           },
         ],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).not.toHaveBeenCalled();
+    expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not auto-progress while a current conditional-release round has an open condition', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [{ id: 'hold-point-1', evidenceRequired: 'none', testType: null }],
+        completions: [{ checklistItemId: 'hold-point-1', status: 'completed' }],
+        openConditionHoldPointCount: 1,
       }),
     );
 

@@ -145,6 +145,37 @@ export function buildConformanceBlockerItems(
     );
   }
 
+  const openConditionHoldPoints = prerequisites.openHoldPointConditions ?? [];
+  if (
+    !(prerequisites.noOpenHoldPointConditions ?? openConditionHoldPoints.length === 0) ||
+    openConditionHoldPoints.length > 0
+  ) {
+    const namedHoldPoints =
+      openConditionHoldPoints.length > 0
+        ? openConditionHoldPoints
+        : [
+            {
+              holdPointId: '',
+              holdPointName: 'Unknown hold point',
+              openConditionCount: 0,
+            },
+          ];
+    for (const holdPoint of namedHoldPoints) {
+      const count = holdPoint.openConditionCount;
+      items.push(
+        blockingItem({
+          code: 'hp_conditions_open',
+          area: 'hold_point',
+          title: 'Hold point release conditions remain open',
+          detail: `Hold point ${holdPoint.holdPointName} released with ${count} condition${count === 1 ? '' : 's'} not yet recorded satisfied`,
+          actionLabel: 'Review hold point conditions',
+          count,
+          relatedIds: holdPoint.holdPointId ? [holdPoint.holdPointId] : undefined,
+        }),
+      );
+    }
+  }
+
   // N/A hold-point bypass guard: a hold-point sign-off item marked N/A is only
   // accepted when its hold point is released. Surface this as a conformance
   // blocker so field staff know exactly what still needs a superintendent sign-off.

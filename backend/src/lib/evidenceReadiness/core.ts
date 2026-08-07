@@ -145,6 +145,14 @@ export interface ConformancePrerequisiteSnapshot {
   }[];
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
+  // Current conditional-release rounds with conditions not yet recorded
+  // satisfied. Optional for compatibility with pre-PR-D callers and fixtures.
+  noOpenHoldPointConditions?: boolean;
+  openHoldPointConditions?: {
+    holdPointId: string;
+    holdPointName: string;
+    openConditionCount: number;
+  }[];
   // N/A hold-point bypass guard — optional for backward compatibility with
   // callers that predate the field (e.g. existing tests / routes that haven't
   // been regenerated yet). Defaults to no bypass blockers when absent.

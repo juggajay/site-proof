@@ -32,6 +32,7 @@ export const READINESS_REASON_CODES = [
   'itp_incomplete',
   'no_passing_verified_test',
   'open_ncrs',
+  'hp_conditions_open',
   'na_hold_point_not_released',
   'conformance_prerequisites_met',
   // claim items (evidenceReadiness.ts buildClaimItems) + already-* short circuits
@@ -136,6 +137,7 @@ export const HANDOVER_BLOCKING_REASON_CODES = [
   'itp_incomplete',
   'no_passing_verified_test',
   'open_ncrs',
+  'hp_conditions_open',
   'na_hold_point_not_released',
   // Wave C1's blocking sufficiency item — live at
   // `evidenceReadiness/conformanceItems.ts` and absent from the pre-D1a-respec
@@ -177,6 +179,10 @@ export const REASON_CODE_PROVENANCE: Record<
     source: 'buildConformanceItems (hasPassingTest)',
   },
   open_ncrs: { predicate: 'ncrOpen', source: 'buildConformanceItems (noOpenNcrs)' },
+  hp_conditions_open: {
+    predicate: 'lotConformable',
+    source: 'buildConformanceItems (noOpenHoldPointConditions)',
+  },
   na_hold_point_not_released: {
     predicate: 'holdPointReleased',
     source: 'buildConformanceItems (noNaHoldPointBypass)',

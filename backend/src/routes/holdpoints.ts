@@ -19,6 +19,7 @@ import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
 import { holdPointReleaseLinkRouter } from './holdpoints/releaseLinkRoutes.js';
+import { holdPointConditionsRouter } from './holdpoints/conditionsRoutes.js';
 import { holdPointPublicBatchRouter } from './holdpoints/publicBatchRoutes.js';
 import { holdPointUnsubscribeRouter } from './holdpoints/unsubscribeRoutes.js';
 import { recordHoldPointLinkOpen } from '../lib/holdPointMailConsent.js';
@@ -77,6 +78,10 @@ holdpointsRouter.use(holdPointActionRouter);
 // mutation routes; mounted after them and before the public token routes so
 // its /:id path cannot shadow /public/:token.
 holdpointsRouter.use(holdPointReleaseLinkRouter);
+
+// Authenticated condition-satisfaction mutation. Mounted before the public
+// token section so the route is always protected by its own requireAuth gate.
+holdpointsRouter.use(holdPointConditionsRouter);
 
 // ============================================================================
 // PUBLIC ENDPOINTS - No authentication required (Feature #23)

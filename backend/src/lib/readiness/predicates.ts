@@ -345,6 +345,26 @@ export function ncrOpen(ncr: Pick<NcrRow, 'status'>): boolean {
 }
 
 /**
+ * Prisma-compatible filter for hold points whose CURRENT decision round is a
+ * conditional release with at least one condition not yet recorded satisfied.
+ *
+ * Keep this as data rather than a second status vocabulary: both conformance
+ * and ITP lot progression bind their queries to this exact object, so an old
+ * conditional round or an unconditional release cannot drift into either
+ * gate.
+ */
+export const OPEN_HOLD_POINT_CONDITIONS_WHERE = {
+  currentRound: {
+    is: {
+      outcome: 'released_with_conditions',
+      conditions: {
+        some: { recordedSatisfiedAt: null },
+      },
+    },
+  },
+} as const;
+
+/**
  * An NCR is overdue when it is still open and its due date has passed.
  * Consistent across call sites (map §5 A4): `dueDate < now && not closed`
  * (`portfolio.ts` groupBy, `systemAutomation.ts` overdue-NCR pass).
@@ -451,6 +471,8 @@ export interface ConformablePrerequisites {
   testRequired: boolean;
   hasPassingTest: boolean;
   noOpenNcrs: boolean;
+  /** False while a current conditional-release round has an open condition. */
+  noOpenHoldPointConditions?: boolean;
   noNaHoldPointBypass?: boolean;
   /**
    * Wave C1 (spec §5.1.1, §5.1.2). ALREADY mode- and status-folded by the
@@ -480,6 +502,7 @@ export function lotConformable(prerequisites: ConformablePrerequisites): boolean
     prerequisites.itpCompleted &&
     (!prerequisites.testRequired || prerequisites.hasPassingTest) &&
     prerequisites.noOpenNcrs &&
+    (prerequisites.noOpenHoldPointConditions ?? true) &&
     (prerequisites.noNaHoldPointBypass ?? true) &&
     !(prerequisites.sufficiencyBlocks ?? false)
   );

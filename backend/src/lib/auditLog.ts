@@ -239,6 +239,7 @@ export const AuditAction = {
   HP_PUBLIC_RELEASED: 'hp_public_released',
   HP_PUBLIC_REJECTED: 'hp_public_rejected',
   HP_PUBLIC_CONDITIONALLY_RELEASED: 'hp_public_conditionally_released',
+  HP_CONDITION_SATISFACTION_RECORDED: 'hp_condition_satisfaction_recorded',
   HP_REQUEST_WITHDRAWN: 'hp_request_withdrawn',
   // A QR/secure release link produced on screen for a co-located approver.
   // Recorded because the link is release-capable and leaves the app outside
