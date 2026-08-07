@@ -146,8 +146,8 @@ export function ModelViewerPage() {
           <h2 className="mt-3 text-base font-semibold">Too large for this device</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             This model is {formatDocumentFileSize(fragSizeBytes)}. Phones and tablets run out of
-            memory and crash on models over {formatDocumentFileSize(MOBILE_FRAG_BUDGET_BYTES)}, so
-            3D viewing for this model needs a desktop browser.
+            memory and crash on models over {Math.round(MOBILE_FRAG_BUDGET_BYTES / 1_000_000)} MB,
+            so 3D viewing for this model needs a desktop browser.
           </p>
           <Button type="button" variant="outline" className="mt-4" asChild>
             <Link to={backHref}>Back to design models</Link>

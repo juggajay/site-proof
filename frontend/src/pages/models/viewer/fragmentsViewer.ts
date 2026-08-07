@@ -22,12 +22,10 @@ import * as OBC from '@thatopen/components';
 import type * as FRAGS from '@thatopen/fragments';
 
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
+import { flattenPsets, type PickedElementData } from './psets';
 
-export interface PickedElement {
-  name: string | null;
+export interface PickedElement extends PickedElementData {
   localId: number;
-  /** Property sets: pset name -> property name -> value. */
-  psets: Record<string, Record<string, string | number | boolean | null>>;
 }
 
 export interface FragmentsViewer {
@@ -50,6 +48,8 @@ export async function createFragmentsViewer(container: HTMLElement): Promise<Fra
   components.init();
   world.scene.setup();
   world.scene.three.background = new THREE.Color(BACKGROUND);
+  // Documented white-label opt-out (MIT) — CIVOS is a customer-branded surface.
+  world.renderer.showLogo = false;
 
   const fragments = components.get(OBC.FragmentsManager);
   const workerBlob = await fetchWithTimeout(WORKER_URL).then((response) => {
@@ -124,36 +124,4 @@ export async function createFragmentsViewer(container: HTMLElement): Promise<Fra
       URL.revokeObjectURL(workerObjectUrl);
     },
   };
-}
-
-type ItemAttribute = { value?: unknown } | null | undefined;
-type ItemData = {
-  Name?: ItemAttribute;
-  IsDefinedBy?: {
-    Name?: ItemAttribute;
-    HasProperties?: { Name?: ItemAttribute; NominalValue?: ItemAttribute }[];
-  }[];
-};
-
-function attributeValue(attribute: ItemAttribute): string | number | boolean | null {
-  const value = attribute?.value;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value;
-  }
-  return null;
-}
-
-export function flattenPsets(data: unknown): Omit<PickedElement, 'localId'> {
-  const item = (data ?? {}) as ItemData;
-  const name = attributeValue(item.Name);
-  const psets: PickedElement['psets'] = {};
-  for (const pset of item.IsDefinedBy ?? []) {
-    const psetName = String(attributeValue(pset?.Name) ?? '?');
-    const props: Record<string, string | number | boolean | null> = {};
-    for (const property of pset?.HasProperties ?? []) {
-      props[String(attributeValue(property?.Name) ?? '?')] = attributeValue(property?.NominalValue);
-    }
-    psets[psetName] = props;
-  }
-  return { name: typeof name === 'string' ? name : null, psets };
 }
