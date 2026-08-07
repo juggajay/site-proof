@@ -1,10 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "ignorePatterns": [
-    "backend/scripts/archive/**",
-    "hero-video/**"
-  ],
+  "ignorePatterns": ["backend/scripts/archive/**", "hero-video/**"],
   "dynamicallyLoaded": [
+    "backend/scripts/convert-ifc.ts",
     "backend/scripts/seeds/itp-templates/**",
     "scripts/audit-check.mjs"
   ]
