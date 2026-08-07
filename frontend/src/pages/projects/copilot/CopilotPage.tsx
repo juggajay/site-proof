@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/queryKeys';
+import { fetchDesignModels } from '@/lib/models/designModelsApi';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
@@ -20,6 +21,7 @@ import { ProjectFactsReviewModal, type ProjectFactsCurrent } from './ProjectFact
 import { ControlLineReviewModal } from './ControlLineReviewModal';
 import { PlanSheetRegistrationReviewModal } from './PlanSheetRegistrationReviewModal';
 import { LotBreakdownReviewModal } from './LotBreakdownReviewModal';
+import { ModelLotLinkingReviewModal } from './ModelLotLinkingReviewModal';
 import {
   newestProposalForStage,
   useCopilotProposals,
@@ -103,6 +105,17 @@ export function CopilotPage() {
   const controlLinesQuery = useControlLines(projectId);
   const planSheetsQuery = usePlanSheets(projectId);
   const lotPresenceQuery = useProjectLotPresence(projectId);
+  // Whether any model version is ready — the linking stage is only a sensible
+  // "next step" once there is a model to link (the modal explains otherwise).
+  const modelsQuery = useQuery({
+    queryKey: queryKeys.designModels(projectId ?? 'none'),
+    queryFn: () => fetchDesignModels(projectId!),
+    enabled: Boolean(projectId),
+    staleTime: 30_000,
+  });
+  const hasReadyModel = (modelsQuery.data ?? []).some(
+    (model) => model.latestVersion?.status === 'ready',
+  );
   const { aiConfigured } = useAiStatus();
   const rollbackMutation = useRollbackProposal(projectId);
   // This rail migrates ITP libraries. Lot registers ride the same machinery from
@@ -160,6 +173,8 @@ export function CopilotPage() {
       // not yet on the map, which is what this stage delivers.
       plan_sheets: (planSheetsQuery.data ?? []).some((sheet) => sheet.hasRegistration),
       lot_breakdown: Boolean(lotPresenceQuery.data),
+      // model_lot_linking: no cheap "links exist" read — the applied proposal
+      // itself is the Done signal (deriveStageStatus falls back to it).
     };
     return STAGE_META.map((meta) => {
       const proposal = newestProposalForStage(proposals, meta.stage);
@@ -182,7 +197,14 @@ export function CopilotPage() {
   // The next thing to do after the applied stage: first incomplete stage in order,
   // skipping the one just applied (its "done" may still be settling in the cache).
   const nextIncomplete = appliedStage
-    ? (cards.find((c) => c.status !== 'done' && c.stage !== appliedStage) ?? null)
+    ? (cards.find(
+        (c) =>
+          c.status !== 'done' &&
+          c.stage !== appliedStage &&
+          // Don't send Wave-1 setup towards model linking when there is no
+          // ready model — "Setup complete" stays reachable without 3D.
+          (c.stage !== 'model_lot_linking' || hasReadyModel),
+      ) ?? null)
     : null;
 
   const factsCurrent: ProjectFactsCurrent = {
@@ -289,6 +311,15 @@ export function CopilotPage() {
           controlLines={controlLinesQuery.data ?? []}
           existingProposal={reviewProposal}
           onApplied={() => setAppliedStage('lot_breakdown')}
+          onClose={() => setOpenStage(null)}
+        />
+      )}
+
+      {openStage === 'model_lot_linking' && projectId && reviewReady && (
+        <ModelLotLinkingReviewModal
+          projectId={projectId}
+          existingProposal={reviewProposal}
+          onApplied={() => setAppliedStage('model_lot_linking')}
           onClose={() => setOpenStage(null)}
         />
       )}

@@ -1,11 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
-import { Loader2, RotateCcw, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { History, Loader2, RotateCcw, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { fetchDesignModelFragments } from '@/lib/models/designModelsApi';
+import { fetchDesignModelFragments, fetchModelElementLinks } from '@/lib/models/designModelsApi';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
+import { queryKeys } from '@/lib/queryKeys';
+import { DEFAULT_APP_TIME_ZONE, formatDateKey } from '@/lib/localDate';
+import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
+import { canManageProjectForRole } from '@/pages/projects/settings/projectPageAccess';
+import { historicalStatusByLot, useLotStatusTimeline } from '@/pages/lots/map/statusTimelineData';
 import { createFragmentsViewer, type FragmentsViewer, type PickedElement } from './fragmentsViewer';
+import { buildPaintPlan, currentStatusByLot, type PaintPlan } from './playbackPaint';
+import { PlaybackBar } from './PlaybackBar';
 
 type CanvasState = 'downloading' | 'preparing' | 'ready' | 'error';
 
@@ -13,6 +21,104 @@ interface ModelViewerCanvasProps {
   projectId: string;
   modelId: string;
   versionId: string;
+}
+
+/**
+ * 4D playback state + paint application. The join and bucketing are pure
+ * (`playbackPaint.ts`); this hook owns the queries (timeline shares the 2D
+ * scrubber's cache key by construction), the guid index, and serialised
+ * repaints (a scrub drag fires faster than the async highlight pass — only the
+ * latest plan is ever applied, never interleaved).
+ */
+function usePlayback(
+  projectId: string,
+  modelId: string,
+  versionId: string,
+  viewerRef: React.RefObject<FragmentsViewer | null>,
+  viewerReady: boolean,
+) {
+  const todayKey = formatDateKey(new Date(), DEFAULT_APP_TIME_ZONE);
+  const [open, setOpen] = useState(false);
+  const [dateKey, setDateKey] = useState(todayKey);
+  const [compare, setCompare] = useState(false);
+  const [guidIndex, setGuidIndex] = useState<Map<string, number> | null>(null);
+
+  // A different version = a different fragments model = new localIds.
+  useEffect(() => setGuidIndex(null), [versionId]);
+
+  const timelineQuery = useLotStatusTimeline(projectId, open);
+  const linksQuery = useQuery({
+    queryKey: queryKeys.modelElementLinks(versionId),
+    queryFn: () => fetchModelElementLinks(projectId, modelId, versionId),
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!open || !viewerReady || guidIndex) return;
+    let cancelled = false;
+    viewerRef.current
+      ?.getElementGuidIndex()
+      .then((index) => {
+        if (!cancelled) setGuidIndex(index);
+      })
+      .catch((err) => logError('4D playback failed to index element GUIDs:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, viewerReady, guidIndex, viewerRef]);
+
+  const timeline = timelineQuery.data;
+  const links = linksQuery.data;
+
+  const plan: PaintPlan | null = useMemo(() => {
+    if (!open || !timeline || !links) return null;
+    const statusAtDate = historicalStatusByLot(timeline, dateKey);
+    return buildPaintPlan(
+      links.links,
+      guidIndex ?? new Map(),
+      statusAtDate,
+      compare ? currentStatusByLot(timeline.lots) : undefined,
+    );
+  }, [open, timeline, links, guidIndex, dateKey, compare]);
+
+  // Serialised painter: apply the newest plan; coalesce anything that arrived
+  // while a pass was in flight. On close, restore original materials.
+  const paintingRef = useRef(false);
+  const latestPlanRef = useRef<PaintPlan | null>(null);
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !viewerReady) return;
+    latestPlanRef.current = open ? plan : null;
+    if (paintingRef.current) return;
+    paintingRef.current = true;
+    (async () => {
+      // Loop until the latest intent has been applied.
+      let applied: PaintPlan | null | undefined;
+      while (applied !== latestPlanRef.current) {
+        applied = latestPlanRef.current;
+        if (applied) await viewer.applyPaint(applied.layers);
+        else await viewer.clearPaint();
+      }
+    })()
+      .catch((err) => logError('4D playback repaint failed:', err))
+      .finally(() => {
+        paintingRef.current = false;
+      });
+  }, [open, plan, viewerReady, viewerRef]);
+
+  return {
+    open,
+    setOpen,
+    todayKey,
+    dateKey,
+    setDateKey,
+    compare,
+    setCompare,
+    plan,
+    timelineQuery,
+    linksQuery,
+  };
 }
 
 /**
@@ -28,6 +134,24 @@ export function ModelViewerCanvas({ projectId, modelId, versionId }: ModelViewer
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<PickedElement | null>(null);
   const [attempt, setAttempt] = useState(0);
+
+  const role = useCurrentProjectRole(projectId);
+  const playback = usePlayback(projectId, modelId, versionId, viewerRef, state === 'ready');
+
+  // Local-only test hook: the real-3D Playwright smoke reads the model's GUIDs
+  // to mock element-links against real geometry. Dev server only — never built.
+  useEffect(() => {
+    if (!import.meta.env.DEV || state !== 'ready') return;
+    const debugWindow = window as { __civosViewerDebug?: { listGuids(): Promise<string[]> } };
+    debugWindow.__civosViewerDebug = {
+      listGuids: async () => [
+        ...((await viewerRef.current?.getElementGuidIndex()) ?? new Map<string, number>()).keys(),
+      ],
+    };
+    return () => {
+      delete debugWindow.__civosViewerDebug;
+    };
+  }, [state]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -111,7 +235,7 @@ export function ModelViewerCanvas({ projectId, modelId, versionId }: ModelViewer
         </div>
       )}
 
-      {state === 'ready' && (
+      {state === 'ready' && !playback.open && (
         <Button
           type="button"
           variant="outline"
@@ -122,6 +246,49 @@ export function ModelViewerCanvas({ projectId, modelId, versionId }: ModelViewer
           <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
           Reset view
         </Button>
+      )}
+
+      {!playback.open && state !== 'error' && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="absolute bottom-4 left-4 shadow-sm"
+          onClick={() => playback.setOpen(true)}
+          data-testid="playback-toggle"
+        >
+          <History className="mr-1.5 h-3.5 w-3.5" />
+          QA playback
+        </Button>
+      )}
+
+      {playback.open && (
+        <div className="pointer-events-none absolute inset-x-4 bottom-4">
+          <PlaybackBar
+            projectId={projectId}
+            earliestKey={
+              playback.timelineQuery.data?.earliest
+                ? formatDateKey(new Date(playback.timelineQuery.data.earliest))
+                : null
+            }
+            todayKey={playback.todayKey}
+            dateKey={playback.dateKey}
+            onDateChange={playback.setDateKey}
+            compare={playback.compare}
+            onCompareChange={playback.setCompare}
+            plan={playback.plan}
+            linkCounts={playback.linksQuery.data?.counts ?? null}
+            canLinkLots={canManageProjectForRole(role)}
+            isLoading={playback.timelineQuery.isLoading || playback.linksQuery.isLoading}
+            error={playback.timelineQuery.error ?? playback.linksQuery.error}
+            onRetry={() => {
+              void playback.timelineQuery.refetch();
+              void playback.linksQuery.refetch();
+            }}
+            onResetView={() => void viewerRef.current?.resetView()}
+            onClose={() => playback.setOpen(false)}
+          />
+        </div>
       )}
 
       {picked && (
