@@ -279,6 +279,7 @@ export const queryKeys = {
   projectAreas: (projectId: string) => ['project-areas', projectId] as const,
   controlLines: (projectId: string) => ['control-lines', projectId] as const,
   planSheets: (projectId: string) => ['plan-sheets', projectId] as const,
+  planSheet: (projectId: string, sheetId: string) => ['plan-sheets', projectId, sheetId] as const,
 
   // AI availability
   aiStatus: ['ai-status'] as const,

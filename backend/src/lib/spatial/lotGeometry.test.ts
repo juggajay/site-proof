@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import { AppError } from '../AppError.js';
 import { controlLineToWgs84, type ControlPoint } from './controlLineGeometry.js';
-import { generateChainageOffsetPolygon, generateChainagePoint } from './lotGeometry.js';
+import {
+  generateChainageOffsetLocalRing,
+  generateChainageOffsetPolygon,
+  generateChainagePoint,
+} from './lotGeometry.js';
 import { wgs84ToLocal } from './crs.js';
 
 const EPSG = 'EPSG:7855'; // GDA2020 MGA zone 55
@@ -84,6 +88,26 @@ describe('generateChainageOffsetPolygon (golden — straight line)', () => {
     expect(rightEnd.northing).toBeCloseTo(N0 - 4, 1);
     expect(rightStart.easting).toBeCloseTo(500_020, 1);
     expect(rightStart.northing).toBeCloseTo(N0 - 4, 1);
+  });
+});
+
+describe('generateChainageOffsetLocalRing', () => {
+  it('exposes the same unprojected, unclosed ring used by the WGS84 generator', () => {
+    expect(
+      generateChainageOffsetLocalRing({
+        points: STRAIGHT,
+        epsg: EPSG,
+        chainageStart: 20,
+        chainageEnd: 80,
+        offsetLeft: 6,
+        offsetRight: 4,
+      }),
+    ).toEqual([
+      { easting: 500_020, northing: N0 + 6 },
+      { easting: 500_080, northing: N0 + 6 },
+      { easting: 500_080, northing: N0 - 4 },
+      { easting: 500_020, northing: N0 - 4 },
+    ]);
   });
 });
 
