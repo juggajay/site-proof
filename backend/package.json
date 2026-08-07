@@ -65,6 +65,7 @@
     "@prisma/client": "^6.19.3",
     "@sentry/node": "^10.58.0",
     "@supabase/supabase-js": "^2.39.0",
+    "@thatopen/fragments": "3.4.7",
     "@turf/turf": "^7.3.5",
     "archiver": "8.0.0",
     "bcryptjs": "^3.0.3",
@@ -84,6 +85,7 @@
     "qrcode": "^1.5.4",
     "resend": "^2.1.0",
     "sharp": "^0.35.3",
+    "web-ifc": "0.0.77",
     "web-push": "^3.6.7",
     "zod": "^3.22.4"
   },
