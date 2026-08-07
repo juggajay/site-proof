@@ -1286,24 +1286,6 @@
     page-break-inside: avoid;
   }
 
-  /* Report header styling */
-  .report-header {
-    border-bottom: 2px solid #333;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-  }
-
-  .report-header h1 {
-    font-size: 18pt;
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-
-  .report-header .report-meta {
-    font-size: 10pt;
-    color: #666;
-  }
-
   /* Section headers */
   h2,
   h3 {

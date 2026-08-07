@@ -1976,8 +1976,12 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/reports/reportFormatting.ts', import.meta.url),
       'utf8',
     );
+    // ReportsPage.tsx is deliberately absent: its only formatted timestamp was
+    // the "Printed:" line on the print-only report header, which went with the
+    // screen-print retirement. The page now renders no date of its own — every
+    // report timestamp lives in the tabs below, which is where this guard
+    // still bites. Re-add it here if the page ever renders a date again.
     const reportFiles = [
-      '../src/pages/reports/ReportsPage.tsx',
       '../src/pages/reports/components/LotStatusTab.tsx',
       '../src/pages/reports/components/NCRReportTab.tsx',
       '../src/pages/reports/components/TestResultsTab.tsx',
