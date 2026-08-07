@@ -77,6 +77,12 @@ export const LotEditPage = lazy(() =>
 export const ITPPage = lazy(() =>
   import('@/pages/itp/ITPPage').then((m) => ({ default: m.ITPPage })),
 );
+export const DesignModelsPage = lazy(() =>
+  import('@/pages/models/DesignModelsPage').then((m) => ({ default: m.DesignModelsPage })),
+);
+export const ModelViewerPage = lazy(() =>
+  import('@/pages/models/ModelViewerPage').then((m) => ({ default: m.ModelViewerPage })),
+);
 export const HoldPointsPage = lazy(() =>
   import('@/pages/holdpoints/HoldPointsPage').then((m) => ({ default: m.HoldPointsPage })),
 );

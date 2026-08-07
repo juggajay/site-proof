@@ -33,6 +33,14 @@ const manualChunkGroups: Record<string, string[]> = {
     '@hookform/resolvers',
   ],
   'vendor-offline': ['dexie'],
+  'vendor-3d': [
+    'three',
+    'three-mesh-bvh',
+    '@thatopen/components',
+    '@thatopen/fragments',
+    'web-ifc',
+    'camera-controls',
+  ],
 };
 
 const deferredHtmlModulePreloadPrefixes = [
@@ -49,6 +57,8 @@ const deferredHtmlModulePreloadPrefixes = [
   'pdfGenerator',
   'html2canvas',
   'index.es',
+  'vendor-3d',
+  'ModelViewerPage',
 ];
 
 type ModulePreloadContext = {
@@ -263,6 +273,8 @@ export default defineConfig(({ mode }) => {
             '**/assets/LazyCharts*.js',
             '**/assets/html2canvas*.js',
             '**/assets/index.es*.js',
+            '**/assets/vendor-3d*.js',
+            '**/assets/ModelViewerPage*.js',
           ],
           // Import the push notification service worker
           importScripts: ['sw-push.js'],
