@@ -112,7 +112,8 @@ File paths and evidence screenshots are in the per-flow reports (ticket IDs refe
 | 18 | **Claim detail page** `/claims/:claimId` with pinned lot columns + band columns (Previously claimed / This claim / Certified / To date); mobile = one band at a time via segmented control | claims T1 | ~1wk |
 | 19 | Set Certified = Claimed, then edit exceptions; line-level certification (what makes a SOPA dispute arguable) | claims T2 | ~1d |
 | 20 | Shortcut buttons with live values ("Claim remaining (42%)"); manual-override amber + Edited chip + revert; quantity transparency line ("$42,000 × 65% (ITP 13/20) = $27,300") incl. no-dollar variant on evidence docs | claims T3-T5 | ~2d |
-| 21 | Notification triage state (Needs action / FYI / Actioned) + collapse repeated alerts — our bell shows five identical ESCALATED rows today | platform P5 | ~2d |
+| 21 | Notification triage state (Needs action / FYI / Actioned) + collapse repeated alerts — our bell shows five identical ESCALATED rows today. **Shipped page-only in #1778** ("Read" not "Actioned" — read ≠ done); the bell dropdown was descoped pending design | platform P5 | ~2d |
+| 21b | **Bell dropdown — design APPROVED by Jay 2026-08-07** (`docs/design-bell-dropdown-mock-2026-08-07.html`): desktop-only popover over the same `/api/notifications/grouped` data as the page (one classifier module, no drift); Needs-action first, ×N collapse chips, "Read" collapsed, ~8 rows then "View all notifications" + "Mark all read" footer; below `md` the bell stays a straight link to /notifications. Build-ready — no further design pass needed | platform P5 | ~1d |
 
 ### Wave 4 — structural (schema/product decisions for Jay, not quick tickets)
 
