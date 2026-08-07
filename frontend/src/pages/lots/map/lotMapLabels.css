@@ -1,6 +1,11 @@
 /* Zoom-tiered lot labels. These render over map imagery (satellite or plan
    paper), so colours are fixed — the app theme never restyles the ground. */
 
+/* Plan mode: a neutral desk under the paper — the basemap is OFF by design. */
+.civos-plan-canvas {
+  background: #e4e4e7;
+}
+
 .civos-lot-label-icon {
   background: transparent;
   border: none;
