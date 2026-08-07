@@ -34,7 +34,12 @@ export const notificationUserRouter = Router();
 
 const COMPANY_PROJECT_NOTIFICATION_ROLES = new Set(['owner', 'admin']);
 
-function buildVisibleNotificationWhere(
+/**
+ * Exported for groupedRoutes.ts so the grouped read endpoint applies the exact
+ * same multi-tenant visibility rule as the list endpoint. Kept here (rather than
+ * moved) so this route file's behaviour is provably unchanged.
+ */
+export function buildVisibleNotificationWhere(
   user: NonNullable<Express.Request['user']>,
 ): Prisma.NotificationWhereInput {
   const projectAccessOr: Prisma.ProjectWhereInput[] = [

@@ -116,6 +116,34 @@ async function mockHeaderApis(page: Page) {
       return;
     }
 
+    // NotificationsPage reads the triaged, repeat-collapsed model. These three
+    // fixtures point at three different entities, so each is its own group of
+    // one — mirroring how the real backend groups them.
+    if (url.pathname === '/api/notifications/grouped' && method === 'GET') {
+      const category = (notification: (typeof notifications)[number]) => {
+        if (notification.isRead) return 'read';
+        return notification.type === 'alert_overdue_ncr' || notification.type === 'mention'
+          ? 'needs_action'
+          : 'fyi';
+      };
+      const rank = { needs_action: 0, fyi: 1, read: 2 } as const;
+
+      await json({
+        groups: notifications
+          .map((notification) => ({
+            key: `${notification.type} ${notification.id}`,
+            type: notification.type,
+            category: category(notification),
+            notifications: [notification],
+          }))
+          .sort((a, b) => rank[a.category] - rank[b.category]),
+        unreadCount: notifications.filter((notification) => !notification.isRead).length,
+        windowSize: 200,
+        truncated: false,
+      });
+      return;
+    }
+
     const readMatch = /^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname);
     if (readMatch && method === 'PUT') {
       const notification = notifications.find((item) => item.id === readMatch[1]);
