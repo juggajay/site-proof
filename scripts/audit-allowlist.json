@@ -1,4 +1,8 @@
 {
+  "GHSA-5p4m-2wfm-xmqj": {
+    "reason": "js-yaml quadratic CPU in !!omap resolution (CVE-2026-59870), high. Reaches this repo only as a devDependency chain (eslint → @eslint/eslintrc → js-yaml@4) parsing our own trusted lint config at dev/CI time — never bundled, never fed untrusted YAML, no runtime exposure. No fixed 4.x exists (fix not backported; first fixed line is js-yaml@5). Remove this entry when @eslint/eslintrc ships a js-yaml@5-based release or the eslint chain otherwise clears the advisory.",
+    "added": "2026-08-07"
+  },
   "GHSA-qwww-vcr4-c8h2": {
     "reason": "React Router RSC-mode CSRF (action execution before 400). This app is a Vite SPA using declarative-mode react-router-dom only — no RSC, no framework mode, no server actions — so the vulnerable code path cannot execute. The only fixed version is react-router@8.3.0, which requires React 19.2.7+; remove this entry when the React 19 migration lands.",
     "added": "2026-07-26"
