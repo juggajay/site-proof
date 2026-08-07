@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Boxes, Loader2, Trash2, Upload } from 'lucide-react';
+import { Boxes, Link2, Loader2, Trash2, Upload } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -21,6 +21,7 @@ import {
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 import { canManageProjectForRole } from '@/pages/projects/settings/projectPageAccess';
 import { formatDocumentFileSize } from '@/pages/documents/documentsDisplayData';
+import { useExtractModelLotLinking } from '@/pages/projects/copilot/copilotData';
 import { UploadModelVersionDialog } from './UploadModelVersionDialog';
 
 const CONVERSION_POLL_MS = 5000;
@@ -79,11 +80,14 @@ type DialogState =
 export function DesignModelsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const role = useCurrentProjectRole(projectId);
   const canManage = canManageProjectForRole(role);
   const [dialog, setDialog] = useState<DialogState>({ kind: 'closed' });
   const [pendingDelete, setPendingDelete] = useState<DesignModelListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [linkingVersionId, setLinkingVersionId] = useState<string | null>(null);
+  const extractLinking = useExtractModelLotLinking(projectId);
 
   const modelsQuery = useQuery({
     queryKey: queryKeys.designModels(projectId ?? 'none'),
@@ -105,6 +109,25 @@ export function DesignModelsPage() {
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.designModels(projectId) });
+
+  // Propose element→lot links for this version, then land the user on the
+  // copilot rail where the pending proposal opens for review (deep link).
+  const handleLinkLots = async (model: DesignModelListItem) => {
+    if (!model.latestVersion || !projectId) return;
+    setLinkingVersionId(model.latestVersion.id);
+    try {
+      await extractLinking.mutateAsync(model.latestVersion.id);
+      navigate(`/projects/${projectId}/copilot?stage=model_lot_linking`);
+    } catch (err) {
+      logError('Failed to propose model lot links:', err);
+      toast({
+        title: extractErrorMessage(err, 'Could not propose lot links for this model.'),
+        variant: 'error',
+      });
+    } finally {
+      setLinkingVersionId(null);
+    }
+  };
 
   const handleDelete = async (model: DesignModelListItem) => {
     if (!model.latestVersion) return;
@@ -187,6 +210,22 @@ export function DesignModelsPage() {
                       >
                         View in 3D
                       </Link>
+                    </Button>
+                  )}
+                  {canManage && version?.status === 'ready' && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={linkingVersionId !== null}
+                      onClick={() => void handleLinkLots(model)}
+                    >
+                      {linkingVersionId === version.id ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Link lots
                     </Button>
                   )}
                   {canManage && (

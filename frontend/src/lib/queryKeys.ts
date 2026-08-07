@@ -289,12 +289,18 @@ export const queryKeys = {
   copilotProposal: (projectId: string, proposalId: string) =>
     ['copilot-proposal', projectId, proposalId] as const,
   copilotLotPresence: (projectId: string) => ['copilot-lot-presence', projectId] as const,
+  // Wave 6 — id→lotNumber options for the linking review's ambiguous picker.
+  // Own key so it can never collide with (or invalidate) the register's cache.
+  modelLinkingLotOptions: (projectId: string) => ['model-linking-lot-options', projectId] as const,
 
   // Wave 5 — 3D design models. The list carries each model's latest version
   // (status included), so upload/convert polling invalidates the list key; a
   // single version detail (the viewer's read) has its own key.
   designModels: (projectId: string) => ['design-models', projectId] as const,
   designModelVersion: (versionId: string) => ['design-model-version', versionId] as const,
+  // Wave 6 — the version's element→lot links (the 4D painter's join input).
+  // Prefix-invalidated (['model-element-links']) after a linking decision.
+  modelElementLinks: (versionId: string) => ['model-element-links', versionId] as const,
 
   // Wave B — migration imports. Batch lists and profile lists are per KIND
   // (ITP templates, lot registers), so the two never share a cache entry.
