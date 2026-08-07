@@ -180,7 +180,12 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 const navigate = vi.fn();
-vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
+const setSearchParamsMock = vi.hoisted(() => vi.fn());
+const searchParamsValue = vi.hoisted(() => ({ current: new URLSearchParams() }));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigate,
+  useSearchParams: () => [searchParamsValue.current, setSearchParamsMock],
+}));
 
 // SecureDocumentImage does an authenticated fetch on mount — stub it so the
 // photo-pin popups render a deterministic thumbnail with no network.
@@ -407,6 +412,11 @@ beforeEach(() => {
   isMobileValue = false;
   setNavigatorOnline(true);
   planSheetsQuery.data = [];
+  searchParamsValue.current = new URLSearchParams();
+  // Stateful like the real router: a write is visible to the next render.
+  setSearchParamsMock.mockImplementation((next: URLSearchParams) => {
+    searchParamsValue.current = next;
+  });
   timelineQuery.data = undefined;
   timelineQuery.isLoading = false;
   timelineQuery.error = null;
@@ -1518,6 +1528,43 @@ describe('LotMapView', () => {
       fireEvent.click(screen.getByTestId('mode-map-button'));
       expect(screen.queryByTestId('plan-mode-canvas')).not.toBeInTheDocument();
       expect(screen.getByTestId('map-container')).toBeInTheDocument();
+    });
+
+    it('deep link ?view=plan&sheet= opens Plan mode on that sheet', () => {
+      planSheetsQuery.data = [registeredSheet, { ...registeredSheet, id: 'sheet-2', name: 'S2' }];
+      searchParamsValue.current = new URLSearchParams('view=plan&sheet=sheet-2');
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(screen.getByTestId('plan-mode-canvas')).toHaveAttribute('data-sheet', 'sheet-2');
+    });
+
+    it('mirrors workspace state to the URL and clears it on the way back', () => {
+      planSheetsQuery.data = [registeredSheet];
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      fireEvent.click(screen.getByTestId('mode-plan-button'));
+      const written = setSearchParamsMock.mock.calls.at(-1)?.[0] as URLSearchParams;
+      expect(written.get('view')).toBe('plan');
+      expect(written.get('sheet')).toBe('sheet-1');
+
+      fireEvent.click(screen.getByTestId('mode-map-button'));
+      const cleared = setSearchParamsMock.mock.calls.at(-1)?.[0] as URLSearchParams;
+      expect(cleared.get('view')).toBeNull();
+      expect(cleared.get('sheet')).toBeNull();
+    });
+
+    it('deep link ?lot= selects the lot and opens its popup once geometry loads', async () => {
+      searchParamsValue.current = new URLSearchParams('lot=lot-1');
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(await screen.findByTestId('lot-popup-lot-1')).toBeInTheDocument();
     });
 
     it('entering Plan mode disarms geographic tools (draw, history)', () => {

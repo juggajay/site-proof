@@ -21,7 +21,7 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ExternalLink, Navigation } from 'lucide-react';
 
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
@@ -48,6 +48,7 @@ import { chooseCamera, readSavedViewport, writeSavedViewport } from './cameraPol
 import { LotLabelsLayer, type LabelLot } from './LotLabelsLayer';
 import { PlanModeCanvas } from './PlanModeCanvas';
 import { PlanModeBar } from './PlanModeBar';
+import { applyMapUrlState, readMapUrlState } from './mapUrlState';
 import { FindByAreaPanel } from './FindByAreaPanel';
 import { CoveragePanel } from './CoveragePanel';
 import { PlansPanel } from './PlansPanel';
@@ -1201,6 +1202,60 @@ export function LotMapView({
     const b = computeBounds(filteredGeometries.map((g) => g.geometryWgs84));
     if (b) map.fitBounds(b, { padding: [24, 24], maxZoom: 18 });
   }, [map, mapMode, filteredLotIds, filteredGeometries]);
+
+  // ── URL state (view/sheet/lot/date): any workspace state is linkable ─────
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Track the live params via a ref, not an effect dependency — the mirror
+  // effect writes them, which would otherwise feed back into itself.
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+
+  const urlInitRef = useRef(false);
+  const pendingUrlLotRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (urlInitRef.current) return;
+    urlInitRef.current = true;
+    const initial = readMapUrlState(searchParamsRef.current);
+    if (initial.view === 'plan') setMapMode('plan');
+    if (initial.sheet) setActiveSheetId(initial.sheet);
+    if (initial.lot) pendingUrlLotRef.current = initial.lot;
+    if (initial.date && initial.view !== 'plan') {
+      setHistoryArmed(true);
+      setHistoryDateKey(initial.date);
+    }
+  }, []);
+
+  // Deep-linked lot: select once its geometry arrives. Map canvas only — the
+  // popup needs a position in the active canvas's coordinate space.
+  useEffect(() => {
+    const lotId = pendingUrlLotRef.current;
+    if (!lotId || !dataReady || mapMode !== 'map') return;
+    pendingUrlLotRef.current = null;
+    const g = (allGeometries ?? []).find((x) => x.lotId === lotId);
+    const centre = g ? featureCentroid(g.geometryWgs84) : null;
+    if (centre) setSelectedLot({ lotId, latlng: { lat: centre[0], lng: centre[1] } });
+  }, [dataReady, mapMode, allGeometries]);
+
+  // Mirror state → URL (replace: no history spam), leaving foreign keys alone.
+  // First run is skipped so the deep-link read above wins over default state.
+  const urlMirrorReadyRef = useRef(false);
+  useEffect(() => {
+    if (!urlMirrorReadyRef.current) {
+      urlMirrorReadyRef.current = true;
+      return;
+    }
+    const next = applyMapUrlState(searchParamsRef.current, {
+      mode: mapMode,
+      activeSheetId: mapMode === 'plan' ? (activeSheet?.id ?? null) : null,
+      selectedLotId: selectedLot?.lotId ?? null,
+      historyArmed,
+      historyDateKey,
+      todayKey: formatDateKey(),
+    });
+    if (next.toString() !== searchParamsRef.current.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [mapMode, activeSheet, selectedLot, historyArmed, historyDateKey, setSearchParams]);
 
   // Legend counts: what is actually drawn (post-filter, post-history).
   const statusCounts = useMemo(() => {
