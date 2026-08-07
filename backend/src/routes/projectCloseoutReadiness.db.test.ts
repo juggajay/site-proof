@@ -9,7 +9,7 @@
 // AT-119 does not compare the endpoint against a hand-written expectation. It
 // compares it against the OTHER ENDPOINT — `GET /api/lots/:id/readiness`, the
 // thing the user is looking at when they disbelieve the panel — over a project
-// seeded to provoke all nine registered codes.
+// seeded to provoke every registered code.
 //
 // DB-backed: local disposable database only (`src/test/databaseSafety.ts`).
 
@@ -74,7 +74,7 @@ interface LotSpec {
   /** Item keys whose completion is recorded, and with what status. */
   completions?: { itemKey: string; status: string }[];
   ncrs?: { severity: string; status: string }[];
-  holdPoints?: { itemKey: string; status: string }[];
+  holdPoints?: { itemKey: string; status: string; openConditions?: number }[];
   verifiedTests?: number;
 }
 
@@ -137,14 +137,35 @@ async function seedLotEvidence(
   }
 
   for (const holdPoint of spec.holdPoints ?? []) {
-    await prisma.holdPoint.create({
+    const createdHoldPoint = await prisma.holdPoint.create({
       data: {
         lotId,
         itpChecklistItemId: itemIdByKey.get(holdPoint.itemKey)!,
         pointType: 'hold_point',
         status: holdPoint.status,
+        description: `HP ${holdPoint.itemKey}`,
       },
     });
+    if (holdPoint.openConditions) {
+      const round = await prisma.holdPointDecisionRound.create({
+        data: {
+          holdPointId: createdHoldPoint.id,
+          roundNumber: 1,
+          outcome: 'released_with_conditions',
+          decidedAt: new Date(),
+          conditions: {
+            create: Array.from({ length: holdPoint.openConditions }, (_, index) => ({
+              sequence: index + 1,
+              text: `Open condition ${index + 1}`,
+            })),
+          },
+        },
+      });
+      await prisma.holdPoint.update({
+        where: { id: createdHoldPoint.id },
+        data: { currentRoundId: round.id },
+      });
+    }
   }
 
   for (let i = 0; i < (spec.verifiedTests ?? 0); i += 1) {
@@ -274,6 +295,13 @@ beforeAll(async () => {
       completions: [{ itemKey: 'h', status: 'completed' }],
       holdPoints: [{ itemKey: 'h', status: 'pending' }],
     },
+    // hp_conditions_open — released HP, current conditional round still open.
+    {
+      lotNumber: 'L07b-hp-conditions',
+      items: [holdPointItem],
+      completions: [{ itemKey: 'h', status: 'completed' }],
+      holdPoints: [{ itemKey: 'h', status: 'released', openConditions: 2 }],
+    },
     // insufficient_test_count — 1 of the pack's 6, ITP complete, test satisfied.
     {
       lotNumber: 'L08-insufficient',
@@ -399,7 +427,7 @@ describe('AT-119 — set parity with the lot page, over every registered code [D
   it("each lot's closeout codes equal its lot-page codes, modulo one declared divergence", async () => {
     const body = await fetchCloseout();
     const lotVerdicts = body.verdicts.filter((v) => v.subjectType === 'lot');
-    expect(lotVerdicts).toHaveLength(9);
+    expect(lotVerdicts).toHaveLength(10);
 
     const divergences = new Set<string>();
     for (const verdict of lotVerdicts) {
@@ -536,8 +564,8 @@ describe('AT-139 — filters disclose what they cannot place', () => {
 
     // 0–150 overlaps L01 (0–100) and not L02 (200–300).
     expect(lots.map((v) => v.subjectId)).toEqual([lotId('L01-no-itp')]);
-    // The seven lots with no chainage are reported, never dropped in silence.
-    expect(body.unplacedLots).toBe(7);
+    // The eight lots with no chainage are reported, never dropped in silence.
+    expect(body.unplacedLots).toBe(8);
     expect(body.unclassifiedLots).toBe(0);
   });
 
@@ -547,7 +575,7 @@ describe('AT-139 — filters disclose what they cannot place', () => {
 
     expect(lots.map((v) => v.subjectId)).toEqual([lotId('L08-insufficient')]);
     expect(lots[0].reasonCodes).toContain('insufficient_test_count');
-    expect(body.unclassifiedLots).toBe(8);
+    expect(body.unclassifiedLots).toBe(9);
     expect(body.unplacedLots).toBe(0);
   });
 

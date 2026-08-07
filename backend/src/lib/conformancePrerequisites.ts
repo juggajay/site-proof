@@ -2,6 +2,7 @@ import { prisma } from './prisma.js';
 import { isReleaseGatedChecklistItem } from './holdPointReleaseGating.js';
 import {
   CLOSED_NCR_STATUSES,
+  OPEN_HOLD_POINT_CONDITIONS_WHERE,
   lotConformable,
   testMatchesItem,
   testPassing,
@@ -150,6 +151,12 @@ interface ConformancePrerequisites {
   }[];
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
+  noOpenHoldPointConditions: boolean;
+  openHoldPointConditions: {
+    holdPointId: string;
+    holdPointName: string;
+    openConditionCount: number;
+  }[];
   // N/A hold-point bypass guard: hold-point sign-off items marked N/A only
   // satisfy conformance when their HoldPoint is released. This count tracks
   // how many are still blocked (unreleased hold point + N/A status).
@@ -172,6 +179,12 @@ interface ClaimConformancePrerequisites {
   hasPassingTest: boolean;
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
+  noOpenHoldPointConditions?: boolean;
+  openHoldPointConditions?: {
+    holdPointId: string;
+    holdPointName: string;
+    openConditionCount: number;
+  }[];
   naHoldPointBlockerCount?: number;
   noNaHoldPointBypass?: boolean;
 }
@@ -229,6 +242,15 @@ export function getClaimBlockingReasonsForConformedLot(
   }
   if (!prerequisites.noOpenNcrs) {
     reasons.push(`${prerequisites.openNcrs.length} open NCR(s) must be closed`);
+  }
+  if (!(prerequisites.noOpenHoldPointConditions ?? true)) {
+    const openConditionCount = (prerequisites.openHoldPointConditions ?? []).reduce(
+      (total, holdPoint) => total + holdPoint.openConditionCount,
+      0,
+    );
+    reasons.push(
+      `${openConditionCount} hold point release condition${openConditionCount === 1 ? '' : 's'} must be recorded satisfied`,
+    );
   }
   if (!(prerequisites.noNaHoldPointBypass ?? true)) {
     const blockerCount = prerequisites.naHoldPointBlockerCount ?? 0;
@@ -466,11 +488,33 @@ export const CONFORMANCE_LOT_SELECT = {
       },
     },
   },
+  holdPoints: {
+    where: OPEN_HOLD_POINT_CONDITIONS_WHERE,
+    select: {
+      id: true,
+      description: true,
+      itpChecklistItem: { select: { description: true } },
+      currentRound: {
+        select: {
+          _count: {
+            select: { conditions: { where: { recordedSatisfiedAt: null } } },
+          },
+        },
+      },
+    },
+  },
 };
 
 // The fetched-lot shape the pure conformance computation consumes. Structurally
 // a subset of the Prisma payload from CONFORMANCE_LOT_SELECT, so the
 // findUnique/findMany results assign directly.
+interface OpenConditionHoldPoint {
+  id: string;
+  description: string | null;
+  itpChecklistItem: { description: string };
+  currentRound: { _count: { conditions: number } } | null;
+}
+
 interface LotForConformance {
   id: string;
   lotNumber: string;
@@ -504,6 +548,7 @@ interface LotForConformance {
     status: string;
   }[];
   ncrLots: { ncr: { id: string; ncrNumber: string; description: string; status: string } }[];
+  openConditionHoldPoints?: OpenConditionHoldPoint[];
 }
 
 // Pure (DB-free) conformance computation. Takes a fetched lot plus the set of
@@ -543,6 +588,8 @@ export function computeConformanceResult(
     testResults: [],
     noOpenNcrs: true,
     openNcrs: [],
+    noOpenHoldPointConditions: true,
+    openHoldPointConditions: [],
     naHoldPointBlockerCount: 0,
     noNaHoldPointBypass: true,
     sufficiencyBlocks: false,
@@ -602,6 +649,16 @@ export function computeConformanceResult(
   }));
   prerequisites.noOpenNcrs = ncrs.length === 0;
 
+  prerequisites.openHoldPointConditions = (lot.openConditionHoldPoints ?? []).map((holdPoint) => ({
+    holdPointId: holdPoint.id,
+    holdPointName:
+      holdPoint.description?.trim() ||
+      holdPoint.itpChecklistItem.description ||
+      'Unnamed hold point',
+    openConditionCount: holdPoint.currentRound?._count.conditions ?? 0,
+  }));
+  prerequisites.noOpenHoldPointConditions = prerequisites.openHoldPointConditions.length === 0;
+
   // Wave C1 (§5.1.1, §5.1.2). Evaluated before `lotConformable` so its single
   // blocking limb is in the prerequisites the predicate reads. The evaluator owns
   // the structural non-blocking expression, so nothing here needs to re-check the
@@ -634,6 +691,15 @@ export function computeConformanceResult(
   }
   if (!prerequisites.noOpenNcrs) {
     blockingReasons.push(`${prerequisites.openNcrs.length} open NCR(s) must be closed`);
+  }
+  if (!prerequisites.noOpenHoldPointConditions) {
+    const openConditionCount = prerequisites.openHoldPointConditions.reduce(
+      (total, holdPoint) => total + holdPoint.openConditionCount,
+      0,
+    );
+    blockingReasons.push(
+      `${openConditionCount} hold point release condition${openConditionCount === 1 ? '' : 's'} must be recorded satisfied`,
+    );
   }
   if (!prerequisites.noNaHoldPointBypass) {
     blockingReasons.push(
@@ -680,12 +746,16 @@ function describeSufficiencyShortfalls(evaluation: SufficiencyEvaluation): strin
 // The shape CONFORMANCE_LOT_SELECT returns: a LotForConformance whose instance
 // carries `id` and `templateId` (to fetch completions and to resolve a legacy
 // fallback) but neither completions nor live template items yet.
-type FetchedLotForConformance = Omit<LotForConformance, 'itpInstance'> & {
+type FetchedLotForConformance = Omit<
+  LotForConformance,
+  'itpInstance' | 'openConditionHoldPoints'
+> & {
   itpInstance: {
     id: string;
     templateId: string;
     templateSnapshot?: string | null;
   } | null;
+  holdPoints?: OpenConditionHoldPoint[];
 };
 
 // Completions for every fetched instance, in ONE flat query grouped in JS.
@@ -771,10 +841,12 @@ async function hydrateFetchedLots(
   const legacyItemsByTemplateId = await fetchLegacyChecklistItemsByTemplateId(lots, client);
 
   return lots.map((lot) => {
-    if (!lot.itpInstance) return { ...lot, itpInstance: null };
+    const openConditionHoldPoints = lot.holdPoints ?? [];
+    if (!lot.itpInstance) return { ...lot, itpInstance: null, openConditionHoldPoints };
     const legacyItems = legacyItemsByTemplateId.get(lot.itpInstance.templateId);
     return {
       ...lot,
+      openConditionHoldPoints,
       itpInstance: {
         ...lot.itpInstance,
         completions: completionsByInstanceId.get(lot.itpInstance.id) ?? [],

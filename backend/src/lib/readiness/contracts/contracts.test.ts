@@ -328,6 +328,10 @@ function emitBatteryItems(): EvidenceReadinessItem[] {
           testResults: [],
           noOpenNcrs: false,
           openNcrs: [{ id: 'ncr-1', ncrNumber: 'NCR-1', description: 'x', status: 'open' }],
+          noOpenHoldPointConditions: false,
+          openHoldPointConditions: [
+            { holdPointId: 'hp-conditions', holdPointName: 'HP-3', openConditionCount: 2 },
+          ],
           noNaHoldPointBypass: false,
           naHoldPointBlockerCount: 2,
           sufficiencyBlocks: true,
@@ -458,6 +462,7 @@ describe('AT-138 — HANDOVER_BLOCKING_REASON_CODES cannot drift [DH-B5]', () =>
     expect([...emittedHardBlockerCodes].sort()).toEqual([
       'already_claimed',
       'conformance_no_longer_current',
+      'hp_conditions_open',
       'insufficient_test_count',
       'itp_incomplete',
       'missing_budget',
