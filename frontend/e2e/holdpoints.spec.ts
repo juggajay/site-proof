@@ -521,9 +521,9 @@ async function mockPublicHoldPointReleaseApi(
   };
 }
 
-// M20: the public secure-link release requires a signature. Draw a short stroke
-// on the SignaturePad canvas so onChange fires a non-empty data URL and the
-// "Release Hold Point" button becomes enabled.
+// M20: the public secure-link decision requires a signature. Draw a short
+// stroke on the SignaturePad canvas so onChange fires a non-empty data URL;
+// validation runs when "Review decision" is clicked.
 async function drawReleaseSignature(page: Page) {
   const canvas = page.locator('canvas').first();
   await expect(canvas).toBeVisible();
@@ -534,7 +534,13 @@ async function drawReleaseSignature(page: Page) {
     targetPosition: { x: box.width * 0.75, y: box.height * 0.6 },
   });
   await expect(page.getByText('Signature captured')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeEnabled();
+}
+
+/** Drive the decision form through review + confirm for the selected outcome. */
+async function reviewAndConfirmDecision(page: Page) {
+  await page.getByRole('button', { name: 'Review decision' }).click();
+  await expect(page.getByRole('button', { name: 'Confirm decision' })).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm decision' }).click();
 }
 
 test.describe('Hold points seeded release contract', () => {
@@ -849,19 +855,26 @@ test.describe('Public hold point secure release page', () => {
     ).toBeVisible();
     await expect(page.locator('body')).not.toContainText('/storage/v1/object/public/');
 
-    const releasedBy = page.getByLabel('Released By');
-    await expect(releasedBy).toHaveValue('E2E Superintendent');
-    await expect(releasedBy).toBeDisabled();
+    // Not exact: the assigned-recipient hint renders inside the same label.
+    const signerName = page.getByLabel('Name');
+    await expect(signerName).toHaveValue('E2E Superintendent');
+    await expect(signerName).toBeDisabled();
     await expect(
       page.getByText('This secure link is assigned to E2E Superintendent.'),
     ).toBeVisible();
 
+    await expect(page.getByLabel('Outcome')).toHaveValue('release');
     await page.getByLabel('Organisation').fill('Client Superintendent Org');
-    await page.getByLabel('Release Notes').fill('Evidence reviewed and accepted');
-    // M20: signature is required before the release can be submitted.
-    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
+    await page.getByLabel('Release notes').fill('Evidence reviewed and accepted');
+    // M20: signature is required — reviewing without one surfaces the error.
+    await page.getByRole('button', { name: 'Review decision' }).click();
+    await expect(page.getByRole('alert')).toContainText('A signature is required');
     await drawReleaseSignature(page);
-    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+    await page.getByRole('button', { name: 'Review decision' }).click();
+    await expect(
+      page.getByText(/You are granting permission to proceed for .* on HP-PUBLIC-001/),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Confirm decision' }).click();
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
     expect(api.getReleaseRequest()).toMatchObject({
@@ -869,17 +882,14 @@ test.describe('Public hold point secure release page', () => {
       releasedByOrg: 'Client Superintendent Org',
       releaseNotes: 'Evidence reviewed and accepted',
     });
-    await expect(page.getByRole('status')).toContainText('Hold Point Released');
-    await expect(
-      page.getByText(/Released by E2E Superintendent, Client Superintendent Org/),
-    ).toBeVisible();
-    await expect(page.getByText(/Secure link/)).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Permission to proceed granted');
+    await expect(page.getByText('Hold point released successfully via secure link')).toBeVisible();
     await expect(page.getByText('1/1 checklist items')).toBeVisible();
     await expect(page.getByRole('row').filter({ hasText: 'Confirm formwork' })).toContainText(
       'Yes',
     );
     await expect(page.getByRole('button', { name: 'Download Evidence PDF' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Review decision' })).toHaveCount(0);
   });
 
   test('requires an unnamed secure-link recipient to enter their release identity', async ({
@@ -889,22 +899,22 @@ test.describe('Public hold point secure release page', () => {
 
     await page.goto('/hp-release/e2e-public-token');
 
-    const releasedBy = page.getByLabel('Released By');
-    await expect(releasedBy).toBeEnabled();
-    await expect(releasedBy).toHaveValue('');
-    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
+    const signerName = page.getByLabel('Name', { exact: true });
+    await expect(signerName).toBeEnabled();
+    await expect(signerName).toHaveValue('');
+    // The unnamed recipient must type an identity: the input is required, so
+    // the native form validation refuses to review until it is filled.
+    await expect(signerName).toHaveAttribute('required', '');
 
-    await releasedBy.fill('Typed External Reviewer');
-    // M20: still disabled until a signature is captured.
-    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
+    await signerName.fill('Typed External Reviewer');
     await drawReleaseSignature(page);
-    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+    await reviewAndConfirmDecision(page);
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
     expect(api.getReleaseRequest()).toMatchObject({
       releasedByName: 'Typed External Reviewer',
     });
-    await expect(page.getByText('Released by Typed External Reviewer')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Permission to proceed granted');
   });
 
   test('renders an already released secure link as read-only release evidence', async ({
@@ -930,21 +940,21 @@ test.describe('Public hold point secure release page', () => {
     await page.goto('/hp-release/e2e-public-token');
 
     await expect(page.getByRole('heading', { name: 'Evidence Package' })).toBeVisible();
-    await page.getByRole('heading', { name: 'Release Hold Point' }).scrollIntoViewIfNeeded();
-    await expect(page.getByLabel('Released By')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeVisible();
+    await page.getByRole('heading', { name: 'Record decision' }).scrollIntoViewIfNeeded();
+    await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Review decision' })).toBeVisible();
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
 
-    await page.getByLabel('Released By').fill('Mobile External Reviewer');
+    await page.getByLabel('Name', { exact: true }).fill('Mobile External Reviewer');
     await drawReleaseSignature(page);
-    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+    await reviewAndConfirmDecision(page);
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
-    await expect(page.getByText('Released by Mobile External Reviewer')).toBeVisible();
+    await expect(page.getByRole('status')).toContainText('Permission to proceed granted');
   });
 
   test('shows expired secure-link errors without rendering the release form', async ({ page }) => {
@@ -973,14 +983,15 @@ test.describe('Public hold point secure release page', () => {
 
     await page.getByLabel('Organisation').fill('Client Superintendent Org');
     await drawReleaseSignature(page);
-    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+    await reviewAndConfirmDecision(page);
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
     await expect(page.getByRole('alert')).toContainText(
       'This hold point has already been released.',
     );
-    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeVisible();
-    await expect(page.getByRole('status', { name: /Hold Point Released/i })).toHaveCount(0);
+    // The rejection returns to the form with the error so terms can be revised.
+    await expect(page.getByRole('button', { name: 'Review decision' })).toBeVisible();
+    await expect(page.getByRole('status')).toHaveCount(0);
   });
 });
 
