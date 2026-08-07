@@ -111,6 +111,7 @@ model User {
   consentRecords              ConsentRecord[] // Feature #776: Privacy consent tracking
   createdDesignModels         DesignModel[]                  @relation("CreatedDesignModels")
   uploadedDesignModelVersions DesignModelVersion[]           @relation("UploadedDesignModelVersions")
+  createdModelElementLotLinks ModelElementLotLink[]           @relation("CreatedModelElementLotLinks")
   assignedLotSubcontractors   LotSubcontractorAssignment[] @relation("AssignedByUser")
   subcontractorUsers          SubcontractorUser[]
   scheduledReports            ScheduledReport[]
@@ -669,6 +670,7 @@ model Lot {
   folioIssueReservations   FolioIssueReservation[]
   folioIssues              FolioIssue[]
   governingRevisions       LotGoverningRevision[]
+  modelElementLinks        ModelElementLotLink[]
 
   @@unique([projectId, lotNumber])
   @@index([projectId])
@@ -2786,11 +2788,49 @@ model DesignModelVersion {
 
   model      DesignModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
   uploadedBy User?       @relation("UploadedDesignModelVersions", fields: [uploadedById], references: [id], onDelete: SetNull)
+  elements        ModelElement[]
+  elementLotLinks ModelElementLotLink[]
 
   @@unique([modelId, versionNumber])
   @@index([status, nextAttemptAt])
   @@index([sourceSha256])
   @@map("design_model_versions")
+}
+
+model ModelElement {
+  id             String   @id @default(uuid())
+  versionId      String   @map("version_id")
+  ifcGuid        String   @map("ifc_guid")
+  name           String?
+  category       String? // IFC type name, e.g. IFCBUILDINGELEMENTPROXY
+  lotNumberValue String?  @map("lot_number_value") // ConstructionLotNumber pset value verbatim
+  objectCode     String?  @map("object_code") // UniqueObjectCode if present (stored; v1 linker ignores it)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  version DesignModelVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  links   ModelElementLotLink[]
+
+  @@unique([versionId, ifcGuid])
+  @@map("model_elements")
+}
+
+model ModelElementLotLink {
+  id          String   @id @default(uuid())
+  versionId   String   @map("version_id")
+  elementId   String   @unique @map("element_id") // one lot per element
+  lotId       String   @map("lot_id")
+  source      String // 'auto' | 'manual'
+  createdById String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  version   DesignModelVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  element   ModelElement       @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  lot       Lot                @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  createdBy User?              @relation("CreatedModelElementLotLinks", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([versionId])
+  @@index([lotId])
+  @@map("model_element_lot_links")
 }
 
 /// One archive generation request (§7.4). `D1c.1` creates it and freezes its

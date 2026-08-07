@@ -173,24 +173,42 @@ The tab strip opens **General**, **Modules**, **Team**, **Areas**, **Control Lin
   {
     route: 'projects/<projectId>/models',
     title: 'Design Models',
-    keywords: ['ifc', '3d model', 'upload model', 'design model', 'conversion', 'new version'],
+    keywords: [
+      'ifc',
+      '3d model',
+      'upload model',
+      'design model',
+      'conversion',
+      'new version',
+      'lot linking',
+      '4d playback',
+    ],
     roles:
       'All internal project roles and viewers can read; owner, admin and project manager can upload and delete.',
     surface: 'office',
-    body: `Design Models stores IFC design files and converts each uploaded version for 3D viewing in the browser.
+    body: `Design Models stores IFC design files, indexes their elements and converts each uploaded version for 3D and 4D viewing in the browser.
 
-**Upload design model** opens the IFC picker with a model name (prefilled from the file); **New version** adds a version to an existing model, keeping earlier ones. Uploads are chunked and resume from what the server already holds; Retry re-sends only missing parts. Each row shows the latest version's status — Queued for conversion, Converting (updates automatically), Ready, or Conversion failed (a file that failed twice is not retried; upload a corrected version). **View in 3D** opens the viewer for a ready version. The bin icon deletes the latest version after confirmation.`,
+**Upload design model** opens the IFC picker with a model name (prefilled from the file); **New version** adds a version to an existing model, keeping earlier ones. Uploads are chunked and resume from what the server already holds; Retry re-sends only missing parts. Each row shows the latest version's status — Queued for conversion, Converting (updates automatically), Ready, or Conversion failed (a file that failed twice is not retried; upload a corrected version). Lot linking proposes matches from each element's ConstructionLotNumber for review, and reviewed manual links carry forward by IFC GlobalId when the next version retains that element. **View in 3D** opens the ready version and its lot-linked 4D playback. The bin icon deletes the latest version after confirmation.`,
   },
   {
     route: 'projects/<projectId>/models/<modelId>/versions/<versionId>/view',
     title: '3D Model Viewer',
-    keywords: ['3d viewer', 'orbit', 'reset view', 'inspect element', 'property sets', 'too large'],
+    keywords: [
+      '3d viewer',
+      'orbit',
+      'reset view',
+      'inspect element',
+      'property sets',
+      '4d playback',
+      'status timeline',
+      'lot colours',
+    ],
     roles:
       'All internal project roles and viewers can open it; subcontractor accounts cannot see design models.',
     surface: 'office',
-    body: `The 3D Model Viewer renders a converted design-model version in the browser.
+    body: `The 3D Model Viewer renders a converted design-model version and its lot-linked construction history in the browser.
 
-The model downloads and frames itself automatically; drag orbits, scroll zooms, and **Reset view** reframes the whole model. Clicking an element opens its properties panel (name and property sets, including QA data when present); the X closes it. While a version is still converting the page shows progress and refreshes itself. On phones and tablets, models over the mobile size limit are refused with an explanation instead of loading — there is deliberately no override because oversized models crash mobile browsers; open the model on a desktop instead.`,
+The model downloads and frames itself automatically; drag orbits, scroll zooms, and **Reset view** reframes the whole model. Clicking an element opens its properties panel (name and property sets, including QA data when present); the X closes it. The 4D playback scrubber replays the complete lot-status ledger and recolours linked elements for the selected date; elements without an approved lot link remain unlinked rather than being guessed. While a version is still converting the page shows progress and refreshes itself. On phones and tablets, models over the mobile size limit are refused with an explanation instead of loading — there is deliberately no override because oversized models crash mobile browsers; open the model on a desktop instead.`,
   },
   {
     route: 'projects/<projectId>/copilot',

@@ -167,6 +167,51 @@ designModelsRouter.get(
   }),
 );
 
+designModelsRouter.get(
+  '/:projectId/models/:modelId',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    const modelId = parseProjectRouteParam(req.params.modelId, 'modelId');
+    await requireReadAccess(projectId, req.user!);
+    const model = await loadModel(projectId, modelId);
+    const versions = await prisma.designModelVersion.findMany({
+      where: { modelId },
+      orderBy: { versionNumber: 'desc' },
+    });
+    res.json({ model, versions: versions.map(serializeVersion) });
+  }),
+);
+
+designModelsRouter.delete(
+  '/:projectId/models/:modelId',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    const modelId = parseProjectRouteParam(req.params.modelId, 'modelId');
+    await requireManageAccess(projectId, req.user!);
+    await loadModel(projectId, modelId);
+    const versions = await prisma.designModelVersion.findMany({ where: { modelId } });
+    if (versions.some((version) => version.status === 'converting')) {
+      throw AppError.conflict('A design model with a converting version cannot be deleted');
+    }
+
+    const store = resolveModelObjectStore();
+    for (const version of versions) {
+      const expectedSourceRef = sourceObjectRef(projectId, modelId, version.id);
+      const expectedFragRef = fragmentObjectRef(projectId, modelId, version.id);
+      if (version.sourceStorageRef === expectedSourceRef) await store.delete(expectedSourceRef);
+      if (version.fragStorageRef === expectedFragRef) await store.delete(expectedFragRef);
+      await removeUploadParts(version.id);
+    }
+    const deleted = await prisma.designModel.deleteMany({
+      where: { id: modelId, versions: { none: { status: 'converting' } } },
+    });
+    if (deleted.count !== 1) {
+      throw AppError.conflict('A design model with a converting version cannot be deleted');
+    }
+    res.status(204).send();
+  }),
+);
+
 designModelsRouter.post(
   '/:projectId/models/:modelId/versions',
   asyncHandler(async (req, res) => {
@@ -320,6 +365,63 @@ designModelsRouter.get(
     await requireReadAccess(projectId, req.user!);
     const { version } = await loadVersion(projectId, modelId, versionId);
     res.json(serializeVersion(version));
+  }),
+);
+
+designModelsRouter.get(
+  '/:projectId/models/:modelId/versions/:versionId/element-links',
+  asyncHandler(async (req, res) => {
+    const { projectId, modelId, versionId } = parseNestedParams(req);
+    await requireReadAccess(projectId, req.user!);
+    await loadVersion(projectId, modelId, versionId);
+
+    const [elements, linked, latestProposal] = await Promise.all([
+      prisma.modelElement.findMany({
+        where: { versionId },
+        select: {
+          ifcGuid: true,
+          links: { select: { lotId: true } },
+        },
+        orderBy: { ifcGuid: 'asc' },
+      }),
+      prisma.modelElementLotLink.count({ where: { versionId } }),
+      prisma.aiProposal.findFirst({
+        where: {
+          projectId,
+          stage: 'model_lot_linking',
+          payload: { path: ['versionId'], equals: versionId },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { payload: true },
+      }),
+    ]);
+    const links = elements.flatMap((element) =>
+      element.links.map((link) => ({ ifcGuid: element.ifcGuid, lotId: link.lotId })),
+    );
+    let ambiguousAtLastProposal: number | undefined;
+    if (
+      latestProposal?.payload &&
+      typeof latestProposal.payload === 'object' &&
+      !Array.isArray(latestProposal.payload)
+    ) {
+      const counts = (latestProposal.payload as Record<string, unknown>).counts;
+      if (counts && typeof counts === 'object' && !Array.isArray(counts)) {
+        const ambiguous = (counts as Record<string, unknown>).ambiguous;
+        if (typeof ambiguous === 'number' && Number.isFinite(ambiguous)) {
+          ambiguousAtLastProposal = ambiguous;
+        }
+      }
+    }
+
+    res.json({
+      links,
+      counts: {
+        elements: elements.length,
+        linked,
+        unlinked: Math.max(0, elements.length - linked),
+        ...(ambiguousAtLastProposal === undefined ? {} : { ambiguousAtLastProposal }),
+      },
+    });
   }),
 );
 

@@ -29,19 +29,11 @@ import {
   getProjectSubcontractorCompanyIds,
   requireSubcontractorLotPortalModules,
 } from './lots/access.js';
-import {
-  CLAIM_INCLUSION_ACTION,
-  buildStatusTimeline,
-  lotStatusEventsFromAudit,
-} from './lots/statusTimeline.js';
+import { buildStatusTimeline, type LotStatusEvent } from './lots/statusTimeline.js';
 
 const lotStatusTimelineRouter = Router();
 
 lotStatusTimelineRouter.use(requireAuth);
-
-// Audit actions that carry a lot-status transition; used to filter the query so
-// a huge audit trail does not load unrelated rows.
-const LOT_STATUS_ACTIONS = ['lot_updated', 'lot_status_changed', 'lot_force_conformed'];
 
 lotStatusTimelineRouter.get(
   '/:projectId/lots/status-timeline',
@@ -85,32 +77,21 @@ lotStatusTimelineRouter.get(
       return res.json({ earliest: null, lots: [] });
     }
 
-    // Only status-change audit rows for the visible lots — filtered on
-    // entityType/action and the scoped lot id set, selecting only needed columns.
-    //
-    // Plus the project's `claim_created` decision rows: F0.4b PR 5 collapsed
-    // claim create into one decision row, so the conformed -> claimed transition
-    // now lives in that row's `fullyClaimedLotIds` rather than in per-lot rows
-    // (`[R3.1-R4]`). They cannot be filtered by lot id — their `entityId` is the
-    // claim — but `buildStatusTimeline` only reads events for VISIBLE lots, so
-    // subcontractor scoping is unchanged.
-    const auditRows = await prisma.auditLog.findMany({
-      where: {
-        projectId,
-        OR: [
-          {
-            entityType: 'lot',
-            action: { in: LOT_STATUS_ACTIONS },
-            entityId: { in: lots.map((l) => l.id) },
-          },
-          { entityType: 'progress_claim', action: CLAIM_INCLUSION_ACTION },
-        ],
-      },
-      select: { entityId: true, action: true, changes: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
+    const ledgerEvents = await prisma.lotStatusEvent.findMany({
+      where: { lot: lotWhere },
+      orderBy: { effectiveAt: 'asc' },
+      select: { lotId: true, fromStatus: true, toStatus: true, effectiveAt: true },
     });
-
-    const eventsByLot = lotStatusEventsFromAudit(auditRows);
+    const eventsByLot = new Map<string, LotStatusEvent[]>();
+    for (const event of ledgerEvents) {
+      const list = eventsByLot.get(event.lotId) ?? [];
+      list.push({
+        at: event.effectiveAt.toISOString(),
+        from: event.fromStatus,
+        to: event.toStatus,
+      });
+      eventsByLot.set(event.lotId, list);
+    }
     res.json(buildStatusTimeline(lots, eventsByLot));
   }),
 );
