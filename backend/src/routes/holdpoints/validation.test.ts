@@ -5,8 +5,10 @@ import {
   MAX_ID_LENGTH,
   MAX_RELEASE_TOKEN_LENGTH,
   parseHoldPointRouteParam,
+  publicRejectSchema,
   requestReleaseSchema,
   publicReleaseSchema,
+  publicReleaseWithConditionsSchema,
   releaseHoldPointSchema,
 } from './validation.js';
 
@@ -184,5 +186,35 @@ describe('hold point release signature validation (pure, DB-free)', () => {
         releasedByOrg: 'SiteProof',
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('public decision payload caps (pure, DB-free)', () => {
+  it('enforces the trimmed 25..5000 rejection-reason bounds', () => {
+    expect(publicRejectSchema.safeParse({ reason: `  ${'a'.repeat(25)}  ` }).success).toBe(true);
+    expect(publicRejectSchema.safeParse({ reason: 'a'.repeat(24) }).success).toBe(false);
+    expect(publicRejectSchema.safeParse({ reason: 'a'.repeat(5000) }).success).toBe(true);
+    expect(publicRejectSchema.safeParse({ reason: 'a'.repeat(5001) }).success).toBe(false);
+  });
+
+  it('splits condition lines, trims them, and enforces item/count caps', () => {
+    const parsed = publicReleaseWithConditionsSchema.safeParse({
+      conditions: [' First condition \nSecond condition '],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success)
+      expect(parsed.data.conditions).toEqual(['First condition', 'Second condition']);
+
+    expect(publicReleaseWithConditionsSchema.safeParse({ conditions: [] }).success).toBe(false);
+    expect(
+      publicReleaseWithConditionsSchema.safeParse({ conditions: Array(21).fill('condition') })
+        .success,
+    ).toBe(false);
+    expect(
+      publicReleaseWithConditionsSchema.safeParse({ conditions: ['a'.repeat(501)] }).success,
+    ).toBe(false);
+    expect(publicReleaseWithConditionsSchema.safeParse({ conditions: ['   '] }).success).toBe(
+      false,
+    );
   });
 });

@@ -113,6 +113,7 @@ async function createReleasableHoldPoint(suffix: string, status = 'notified') {
       pointType: 'hold_point',
       description: `Release decision hold point ${suffix}`,
       status,
+      authorityClass: 'contractor_internal',
     },
   });
 

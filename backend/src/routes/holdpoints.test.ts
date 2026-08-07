@@ -808,6 +808,7 @@ describe('Hold Points API', () => {
           itpChecklistItemId: freshItem.id,
           pointType: 'hold_point',
           status,
+          authorityClass: 'contractor_internal',
         },
       });
 
@@ -995,6 +996,7 @@ describe('Hold Points API', () => {
           itpChecklistItemId: freshItem.id,
           pointType: 'hold_point',
           status: 'notified',
+          authorityClass: 'contractor_internal',
         },
       });
 
@@ -3641,16 +3643,11 @@ describe('Hold Point Token Release', () => {
     expect(completion.verifiedById).toBeNull();
   });
 
-  it('should reopen a used public release token as read-only evidence', async () => {
+  it('should revoke a used public release token on the public payload GET', async () => {
     const res = await request(app).get(`/api/holdpoints/public/${releaseToken}`);
 
-    expect(res.status).toBe(200);
-    expect(res.body.evidencePackage.holdPoint.status).toBe('released');
-    expect(res.body.tokenInfo.canRelease).toBe(false);
-    expect(res.body.evidencePackage.checklist[0].attachments[0]).toMatchObject({
-      documentId: evidenceDocumentId,
-      filename: 'release-evidence.pdf',
-    });
+    expect(res.status).toBe(410);
+    expect(res.body.error.code).toBe('TOKEN_USED');
   });
 
   it('should reject reuse of a public release token', async () => {

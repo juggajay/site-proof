@@ -51,7 +51,10 @@ export type DecisionKind =
   | 'concession'
   | 'override'
   | 'waiver'
-  | 'inclusion';
+  | 'inclusion'
+  | 'rejection'
+  | 'conditional_release'
+  | 'withdrawal';
 
 /**
  * Snapshot grains. `claim_lot` rows key on `ClaimedLot.id` (NOT the lot id);

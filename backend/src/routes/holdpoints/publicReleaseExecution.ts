@@ -73,6 +73,62 @@ export async function executeHoldPointTokenRelease(
     signatureDataUrl,
   }: ExecuteHoldPointTokenReleaseParams,
 ): Promise<{ holdPoint: ReleasedHoldPoint; releasedItpInstanceId: string | null }> {
+  const currentToken = await tx.holdPointReleaseToken.findUnique({
+    where: { id: tokenId },
+    select: {
+      decisionRoundId: true,
+      holdPoint: { select: { currentRoundId: true, status: true } },
+    },
+  });
+  if (!currentToken) {
+    throw AppError.notFound('Invalid or expired link');
+  }
+
+  // PR C: round-backed public releases participate in the same immutable
+  // decision race as rejection and conditional release. Legacy tokens on an HP
+  // with no round retain the shipped release path; a legacy null-round token on
+  // an HP with an open current round is lazily bound before deciding it.
+  let decidedRoundId = currentToken.decisionRoundId;
+  if (!decidedRoundId && currentToken.holdPoint.currentRoundId) {
+    decidedRoundId = currentToken.holdPoint.currentRoundId;
+    const bound = await tx.holdPointReleaseToken.updateMany({
+      where: { id: tokenId, decisionRoundId: null, usedAt: null },
+      data: { decisionRoundId: decidedRoundId },
+    });
+    if (bound.count !== 1) {
+      throw new AppError(410, 'This secure release link has already been used.', 'TOKEN_USED');
+    }
+  }
+  if (decidedRoundId) {
+    if (currentToken.holdPoint.currentRoundId !== decidedRoundId) {
+      throw new AppError(
+        410,
+        'This hold point release request has already been decided, withdrawn, or superseded.',
+        'TOKEN_REVOKED',
+      );
+    }
+    const roundUpdate = await tx.holdPointDecisionRound.updateMany({
+      where: { id: decidedRoundId, outcome: null, withdrawnAt: null },
+      data: {
+        outcome: 'released',
+        decidedAt: releasedAt,
+        decidedByName: effectiveReleasedByName,
+        decidedByOrg: releasedByOrg || null,
+        decidedByTokenId: tokenId,
+        decisionReason: releaseNotes || null,
+        decisionMethod: 'public_token',
+        signatureUrl: signatureDataUrl || null,
+      },
+    });
+    if (roundUpdate.count !== 1) {
+      throw new AppError(
+        410,
+        'This hold point release request has already been decided, withdrawn, or superseded.',
+        'TOKEN_REVOKED',
+      );
+    }
+  }
+
   const tokenUpdate = await tx.holdPointReleaseToken.updateMany({
     where: {
       id: tokenId,
@@ -118,7 +174,9 @@ export async function executeHoldPointTokenRelease(
   const holdPointUpdate = await tx.holdPoint.updateMany({
     where: {
       id: holdPointId,
-      status: { notIn: ['released', 'completed'] },
+      ...(decidedRoundId
+        ? { status: 'notified', currentRoundId: decidedRoundId }
+        : { status: { notIn: ['released', 'completed'] } }),
     },
     data: {
       status: 'released',
@@ -250,6 +308,7 @@ export interface RunHoldPointReleasePostCommitParams {
   effectiveReleasedByName: string;
   releasedByOrg?: string | null;
   releaseNotes?: string | null;
+  suppressTeamReleaseNotifications?: boolean;
 }
 
 // Post-commit side effects for a single released hold point: lot-status
@@ -272,6 +331,7 @@ export async function runHoldPointReleasePostCommit({
   effectiveReleasedByName,
   releasedByOrg,
   releaseNotes,
+  suppressTeamReleaseNotifications = false,
 }: RunHoldPointReleasePostCommitParams): Promise<void> {
   if (releasedItpInstanceId) {
     try {
@@ -300,50 +360,52 @@ export async function runHoldPointReleasePostCommit({
   });
 
   if (isProjectNotificationEnabled(project.settings, 'holdPointReleases')) {
-    const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
-      projectId: project.id,
-      holdPointId: holdPoint.id,
-      holdPointDescription: holdPoint.description,
-      lotNumber: holdPoint.lot.lotNumber,
-      releasedByName: effectiveReleasedByName,
-    });
-
-    if (notificationsToCreate.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: notificationsToCreate,
-        });
-      } catch (notificationError) {
-        logError('[HP Secure Release] Failed to create in-app notifications:', notificationError);
-        // The release already committed above; don't fail the request if the
-        // post-commit notification insert throws.
-      }
-    }
-
-    const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
-      projectId: project.id,
-      holdPointId: holdPoint.id,
-      holdPointDescription: holdPoint.description,
-      lotNumber: holdPoint.lot.lotNumber,
-      releasedByName: effectiveReleasedByName,
-      projectName: project.name,
-      releaseMethod: 'secure_link',
-      releaseNotes,
-    });
-
     const immediateHoldPointReleaseEmailUserIds = new Set<string>();
-    for (const pu of projectUsers) {
-      try {
-        const delivery = await sendNotificationIfEnabled(
-          pu.userId,
-          'holdPointRelease',
-          releaseEmailNotification,
-        );
-        if (delivery.sent) {
-          immediateHoldPointReleaseEmailUserIds.add(pu.userId);
+    if (!suppressTeamReleaseNotifications) {
+      const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
+        projectId: project.id,
+        holdPointId: holdPoint.id,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName: effectiveReleasedByName,
+      });
+
+      if (notificationsToCreate.length > 0) {
+        try {
+          await prisma.notification.createMany({
+            data: notificationsToCreate,
+          });
+        } catch (notificationError) {
+          logError('[HP Secure Release] Failed to create in-app notifications:', notificationError);
+          // The release already committed above; don't fail the request if the
+          // post-commit notification insert throws.
         }
-      } catch (emailError) {
-        logError(`[HP Secure Release] Failed to send email to user ${pu.userId}:`, emailError);
+      }
+
+      const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
+        projectId: project.id,
+        holdPointId: holdPoint.id,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName: effectiveReleasedByName,
+        projectName: project.name,
+        releaseMethod: 'secure_link',
+        releaseNotes,
+      });
+
+      for (const pu of projectUsers) {
+        try {
+          const delivery = await sendNotificationIfEnabled(
+            pu.userId,
+            'holdPointRelease',
+            releaseEmailNotification,
+          );
+          if (delivery.sent) {
+            immediateHoldPointReleaseEmailUserIds.add(pu.userId);
+          }
+        } catch (emailError) {
+          logError(`[HP Secure Release] Failed to send email to user ${pu.userId}:`, emailError);
+        }
       }
     }
 

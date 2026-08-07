@@ -6,7 +6,9 @@ import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
   MAX_RELEASE_TOKEN_LENGTH,
   parseHPProjectSettings,
+  publicRejectSchema,
   publicReleaseSchema,
+  publicReleaseWithConditionsSchema,
   parseHoldPointRouteParam,
 } from './holdpoints/validation.js';
 import { holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
@@ -40,6 +42,13 @@ import {
   holdPointReleaseSnapshots,
   resolveHoldPointReleaseSufficiency,
 } from './holdpoints/releaseDecision.js';
+import {
+  assertPublicDecisionTokenAvailable,
+  assertPublicDecisionTokenGetAvailable,
+  executePublicHoldPointConditionalRelease,
+  executePublicHoldPointRejection,
+  loadPublicDecisionToken,
+} from './holdpoints/publicDecisionExecution.js';
 
 const holdpointsRouter = Router();
 
@@ -138,6 +147,7 @@ holdpointsRouter.get(
 
     const releaseToken = await loadPublicHoldPointReleaseToken(token);
     assertPublicHoldPointTokenAvailable(releaseToken);
+    await assertPublicDecisionTokenGetAvailable(releaseToken.id);
     const { evidencePackage, tokenInfo } = await buildPublicHoldPointReleasePayload(releaseToken);
 
     // Wave E2.1 — the implied-consent signal. Only on a real GET: Express hands
@@ -159,6 +169,54 @@ holdpointsRouter.get(
     }
 
     res.json(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo));
+  }),
+);
+
+// Refuse release via the round-bound secure link (no auth required).
+holdpointsRouter.post(
+  '/public/:token/reject',
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = parseHoldPointRouteParam(req.params.token, 'token', MAX_RELEASE_TOKEN_LENGTH);
+    const parsed = publicRejectSchema.safeParse(req.body);
+    if (!parsed.success) throw AppError.fromZodError(parsed.error);
+
+    const releaseToken = await loadPublicDecisionToken(token);
+    assertPublicDecisionTokenAvailable(releaseToken);
+    const result = await executePublicHoldPointRejection({
+      releaseToken,
+      ...parsed.data,
+      req,
+    });
+    res.json({
+      success: true,
+      message: 'Hold point release refused and NCR raised',
+      holdPoint: result.holdPoint,
+      ncr: result.ncr,
+    });
+  }),
+);
+
+// Grant permission to proceed subject to recorded authority conditions.
+holdpointsRouter.post(
+  '/public/:token/release-with-conditions',
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = parseHoldPointRouteParam(req.params.token, 'token', MAX_RELEASE_TOKEN_LENGTH);
+    const parsed = publicReleaseWithConditionsSchema.safeParse(req.body);
+    if (!parsed.success) throw AppError.fromZodError(parsed.error);
+
+    const releaseToken = await loadPublicDecisionToken(token);
+    assertPublicDecisionTokenAvailable(releaseToken);
+    const result = await executePublicHoldPointConditionalRelease({
+      releaseToken,
+      ...parsed.data,
+      req,
+    });
+    res.json({
+      success: true,
+      message: 'Hold point released with conditions via secure link',
+      holdPoint: result.holdPoint,
+      conditions: parsed.data.conditions,
+    });
   }),
 );
 

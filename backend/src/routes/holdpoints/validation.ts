@@ -220,6 +220,10 @@ export const requestReleaseSchema = z
     ),
     noticePeriodOverride: z.boolean().optional(),
     noticePeriodOverrideReason: nullableTrimmedStringSchema(1000, 'noticePeriodOverrideReason'),
+    responseToPriorRejection: optionalTrimmedStringSchema(
+      MAX_NOTE_LENGTH,
+      'responseToPriorRejection',
+    ),
   })
   .superRefine((data, ctx) => {
     if (data.noticePeriodOverride && !data.noticePeriodOverrideReason) {
@@ -265,6 +269,36 @@ export const publicReleaseSchema = z.object({
   releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
   signatureDataUrl: requiredSignatureDataUrlSchema,
+});
+
+export const publicRejectSchema = z.object({
+  name: optionalTrimmedStringSchema(MAX_NAME_LENGTH, 'name'),
+  org: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'org'),
+  reason: z.string().trim().min(25, 'reason must be at least 25 characters').max(MAX_NOTE_LENGTH),
+  signatureDataUrl: nullableSignatureDataUrlSchema,
+});
+
+const publicConditionSchema = z
+  .string()
+  .trim()
+  .min(1, 'conditions cannot contain blank items')
+  .max(500, 'Each condition must be 500 characters or fewer');
+
+export const publicReleaseWithConditionsSchema = z.object({
+  name: optionalTrimmedStringSchema(MAX_NAME_LENGTH, 'name'),
+  org: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'org'),
+  conditions: z.preprocess(
+    (value) =>
+      Array.isArray(value)
+        ? value.flatMap((item) => (typeof item === 'string' ? item.split(/\r?\n/) : [item]))
+        : value,
+    z
+      .array(publicConditionSchema)
+      .min(1, 'At least one condition is required')
+      .max(20, 'No more than 20 conditions are allowed'),
+  ),
+  notes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'notes'),
+  signatureDataUrl: nullableSignatureDataUrlSchema,
 });
 
 export const MAX_BATCH_RELEASE_ITEMS = 25;

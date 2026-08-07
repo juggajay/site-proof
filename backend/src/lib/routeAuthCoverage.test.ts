@@ -755,6 +755,8 @@ describe('route authentication coverage', () => {
     expect(publicRouteDescriptorsBeforeRouteWideAuth(holdpointsSource)).toEqual([
       'GET /public/:token/documents/:documentId',
       'GET /public/:token',
+      'POST /public/:token/reject',
+      'POST /public/:token/release-with-conditions',
       'POST /public/:token/release',
     ]);
 
