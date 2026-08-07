@@ -6,7 +6,7 @@ import { parseLandXml } from './landxmlParser.js';
 const LINE_AND_CURVE = `<?xml version="1.0"?>
 <LandXML>
   <Alignments>
-    <Alignment name="MC01" staStart="1000" length="200">
+    <Alignment name="MC01" staStart="1000" length="115.708">
       <CoordGeom>
         <Line>
           <Start>6250000 500000</Start>
@@ -66,5 +66,61 @@ describe('parseLandXml', () => {
 
   it('throws on non-XML input', () => {
     expect(() => parseLandXml('not xml at all')).toThrow();
+  });
+
+  it('rejects a file declaring imperial units', () => {
+    const fx = LINE_AND_CURVE.replace(
+      '<LandXML>',
+      '<LandXML><Units><Imperial linearUnit="foot" areaUnit="squareFoot"/></Units>',
+    );
+    expect(() => parseLandXml(fx)).toThrow(/imperial|foot/i);
+  });
+
+  it('accepts an explicit metric declaration', () => {
+    const fx = LINE_AND_CURVE.replace(
+      '<LandXML>',
+      '<LandXML><Units><Metric linearUnit="meter"/></Units>',
+    );
+    const { alignments, warnings } = parseLandXml(fx);
+    expect(alignments).toHaveLength(1);
+    expect(warnings).toEqual([]);
+  });
+
+  it('rejects a Metric declaration in non-metre units', () => {
+    const fx = LINE_AND_CURVE.replace(
+      '<LandXML>',
+      '<LandXML><Units><Metric linearUnit="foot"/></Units>',
+    );
+    expect(() => parseLandXml(fx)).toThrow(/foot/);
+  });
+
+  it('rejects truncated (non-well-formed) XML', () => {
+    const fx = LINE_AND_CURVE.slice(0, LINE_AND_CURVE.indexOf('<Curve'));
+    expect(() => parseLandXml(fx)).toThrow(/not valid XML/);
+  });
+
+  it('skips an alignment whose declared length disagrees with its geometry', () => {
+    const fx = LINE_AND_CURVE.replace(
+      '</Alignments>',
+      `<Alignment name="Short" staStart="0" length="500">
+         <CoordGeom>
+           <Line>
+             <Start>0 0</Start>
+             <End>0 100</End>
+           </Line>
+         </CoordGeom>
+       </Alignment></Alignments>`,
+    );
+    const { alignments, warnings } = parseLandXml(fx);
+    expect(alignments.map((a) => a.name)).toEqual(['MC01']);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/declares length/);
+  });
+
+  it('accepts an alignment with no declared length', () => {
+    const fx = LINE_AND_CURVE.replace(' length="115.708"', '');
+    const { alignments, warnings } = parseLandXml(fx);
+    expect(alignments).toHaveLength(1);
+    expect(warnings).toEqual([]);
   });
 });
