@@ -31,11 +31,12 @@
     ]
   },
   "manyPhotos": {
-    "pageCount": 2,
+    "pageCount": 3,
     "bottomMarginMm": 20,
     "extents": [
-      { "page": 1, "topMm": 20, "bottomMm": 240 },
-      { "page": 2, "topMm": 20, "bottomMm": 218 }
+      { "page": 1, "topMm": 20, "bottomMm": 232 },
+      { "page": 2, "topMm": 20, "bottomMm": 235 },
+      { "page": 3, "topMm": 20, "bottomMm": 54 }
     ]
   },
   "missingOptionals": {

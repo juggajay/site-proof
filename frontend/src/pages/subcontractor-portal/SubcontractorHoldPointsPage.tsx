@@ -15,6 +15,8 @@ import {
   type ApiSubcontractorHoldPoint,
   type SubcontractorHoldPoint,
 } from './subcontractorHoldPointData';
+import { formatHoldPointStatusLabel, getHoldPointStatusKey } from '@/lib/statusLabels';
+import { getHoldPointStatusBadgeClass } from '@/lib/statusColors';
 
 interface SubcontractorCompany {
   id: string;
@@ -24,30 +26,22 @@ interface SubcontractorCompany {
   portalAccess?: PortalAccess;
 }
 
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'released':
-      return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-          <CheckCircle2 className="h-3 w-3" />
-          Released
-        </span>
-      );
-    case 'rejected':
-      return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-          <AlertTriangle className="h-3 w-3" />
-          Rejected
-        </span>
-      );
-    default:
-      return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
-          <Clock className="h-3 w-3" />
-          Pending
-        </span>
-      );
-  }
+function getStatusBadge(holdPoint: SubcontractorHoldPoint) {
+  const key = getHoldPointStatusKey(holdPoint);
+  const Icon =
+    key === 'release_refused'
+      ? AlertTriangle
+      : key === 'released' || key === 'released_with_conditions'
+        ? CheckCircle2
+        : Clock;
+  return (
+    <span
+      className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${getHoldPointStatusBadgeClass(key)}`}
+    >
+      <Icon className="h-3 w-3" />
+      {formatHoldPointStatusLabel(holdPoint)}
+    </span>
+  );
 }
 
 export function SubcontractorHoldPointsPage() {
@@ -97,9 +91,13 @@ export function SubcontractorHoldPointsPage() {
     subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
   });
 
-  const pending = holdPoints.filter((hp) => hp.status === 'pending' || hp.status === 'notified');
-  const released = holdPoints.filter((hp) => hp.status === 'released');
-  const rejected = holdPoints.filter((hp) => hp.status === 'rejected');
+  const pending = holdPoints.filter((hp) =>
+    ['pending', 'notified'].includes(getHoldPointStatusKey(hp)),
+  );
+  const released = holdPoints.filter((hp) =>
+    ['released', 'released_with_conditions'].includes(getHoldPointStatusKey(hp)),
+  );
+  const rejected = holdPoints.filter((hp) => getHoldPointStatusKey(hp) === 'release_refused');
 
   if (loading) {
     return (
@@ -161,7 +159,7 @@ export function SubcontractorHoldPointsPage() {
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-foreground">{rejected.length}</p>
-          <p className="text-xs text-muted-foreground">Rejected</p>
+          <p className="text-xs text-muted-foreground">Release refused</p>
         </div>
       </div>
 
@@ -209,7 +207,7 @@ export function SubcontractorHoldPointsPage() {
           {rejected.length > 0 && (
             <div>
               <h2 className="text-sm font-medium text-muted-foreground mb-2">
-                Rejected ({rejected.length})
+                Release refused ({rejected.length})
               </h2>
               <div className="space-y-2">
                 {rejected.map((hp) => (
@@ -254,7 +252,7 @@ function HoldPointCard({ holdPoint }: { holdPoint: SubcontractorHoldPoint }) {
               )}
             </div>
           </div>
-          {getStatusBadge(holdPoint.status)}
+          {getStatusBadge(holdPoint)}
         </div>
       </div>
     </div>

@@ -162,6 +162,7 @@ export interface ItpHoldPointState {
   releaseMethod: string | null;
   releasedAt: string | null;
   releaseNotes: string | null;
+  latestRound?: import('../holdpoints/types').LatestHoldPointDecisionRound | null;
 }
 
 export interface ITPInstance {

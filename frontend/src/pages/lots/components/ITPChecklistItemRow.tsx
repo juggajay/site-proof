@@ -387,6 +387,7 @@ export function ITPChecklistItemRow({
                 onRequestHoldPointRelease?.({ id: item.id, description: item.description })
               }
               onShowQrCode={() => holdPoint && onShowHoldPointQrCode?.(holdPoint, item.description)}
+              projectId={projectId}
             />
           ) : completion?.completedBy ? (
             <p className="text-xs text-muted-foreground mt-1">

@@ -3,6 +3,16 @@
  * Extracted from HoldPointsPage.tsx for reusability.
  */
 
+export interface LatestHoldPointDecisionRound {
+  outcome: string | null;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  ncrId: string | null;
+  ncrNumber: string | null;
+  ncrStatus: string | null;
+  openConditionCount: number;
+}
+
 export interface HoldPoint {
   id: string;
   lotId: string;
@@ -19,6 +29,7 @@ export interface HoldPoint {
   releaseMethod?: string | null;
   releaseRecipientEmail?: string | null;
   releaseNotes: string | null;
+  latestRound?: LatestHoldPointDecisionRound | null;
   sequenceNumber: number;
   isCompleted: boolean;
   isVerified: boolean;
@@ -59,11 +70,18 @@ export interface RequestError {
 }
 
 /**
- * Register filter views. The first four mirror backend hold-point statuses;
- * 'notice-expired' is a derived view — awaiting release ('notified') with the
- * minimum notice window already elapsed (see isNoticeExpired).
+ * Register filter views. Pending/notified/released mirror backend status;
+ * refused and conditions-open derive from latestRound, while notice-expired
+ * derives from an awaiting-release request whose notice window has elapsed.
  */
-export type StatusFilter = 'all' | 'pending' | 'notified' | 'released' | 'notice-expired';
+export type StatusFilter =
+  | 'all'
+  | 'pending'
+  | 'notified'
+  | 'released'
+  | 'refused'
+  | 'conditions-open'
+  | 'notice-expired';
 
 /**
  * Sortable register columns. 'lot' is the server order (lot number, then
@@ -83,6 +101,8 @@ export interface HoldPointStats {
   total: number;
   pending: number;
   notified: number;
+  refused: number;
+  conditionsOpen: number;
   releasedThisWeek: number;
   overdue: number;
 }

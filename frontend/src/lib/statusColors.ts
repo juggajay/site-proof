@@ -156,3 +156,16 @@ export const NCR_GATE_DOT_CLASSES = {
   pending: 'h-2.5 w-2.5 rounded-full border border-muted-foreground/60',
   not_required: 'h-px w-2.5 bg-muted-foreground/40',
 } as const;
+
+const HOLD_POINT_STATUS_BADGE_CLASSES: Record<string, string> = {
+  pending: 'bg-muted text-muted-foreground',
+  notified: 'bg-warning/10 text-warning',
+  released: 'bg-success/10 text-success',
+  completed: 'bg-success/10 text-success',
+  release_refused: 'bg-destructive/10 text-destructive',
+  released_with_conditions: 'bg-warning/10 text-warning',
+};
+
+export function getHoldPointStatusBadgeClass(statusKey: string): string {
+  return HOLD_POINT_STATUS_BADGE_CLASSES[statusKey] ?? HOLD_POINT_STATUS_BADGE_CLASSES.pending;
+}

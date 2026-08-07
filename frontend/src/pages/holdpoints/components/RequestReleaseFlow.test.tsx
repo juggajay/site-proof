@@ -120,6 +120,47 @@ describe('RequestReleaseFlow', () => {
     expect(onRequested).toHaveBeenCalled();
   });
 
+  it('maps the required refusal response to responseToPriorRejection', async () => {
+    const refusedHoldPoint: HoldPoint = {
+      ...holdPoint,
+      id: 'hp-refused',
+      latestRound: {
+        outcome: 'rejected',
+        decidedAt: '2026-08-02T00:00:00.000Z',
+        decisionReason: 'Proof roll failed.',
+        ncrId: 'ncr-42',
+        ncrNumber: 'NCR-0042',
+        ncrStatus: 'closed',
+        openConditionCount: 0,
+      },
+    };
+    apiFetchMock.mockImplementation((path: string) =>
+      path.startsWith('/api/holdpoints/lot/')
+        ? (Promise.resolve({ ...readyDetails, holdPoint: refusedHoldPoint }) as never)
+        : (Promise.resolve({}) as never),
+    );
+
+    render(
+      <RequestReleaseFlow holdPoint={refusedHoldPoint} onClose={vi.fn()} onRequested={vi.fn()} />,
+    );
+
+    await screen.findByText(/All prerequisites completed/i);
+    await userEvent.type(screen.getByLabelText(/Scheduled Date/i), futureDateInputValue());
+    await userEvent.type(screen.getByLabelText(/Scheduled Time/i), '09:30');
+    await userEvent.type(
+      screen.getByLabelText(/Response to the refusal/),
+      'The failed section was excavated and recompacted.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^re-request release$/i }));
+
+    const requestCall = apiFetchMock.mock.calls.find(
+      ([path]) => path === '/api/holdpoints/request-release',
+    );
+    expect(JSON.parse((requestCall![1] as RequestInit).body as string)).toMatchObject({
+      responseToPriorRejection: 'The failed section was excavated and recompacted.',
+    });
+  });
+
   it('surfaces the missing prerequisites the API names, without closing', async () => {
     apiFetchMock.mockImplementation((path: string) => {
       if (path.startsWith('/api/holdpoints/lot/')) return Promise.resolve(readyDetails) as never;

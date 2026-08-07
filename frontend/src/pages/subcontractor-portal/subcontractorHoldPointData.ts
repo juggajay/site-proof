@@ -11,6 +11,7 @@ export interface SubcontractorHoldPoint {
   releaseMethod?: string | null;
   releaseRecipientEmail?: string | null;
   checklistItemDescription?: string;
+  latestRound?: import('../holdpoints/types').LatestHoldPointDecisionRound | null;
 }
 
 export interface ApiSubcontractorHoldPoint {
@@ -27,6 +28,7 @@ export interface ApiSubcontractorHoldPoint {
   releaseMethod?: string | null;
   releaseRecipientEmail?: string | null;
   createdAt?: string | null;
+  latestRound?: import('../holdpoints/types').LatestHoldPointDecisionRound | null;
 }
 
 export function normalizeSubcontractorHoldPoint(
@@ -46,5 +48,6 @@ export function normalizeSubcontractorHoldPoint(
     releasedByOrg: holdPoint.releasedByOrg || null,
     releaseMethod: holdPoint.releaseMethod || null,
     releaseRecipientEmail: holdPoint.releaseRecipientEmail || null,
+    latestRound: holdPoint.latestRound ?? null,
   };
 }

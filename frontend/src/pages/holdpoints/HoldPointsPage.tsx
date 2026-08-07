@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
 import { compressImageForUpload } from '@/lib/offlinePhotoCompression';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthToken, useAuth } from '@/lib/auth';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
@@ -40,7 +40,8 @@ import {
 } from './HoldPointsPageSections';
 import { HoldPointsTable } from './components/HoldPointsTable';
 import { HoldPointsMobileList } from './components/HoldPointsMobileList';
-import { formatHoldPointDate, getStatusLabel } from './components/holdPointTableUtils';
+import { formatHoldPointDate, getHoldPointStatusLabel } from './components/holdPointTableUtils';
+import { getHoldPointStatusKey } from '@/lib/statusLabels';
 import {
   buildHoldPointChartData,
   buildHoldPointLotOptions,
@@ -66,6 +67,7 @@ import { getReleaseMethodLabel } from './holdPointReleaseIdentity';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 import { AskClancyChips } from '@/components/copilot/AskClancy';
+import { WithdrawHoldPointRequestDialog } from './components/WithdrawHoldPointRequestDialog';
 
 // Read side of the "Copy link" action (?hp=<id>): stable references so the
 // deep-link effect doesn't re-run on every render.
@@ -91,12 +93,17 @@ export function HoldPointsPage() {
   const csvBranding = useCsvBranding(projectId);
   const isMobile = useIsMobile();
   const currentProjectRole = useCurrentProjectRole(projectId);
+  const { actualRole } = useAuth();
+  const canWithdrawRequest = ['quality_manager', 'project_manager', 'site_manager'].includes(
+    actualRole ?? '',
+  );
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showBatchRequestModal, setShowBatchRequestModal] = useState(false);
   // The single request-release interaction lives in RequestReleaseFlow, shared
   // with the lot ITP checklist row, so both doors drive one request path.
   const [releaseRequestHoldPoint, setReleaseRequestHoldPoint] = useState<HoldPoint | null>(null);
+  const [withdrawRequestHoldPoint, setWithdrawRequestHoldPoint] = useState<HoldPoint | null>(null);
   // T2: the scannable release link for an approver standing in front of you.
   const [qrHoldPoint, setQrHoldPoint] = useState<HoldPoint | null>(null);
   const [selectedHoldPoint, setSelectedHoldPoint] = useState<HoldPoint | null>(null);
@@ -233,7 +240,9 @@ export function HoldPointsPage() {
     () =>
       selectedLotId === 'all'
         ? []
-        : filteredHoldPoints.filter((hp) => hp.lotId === selectedLotId && hp.status === 'pending'),
+        : filteredHoldPoints.filter(
+            (hp) => hp.lotId === selectedLotId && getHoldPointStatusKey(hp) === 'pending',
+          ),
     [filteredHoldPoints, selectedLotId],
   );
 
@@ -580,7 +589,7 @@ export function HoldPointsPage() {
       hp.lotNumber,
       hp.description,
       hp.pointType || '-',
-      getStatusLabel(hp.status),
+      getHoldPointStatusLabel(hp),
       formatHoldPointDate(hp.scheduledDate),
       formatHoldPointDate(hp.releasedAt),
       hp.releasedByName || '-',
@@ -692,6 +701,7 @@ export function HoldPointsPage() {
       {!loadError &&
         (isMobile ? (
           <HoldPointsMobileList
+            projectId={projectId!}
             holdPoints={holdPoints}
             filteredHoldPoints={filteredHoldPoints}
             loading={loading}
@@ -709,11 +719,14 @@ export function HoldPointsPage() {
             onChase={handleChaseHoldPoint}
             onShowQrCode={handleShowQrCode}
             onGenerateEvidence={handleGenerateEvidencePackage}
+            canWithdrawRequest={canWithdrawRequest}
+            onWithdrawRequest={setWithdrawRequestHoldPoint}
             onToggleBatchSelection={handleToggleBatchSelection}
             onClearFilter={handleClearFilter}
           />
         ) : (
           <HoldPointsTable
+            projectId={projectId!}
             holdPoints={holdPoints}
             filteredHoldPoints={filteredHoldPoints}
             loading={loading}
@@ -734,6 +747,8 @@ export function HoldPointsPage() {
             onChase={handleChaseHoldPoint}
             onShowQrCode={handleShowQrCode}
             onGenerateEvidence={handleGenerateEvidencePackage}
+            canWithdrawRequest={canWithdrawRequest}
+            onWithdrawRequest={setWithdrawRequestHoldPoint}
             onToggleBatchSelection={handleToggleBatchSelection}
             onClearFilter={handleClearFilter}
           />
@@ -760,6 +775,14 @@ export function HoldPointsPage() {
           holdPoint={releaseRequestHoldPoint}
           onClose={handleCloseRequestModal}
           onRequested={refreshHoldPoints}
+        />
+      )}
+
+      {withdrawRequestHoldPoint && canWithdrawRequest && (
+        <WithdrawHoldPointRequestDialog
+          holdPoint={withdrawRequestHoldPoint}
+          onClose={() => setWithdrawRequestHoldPoint(null)}
+          onWithdrawn={refreshHoldPoints}
         />
       )}
 

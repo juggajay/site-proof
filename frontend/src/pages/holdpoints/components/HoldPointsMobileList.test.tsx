@@ -82,4 +82,67 @@ describe('HoldPointsMobileList deep-link highlight', () => {
     expect(container.querySelector('[data-deep-linked]')).toBeNull();
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
+
+  it('renders refused and open-condition chips and blocks re-request while the NCR is open', () => {
+    const lifecycleHoldPoints = [
+      buildHoldPoint({
+        id: 'refused',
+        status: 'pending',
+        latestRound: {
+          outcome: 'rejected',
+          decidedAt: '2026-06-02T00:00:00.000Z',
+          decisionReason: 'Repair the failed area.',
+          ncrId: 'ncr-42',
+          ncrNumber: 'NCR-0042',
+          ncrStatus: 'open',
+          openConditionCount: 0,
+        },
+      }),
+      buildHoldPoint({
+        id: 'conditions',
+        status: 'released',
+        latestRound: {
+          outcome: 'released_with_conditions',
+          decidedAt: '2026-06-02T00:00:00.000Z',
+          decisionReason: null,
+          ncrId: null,
+          ncrNumber: null,
+          ncrStatus: null,
+          openConditionCount: 2,
+        },
+      }),
+    ];
+
+    render(
+      <HoldPointsMobileList
+        holdPoints={lifecycleHoldPoints}
+        filteredHoldPoints={lifecycleHoldPoints}
+        loading={false}
+        statusFilter="all"
+        searchQuery=""
+        highlightedHpId={null}
+        copiedHpId={null}
+        generatingPdf={null}
+        chasingHpId={null}
+        batchSelectableHoldPointIds={new Set()}
+        selectedBatchHoldPointIds={new Set()}
+        onCopyLink={vi.fn()}
+        onRequestRelease={vi.fn()}
+        onRecordRelease={vi.fn()}
+        onChase={vi.fn()}
+        onShowQrCode={vi.fn()}
+        onGenerateEvidence={vi.fn()}
+        onToggleBatchSelection={vi.fn()}
+        onClearFilter={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Release refused — NCR-0042 open')).toBeInTheDocument();
+    expect(screen.getByText('Released — 2 conditions open')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Re-request release' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Re-request release' })).toHaveAttribute(
+      'title',
+      'Close the linked NCR before re-requesting release.',
+    );
+  });
 });

@@ -58,6 +58,40 @@ describe('getHoldPointRowState', () => {
     expect(getHoldPointRowState(makeHoldPoint({ status: 'pending' }), false)).toBe('not_requested');
     expect(getHoldPointRowState(makeHoldPoint({ status: 'notified' }), false)).toBe('requested');
     expect(getHoldPointRowState(makeHoldPoint({ status: 'released' }), false)).toBe('released');
+    expect(
+      getHoldPointRowState(
+        makeHoldPoint({
+          status: 'pending',
+          latestRound: {
+            outcome: 'rejected',
+            decidedAt: '2026-09-03T00:00:00.000Z',
+            decisionReason: 'Proof roll failed under the authority review.',
+            ncrId: 'ncr-1',
+            ncrNumber: 'NCR-0042',
+            ncrStatus: 'open',
+            openConditionCount: 0,
+          },
+        }),
+        false,
+      ),
+    ).toBe('refused');
+    expect(
+      getHoldPointRowState(
+        makeHoldPoint({
+          status: 'released',
+          latestRound: {
+            outcome: 'released_with_conditions',
+            decidedAt: '2026-09-03T00:00:00.000Z',
+            decisionReason: null,
+            ncrId: null,
+            ncrNumber: null,
+            ncrStatus: null,
+            openConditionCount: 2,
+          },
+        }),
+        false,
+      ),
+    ).toBe('conditions_open');
   });
 
   it('still reads released from the completion when no hold point is served', () => {
@@ -138,5 +172,48 @@ describe('ITPChecklistHoldPointState', () => {
     const attribution = screen.getByText(/Released by Amos Soo/);
     expect(attribution).toHaveTextContent('Client Company');
     expect(attribution).toHaveTextContent('via secure link');
+  });
+
+  it('renders a refused state and disables re-request while its NCR is open', () => {
+    renderState(
+      makeHoldPoint({
+        latestRound: {
+          outcome: 'rejected',
+          decidedAt: '2026-09-03T00:00:00.000Z',
+          decisionReason: 'The proof roll remains non-compliant.',
+          ncrId: 'ncr-1',
+          ncrNumber: 'NCR-0042',
+          ncrStatus: 'open',
+          openConditionCount: 0,
+        },
+      }),
+    );
+
+    expect(screen.getByText('Release refused — NCR-0042 open')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Re-request release' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Re-request release' })).toHaveAttribute(
+      'title',
+      'Close the linked NCR before re-requesting release.',
+    );
+  });
+
+  it('renders open release conditions distinctly', () => {
+    renderState(
+      makeHoldPoint({
+        status: 'released',
+        latestRound: {
+          outcome: 'released_with_conditions',
+          decidedAt: '2026-09-03T00:00:00.000Z',
+          decisionReason: null,
+          ncrId: null,
+          ncrNumber: null,
+          ncrStatus: null,
+          openConditionCount: 3,
+        },
+      }),
+    );
+
+    expect(screen.getByText('Released — 3 conditions open')).toBeInTheDocument();
+    expect(screen.getByText(/Permission to proceed has been granted/i)).toBeInTheDocument();
   });
 });

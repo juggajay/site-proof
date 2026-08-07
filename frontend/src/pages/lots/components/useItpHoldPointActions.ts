@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 import { canRequestHoldPointRelease } from '@/lib/roles';
 import { queryKeys } from '@/lib/queryKeys';
 import type { HoldPoint } from '@/pages/holdpoints/types';
+import { fetchAllProjectHoldPoints } from '@/pages/holdpoints/holdPointsApi';
 import type { ItpHoldPointState, Lot } from '../types';
 
 // Benchmark T1/T2 — the hold-point affordances the lot ITP checklist puts on
@@ -34,13 +35,44 @@ export function useItpHoldPointActions({
   const [releaseRequestHoldPoint, setReleaseRequestHoldPoint] = useState<HoldPoint | null>(null);
   const [qrHoldPoint, setQrHoldPoint] = useState<{ id: string; description: string } | null>(null);
 
+  // The ITP instance deliberately omits authority-recipient detail for portal
+  // viewers and does not carry latestRound. Internal checklist users join the
+  // project register projection here so refused/conditioned decisions cannot
+  // collapse back into the legacy pending/released display.
+  const { data: registerHoldPoints = [] } = useQuery({
+    queryKey: queryKeys.holdPoints(projectId),
+    queryFn: () => fetchAllProjectHoldPoints(projectId),
+    enabled: Boolean(projectId),
+    staleTime: 30_000,
+    cacheTime: 5 * 60_000,
+  });
+
   const holdPointsByItemId = useMemo(() => {
     const map = new Map<string, ItpHoldPointState>();
     for (const holdPoint of holdPoints ?? []) {
       map.set(holdPoint.itpChecklistItemId, holdPoint);
     }
+    for (const registerHoldPoint of registerHoldPoints) {
+      if (registerHoldPoint.lotId !== lot.id) continue;
+      const existing = map.get(registerHoldPoint.itpChecklistItemId);
+      map.set(registerHoldPoint.itpChecklistItemId, {
+        id: registerHoldPoint.id,
+        itpChecklistItemId: registerHoldPoint.itpChecklistItemId,
+        status: registerHoldPoint.status,
+        scheduledDate: registerHoldPoint.scheduledDate,
+        scheduledTime: existing?.scheduledTime ?? null,
+        notificationSentAt: registerHoldPoint.notificationSentAt,
+        notificationSentTo: existing?.notificationSentTo ?? null,
+        releasedByName: registerHoldPoint.releasedByName,
+        releasedByOrg: registerHoldPoint.releasedByOrg ?? null,
+        releaseMethod: registerHoldPoint.releaseMethod ?? null,
+        releasedAt: registerHoldPoint.releasedAt,
+        releaseNotes: registerHoldPoint.releaseNotes,
+        latestRound: registerHoldPoint.latestRound ?? null,
+      });
+    }
     return map;
-  }, [holdPoints]);
+  }, [holdPoints, lot.id, registerHoldPoints]);
 
   // The request-release sheet is shared with the hold point register, which
   // hands it a register row. From the checklist we only know the lot and the
@@ -62,6 +94,7 @@ export function useItpHoldPointActions({
       releasedAt: null,
       releasedByName: null,
       releaseNotes: null,
+      latestRound: existing?.latestRound ?? null,
       sequenceNumber: 0,
       isCompleted: false,
       isVerified: false,

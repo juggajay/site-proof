@@ -184,6 +184,62 @@ describe('RequestReleaseModal — desktop', () => {
       undefined,
       undefined,
       ['doc-1'],
+      undefined,
+    );
+  });
+
+  it('requires and submits a response to the refusal for a re-request', async () => {
+    useIsMobileMock.mockReturnValue(false);
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const refusedHoldPoint = makeHoldPoint({
+      latestRound: {
+        outcome: 'rejected',
+        decidedAt: '2026-06-02T00:00:00.000Z',
+        decisionReason: 'Correct the failed proof roll.',
+        ncrId: 'ncr-1',
+        ncrNumber: 'NCR-0042',
+        ncrStatus: 'closed',
+        openConditionCount: 0,
+      },
+    });
+
+    render(
+      <RequestReleaseModal
+        holdPoint={refusedHoldPoint}
+        details={makeDetails({ holdPoint: refusedHoldPoint })}
+        loading={false}
+        requesting={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const scheduledDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    fireEvent.change(screen.getByLabelText('Scheduled Date'), {
+      target: { value: scheduledDate },
+    });
+    fireEvent.change(screen.getByLabelText('Scheduled Time'), {
+      target: { value: '09:30' },
+    });
+    expect(screen.getByLabelText(/Response to the refusal/)).toBeRequired();
+    expect(screen.getByRole('button', { name: 'Re-request Release' })).toBeDisabled();
+
+    await user.type(
+      screen.getByLabelText(/Response to the refusal/),
+      'The failed area was undercut and recompacted.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Re-request Release' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      scheduledDate,
+      '09:30',
+      'inspector@example.com',
+      undefined,
+      undefined,
+      [],
+      'The failed area was undercut and recompacted.',
     );
   });
 });

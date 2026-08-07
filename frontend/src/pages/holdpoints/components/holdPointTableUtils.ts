@@ -1,5 +1,7 @@
 import { getCalendarDaysSince } from '@/lib/localDate';
 import type { HoldPoint, StatusFilter } from '../types';
+import { formatHoldPointStatusLabel, getHoldPointStatusKey } from '@/lib/statusLabels';
+import { getHoldPointStatusBadgeClass } from '@/lib/statusColors';
 
 export function formatHoldPointDate(value: string | null | undefined): string {
   if (!value) return '-';
@@ -75,13 +77,8 @@ export function getWaitingDays(
   return Math.max(0, getCalendarDaysSince(since, referenceDate));
 }
 
-export function getStatusBadge(status: string): string {
-  const styles: Record<string, string> = {
-    pending: 'bg-muted text-muted-foreground',
-    notified: 'bg-warning/10 text-warning',
-    released: 'bg-muted text-muted-foreground',
-  };
-  return styles[status] || styles.pending;
+export function getStatusBadge(holdPoint: HoldPoint): string {
+  return getHoldPointStatusBadgeClass(getHoldPointStatusKey(holdPoint));
 }
 
 export function getStatusLabel(status: string): string {
@@ -92,8 +89,14 @@ export function getStatusLabel(status: string): string {
     // Register-only view (StatusFilter), never a backend hold-point status:
     // awaiting release with the notice window elapsed.
     'notice-expired': 'Notice Expired',
+    refused: 'Release Refused',
+    'conditions-open': 'Conditions Open',
   };
   return labels[status] || status;
+}
+
+export function getHoldPointStatusLabel(holdPoint: HoldPoint): string {
+  return formatHoldPointStatusLabel(holdPoint);
 }
 
 /**

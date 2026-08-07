@@ -6,13 +6,15 @@ import type { HoldPoint, StatusFilter } from '../types';
 import {
   buildFilterEmptyStateMessage,
   formatHoldPointDate,
-  getStatusLabel,
+  getHoldPointStatusLabel,
   isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
 import { getReleaseIdentityParts } from '../holdPointReleaseIdentity';
+import { getHoldPointStatusKey } from '@/lib/statusLabels';
 
 interface HoldPointsMobileListProps {
+  projectId?: string;
   holdPoints: HoldPoint[];
   filteredHoldPoints: HoldPoint[];
   loading: boolean;
@@ -31,6 +33,8 @@ interface HoldPointsMobileListProps {
   onChase: (hp: HoldPoint) => void;
   onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  canWithdrawRequest?: boolean;
+  onWithdrawRequest?: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
   onClearFilter: () => void;
 }
@@ -41,6 +45,7 @@ interface HoldPointsMobileListProps {
 // full-width primary action. Reuses the page's existing request/record/chase/
 // evidence handlers and modals — no behavior or permission changes.
 export function HoldPointsMobileList({
+  projectId,
   holdPoints,
   filteredHoldPoints,
   loading,
@@ -58,6 +63,8 @@ export function HoldPointsMobileList({
   onChase,
   onShowQrCode,
   onGenerateEvidence,
+  canWithdrawRequest = false,
+  onWithdrawRequest = () => undefined,
   onToggleBatchSelection,
   onClearFilter,
 }: HoldPointsMobileListProps) {
@@ -119,6 +126,7 @@ export function HoldPointsMobileList({
           >
             <HoldPointMobileCard
               hp={hp}
+              projectId={projectId}
               copiedHpId={copiedHpId}
               generatingPdf={generatingPdf}
               chasingHpId={chasingHpId}
@@ -130,6 +138,8 @@ export function HoldPointsMobileList({
               onChase={onChase}
               onShowQrCode={onShowQrCode}
               onGenerateEvidence={onGenerateEvidence}
+              canWithdrawRequest={canWithdrawRequest}
+              onWithdrawRequest={onWithdrawRequest}
               onToggleBatchSelection={onToggleBatchSelection}
             />
           </div>
@@ -141,6 +151,7 @@ export function HoldPointsMobileList({
 
 interface HoldPointMobileCardProps {
   hp: HoldPoint;
+  projectId?: string;
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
@@ -152,6 +163,8 @@ interface HoldPointMobileCardProps {
   onChase: (hp: HoldPoint) => void;
   onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  canWithdrawRequest: boolean;
+  onWithdrawRequest: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
 }
 
@@ -163,6 +176,7 @@ const statusVariants: Record<string, MobileDataCardStatusVariant> = {
 
 function HoldPointMobileCard({
   hp,
+  projectId,
   copiedHpId,
   generatingPdf,
   chasingHpId,
@@ -174,18 +188,32 @@ function HoldPointMobileCard({
   onChase,
   onShowQrCode,
   onGenerateEvidence,
+  canWithdrawRequest,
+  onWithdrawRequest,
   onToggleBatchSelection,
 }: HoldPointMobileCardProps) {
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
   const isVirtual = hp.id.startsWith('virtual-');
   const releaseIdentity = hp.releasedAt ? getReleaseIdentityParts(hp) : null;
+  const statusKey = getHoldPointStatusKey(hp);
+  const refusalNcrClosed =
+    hp.latestRound?.ncrStatus != null &&
+    ['closed', 'closed_concession'].includes(hp.latestRound.ncrStatus);
 
   return (
     <MobileDataCard
       title={hp.lotNumber}
       subtitle={hp.description}
-      status={{ label: getStatusLabel(hp.status), variant: statusVariants[hp.status] ?? 'default' }}
+      status={{
+        label: getHoldPointStatusLabel(hp),
+        variant:
+          statusKey === 'release_refused'
+            ? 'error'
+            : statusKey === 'released_with_conditions'
+              ? 'warning'
+              : (statusVariants[hp.status] ?? 'default'),
+      }}
       className={overdue ? 'border-destructive' : undefined}
       fields={[
         ...(hp.notificationSentAt
@@ -258,10 +286,37 @@ function HoldPointMobileCard({
             <span>Batch request</span>
           </label>
 
-          {hp.status === 'pending' && (
+          {statusKey === 'pending' && (
             <Button size="lg" className="w-full" onClick={() => onRequestRelease(hp)}>
               Request Release
             </Button>
+          )}
+
+          {statusKey === 'release_refused' && (
+            <>
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={() => onRequestRelease(hp)}
+                disabled={!refusalNcrClosed}
+                title={
+                  refusalNcrClosed
+                    ? undefined
+                    : 'Close the linked NCR before re-requesting release.'
+                }
+              >
+                Re-request release
+              </Button>
+              {projectId && hp.latestRound?.ncrId && (
+                <Button asChild variant="outline" size="lg" className="w-full">
+                  <a
+                    href={`/projects/${encodeURIComponent(projectId)}/ncr?ncr=${encodeURIComponent(hp.latestRound.ncrId)}`}
+                  >
+                    Open {hp.latestRound.ncrNumber || 'linked NCR'}
+                  </a>
+                </Button>
+              )}
+            </>
           )}
 
           {hp.status === 'notified' && !isVirtual && (
@@ -303,6 +358,16 @@ function HoldPointMobileCard({
                   </>
                 )}
               </Button>
+              {canWithdrawRequest && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full text-destructive"
+                  onClick={() => onWithdrawRequest(hp)}
+                >
+                  Withdraw request
+                </Button>
+              )}
             </>
           )}
 

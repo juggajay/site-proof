@@ -167,6 +167,32 @@ describe('LotReadinessPanel', () => {
     );
   });
 
+  it('renders the backend message for open hold-point conditions without code-specific handling', () => {
+    const withOpenConditions = {
+      ...readiness,
+      conformance: {
+        ...readiness.conformance,
+        blockers: [
+          {
+            code: 'hp_conditions_open',
+            severity: 'blocker',
+            area: 'hold_point',
+            title: 'Hold point conditions remain open',
+            detail: 'HP-7 has 2 release conditions still requiring satisfaction.',
+            blocksAction: true,
+          },
+        ],
+      },
+    } as LotEvidenceReadiness;
+
+    renderPanel({ readiness: withOpenConditions });
+
+    expect(screen.getByText('Hold point conditions remain open')).toBeInTheDocument();
+    expect(
+      screen.getByText(/HP-7 has 2 release conditions still requiring satisfaction/),
+    ).toBeInTheDocument();
+  });
+
   const readinessWithOutstandingTests = {
     ...readiness,
     conformance: {

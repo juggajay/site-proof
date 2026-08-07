@@ -574,6 +574,12 @@ describe('pdfGenerator characterization', () => {
         'Template: Earthworks ITP - Subgrade',
         'Completion: 4/4 items (100%)',
         'Hold Points: 2/2 released',
+        '  Subgrade proof roll — immutable decision terms',
+        '    Round 1: Release refused',
+        '    Reason: Soft spot remained at chainage 220.',
+        '    Round 2: Permission to proceed granted with conditions (a CIVOS convention)',
+        '    Condition 1 [SATISFIED by Jordan Surveyor at 20 May 2026, 3:00 pm]: Lodge the final survey.',
+        '    Condition 2 [OPEN]: Submit the compaction retest.',
         'Test Results',
         'Total: 3 | Passed: 3 | Pending: 0 | Failed: 0',
         'Conformance',
@@ -609,6 +615,7 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).toContain('Concrete Slump: 80 mm');
     expect(textContent).toContain('Pipe Joint: pending');
     expect(textContent).toContain('NCR-0021 (minor): Open');
+    expect(textContent).toContain('Condition status as at 28 May 2026');
 
     expect(text).toEqual(
       expect.arrayContaining([
@@ -911,6 +918,18 @@ describe('pdfGenerator characterization', () => {
     // Date labels render (locale-formatted values intentionally not asserted)
     expect(textContent).toContain('Scheduled Date:');
     expect(textContent).toContain('Released:');
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'Decision rounds',
+        'Round 1: Release refused',
+        'Reason: Proof roll identified rutting beside chainage 240.',
+        'Round 2: Permission to proceed granted with conditions (a CIVOS convention)',
+        'Decided by: Sam Supervisor, Client Superintendent Org at 27 May 2026, 4:30 pm',
+        'Condition 1 [SATISFIED by Jordan Surveyor at 27 May 2026, 6:00 pm]: Upload the final level survey.',
+        'Condition 2 [OPEN]: Provide the superintendent with the compaction retest.',
+      ]),
+    );
+    expect(textContent).toContain('Condition status as at 28 May 2026');
     // Per-page document footer identity.
     expect(textContent).toContain('Page 1 of');
     // Checklist accountability second line (who verified).

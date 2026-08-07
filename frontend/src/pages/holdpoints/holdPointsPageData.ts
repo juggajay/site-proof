@@ -7,6 +7,7 @@ import type {
   StatusFilter,
 } from './types';
 import { getWaitingSince, isNoticeExpired, isOverdue } from './components/holdPointTableUtils';
+import { getHoldPointStatusKey } from '@/lib/statusLabels';
 
 export interface HoldPointChartData {
   releasesOverTime: { date: string; releases: number }[];
@@ -20,6 +21,8 @@ const STATUS_FILTER_VALUES: readonly StatusFilter[] = [
   'pending',
   'notified',
   'released',
+  'refused',
+  'conditions-open',
   'notice-expired',
 ];
 
@@ -64,8 +67,18 @@ export function filterHoldPoints(
 
     if (statusFilter === 'notice-expired') {
       if (!isNoticeExpired(hp, referenceDate)) return false;
-    } else if (statusFilter !== 'all' && hp.status !== statusFilter) {
-      return false;
+    } else if (statusFilter !== 'all') {
+      const displayStatus = getHoldPointStatusKey(hp);
+      if (statusFilter === 'refused' && displayStatus !== 'release_refused') return false;
+      if (statusFilter === 'conditions-open' && displayStatus !== 'released_with_conditions') {
+        return false;
+      }
+      if (
+        !['refused', 'conditions-open'].includes(statusFilter) &&
+        displayStatus !== statusFilter
+      ) {
+        return false;
+      }
     }
 
     if (query) {
@@ -135,7 +148,7 @@ export function sortHoldPoints(
       case 'lot':
         return direction * compareLotOrder(a, b);
       case 'status':
-        return direction * a.status.localeCompare(b.status);
+        return direction * getHoldPointStatusKey(a).localeCompare(getHoldPointStatusKey(b));
       case 'waiting': {
         // More days waited === older start timestamp, so ascending days is
         // descending timestamp.
@@ -179,8 +192,12 @@ export function buildHoldPointStats(
 
   return {
     total: holdPoints.length,
-    pending: holdPoints.filter((hp) => hp.status === 'pending').length,
+    pending: holdPoints.filter((hp) => getHoldPointStatusKey(hp) === 'pending').length,
     notified: holdPoints.filter((hp) => hp.status === 'notified').length,
+    refused: holdPoints.filter((hp) => getHoldPointStatusKey(hp) === 'release_refused').length,
+    conditionsOpen: holdPoints.filter(
+      (hp) => getHoldPointStatusKey(hp) === 'released_with_conditions',
+    ).length,
     releasedThisWeek: holdPoints.filter((hp) => {
       if (hp.status !== 'released' || !hp.releasedAt) return false;
       const releasedDate = new Date(hp.releasedAt);

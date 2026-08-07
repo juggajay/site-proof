@@ -4,6 +4,7 @@ import { getJsPDF, pinPdfIdentity } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
 import type { HPEvidencePackageData, HPPackageOptions } from './types';
+import { holdPointDecisionRoundLines } from './holdPointDecisionRoundLines';
 
 function formatReleaseMethod(method: string): string {
   return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
@@ -223,6 +224,25 @@ export async function generateHPEvidencePackagePDF(
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     yPos += 6;
+  }
+
+  const evidenceGeneratedAt = new Date(data.generatedAt);
+  const decisionRoundLines = holdPointDecisionRoundLines(
+    data.holdPoint.decisionRounds,
+    Number.isFinite(evidenceGeneratedAt.getTime()) ? evidenceGeneratedAt : generatedAt,
+  );
+  if (decisionRoundLines.length > 0) {
+    yPos += 3;
+    decisionRoundLines.forEach((line, index) => {
+      const wrapped = doc.splitTextToSize(line, contentWidth) as string[];
+      checkPageBreak(wrapped.length * 5 + 2);
+      doc.setFont('helvetica', index === 0 || line.startsWith('Round ') ? 'bold' : 'normal');
+      doc.setFontSize(index === 0 ? 11 : 9);
+      doc.text(wrapped, margin, yPos);
+      yPos += wrapped.length * 5;
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
   }
 
   yPos += 5;
