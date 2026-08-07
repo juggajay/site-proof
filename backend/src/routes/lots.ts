@@ -25,6 +25,7 @@ import { lotSubcontractorAssignmentsRouter } from './lots/subcontractorAssignmen
 import { lotBulkMutationRouter } from './lots/bulkMutationRoutes.js';
 import { lotQualityRouter } from './lots/qualityRoutes.js';
 import { lotFolioRouter } from './lots/folioRoutes.js';
+import { ifcExportRouter } from './lots/ifcExportRoutes.js';
 import { emitLotWebhookEvent } from './lots/webhookEvents.js';
 
 export const lotsRouter = Router();
@@ -43,6 +44,9 @@ lotsRouter.use(lotGeometryRouter);
 // Three- and two-segment paths, so like the geometry router they never collide
 // with the read router's dynamic `/:id`. See ./lots/folioRoutes.ts
 lotsRouter.use(lotFolioRouter);
+
+// P1a DRAFT IFC export (GET /:id/exports/ifc-draft), parent-authenticated above.
+lotsRouter.use(ifcExportRouter);
 
 // Lot create routes (POST /, /bulk, /:id/clone) — mounted after read routes, before update/delete/bulk routes. See ./lots/createRoutes.ts
 lotsRouter.use(lotCreateRouter);
