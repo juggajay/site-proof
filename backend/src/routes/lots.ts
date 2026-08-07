@@ -5,6 +5,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { activitySlugForWrite } from '../lib/activityTaxonomy.js';
+import { transitionLotStatus } from '../lib/lotStatusTransition.js';
 import { assertLotSufficiencyAttributes } from '../lib/readiness/sufficiency/lotAttributeValidation.js';
 import { updateLotSchema } from './lots/validation.js';
 import { canViewLotBudget, requireProjectRole } from './lots/access.js';
@@ -258,10 +259,18 @@ lotsRouter.patch(
       updateData.assignedSubcontractorId = null;
     }
 
-    const updatedLot = await prisma.lot.update({
-      where: { id },
-      data: updateData,
-      select: {
+    const auditUpdateData = { ...updateData };
+    delete updateData.status;
+    const updatedLot = await prisma.$transaction(async (tx) => {
+      if (status !== undefined) {
+        await transitionLotStatus(tx, {
+          lotId: id,
+          to: status,
+          event: { actorId: user.id, source: 'user' },
+        });
+      }
+
+      const select = {
         id: true,
         lotNumber: true,
         description: true,
@@ -276,10 +285,14 @@ lotsRouter.patch(
         budgetAmount: true,
         assignedSubcontractorId: true,
         updatedAt: true,
-      },
+      } as const;
+      if (Object.keys(updateData).length > 0) {
+        return tx.lot.update({ where: { id }, data: updateData, select });
+      }
+      return tx.lot.findUniqueOrThrow({ where: { id }, select });
     });
 
-    const changedFields = Object.keys(updateData).sort();
+    const changedFields = Object.keys(auditUpdateData).sort();
     // C1 (F7): scale, quantity and activity classification all move the required
     // test count, so the audit record carries from/to — same shape as the
     // existing status/budget pairs. Quantity is logged as a value+unit pair
@@ -310,10 +323,10 @@ lotsRouter.patch(
         changes: {
           lotNumber: updatedLot.lotNumber,
           fields: changedFields,
-          ...(updateData.status !== undefined
+          ...(auditUpdateData.status !== undefined
             ? { status: { from: lot.status, to: updatedLot.status } }
             : {}),
-          ...(updateData.budgetAmount !== undefined
+          ...(auditUpdateData.budgetAmount !== undefined
             ? {
                 budgetAmount: {
                   from: lot.budgetAmount != null ? Number(lot.budgetAmount) : null,

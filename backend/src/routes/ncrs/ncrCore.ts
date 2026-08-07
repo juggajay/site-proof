@@ -7,6 +7,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import { transitionLotStatusesWhere } from '../../lib/lotStatusTransition.js';
 import {
   canReadNcr,
   NCR_CREATE_ROLES,
@@ -386,13 +387,19 @@ ncrCoreRouter.post(
 
           // Update affected lots status in the same transaction as the NCR record.
           if (ncrLotIds.length) {
-            await tx.lot.updateMany({
+            await transitionLotStatusesWhere(tx, {
               where: {
                 id: { in: ncrLotIds },
                 projectId,
                 status: { notIn: ['conformed', 'claimed'] },
               },
-              data: { status: 'ncr_raised' },
+              to: 'ncr_raised',
+              event: {
+                actorId: user.userId,
+                source: 'system',
+                sourceEntityType: 'ncr',
+                sourceEntityId: createdNcr.id,
+              },
             });
           }
 

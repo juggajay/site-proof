@@ -30,6 +30,7 @@
     "db:backfill-activity-slug": "tsx scripts/backfill-lot-activity-slug.ts",
     "db:backfill-sent-to-lab": "tsx scripts/backfill-sent-to-lab.ts",
     "db:backfill-hp-decision-rounds": "tsx scripts/backfill-hp-decision-rounds.ts",
+    "db:backfill-lot-status-events": "tsx scripts/backfill-lot-status-events.ts",
     "db:backfill-itp-snapshots": "tsx scripts/backfill-itp-snapshots.ts",
     "db:backfill-ncr-checklist-items": "tsx scripts/backfill-ncr-checklist-items.ts",
     "db:classify-test-types": "tsx scripts/classify-test-types.ts",

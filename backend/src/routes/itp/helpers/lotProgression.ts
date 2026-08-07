@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma.js';
 import { logError } from '../../../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../../../lib/auditLog.js';
 import { isReleaseGatedChecklistItem } from '../../../lib/holdPointReleaseGating.js';
+import { transitionLotStatus } from '../../../lib/lotStatusTransition.js';
 import { OPEN_HOLD_POINT_CONDITIONS_WHERE } from '../../../lib/readiness/predicates.js';
 import { getChecklistItemsForInstance, type ChecklistItem } from './templateSnapshot.js';
 
@@ -150,9 +151,18 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
 
     // Update lot status if changed
     if (newStatus && newStatus !== lot.status) {
-      await prisma.lot.update({
-        where: { id: lot.id },
-        data: { status: newStatus },
+      await prisma.$transaction(async (tx) => {
+        await transitionLotStatus(tx, {
+          lotId: lot.id,
+          to: newStatus,
+          event: {
+            actorId: null,
+            source: 'system',
+            sourceEntityType: 'itp_instance',
+            sourceEntityId: instance.id,
+            metadata: { auto: true },
+          },
+        });
       });
       // Audit the transition so the map time scrubber can replay it. No user is
       // in scope here (auto-progression); AuditLog.userId is nullable.
