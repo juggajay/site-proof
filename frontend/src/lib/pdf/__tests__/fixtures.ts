@@ -1,4 +1,9 @@
-export { mixedStateChecklistFixture } from './fixtures/checklistPdfFixture';
+export {
+  emptyChecklistFixture,
+  longChecklistFixture,
+  mixedStateChecklistFixture,
+  provenanceChecklistFixture,
+} from './fixtures/checklistPdfFixture';
 export { dashboardPdfFixture } from './fixtures/dashboardFixture';
 export { passingTestCertificateFixture } from './fixtures/testCertificateFixture';
 export { majorNcrDetailFixture } from './fixtures/ncrDetailFixture';
