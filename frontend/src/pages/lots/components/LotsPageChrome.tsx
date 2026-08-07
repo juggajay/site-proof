@@ -1,35 +1,11 @@
-// Presentation-only pieces of the lot register page: the print-media header and
-// footer, the desktop table skeleton, and the load-failure banner. Split out of
-// LotsPage.tsx — none of them touch register state, so keeping them inline just
-// buried the page's actual structure.
+// Presentation-only pieces of the lot register page: the desktop table skeleton
+// and the load-failure banner. Split out of LotsPage.tsx — neither touches
+// register state, so keeping them inline just buried the page's structure.
+//
+// The print-media report header and footer that used to live here went with the
+// "Print Register" button: with no screen-print action, they dressed an output
+// the product no longer offers. Paper comes from Export CSV or a generated PDF.
 import { Button } from '@/components/ui/button';
-
-/** Report chrome that only exists on the printed page. */
-export function LotsPrintHeader({ projectName }: { projectName: string }) {
-  return (
-    <>
-      <div className="hidden print:block report-header mb-6 text-center">
-        <h1 className="text-2xl font-bold mb-2">Lot Register</h1>
-        {projectName && <p className="text-muted-foreground mb-1">{projectName}</p>}
-        <div className="text-sm text-muted-foreground">
-          Generated:{' '}
-          {new Date().toLocaleDateString('en-AU', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </div>
-        <div className="text-xs text-muted-foreground mt-2">CIVOS - Quality Management System</div>
-      </div>
-
-      <div className="hidden print:block report-footer fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground py-2 bg-card border-t">
-        &copy; {new Date().getFullYear()} CIVOS - Confidential
-      </div>
-    </>
-  );
-}
 
 /**
  * Desktop table skeleton. Mobile and card view render LotMobileList with

@@ -19,6 +19,10 @@ export interface ChecklistItem {
   verificationMethod?: string;
   acceptanceCriteria?: string;
   testType?: string;
+  // Where every seeder parks its clause citation. No editor input sets it, so
+  // it exists here only to survive the edit round-trip — PATCH replaces items
+  // wholesale, so a field the form drops is written back as null.
+  notes?: string | null;
   order: number;
 }
 

@@ -3517,10 +3517,30 @@ describe('Progress Claims API', () => {
         expect(overridden.body.lots[0].conformanceOverrideReason).toBe(
           'Client accepted as-built deviation',
         );
+
+        // The pack is generated after the lot is claimed, which is the only
+        // state it is ever generated in. The override marker lives on the lot
+        // and must survive that transition — reading it off `status` would
+        // lose it exactly when the document is produced.
+        await prisma.lot.update({
+          where: { id: evidenceLotId },
+          data: { status: 'claimed' },
+        });
+        const claimed = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(claimed.status).toBe(200);
+        expect(claimed.body.lots[0].status).toBe('claimed');
+        expect(claimed.body.lots[0].conformanceOverriddenAt).toBe(overriddenAt.toISOString());
+        expect(claimed.body.lots[0].conformanceOverrideReason).toBe(
+          'Client accepted as-built deviation',
+        );
       } finally {
         await prisma.lot.update({
           where: { id: evidenceLotId },
           data: {
+            status: 'conformed',
             conformanceOverriddenAt: null,
             conformanceOverriddenById: null,
             conformanceOverrideReason: null,
