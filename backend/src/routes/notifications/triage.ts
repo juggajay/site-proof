@@ -47,6 +47,8 @@ export const NOTIFICATION_TRIAGE: Record<string, 'needs_action' | 'fyi'> = {
   // Hold points.
   hold_point_escalation: 'needs_action',
   hold_point_release: 'fyi',
+  hold_point_rejection: 'needs_action',
+  hold_point_conditional_release: 'needs_action',
 
   // ITP.
   itp_rejection: 'needs_action',

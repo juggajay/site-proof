@@ -10,6 +10,7 @@ import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../l
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildSufficiencySnapshotV1 } from '../../lib/readiness/sufficiency/snapshot.js';
+import { CLOSED_NCR_STATUSES } from '../../lib/readiness/predicates.js';
 import { resolveHoldPointReleaseSufficiency } from './releaseDecision.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
@@ -26,6 +27,7 @@ import {
   nullableScheduledDateSchema,
   nullableScheduledTimeSchema,
   nullableTrimmedStringSchema,
+  optionalTrimmedStringSchema,
   requiredIdSchema,
   requestReleaseSchema,
   requiredTrimmedStringSchema,
@@ -53,7 +55,6 @@ import { attachHoldPointEvidenceDocuments } from './evidenceAttachments.js';
 import {
   createDecisionRoundForReleaseRequest,
   isLifecycleTerminal,
-  releaseRequestAllowed,
   withdrawCurrentDecisionRound,
 } from './roundCore.js';
 
@@ -95,6 +96,10 @@ export const holdPointRequestReleaseRouter = Router();
 
 const batchRequestReleaseItemSchema = z.object({
   itpChecklistItemId: requiredIdSchema('itpChecklistItemId'),
+  responseToPriorRejection: optionalTrimmedStringSchema(
+    MAX_NOTE_LENGTH,
+    'responseToPriorRejection',
+  ),
   evidenceDocumentIds: z
     .array(requiredIdSchema('evidenceDocumentIds'))
     .max(
@@ -169,6 +174,7 @@ async function updateExistingHoldPointForReleaseRequest(
   tx: Prisma.TransactionClient,
   holdPointId: string,
   data: HoldPointRequestStateData,
+  responseToPriorRejection?: string,
 ) {
   const currentHoldPoint = await tx.holdPoint.findUnique({
     where: { id: holdPointId },
@@ -183,10 +189,36 @@ async function updateExistingHoldPointForReleaseRequest(
     rejectTerminalHoldPointRequest(currentHoldPoint.status);
   }
 
-  if (!(await releaseRequestAllowed(currentHoldPoint, tx))) {
-    throw AppError.badRequest(
-      'This hold point cannot be requested again until its rejection NCR is closed.',
-    );
+  let responseForNewRound: string | null = null;
+  if (currentHoldPoint.status === 'pending') {
+    const latestRound = await tx.holdPointDecisionRound.findFirst({
+      where: { holdPointId },
+      orderBy: { roundNumber: 'desc' },
+      select: {
+        outcome: true,
+        withdrawnAt: true,
+        linkedNcr: { select: { status: true } },
+      },
+    });
+
+    if (latestRound && !latestRound.withdrawnAt) {
+      if (
+        latestRound.outcome !== 'rejected' ||
+        !latestRound.linkedNcr ||
+        !CLOSED_NCR_STATUSES.includes(latestRound.linkedNcr.status)
+      ) {
+        throw AppError.badRequest(
+          'This hold point cannot be requested again until its rejection NCR is closed.',
+        );
+      }
+
+      if (!responseToPriorRejection) {
+        throw AppError.badRequest(
+          'responseToPriorRejection is required when re-requesting a rejected hold point.',
+        );
+      }
+      responseForNewRound = responseToPriorRejection;
+    }
   }
 
   const updateResult = await tx.holdPoint.updateMany({
@@ -219,7 +251,7 @@ async function updateExistingHoldPointForReleaseRequest(
     throw AppError.notFound('Hold point');
   }
 
-  return savedHoldPoint;
+  return { holdPoint: savedHoldPoint, responseToPriorRejection: responseForNewRound };
 }
 
 function formatScheduledDateForEmail(scheduledDateValue: Date | null) {
@@ -411,13 +443,17 @@ holdPointRequestReleaseRouter.post(
 
       for (const preparedItem of preparedItems) {
         let savedHoldPoint;
+        let responseToPriorRejection: string | null = null;
 
         if (preparedItem.existingHoldPoint) {
-          savedHoldPoint = await updateExistingHoldPointForReleaseRequest(
+          const updated = await updateExistingHoldPointForReleaseRequest(
             tx,
             preparedItem.existingHoldPoint.id,
             data,
+            preparedItem.itemRequest.responseToPriorRejection,
           );
+          savedHoldPoint = updated.holdPoint;
+          responseToPriorRejection = updated.responseToPriorRejection;
         } else {
           savedHoldPoint = await tx.holdPoint.create({
             data: {
@@ -442,6 +478,12 @@ holdPointRequestReleaseRouter.post(
             name: recipient.fullName,
           },
         });
+        if (responseToPriorRejection) {
+          await tx.holdPointDecisionRound.update({
+            where: { id: decisionRound.id },
+            data: { responseToPriorRejection },
+          });
+        }
 
         await tx.holdPointReleaseToken.deleteMany({
           where: {
@@ -620,6 +662,7 @@ holdPointRequestReleaseRouter.post(
       evidenceDocumentIds,
       noticePeriodOverride,
       noticePeriodOverrideReason,
+      responseToPriorRejection,
     } = parseResult.data;
     const scheduledDateValue = parseScheduledDateInput(scheduledDate);
     const notificationEmails = parseNotificationEmailList(notificationSentTo);
@@ -897,6 +940,7 @@ holdPointRequestReleaseRouter.post(
       });
 
       let savedHoldPoint;
+      let responseForNewRound: string | null = null;
 
       if (lockedHoldPoint) {
         if (!existingHoldPoint) {
@@ -905,11 +949,14 @@ holdPointRequestReleaseRouter.post(
           // token / sending a second superintendent email.
           throw AppError.conflict('A release request for this hold point is already in progress.');
         }
-        savedHoldPoint = await updateExistingHoldPointForReleaseRequest(
+        const updated = await updateExistingHoldPointForReleaseRequest(
           tx,
           lockedHoldPoint.id,
           data,
+          responseToPriorRejection,
         );
+        savedHoldPoint = updated.holdPoint;
+        responseForNewRound = updated.responseToPriorRejection;
       } else {
         savedHoldPoint = await tx.holdPoint.create({
           data: {
@@ -942,6 +989,12 @@ holdPointRequestReleaseRouter.post(
             name: primaryRecipient.fullName,
           },
         });
+        if (responseForNewRound) {
+          await tx.holdPointDecisionRound.update({
+            where: { id: decisionRound.id },
+            data: { responseToPriorRejection: responseForNewRound },
+          });
+        }
 
         await tx.holdPointReleaseToken.createMany({
           data: releaseTokenEntries.map((recipient) => ({
@@ -1115,7 +1168,7 @@ holdPointRequestReleaseRouter.post(
             userId: req.user!.userId,
             entityType: 'hold_point',
             entityId: holdPointId,
-            action: 'hp_request_withdrawn',
+            action: AuditAction.HP_REQUEST_WITHDRAWN,
             changes: {
               decisionRoundId: roundId,
               reason: parseResult.data.reason,

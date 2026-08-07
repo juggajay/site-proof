@@ -18,7 +18,6 @@ import {
   requireProjectRole,
   type AuthenticatedUser,
 } from './access.js';
-import { HP_SUPERINTENDENT_RELEASE_ROLES } from './superintendentRecipients.js';
 import {
   buildHoldPointReleaseEmailNotification,
   buildHoldPointReleaseNotifications,
@@ -50,6 +49,7 @@ import {
   holdPointReleaseSnapshots,
   resolveHoldPointReleaseSufficiency,
 } from './releaseDecision.js';
+import { decisionEligible } from './roundCore.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -66,12 +66,14 @@ const HP_RELEASE_ROLES = [...HP_REQUEST_ROLES, 'superintendent'];
 
 type ExistingHoldPointForRelease = {
   status: string;
+  authorityClass: string;
   lotId: string;
   lot: {
     id: string;
     projectId: string;
     project: {
       settings: string | null;
+      hpInternalReleaserIds: string[];
     };
   };
 };
@@ -105,19 +107,6 @@ async function loadReleaseEvidenceDocumentForHoldPoint(
   return document;
 }
 
-function getHoldPointApprovalRequirement(settings: string | null): string {
-  if (!settings) {
-    return 'any';
-  }
-
-  try {
-    const parsed = JSON.parse(settings) as { hpApprovalRequirement?: string };
-    return parsed.hpApprovalRequirement || 'any';
-  } catch (_e) {
-    return 'any';
-  }
-}
-
 async function requireHoldPointReleaseAccess(
   holdPoint: ExistingHoldPointForRelease,
   user: AuthenticatedUser,
@@ -131,12 +120,16 @@ async function requireHoldPointReleaseAccess(
     { requireWritable: true },
   );
 
-  if (getHoldPointApprovalRequirement(holdPoint.lot.project.settings) === 'superintendent') {
-    await requireProjectRole(
-      holdPoint.lot.projectId,
-      user,
-      HP_SUPERINTENDENT_RELEASE_ROLES,
-      'This project requires superintendent approval to release hold points.',
+  if (holdPoint.authorityClass === 'principal') {
+    throw AppError.forbidden(
+      'Principal-authority hold points can only be released through the secure release-link flow.',
+    );
+  }
+
+  const nominatedReleaserIds = holdPoint.lot.project.hpInternalReleaserIds;
+  if (nominatedReleaserIds.length > 0 && !nominatedReleaserIds.includes(user.userId)) {
+    throw AppError.forbidden(
+      'You are not a nominated internal releaser for this hold point. Use the release-link flow.',
     );
   }
 }
@@ -171,7 +164,7 @@ async function evaluateAuthenticatedHoldPointRelease(
 ) {
   const current = await tx.holdPoint.findUnique({
     where: { id },
-    select: { status: true, lotId: true, itpChecklistItemId: true },
+    select: { status: true, lotId: true, itpChecklistItemId: true, currentRoundId: true },
   });
 
   if (!current) {
@@ -180,6 +173,16 @@ async function evaluateAuthenticatedHoldPointRelease(
 
   assertHoldPointNotReleased(current);
   assertHoldPointReleaseRequested(current);
+
+  if (current.currentRoundId) {
+    const round = await tx.holdPointDecisionRound.findUnique({
+      where: { id: current.currentRoundId },
+      select: { id: true, outcome: true, withdrawnAt: true },
+    });
+    if (!decisionEligible(current, round)) {
+      throw AppError.badRequest('This release request has already been decided or withdrawn.');
+    }
+  }
 
   const itpInstance = await tx.iTPInstance.findUnique({
     where: { lotId: current.lotId },
@@ -202,6 +205,7 @@ async function evaluateAuthenticatedHoldPointRelease(
   return {
     ...(await evaluateHoldPointReleaseReadiness(tx, [id], current.lotId, sufficiency)),
     itpInstanceId: itpInstance?.id ?? null,
+    decisionRoundId: current.currentRoundId,
   };
 }
 
@@ -299,10 +303,31 @@ holdPointActionRouter.post(
       // The existing optimistic guard stays as the cheap second line inside the
       // transaction.
       mutate: async (tx, evaluation) => {
+        if (evaluation.decisionRoundId) {
+          const roundTransition = await tx.holdPointDecisionRound.updateMany({
+            where: { id: evaluation.decisionRoundId, outcome: null, withdrawnAt: null },
+            data: {
+              outcome: 'released',
+              decidedAt: releasedAt,
+              decidedByName: releasedByName || null,
+              decidedByOrg: releasedByOrg || null,
+              decisionReason: releaseNotes || null,
+              decisionMethod: 'authenticated',
+              signatureUrl: signatureDataUrl || null,
+            },
+          });
+          if (roundTransition.count !== 1) {
+            throw AppError.badRequest(
+              'This release request has already been decided or withdrawn.',
+            );
+          }
+        }
+
         const releaseTransition = await tx.holdPoint.updateMany({
           where: {
             id,
-            status: { not: 'released' },
+            status: 'notified',
+            ...(evaluation.decisionRoundId ? { currentRoundId: evaluation.decisionRoundId } : {}),
           },
           data: {
             status: 'released',
