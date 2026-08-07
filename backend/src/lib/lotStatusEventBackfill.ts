@@ -1,9 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 
-import {
-  lotStatusEventsFromAudit,
-  type LotStatusEvent as TimelineEvent,
-} from '../routes/lots/statusTimeline.js';
+import type { LotStatusEvent as TimelineEvent } from '../routes/lots/statusTimeline.js';
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_SAMPLE_SIZE = 10;
@@ -62,11 +59,50 @@ function pairKey(lotId: string, auditRowId: string): string {
 }
 
 function deriveEvents(rows: BackfillAuditRow[]): DerivedEvent[] {
-  return rows.flatMap((row) =>
-    Array.from(lotStatusEventsFromAudit([row]).entries()).flatMap(([lotId, events]) =>
-      events.map((event) => ({ lotId, row, event })),
-    ),
-  );
+  return rows.flatMap((row) => {
+    if (!row.changes) return [];
+    let changes: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(row.changes);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+      changes = parsed as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+
+    if (row.action === 'claim_created') {
+      const lotIds = changes.fullyClaimedLotIds;
+      if (!Array.isArray(lotIds)) return [];
+      return lotIds
+        .filter((lotId): lotId is string => typeof lotId === 'string')
+        .map((lotId) => ({
+          lotId,
+          row,
+          event: {
+            at: row.createdAt.toISOString(),
+            from: 'conformed',
+            to: 'claimed',
+          },
+        }));
+    }
+
+    const status = changes.status;
+    if (!status || typeof status !== 'object' || Array.isArray(status)) return [];
+    const to = (status as Record<string, unknown>).to;
+    if (typeof to !== 'string') return [];
+    const from = (status as Record<string, unknown>).from;
+    return [
+      {
+        lotId: row.entityId,
+        row,
+        event: {
+          at: row.createdAt.toISOString(),
+          from: typeof from === 'string' ? from : null,
+          to,
+        },
+      },
+    ];
+  });
 }
 
 async function loadAuditRows(

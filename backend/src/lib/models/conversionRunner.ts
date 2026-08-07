@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { pipeline } from 'node:stream/promises';
 
 import { IfcImporter } from '@thatopen/fragments';
+import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../prisma.js';
 import { logError, logInfo, logWarn } from '../serverLogger.js';
@@ -15,6 +16,11 @@ import {
   HEARTBEAT_INTERVAL_MS,
   heartbeatVersion,
 } from './conversionLease.js';
+import {
+  extractElements,
+  type ElementExtractionResult,
+  type ExtractedElement,
+} from './elementExtraction.js';
 import { fragmentObjectRef, sourceObjectRef, type ModelObjectStore } from './modelObjectStore.js';
 
 export const CONVERTER_VERSION = 'fragments@3.4.7+web-ifc@0.0.77';
@@ -36,7 +42,36 @@ export interface ConversionRunnerOptions {
   readonly client?: PrismaClientLike;
   readonly heartbeatIntervalMs?: number;
   readonly convert?: (source: Buffer) => Promise<Uint8Array>;
+  readonly extract?: (source: Buffer) => Promise<ElementExtractionResult>;
   readonly now?: () => Date;
+}
+
+const ELEMENT_WRITE_CHUNK_SIZE = 1_000;
+
+async function replaceElementIndex(
+  client: Prisma.TransactionClient,
+  versionId: string,
+  elements: readonly ExtractedElement[],
+): Promise<void> {
+  await client.modelElement.deleteMany({ where: { versionId } });
+  for (let offset = 0; offset < elements.length; offset += ELEMENT_WRITE_CHUNK_SIZE) {
+    await client.modelElement.createMany({
+      data: elements.slice(offset, offset + ELEMENT_WRITE_CHUNK_SIZE).map((element) => ({
+        versionId,
+        ...element,
+      })),
+    });
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 500);
+}
+
+function cachedDiagnosticCount(diagnostics: unknown, key: string): number {
+  if (!diagnostics || typeof diagnostics !== 'object' || Array.isArray(diagnostics)) return 0;
+  const value = (diagnostics as Record<string, unknown>)[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 export async function convertIfcBuffer(source: Buffer): Promise<Uint8Array> {
@@ -110,13 +145,47 @@ export async function runNextConversion(
       if (cacheHit.fragStorageRef === cacheRef) {
         await options.store.copy(cacheRef, destinationRef);
         if (fencedOut) return 'fenced_out';
+        const diagnostics: Record<string, string | number> = {
+          cacheHitFromVersionId: cacheHit.id,
+        };
+        try {
+          const cachedElements = await client.modelElement.findMany({
+            where: { versionId: cacheHit.id },
+            select: {
+              ifcGuid: true,
+              name: true,
+              category: true,
+              lotNumberValue: true,
+              objectCode: true,
+            },
+          });
+          await client.$transaction((tx) => replaceElementIndex(tx, version.id, cachedElements));
+          diagnostics.elementCount = cachedElements.length;
+          diagnostics.skippedMissingGuid = cachedDiagnosticCount(
+            cacheHit.diagnostics,
+            'skippedMissingGuid',
+          );
+          diagnostics.skippedDuplicateGuid = cachedDiagnosticCount(
+            cacheHit.diagnostics,
+            'skippedDuplicateGuid',
+          );
+        } catch (error) {
+          const reason = errorMessage(error);
+          diagnostics.elementIndexError = reason;
+          logError('[Model Conversion] Cached element index copy failed', {
+            versionId: version.id,
+            cacheHitFromVersionId: cacheHit.id,
+            reason,
+          });
+        }
+        if (fencedOut) return 'fenced_out';
         const published = await completeVersion({
           versionId: version.id,
           leaseToken: claim.leaseToken,
           fragStorageRef: destinationRef,
           fragSizeBytes: cacheHit.fragSizeBytes,
           converterVersion: CONVERTER_VERSION,
-          diagnostics: { cacheHitFromVersionId: cacheHit.id },
+          diagnostics,
           convertedAt: now(),
           client,
         });
@@ -146,19 +215,34 @@ export async function runNextConversion(
     if (fencedOut) return 'fenced_out';
 
     const fragSizeBytes = BigInt(fragBytes.byteLength);
+    const diagnostics: Record<string, string | number> = {
+      readMs,
+      convertMs,
+      sourceSizeBytes: version.sourceSizeBytes.toString(),
+      fragSizeBytes: fragSizeBytes.toString(),
+      peakRssMb: Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10,
+    };
+    try {
+      const extraction = await (options.extract ?? extractElements)(source);
+      if (fencedOut) return 'fenced_out';
+      await client.$transaction((tx) => replaceElementIndex(tx, version.id, extraction.elements));
+      diagnostics.elementCount = extraction.elements.length;
+      diagnostics.skippedMissingGuid = extraction.skippedMissingGuid;
+      diagnostics.skippedDuplicateGuid = extraction.skippedDuplicateGuid;
+    } catch (error) {
+      const reason = errorMessage(error);
+      diagnostics.elementIndexError = reason;
+      logError('[Model Conversion] Element indexing failed', { versionId: version.id, reason });
+      // ponytail: unindexed ready model = viewable but unlinkable; re-upload reindexes
+    }
+    if (fencedOut) return 'fenced_out';
     const published = await completeVersion({
       versionId: version.id,
       leaseToken: claim.leaseToken,
       fragStorageRef: destinationRef,
       fragSizeBytes,
       converterVersion: CONVERTER_VERSION,
-      diagnostics: {
-        readMs,
-        convertMs,
-        sourceSizeBytes: version.sourceSizeBytes.toString(),
-        fragSizeBytes: fragSizeBytes.toString(),
-        peakRssMb: Math.round((process.memoryUsage().rss / 1024 / 1024) * 10) / 10,
-      },
+      diagnostics,
       convertedAt: now(),
       client,
     });
@@ -170,7 +254,7 @@ export async function runNextConversion(
     });
     return 'ready';
   } catch (error) {
-    const reason = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+    const reason = errorMessage(error);
     logError('[Model Conversion] Version failed', { versionId: version.id, reason });
     const recorded = await failVersion({
       versionId: version.id,

@@ -116,6 +116,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await prisma.designModel.deleteMany({ where: { projectId } });
+  await prisma.lot.deleteMany({ where: { projectId } });
   await fs.promises
     .rm(getUploadSubdirectoryPath(DESIGN_MODEL_UPLOAD_SCRATCH), {
       recursive: true,
@@ -141,6 +142,22 @@ afterAll(async () => {
 });
 
 describe('design model upload routes', () => {
+  it('returns one model with all versions in descending version order', async () => {
+    const modelId = await createModel('Versioned model');
+    const firstId = await createVersion(modelId, Buffer.from('first'));
+    const secondId = await createVersion(modelId, Buffer.from('second'));
+
+    const response = await request(app)
+      .get(`/api/projects/${projectId}/models/${modelId}`)
+      .set(auth());
+    expect(response.status).toBe(200);
+    expect(response.body.model).toMatchObject({ id: modelId, name: 'Versioned model' });
+    expect(response.body.versions.map((version: { id: string }) => version.id)).toEqual([
+      secondId,
+      firstId,
+    ]);
+  });
+
   it('creates models for managers and rejects a foreman', async () => {
     const created = await request(app)
       .post(`/api/projects/${projectId}/models`)
@@ -295,6 +312,92 @@ describe('design model upload routes', () => {
     expect(await prisma.designModelVersion.findUnique({ where: { id: versionId } })).toBeNull();
     await expect(store.sizeOf(sourceRef)).rejects.toThrow();
     await expect(store.sizeOf(fragRef)).rejects.toThrow();
+  });
+
+  it('blocks whole-model deletion while converting, then removes every stored object', async () => {
+    const modelId = await createModel('Delete all versions');
+    const versionIds = [
+      await createVersion(modelId, Buffer.from('source-v1')),
+      await createVersion(modelId, Buffer.from('source-v2')),
+    ];
+    await prisma.designModelVersion.update({
+      where: { id: versionIds[1] },
+      data: { status: 'converting' },
+    });
+    await request(app)
+      .delete(`/api/projects/${projectId}/models/${modelId}`)
+      .set(auth())
+      .expect(409);
+
+    const store = createLocalModelObjectStore();
+    const refs: Array<{ sourceRef: string; fragRef: string }> = [];
+    for (const versionId of versionIds) {
+      const scratch = await ensureUploadPartsDirectory(versionId);
+      const sourcePath = `${scratch}/delete-source.ifc`;
+      const fragPath = `${scratch}/delete-frag.frag`;
+      await fs.promises.writeFile(sourcePath, `source-${versionId}`);
+      await fs.promises.writeFile(fragPath, `fragment-${versionId}`);
+      const sourceRef = sourceObjectRef(projectId, modelId, versionId);
+      const fragRef = fragmentObjectRef(projectId, modelId, versionId);
+      refs.push({ sourceRef, fragRef });
+      await store.writeFromFile(sourcePath, sourceRef);
+      await store.writeFromFile(fragPath, fragRef);
+      await prisma.designModelVersion.update({
+        where: { id: versionId },
+        data: {
+          status: 'ready',
+          sourceStorageRef: sourceRef,
+          fragStorageRef: fragRef,
+          fragSizeBytes: BigInt(`fragment-${versionId}`.length),
+        },
+      });
+    }
+
+    await request(app)
+      .delete(`/api/projects/${projectId}/models/${modelId}`)
+      .set(auth())
+      .expect(204);
+    expect(await prisma.designModel.findUnique({ where: { id: modelId } })).toBeNull();
+    for (const { sourceRef, fragRef } of refs) {
+      await expect(store.sizeOf(sourceRef)).rejects.toThrow();
+      await expect(store.sizeOf(fragRef)).rejects.toThrow();
+    }
+  });
+
+  it('returns compact element links and live counts, and forbids a subcontractor', async () => {
+    const modelId = await createModel('Linked model');
+    const versionId = await createVersion(modelId, Buffer.from('linked source'));
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${tag}-LINKED`,
+        lotType: 'general',
+        activityType: 'Earthworks',
+      },
+    });
+    const linked = await prisma.modelElement.create({
+      data: { versionId, ifcGuid: 'linked-guid', lotNumberValue: lot.lotNumber },
+    });
+    await prisma.modelElement.create({
+      data: { versionId, ifcGuid: 'unlinked-guid', lotNumberValue: null },
+    });
+    await prisma.modelElementLotLink.create({
+      data: { versionId, elementId: linked.id, lotId: lot.id, source: 'auto' },
+    });
+
+    const response = await request(app)
+      .get(`/api/projects/${projectId}/models/${modelId}/versions/${versionId}/element-links`)
+      .set(auth());
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      links: [{ ifcGuid: 'linked-guid', lotId: lot.id }],
+      counts: { elements: 2, linked: 1, unlinked: 1 },
+    });
+
+    await request(app)
+      .get(`/api/projects/${projectId}/models/${modelId}/versions/${versionId}/element-links`)
+      .set(auth(subcontractorToken))
+      .expect(403);
   });
 
   it('forbids subcontractor reads', async () => {
