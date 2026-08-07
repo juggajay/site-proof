@@ -21,7 +21,7 @@ import { localToWgs84 } from './crs.js';
 
 const CHAINAGE_EPSILON = 1e-6;
 
-interface LocalXY {
+export interface LocalXY {
   easting: number;
   northing: number;
 }
@@ -93,11 +93,8 @@ function toWgs84Position(p: LocalXY, epsg: string): Position {
   return [lng, lat];
 }
 
-/**
- * Chainage window + offsets → WGS84 Polygon straddling the control line.
- * offsetLeft/offsetRight are metres left/right of increasing chainage.
- */
-export function generateChainageOffsetPolygon(input: ChainageOffsetInput): GeneratedLotGeometry {
+/** Chainage window + offsets → unclosed polygon ring in the source local grid. */
+export function generateChainageOffsetLocalRing(input: ChainageOffsetInput): LocalXY[] {
   const points = normaliseControlPoints(input.points);
   requireFinite(input.chainageStart, 'chainageStart');
   requireFinite(input.chainageEnd, 'chainageEnd');
@@ -130,36 +127,37 @@ export function generateChainageOffsetPolygon(input: ChainageOffsetInput): Gener
   ];
   const centre = chainages.map((c) => positionAtChainage(points, c));
 
-  const left: Position[] = [];
-  const right: Position[] = [];
+  const left: LocalXY[] = [];
+  const right: LocalXY[] = [];
   for (let i = 0; i < centre.length; i += 1) {
     const prev = centre[Math.max(0, i - 1)];
     const next = centre[Math.min(centre.length - 1, i + 1)];
     const [tx, ty] = unit(next.easting - prev.easting, next.northing - prev.northing);
     // Left of travel = rotate tangent +90°: (-ty, tx). Right = (ty, -tx).
     const c = centre[i];
-    left.push(
-      toWgs84Position(
-        {
-          easting: c.easting - ty * input.offsetLeft,
-          northing: c.northing + tx * input.offsetLeft,
-        },
-        input.epsg,
-      ),
-    );
-    right.push(
-      toWgs84Position(
-        {
-          easting: c.easting + ty * input.offsetRight,
-          northing: c.northing - tx * input.offsetRight,
-        },
-        input.epsg,
-      ),
-    );
+    left.push({
+      easting: c.easting - ty * input.offsetLeft,
+      northing: c.northing + tx * input.offsetLeft,
+    });
+    right.push({
+      easting: c.easting + ty * input.offsetRight,
+      northing: c.northing - tx * input.offsetRight,
+    });
   }
 
+  return [...left, ...right.reverse()];
+}
+
+/**
+ * Chainage window + offsets → WGS84 Polygon straddling the control line.
+ * offsetLeft/offsetRight are metres left/right of increasing chainage.
+ */
+export function generateChainageOffsetPolygon(input: ChainageOffsetInput): GeneratedLotGeometry {
+  const localRing = generateChainageOffsetLocalRing(input);
+  const projectedRing: Position[] = localRing.map((point) => toWgs84Position(point, input.epsg));
+
   // Ring: left edge start→end, right edge end→start, closed.
-  const ring: Position[] = [...left, ...right.reverse(), left[0]];
+  const ring: Position[] = [...projectedRing, projectedRing[0]];
   const feature: Feature<Polygon> = {
     type: 'Feature',
     properties: {},

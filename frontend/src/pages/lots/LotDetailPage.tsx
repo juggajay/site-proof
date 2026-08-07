@@ -3,9 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { useAuth } from '@/lib/auth';
-import { apiFetch, ApiError } from '@/lib/api';
+import { apiFetch, authFetch, ApiError } from '@/lib/api';
+import { downloadBlob } from '@/lib/downloads';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { toast } from '@/components/ui/toaster';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -48,7 +50,7 @@ export function LotDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, actualRole } = useAuth();
 
   // Get return filters from navigation state (passed from LotsPage)
   const locationState = location.state as LocationState | null;
@@ -69,6 +71,7 @@ export function LotDetailPage() {
   const [lot, setLot] = useState<Lot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<LotDetailPageError | null>(null);
+  const [exportingIfc, setExportingIfc] = useState(false);
   // Offline state
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
   // Copy-link workflow (URL build, clipboard write + textarea fallback, toast,
@@ -377,6 +380,24 @@ export function LotDetailPage() {
   // Conformed lots keep QA fields locked, but commercial users can still add a budget before claiming.
   const isEditable =
     lot.status !== 'claimed' && (lot.status !== 'conformed' || Boolean(canViewBudgets));
+  const canExportIfcDraft = FOLIO_ISSUER_ROLES.includes(actualRole ?? '');
+
+  const exportDraftIfc = async () => {
+    setExportingIfc(true);
+    try {
+      const response = await authFetch(`/api/lots/${encodeURIComponent(lot.id)}/exports/ifc-draft`);
+      if (!response.ok) throw new ApiError(response.status, await response.text());
+      downloadBlob(await response.blob(), `IFC-DRAFT-${lot.lotNumber}.ifc`, 'lot.ifc');
+    } catch (exportError) {
+      toast({
+        title: 'IFC export failed',
+        description: extractErrorMessage(exportError, 'Could not export this lot as IFC.'),
+        variant: 'error',
+      });
+    } finally {
+      setExportingIfc(false);
+    }
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -406,6 +427,8 @@ export function LotDetailPage() {
           setShowAssignSubcontractorModal(true);
         }}
         onRemoveAssignment={removeAssignment}
+        onExportIfcDraft={canExportIfcDraft ? () => void exportDraftIfc() : undefined}
+        exportingIfc={exportingIfc}
       />
 
       <LotReadinessPanel
