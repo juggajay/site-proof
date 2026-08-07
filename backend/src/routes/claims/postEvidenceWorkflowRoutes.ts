@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { transitionLotStatusesWhere } from '../../lib/lotStatusTransition.js';
 import { prisma } from '../../lib/prisma.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
@@ -611,16 +612,20 @@ export function createClaimPostEvidenceWorkflowRouter({
         // own. Lots this claim had taken to 100% (status `claimed`, linked via
         // claimedInId) must be returned to `conformed` so they can be claimed
         // again.
-        // Capture refs before the update — updateMany returns only a count, but
-        // the map time scrubber needs a per-lot claimed -> conformed audit row.
-        const releasedLotRefs = await tx.lot.findMany({
+        // Capture refs with the transition result so the map time scrubber keeps
+        // its per-lot claimed -> conformed audit rows.
+        const releasedClaimedLots = await transitionLotStatusesWhere(tx, {
           where: { claimedInId: claimId, projectId, status: 'claimed' },
-          select: { id: true, lotNumber: true },
+          to: 'conformed',
+          extraData: { claimedInId: null },
+          event: {
+            actorId: userId,
+            source: 'user',
+            sourceEntityType: 'claim',
+            sourceEntityId: claimId,
+          },
         });
-        const releasedClaimedLots = await tx.lot.updateMany({
-          where: { claimedInId: claimId, projectId, status: 'claimed' },
-          data: { claimedInId: null, status: 'conformed' },
-        });
+        const releasedLotRefs = releasedClaimedLots.lots;
         const clearedStaleLotLinks = await tx.lot.updateMany({
           where: { claimedInId: claimId, projectId },
           data: { claimedInId: null },

@@ -28,9 +28,9 @@ Previous project ref `dwumiirtsuqxratjjvhb` was deprovisioned by Supabase
 after the free-tier 90-day deletion window. URLs referencing that host no
 longer resolve and are unrecoverable.
 
-## Storage prefixes (one bucket, six prefixes)
+## Storage prefixes (one bucket, seven prefixes)
 
-All six customer-facing upload surfaces share the `documents` bucket and
+All seven customer-facing upload surfaces share the `documents` bucket and
 differ only in the prefix they write under. Project-scoped surfaces nest
 under `<projectId>`; per-user / per-company surfaces nest under
 `<userId>` / `<companyId>`.
@@ -43,6 +43,7 @@ under `<projectId>`; per-user / per-company surfaces nest under
 | Test result certificates | `certificates/<projectId>/cert-<unique>.<ext>` | `backend/src/routes/testResults.ts` |
 | Avatars | `avatars/<userId>/avatar-<userId>-<uuid>.<ext>` | `backend/src/routes/auth.ts` |
 | Company logos | `company-logos/<companyId>/company-logo-<companyId>-<uuid>.<ext>` | `backend/src/routes/company.ts` |
+| Design models | `design-models/<projectId>/<modelId>/<versionId>/{source.ifc,model.frag}` | `backend/src/routes/designModels.ts` |
 
 The preferred stored locator for new Supabase objects is:
 

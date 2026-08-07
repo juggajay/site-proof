@@ -191,6 +191,20 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
 });
 
 describe('LotHeader desktop layout', () => {
+  it('shows the draft IFC export only to the RoleSwitcher-aware exporter roles', () => {
+    const onExportIfcDraft = vi.fn();
+    renderHeader({ onExportIfcDraft });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export IFC (draft)' }));
+    expect(onExportIfcDraft).toHaveBeenCalledOnce();
+
+    cleanup();
+    authState.actualRole = 'foreman';
+    renderHeader({ onExportIfcDraft });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(screen.queryByRole('button', { name: 'Export IFC (draft)' })).not.toBeInTheDocument();
+  });
+
   it('renders the action cluster with flex-wrap and desktop layout classes', () => {
     renderHeader({ canManageLot: true });
 

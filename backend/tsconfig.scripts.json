@@ -10,6 +10,7 @@
     "scripts/storage-backup.ts",
     "scripts/storageBackupManifest.ts",
     "scripts/storageBackupManifest.test.ts",
+    "scripts/convert-ifc.ts",
     "scripts/lib/database-target.ts",
     "scripts/lib/run-script.ts",
     "scripts/backfill-one-time-token-hashes.ts",
@@ -23,6 +24,7 @@
     "scripts/process-scheduled-reports.ts",
     "scripts/send-notification-digests.ts",
     "scripts/process-notification-automation.ts",
+    "scripts/generate-sample-ifc.ts",
     "scripts/bench-f05.ts",
     // bench-f05 mounts the real routers, so it pulls src/routes into this
     // program — which needs the `Express.Request.user` augmentation the root

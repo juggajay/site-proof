@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Link2, Check, RefreshCw, MoreVertical, Pencil } from 'lucide-react';
+import { Link2, Check, RefreshCw, MoreVertical, Pencil, Download } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { LotQRCode } from '@/components/lots/LotQRCode';
 import { AskClancyButton } from '@/components/copilot/AskClancy';
@@ -43,6 +43,8 @@ export interface LotHeaderProps {
   onAddSubcontractor: () => void;
   onEditAssignment: (assignment: LotSubcontractorAssignment) => void;
   onRemoveAssignment: (assignmentId: string) => void;
+  onExportIfcDraft?: () => void;
+  exportingIfc?: boolean;
 }
 
 /**
@@ -88,6 +90,8 @@ export function LotHeader({
   onAddSubcontractor,
   onEditAssignment,
   onRemoveAssignment,
+  onExportIfcDraft,
+  exportingIfc = false,
 }: LotHeaderProps) {
   const isMobile = useIsMobile();
   // `actualRole` — the RoleSwitcher-aware role — gates the primary action's
@@ -169,6 +173,21 @@ export function LotHeader({
       },
     },
   ];
+
+  const canExportIfcDraft = ['owner', 'admin', 'project_manager', 'quality_manager'].includes(
+    actualRole ?? '',
+  );
+  if (canExportIfcDraft && onExportIfcDraft) {
+    overflowActions.push({
+      key: 'export-ifc-draft',
+      icon: <Download className="h-5 w-5" />,
+      label: exportingIfc ? 'Exporting IFC (draft)...' : 'Export IFC (draft)',
+      handler: () => {
+        if (!exportingIfc) onExportIfcDraft();
+        setMoreOpen(false);
+      },
+    });
+  }
 
   if (canEdit && !editIsFallback) {
     overflowActions.push({

@@ -193,6 +193,36 @@ jobs:
 
           echo "No unsafe patterns detected"
 
+  ifc-validate:
+    name: IFC validation
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+        working-directory: backend
+
+      - run: npx tsx scripts/generate-sample-ifc.ts /tmp/sample.ifc
+        working-directory: backend
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - run: pip install ifcopenshell pytest
+
+      - run: python -c "import ifcopenshell.simple_spf as s; s.open('/tmp/sample.ifc'); print('simple_spf OK')"
+
+      - run: python -m ifcopenshell.validate --rules /tmp/sample.ifc
+
   frontend:
     name: Frontend
     needs: changes

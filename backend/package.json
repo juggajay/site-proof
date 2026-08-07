@@ -30,6 +30,7 @@
     "db:backfill-activity-slug": "tsx scripts/backfill-lot-activity-slug.ts",
     "db:backfill-sent-to-lab": "tsx scripts/backfill-sent-to-lab.ts",
     "db:backfill-hp-decision-rounds": "tsx scripts/backfill-hp-decision-rounds.ts",
+    "db:backfill-lot-status-events": "tsx scripts/backfill-lot-status-events.ts",
     "db:backfill-itp-snapshots": "tsx scripts/backfill-itp-snapshots.ts",
     "db:backfill-ncr-checklist-items": "tsx scripts/backfill-ncr-checklist-items.ts",
     "db:classify-test-types": "tsx scripts/classify-test-types.ts",
@@ -52,8 +53,8 @@
     "bench:g5": "tsx scripts/bench-g5-ncr-analytics.ts",
     "bench:pdf": "node scripts/bench-pdf-folio.mjs",
     "verify:claims": "node scripts/verify-marketing-claims.mjs",
-    "lint": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/backfill-lot-activity-slug.ts scripts/backfill-sent-to-lab.ts scripts/backfill-hp-decision-rounds.ts scripts/backfill-itp-snapshots.ts scripts/backfill-ncr-checklist-items.ts scripts/classify-test-types.ts scripts/retag-template-activities.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/seeds/itp-templates/provenance.mjs scripts/seeds/itp-templates/seed-writer.mjs scripts/smoke-production.mjs scripts/verify-marketing-claims.mjs scripts/benchResults.ts scripts/bench-pdf-folio.mjs scripts/bench-zip-spike.mjs scripts/bench-zip-cost.mjs scripts/bench-f05.ts scripts/bench-c3-test-coverage.ts scripts/bench-c5-folio-rows.ts scripts/bench-g5-ncr-analytics.ts",
-    "lint:fix": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/backfill-lot-activity-slug.ts scripts/backfill-sent-to-lab.ts scripts/backfill-hp-decision-rounds.ts scripts/backfill-ncr-checklist-items.ts scripts/classify-test-types.ts scripts/retag-template-activities.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/smoke-production.mjs scripts/verify-marketing-claims.mjs scripts/benchResults.ts scripts/bench-pdf-folio.mjs scripts/bench-f05.ts scripts/bench-c3-test-coverage.ts scripts/bench-c5-folio-rows.ts scripts/bench-g5-ncr-analytics.ts --fix",
+    "lint": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/backfill-lot-activity-slug.ts scripts/backfill-sent-to-lab.ts scripts/backfill-hp-decision-rounds.ts scripts/backfill-itp-snapshots.ts scripts/backfill-ncr-checklist-items.ts scripts/classify-test-types.ts scripts/retag-template-activities.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/generate-sample-ifc.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/seeds/itp-templates/provenance.mjs scripts/seeds/itp-templates/seed-writer.mjs scripts/smoke-production.mjs scripts/verify-marketing-claims.mjs scripts/benchResults.ts scripts/bench-pdf-folio.mjs scripts/bench-zip-spike.mjs scripts/bench-zip-cost.mjs scripts/bench-f05.ts scripts/bench-c3-test-coverage.ts scripts/bench-c5-folio-rows.ts scripts/bench-g5-ncr-analytics.ts",
+    "lint:fix": "eslint src/ scripts/migrate.ts scripts/backup.ts scripts/lib/database-target.ts scripts/lib/run-script.ts scripts/backfill-one-time-token-hashes.ts scripts/backfill-lot-activity-slug.ts scripts/backfill-sent-to-lab.ts scripts/backfill-hp-decision-rounds.ts scripts/backfill-ncr-checklist-items.ts scripts/classify-test-types.ts scripts/retag-template-activities.ts scripts/check-unique-migration-preconditions.ts scripts/data-retention.ts scripts/migrate-passwords.ts scripts/preflight-production-integrations.ts scripts/process-scheduled-reports.ts scripts/send-notification-digests.ts scripts/process-notification-automation.ts scripts/generate-sample-ifc.ts scripts/check-migration-drift.mjs scripts/seed-e2e.mjs scripts/seeds/itp-templates/index.mjs scripts/smoke-production.mjs scripts/verify-marketing-claims.mjs scripts/benchResults.ts scripts/bench-pdf-folio.mjs scripts/bench-f05.ts scripts/bench-c3-test-coverage.ts scripts/bench-c5-folio-rows.ts scripts/bench-g5-ncr-analytics.ts --fix",
     "format": "prettier --write \"src/**/*.{ts,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,css,json}\"",
     "type-check": "tsc --noEmit && tsc -p tsconfig.scripts.json"
@@ -64,6 +65,7 @@
     "@prisma/client": "^6.19.3",
     "@sentry/node": "^10.58.0",
     "@supabase/supabase-js": "^2.39.0",
+    "@thatopen/fragments": "3.4.7",
     "@turf/turf": "^7.3.5",
     "archiver": "8.0.0",
     "bcryptjs": "^3.0.3",
@@ -83,6 +85,7 @@
     "qrcode": "^1.5.4",
     "resend": "^2.1.0",
     "sharp": "^0.35.3",
+    "web-ifc": "0.0.77",
     "web-push": "^3.6.7",
     "zod": "^3.22.4"
   },
@@ -121,6 +124,7 @@
     "tsx": "^4.22.4",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.55.0",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "web-ifc": "0.0.77"
   }
 }

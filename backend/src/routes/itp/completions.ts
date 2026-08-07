@@ -9,6 +9,7 @@ import { checkAndNotifyWitnessPoint } from './helpers/witnessPoints.js';
 import { updateLotStatusFromITP } from './helpers/lotProgression.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { transitionLotStatus } from '../../lib/lotStatusTransition.js';
 import {
   ITP_WRITE_ROLES,
   isItpSubcontractorUser,
@@ -545,9 +546,15 @@ completionsRouter.post(
               });
 
               // Update lot status to ncr_raised in the same transaction as the NCR.
-              await tx.lot.update({
-                where: { id: lot.id },
-                data: { status: 'ncr_raised' },
+              await transitionLotStatus(tx, {
+                lotId: lot.id,
+                to: 'ncr_raised',
+                event: {
+                  actorId: user.userId,
+                  source: 'system',
+                  sourceEntityType: 'ncr',
+                  sourceEntityId: createdNcr.id,
+                },
               });
             }
           }

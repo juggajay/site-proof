@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { AppError, ErrorCodes } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { transitionLotStatusesWhere } from '../../lib/lotStatusTransition.js';
 import { prisma } from '../../lib/prisma.js';
 import { recordDecision } from '../../lib/readiness/recordDecision.js';
 import { logError } from '../../lib/serverLogger.js';
@@ -349,17 +350,29 @@ export function createClaimWorkflowRouter({
               // terminal `claimed` state. Lots below 100% stay `conformed` so
               // they can be claimed again on a future claim.
               if (fullyClaimedLotIds.length > 0) {
-                const updateResult = await tx.lot.updateMany({
+                const updateResult = await transitionLotStatusesWhere(tx, {
                   where: {
                     id: { in: fullyClaimedLotIds },
                     projectId,
                     status: 'conformed',
                     claimedInId: null,
                   },
-                  data: { claimedInId: claimId, status: 'claimed' },
+                  to: 'claimed',
+                  extraData: { claimedInId: claimId },
+                  event: {
+                    actorId: userId,
+                    source: 'user',
+                    sourceEntityType: 'claim',
+                    sourceEntityId: claimId,
+                  },
+                  onCountMismatch: () => {
+                    throw AppError.badRequest(
+                      'One or more selected lots are no longer available to claim',
+                    );
+                  },
                 });
 
-                if (updateResult.count !== fullyClaimedLotIds.length) {
+                if (updateResult.lots.length !== fullyClaimedLotIds.length) {
                   throw AppError.badRequest(
                     'One or more selected lots are no longer available to claim',
                   );

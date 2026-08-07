@@ -7,6 +7,7 @@ import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sendEmail } from '../../lib/email.js';
+import { transitionLotStatus, transitionLotStatusesWhere } from '../../lib/lotStatusTransition.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import { prisma } from '../../lib/prisma.js';
 import { ncrSerious } from '../../lib/readiness/predicates.js';
@@ -577,7 +578,16 @@ ncrClosureWorkflowRouter.post(
         await ensureCloseClaimed(id, closeUpdate.count, tx);
 
         for (const { lotId, nextStatus } of evaluation.cascade) {
-          await tx.lot.update({ where: { id: lotId }, data: { status: nextStatus } });
+          await transitionLotStatus(tx, {
+            lotId,
+            to: nextStatus,
+            event: {
+              actorId: user.userId,
+              source: 'system',
+              sourceEntityType: 'ncr',
+              sourceEntityId: id,
+            },
+          });
         }
 
         return tx.nCR.findUniqueOrThrow({
@@ -826,13 +836,19 @@ ncrClosureWorkflowRouter.post(
       });
 
       if (ncr.ncrLots.length > 0) {
-        await tx.lot.updateMany({
+        await transitionLotStatusesWhere(tx, {
           where: {
             id: { in: ncr.ncrLots.map((ncrLot) => ncrLot.lotId) },
             projectId: ncr.projectId,
             status: { notIn: ['conformed', 'claimed'] },
           },
-          data: { status: 'ncr_raised' },
+          to: 'ncr_raised',
+          event: {
+            actorId: user.userId,
+            source: 'system',
+            sourceEntityType: 'ncr',
+            sourceEntityId: id,
+          },
         });
       }
 

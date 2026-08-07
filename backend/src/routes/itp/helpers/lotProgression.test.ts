@@ -3,18 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   instanceFindUnique: vi.fn(),
   instanceUpdate: vi.fn(),
+  lotFindUnique: vi.fn(),
   lotUpdate: vi.fn(),
+  statusEventCreate: vi.fn(),
   auditLogCreate: vi.fn(),
   logError: vi.fn(),
 }));
 
-vi.mock('../../../lib/prisma.js', () => ({
-  prisma: {
+vi.mock('../../../lib/prisma.js', () => {
+  const prisma = {
     iTPInstance: { findUnique: mocks.instanceFindUnique, update: mocks.instanceUpdate },
-    lot: { update: mocks.lotUpdate },
+    lot: { findUnique: mocks.lotFindUnique, update: mocks.lotUpdate },
+    lotStatusEvent: { create: mocks.statusEventCreate },
     auditLog: { create: mocks.auditLogCreate },
-  },
-}));
+    // The transition service runs inside prisma.$transaction; hand it the same
+    // mocked client so its lot/lotStatusEvent calls land on these fns.
+    $transaction: (fn: (tx: unknown) => unknown) => fn(prisma),
+  };
+  return { prisma };
+});
 
 vi.mock('../../../lib/serverLogger.js', () => ({
   logError: mocks.logError,
@@ -70,6 +77,8 @@ function makeInstance({
 describe('updateLotStatusFromITP', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.lotFindUnique.mockResolvedValue({ id: 'lot-1', status: 'not_started' });
+    mocks.statusEventCreate.mockResolvedValue({});
     mocks.lotUpdate.mockResolvedValue({});
     mocks.instanceUpdate.mockResolvedValue({});
     mocks.auditLogCreate.mockResolvedValue({});

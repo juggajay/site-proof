@@ -99,6 +99,7 @@ model User {
   documentSignedUrlTokens     DocumentSignedUrlToken[]
   notifications               Notification[]
   auditLogs                   AuditLog[]
+  lotStatusEvents             LotStatusEvent[]
   productEvents               ProductEvent[]
   syncQueues                  SyncQueue[]
   preparedClaims              ProgressClaim[]
@@ -108,6 +109,8 @@ model User {
   comments                    Comment[]
   apiKeys                     ApiKey[] // Feature #747: External API access
   consentRecords              ConsentRecord[] // Feature #776: Privacy consent tracking
+  createdDesignModels         DesignModel[]                  @relation("CreatedDesignModels")
+  uploadedDesignModelVersions DesignModelVersion[]           @relation("UploadedDesignModelVersions")
   assignedLotSubcontractors   LotSubcontractorAssignment[] @relation("AssignedByUser")
   subcontractorUsers          SubcontractorUser[]
   scheduledReports            ScheduledReport[]
@@ -442,6 +445,7 @@ model Project {
   aiProposals                 AiProposal[]
   requirementEvaluations      RequirementEvaluation[]
   importBatches               ImportBatch[]
+  designModels                DesignModel[]
   importMappingProfiles       ImportMappingProfile[]
   folioSnapshots              FolioSnapshot[]
   folioIssueReservations      FolioIssueReservation[]
@@ -660,6 +664,7 @@ model Lot {
   variations               Variation[]
   subcontractorAssignments LotSubcontractorAssignment[]
   geometries               LotGeometry[]
+  statusEvents             LotStatusEvent[]
   folioSnapshots           FolioSnapshot[]
   folioIssueReservations   FolioIssueReservation[]
   folioIssues              FolioIssue[]
@@ -674,6 +679,34 @@ model Lot {
   // The existing @@index([projectId, conformedAt]) cannot serve it.
   @@index([projectId, activitySlug, conformedAt], map: "lots_project_activity_slug_conformed_idx")
   @@map("lots")
+}
+
+model LotStatusEvent {
+  id                       String   @id @default(uuid())
+  lotId                    String   @map("lot_id")
+  fromStatus               String?  @map("from_status")
+  toStatus                 String   @map("to_status")
+  // When the transition happened in the world vs when this row was written.
+  // Identical for live transitions; backfilled rows carry the audit timestamp.
+  effectiveAt              DateTime @map("effective_at")
+  recordedAt               DateTime @default(now()) @map("recorded_at")
+  actorId                  String?  @map("actor_id")
+  // 'user' | 'system' | 'import' | 'backfill' — string, not enum, matching Lot.status.
+  source                   String
+  // e.g. 'ncr'/'claim'/'audit_log' + the row id that caused the flip.
+  sourceEntityType         String?  @map("source_entity_type")
+  sourceEntityId           String?  @map("source_entity_id")
+  // Only on backfilled rows: how trustworthy the reconstruction is.
+  reconstructionConfidence String?  @map("reconstruction_confidence")
+  metadata                 Json?
+
+  lot   Lot   @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([lotId, effectiveAt])
+  @@index([lotId, recordedAt])
+  @@index([sourceEntityType, sourceEntityId])
+  @@map("lot_status_events")
 }
 
 // ============================================================================
@@ -2705,6 +2738,60 @@ model FolioIssue {
 // heartbeats, publishes and expires. Its correctness comes from the fencing
 // token (§4.6.2), not from immutability.
 // ============================================================================
+
+model DesignModel {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  name        String
+  createdById String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?                @relation("CreatedDesignModels", fields: [createdById], references: [id], onDelete: SetNull)
+  versions  DesignModelVersion[]
+
+  @@index([projectId])
+  @@map("design_models")
+}
+
+model DesignModelVersion {
+  id               String  @id @default(uuid())
+  modelId          String  @map("model_id")
+  versionNumber    Int     @map("version_number")
+  // 'uploading' | 'queued' | 'converting' | 'ready' | 'failed'
+  status           String  @default("uploading")
+  fileName         String  @map("file_name")
+  // BigInt like HandoverExport.fileSize — Int caps at 2^31-1 bytes.
+  sourceSizeBytes  BigInt  @map("source_size_bytes")
+  sourceSha256     String  @map("source_sha256")
+  sourceStorageRef String? @map("source_storage_ref")
+  fragStorageRef   String? @map("frag_storage_ref")
+  fragSizeBytes    BigInt? @map("frag_size_bytes")
+  converterVersion String? @map("converter_version")
+  diagnostics      Json?
+  // Lease columns — same names and semantics as HandoverExport (fencing token
+  // regenerated on every claim; see schema.prisma HandoverExport comments).
+  leaseOwner        String?   @map("lease_owner")
+  leaseToken        String?   @map("lease_token")
+  leaseExpiresAt    DateTime? @map("lease_expires_at")
+  heartbeatAt       DateTime? @map("heartbeat_at")
+  nextAttemptAt     DateTime? @map("next_attempt_at")
+  failureCount      Int       @default(0) @map("failure_count")
+  lastFailureReason String?   @map("last_failure_reason")
+  uploadedById      String?   @map("uploaded_by")
+  convertedAt       DateTime? @map("converted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  model      DesignModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  uploadedBy User?       @relation("UploadedDesignModelVersions", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@unique([modelId, versionNumber])
+  @@index([status, nextAttemptAt])
+  @@index([sourceSha256])
+  @@map("design_model_versions")
+}
 
 /// One archive generation request (§7.4). `D1c.1` creates it and freezes its
 /// ledger; `D1c.2` runs it.
