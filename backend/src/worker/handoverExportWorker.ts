@@ -1,9 +1,11 @@
-// Wave D `D1c.2` — THE ARCHIVE WORKER ENTRYPOINT, a separate PROCESS
+// Wave D `D1c.2` — THE SHARED HEAVY-WORKER ENTRYPOINT, a separate PROCESS
 // (spec `docs/plans/wave-d-handover-spec-2026-07-28.md` Rev 3 §4.7.7, §10.3,
 // §13; `[DH-j]`). §15 item 11.
 //
-// `node dist/worker/handoverExportWorker.js` — a fifth Railway service, and
-// EXPLICITLY NOT a fifth `setInterval` in `server.ts:222-225`.
+// `node dist/worker/handoverExportWorker.js` — the existing Railway worker
+// service, and EXPLICITLY NOT another loop in the API process. Wave 5a adds
+// model conversion beside handover assembly in this same process; it does not
+// add another Railway service.
 //
 // WHY, and it is measured rather than preferred. `[DH-j]`: `D1c.0` recorded
 // maximum single-tick event-loop stalls of 100–700 ms across ALL FOUR ZIP
@@ -52,11 +54,11 @@ function exitAfterFatal(message: string, details: FatalDetails): void {
 }
 
 process.on('uncaughtException', (error) => {
-  exitAfterFatal('[FATAL] Handover worker uncaught exception:', error);
+  exitAfterFatal('[FATAL] Worker uncaught exception:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  exitAfterFatal('[FATAL] Handover worker unhandled rejection:', { promise, reason });
+  exitAfterFatal('[FATAL] Worker unhandled rejection:', { promise, reason });
 });
 
 async function bootstrap(): Promise<void> {
@@ -66,14 +68,16 @@ async function bootstrap(): Promise<void> {
   initSentry();
 
   const { startHandoverExportWorker } = await import('../lib/handover/exportWorkerLoop.js');
-  const handle = startHandoverExportWorker();
+  const { startModelConversionWorker } = await import('../lib/models/conversionWorkerLoop.js');
+  const handoverHandle = startHandoverExportWorker();
+  const modelHandle = startModelConversionWorker();
 
   const { prisma } = await import('../lib/prisma.js');
   const { logInfo } = await import('../lib/serverLogger.js');
 
   const shutdown = async (signal: string) => {
-    logInfo(`[Handover Worker] ${signal} received; finishing the current job`);
-    await handle.stop();
+    logInfo(`[Worker] ${signal} received; finishing current jobs`);
+    await Promise.all([handoverHandle.stop(), modelHandle.stop()]);
     await prisma.$disconnect();
     process.exit(0);
   };
@@ -83,5 +87,5 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch((error) => {
-  exitAfterFatal('[FATAL] Handover worker startup failed:', error);
+  exitAfterFatal('[FATAL] Worker startup failed:', error);
 });

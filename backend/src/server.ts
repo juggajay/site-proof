@@ -36,6 +36,7 @@ import { projectCloseoutReadinessRouter } from './routes/projectCloseoutReadines
 import { projectTestCoverageRouter } from './routes/projectTestCoverage.js';
 import { spatialSearchRouter } from './routes/spatialSearch.js';
 import { lotStatusTimelineRouter } from './routes/lotStatusTimeline.js';
+import { designModelsRouter } from './routes/designModels.js';
 import { holdpointsRouter } from './routes/holdpoints.js';
 import { docketsRouter } from './routes/dockets.js';
 import { companyRouter } from './routes/company.js';
@@ -183,6 +184,7 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   app.use('/api/diary', diaryRouter);
   app.use('/api/projects', claimsRouter);
   app.use('/api/projects', controlLinesRouter);
+  app.use('/api/projects', designModelsRouter);
   app.use('/api/projects', copilotRouter);
   app.use('/api/projects', planSheetsRouter);
   app.use('/api/projects', projectCoverageRouter);
