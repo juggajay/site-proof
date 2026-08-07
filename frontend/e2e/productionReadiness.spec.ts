@@ -2876,6 +2876,33 @@ test.describe('production readiness guardrails', () => {
     expect(equatorOriginLinks?.googleMapsUrl).toContain('query=0.000000%2C0.000000');
   });
 
+  test('hold-point authority copy uses permission-to-proceed language', async () => {
+    const files = await collectSourceFiles(new URL('../src/', import.meta.url));
+    // prettier-ignore
+    const forbiddenAuthorityConformanceCopy = /conform(ed|s)? by (the )?(authority|superintendent|principal)/i;
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      if (/\.(?:test|spec)\.[cm]?[tj]sx?$/.test(file.pathname)) continue;
+
+      const source = await readFile(file, 'utf8');
+      if (forbiddenAuthorityConformanceCopy.test(source)) {
+        offenders.push(file.pathname.replace(/\\/g, '/'));
+      }
+    }
+
+    expect(offenders).toEqual([]);
+
+    const publicDecisionForm = await readFile(
+      new URL(
+        '../src/pages/holdpoints/components/PublicHoldPointDecisionForm.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    expect(publicDecisionForm).toContain('permission to proceed');
+  });
+
   test('frontend source does not use blocking browser dialogs', async () => {
     const files = await collectSourceFiles(new URL('../src/', import.meta.url));
     const offenders: string[] = [];
