@@ -120,7 +120,9 @@ describe('model conversion runner', () => {
     expect(
       (await prisma.designModelVersion.findUnique({ where: { id: second.version.id } }))?.status,
     ).toBe('ready');
-  });
+    // 120 s: the first real conversion cold-boots the web-ifc wasm, which can
+    // exceed the default 30 s under CI coverage instrumentation on a cold runner.
+  }, 120_000);
 
   it('copies a same-project cache hit without constructing the importer', async () => {
     const store = new FakeModelObjectStore();
