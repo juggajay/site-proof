@@ -44,6 +44,7 @@ import {
   NeedsAttentionPage,
   DelayRegisterPage,
   DeliveryRegisterPage,
+  DesignModelsPage,
   DocketApprovalsPage,
   DocketEditPage,
   DocketsListPage,
@@ -61,6 +62,7 @@ import {
   LotEditPage,
   LotsPage,
   MagicLinkPage,
+  ModelViewerPage,
   MyCompanyPage,
   NCRAnalyticsPage,
   NCRPage,
@@ -418,6 +420,27 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={LOT_EDITOR_ROLES}>
                     <LotEditPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+
+              {/* Wave 5 — 3D design models. Reads mirror the backend: any
+                  internal role or viewer (subcontractor roles are refused
+                  server-side); the pages gate uploads/deletes to
+                  owner/admin/project_manager, which the backend enforces. */}
+              <Route
+                path="/projects/:projectId/models"
+                element={
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <DesignModelsPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/models/:modelId/versions/:versionId/view"
+                element={
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <ModelViewerPage />
                   </ProjectProtectedRoute>
                 }
               />

@@ -290,6 +290,12 @@ export const queryKeys = {
     ['copilot-proposal', projectId, proposalId] as const,
   copilotLotPresence: (projectId: string) => ['copilot-lot-presence', projectId] as const,
 
+  // Wave 5 — 3D design models. The list carries each model's latest version
+  // (status included), so upload/convert polling invalidates the list key; a
+  // single version detail (the viewer's read) has its own key.
+  designModels: (projectId: string) => ['design-models', projectId] as const,
+  designModelVersion: (versionId: string) => ['design-model-version', versionId] as const,
+
   // Wave B — migration imports. Batch lists and profile lists are per KIND
   // (ITP templates, lot registers), so the two never share a cache entry.
   importBatches: (projectId: string, kind: string) => ['import-batches', projectId, kind] as const,

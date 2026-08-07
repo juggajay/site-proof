@@ -13,7 +13,10 @@ function stubCanvas() {
       get: () => vi.fn(),
       set: () => true,
     },
-  ) as unknown as CanvasRenderingContext2D;
+    // @webgpu/types (via @types/three) adds a getContext('webgpu') overload,
+    // and mockReturnValue resolves against it — the intersection keeps this
+    // stub assignable to every overload's return type.
+  ) as unknown as CanvasRenderingContext2D & GPUCanvasContext;
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx);
   vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(TYPED_DATA_URL);
 }

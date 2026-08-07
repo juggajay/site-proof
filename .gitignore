@@ -83,6 +83,9 @@ workbox-*.js
 # Generated PDF.js public assets
 frontend/public/pdfjs/
 
+# Generated 3D viewer assets (web-ifc wasm + fragments worker)
+frontend/public/wasm/
+
 # Misc
 .cache/
 *.pid
