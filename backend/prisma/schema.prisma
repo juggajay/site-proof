@@ -404,6 +404,7 @@ model Project {
   ncrPrefix           String?   @default("NCR-") @map("ncr_prefix")
   ncrStartingNumber   Int?      @default(1) @map("ncr_starting_number")
   settings            String? // Stored as JSON string for SQLite
+  hpInternalReleaserIds String[] @default([]) @map("hp_internal_releaser_ids")
   // Location for weather API
   latitude            Decimal?  @map("latitude")
   longitude           Decimal?  @map("longitude")
@@ -870,6 +871,8 @@ model HoldPoint {
   evidencePackageUrl   String?   @map("evidence_package_url")
   chaseCount           Int       @default(0) @map("chase_count")
   lastChasedAt         DateTime? @map("last_chased_at")
+  currentRoundId       String?   @map("current_round_id")
+  authorityClass       String    @default("principal") @map("authority_class")
   // Escalation fields
   isEscalated          Boolean   @default(false) @map("is_escalated")
   escalatedAt          DateTime? @map("escalated_at")
@@ -884,6 +887,8 @@ model HoldPoint {
   lot              Lot                     @relation(fields: [lotId], references: [id], onDelete: Cascade)
   itpChecklistItem ITPChecklistItem        @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
   releaseTokens    HoldPointReleaseToken[]
+  decisionRounds   HoldPointDecisionRound[] @relation("HoldPointDecisionRounds")
+  currentRound     HoldPointDecisionRound?  @relation("HoldPointCurrentRound", fields: [currentRoundId], references: [id], onDelete: SetNull)
 
   @@unique([lotId, itpChecklistItemId])
   @@index([lotId])
@@ -898,6 +903,7 @@ model HoldPointReleaseToken {
   id                  String    @id @default(uuid())
   holdPointId         String    @map("hold_point_id")
   batchId             String?   @map("batch_id")
+  decisionRoundId     String?   @map("decision_round_id")
   recipientEmail      String    @map("recipient_email")
   recipientName       String?   @map("recipient_name")
   /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
@@ -917,6 +923,7 @@ model HoldPointReleaseToken {
 
   holdPoint HoldPoint              @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
   batch     HoldPointReleaseBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  decisionRound HoldPointDecisionRound? @relation(fields: [decisionRoundId], references: [id], onDelete: SetNull)
 
   requirementEvaluations RequirementEvaluation[]
 
@@ -927,6 +934,61 @@ model HoldPointReleaseToken {
   /// hourly-and-automatic, which is what makes an existing gap load-bearing.
   @@index([holdPointId])
   @@map("hold_point_release_tokens")
+}
+
+model HoldPointDecisionRound {
+  id                       String    @id @default(uuid())
+  holdPointId              String    @map("hold_point_id")
+  roundNumber              Int       @map("round_number")
+  authorityClass           String    @default("principal") @map("authority_class") // 'principal' | 'contractor_internal'
+  requestedAt              DateTime  @default(now()) @map("requested_at")
+  requestedById            String?   @map("requested_by_id")
+  responseToPriorRejection String?   @map("response_to_prior_rejection")
+  // recipient provenance denormalized (D-H1)
+  recipientEmail            String?   @map("recipient_email")
+  recipientName             String?   @map("recipient_name")
+  // outcome — all null until decided; immutable once outcome set
+  outcome                   String?   // 'released' | 'released_with_conditions' | 'rejected'
+  decidedAt                 DateTime? @map("decided_at")
+  decidedByName             String?   @map("decided_by_name")
+  decidedByOrg              String?   @map("decided_by_org")
+  decidedByTokenId          String?   @map("decided_by_token_id")
+  decisionReason            String?   @map("decision_reason")
+  decisionMethod            String?   @map("decision_method") // 'public_token' | 'authenticated'
+  signatureUrl              String?   @map("signature_url")
+  linkedNcrId               String?   @map("linked_ncr_id")
+  // contractor-side recall (only while undecided)
+  withdrawnAt               DateTime? @map("withdrawn_at")
+  withdrawnById             String?   @map("withdrawn_by_id")
+  withdrawalReason          String?   @map("withdrawal_reason")
+
+  holdPoint            HoldPoint                  @relation("HoldPointDecisionRounds", fields: [holdPointId], references: [id], onDelete: Cascade)
+  currentForHoldPoints HoldPoint[]                @relation("HoldPointCurrentRound")
+  linkedNcr            NCR?                       @relation(fields: [linkedNcrId], references: [id], onDelete: SetNull)
+  conditions           HoldPointReleaseCondition[]
+  releaseTokens        HoldPointReleaseToken[]
+
+  @@unique([holdPointId, roundNumber])
+  @@index([holdPointId, outcome])
+  @@map("hold_point_decision_rounds")
+}
+
+model HoldPointReleaseCondition {
+  id                             String    @id @default(uuid())
+  decisionRoundId                String    @map("decision_round_id")
+  sequence                       Int
+  text                           String    // bounded by route validation (M3), not schema
+  recordedSatisfiedAt            DateTime? @map("recorded_satisfied_at")
+  recordedSatisfiedById          String?   @map("recorded_satisfied_by_id")
+  recordedSatisfiedByName        String?   @map("recorded_satisfied_by_name") // survives user deletion
+  satisfactionNote               String?   @map("satisfaction_note")
+  satisfactionEvidenceDocumentId String?   @map("satisfaction_evidence_document_id")
+
+  decisionRound HoldPointDecisionRound @relation(fields: [decisionRoundId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionRoundId, sequence])
+  @@index([decisionRoundId, recordedSatisfiedAt])
+  @@map("hold_point_release_conditions")
 }
 
 // A batch release request groups the per-hold-point tokens above under a single
@@ -1175,6 +1237,7 @@ model NCR {
 
   ncrLots     NCRLot[]
   ncrEvidence NCREvidence[]
+  holdPointDecisionRounds HoldPointDecisionRound[]
 
   @@unique([projectId, ncrNumber])
   // Offline-retry replay returns the original NCR, never a duplicate (H5).
