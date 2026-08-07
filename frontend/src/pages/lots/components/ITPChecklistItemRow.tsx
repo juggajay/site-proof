@@ -22,6 +22,7 @@ export interface ITPChecklistItemRowProps {
   item: ITPInstance['template']['checklistItems'][0];
   completion: ITPCompletion | undefined;
   projectId: string;
+  lotId: string;
   updatingCompletion: string | null;
   onToggleCompletion: (checklistItemId: string, isCompleted: boolean, notes: string) => void;
   onUpdateNotes: (checklistItemId: string, notes: string) => void;
@@ -57,6 +58,7 @@ export function ITPChecklistItemRow({
   item,
   completion,
   projectId,
+  lotId,
   updatingCompletion,
   onToggleCompletion,
   onUpdateNotes,
@@ -388,6 +390,8 @@ export function ITPChecklistItemRow({
               }
               onShowQrCode={() => holdPoint && onShowHoldPointQrCode?.(holdPoint, item.description)}
               projectId={projectId}
+              lotId={lotId}
+              itemId={item.id}
             />
           ) : completion?.completedBy ? (
             <p className="text-xs text-muted-foreground mt-1">

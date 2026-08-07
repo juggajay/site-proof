@@ -5,11 +5,26 @@
  * lock, so a foreman could not tell whether the office had already called the
  * superintendent, and had no way to ask from where they were standing.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiFetch } from '@/lib/api';
 import { getHoldPointRowState, ITPChecklistHoldPointState } from './ITPChecklistHoldPointState';
 import type { ItpHoldPointState } from '../types';
+
+const authState = vi.hoisted(() => ({ actualRole: 'quality_manager' as string | null }));
+
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ actualRole: authState.actualRole }),
+}));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiFetch: vi.fn() };
+});
+
+const apiFetchMock = vi.mocked(apiFetch);
 
 function makeHoldPoint(overrides: Partial<ItpHoldPointState> = {}): ItpHoldPointState {
   return {
@@ -39,17 +54,67 @@ function renderState(
   } = {},
 ) {
   const state = getHoldPointRowState(holdPoint, hasReleaseAttribution);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   render(
-    <ITPChecklistHoldPointState
-      state={state}
-      holdPoint={holdPoint}
-      releaseAttribution={null}
-      canRequestRelease={canRequestRelease}
-      onRequestRelease={onRequestRelease}
-      onShowQrCode={onShowQrCode}
-    />,
+    <QueryClientProvider client={queryClient}>
+      <ITPChecklistHoldPointState
+        state={state}
+        holdPoint={holdPoint}
+        releaseAttribution={null}
+        canRequestRelease={canRequestRelease}
+        onRequestRelease={onRequestRelease}
+        onShowQrCode={onShowQrCode}
+        projectId="project-1"
+        lotId="lot-1"
+        itemId="item-1"
+      />
+    </QueryClientProvider>,
   );
-  return { onRequestRelease, onShowQrCode };
+  return { onRequestRelease, onShowQrCode, queryClient };
+}
+
+function conditionDetail(
+  conditions: Array<{
+    id: string;
+    sequence: number;
+    text: string;
+    recordedSatisfiedAt: string | null;
+    recordedSatisfiedByName: string | null;
+    satisfactionNote: string | null;
+    satisfactionEvidenceDocumentId: string | null;
+  }>,
+) {
+  return {
+    holdPoint: {
+      ...makeHoldPoint({
+        status: 'released',
+        latestRound: {
+          outcome: 'released_with_conditions',
+          decidedAt: '2026-09-03T00:00:00.000Z',
+          decisionReason: null,
+          ncrId: null,
+          ncrNumber: null,
+          ncrStatus: null,
+          openConditionCount: conditions.filter((condition) => !condition.recordedSatisfiedAt)
+            .length,
+          conditions,
+        },
+      }),
+      lotId: 'lot-1',
+      lotNumber: 'LOT-001',
+      description: 'Proof roll hold point',
+      pointType: 'hold_point',
+      sequenceNumber: 4,
+      isCompleted: true,
+      isVerified: false,
+      createdAt: '2026-09-01T00:00:00.000Z',
+    },
+    prerequisites: [],
+    incompletePrerequisites: [],
+    canRequestRelease: false,
+  };
 }
 
 describe('getHoldPointRowState', () => {
@@ -102,6 +167,16 @@ describe('getHoldPointRowState', () => {
 });
 
 describe('ITPChecklistHoldPointState', () => {
+  beforeEach(() => {
+    authState.actualRole = 'quality_manager';
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/holdpoints/lot/lot-1/item/item-1') return conditionDetail([]);
+      if (path === '/api/documents/project-1?limit=100') return { documents: [] };
+      throw new Error(`Unexpected request: ${path}`);
+    });
+  });
+
   it('offers the request action on a hold point nobody has asked about', async () => {
     const { onRequestRelease } = renderState(undefined);
 
@@ -215,5 +290,169 @@ describe('ITPChecklistHoldPointState', () => {
 
     expect(screen.getByText('Released — 3 conditions open')).toBeInTheDocument();
     expect(screen.getByText(/Permission to proceed has been granted/i)).toBeInTheDocument();
+  });
+
+  it('loads and renders open and satisfied condition rows from the detail contract', async () => {
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/documents/project-1?limit=100') return { documents: [] };
+      if (path === '/api/holdpoints/lot/lot-1/item/item-1') {
+        return conditionDetail([
+          {
+            id: 'condition-open',
+            sequence: 1,
+            text: 'Protect the exposed edge.',
+            recordedSatisfiedAt: null,
+            recordedSatisfiedByName: null,
+            satisfactionNote: null,
+            satisfactionEvidenceDocumentId: null,
+          },
+          {
+            id: 'condition-satisfied',
+            sequence: 2,
+            text: 'Upload the final survey.',
+            recordedSatisfiedAt: '2026-09-05T03:00:00.000Z',
+            recordedSatisfiedByName: 'Alex Quality',
+            satisfactionNote: 'Survey uploaded.',
+            satisfactionEvidenceDocumentId: 'document-1',
+          },
+        ]);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    renderState(
+      makeHoldPoint({
+        status: 'released',
+        latestRound: {
+          outcome: 'released_with_conditions',
+          decidedAt: '2026-09-03T00:00:00.000Z',
+          decisionReason: null,
+          ncrId: null,
+          ncrNumber: null,
+          ncrStatus: null,
+          openConditionCount: 1,
+        },
+      }),
+    );
+
+    expect(await screen.findByText('1. Protect the exposed edge.')).toBeInTheDocument();
+    expect(screen.getByText('2. Upload the final survey.')).toBeInTheDocument();
+    expect(screen.getByText(/Recorded satisfied by Alex Quality/)).toHaveTextContent('5/09/2026');
+    expect(screen.getByText('Survey uploaded.')).toBeInTheDocument();
+  });
+
+  it('posts satisfaction and immediately renders the satisfied state', async () => {
+    const openCondition = {
+      id: 'condition-open',
+      sequence: 1,
+      text: 'Protect the exposed edge.',
+      recordedSatisfiedAt: null,
+      recordedSatisfiedByName: null,
+      satisfactionNote: null,
+      satisfactionEvidenceDocumentId: null,
+    };
+    apiFetchMock.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === '/api/holdpoints/lot/lot-1/item/item-1') {
+        return conditionDetail([openCondition]);
+      }
+      if (path === '/api/documents/project-1?limit=100') {
+        return { documents: [{ id: 'document-1', filename: 'edge-photo.jpg' }] };
+      }
+      if (
+        path === '/api/holdpoints/hp-1/conditions/condition-open/record-satisfaction' &&
+        options?.method === 'POST'
+      ) {
+        return {
+          condition: {
+            ...openCondition,
+            recordedSatisfiedAt: '2026-09-06T01:00:00.000Z',
+            recordedSatisfiedByName: 'Alex Quality',
+            satisfactionNote: 'Barrier installed.',
+            satisfactionEvidenceDocumentId: 'document-1',
+          },
+          remainingOpenConditionCount: 0,
+          itpCompletionVerified: true,
+        };
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    renderState(
+      makeHoldPoint({
+        status: 'released',
+        latestRound: {
+          outcome: 'released_with_conditions',
+          decidedAt: '2026-09-03T00:00:00.000Z',
+          decisionReason: null,
+          ncrId: null,
+          ncrNumber: null,
+          ncrStatus: null,
+          openConditionCount: 1,
+        },
+      }),
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Record satisfaction' }));
+    await user.type(screen.getByLabelText('Satisfaction note (optional)'), 'Barrier installed.');
+    await screen.findByRole('option', { name: 'edge-photo.jpg' });
+    await user.selectOptions(screen.getByLabelText('Evidence document (optional)'), 'document-1');
+    await user.click(screen.getByRole('button', { name: 'Record satisfaction' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/holdpoints/hp-1/conditions/condition-open/record-satisfaction',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            note: 'Barrier installed.',
+            evidenceDocumentId: 'document-1',
+          }),
+        },
+      ),
+    );
+    expect(await screen.findByText(/Recorded satisfied by Alex Quality/)).toHaveTextContent(
+      '6/09/2026',
+    );
+    expect(screen.getByText('Barrier installed.')).toBeInTheDocument();
+  });
+
+  it('does not offer satisfaction actions to company admins outside the three project roles', async () => {
+    authState.actualRole = 'admin';
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/holdpoints/lot/lot-1/item/item-1') {
+        return conditionDetail([
+          {
+            id: 'condition-open',
+            sequence: 1,
+            text: 'Protect the exposed edge.',
+            recordedSatisfiedAt: null,
+            recordedSatisfiedByName: null,
+            satisfactionNote: null,
+            satisfactionEvidenceDocumentId: null,
+          },
+        ]);
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    renderState(
+      makeHoldPoint({
+        status: 'released',
+        latestRound: {
+          outcome: 'released_with_conditions',
+          decidedAt: '2026-09-03T00:00:00.000Z',
+          decisionReason: null,
+          ncrId: null,
+          ncrNumber: null,
+          ncrStatus: null,
+          openConditionCount: 1,
+        },
+      }),
+    );
+
+    expect(await screen.findByText('Not yet recorded satisfied.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record satisfaction' })).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/documents/project-1?limit=100');
   });
 });

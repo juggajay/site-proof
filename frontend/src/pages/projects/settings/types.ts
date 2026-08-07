@@ -38,6 +38,7 @@ export interface Project {
   /** Wave C1 gate strength: 'off' | 'warn' | 'block' (spec §5.1.2). */
   testSufficiencyMode?: string | null;
   settings?: string | Record<string, unknown> | null;
+  hpInternalReleaserIds?: string[];
   currentUserRole?: string | null;
 }
 

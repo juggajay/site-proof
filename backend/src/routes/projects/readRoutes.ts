@@ -134,6 +134,7 @@ function getProjectDetailRole({
 function maskProjectDetailForCurrentUser<
   T extends {
     contractValue: unknown;
+    hpInternalReleaserIds: unknown;
     settings: unknown;
     workingHoursStart: unknown;
     workingHoursEnd: unknown;
@@ -147,6 +148,7 @@ function maskProjectDetailForCurrentUser<
   }
 
   if (isSubcontractor) {
+    visibleProject.hpInternalReleaserIds = [] as T['hpInternalReleaserIds'];
     visibleProject.settings = null as T['settings'];
     visibleProject.workingHoursStart = null as T['workingHoursStart'];
     visibleProject.workingHoursEnd = null as T['workingHoursEnd'];
@@ -311,6 +313,7 @@ export function createProjectReadRouter({
           chainageStart: true,
           chainageEnd: true,
           settings: true, // Feature #697 - HP recipients stored in JSON settings
+          hpInternalReleaserIds: true,
           createdAt: true,
           updatedAt: true,
           company: {

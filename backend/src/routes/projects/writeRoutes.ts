@@ -11,6 +11,7 @@ import { buildProjectCreatedResponse } from './costResponses.js';
 import { assertCompanyProjectCapacity } from './projectCreationLimit.js';
 import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../../lib/projectAccess.js';
 import { SUFFICIENCY_MODES } from '../../lib/readiness/sufficiency/types.js';
+import { z } from 'zod';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -71,6 +72,23 @@ type RetainedProjectRelation = (typeof RETAINED_PROJECT_RELATIONS)[number];
 type RetainedProjectCounts = Record<RetainedProjectRelation, number>;
 
 const AUSTROADS_SPECIFICATION_SET = 'Austroads';
+
+const hpInternalReleaserIdsSchema = z
+  .array(z.string().trim().min(1).max(128))
+  .max(100)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'Internal hold point releaser IDs must be unique.',
+  });
+
+export function parseOptionalHpInternalReleaserIds(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+
+  const parsed = hpInternalReleaserIdsSchema.safeParse(value);
+  if (!parsed.success) {
+    throw AppError.fromZodError(parsed.error);
+  }
+  return parsed.data;
+}
 
 const PROJECT_SPECIFICATION_SET_BY_STATE: Record<string, string> = {
   NSW: 'TfNSW',
@@ -451,6 +469,9 @@ export function createProjectWriteRouter({
       );
       const chainageEnd = parseOptionalNonNegativeNumber(req.body.chainageEnd, 'Chainage end');
       const settings = parseOptionalProjectSettings(req.body.settings);
+      const hpInternalReleaserIds = parseOptionalHpInternalReleaserIds(
+        req.body.hpInternalReleaserIds,
+      );
       const status = req.body.status;
       if (status !== undefined && (typeof status !== 'string' || !projectStatuses.has(status))) {
         throw AppError.badRequest('Invalid status value');
@@ -480,6 +501,7 @@ export function createProjectWriteRouter({
           workingHoursStart: true,
           workingHoursEnd: true,
           settings: true,
+          hpInternalReleaserIds: true,
           status: true,
           // C1 (F7): prior gate strength, so an audit reader can see a
           // block -> warn -> block round trip, not just "mode was touched".
@@ -504,6 +526,23 @@ export function createProjectWriteRouter({
       const isStatusOnlyUpdate = requestKeys.length === 1 && requestKeys[0] === 'status';
       if (project.status === 'archived' && (!isStatusOnlyUpdate || status !== 'active')) {
         throw AppError.conflict(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
+      }
+
+      if (hpInternalReleaserIds !== undefined) {
+        const activeMembers = await prisma.projectUser.findMany({
+          where: {
+            projectId: id,
+            userId: { in: hpInternalReleaserIds },
+            status: 'active',
+          },
+          select: { userId: true },
+        });
+        const activeMemberIds = new Set(activeMembers.map((member) => member.userId));
+        if (hpInternalReleaserIds.some((userId) => !activeMemberIds.has(userId))) {
+          throw AppError.badRequest(
+            'Every nominated internal releaser must be an active member of this project.',
+          );
+        }
       }
 
       const effectiveChainageStart =
@@ -554,6 +593,9 @@ export function createProjectWriteRouter({
       if (chainageStart !== undefined) updateData.chainageStart = chainageStart;
       if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd;
       if (status !== undefined) updateData.status = status;
+      if (hpInternalReleaserIds !== undefined) {
+        updateData.hpInternalReleaserIds = hpInternalReleaserIds;
+      }
       // Feature #697 - Store HP recipients and other notification settings in JSON settings field
       if (settings !== undefined) {
         let existingSettings: Record<string, unknown> = {};
@@ -588,6 +630,7 @@ export function createProjectWriteRouter({
           chainageStart: true,
           chainageEnd: true,
           status: true,
+          hpInternalReleaserIds: true,
           createdAt: true,
           updatedAt: true,
         },

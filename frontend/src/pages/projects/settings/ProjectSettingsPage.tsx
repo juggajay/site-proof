@@ -244,8 +244,10 @@ interface SettingsTabPanelsProps {
   notificationPreferences: ProjectNotificationPreferences;
   witnessPointNotifications: WitnessPointNotificationSettings;
   hpMinimumNoticeDays: number;
+  hpInternalReleaserIds: string[];
   onProjectUpdate: (project: Project) => void;
   onSettingsSaved: (patch: Record<string, unknown>) => void;
+  onInternalReleasersSaved: (ids: string[]) => void;
 }
 
 // The per-tab panel dispatch lives here so ProjectSettingsPage stays a thin
@@ -266,8 +268,10 @@ function SettingsTabPanels({
   notificationPreferences,
   witnessPointNotifications,
   hpMinimumNoticeDays,
+  hpInternalReleaserIds,
   onProjectUpdate,
   onSettingsSaved,
+  onInternalReleasersSaved,
 }: SettingsTabPanelsProps) {
   if (!projectId) return null;
 
@@ -320,8 +324,10 @@ function SettingsTabPanels({
           initialNotificationPreferences={notificationPreferences}
           initialWitnessPointNotifications={witnessPointNotifications}
           initialHpMinimumNoticeDays={hpMinimumNoticeDays}
+          initialHpInternalReleaserIds={hpInternalReleaserIds}
           readOnly={readOnly}
           onSettingsSaved={onSettingsSaved}
+          onInternalReleasersSaved={onInternalReleasersSaved}
         />
       )}
 
@@ -450,6 +456,12 @@ export function ProjectSettingsPage() {
     applyProjectState(updatedProject);
   };
 
+  const handleInternalReleasersSaved = (ids: string[]) => {
+    setProject((currentProject) =>
+      currentProject ? { ...currentProject, hpInternalReleaserIds: ids } : currentProject,
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -553,8 +565,10 @@ export function ProjectSettingsPage() {
             notificationPreferences={notificationPreferences}
             witnessPointNotifications={witnessPointNotifications}
             hpMinimumNoticeDays={hpMinimumNoticeDays}
+            hpInternalReleaserIds={project?.hpInternalReleaserIds ?? []}
             onProjectUpdate={handleProjectUpdate}
             onSettingsSaved={applyProjectSettingsPatch}
+            onInternalReleasersSaved={handleInternalReleasersSaved}
           />
         )}
       </div>
