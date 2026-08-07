@@ -44,6 +44,7 @@ import { usePlanSheets } from '@/pages/projects/settings/planSheetsData';
 import { AreaDrawLayer } from './AreaDrawLayer';
 import { LotsGeoJsonLayer, POLYGON_STROKE_COLOR, type LotSelectEvent } from './LotsGeoJsonLayer';
 import { chooseCamera, readSavedViewport, writeSavedViewport } from './cameraPolicy';
+import { LotLabelsLayer, type LabelLot } from './LotLabelsLayer';
 import { FindByAreaPanel } from './FindByAreaPanel';
 import { CoveragePanel } from './CoveragePanel';
 import { PlansPanel } from './PlansPanel';
@@ -1205,6 +1206,26 @@ export function LotMapView({
     if (b) map.fitBounds(b, { padding: [24, 24], maxZoom: 18 });
   }, [map, filteredLotIds, filteredGeometries]);
 
+  // Zoom-tiered labels: one candidate per displayed lot with a usable centroid.
+  const labelLots = useMemo<LabelLot[]>(
+    () =>
+      displayGeometries.flatMap((g) => {
+        const position = featureCentroid(g.geometryWgs84);
+        return position
+          ? [
+              {
+                lotId: g.lotId,
+                lotNumber: g.lotNumber,
+                status: g.status,
+                chainage: chainageLabel(g.chainageStart, g.chainageEnd),
+                position,
+              },
+            ]
+          : [];
+      }),
+    [displayGeometries],
+  );
+
   // The explicit Fit control: filtered lots + control lines, or the first
   // registered sheet when nothing else has geometry (the `bounds` memo).
   const handleFit = useCallback(() => {
@@ -1539,6 +1560,11 @@ export function LotMapView({
                 colorFor={colorForLot}
                 selectedLotId={selectedLot?.lotId ?? null}
                 onSelect={setSelectedLot}
+              />
+              <LotLabelsLayer
+                lots={labelLots}
+                colorFor={colorForLot}
+                selectedLotId={selectedLot?.lotId ?? null}
               />
               {selectedLot && selectedGeometry && (
                 <LotPopup

@@ -1,0 +1,80 @@
+/* Zoom-tiered lot labels. These render over map imagery (satellite or plan
+   paper), so colours are fixed — the app theme never restyles the ground. */
+
+.civos-lot-label-icon {
+  background: transparent;
+  border: none;
+}
+
+/* Every label variant hangs off one centred anchor at the lot centroid. */
+.civos-lot-anchor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* Overview tier: a status dot with a dark casing and a white halo ring —
+   legible at sub-pixel lot sizes where fills cannot be. */
+.civos-lot-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  border: 2px solid #1f2937;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+}
+
+/* Working/detail tiers: halo keeps text readable on any imagery. */
+.civos-lot-label-text {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #111827;
+  text-shadow:
+    0 1px 0 #fff,
+    1px 0 0 #fff,
+    -1px 0 0 #fff,
+    0 -1px 0 #fff,
+    0 0 3px #fff;
+}
+
+.civos-lot-label-detail {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #374151;
+  text-shadow:
+    0 1px 0 #fff,
+    1px 0 0 #fff,
+    -1px 0 0 #fff,
+    0 -1px 0 #fff,
+    0 0 3px #fff;
+}
+
+/* Status is never colour-only: blocked lots (hold point / NCR) carry a shape
+   mark alongside the fill/dot colour. */
+.civos-lot-alert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  margin-right: 2px;
+  border-radius: 9999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1px #fff;
+}
+
+/* Dot tier: the mark rides the dot's shoulder instead of sitting inline. */
+.civos-lot-alert--dot {
+  position: absolute;
+  left: 3px;
+  top: -14px;
+  margin-right: 0;
+}

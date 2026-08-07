@@ -133,6 +133,14 @@ vi.mock('react-leaflet', () => {
   };
 });
 
+// The labels layer drives imperative Leaflet markers (panes, container-point
+// projection) that jsdom cannot host — stub it and assert the candidates fed in.
+vi.mock('./LotLabelsLayer', () => ({
+  LotLabelsLayer: ({ lots, selectedLotId }: { lots: unknown[]; selectedLotId: string | null }) => (
+    <div data-testid="lot-labels" data-count={lots.length} data-selected={selectedLotId ?? ''} />
+  ),
+}));
+
 // usePlanSheets hits useQuery; the map renders without a QueryClientProvider, so
 // stub it. DrawLotLayer/overlays only mount when armed/shown, so no leaflet.
 const planSheetsQuery = { data: [] as unknown[] };
