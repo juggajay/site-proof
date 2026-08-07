@@ -50,14 +50,42 @@ describe('buildHoldPointStats', () => {
           status: 'released',
           releasedAt: '2026-05-20T10:00:00.000Z',
         }),
+        makeHoldPoint({
+          id: 'refused',
+          status: 'pending',
+          latestRound: {
+            outcome: 'rejected',
+            decidedAt: '2026-06-05T10:00:00.000Z',
+            decisionReason: 'Correct the failed proof roll.',
+            ncrId: 'ncr-1',
+            ncrNumber: 'NCR-0042',
+            ncrStatus: 'open',
+            openConditionCount: 0,
+          },
+        }),
+        makeHoldPoint({
+          id: 'conditions',
+          status: 'released',
+          latestRound: {
+            outcome: 'released_with_conditions',
+            decidedAt: '2026-06-05T10:00:00.000Z',
+            decisionReason: null,
+            ncrId: null,
+            ncrNumber: null,
+            ncrStatus: null,
+            openConditionCount: 2,
+          },
+        }),
       ],
       new Date('2026-06-06T12:00:00.000Z'),
     );
 
     expect(stats).toMatchObject({
-      total: 4,
+      total: 6,
       pending: 1,
       notified: 1,
+      refused: 1,
+      conditionsOpen: 1,
       releasedThisWeek: 1,
     });
   });
@@ -209,10 +237,40 @@ describe('filterHoldPoints', () => {
       notificationSentAt: '2026-06-05T01:00:00.000Z',
     }),
     makeHoldPoint({ id: 'released', status: 'released', lotId: 'lot-4', lotNumber: 'LOT-004' }),
+    makeHoldPoint({
+      id: 'refused',
+      status: 'pending',
+      lotId: 'lot-5',
+      lotNumber: 'LOT-005',
+      latestRound: {
+        outcome: 'rejected',
+        decidedAt: '2026-06-09T01:00:00.000Z',
+        decisionReason: 'Complete rectification.',
+        ncrId: 'ncr-42',
+        ncrNumber: 'NCR-0042',
+        ncrStatus: 'open',
+        openConditionCount: 0,
+      },
+    }),
+    makeHoldPoint({
+      id: 'conditions',
+      status: 'released',
+      lotId: 'lot-6',
+      lotNumber: 'LOT-006',
+      latestRound: {
+        outcome: 'released_with_conditions',
+        decidedAt: '2026-06-09T01:00:00.000Z',
+        decisionReason: null,
+        ncrId: null,
+        ncrNumber: null,
+        ncrStatus: null,
+        openConditionCount: 3,
+      },
+    }),
   ];
 
   it('passes everything through for the all view', () => {
-    expect(filterHoldPoints(register, 'all', '', reference)).toHaveLength(4);
+    expect(filterHoldPoints(register, 'all', '', reference)).toHaveLength(6);
   });
 
   it('filters by backend status', () => {
@@ -226,6 +284,18 @@ describe('filterHoldPoints', () => {
     expect(filterHoldPoints(register, 'notice-expired', '', reference).map((hp) => hp.id)).toEqual([
       'notified-expired',
     ]);
+  });
+
+  it('keeps refused and conditional releases in their actionable buckets', () => {
+    expect(filterHoldPoints(register, 'pending', '', reference).map((hp) => hp.id)).toEqual([
+      'pending',
+    ]);
+    expect(filterHoldPoints(register, 'refused', '', reference).map((hp) => hp.id)).toEqual([
+      'refused',
+    ]);
+    expect(filterHoldPoints(register, 'conditions-open', '', reference).map((hp) => hp.id)).toEqual(
+      ['conditions'],
+    );
   });
 
   it('searches lot number and description, case-insensitively', () => {
@@ -400,6 +470,8 @@ describe('URL param parsing', () => {
   it('accepts known values and falls back safely', () => {
     expect(parseStatusFilterParam('notice-expired')).toBe('notice-expired');
     expect(parseStatusFilterParam('released')).toBe('released');
+    expect(parseStatusFilterParam('refused')).toBe('refused');
+    expect(parseStatusFilterParam('conditions-open')).toBe('conditions-open');
     expect(parseStatusFilterParam('bogus')).toBe('all');
     expect(parseStatusFilterParam(null)).toBe('all');
 

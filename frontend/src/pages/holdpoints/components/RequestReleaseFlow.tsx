@@ -63,6 +63,7 @@ export function RequestReleaseFlow({ holdPoint, onClose, onRequested }: RequestR
       overrideNoticePeriod?: boolean,
       overrideReason?: string,
       evidenceDocumentIds?: string[],
+      responseToPriorRejection?: string,
     ) => {
       if (requestingRef.current) return;
       requestingRef.current = true;
@@ -80,6 +81,7 @@ export function RequestReleaseFlow({ holdPoint, onClose, onRequested }: RequestR
             evidenceDocumentIds: evidenceDocumentIds || [],
             noticePeriodOverride: overrideNoticePeriod || false,
             noticePeriodOverrideReason: overrideReason?.trim() || null,
+            responseToPriorRejection: responseToPriorRejection?.trim() || undefined,
           }),
         });
         await onRequested();

@@ -36,6 +36,7 @@ interface RequestReleaseModalProps {
     overrideNoticePeriod?: boolean,
     overrideReason?: string,
     evidenceDocumentIds?: string[],
+    responseToPriorRejection?: string,
   ) => void;
 }
 
@@ -104,6 +105,7 @@ export function RequestReleaseModal({
       scheduledTime: '',
       notificationSentTo: '',
       overrideReason: '',
+      responseToPriorRejection: '',
     },
   });
 
@@ -119,6 +121,7 @@ export function RequestReleaseModal({
   // Check if we have a notice period warning that needs override
   const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING';
   const evidenceDocumentIds = uploadedEvidenceDocuments.map((document) => document.id);
+  const isReRequest = holdPoint.latestRound?.outcome === 'rejected';
 
   const onFormSubmit = (data: RequestReleaseFormData) => {
     if (uploadingEvidence) {
@@ -137,6 +140,7 @@ export function RequestReleaseModal({
       undefined,
       undefined,
       evidenceDocumentIds,
+      data.responseToPriorRejection?.trim() || undefined,
     );
   };
 
@@ -160,7 +164,15 @@ export function RequestReleaseModal({
       return;
     }
     const { scheduledDate, scheduledTime, notificationSentTo: sentTo } = getValues();
-    onSubmit(scheduledDate, scheduledTime, sentTo, true, overrideReason, evidenceDocumentIds);
+    onSubmit(
+      scheduledDate,
+      scheduledTime,
+      sentTo,
+      true,
+      overrideReason,
+      evidenceDocumentIds,
+      getValues('responseToPriorRejection')?.trim() || undefined,
+    );
   };
 
   const handleEvidenceUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -292,7 +304,11 @@ export function RequestReleaseModal({
     }
   };
 
-  const canSubmit = details?.canRequestRelease && !requesting && !uploadingEvidence;
+  const canSubmit =
+    details?.canRequestRelease &&
+    !requesting &&
+    !uploadingEvidence &&
+    (!isReRequest || Boolean(watch('responseToPriorRejection')?.trim()));
 
   // Footer for the "can request" happy-path form — rendered in the sticky footer
   // of the sheet so Submit is always in reach without scrolling.
@@ -323,7 +339,7 @@ export function RequestReleaseModal({
             Cancel
           </Button>
           <Button type="submit" form="request-release-form" disabled={!canSubmit}>
-            {requesting ? 'Requesting...' : 'Request Release'}
+            {requesting ? 'Requesting...' : isReRequest ? 'Re-request Release' : 'Request Release'}
           </Button>
         </div>
       </>
@@ -338,7 +354,7 @@ export function RequestReleaseModal({
       <ResponsiveSheet
         open={true}
         onClose={onClose}
-        title="Request Hold Point Release"
+        title={isReRequest ? 'Re-request Hold Point Release' : 'Request Hold Point Release'}
         footer={formFooter}
         className="max-w-lg"
       >
@@ -542,6 +558,30 @@ export function RequestReleaseModal({
                     </p>
                   )}
                 </div>
+
+                {isReRequest && (
+                  <div>
+                    <Label htmlFor="request-release-refusal-response">
+                      Response to the refusal (required)
+                    </Label>
+                    <Textarea
+                      id="request-release-refusal-response"
+                      {...register('responseToPriorRejection', {
+                        required: 'Response to the refusal is required',
+                      })}
+                      required
+                      maxLength={5000}
+                      rows={4}
+                      placeholder="Explain how the refusal and linked non-conformance were addressed."
+                      className={errors.responseToPriorRejection ? 'border-destructive' : undefined}
+                    />
+                    {errors.responseToPriorRejection && (
+                      <p className="mt-1 text-sm text-destructive" role="alert">
+                        {errors.responseToPriorRejection.message}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="request-release-evidence">Release Evidence</Label>

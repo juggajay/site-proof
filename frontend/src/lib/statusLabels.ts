@@ -115,6 +115,9 @@ export const STATUS_LABELS: Record<string, string> = {
   // Hold point / subcontractor admin statuses
   requested: 'Requested',
   released: 'Released',
+  release_refused: 'Release refused',
+  released_with_conditions: 'Released with conditions',
+  hp_conditions_open: 'Release conditions not yet satisfied',
   suspended: 'Suspended',
   removed: 'Removed',
   inactive: 'Inactive',
@@ -242,4 +245,44 @@ export function formatStatusLabel(
   }
 
   return toTitleCase(status);
+}
+
+export interface HoldPointStatusSource {
+  status: string;
+  latestRound?: {
+    outcome: string | null;
+    ncrNumber: string | null;
+    ncrStatus: string | null;
+    openConditionCount: number;
+  } | null;
+}
+
+export function getHoldPointStatusKey(holdPoint: HoldPointStatusSource): string {
+  if (holdPoint.latestRound?.outcome === 'rejected' || holdPoint.status === 'rejected') {
+    return 'release_refused';
+  }
+  if (
+    holdPoint.latestRound?.outcome === 'released_with_conditions' &&
+    holdPoint.latestRound.openConditionCount > 0
+  ) {
+    return 'released_with_conditions';
+  }
+  return holdPoint.status;
+}
+
+export function formatHoldPointStatusLabel(holdPoint: HoldPointStatusSource): string {
+  const round = holdPoint.latestRound;
+  if (round?.outcome === 'rejected' || holdPoint.status === 'rejected') {
+    const ncr = round?.ncrNumber ? ` — ${round.ncrNumber}` : '';
+    const status = round?.ncrStatus
+      ? ` ${formatStatusLabel(round.ncrStatus).toLowerCase()}`
+      : round?.ncrNumber
+        ? ' open'
+        : '';
+    return `${STATUS_LABELS.release_refused}${ncr}${status}`;
+  }
+  if (round?.outcome === 'released_with_conditions' && round.openConditionCount > 0) {
+    return `Released — ${round.openConditionCount} condition${round.openConditionCount === 1 ? '' : 's'} open`;
+  }
+  return formatStatusLabel(holdPoint.status);
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Download, QrCode, RefreshCw, ClipboardCheck } from 'lucide-react';
 import type { HoldPoint, HoldPointSortDirection, HoldPointSortField, StatusFilter } from '../types';
@@ -6,14 +7,16 @@ import {
   buildFilterEmptyStateMessage,
   formatHoldPointDate,
   getStatusBadge,
-  getStatusLabel,
+  getHoldPointStatusLabel,
   getWaitingDays,
   isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
 import { getReleaseIdentityParts } from '../holdPointReleaseIdentity';
+import { getHoldPointStatusKey } from '@/lib/statusLabels';
 
 interface HoldPointsTableProps {
+  projectId?: string;
   holdPoints: HoldPoint[];
   filteredHoldPoints: HoldPoint[];
   loading: boolean;
@@ -35,6 +38,8 @@ interface HoldPointsTableProps {
   onChase: (hp: HoldPoint) => void;
   onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  canWithdrawRequest?: boolean;
+  onWithdrawRequest?: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
   onClearFilter: () => void;
 }
@@ -84,6 +89,7 @@ function SortableHeader({
 }
 
 export const HoldPointsTable = React.memo(function HoldPointsTable({
+  projectId,
   holdPoints,
   filteredHoldPoints,
   loading,
@@ -104,6 +110,8 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
   onChase,
   onShowQrCode,
   onGenerateEvidence,
+  canWithdrawRequest = false,
+  onWithdrawRequest = () => undefined,
   onToggleBatchSelection,
   onClearFilter,
 }: HoldPointsTableProps) {
@@ -247,6 +255,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
                 innerRef={virtualizer.measureElement}
                 dataIndex={virtualRow.index}
                 hp={hp}
+                projectId={projectId}
                 isDeepLinked={hp.id === highlightedHpId}
                 copiedHpId={copiedHpId}
                 generatingPdf={generatingPdf}
@@ -259,6 +268,8 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
                 onChase={onChase}
                 onShowQrCode={onShowQrCode}
                 onGenerateEvidence={onGenerateEvidence}
+                canWithdrawRequest={canWithdrawRequest}
+                onWithdrawRequest={onWithdrawRequest}
                 onToggleBatchSelection={onToggleBatchSelection}
               />
             );
@@ -284,6 +295,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
 
 interface HoldPointRowProps {
   hp: HoldPoint;
+  projectId?: string;
   /** True while this row is the deep-linked record's highlight pulse target. */
   isDeepLinked: boolean;
   /** Virtualizer measure ref + index, applied to the <tr> for dynamic sizing. */
@@ -300,11 +312,14 @@ interface HoldPointRowProps {
   onChase: (hp: HoldPoint) => void;
   onShowQrCode: (hp: HoldPoint) => void;
   onGenerateEvidence: (hp: HoldPoint) => void;
+  canWithdrawRequest: boolean;
+  onWithdrawRequest: (hp: HoldPoint) => void;
   onToggleBatchSelection: (hp: HoldPoint) => void;
 }
 
 function HoldPointRow({
   hp,
+  projectId,
   isDeepLinked,
   innerRef,
   dataIndex,
@@ -319,6 +334,8 @@ function HoldPointRow({
   onChase,
   onShowQrCode,
   onGenerateEvidence,
+  canWithdrawRequest,
+  onWithdrawRequest,
   onToggleBatchSelection,
 }: HoldPointRowProps) {
   const overdue = isOverdue(hp);
@@ -363,9 +380,18 @@ function HoldPointRow({
         <div className="max-w-md truncate">{hp.description}</div>
       </td>
       <td className="px-4 py-3">
-        <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(hp.status)}`}>
-          {getStatusLabel(hp.status)}
-        </span>
+        {projectId && hp.latestRound?.ncrId ? (
+          <Link
+            to={`/projects/${encodeURIComponent(projectId)}/ncr?ncr=${encodeURIComponent(hp.latestRound.ncrId)}`}
+            className={`inline-flex rounded-full px-2 py-1 text-xs underline-offset-2 hover:underline ${getStatusBadge(hp)}`}
+          >
+            {getHoldPointStatusLabel(hp)}
+          </Link>
+        ) : (
+          <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(hp)}`}>
+            {getHoldPointStatusLabel(hp)}
+          </span>
+        )}
       </td>
       <td
         className={`px-4 py-3 text-sm tabular-nums ${overdue || noticeExpired ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
@@ -420,6 +446,8 @@ function HoldPointRow({
           onChase={onChase}
           onShowQrCode={onShowQrCode}
           onGenerateEvidence={onGenerateEvidence}
+          canWithdrawRequest={canWithdrawRequest}
+          onWithdrawRequest={onWithdrawRequest}
         />
       </td>
     </tr>
@@ -440,6 +468,8 @@ function HoldPointRowActions({
   onChase,
   onShowQrCode,
   onGenerateEvidence,
+  canWithdrawRequest,
+  onWithdrawRequest,
 }: Pick<
   HoldPointRowProps,
   | 'hp'
@@ -452,7 +482,14 @@ function HoldPointRowActions({
   | 'onChase'
   | 'onShowQrCode'
   | 'onGenerateEvidence'
+  | 'canWithdrawRequest'
+  | 'onWithdrawRequest'
 >) {
+  const statusKey = getHoldPointStatusKey(hp);
+  const refusalNcrClosed =
+    hp.latestRound?.ncrStatus != null &&
+    ['closed', 'closed_concession'].includes(hp.latestRound.ncrStatus);
+
   return (
     <div className="flex items-center gap-2">
       <button
@@ -467,12 +504,24 @@ function HoldPointRowActions({
           <Link2 className="h-3.5 w-3.5" />
         )}
       </button>
-      {hp.status === 'pending' && (
+      {statusKey === 'pending' && (
         <button
           onClick={() => onRequestRelease(hp)}
           className="text-sm text-primary hover:underline"
         >
           Request Release
+        </button>
+      )}
+      {statusKey === 'release_refused' && (
+        <button
+          onClick={() => onRequestRelease(hp)}
+          disabled={!refusalNcrClosed}
+          title={
+            refusalNcrClosed ? undefined : 'Close the linked NCR before re-requesting release.'
+          }
+          className="text-sm text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+        >
+          Re-request release
         </button>
       )}
       {hp.status === 'notified' && (
@@ -514,6 +563,14 @@ function HoldPointRowActions({
                   </>
                 )}
               </button>
+              {canWithdrawRequest && (
+                <button
+                  onClick={() => onWithdrawRequest(hp)}
+                  className="px-2 py-1 text-xs text-destructive underline-offset-2 hover:underline"
+                >
+                  Withdraw request
+                </button>
+              )}
             </>
           )}
         </>

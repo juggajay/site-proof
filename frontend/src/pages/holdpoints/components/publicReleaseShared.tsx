@@ -1,4 +1,5 @@
 import { CheckCircle2, ClipboardCheck } from 'lucide-react';
+import { getHoldPointStatusBadgeClass } from '@/lib/statusColors';
 import { formatStatusLabel } from '@/lib/statusLabels';
 
 export function formatDateTime(value: string | null | undefined): string {
@@ -30,14 +31,12 @@ export function isHoldPointReleased(status: string | null | undefined): boolean 
 }
 
 export function StatusPill({ status }: { status: string }) {
-  const released = isHoldPointReleased(status);
+  const released = isHoldPointReleased(status) || status === 'released_with_conditions';
   const label = formatStatusLabel(status);
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-        released ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-      }`}
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${getHoldPointStatusBadgeClass(status)}`}
     >
       {released ? (
         <CheckCircle2 className="h-3.5 w-3.5" />

@@ -68,6 +68,8 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
           <option value="pending">Pending</option>
           <option value="notified">Awaiting Release</option>
           <option value="notice-expired">Awaiting Release — Notice Expired</option>
+          <option value="refused">Release Refused</option>
+          <option value="conditions-open">Conditions Open</option>
           <option value="released">Released</option>
         </select>
         {showExport && (
@@ -105,6 +107,12 @@ export const HoldPointSummaryLine = React.memo(function HoldPointSummaryLine({
   const counts = [
     { filter: 'pending' as const, label: 'pending', value: stats.pending },
     { filter: 'notified' as const, label: 'awaiting release', value: stats.notified },
+    { filter: 'refused' as const, label: 'release refused', value: stats.refused },
+    {
+      filter: 'conditions-open' as const,
+      label: 'with conditions open',
+      value: stats.conditionsOpen,
+    },
   ].filter((count) => count.value > 0);
 
   if (counts.length === 0) {

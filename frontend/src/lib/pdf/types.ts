@@ -293,6 +293,7 @@ export interface HPEvidencePackageData extends PDFBrandableData {
     releaseMethod?: string | null;
     releaseSignatureUrl?: string | null;
     releaseNotes: string | null;
+    decisionRounds?: HoldPointDecisionRound[];
   };
   lot: {
     id: string;
@@ -441,6 +442,32 @@ export interface ClaimHoldPoint {
   description?: string;
   releasedAt?: string | null;
   releasedBy?: { name: string; organization?: string | null } | null;
+  decisionRounds?: HoldPointDecisionRound[];
+}
+
+export interface HoldPointReleaseCondition {
+  id: string;
+  sequence: number;
+  text: string;
+  recordedSatisfiedAt: string | null;
+  recordedSatisfiedByName: string | null;
+  satisfactionNote: string | null;
+  satisfactionEvidenceDocumentId: string | null;
+}
+
+export interface HoldPointDecisionRound {
+  id: string;
+  roundNumber: number;
+  requestedAt: string;
+  responseToPriorRejection: string | null;
+  outcome: 'released' | 'released_with_conditions' | 'rejected' | null;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  decidedByOrg: string | null;
+  decisionReason: string | null;
+  withdrawnAt: string | null;
+  withdrawalReason: string | null;
+  conditions: HoldPointReleaseCondition[];
 }
 
 export interface ClaimTestResult {

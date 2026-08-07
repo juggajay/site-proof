@@ -22,6 +22,7 @@ export const requestReleaseSchema = z.object({
       );
     }, 'Enter valid email addresses separated by commas or semicolons'),
   overrideReason: z.string().optional(),
+  responseToPriorRejection: z.string().max(5000).optional(),
 });
 
 export type RequestReleaseFormData = z.infer<typeof requestReleaseSchema>;

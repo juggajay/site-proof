@@ -231,7 +231,15 @@ describe('HoldPointsTrends', () => {
 });
 
 describe('HoldPointSummaryLine', () => {
-  const stats = { total: 10, pending: 7, notified: 2, releasedThisWeek: 0, overdue: 0 };
+  const stats = {
+    total: 10,
+    pending: 7,
+    notified: 2,
+    refused: 1,
+    conditionsOpen: 1,
+    releasedThisWeek: 0,
+    overdue: 0,
+  };
 
   it('shows only the counts that name work, and filters on click', async () => {
     const user = userEvent.setup();
@@ -277,7 +285,15 @@ describe('HoldPointSummaryLine', () => {
   it('calls out overdue hold points and drops zero counts', () => {
     render(
       <HoldPointSummaryLine
-        stats={{ total: 10, pending: 0, notified: 3, releasedThisWeek: 4, overdue: 2 }}
+        stats={{
+          total: 10,
+          pending: 0,
+          notified: 3,
+          refused: 0,
+          conditionsOpen: 0,
+          releasedThisWeek: 4,
+          overdue: 2,
+        }}
         statusFilter="all"
         onStatusFilterChange={vi.fn()}
       />,
@@ -293,7 +309,15 @@ describe('HoldPointSummaryLine', () => {
   it('says so when there is nothing left to action', () => {
     render(
       <HoldPointSummaryLine
-        stats={{ total: 6, pending: 0, notified: 0, releasedThisWeek: 6, overdue: 0 }}
+        stats={{
+          total: 6,
+          pending: 0,
+          notified: 0,
+          refused: 0,
+          conditionsOpen: 0,
+          releasedThisWeek: 6,
+          overdue: 0,
+        }}
         statusFilter="all"
         onStatusFilterChange={vi.fn()}
       />,

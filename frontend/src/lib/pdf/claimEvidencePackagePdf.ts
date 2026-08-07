@@ -11,6 +11,7 @@ import type {
   ClaimItpCompletion,
   ClaimPackageOptions,
 } from './types';
+import { holdPointDecisionRoundLines } from './holdPointDecisionRoundLines';
 
 /**
  * Supporting-statement reminder, keyed off the project's jurisdiction. Returns
@@ -578,6 +579,34 @@ export async function generateClaimEvidencePackagePDF(
               doc.text(`  ${desc}released by ${hp.releasedBy?.name}${org}${when}`, margin, yPos);
               yPos += 4;
             });
+
+          (lot.holdPoints ?? []).forEach((holdPoint) => {
+            const evidenceGeneratedAt = new Date(data.generatedAt);
+            const lines = holdPointDecisionRoundLines(
+              holdPoint.decisionRounds,
+              Number.isFinite(evidenceGeneratedAt.getTime()) ? evidenceGeneratedAt : generatedAt,
+            );
+            if (lines.length === 0) return;
+            checkPageBreak(8);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.text(
+              `  ${holdPoint.description || 'Hold point'} — immutable decision terms`,
+              margin,
+              yPos,
+            );
+            yPos += 4;
+            lines.forEach((line) => {
+              const wrapped = doc.splitTextToSize(`    ${line}`, contentWidth) as string[];
+              checkPageBreak(wrapped.length * 4 + 1);
+              doc.setFont(
+                'helvetica',
+                line === 'Decision rounds' || line.startsWith('Round ') ? 'bold' : 'normal',
+              );
+              doc.text(wrapped, margin, yPos);
+              yPos += wrapped.length * 4;
+            });
+          });
           doc.setFontSize(9);
           yPos += 3;
         }
