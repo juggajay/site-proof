@@ -2275,6 +2275,47 @@ test.describe('production readiness guardrails', () => {
     expect(offlineIndicatorSource).toContain("from '@/lib/useOfflineStatus'");
   });
 
+  test('3D viewer stack stays out of eager bundles', async () => {
+    // The vendor-3d chunk (three + @thatopen + web-ifc + camera-controls,
+    // ~MBs of JS + wasm) must only ever load behind the lazily-imported
+    // viewer modules. A static import from any eager module would pull the
+    // whole stack into the initial app bundle.
+    const allowedPrefix = '/frontend/src/pages/models/viewer/';
+    const importPattern =
+      /(?:from\s+|import\()\s*['"](?:three|three-mesh-bvh|@thatopen\/|web-ifc|camera-controls)/;
+
+    const sourceFiles = await collectSourceFiles(new URL('../src/', import.meta.url));
+    const offenders: string[] = [];
+    for (const file of sourceFiles) {
+      const pathname = file.pathname.replace(/\\/g, '/');
+      if (pathname.includes(allowedPrefix)) continue;
+      const source = await readFile(file, 'utf8');
+      if (importPattern.test(source)) {
+        offenders.push(pathname);
+      }
+    }
+    expect(offenders).toEqual([]);
+
+    // The viewer page reaches the 3D code only through a dynamic import, and
+    // the page itself is lazy in appLazyPages.
+    const viewerPageSource = await readFile(
+      new URL('../src/pages/models/ModelViewerPage.tsx', import.meta.url),
+      'utf8',
+    );
+    expect(viewerPageSource).toContain("import('./viewer/ModelViewerCanvas')");
+    const lazyPagesSource = await readFile(
+      new URL('../src/appLazyPages.ts', import.meta.url),
+      'utf8',
+    );
+    expect(lazyPagesSource).toContain("import('@/pages/models/ModelViewerPage')");
+    expect(lazyPagesSource).toContain("import('@/pages/models/DesignModelsPage')");
+
+    // And the heavyweight chunks stay out of the PWA install-time precache.
+    const viteConfigSource = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8');
+    expect(viteConfigSource).toContain("'**/assets/vendor-3d*.js'");
+    expect(viteConfigSource).toContain("'**/assets/ModelViewerPage*.js'");
+  });
+
   test('offline lot conflict sync does not overwrite unresolved conflicts', async () => {
     const offlineDbSource = await readFile(
       new URL('../src/lib/offlineDb.ts', import.meta.url),

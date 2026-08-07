@@ -25,6 +25,7 @@ import {
   Users,
   BarChart3,
   Settings,
+  Boxes,
   FileCheck,
   GitPullRequest,
   Package,
@@ -107,6 +108,7 @@ export const projectNavigation: NavigationItem[] = [
   },
   { name: 'Docket Approvals', href: 'dockets', icon: FileCheck, section: 'Commercial' },
   { name: 'Documents', href: 'documents', icon: FileText, section: 'Records' },
+  { name: 'Design Models', href: 'models', icon: Boxes, section: 'Records' },
   { name: 'Deliveries', href: 'deliveries', icon: Truck, section: 'Records' },
   {
     name: 'Subcontractors',

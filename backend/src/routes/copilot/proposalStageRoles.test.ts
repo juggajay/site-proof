@@ -25,6 +25,10 @@ describe('rolesForProposalStage', () => {
     expect(rolesForProposalStage('import_lot_register')).toEqual([...LOT_CREATORS]);
   });
 
+  it('gates model_lot_linking on LOT_CREATORS', () => {
+    expect(rolesForProposalStage('model_lot_linking')).toEqual([...LOT_CREATORS]);
+  });
+
   it('defaults an unknown stage to the narrower LOT_CREATORS set', () => {
     expect(rolesForProposalStage('some_future_stage')).toEqual([...LOT_CREATORS]);
   });

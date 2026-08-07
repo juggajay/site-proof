@@ -18,6 +18,7 @@ const STAGE_DECISION_ROLES: Record<string, readonly string[]> = {
   import_itp_templates: TEMPLATE_MANAGER_ROLES,
   // B2's stage, listed so the map states the whole intended shape in one place.
   import_lot_register: LOT_CREATORS,
+  model_lot_linking: LOT_CREATORS,
 };
 
 export function rolesForProposalStage(stage: string): string[] {

@@ -96,6 +96,46 @@ afterAll(async () => {
 });
 
 describe('model conversion runner', () => {
+  it('writes the extracted element index and diagnostic counts before publishing ready', async () => {
+    const store = new FakeModelObjectStore();
+    const source = Buffer.from('source with injectable extraction');
+    const target = await createVersion(source);
+    store.objects.set(target.sourceRef, source);
+
+    expect(
+      await runNextConversion({
+        leaseOwner: 'runner',
+        store,
+        convert: async () => Uint8Array.from([1, 2, 3]),
+        extract: async () => ({
+          elements: [
+            {
+              ifcGuid: 'ifc-guid-1',
+              name: 'Drainage element',
+              category: 'IFCBUILDINGELEMENTPROXY',
+              lotNumberValue: 'LOT-1',
+              objectCode: 'OBJ-1',
+            },
+          ],
+          skippedMissingGuid: 2,
+          skippedDuplicateGuid: 1,
+        }),
+      }),
+    ).toBe('ready');
+
+    expect(await prisma.modelElement.findMany({ where: { versionId: target.version.id } })).toEqual(
+      [expect.objectContaining({ ifcGuid: 'ifc-guid-1', lotNumberValue: 'LOT-1' })],
+    );
+    const updated = await prisma.designModelVersion.findUniqueOrThrow({
+      where: { id: target.version.id },
+    });
+    expect(updated.diagnostics).toMatchObject({
+      elementCount: 1,
+      skippedMissingGuid: 2,
+      skippedDuplicateGuid: 1,
+    });
+  });
+
   it('catches invalid IFC bytes and remains callable for the next job', async () => {
     const store = new FakeModelObjectStore();
     const garbage = crypto.randomBytes(64);
@@ -120,7 +160,9 @@ describe('model conversion runner', () => {
     expect(
       (await prisma.designModelVersion.findUnique({ where: { id: second.version.id } }))?.status,
     ).toBe('ready');
-  });
+    // 120 s: the first real conversion cold-boots the web-ifc wasm, which can
+    // exceed the default 30 s under CI coverage instrumentation on a cold runner.
+  }, 120_000);
 
   it('copies a same-project cache hit without constructing the importer', async () => {
     const store = new FakeModelObjectStore();
@@ -138,6 +180,20 @@ describe('model conversion runner', () => {
         fragStorageRef: cachedFragRef,
         fragSizeBytes: BigInt(cachedFrag.length),
         convertedAt: new Date(),
+        diagnostics: {
+          elementCount: 1,
+          skippedMissingGuid: 1,
+          skippedDuplicateGuid: 2,
+        },
+      },
+    });
+    await prisma.modelElement.create({
+      data: {
+        versionId: cached.version.id,
+        ifcGuid: 'cached-guid',
+        name: 'Cached element',
+        category: 'IFCWALL',
+        lotNumberValue: 'LOT-CACHED',
       },
     });
 
@@ -155,6 +211,37 @@ describe('model conversion runner', () => {
       where: { id: target.version.id },
     });
     expect(updated?.status).toBe('ready');
-    expect(updated?.diagnostics).toEqual({ cacheHitFromVersionId: cached.version.id });
+    expect(updated?.diagnostics).toEqual({
+      cacheHitFromVersionId: cached.version.id,
+      elementCount: 1,
+      skippedMissingGuid: 1,
+      skippedDuplicateGuid: 2,
+    });
+    expect(await prisma.modelElement.findMany({ where: { versionId: target.version.id } })).toEqual(
+      [expect.objectContaining({ ifcGuid: 'cached-guid', lotNumberValue: 'LOT-CACHED' })],
+    );
+  });
+
+  it('publishes a viewable ready version when element extraction fails', async () => {
+    const store = new FakeModelObjectStore();
+    const source = Buffer.from('source whose index fails');
+    const target = await createVersion(source);
+    store.objects.set(target.sourceRef, source);
+
+    expect(
+      await runNextConversion({
+        leaseOwner: 'runner',
+        store,
+        convert: async () => Uint8Array.from([4, 5, 6]),
+        extract: async () => {
+          throw new Error('fixture extraction failure');
+        },
+      }),
+    ).toBe('ready');
+    const updated = await prisma.designModelVersion.findUniqueOrThrow({
+      where: { id: target.version.id },
+    });
+    expect(updated.status).toBe('ready');
+    expect(updated.diagnostics).toMatchObject({ elementIndexError: 'fixture extraction failure' });
   });
 });
