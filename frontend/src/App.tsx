@@ -31,6 +31,7 @@ import {
   AcceptInvitePage,
   AssignedWorkPage,
   AuditLogPage,
+  ClaimDetailPage,
   ClaimsPage,
   CompanyOnboardingPage,
   CompanySettingsPage,
@@ -514,6 +515,14 @@ function App() {
                 element={
                   <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
                     <ClaimsPage />
+                  </ProjectProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/claims/:claimId"
+                element={
+                  <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
+                    <ClaimDetailPage />
                   </ProjectProtectedRoute>
                 }
               />

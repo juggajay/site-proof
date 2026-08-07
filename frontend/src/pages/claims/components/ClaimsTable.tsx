@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   FileText,
   DollarSign,
@@ -30,6 +31,9 @@ import { toast } from '@/components/ui/toaster';
 
 interface ClaimsTableProps {
   claims: Claim[];
+  /** Enables the claim-number link through to the claim detail page. Optional so
+   * existing tests that render the table standalone keep working. */
+  projectId?: string;
   loadingCompleteness: boolean;
   showCompletenessModal: string | null;
   generatingEvidence: string | null;
@@ -192,6 +196,7 @@ function downloadClaimCsv(claim: Claim, branding?: CsvBrandingContext) {
 
 export const ClaimsTable = React.memo(function ClaimsTable({
   claims,
+  projectId,
   loadingCompleteness,
   showCompletenessModal,
   generatingEvidence,
@@ -265,7 +270,18 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                   key={claim.id}
                   className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-destructive/10' : ''}`}
                 >
-                  <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
+                  <td className="p-4 font-medium">
+                    {projectId ? (
+                      <Link
+                        to={`/projects/${projectId}/claims/${claim.id}`}
+                        className="text-primary underline-offset-2 hover:underline"
+                      >
+                        Claim {claim.claimNumber}
+                      </Link>
+                    ) : (
+                      `Claim ${claim.claimNumber}`
+                    )}
+                  </td>
                   <td className="p-4">
                     {new Date(claim.periodStart).toLocaleDateString('en-AU')} -{' '}
                     {new Date(claim.periodEnd).toLocaleDateString('en-AU')}

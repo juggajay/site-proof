@@ -422,3 +422,79 @@ describe('CreateClaimModal create flow', () => {
     expect(cursorCall).toBeTruthy();
   });
 });
+
+describe('CreateClaimModal shortcut values and manual overrides', () => {
+  // A lot already claimed to 58%, so 42% is left. The remaining figure comes
+  // from the RESERVATION rule (every claim, drafts included) — the same rule the
+  // create endpoint validates the increment against.
+  const PARTLY_CLAIMED_READINESS: ProjectClaimReadiness = {
+    lots: [
+      {
+        ...READY_LOT_READINESS.lots[0],
+        claim: {
+          ...READY_LOT_READINESS.lots[0].claim,
+          budgetAmount: 100000,
+          claimedPercentage: 58,
+          remainingPercentage: 42,
+        },
+      },
+    ],
+  };
+
+  async function selectPartlyClaimedLot() {
+    mockClaimReadinessAndVariations({
+      readiness: PARTLY_CLAIMED_READINESS,
+      variations: { variations: [] },
+    });
+    renderModal();
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+  }
+
+  it('puts the live remaining percentage in the shortcut button label', async () => {
+    await selectPartlyClaimedLot();
+
+    // The number is IN the label, so it answers the question without a click.
+    expect(screen.getByRole('button', { name: 'Claim remaining (42%)' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/% to claim this time/)).toHaveValue(42);
+  });
+
+  it('computes remaining from what prior claims already took, not always 100%', async () => {
+    await selectPartlyClaimedLot();
+
+    expect(screen.getByText('Previously claimed 58% - 42% still available')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Claim remaining (100%)' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('marks a manual override with an Edited chip and reverts on one click', async () => {
+    await selectPartlyClaimedLot();
+
+    const input = screen.getByLabelText(/% to claim this time/);
+    expect(screen.queryByText('Edited')).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: '30' } });
+
+    expect(screen.getByText('Edited')).toBeInTheDocument();
+    expect(input).toHaveValue(30);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revert to 42%' }));
+
+    expect(input).toHaveValue(42);
+    expect(screen.queryByText('Edited')).not.toBeInTheDocument();
+  });
+
+  it('restores the computed value from the shortcut button too', async () => {
+    await selectPartlyClaimedLot();
+
+    const input = screen.getByLabelText(/% to claim this time/);
+    fireEvent.change(input, { target: { value: '5' } });
+    expect(screen.getByText('Edited')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claim remaining (42%)' }));
+
+    expect(input).toHaveValue(42);
+    expect(screen.queryByText('Edited')).not.toBeInTheDocument();
+  });
+});

@@ -336,7 +336,7 @@ describe('chat tool executor', () => {
       (await execute('get_page_guide', { route: '/projects/project-1/invoices' })).result,
     );
     expect(parsed.error).toContain('Unknown page guide');
-    expect(parsed.routes).toHaveLength(91);
+    expect(parsed.routes).toHaveLength(92);
     expect(parsed.routes).toContainEqual({
       route: 'projects/<projectId>/tests',
       title: 'Test Results',

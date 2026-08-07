@@ -3,15 +3,19 @@ import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import type { ConformedLot, NewClaimFormData } from '../types';
+import type { NewClaimFormData } from '../types';
 import type { ClaimReadinessLot, EvidenceReadinessItem } from '@/types/evidenceReadiness';
 import {
   calculateLotClaimAmount,
   formatCurrency,
-  getClaimIncrementError,
   getClaimPeriodError,
   parseClaimPercentageInput,
 } from '../utils';
+import {
+  ClaimableLotRow,
+  getSelectedLotClaimIncrementError,
+  type ClaimableLot,
+} from './ClaimableLotRow';
 import {
   Modal,
   ModalHeader,
@@ -26,18 +30,12 @@ import { queryKeys } from '@/lib/queryKeys';
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 import { createUuid } from '@/lib/localIds';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface CreateClaimModalProps {
   projectId: string;
   onClose: () => void;
   onClaimCreated: () => void;
 }
-
-type ClaimableLot = ConformedLot & {
-  actionBlocked: boolean;
-  readinessItems: EvidenceReadinessItem[];
-};
 
 interface ClaimableVariation {
   id: string;
@@ -85,17 +83,6 @@ function mapReadinessLot(lot: ClaimReadinessLot): ClaimableLot {
     actionBlocked: lot.claim.blockers.some((item) => item.blocksAction),
     readinessItems: items,
   };
-}
-
-function getSelectedLotClaimIncrementError(
-  value: string,
-  remainingPercentage: number,
-): string | null {
-  const incrementError = getClaimIncrementError(value, remainingPercentage);
-  if (incrementError) return incrementError;
-
-  const parsed = parseClaimPercentageInput(value);
-  return parsed !== null && parsed <= 0 ? 'Claim percentage must be greater than 0.' : null;
 }
 
 export const CreateClaimModal = React.memo(function CreateClaimModal({
@@ -405,117 +392,14 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                   </Link>
                 </div>
               ) : (
-                conformedLots.map((lot) => {
-                  const actionBlockers = lot.readinessItems.filter((item) => item.blocksAction);
-                  const evidenceIssues = lot.readinessItems.filter(
-                    (item) => !item.blocksAction && item.severity !== 'support',
-                  );
-                  const supportItems = lot.readinessItems.filter(
-                    (item) => item.severity === 'support',
-                  );
-                  const lotClaimAmount = calculateLotClaimAmount(lot);
-                  const percentageInputId = `claim-percent-${lot.id}`;
-                  const percentageError = getSelectedLotClaimIncrementError(
-                    lot.percentComplete,
-                    lot.remainingPercentage,
-                  );
-
-                  return (
-                    <div key={lot.id} className="p-3 hover:bg-muted/30">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${lot.lotNumber}`}
-                          checked={lot.selected}
-                          onChange={() => toggleLotSelection(lot.id)}
-                          disabled={lot.actionBlocked}
-                          className="h-4 w-4 rounded border-border accent-primary"
-                        />
-                        <div className="flex-1">
-                          <span className="font-medium">{lot.lotNumber}</span>
-                          <span className="text-muted-foreground ml-2">{lot.activity}</span>
-                        </div>
-                        <span className="text-muted-foreground text-sm">
-                          {formatCurrency(lot.budgetAmount)}
-                        </span>
-                      </div>
-                      {lot.claimedPercentage > 0 && (
-                        <p className="mt-1 ml-7 text-xs text-muted-foreground">
-                          Previously claimed {Number(lot.claimedPercentage.toFixed(2))}% -{' '}
-                          {Number(lot.remainingPercentage.toFixed(2))}% still available
-                        </p>
-                      )}
-                      {(actionBlockers.length > 0 || evidenceIssues.length > 0) && (
-                        <div className="mt-2 ml-7 space-y-1">
-                          {[...actionBlockers, ...evidenceIssues].slice(0, 3).map((item) => (
-                            <p
-                              key={`${lot.id}-${item.code}`}
-                              className={`flex items-start gap-1.5 text-xs ${
-                                item.blocksAction ? 'text-destructive' : 'text-warning'
-                              }`}
-                            >
-                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                              <span>
-                                <span className="font-medium">{item.title}</span>
-                                <span> - {item.detail}</span>
-                              </span>
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                      {supportItems.length > 0 &&
-                        actionBlockers.length === 0 &&
-                        evidenceIssues.length === 0 && (
-                          <p className="mt-2 ml-7 flex items-start gap-1.5 text-xs text-success">
-                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                            <span>{supportItems[0].title}</span>
-                          </p>
-                        )}
-                      {lot.selected && (
-                        <div className="mt-2 ml-7 flex flex-wrap items-center gap-3">
-                          <label
-                            htmlFor={percentageInputId}
-                            className="text-sm text-muted-foreground"
-                          >
-                            % to claim this time:
-                            <span className="sr-only"> for {lot.lotNumber}</span>
-                          </label>
-                          <Input
-                            id={percentageInputId}
-                            type="number"
-                            min={0.01}
-                            max={lot.remainingPercentage}
-                            step="0.01"
-                            required
-                            aria-invalid={Boolean(percentageError)}
-                            aria-describedby={
-                              percentageError ? `${percentageInputId}-error` : undefined
-                            }
-                            value={lot.percentComplete}
-                            onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
-                            className={`w-20 h-8 text-sm text-center ${
-                              percentageError ? 'border-destructive' : ''
-                            }`}
-                          />
-                          <span className="text-sm">%</span>
-                          <span className="ml-auto font-semibold text-primary">
-                            {lotClaimAmount === null ? 'No budget' : formatCurrency(lotClaimAmount)}
-                          </span>
-                          {percentageError && (
-                            <span
-                              id={`${percentageInputId}-error`}
-                              className="text-sm text-destructive"
-                              role="alert"
-                              aria-live="assertive"
-                            >
-                              {percentageError}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
+                conformedLots.map((lot) => (
+                  <ClaimableLotRow
+                    key={lot.id}
+                    lot={lot}
+                    onToggleSelection={toggleLotSelection}
+                    onPercentageChange={updateLotPercentage}
+                  />
+                ))
               )}
               {!loadingLots && !loadError && readinessQuery.hasNextPage && (
                 <button

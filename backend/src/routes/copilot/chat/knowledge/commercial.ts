@@ -81,6 +81,25 @@ Opening a row shows labour/plant entries, allocation and submitted totals. Draft
 Draft **Submit Claim** confirms the declaration and changes workflow state; **Delete Draft Claim** removes only a draft. **Claim Evidence Review** shows completeness without changing the claim. **Generate Evidence Package** lets the user include or exclude report sections and creates a PDF—the claim does not store that PDF automatically. **Mark as Disputed** records the dispute. **Record Payment Schedule** records certified amount/date and variation notes. **Record Payment** records payment amount/date/reference. **Download CSV** exports one claim. **Export to Xero** creates the accounting export when configured; Xero remains the accounting system of record. Summary cards deliberately distinguish total claimed, certified, paid and outstanding.`,
   },
   {
+    route: 'projects/<projectId>/claims/<claimId>',
+    title: 'Claim Detail',
+    keywords: [
+      'previously claimed',
+      'this claim',
+      'claimed to date',
+      'claim lines',
+      'lot breakdown',
+      'certified claim level',
+    ],
+    roles: 'Owner, admin and project manager.',
+    surface: 'office',
+    body: `Claim Detail shows the lot lines behind one progress claim, opened from the claim number in the Progress Claims register.
+
+Each lot line carries three precisely-labelled money bands: **Previously claimed** (that lot on earlier claims of this project that were submitted, disputed, certified, partially paid or paid — drafts are excluded), **This claim**, and **Claimed to date** (the two added). On a phone a segmented control shows one band at a time instead of scrolling sideways. Under each line are two independent facts: how the amount was actually derived (a percentage of the lot budget, or "as recorded" when the lot budget no longer reproduces it) and the lot's ITP progress. The ITP count is context only — it is not what produced the claimed amount.
+
+Certified and paid are shown once in the page header and labelled claim level: this product records certification against the whole claim, so there is no certified figure per lot and none is inferred. A figure that cannot be truthfully derived renders as a dash with the reason rather than a zero. The lot lines are a subtotal, not a reconciliation of the claim total, because a claim can also carry approved variations, which are listed separately. The bands are derived live and recompute if the claim history changes. This page is read-only; claim actions stay on the register.`,
+  },
+  {
     route: 'projects/<projectId>/variations',
     title: 'Variation Register',
     keywords: [

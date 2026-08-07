@@ -91,6 +91,7 @@ vi.mock('./appLazyPages', () => ({
   DeliveryRegisterPage: () => <div>Deliveries</div>,
   DocketApprovalsPage: () => <div>Docket approvals</div>,
   ClaimsPage: () => <div>Claims</div>,
+  ClaimDetailPage: () => <div>Claim detail</div>,
   VariationsPage: () => <div>Variations</div>,
   CostsPage: () => <div>Costs</div>,
   DocumentsPage: () => <div>Documents</div>,
