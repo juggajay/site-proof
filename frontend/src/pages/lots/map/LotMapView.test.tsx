@@ -49,6 +49,10 @@ vi.mock('react-leaflet', () => {
       return <div data-testid="tile-layer" data-url={String(props.url)} />;
     },
     ScaleControl: () => <div data-testid="scale-control" />,
+    ZoomControl: (props: { position?: string }) => (
+      <div data-testid="zoom-control" data-position={props.position} />
+    ),
+    ImageOverlay: () => <div data-testid="image-overlay" />,
     LayersControl,
     // `data-fill` exposes the resolved fill so the C3 `fillOverride` recolour is
     // assertable without a real Leaflet layer.
@@ -76,6 +80,54 @@ vi.mock('react-leaflet', () => {
       <div data-testid="marker">{children}</div>
     ),
     Popup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    // The collapsed lots layer. The mock re-renders each feature as a div with
+    // the SAME testids the per-lot components used ('polygon'/'polyline'/
+    // 'circle-marker'), exposes the resolved fill, and wires click through the
+    // layer-level eventHandlers exactly as Leaflet propagates it.
+    GeoJSON: ({
+      data,
+      style,
+      eventHandlers,
+    }: {
+      data?: { features?: GeoJSON.Feature[] };
+      style?: (f: GeoJSON.Feature) => { fillColor?: string; color?: string };
+      eventHandlers?: {
+        click?: (e: {
+          propagatedFrom: { feature: GeoJSON.Feature };
+          latlng: { lat: number; lng: number };
+        }) => void;
+      };
+    }) => (
+      <div data-testid="lots-geojson">
+        {(data?.features ?? []).map((f, i) => {
+          const opts = style?.(f) ?? {};
+          const type = f.geometry?.type;
+          const kind =
+            type === 'LineString' ? 'polyline' : type === 'Point' ? 'circle-marker' : 'polygon';
+          const geom = f.geometry as {
+            type: string;
+            coordinates: number[] | number[][] | number[][][];
+          };
+          const first =
+            type === 'Polygon'
+              ? (geom.coordinates as number[][][])[0]?.[0]
+              : type === 'LineString'
+                ? (geom.coordinates as number[][])[0]
+                : (geom.coordinates as number[]);
+          const latlng = { lat: (first?.[1] as number) ?? 0, lng: (first?.[0] as number) ?? 0 };
+          const props = f.properties as { lotId?: string } | undefined;
+          return (
+            <div
+              key={props?.lotId ?? i}
+              data-testid={kind}
+              data-lot-id={props?.lotId}
+              data-fill={opts.fillColor ?? opts.color}
+              onClick={() => eventHandlers?.click?.({ propagatedFrom: { feature: f }, latlng })}
+            />
+          );
+        })}
+      </div>
+    ),
     Tooltip: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Rectangle: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="rectangle">{children}</div>
@@ -85,21 +137,55 @@ vi.mock('react-leaflet', () => {
   };
 });
 
+// The labels layer drives imperative Leaflet markers (panes, container-point
+// projection) that jsdom cannot host — stub it and assert the candidates fed in.
+vi.mock('./LotLabelsLayer', () => ({
+  LotLabelsLayer: ({ lots, selectedLotId }: { lots: unknown[]; selectedLotId: string | null }) => (
+    <div data-testid="lot-labels" data-count={lots.length} data-selected={selectedLotId ?? ''} />
+  ),
+}));
+
+// The plan canvas is a second real Leaflet map (CRS.Simple) — stub it and
+// assert the props the workspace hands it.
+vi.mock('./PlanModeCanvas', () => ({
+  PlanModeCanvas: ({
+    sheet,
+    geometries,
+    children,
+  }: {
+    sheet: { id: string };
+    geometries: unknown[];
+    children?: React.ReactNode;
+  }) => (
+    <div data-testid="plan-mode-canvas" data-sheet={sheet.id} data-count={geometries.length}>
+      {children}
+    </div>
+  ),
+}));
+
 // usePlanSheets hits useQuery; the map renders without a QueryClientProvider, so
 // stub it. DrawLotLayer/overlays only mount when armed/shown, so no leaflet.
 const planSheetsQuery = { data: [] as unknown[] };
 vi.mock('@/pages/projects/settings/planSheetsData', () => ({
   usePlanSheets: () => planSheetsQuery,
+  fetchPlanSheet: vi.fn(),
 }));
 
 // createDrawnLotGeometry is exercised via its own path; the map only needs the
-// invalidate on success. QueryClient is stubbed below.
+// invalidate on success. QueryClient is stubbed below. PlanModeBar's sheet
+// detail query (registration confidence) resolves to "loading" in tests.
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQuery: () => ({ data: undefined, isLoading: true, error: null }),
 }));
 
 const navigate = vi.fn();
-vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
+const setSearchParamsMock = vi.hoisted(() => vi.fn());
+const searchParamsValue = vi.hoisted(() => ({ current: new URLSearchParams() }));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigate,
+  useSearchParams: () => [searchParamsValue.current, setSearchParamsMock],
+}));
 
 // SecureDocumentImage does an authenticated fetch on mount — stub it so the
 // photo-pin popups render a deterministic thumbnail with no network.
@@ -325,6 +411,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   isMobileValue = false;
   setNavigatorOnline(true);
+  planSheetsQuery.data = [];
+  searchParamsValue.current = new URLSearchParams();
+  // Stateful like the real router: a write is visible to the next render.
+  setSearchParamsMock.mockImplementation((next: URLSearchParams) => {
+    searchParamsValue.current = next;
+  });
   timelineQuery.data = undefined;
   timelineQuery.isLoading = false;
   timelineQuery.error = null;
@@ -343,7 +435,7 @@ beforeEach(() => {
 });
 
 describe('LotMapView', () => {
-  it('renders a polygon layer with a popup for each filtered geometry', () => {
+  it('renders a polygon for each filtered geometry and opens the popup on click', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
 
     render(
@@ -357,6 +449,9 @@ describe('LotMapView', () => {
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
     expect(screen.getByTestId('polygon')).toBeInTheDocument();
 
+    // One selection-driven popup now, not one per lot: nothing until a click.
+    expect(screen.queryByTestId('lot-popup-lot-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('polygon'));
     const popup = screen.getByTestId('lot-popup-lot-1');
     expect(within(popup).getByText('LOT-001')).toBeInTheDocument();
     // formatStatusLabel turns in_progress -> "In Progress"; the chainage range
@@ -375,6 +470,7 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
     const link = screen.getByTestId('lot-popup-directions-lot-1');
     // Centroid of the fixture ring [[151,-33.8],[151.001,-33.8],[151.001,-33.801],[151,-33.8]]
     // is a degenerate/triangular ring; assert the Google Maps universal URL shape.
@@ -405,6 +501,8 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
+    expect(screen.getByTestId('lot-popup-lot-1')).toBeInTheDocument();
     expect(screen.queryByTestId('lot-popup-directions-lot-1')).not.toBeInTheDocument();
   });
 
@@ -417,6 +515,7 @@ describe('LotMapView', () => {
         canManageSettings={false}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
     fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
     expect(navigate).toHaveBeenCalledWith('/projects/proj-1/lots/lot-1');
   });
@@ -431,6 +530,7 @@ describe('LotMapView', () => {
         linkTargets={{ lot: (lotId) => `/m/lots/${lotId}?projectId=proj-1` }}
       />,
     );
+    fireEvent.click(screen.getByTestId('polygon'));
     fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
     expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
   });
@@ -692,12 +792,16 @@ describe('LotMapView', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
     expect(mapContainerProps.current.zoomControl).toBe(false);
+    expect(screen.queryByTestId('zoom-control')).not.toBeInTheDocument();
   });
 
-  it('keeps the +/- zoom control on desktop', () => {
+  it('desktop: the +/- control lives bottom-right, out from under the toolbar column', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(<LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />);
-    expect(mapContainerProps.current.zoomControl).toBe(true);
+    // The default top-left control is off (the toolbar spans both top corners);
+    // an explicit control is re-added clear of it.
+    expect(mapContainerProps.current.zoomControl).toBe(false);
+    expect(screen.getByTestId('zoom-control')).toHaveAttribute('data-position', 'bottomright');
   });
 
   it('isolates the map stacking context so leaflet z-indexes cannot paint over app chrome', () => {
@@ -1355,6 +1459,130 @@ describe('LotMapView', () => {
       expect(screen.getByTestId('map-pin-layers-truncated')).toHaveTextContent(
         /500\+.*Showing the first 500 photo pins in this view\. Zoom in to see the rest\./,
       );
+    });
+  });
+
+  describe('Plan mode', () => {
+    const registeredSheet = {
+      id: 'sheet-1',
+      name: 'Sheet 05 — Drainage',
+      pageNumber: 5,
+      imageWidth: 1000,
+      imageHeight: 500,
+      coordinateSystem: 'EPSG:7856',
+      hasRegistration: true,
+      cornersWgs84: {
+        topLeft: [151.0, -33.8],
+        topRight: [151.01, -33.8],
+        bottomRight: [151.01, -33.81],
+        bottomLeft: [151.0, -33.81],
+      },
+      perimeter: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    it('offers Plan only when a registered sheet exists', () => {
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      const { rerender } = render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(screen.getByTestId('mode-plan-button')).toBeDisabled();
+
+      planSheetsQuery.data = [registeredSheet];
+      rerender(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(screen.getByTestId('mode-plan-button')).toBeEnabled();
+    });
+
+    it('entering Plan mode swaps to the sheet canvas, shows identity + registration, and collapses the toolbar', () => {
+      planSheetsQuery.data = [registeredSheet];
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      fireEvent.click(screen.getByTestId('mode-plan-button'));
+
+      // The sheet canvas replaces the geographic map, fed the displayed lots.
+      const canvas = screen.getByTestId('plan-mode-canvas');
+      expect(canvas).toHaveAttribute('data-sheet', 'sheet-1');
+      expect(canvas).toHaveAttribute('data-count', '1');
+      expect(screen.queryByTestId('map-container')).not.toBeInTheDocument();
+
+      // Sheet identity + registration confidence are always visible.
+      const bar = screen.getByTestId('plan-mode-bar');
+      expect(within(bar).getByText('Sheet 05 — Drainage')).toBeInTheDocument();
+      expect(within(bar).getByText(/p\.5 · EPSG:7856/)).toBeInTheDocument();
+      expect(screen.getByTestId('plan-registration-confidence')).toBeInTheDocument();
+
+      // Geographic tools withdraw; Save map stays.
+      expect(screen.queryByTestId('find-by-area-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('locate-me-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('layers-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('history-button')).not.toBeInTheDocument();
+      expect(screen.getByTestId('snapshot-button')).toBeInTheDocument();
+
+      // And back.
+      fireEvent.click(screen.getByTestId('mode-map-button'));
+      expect(screen.queryByTestId('plan-mode-canvas')).not.toBeInTheDocument();
+      expect(screen.getByTestId('map-container')).toBeInTheDocument();
+    });
+
+    it('deep link ?view=plan&sheet= opens Plan mode on that sheet', () => {
+      planSheetsQuery.data = [registeredSheet, { ...registeredSheet, id: 'sheet-2', name: 'S2' }];
+      searchParamsValue.current = new URLSearchParams('view=plan&sheet=sheet-2');
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(screen.getByTestId('plan-mode-canvas')).toHaveAttribute('data-sheet', 'sheet-2');
+    });
+
+    it('mirrors workspace state to the URL and clears it on the way back', () => {
+      planSheetsQuery.data = [registeredSheet];
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      fireEvent.click(screen.getByTestId('mode-plan-button'));
+      const written = setSearchParamsMock.mock.calls.at(-1)?.[0] as URLSearchParams;
+      expect(written.get('view')).toBe('plan');
+      expect(written.get('sheet')).toBe('sheet-1');
+
+      fireEvent.click(screen.getByTestId('mode-map-button'));
+      const cleared = setSearchParamsMock.mock.calls.at(-1)?.[0] as URLSearchParams;
+      expect(cleared.get('view')).toBeNull();
+      expect(cleared.get('sheet')).toBeNull();
+    });
+
+    it('deep link ?lot= selects the lot and opens its popup once geometry loads', async () => {
+      searchParamsValue.current = new URLSearchParams('lot=lot-1');
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(await screen.findByTestId('lot-popup-lot-1')).toBeInTheDocument();
+    });
+
+    it('entering Plan mode disarms geographic tools (draw, history)', () => {
+      planSheetsQuery.data = [registeredSheet];
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      fireEvent.click(screen.getByTestId('history-button'));
+      expect(screen.getByTestId('history-panel')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('mode-plan-button'));
+      expect(screen.queryByTestId('history-panel')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('mode-map-button'));
+      // Leaving Plan restores the toolbar with History disarmed, not re-armed.
+      expect(screen.getByTestId('history-button')).toHaveAttribute('aria-pressed', 'false');
     });
   });
 });

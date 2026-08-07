@@ -60,6 +60,10 @@ export function DrawLotLayer({ active, onComplete, onCancel }: DrawLotLayerProps
       try {
         await import('@geoman-io/leaflet-geoman-free');
         if (disposed) return;
+        // Opt-in mode: without this Geoman initialises editing plumbing on EVERY
+        // layer already on the map (hundreds of read-only lot shapes). Geoman's
+        // own draw working layers opt themselves in, so drawing still works.
+        (L as unknown as { PM?: { setOptIn?: (optIn: boolean) => void } }).PM?.setOptIn?.(true);
         ensurePm(map);
         map.on('pm:create', handleCreate);
         map.pm.enableDraw('Polygon', { finishOn: 'dblclick', snappable: true });
