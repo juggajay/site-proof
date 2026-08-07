@@ -166,7 +166,10 @@ export function LotInspector({
       aria-label={`Lot ${geometry.lotNumber}`}
       className={
         isMobile
-          ? 'absolute inset-x-0 bottom-0 z-[1002] flex max-h-[60dvh] flex-col rounded-t-xl border-t bg-background shadow-[0_-4px_16px_rgba(0,0,0,0.18)]'
+          ? // 75% of the MAP AREA, not the viewport — the sheet is positioned
+            // inside the stacking root, and a viewport-relative cap can exceed
+            // the whole map strip on a phone, hiding the map it inspects.
+            'absolute inset-x-0 bottom-0 z-[1002] flex max-h-[75%] flex-col rounded-t-xl border-t bg-background shadow-[0_-4px_16px_rgba(0,0,0,0.18)]'
           : 'absolute inset-y-0 right-0 z-[1002] flex w-[360px] max-w-[85%] flex-col border-l bg-background shadow-xl'
       }
     >
