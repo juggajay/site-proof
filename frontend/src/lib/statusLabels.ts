@@ -114,6 +114,9 @@ export const STATUS_LABELS: Record<string, string> = {
 
   // Hold point / subcontractor admin statuses
   requested: 'Requested',
+  // The HP register has always shown a notified hold point as awaiting the
+  // authority's release, not the mechanical "Notified".
+  notified: 'Awaiting Release',
   released: 'Released',
   release_refused: 'Release refused',
   released_with_conditions: 'Released with conditions',
