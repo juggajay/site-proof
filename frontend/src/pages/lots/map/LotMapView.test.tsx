@@ -141,17 +141,38 @@ vi.mock('./LotLabelsLayer', () => ({
   ),
 }));
 
+// The plan canvas is a second real Leaflet map (CRS.Simple) — stub it and
+// assert the props the workspace hands it.
+vi.mock('./PlanModeCanvas', () => ({
+  PlanModeCanvas: ({
+    sheet,
+    geometries,
+    children,
+  }: {
+    sheet: { id: string };
+    geometries: unknown[];
+    children?: React.ReactNode;
+  }) => (
+    <div data-testid="plan-mode-canvas" data-sheet={sheet.id} data-count={geometries.length}>
+      {children}
+    </div>
+  ),
+}));
+
 // usePlanSheets hits useQuery; the map renders without a QueryClientProvider, so
 // stub it. DrawLotLayer/overlays only mount when armed/shown, so no leaflet.
 const planSheetsQuery = { data: [] as unknown[] };
 vi.mock('@/pages/projects/settings/planSheetsData', () => ({
   usePlanSheets: () => planSheetsQuery,
+  fetchPlanSheet: vi.fn(),
 }));
 
 // createDrawnLotGeometry is exercised via its own path; the map only needs the
-// invalidate on success. QueryClient is stubbed below.
+// invalidate on success. QueryClient is stubbed below. PlanModeBar's sheet
+// detail query (registration confidence) resolves to "loading" in tests.
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQuery: () => ({ data: undefined, isLoading: true, error: null }),
 }));
 
 const navigate = vi.fn();
@@ -381,6 +402,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   isMobileValue = false;
   setNavigatorOnline(true);
+  planSheetsQuery.data = [];
   timelineQuery.data = undefined;
   timelineQuery.isLoading = false;
   timelineQuery.error = null;
@@ -1419,6 +1441,93 @@ describe('LotMapView', () => {
       expect(screen.getByTestId('map-pin-layers-truncated')).toHaveTextContent(
         /500\+.*Showing the first 500 photo pins in this view\. Zoom in to see the rest\./,
       );
+    });
+  });
+
+  describe('Plan mode', () => {
+    const registeredSheet = {
+      id: 'sheet-1',
+      name: 'Sheet 05 — Drainage',
+      pageNumber: 5,
+      imageWidth: 1000,
+      imageHeight: 500,
+      coordinateSystem: 'EPSG:7856',
+      hasRegistration: true,
+      cornersWgs84: {
+        topLeft: [151.0, -33.8],
+        topRight: [151.01, -33.8],
+        bottomRight: [151.01, -33.81],
+        bottomLeft: [151.0, -33.81],
+      },
+      perimeter: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    it('offers Plan only when a registered sheet exists', () => {
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      const { rerender } = render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(screen.getByTestId('mode-plan-button')).toBeDisabled();
+
+      planSheetsQuery.data = [registeredSheet];
+      rerender(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+      expect(screen.getByTestId('mode-plan-button')).toBeEnabled();
+    });
+
+    it('entering Plan mode swaps to the sheet canvas, shows identity + registration, and collapses the toolbar', () => {
+      planSheetsQuery.data = [registeredSheet];
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      fireEvent.click(screen.getByTestId('mode-plan-button'));
+
+      // The sheet canvas replaces the geographic map, fed the displayed lots.
+      const canvas = screen.getByTestId('plan-mode-canvas');
+      expect(canvas).toHaveAttribute('data-sheet', 'sheet-1');
+      expect(canvas).toHaveAttribute('data-count', '1');
+      expect(screen.queryByTestId('map-container')).not.toBeInTheDocument();
+
+      // Sheet identity + registration confidence are always visible.
+      const bar = screen.getByTestId('plan-mode-bar');
+      expect(within(bar).getByText('Sheet 05 — Drainage')).toBeInTheDocument();
+      expect(within(bar).getByText(/p\.5 · EPSG:7856/)).toBeInTheDocument();
+      expect(screen.getByTestId('plan-registration-confidence')).toBeInTheDocument();
+
+      // Geographic tools withdraw; Save map stays.
+      expect(screen.queryByTestId('find-by-area-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('locate-me-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('layers-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('history-button')).not.toBeInTheDocument();
+      expect(screen.getByTestId('snapshot-button')).toBeInTheDocument();
+
+      // And back.
+      fireEvent.click(screen.getByTestId('mode-map-button'));
+      expect(screen.queryByTestId('plan-mode-canvas')).not.toBeInTheDocument();
+      expect(screen.getByTestId('map-container')).toBeInTheDocument();
+    });
+
+    it('entering Plan mode disarms geographic tools (draw, history)', () => {
+      planSheetsQuery.data = [registeredSheet];
+      mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
+      render(
+        <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
+      );
+
+      fireEvent.click(screen.getByTestId('history-button'));
+      expect(screen.getByTestId('history-panel')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('mode-plan-button'));
+      expect(screen.queryByTestId('history-panel')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('mode-map-button'));
+      // Leaving Plan restores the toolbar with History disarmed, not re-armed.
+      expect(screen.getByTestId('history-button')).toHaveAttribute('aria-pressed', 'false');
     });
   });
 });

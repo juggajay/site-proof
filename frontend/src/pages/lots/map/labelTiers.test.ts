@@ -33,7 +33,7 @@ describe('placeLabels', () => {
         candidate({ lotId: 'lot-2', lotNumber: 'LOT-002', x: 104, y: 100 }), // overlaps lot-1
         candidate({ lotId: 'lot-3', lotNumber: 'LOT-003', x: 400, y: 400 }),
       ],
-      16,
+      'number',
       null,
     );
     expect(placed.map((p) => p.lotId)).toEqual(['lot-1', 'lot-3']);
@@ -44,7 +44,7 @@ describe('placeLabels', () => {
   it('the selected lot wins a collision against an earlier-numbered neighbour', () => {
     const placed = placeLabels(
       [candidate(), candidate({ lotId: 'lot-2', lotNumber: 'LOT-002', x: 104, y: 100 })],
-      16,
+      'number',
       'lot-2',
     );
     expect(placed.map((p) => p.lotId)).toEqual(['lot-2']);
@@ -56,14 +56,14 @@ describe('placeLabels', () => {
         candidate({ lotId: 'settled', lotNumber: 'LOT-001', status: 'conformed' }),
         candidate({ lotId: 'front', lotNumber: 'LOT-999', status: 'hold_point', x: 104, y: 100 }),
       ],
-      16,
+      'number',
       null,
     );
     expect(placed.map((p) => p.lotId)).toEqual(['front']);
   });
 
   it('detail tier carries the chainage as a second line', () => {
-    const placed = placeLabels([candidate()], 18, null);
+    const placed = placeLabels([candidate()], 'detail', null);
     expect(placed[0].tier).toBe('detail');
     expect(placed[0].detail).toBe('Ch 0–100');
   });
@@ -71,7 +71,7 @@ describe('placeLabels', () => {
   it('dot tier collides on the dot footprint, so near neighbours both place', () => {
     const placed = placeLabels(
       [candidate(), candidate({ lotId: 'lot-2', lotNumber: 'LOT-002', x: 100, y: 125 })],
-      12,
+      'dot',
       null,
     );
     expect(placed).toHaveLength(2);
@@ -87,6 +87,6 @@ describe('placeLabels', () => {
         y: Math.floor(i / 30) * 200,
       }),
     );
-    expect(placeLabels(many, 16, null)).toHaveLength(MAX_LABELS);
+    expect(placeLabels(many, 'number', null)).toHaveLength(MAX_LABELS);
   });
 });

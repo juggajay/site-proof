@@ -41,6 +41,12 @@ export function usePlanOverlayImage(
   projectId: string | undefined,
   sheet: PlanSheetListItem,
   blend: boolean,
+  /**
+   * Plan mode wants the WHOLE sheet — title block included — as drawn: no
+   * perimeter clip, no white-key. The sheet IS the canvas there, not linework
+   * floated over imagery.
+   */
+  raw = false,
 ): { url: string | null; error: boolean } {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -70,8 +76,8 @@ export function usePlanOverlayImage(
         const blob = await response.blob();
         if (cancelled) return;
 
-        const hasPerimeter = Boolean(perimeter && perimeter.length >= 3);
-        if (hasPerimeter || blend) {
+        const hasPerimeter = !raw && Boolean(perimeter && perimeter.length >= 3);
+        if (hasPerimeter || (!raw && blend)) {
           const bitmap = await createImageBitmap(blob);
           if (cancelled) {
             bitmap.close();
@@ -106,7 +112,7 @@ export function usePlanOverlayImage(
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [projectId, sheetId, imageWidth, imageHeight, perimeter, blend]);
+  }, [projectId, sheetId, imageWidth, imageHeight, perimeter, blend, raw]);
 
   return { url, error };
 }

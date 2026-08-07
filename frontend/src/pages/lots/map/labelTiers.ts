@@ -81,14 +81,14 @@ function boxFor(candidate: LabelCandidate, tier: LabelTier, detail: string | nul
 /**
  * Prune colliding labels in priority order: the selected lot always places,
  * then active work fronts, then the rest (stable by lot number within a band).
- * Returns at most MAX_LABELS placements.
+ * Returns at most MAX_LABELS placements. Callers resolve the tier (geographic
+ * maps via labelTier(zoom); the plan canvas has its own zoom scale).
  */
 export function placeLabels(
   candidates: LabelCandidate[],
-  zoom: number,
+  tier: LabelTier,
   selectedLotId: string | null,
 ): PlacedLabel[] {
-  const tier = labelTier(zoom);
   const tree = new RBush<{ minX: number; minY: number; maxX: number; maxY: number }>();
   const placed: PlacedLabel[] = [];
 

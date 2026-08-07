@@ -3,7 +3,13 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 import './lotMapLabels.css';
-import { placeLabels, type LabelCandidate, type PlacedLabel } from './labelTiers';
+import {
+  labelTier,
+  placeLabels,
+  type LabelCandidate,
+  type LabelTier,
+  type PlacedLabel,
+} from './labelTiers';
 import type { LatLng } from './lotMapHelpers';
 
 export interface LabelLot {
@@ -22,6 +28,8 @@ interface LotLabelsLayerProps {
   selectedLotId: string | null;
   /** Pane name; created here with pointer-events off so labels never eat taps. */
   pane?: string;
+  /** Zoom → tier. Defaults to the geographic mapping; the plan canvas overrides. */
+  tierFor?: (zoom: number) => LabelTier;
 }
 
 const DEFAULT_PANE = 'civos-lot-labels';
@@ -61,6 +69,7 @@ export function LotLabelsLayer({
   colorFor,
   selectedLotId,
   pane = DEFAULT_PANE,
+  tierFor = labelTier,
 }: LotLabelsLayerProps) {
   const map = useMap();
   const groupRef = useRef<L.LayerGroup | null>(null);
@@ -105,7 +114,7 @@ export function LotLabelsLayer({
           y: point.y,
         });
       }
-      for (const label of placeLabels(candidates, zoom, selectedLotId)) {
+      for (const label of placeLabels(candidates, tierFor(zoom), selectedLotId)) {
         const latlng = positions.get(label.lotId);
         if (!latlng) continue;
         const icon = L.divIcon({
@@ -121,7 +130,7 @@ export function LotLabelsLayer({
     return () => {
       map.off('zoomend moveend', render);
     };
-  }, [map, lots, colorFor, selectedLotId, pane]);
+  }, [map, lots, colorFor, selectedLotId, pane, tierFor]);
 
   return null;
 }

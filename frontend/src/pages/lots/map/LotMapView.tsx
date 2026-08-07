@@ -45,6 +45,8 @@ import { AreaDrawLayer } from './AreaDrawLayer';
 import { LotsGeoJsonLayer, POLYGON_STROKE_COLOR, type LotSelectEvent } from './LotsGeoJsonLayer';
 import { chooseCamera, readSavedViewport, writeSavedViewport } from './cameraPolicy';
 import { LotLabelsLayer, type LabelLot } from './LotLabelsLayer';
+import { PlanModeCanvas } from './PlanModeCanvas';
+import { PlanModeBar } from './PlanModeBar';
 import { FindByAreaPanel } from './FindByAreaPanel';
 import { CoveragePanel } from './CoveragePanel';
 import { PlansPanel } from './PlansPanel';
@@ -1126,6 +1128,34 @@ export function LotMapView({
     [testCoverageLots],
   );
 
+  // ── Plan mode (plan consensus #2): the sheet as a first-class canvas ──────
+  const [mapMode, setMapMode] = useState<'map' | 'plan'>('map');
+  const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+  const activeSheet = useMemo(
+    () => registeredSheets.find((s) => s.id === activeSheetId) ?? registeredSheets[0] ?? null,
+    [registeredSheets, activeSheetId],
+  );
+  const planAvailable = registeredSheets.length > 0;
+
+  const handleModeChange = useCallback(
+    (mode: 'map' | 'plan') => {
+      if (mode === mapMode) return;
+      // Selection latlngs are canvas-specific (sheet px vs WGS84) — clear.
+      setSelectedLot(null);
+      if (mode === 'plan') {
+        // Geographic tools have no meaning on the sheet canvas.
+        clearSearch();
+        setCoverageArmed(false);
+        setGapFocusBounds(null);
+        setDrawLotArmed(false);
+        setHistoryArmed(false);
+        setPlansOpen(false);
+      }
+      setMapMode(mode);
+    },
+    [mapMode, clearSearch],
+  );
+
   const earliestKey = timelineQuery.data?.earliest
     ? formatDateKey(new Date(timelineQuery.data.earliest))
     : null;
@@ -1157,6 +1187,7 @@ export function LotMapView({
     !geometriesQuery.isLoading && !controlLinesQuery.isLoading && !planSheetsQuery.isLoading;
   const cameraAppliedRef = useRef(false);
   useEffect(() => {
+    if (mapMode !== 'map') return;
     if (!map || !dataReady || cameraAppliedRef.current) return;
     cameraAppliedRef.current = true;
     const target = chooseCamera({
@@ -1174,12 +1205,13 @@ export function LotMapView({
       // Nothing but a registered sheet — open on the drawing.
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
     }
-  }, [map, dataReady, projectId, filteredGeometries, allGeometries, controlLines, bounds]);
+  }, [mapMode, map, dataReady, projectId, filteredGeometries, allGeometries, controlLines, bounds]);
 
   // Persist the viewport per project/device so reopening the map resumes where
   // the user left off (tier 1 of the policy). Debounced against pan momentum.
+  // Geographic canvas only — plan-mode "latlngs" are sheet pixels.
   useEffect(() => {
-    if (!map) return;
+    if (!map || mapMode !== 'map') return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const save = () => {
       clearTimeout(timer);
@@ -1193,7 +1225,7 @@ export function LotMapView({
       clearTimeout(timer);
       map.off('moveend', save);
     };
-  }, [map, projectId]);
+  }, [map, mapMode, projectId]);
 
   // A register-filter change after open is an explicit "show me these" — refit
   // to the new subset (the pre-workspace map did the same via its fit effect).
@@ -1201,10 +1233,10 @@ export function LotMapView({
   useEffect(() => {
     if (prevFilterRef.current === filteredLotIds) return;
     prevFilterRef.current = filteredLotIds;
-    if (!map || !cameraAppliedRef.current) return;
+    if (!map || mapMode !== 'map' || !cameraAppliedRef.current) return;
     const b = computeBounds(filteredGeometries.map((g) => g.geometryWgs84));
     if (b) map.fitBounds(b, { padding: [24, 24], maxZoom: 18 });
-  }, [map, filteredLotIds, filteredGeometries]);
+  }, [map, mapMode, filteredLotIds, filteredGeometries]);
 
   // Zoom-tiered labels: one candidate per displayed lot with a usable centroid.
   const labelLots = useMemo<LabelLot[]>(
@@ -1226,12 +1258,21 @@ export function LotMapView({
     [displayGeometries],
   );
 
-  // The explicit Fit control: filtered lots + control lines, or the first
-  // registered sheet when nothing else has geometry (the `bounds` memo).
+  // The explicit Fit control: filtered lots + control lines (or the first
+  // registered sheet when nothing else has geometry); the sheet in Plan mode.
   const handleFit = useCallback(() => {
-    if (!map || !bounds) return;
-    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
-  }, [map, bounds]);
+    if (!map) return;
+    if (mapMode === 'plan') {
+      if (activeSheet) {
+        map.fitBounds([
+          [0, 0],
+          [activeSheet.imageHeight, activeSheet.imageWidth],
+        ]);
+      }
+      return;
+    }
+    if (bounds) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
+  }, [map, mapMode, activeSheet, bounds]);
 
   const coverageLines = useMemo(() => coverageQuery.data?.controlLines ?? [], [coverageQuery.data]);
 
@@ -1441,6 +1482,9 @@ export function LotMapView({
 
               <MapToolbar
                 isMobile={isMobile}
+                mode={mapMode}
+                onModeChange={handleModeChange}
+                planAvailable={planAvailable}
                 drawArmed={drawArmed}
                 onFindByArea={armFindByArea}
                 locating={locating}
@@ -1468,6 +1512,15 @@ export function LotMapView({
                 historyArmed={historyArmed}
                 onToggleHistory={toggleHistory}
               />
+              {/* Which sheet, and how far to trust it — always on in Plan mode. */}
+              {mapMode === 'plan' && activeSheet && (
+                <PlanModeBar
+                  projectId={projectId}
+                  sheet={activeSheet}
+                  sheets={registeredSheets}
+                  onSheetChange={setActiveSheetId}
+                />
+              )}
               {/* `w-fit` so the panel's wrapper does not stretch across the
                   column and swallow map drags either side of it. */}
               {plansOpen && (
@@ -1489,28 +1542,57 @@ export function LotMapView({
               )}
             </div>
 
-            <MapContainer
-              ref={setMap}
-              center={AU_DEFAULT_CENTER}
-              zoom={AU_DEFAULT_ZOOM}
-              scrollWheelZoom
-              // No +/- control on mobile: pinch covers zoom, and the control's
-              // top-left corner is exactly where the toolbar's first button sits
-              // at phone width (it hid "Find by area" under itself on a real
-              // device). Creation-time Leaflet option — set from the viewport at
-              // mount, which is when it matters.
-              zoomControl={!isMobile}
-              // Mobile: cap at 60% of the (dynamic) viewport so toolbar + legend
-              // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
-              style={
-                // Workspace: the map takes every pixel its flex parent resolves.
-                // Embedded (foreman shell card): the shipped fixed-height strip.
-                workspace
-                  ? { height: '100%', width: '100%' }
-                  : { height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }
-              }
-            >
-              {/* QA/RT-02. On mobile there is no Leaflet LayersControl at all.
+            {mapMode === 'plan' && activeSheet ? (
+              <div
+                style={
+                  workspace
+                    ? { height: '100%', width: '100%' }
+                    : { height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }
+                }
+                data-testid="plan-mode-root"
+              >
+                <PlanModeCanvas
+                  projectId={projectId}
+                  sheet={activeSheet}
+                  geometries={displayGeometries}
+                  colorFor={colorForLot}
+                  selectedLotId={selectedLot?.lotId ?? null}
+                  onSelect={setSelectedLot}
+                  onMapRef={setMap}
+                >
+                  {selectedLot && selectedGeometry && (
+                    <LotPopup
+                      geometry={selectedGeometry}
+                      position={[selectedLot.latlng.lat, selectedLot.latlng.lng]}
+                      onViewDetails={() => navigate(linkPaths.lot(selectedGeometry.lotId))}
+                      onClose={() => setSelectedLot(null)}
+                    />
+                  )}
+                </PlanModeCanvas>
+              </div>
+            ) : (
+              <MapContainer
+                ref={setMap}
+                center={AU_DEFAULT_CENTER}
+                zoom={AU_DEFAULT_ZOOM}
+                scrollWheelZoom
+                // No +/- control on mobile: pinch covers zoom, and the control's
+                // top-left corner is exactly where the toolbar's first button sits
+                // at phone width (it hid "Find by area" under itself on a real
+                // device). Creation-time Leaflet option — set from the viewport at
+                // mount, which is when it matters.
+                zoomControl={!isMobile}
+                // Mobile: cap at 60% of the (dynamic) viewport so toolbar + legend
+                // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
+                style={
+                  // Workspace: the map takes every pixel its flex parent resolves.
+                  // Embedded (foreman shell card): the shipped fixed-height strip.
+                  workspace
+                    ? { height: '100%', width: '100%' }
+                    : { height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }
+                }
+              >
+                {/* QA/RT-02. On mobile there is no Leaflet LayersControl at all.
                   Wherever it was cornered it lost: the CIVOS toolbar column is
                   `inset-x-3`, so it spans the full top strip and covers both top
                   corners — top-right sat under the "Past" tile, top-left under
@@ -1519,167 +1601,172 @@ export function LotMapView({
                   cannot cover, because the toolbar opens it) and exactly one
                   TileLayer is rendered here, the same one the checked BaseLayer
                   drew. Desktop keeps the native control, untouched. */}
-              {isMobile ? (
-                basemap === 'satellite' && satelliteAvailable ? (
-                  satelliteTile
+                {isMobile ? (
+                  basemap === 'satellite' && satelliteAvailable ? (
+                    satelliteTile
+                  ) : (
+                    streetTile
+                  )
                 ) : (
-                  streetTile
-                )
-              ) : (
-                <LayersControl position="topright">
-                  {satelliteAvailable && (
-                    <LayersControl.BaseLayer checked name="Satellite">
-                      {satelliteTile}
+                  <LayersControl position="topright">
+                    {satelliteAvailable && (
+                      <LayersControl.BaseLayer checked name="Satellite">
+                        {satelliteTile}
+                      </LayersControl.BaseLayer>
+                    )}
+                    <LayersControl.BaseLayer checked={!satelliteAvailable} name="Street">
+                      {streetTile}
                     </LayersControl.BaseLayer>
-                  )}
-                  <LayersControl.BaseLayer checked={!satelliteAvailable} name="Street">
-                    {streetTile}
-                  </LayersControl.BaseLayer>
-                </LayersControl>
-              )}
+                  </LayersControl>
+                )}
 
-              <ScaleControl position="bottomleft" imperial={false} />
-              <NorthArrow />
+                <ScaleControl position="bottomleft" imperial={false} />
+                <NorthArrow />
 
-              {controlLines.map((line) => {
-                const shape = featureToShape(line.geometryWgs84);
-                if (!shape || shape.kind !== 'line') return null;
-                return (
-                  <Polyline
-                    key={line.id}
-                    positions={shape.positions}
-                    pathOptions={{ color: CONTROL_LINE_COLOR, weight: 2, dashArray: '6 4' }}
-                  >
-                    <Tooltip sticky>{line.name}</Tooltip>
-                  </Polyline>
-                );
-              })}
+                {controlLines.map((line) => {
+                  const shape = featureToShape(line.geometryWgs84);
+                  if (!shape || shape.kind !== 'line') return null;
+                  return (
+                    <Polyline
+                      key={line.id}
+                      positions={shape.positions}
+                      pathOptions={{ color: CONTROL_LINE_COLOR, weight: 2, dashArray: '6 4' }}
+                    >
+                      <Tooltip sticky>{line.name}</Tooltip>
+                    </Polyline>
+                  );
+                })}
 
-              <LotsGeoJsonLayer
-                geometries={displayGeometries}
-                colorFor={colorForLot}
-                selectedLotId={selectedLot?.lotId ?? null}
-                onSelect={setSelectedLot}
-              />
-              <LotLabelsLayer
-                lots={labelLots}
-                colorFor={colorForLot}
-                selectedLotId={selectedLot?.lotId ?? null}
-              />
-              {selectedLot && selectedGeometry && (
-                <LotPopup
-                  geometry={selectedGeometry}
-                  position={[selectedLot.latlng.lat, selectedLot.latlng.lng]}
-                  onViewDetails={() => navigate(linkPaths.lot(selectedGeometry.lotId))}
-                  onClose={() => setSelectedLot(null)}
+                <LotsGeoJsonLayer
+                  geometries={displayGeometries}
+                  colorFor={colorForLot}
+                  selectedLotId={selectedLot?.lotId ?? null}
+                  onSelect={setSelectedLot}
                 />
-              )}
+                <LotLabelsLayer
+                  lots={labelLots}
+                  colorFor={colorForLot}
+                  selectedLotId={selectedLot?.lotId ?? null}
+                />
+                {selectedLot && selectedGeometry && (
+                  <LotPopup
+                    geometry={selectedGeometry}
+                    position={[selectedLot.latlng.lat, selectedLot.latlng.lng]}
+                    onViewDetails={() => navigate(linkPaths.lot(selectedGeometry.lotId))}
+                    onClose={() => setSelectedLot(null)}
+                  />
+                )}
 
-              {/* `drawnPhotos` is already the located subset — the same array the
+                {/* `drawnPhotos` is already the located subset — the same array the
                   chooser counts, so "51 in view" can never disagree with what is
                   on the map. */}
-              {drawnPhotos.map((photo) => {
-                const to = linkPaths.photo(photo);
-                return (
-                  <PhotoPin key={photo.id} photo={photo} onView={to ? () => navigate(to) : null} />
-                );
-              })}
+                {drawnPhotos.map((photo) => {
+                  const to = linkPaths.photo(photo);
+                  return (
+                    <PhotoPin
+                      key={photo.id}
+                      photo={photo}
+                      onView={to ? () => navigate(to) : null}
+                    />
+                  );
+                })}
 
-              {/* C3 Phase B2. `readSamplePoint` returning null is the only gate:
+                {/* C3 Phase B2. `readSamplePoint` returning null is the only gate:
                   no captured pair, no marker. There is no fallback position — a
                   centroid pin would assert a sample was taken in the middle of a
                   lot, which is a claim CIVOS never received `[C3S-B1]`, AT-84. */}
-              {drawnTestPins.map((test) => {
-                const point = readSamplePoint(test);
-                if (!point) return null;
-                const to = linkPaths.test(test);
-                return (
-                  <TestPin
-                    key={test.id}
-                    test={test}
-                    point={point}
-                    onView={to ? () => navigate(to) : null}
-                  />
-                );
-              })}
+                {drawnTestPins.map((test) => {
+                  const point = readSamplePoint(test);
+                  if (!point) return null;
+                  const to = linkPaths.test(test);
+                  return (
+                    <TestPin
+                      key={test.id}
+                      test={test}
+                      point={point}
+                      onView={to ? () => navigate(to) : null}
+                    />
+                  );
+                })}
 
-              {coverageArmed &&
-                coverageGaps.map(({ key, shape }) =>
-                  shape && shape.kind === 'polygon' ? (
-                    <Polygon
-                      key={key}
-                      positions={shape.positions}
+                {coverageArmed &&
+                  coverageGaps.map(({ key, shape }) =>
+                    shape && shape.kind === 'polygon' ? (
+                      <Polygon
+                        key={key}
+                        positions={shape.positions}
+                        pathOptions={{
+                          color: GAP_COLOR,
+                          weight: 2,
+                          dashArray: '6 4',
+                          fillColor: GAP_COLOR,
+                          fillOpacity: 0.2,
+                        }}
+                      />
+                    ) : null,
+                  )}
+                {coverageArmed && <FitBounds bounds={gapFocusBounds} />}
+
+                <AreaDrawLayer active={drawArmed} onComplete={handleAreaComplete} />
+                {searchBounds && (
+                  <Rectangle
+                    bounds={boundsToLatLngRect(searchBounds)}
+                    pathOptions={{
+                      color: '#2563eb',
+                      weight: 2,
+                      fillColor: '#2563eb',
+                      fillOpacity: 0.08,
+                    }}
+                  />
+                )}
+
+                <MapBoundsWatcher onBounds={handleMapBounds} onBaseLayerChange={resetTileError} />
+                <FitBounds bounds={zoomTarget} />
+
+                {locatedFix && (
+                  <>
+                    <Circle
+                      center={locatedFix.center}
+                      radius={locatedFix.accuracy}
                       pathOptions={{
-                        color: GAP_COLOR,
-                        weight: 2,
-                        dashArray: '6 4',
-                        fillColor: GAP_COLOR,
-                        fillOpacity: 0.2,
+                        color: '#2563eb',
+                        weight: 1,
+                        fillColor: '#2563eb',
+                        fillOpacity: 0.12,
                       }}
+                    />
+                    <CircleMarker
+                      center={locatedFix.center}
+                      radius={6}
+                      pathOptions={{
+                        color: '#ffffff',
+                        weight: 2,
+                        fillColor: '#2563eb',
+                        fillOpacity: 1,
+                      }}
+                    />
+                  </>
+                )}
+
+                {registeredSheets.map((sheet) =>
+                  planShown[sheet.id] ? (
+                    <PlanSheetOverlay
+                      key={sheet.id}
+                      projectId={projectId}
+                      sheet={sheet}
+                      opacity={planOpacity}
+                      blend={planBlend}
                     />
                   ) : null,
                 )}
-              {coverageArmed && <FitBounds bounds={gapFocusBounds} />}
 
-              <AreaDrawLayer active={drawArmed} onComplete={handleAreaComplete} />
-              {searchBounds && (
-                <Rectangle
-                  bounds={boundsToLatLngRect(searchBounds)}
-                  pathOptions={{
-                    color: '#2563eb',
-                    weight: 2,
-                    fillColor: '#2563eb',
-                    fillOpacity: 0.08,
-                  }}
+                <DrawLotLayer
+                  active={drawLotArmed}
+                  onComplete={handleDrawComplete}
+                  onCancel={handleDrawCancel}
                 />
-              )}
-
-              <MapBoundsWatcher onBounds={handleMapBounds} onBaseLayerChange={resetTileError} />
-              <FitBounds bounds={zoomTarget} />
-
-              {locatedFix && (
-                <>
-                  <Circle
-                    center={locatedFix.center}
-                    radius={locatedFix.accuracy}
-                    pathOptions={{
-                      color: '#2563eb',
-                      weight: 1,
-                      fillColor: '#2563eb',
-                      fillOpacity: 0.12,
-                    }}
-                  />
-                  <CircleMarker
-                    center={locatedFix.center}
-                    radius={6}
-                    pathOptions={{
-                      color: '#ffffff',
-                      weight: 2,
-                      fillColor: '#2563eb',
-                      fillOpacity: 1,
-                    }}
-                  />
-                </>
-              )}
-
-              {registeredSheets.map((sheet) =>
-                planShown[sheet.id] ? (
-                  <PlanSheetOverlay
-                    key={sheet.id}
-                    projectId={projectId}
-                    sheet={sheet}
-                    opacity={planOpacity}
-                    blend={planBlend}
-                  />
-                ) : null,
-              )}
-
-              <DrawLotLayer
-                active={drawLotArmed}
-                onComplete={handleDrawComplete}
-                onCancel={handleDrawCancel}
-              />
-            </MapContainer>
+              </MapContainer>
+            )}
 
             {searchBounds && (
               <FindByAreaPanel

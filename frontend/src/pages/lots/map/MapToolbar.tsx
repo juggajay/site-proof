@@ -105,8 +105,59 @@ export const ToolbarButton = forwardRef<
   );
 });
 
+/** One half of the Map/Plan segmented mode switch. */
+function ModeButton({
+  active,
+  disabled,
+  onClick,
+  testId,
+  title,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  testId: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+      className={cn(
+        'px-3 py-1.5 text-sm font-medium disabled:opacity-50',
+        active ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted',
+      )}
+      data-testid={testId}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Group rule between toolbar groups (Locate / Search / Tools / Past). */
+function GroupRule({ isMobile }: { isMobile: boolean }) {
+  return (
+    <span
+      className={cn(
+        'w-px flex-none self-stretch bg-foreground/25',
+        isMobile ? 'mx-1 my-1.5' : 'mx-1',
+      )}
+      aria-hidden
+    />
+  );
+}
+
 interface MapToolbarProps {
   isMobile: boolean;
+  /** Which canvas the workspace is showing; Plan needs a registered sheet. */
+  mode: 'map' | 'plan';
+  onModeChange: (mode: 'map' | 'plan') => void;
+  planAvailable: boolean;
   drawArmed: boolean;
   onFindByArea: () => void;
   locating: boolean;
@@ -151,6 +202,9 @@ interface MapToolbarProps {
  */
 export function MapToolbar({
   isMobile,
+  mode,
+  onModeChange,
+  planAvailable,
   drawArmed,
   onFindByArea,
   locating,
@@ -180,6 +234,33 @@ export function MapToolbar({
 }: MapToolbarProps) {
   return (
     <>
+      {/* Mode is its own row, first: it decides what canvas everything below
+          acts on. Plan needs a registered sheet to mean anything. */}
+      <div className="flex">
+        <div
+          className="pointer-events-auto inline-flex overflow-hidden rounded-md border shadow-sm"
+          role="group"
+          aria-label="Map mode"
+          data-testid="map-mode-switch"
+        >
+          <ModeButton
+            active={mode === 'map'}
+            onClick={() => onModeChange('map')}
+            testId="mode-map-button"
+          >
+            Map
+          </ModeButton>
+          <ModeButton
+            active={mode === 'plan'}
+            disabled={!planAvailable}
+            title={planAvailable ? undefined : 'Register a plan sheet to enable Plan mode'}
+            onClick={() => onModeChange('plan')}
+            testId="mode-plan-button"
+          >
+            Plan
+          </ModeButton>
+        </div>
+      </div>
       <div
         className={cn(
           'flex items-stretch',
@@ -189,123 +270,152 @@ export function MapToolbar({
         )}
         data-testid="lot-map-toolbar"
       >
-        <ToolbarButton
-          icon={Square}
-          label="Find by area"
-          text={drawArmed ? 'Cancel' : 'Find by area'}
-          short={drawArmed ? 'Cancel' : 'Area'}
-          onClick={onFindByArea}
-          pressed={drawArmed}
-          tile={isMobile}
-          testId="find-by-area-button"
-        />
-        <ToolbarButton
-          icon={Crosshair}
-          label="My location"
-          text={locating ? 'Locating…' : 'My location'}
-          short={locating ? 'Locating…' : 'Locate'}
-          onClick={onLocate}
-          disabled={locating || !canLocate}
-          tile={isMobile}
-          testId="locate-me-button"
-        />
-        {/* The camera policy's explicit escape hatch — desktop only: the phone
-            row is at its seven-tile budget and pinch already covers recovery. */}
-        {!isMobile && (
-          <ToolbarButton
-            icon={Maximize}
-            label="Fit lots"
-            text="Fit"
-            onClick={onFit}
-            disabled={!canFit}
-            tile={false}
-            testId="fit-lots-button"
-          />
-        )}
-        {/* Photos earns a top-level tile on the phone and only there: it is the
-            layer a foreman reaches for most, and burying it one tap deeper is
-            the whole failure the tiles fix. On desktop the pointer makes the
-            menu cheap, so it lives there only. */}
-        {isMobile && (
-          <ToolbarButton
-            icon={ImageIcon}
-            label="Photos"
-            short="Photos"
-            onClick={onTogglePhotos}
-            pressed={photosArmed}
-            tile
-            testId="photos-button"
-          />
-        )}
-        <MapLayersMenu
-          isMobile={isMobile}
-          open={layersOpen}
-          onOpenChange={onLayersOpenChange}
-          model={layerModel}
-          onTogglePin={onTogglePin}
-          onOpenPanel={onOpenPanel}
-          basemap={basemap}
-          onBasemapChange={onBasemapChange}
-          satelliteAvailable={satelliteAvailable}
-          trigger={
+        {mode === 'plan' ? (
+          // Plan mode is a reading/selecting canvas: geographic tools (GPS,
+          // find-by-area, draw, history, layers) stay on the Map canvas.
+          <>
+            {!isMobile && (
+              <ToolbarButton
+                icon={Maximize}
+                label="Fit sheet"
+                text="Fit"
+                onClick={onFit}
+                disabled={!canFit}
+                tile={false}
+                testId="fit-lots-button"
+              />
+            )}
             <ToolbarButton
-              icon={Layers}
-              label="Layers"
-              short="Layers"
-              // Desktop: Radix owns the trigger's click. Mobile: the tile opens
-              // the sheet itself.
-              onClick={isMobile ? () => onLayersOpenChange(true) : undefined}
-              pressed={layersOpen || layerModel.armedCount > 0}
-              count={layerModel.armedCount}
-              alert={unavailablePinLayers.length > 0}
+              icon={ImageDown}
+              label="Save map"
+              text={snapshotting ? 'Saving…' : 'Save map'}
+              short={snapshotting ? 'Saving…' : 'Save map'}
+              onClick={onSnapshot}
+              disabled={snapshotting}
               tile={isMobile}
-              testId="layers-button"
+              testId="snapshot-button"
             />
-          }
-        />
-        {canManageSettings && (
-          <ToolbarButton
-            icon={PencilRuler}
-            label={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
-            text={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
-            short={drawLotArmed ? 'Cancel' : 'Draw lot'}
-            onClick={onDrawLot}
-            pressed={drawLotArmed}
-            tile={isMobile}
-            testId="draw-lot-button"
-          />
+          </>
+        ) : (
+          <>
+            {/* ── Locate ── */}
+            <ToolbarButton
+              icon={Crosshair}
+              label="My location"
+              text={locating ? 'Locating…' : 'My location'}
+              short={locating ? 'Locating…' : 'Locate'}
+              onClick={onLocate}
+              disabled={locating || !canLocate}
+              tile={isMobile}
+              testId="locate-me-button"
+            />
+            {/* The camera policy's explicit escape hatch — desktop only: the
+                phone row is at its tile budget and pinch covers recovery. */}
+            {!isMobile && (
+              <ToolbarButton
+                icon={Maximize}
+                label="Fit lots"
+                text="Fit"
+                onClick={onFit}
+                disabled={!canFit}
+                tile={false}
+                testId="fit-lots-button"
+              />
+            )}
+            <GroupRule isMobile={isMobile} />
+            {/* ── Search ── */}
+            <ToolbarButton
+              icon={Square}
+              label="Find by area"
+              text={drawArmed ? 'Cancel' : 'Find by area'}
+              short={drawArmed ? 'Cancel' : 'Area'}
+              onClick={onFindByArea}
+              pressed={drawArmed}
+              tile={isMobile}
+              testId="find-by-area-button"
+            />
+            <GroupRule isMobile={isMobile} />
+            {/* ── Tools ── */}
+            {/* Photos earns a top-level tile on the phone and only there: it is
+                the layer a foreman reaches for most, and burying it one tap
+                deeper is the whole failure the tiles fix. On desktop the
+                pointer makes the menu cheap, so it lives there only. */}
+            {isMobile && (
+              <ToolbarButton
+                icon={ImageIcon}
+                label="Photos"
+                short="Photos"
+                onClick={onTogglePhotos}
+                pressed={photosArmed}
+                tile
+                testId="photos-button"
+              />
+            )}
+            <MapLayersMenu
+              isMobile={isMobile}
+              open={layersOpen}
+              onOpenChange={onLayersOpenChange}
+              model={layerModel}
+              onTogglePin={onTogglePin}
+              onOpenPanel={onOpenPanel}
+              basemap={basemap}
+              onBasemapChange={onBasemapChange}
+              satelliteAvailable={satelliteAvailable}
+              trigger={
+                <ToolbarButton
+                  icon={Layers}
+                  label="Layers"
+                  short="Layers"
+                  // Desktop: Radix owns the trigger's click. Mobile: the tile
+                  // opens the sheet itself.
+                  onClick={isMobile ? () => onLayersOpenChange(true) : undefined}
+                  pressed={layersOpen || layerModel.armedCount > 0}
+                  count={layerModel.armedCount}
+                  alert={unavailablePinLayers.length > 0}
+                  tile={isMobile}
+                  testId="layers-button"
+                />
+              }
+            />
+            {canManageSettings && (
+              <ToolbarButton
+                icon={PencilRuler}
+                label={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
+                text={drawLotArmed ? 'Cancel draw' : 'Draw lot'}
+                short={drawLotArmed ? 'Cancel' : 'Draw lot'}
+                onClick={onDrawLot}
+                pressed={drawLotArmed}
+                tile={isMobile}
+                testId="draw-lot-button"
+              />
+            )}
+            {/* "Save map", not "Snapshot": it writes a PNG of the map to
+                project Documents. The camera icon said "take a photo". */}
+            <ToolbarButton
+              icon={ImageDown}
+              label="Save map"
+              text={snapshotting ? 'Saving…' : 'Save map'}
+              short={snapshotting ? 'Saving…' : 'Save map'}
+              onClick={onSnapshot}
+              disabled={snapshotting}
+              tile={isMobile}
+              testId="snapshot-button"
+            />
+            {/* A rule, not a gap: Past is not an "act" peer of the controls to
+                its left — it changes what every polygon on the map MEANS. */}
+            <GroupRule isMobile={isMobile} />
+            <ToolbarButton
+              icon={History}
+              label={historyArmed ? 'Exit Past view' : 'Past view'}
+              text={historyArmed ? 'Exit Past view' : 'Past'}
+              short="Past"
+              onClick={onToggleHistory}
+              pressed={historyArmed}
+              tile={isMobile}
+              testId="history-button"
+            />
+          </>
         )}
-        {/* "Save map", not "Snapshot": it writes a PNG of the map to project
-            Documents. The camera icon said "take a photo". */}
-        <ToolbarButton
-          icon={ImageDown}
-          label="Save map"
-          text={snapshotting ? 'Saving…' : 'Save map'}
-          short={snapshotting ? 'Saving…' : 'Save map'}
-          onClick={onSnapshot}
-          disabled={snapshotting}
-          tile={isMobile}
-          testId="snapshot-button"
-        />
-        {/* A rule, not a gap: Past is not an "act" peer of the controls to its
-            left — it changes what every polygon on the map MEANS. */}
-        <span
-          className={cn(
-            'w-px flex-none self-stretch bg-foreground/25',
-            isMobile ? 'mx-1 my-1.5' : 'mx-1',
-          )}
-          aria-hidden
-        />
-        <ToolbarButton
-          icon={History}
-          label={historyArmed ? 'Exit Past view' : 'Past view'}
-          text={historyArmed ? 'Exit Past view' : 'Past'}
-          short="Past"
-          onClick={onToggleHistory}
-          pressed={historyArmed}
-          tile={isMobile}
-          testId="history-button"
-        />
       </div>
 
       <div className="flex flex-col items-start gap-1.5">
