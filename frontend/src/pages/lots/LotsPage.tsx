@@ -223,8 +223,12 @@ export function LotsPage() {
   // =====================
   // Render
   // =====================
+  // Map mode is a WORKSPACE: a compact rail (header + filters) over a map that
+  // fills the rest of the viewport — not a 520px strip inside a card. h-full
+  // resolves against <main>'s definite flex height (MainLayout).
+  const isMapWorkspace = viewMode === 'map';
   return (
-    <div className="space-y-6 p-6">
+    <div className={isMapWorkspace ? 'flex h-full min-h-0 flex-col gap-3' : 'space-y-6 p-6'}>
       {/* Page Header */}
       <LotsPageHeader
         isMobile={isMobile}
@@ -237,11 +241,14 @@ export function LotsPage() {
         onOpenBulkWizard={() => actions.setBulkWizardOpen(true)}
         onOpenCreate={() => actions.setCreateModalOpen(true)}
       />
-      <p className="text-sm text-muted-foreground">
-        {isSubcontractor
-          ? `Viewing lots assigned to your company for ${projectLabel}.`
-          : `Manage lots for ${projectLabel}. The lot is the atomic unit of the system.`}
-      </p>
+      {/* The workspace rail stays compact — the map is the page there. */}
+      {!isMapWorkspace && (
+        <p className="text-sm text-muted-foreground">
+          {isSubcontractor
+            ? `Viewing lots assigned to your company for ${projectLabel}.`
+            : `Manage lots for ${projectLabel}. The lot is the atomic unit of the system.`}
+        </p>
+      )}
 
       {/* Filters */}
       <LotFiltersBar
@@ -291,7 +298,10 @@ export function LotsPage() {
         onOpenPrintLabels={() => actions.setPrintLabelsModalOpen(true)}
       />
 
-      {loading && !isMobile && viewMode !== 'card' && <LotTableSkeleton />}
+      {loading && !isMobile && viewMode !== 'card' && !isMapWorkspace && <LotTableSkeleton />}
+      {loading && isMapWorkspace && (
+        <div className="min-h-0 flex-1 animate-pulse rounded-lg bg-muted" role="status" />
+      )}
 
       {error && <LotsLoadErrorBanner message={error} onRetry={() => void fetchLots()} />}
 
@@ -379,9 +389,9 @@ export function LotsPage() {
         </div>
       )}
 
-      {/* Phase 2 - Satellite Basemap Map View */}
+      {/* The spatial workspace: the map takes every remaining viewport pixel. */}
       {!loading && !error && viewMode === 'map' && projectId && (
-        <div className="rounded-lg border overflow-hidden" data-testid="map-view">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-lg border" data-testid="map-view">
           <Suspense
             fallback={
               <div className="p-12 text-center text-sm text-muted-foreground" role="status">
@@ -395,6 +405,7 @@ export function LotsPage() {
               canManageSettings={canManageSettings}
               projectName={projectName}
               lots={lots}
+              variant="workspace"
             />
           </Suspense>
         </div>

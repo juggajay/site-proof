@@ -168,6 +168,13 @@ interface LotMapViewProps {
    * desktop routes (see buildMapLinkPaths).
    */
   linkTargets?: MapLinkTargets;
+  /**
+   * 'workspace': the map fills whatever height its parent gives it (the classic
+   * lots page hands it the rest of the viewport — the spatial workspace).
+   * 'embedded' (default): the shipped fixed-height strip, still used by the
+   * foreman shell's card.
+   */
+  variant?: 'workspace' | 'embedded';
 }
 
 function FitBounds({ bounds }: { bounds: [LatLng, LatLng] | null }) {
@@ -535,8 +542,10 @@ export function LotMapView({
   projectName,
   lots = [],
   linkTargets,
+  variant = 'embedded',
 }: LotMapViewProps) {
   const navigate = useNavigate();
+  const workspace = variant === 'workspace';
   const isMobile = useIsMobile();
   const linkPaths = useMemo(
     () => buildMapLinkPaths(projectId, linkTargets),
@@ -1276,7 +1285,10 @@ export function LotMapView({
   );
 
   return (
-    <div className="bg-background" data-testid="lot-map-view">
+    <div
+      className={workspace ? 'flex h-full min-h-0 flex-col bg-background' : 'bg-background'}
+      data-testid="lot-map-view"
+    >
       {/* A registered plan sheet is a reason to render the map even with zero
           geometries — drawings-first projects trace their lots off the sheet. */}
       {showEmptyState && (allGeometries?.length ?? 0) === 0 && registeredSheets.length === 0 ? (
@@ -1303,7 +1315,10 @@ export function LotMapView({
               toasts). Containing them in their own stacking context keeps the
               map from painting over fixed page-level UI — the offline pill was
               80% hidden behind the map before this. */}
-          <div className="relative isolate" data-testid="lot-map-stacking-root">
+          <div
+            className={workspace ? 'relative isolate min-h-0 flex-1' : 'relative isolate'}
+            data-testid="lot-map-stacking-root"
+          >
             {/* DG-4b. One column: the Past bar (when armed) above the control
                 row above the notices. `pointer-events-none` on the column with
                 `auto` on each control is what keeps the transparent gaps between
@@ -1398,7 +1413,13 @@ export function LotMapView({
               zoomControl={!isMobile}
               // Mobile: cap at 60% of the (dynamic) viewport so toolbar + legend
               // fit without a fiddly inner scroll. Desktop keeps a fixed 520px.
-              style={{ height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }}
+              style={
+                // Workspace: the map takes every pixel its flex parent resolves.
+                // Embedded (foreman shell card): the shipped fixed-height strip.
+                workspace
+                  ? { height: '100%', width: '100%' }
+                  : { height: isMobile ? 'min(520px, 60dvh)' : 520, width: '100%' }
+              }
             >
               {/* QA/RT-02. On mobile there is no Leaflet LayersControl at all.
                   Wherever it was cornered it lost: the CIVOS toolbar column is
