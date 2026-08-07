@@ -12,6 +12,9 @@ export const queryKeys = {
   lotGeometries: (lotId: string) => ['lot-geometries', lotId] as const,
   spatialSearch: (projectId: string) => ['spatial-search', projectId] as const,
   lotStatusTimeline: (projectId: string) => ['lot-status-timeline', projectId] as const,
+  // Wave 2 inspector — the lot's LotStatusEvent ledger (#1800), NOT the
+  // audit-derived project timeline above (which misses NCR-driven transitions).
+  lotStatusEvents: (lotId: string) => ['lot-status-events', lotId] as const,
   projectCoverage: (projectId: string) => ['project-coverage', projectId] as const,
   projectTestCoverage: (projectId: string) => ['project-test-coverage', projectId] as const,
   projectCloseoutReadiness: (projectId: string) =>

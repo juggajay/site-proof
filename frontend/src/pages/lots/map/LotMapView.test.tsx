@@ -145,6 +145,28 @@ vi.mock('./LotLabelsLayer', () => ({
   ),
 }));
 
+// The inspector is a data-heavy panel with its own suite (LotInspector.test.tsx)
+// — stub it here and assert the selection wiring the workspace owns: when it
+// mounts, which lot it gets, and that its close/select callbacks drive the ONE
+// selection state.
+const inspectorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
+vi.mock('./LotInspector', () => ({
+  LotInspector: (props: {
+    geometry: { lotId: string };
+    pastView: boolean;
+    onClose: () => void;
+    onSelectLot: (lotId: string) => void;
+  }) => {
+    inspectorProps.current = props as unknown as Record<string, unknown>;
+    return (
+      <div data-testid={`lot-inspector-${props.geometry.lotId}`} data-past={String(props.pastView)}>
+        <button data-testid="inspector-close" onClick={props.onClose} />
+        <button data-testid="inspector-select-lot-2" onClick={() => props.onSelectLot('lot-2')} />
+      </div>
+    );
+  },
+}));
+
 // The plan canvas is a second real Leaflet map (CRS.Simple) — stub it and
 // assert the props the workspace hands it.
 vi.mock('./PlanModeCanvas', () => ({
@@ -409,6 +431,7 @@ function setNavigatorOnline(value: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  inspectorProps.current = null;
   isMobileValue = false;
   setNavigatorOnline(true);
   planSheetsQuery.data = [];
@@ -435,7 +458,7 @@ beforeEach(() => {
 });
 
 describe('LotMapView', () => {
-  it('renders a polygon for each filtered geometry and opens the popup on click', () => {
+  it('renders a polygon for each filtered geometry and opens the inspector on click', () => {
     mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
 
     render(
@@ -449,20 +472,17 @@ describe('LotMapView', () => {
     expect(screen.getByTestId('map-container')).toBeInTheDocument();
     expect(screen.getByTestId('polygon')).toBeInTheDocument();
 
-    // One selection-driven popup now, not one per lot: nothing until a click.
-    expect(screen.queryByTestId('lot-popup-lot-1')).not.toBeInTheDocument();
+    // One selection-driven inspector (Wave 2 — supersedes the popup): nothing
+    // until a click.
+    expect(screen.queryByTestId('lot-inspector-lot-1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('polygon'));
-    const popup = screen.getByTestId('lot-popup-lot-1');
-    expect(within(popup).getByText('LOT-001')).toBeInTheDocument();
-    // formatStatusLabel turns in_progress -> "In Progress"; the chainage range
-    // is what locates a strip among dozens of identical ones (Wave 1 test-drive
-    // feedback).
-    expect(within(popup).getByText(/In Progress.*Ch 0–100/)).toBeInTheDocument();
-    expect(screen.getByTestId('lot-popup-view-lot-1')).toBeInTheDocument();
+    expect(screen.getByTestId('lot-inspector-lot-1')).toBeInTheDocument();
+    // Live view: the inspector's QA blocks are not suppressed.
+    expect(screen.getByTestId('lot-inspector-lot-1')).toHaveAttribute('data-past', 'false');
   });
 
-  it('renders a Directions link to the lot centroid for a lot with geometry', () => {
-    mockQueries({ geometries: [polygonGeometry()] });
+  it('closing the inspector clears the one selection state (and the lot URL key)', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(
       <LotMapView
         projectId="proj-1"
@@ -471,43 +491,47 @@ describe('LotMapView', () => {
       />,
     );
     fireEvent.click(screen.getByTestId('polygon'));
-    const link = screen.getByTestId('lot-popup-directions-lot-1');
-    // Centroid of the fixture ring [[151,-33.8],[151.001,-33.8],[151.001,-33.801],[151,-33.8]]
-    // is a degenerate/triangular ring; assert the Google Maps universal URL shape.
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    const href = link.getAttribute('href') ?? '';
-    expect(href).toMatch(
-      /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=-?\d+\.?\d*,-?\d+\.?\d*$/,
-    );
+    expect(screen.getByTestId('lot-inspector-lot-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('inspector-close'));
+    expect(screen.queryByTestId('lot-inspector-lot-1')).not.toBeInTheDocument();
+    const written = setSearchParamsMock.mock.calls.at(-1)?.[0] as URLSearchParams;
+    expect(written.get('lot')).toBeNull();
   });
 
-  it('omits the Directions link when the lot has no geometry to route to', () => {
-    // An empty ring yields no renderable shape (and no centroid) -> no dead button.
+  it('inspector next/prev re-targets the SAME selection (state, URL, camera)', () => {
     mockQueries({
       geometries: [
+        polygonGeometry(),
         polygonGeometry({
-          geometryWgs84: {
-            type: 'Feature',
-            geometry: { type: 'Polygon', coordinates: [[]] },
-          },
+          id: 'geo-2',
+          lotId: 'lot-2',
+          lotNumber: 'LOT-002',
+          chainageStart: 100,
+          chainageEnd: 200,
         }),
       ],
+      controlLines: [controlLine],
     });
     render(
       <LotMapView
         projectId="proj-1"
-        filteredLotIds={new Set(['lot-1'])}
+        filteredLotIds={new Set(['lot-1', 'lot-2'])}
         canManageSettings={false}
       />,
     );
-    fireEvent.click(screen.getByTestId('polygon'));
-    expect(screen.getByTestId('lot-popup-lot-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('lot-popup-directions-lot-1')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByTestId('polygon')[0]);
+    expect(screen.getByTestId('lot-inspector-lot-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('inspector-select-lot-2'));
+    expect(screen.getByTestId('lot-inspector-lot-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('lot-inspector-lot-1')).not.toBeInTheDocument();
+    const written = setSearchParamsMock.mock.calls.at(-1)?.[0] as URLSearchParams;
+    expect(written.get('lot')).toBe('lot-2');
   });
 
-  it('navigates to the lot detail page from the popup', () => {
-    mockQueries({ geometries: [polygonGeometry()] });
+  it('marks the inspector as Past view while the history scrubber is armed', () => {
+    mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
     render(
       <LotMapView
         projectId="proj-1"
@@ -516,11 +540,13 @@ describe('LotMapView', () => {
       />,
     );
     fireEvent.click(screen.getByTestId('polygon'));
-    fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
-    expect(navigate).toHaveBeenCalledWith('/projects/proj-1/lots/lot-1');
+    fireEvent.click(screen.getByTestId('history-button'));
+    // Selection survives entering Past view; the inspector is told so it can
+    // withdraw its live QA blocks (one date in the picture).
+    expect(screen.getByTestId('lot-inspector-lot-1')).toHaveAttribute('data-past', 'true');
   });
 
-  it('routes popup View Details through linkTargets so the foreman shell never escapes to desktop', () => {
+  it('hands the inspector the register/shell link builder so navigation stays in-shell', () => {
     mockQueries({ geometries: [polygonGeometry()] });
     render(
       <LotMapView
@@ -531,8 +557,8 @@ describe('LotMapView', () => {
       />,
     );
     fireEvent.click(screen.getByTestId('polygon'));
-    fireEvent.click(screen.getByTestId('lot-popup-view-lot-1'));
-    expect(navigate).toHaveBeenCalledWith('/m/lots/lot-1?projectId=proj-1');
+    const linkPaths = inspectorProps.current?.linkPaths as { lot: (id: string) => string };
+    expect(linkPaths.lot('lot-1')).toBe('/m/lots/lot-1?projectId=proj-1');
   });
 
   it('excludes geometries whose lot is filtered out of the register', () => {
@@ -1558,13 +1584,13 @@ describe('LotMapView', () => {
       expect(cleared.get('sheet')).toBeNull();
     });
 
-    it('deep link ?lot= selects the lot and opens its popup once geometry loads', async () => {
+    it('deep link ?lot= selects the lot and opens its inspector once geometry loads', async () => {
       searchParamsValue.current = new URLSearchParams('lot=lot-1');
       mockQueries({ geometries: [polygonGeometry()], controlLines: [controlLine] });
       render(
         <LotMapView projectId="proj-1" filteredLotIds={new Set(['lot-1'])} canManageSettings />,
       );
-      expect(await screen.findByTestId('lot-popup-lot-1')).toBeInTheDocument();
+      expect(await screen.findByTestId('lot-inspector-lot-1')).toBeInTheDocument();
     });
 
     it('entering Plan mode disarms geographic tools (draw, history)', () => {
