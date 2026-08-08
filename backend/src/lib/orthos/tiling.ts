@@ -110,8 +110,13 @@ function projectedPixelSize(info: GdalInfoJson, bounds: [number, number, number,
     const pixelAxis = Math.hypot(transform[1], transform[4]);
     const lineAxis = Math.hypot(transform[2], transform[5]);
     const wkt = (info.coordinateSystem as { wkt?: unknown } | undefined)?.wkt;
+    // A geographic CRS's WKT still contains LENGTHUNIT["metre"] inside its
+    // ELLIPSOID definition, so unit-matching alone reads degrees as metres.
+    // Trust the geoTransform only for a projected, metre-based CRS.
     const metreBased =
-      typeof wkt === 'string' && /(?:LENGTHUNIT|UNIT)\[\s*"(?:metre|meter)"/i.test(wkt);
+      typeof wkt === 'string' &&
+      /^\s*PROJ(?:CRS|CS)\b/i.test(wkt) &&
+      /(?:LENGTHUNIT|UNIT)\[\s*"(?:metre|meter)"/i.test(wkt);
     if (metreBased && pixelAxis > 0 && lineAxis > 0) return Math.max(pixelAxis, lineAxis);
   }
 
@@ -220,7 +225,8 @@ export async function runOrthoTiling(params: {
     [
       '--xyz',
       '--processes=4',
-      '--exclude-transparent',
+      // ponytail: --exclude-transparent needs GDAL >= 3.9; Debian bookworm ships
+      // 3.6. Blank edge tiles cost pennies of storage — add back on upgrade.
       '--resume',
       `--zoom=${parsed.minZoom}-${parsed.maxZoom}`,
       '--webviewer=none',

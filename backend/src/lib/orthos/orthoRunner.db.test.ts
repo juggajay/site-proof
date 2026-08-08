@@ -85,9 +85,7 @@ describe('ortho tiling runner', () => {
     expect(await runNextOrthoTiling({ leaseOwner: 'test-worker', store, runGdal })).toBe('ready');
     const ready = await prisma.orthoLayer.findUniqueOrThrow({ where: { id: ortho.id } });
     expect(ready).toMatchObject({ status: 'ready', minZoom: 16, maxZoom: 22, tileCount: 1 });
-    expect(invocations[1]).toContain(
-      'gdal2tiles.py --xyz --processes=4 --exclude-transparent --resume',
-    );
+    expect(invocations[1]).toContain('gdal2tiles.py --xyz --processes=4 --resume');
     expect(
       await store.sizeOf(orthoTileObjectRef(orthoTileStorageRoot(projectId, ortho.id), 16, 1, 2)),
     ).toBe(3n);
