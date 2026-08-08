@@ -179,6 +179,38 @@ describe('foldActivityValue — family-level legacy values', () => {
   });
 });
 
+describe('foldActivityValue — dropdown display names (register-import dogfooding bug)', () => {
+  // Users type or export exactly what the UI dropdown shows; every display
+  // name must fold. "Earthworks (general)" was unrecognised in the Pacific
+  // Ridge demo import and forced 108 identical manual fixes.
+  it('folds every canonical activity display name to its slug (exact)', () => {
+    for (const activity of CANONICAL_ACTIVITIES) {
+      expect(foldActivityValue(activity.displayName)).toEqual({
+        slug: activity.slug,
+        confidence: 'exact',
+      });
+    }
+  });
+
+  it('folds "earthworks (GENERAL)" case-insensitively', () => {
+    expect(foldActivityValue('earthworks (GENERAL)')).toEqual({
+      slug: 'earthworks_general',
+      confidence: 'exact',
+    });
+  });
+
+  it('folds multi-word family display names at family confidence', () => {
+    expect(foldActivityValue('Road furniture')).toEqual({
+      slug: 'road_furniture',
+      confidence: 'family',
+    });
+    expect(foldActivityValue('Concrete flatwork')).toEqual({
+      slug: 'concrete_flatwork',
+      confidence: 'family',
+    });
+  });
+});
+
 describe('foldActivityValue — retired / unclassifiable', () => {
   const none = ['Concrete', 'General', 'Other', '', '   ', 'totally unknown junk'];
   it.each(none)('%s → none', (raw) => {
