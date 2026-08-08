@@ -23,6 +23,7 @@ import { RenderedFaces } from '@thatopen/fragments';
 import type * as FRAGS from '@thatopen/fragments';
 
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
+import { openingBoxAndAzimuth } from './openingFit';
 import { flattenPsets, type PickedElementData } from './psets';
 import type { PaintLayer } from './playbackPaint';
 
@@ -87,8 +88,9 @@ export async function createFragmentsViewer(container: HTMLElement): Promise<Fra
     camera.near = Math.max(0.1, diag / 10000);
     camera.far = diag * 6;
     camera.updateProjectionMatrix();
-    await world.camera.controls.rotateTo(Math.PI / 4, Math.PI / 3.2, animate);
-    await world.camera.controls.fitToBox(modelBox, animate);
+    const { fit, azimuth } = openingBoxAndAzimuth(modelBox);
+    await world.camera.controls.rotateTo(azimuth, Math.PI / 3.2, animate);
+    await world.camera.controls.fitToBox(fit, animate);
     await fragments.core.update(true);
     await paintFrame();
   }
