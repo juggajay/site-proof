@@ -181,15 +181,16 @@ export const documentationSections: DocumentationSection[] = [
           'Generate lot footprints from a control line and chainage, import an alignment from LandXML or DXF, trace a lot off a plan sheet, or draw one by hand.',
       },
       {
-        title: 'Read coverage, testing, photos, and history',
+        title: 'Read imagery, coverage, testing, photos, and history',
         description:
-          'Use Testing to recolour drawn lots by test frequency, Test pins to show where samples were taken, Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and Past view to scrub lot status by date.',
+          'Use Layers to show up to two ready drone orthophotos with separate opacity controls, Testing to recolour drawn lots by test frequency, Test pins to show where samples were taken, Coverage to find chainage gaps, Find by area to list lots in a box, Photos to pin GPS-tagged site photos, and Past view to scrub lot status by date.',
       },
     ],
     tips: [
       'The Testing layer recolours drawn lots with the same three-valued test frequency verdict the lot page shows: green for Testing satisfied, amber for Fewer tests than required, and grey for No rule. Lots that are not drawn are counted, not coloured, and the panel says how many. Testing is an internal layer that subcontractors never see, and it is unavailable in Past view because a live verdict has no meaning against a past date.',
       'The Test pins layer shows a pin only where someone captured a sample point on a test. Nothing is derived, so a test recorded with a chainage description and no captured coordinate is counted toward the frequency but never drawn. The pin gives the coordinate and how it was captured, such as GPS plus or minus 6 m, or Picked on map.',
       'Overlay registered plan sheets on the imagery and blend the paper away so only the linework shows.',
+      'Drone orthophotos appear in Layers after background tiling finishes. Up to two can be shown together, each with its own opacity; Past view does not automatically switch imagery by flight date.',
       'Tiles, plan sheets, and map data you have already viewed stay available offline; there is no bulk pre-download.',
       'Snapshot the map to save it into project Documents, ready to attach to a conformance pack or claim.',
       'Subcontractors see only the lots assigned to their company on the map.',

@@ -17,13 +17,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 
 import type {
   MapBasemapId,
   MapLayerMenuModel,
   MapPanelId,
   MapPanelRow,
+  MapOrthoLayerRow,
   MapPinLayerId,
   MapPinLayerRow,
 } from './mapLayerRows';
@@ -57,6 +58,8 @@ interface MapLayersMenuProps {
   model: MapLayerMenuModel;
   onTogglePin: (id: MapPinLayerId) => void;
   onOpenPanel: (id: MapPanelId) => void;
+  onToggleOrtho: (id: string) => void;
+  onOrthoOpacityChange: (id: string, opacity: number) => void;
   /**
    * QA/RT-02, mobile only. The phone has no Leaflet basemap switcher — the CIVOS
    * toolbar spans the whole top strip and covered it in every corner — so the
@@ -97,6 +100,8 @@ export function MapLayersMenu({
   model,
   onTogglePin,
   onOpenPanel,
+  onToggleOrtho,
+  onOrthoOpacityChange,
   basemap,
   onBasemapChange,
   satelliteAvailable,
@@ -143,6 +148,22 @@ export function MapLayersMenu({
             {model.pins.map((row) => (
               <SheetPinRow key={row.id} row={row} onToggle={() => onTogglePin(row.id)} />
             ))}
+
+            {model.orthos.length > 0 && (
+              <>
+                <p className="mt-4 border-t px-1 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Drone imagery · up to 2
+                </p>
+                {model.orthos.map((row) => (
+                  <SheetOrthoRow
+                    key={row.id}
+                    row={row}
+                    onToggle={() => onToggleOrtho(row.id)}
+                    onOpacityChange={(opacity) => onOrthoOpacityChange(row.id, opacity)}
+                  />
+                ))}
+              </>
+            )}
 
             <p className="mt-4 border-t px-1 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Open a panel
@@ -193,6 +214,49 @@ export function MapLayersMenu({
             </DropdownMenuCheckboxItem>
           );
         })}
+
+        {model.orthos.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Drone imagery · up to 2
+            </DropdownMenuLabel>
+            {model.orthos.map((row) => (
+              <div key={row.id}>
+                <DropdownMenuCheckboxItem
+                  checked={row.checked}
+                  disabled={row.disabled}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() => onToggleOrtho(row.id)}
+                  data-testid={`map-ortho-${row.id}`}
+                >
+                  <Satellite className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                  {row.capturedAt && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {formatDate(row.capturedAt)}
+                    </span>
+                  )}
+                </DropdownMenuCheckboxItem>
+                {row.checked && (
+                  <label className="flex items-center gap-2 px-8 pb-2 text-xs text-muted-foreground">
+                    Opacity
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={1}
+                      step={0.05}
+                      value={row.opacity}
+                      onChange={(event) => onOrthoOpacityChange(row.id, Number(event.target.value))}
+                      className="min-w-0 flex-1"
+                      data-testid={`map-ortho-opacity-${row.id}`}
+                    />
+                  </label>
+                )}
+              </div>
+            ))}
+          </>
+        )}
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -329,6 +393,62 @@ function SheetPanelRow({ row, onOpen }: { row: MapPanelRow; onOpen: () => void }
       {row.detail && <span className="text-xs text-muted-foreground">{row.detail}</span>}
       <ChevronRight className="h-5 w-5 flex-none text-muted-foreground" aria-hidden />
     </button>
+  );
+}
+
+function SheetOrthoRow({
+  row,
+  onToggle,
+  onOpacityChange,
+}: {
+  row: MapOrthoLayerRow;
+  onToggle: () => void;
+  onOpacityChange: (opacity: number) => void;
+}) {
+  return (
+    <div className="border-t first:border-t-0">
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={row.checked}
+        disabled={row.disabled}
+        onClick={onToggle}
+        className="flex min-h-[56px] w-full items-center gap-3 px-1 text-left disabled:opacity-50"
+        data-testid={`map-ortho-${row.id}`}
+      >
+        <span
+          className={cn(
+            'flex h-[22px] w-[22px] flex-none items-center justify-center rounded border-2',
+            row.checked
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-muted-foreground/60 bg-card',
+          )}
+          aria-hidden
+        >
+          {row.checked && <span>✓</span>}
+        </span>
+        <Satellite className="h-5 w-5 flex-none text-muted-foreground" aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-[15px]">{row.label}</span>
+        {row.capturedAt && (
+          <span className="text-xs text-muted-foreground">{formatDate(row.capturedAt)}</span>
+        )}
+      </button>
+      {row.checked && (
+        <label className="flex items-center gap-2 px-1 pb-3 pl-12 text-xs text-muted-foreground">
+          Opacity
+          <input
+            type="range"
+            min={0.2}
+            max={1}
+            step={0.05}
+            value={row.opacity}
+            onChange={(event) => onOpacityChange(Number(event.target.value))}
+            className="min-w-0 flex-1"
+            data-testid={`map-ortho-opacity-${row.id}`}
+          />
+        </label>
+      )}
+    </div>
   );
 }
 

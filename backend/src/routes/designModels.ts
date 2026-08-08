@@ -19,9 +19,11 @@ import {
   MAX_SOURCE_SIZE_BYTES,
   UPLOAD_PART_SIZE_BYTES,
   ensureUploadPartsDirectory,
+  expectedUploadPartSize,
   listReceivedParts,
   removeUploadParts,
   uploadPartPath,
+  uploadPartCount,
   uploadPartsDirectory,
 } from '../lib/models/uploadParts.js';
 import { prisma } from '../lib/prisma.js';
@@ -242,7 +244,7 @@ designModelsRouter.post(
     res.status(201).json({
       versionId: version.id,
       partSizeBytes: UPLOAD_PART_SIZE_BYTES,
-      partCount: Math.ceil(parsed.data.sizeBytes / UPLOAD_PART_SIZE_BYTES),
+      partCount: uploadPartCount(parsed.data.sizeBytes, MAX_SOURCE_SIZE_BYTES),
     });
   }),
 );
@@ -261,11 +263,11 @@ designModelsRouter.put(
     }
     if (!req.file) throw AppError.badRequest('A multipart file field named file is required');
 
-    const partCount = Math.ceil(Number(version.sourceSizeBytes) / UPLOAD_PART_SIZE_BYTES);
+    const sourceSizeBytes = Number(version.sourceSizeBytes);
+    const partCount = uploadPartCount(sourceSizeBytes, MAX_SOURCE_SIZE_BYTES);
     const index = indexResult.data;
     if (index >= partCount) throw AppError.badRequest('Part index is outside the declared upload');
-    const finalSize = Number(version.sourceSizeBytes) - (partCount - 1) * UPLOAD_PART_SIZE_BYTES;
-    const expectedSize = index === partCount - 1 ? finalSize : UPLOAD_PART_SIZE_BYTES;
+    const expectedSize = expectedUploadPartSize(sourceSizeBytes, index, MAX_SOURCE_SIZE_BYTES);
     if (req.file.size !== expectedSize) {
       throw AppError.badRequest(`Part ${index} has the wrong size: expected ${expectedSize} bytes`);
     }
@@ -299,7 +301,7 @@ designModelsRouter.post(
       throw AppError.conflict('Only an uploading design-model version can be completed');
     }
 
-    const partCount = Math.ceil(Number(version.sourceSizeBytes) / UPLOAD_PART_SIZE_BYTES);
+    const partCount = uploadPartCount(Number(version.sourceSizeBytes), MAX_SOURCE_SIZE_BYTES);
     const received = await listReceivedParts(version.id);
     const expected = Array.from({ length: partCount }, (_unused, index) => index);
     if (received.length !== expected.length || received.some((value, index) => value !== index)) {

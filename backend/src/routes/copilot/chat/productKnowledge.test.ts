@@ -130,7 +130,7 @@ describe('product knowledge — test sufficiency facts', () => {
   // -------------------------------------------------------------------------
   it('names the overlay layers on the map tool list', () => {
     // LotMapView.tsx toolbar items 9 and 10: `label="Testing"`, `label="Test pins"`.
-    expect(body('site-map')).toContain('Use Testing to recolour drawn lots by test frequency');
+    expect(body('site-map')).toContain('Testing to recolour drawn lots by test frequency');
     expect(body('site-map')).toContain('Test pins to show where samples were taken');
   });
 

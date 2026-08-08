@@ -69,15 +69,17 @@ async function bootstrap(): Promise<void> {
 
   const { startHandoverExportWorker } = await import('../lib/handover/exportWorkerLoop.js');
   const { startModelConversionWorker } = await import('../lib/models/conversionWorkerLoop.js');
+  const { startOrthoTilingWorker } = await import('../lib/orthos/orthoWorkerLoop.js');
   const handoverHandle = startHandoverExportWorker();
   const modelHandle = startModelConversionWorker();
+  const orthoHandle = startOrthoTilingWorker();
 
   const { prisma } = await import('../lib/prisma.js');
   const { logInfo } = await import('../lib/serverLogger.js');
 
   const shutdown = async (signal: string) => {
     logInfo(`[Worker] ${signal} received; finishing current jobs`);
-    await Promise.all([handoverHandle.stop(), modelHandle.stop()]);
+    await Promise.all([handoverHandle.stop(), modelHandle.stop(), orthoHandle.stop()]);
     await prisma.$disconnect();
     process.exit(0);
   };

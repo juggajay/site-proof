@@ -13,6 +13,9 @@ function state(over: Partial<MapLayerMenuState> = {}): MapLayerMenuState {
     plansOpen: false,
     coverageArmed: false,
     testingArmed: false,
+    orthos: [],
+    orthoShown: {},
+    orthoOpacity: {},
     ...over,
   };
 }
@@ -57,6 +60,24 @@ describe('buildMapLayerRows', () => {
       '2 registered',
     );
     expect(buildMapLayerRows(state()).panels[0].detail).toBeNull();
+  });
+
+  it('allows at most two drone imagery rows to be armed', () => {
+    const orthos = [
+      { id: 'one', name: 'Flight one', capturedAt: null },
+      { id: 'two', name: 'Flight two', capturedAt: null },
+      { id: 'three', name: 'Flight three', capturedAt: null },
+    ];
+    const model = buildMapLayerRows(
+      state({
+        orthos,
+        orthoShown: { one: true, two: true },
+        orthoOpacity: { one: 0.5 },
+      }),
+    );
+    expect(model.orthos.map((row) => row.disabled)).toEqual([false, false, true]);
+    expect(model.orthos[0].opacity).toBe(0.5);
+    expect(model.armedCount).toBe(2);
   });
 
   it('marks a panel whose panel is already open, so the row reads as a way back', () => {

@@ -14,7 +14,7 @@
 FROM node:22-slim AS base
 WORKDIR /app
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates gdal-bin python3-gdal \
   && rm -rf /var/lib/apt/lists/*
 
 # Stage 1: Install dependencies

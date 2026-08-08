@@ -1,12 +1,13 @@
 /**
  * DG-4b. The Layers chooser's contents as DATA.
  *
- * The chooser holds two kinds of row and they must never look interchangeable:
+ * The chooser holds three kinds of row and they must never look interchangeable:
  *
  *   • PIN layers are CHECKBOXES. They paint passive markers on the map and do
  *     nothing else, so their whole state is the tick.
  *   • PANEL rows are NAVIGATION. They close the chooser and open a panel that
  *     owns its own state, so they get a chevron and never a tick.
+ *   • ORTHO rows are bounded image toggles with their own opacity control.
  *
  * Which rows exist is a rule, not decoration: in Past view the live-only layers
  * are withdrawn, and the chooser has to SAY why rather than silently dropping
@@ -45,6 +46,21 @@ export interface MapPanelRow {
   active: boolean;
 }
 
+export interface MapOrthoLayerRow {
+  id: string;
+  label: string;
+  capturedAt: string | null;
+  checked: boolean;
+  disabled: boolean;
+  opacity: number;
+}
+
+export interface MapOrthoLayerInput {
+  id: string;
+  name: string;
+  capturedAt: string | null;
+}
+
 export interface MapLayerMenuState {
   /** Past view. Withdraws every layer whose data is about today. */
   historyArmed: boolean;
@@ -56,18 +72,22 @@ export interface MapLayerMenuState {
   plansOpen: boolean;
   coverageArmed: boolean;
   testingArmed: boolean;
+  orthos: MapOrthoLayerInput[];
+  orthoShown: Record<string, boolean>;
+  orthoOpacity: Record<string, number>;
 }
 
 export interface MapLayerMenuModel {
   pins: MapPinLayerRow[];
   panels: MapPanelRow[];
+  orthos: MapOrthoLayerRow[];
   /**
    * Names withdrawn because Past view is on, in reading order. Empty in live
    * view. The menu renders this as a sentence; it is never silently empty when
    * rows are missing.
    */
   liveOnly: string[];
-  /** Pin layers currently painting — the number on the Layers trigger. */
+  /** Passive pin/ortho layers currently painting — the number on the Layers trigger. */
   armedCount: number;
 }
 
@@ -125,10 +145,21 @@ export function buildMapLayerRows(state: MapLayerMenuState): MapLayerMenuModel {
     );
   }
 
+  const activeOrthoCount = state.orthos.filter((ortho) => state.orthoShown[ortho.id]).length;
+  const orthos = state.orthos.map((ortho) => ({
+    id: ortho.id,
+    label: ortho.name,
+    capturedAt: ortho.capturedAt,
+    checked: Boolean(state.orthoShown[ortho.id]),
+    disabled: activeOrthoCount >= 2 && !state.orthoShown[ortho.id],
+    opacity: state.orthoOpacity[ortho.id] ?? 0.85,
+  }));
+
   return {
     pins,
     panels,
+    orthos,
     liveOnly: state.historyArmed ? ['Test pins', 'Coverage', TEST_COVERAGE_LABEL] : [],
-    armedCount: pins.filter((row) => row.checked).length,
+    armedCount: pins.filter((row) => row.checked).length + activeOrthoCount,
   };
 }

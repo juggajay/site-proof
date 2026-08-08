@@ -268,6 +268,13 @@ vi.mock('./statusTimelineData', async (importOriginal) => {
   return { ...actual, useLotStatusTimeline: () => timelineQuery };
 });
 
+// Wave 7. The ortho-layer query calls useQuery; stub it so the loading gate
+// resolves. Pure helpers (readyOrthoLayers, orthoTileUrl) stay real.
+vi.mock('./orthoData', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./orthoData')>();
+  return { ...actual, useOrthoLayers: () => ({ data: [], isLoading: false }) };
+});
+
 // C3 Phase A. The testing-overlay query calls useQuery; stub it. The pure
 // palette/label helpers stay real so the colour assertions test the shipped map.
 const testCoverageQuery = {

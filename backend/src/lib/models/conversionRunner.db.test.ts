@@ -26,6 +26,14 @@ class FakeModelObjectStore implements ModelObjectStore {
     this.objects.delete(ref);
   }
 
+  async deleteMany(refs: readonly string[]): Promise<void> {
+    for (const ref of refs) this.objects.delete(ref);
+  }
+
+  async list(prefix: string): Promise<string[]> {
+    return [...this.objects.keys()].filter((ref) => ref.startsWith(`${prefix}/`));
+  }
+
   async sizeOf(ref: string): Promise<bigint> {
     const value = this.objects.get(ref);
     if (!value) throw new Error(`Missing fake object ${ref}`);

@@ -1,0 +1,22 @@
+{
+  "description": "oam-camino-agri-corridor-1p4km-utm15n.tif",
+  "driverShortName": "GTiff",
+  "size": [66792, 6529],
+  "coordinateSystem": {
+    "wkt": "PROJCRS[\"WGS 84 / UTM zone 15N\",BASEGEOGCRS[\"WGS 84\"],CONVERSION[\"UTM zone 15N\"],CS[Cartesian,2],AXIS[\"easting\",east],AXIS[\"northing\",north],LENGTHUNIT[\"metre\",1],ID[\"EPSG\",32615]]",
+    "dataAxisToSRSAxisMapping": [1, 2]
+  },
+  "geoTransform": [782466.549473958, 0.0216441, 0, 2146861.893829987, 0, -0.0216441],
+  "wgs84Extent": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-90.2984, 19.392],
+        [-90.2847, 19.392],
+        [-90.2847, 19.3934],
+        [-90.2984, 19.3934],
+        [-90.2984, 19.392]
+      ]
+    ]
+  }
+}

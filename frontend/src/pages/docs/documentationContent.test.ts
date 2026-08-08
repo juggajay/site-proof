@@ -73,7 +73,7 @@ const PINNED_SUFFICIENCY_COPY: ReadonlyArray<[sectionId: string, sentence: strin
   // Wave C3 exit item 12 — the map's Testing overlay and the sample point.
   // Written first in the backend mirror and pinned there against the shipped
   // code (routes/projectTestCoverage.ts, testCoverageData.ts, lib/samplePoint.ts).
-  ['site-map', 'Use Testing to recolour drawn lots by test frequency'],
+  ['site-map', 'Testing to recolour drawn lots by test frequency'],
   ['site-map', 'Test pins to show where samples were taken'],
   ['site-map', 'green for Testing satisfied'],
   ['site-map', 'amber for Fewer tests than required'],
