@@ -279,6 +279,20 @@ const LEGACY_FOLD_CI: Map<string, FoldResult | null> = (() => {
   return map;
 })();
 
+// The UI shows display names, so users typing or exporting exactly what the
+// dropdown says ("Earthworks (general)") must fold cleanly. Consulted LAST so
+// legacy rules keep precedence; families set first so an activity wins a clash.
+const DISPLAY_NAME_FOLD: Map<string, FoldResult> = (() => {
+  const map = new Map<string, FoldResult>();
+  for (const family of ACTIVITY_FAMILIES) {
+    map.set(family.displayName.toLowerCase(), { slug: family.slug, confidence: 'family' });
+  }
+  for (const activity of CANONICAL_ACTIVITIES) {
+    map.set(activity.displayName.toLowerCase(), { slug: activity.slug, confidence: 'exact' });
+  }
+  return map;
+})();
+
 /**
  * Normalize any historical activity value to a canonical result. See the map
  * above for the rules. Whitespace- and (mostly) case-insensitive.
@@ -293,6 +307,8 @@ export function foldActivityValue(raw: string | null | undefined): FoldResult {
   if (exact) return exact;
   const ci = LEGACY_FOLD_CI.get(lower);
   if (ci) return ci;
+  const display = DISPLAY_NAME_FOLD.get(lower);
+  if (display) return display;
   return NONE;
 }
 
