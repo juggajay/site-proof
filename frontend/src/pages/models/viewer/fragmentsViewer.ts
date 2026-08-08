@@ -23,7 +23,7 @@ import { RenderedFaces } from '@thatopen/fragments';
 import type * as FRAGS from '@thatopen/fragments';
 
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
-import { openingBoxAndAzimuth } from './openingFit';
+import { WHOLE_BOX_AZIMUTH, openingShot } from './openingFit';
 import { flattenPsets, type PickedElementData } from './psets';
 import type { PaintLayer } from './playbackPaint';
 
@@ -81,6 +81,8 @@ export async function createFragmentsViewer(container: HTMLElement): Promise<Fra
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
 
+  let openingView: { fit: THREE.Box3; azimuth: number } | null = null;
+
   async function frameModel(animate: boolean): Promise<void> {
     if (!modelBox || modelBox.isEmpty()) return;
     const diag = modelBox.min.distanceTo(modelBox.max);
@@ -88,7 +90,7 @@ export async function createFragmentsViewer(container: HTMLElement): Promise<Fra
     camera.near = Math.max(0.1, diag / 10000);
     camera.far = diag * 6;
     camera.updateProjectionMatrix();
-    const { fit, azimuth } = openingBoxAndAzimuth(modelBox);
+    const { fit, azimuth } = openingView ?? { fit: modelBox, azimuth: WHOLE_BOX_AZIMUTH };
     await world.camera.controls.rotateTo(azimuth, Math.PI / 3.2, animate);
     await world.camera.controls.fitToBox(fit, animate);
     await fragments.core.update(true);
@@ -103,6 +105,12 @@ export async function createFragmentsViewer(container: HTMLElement): Promise<Fra
       await fragments.core.update(true);
       await paintFrame();
       modelBox = model.box ?? new THREE.Box3().setFromObject(model.object);
+      try {
+        const localIds = await model.getItemsIdsWithGeometry();
+        openingView = openingShot(modelBox, await model.getPositions(localIds));
+      } catch {
+        openingView = null; // whole-box fallback — never block load on the shot
+      }
       await frameModel(false);
     },
 
