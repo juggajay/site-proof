@@ -33,6 +33,7 @@ import {
   type Resolutions,
   type UploadImportResult,
 } from './importData';
+import { learnActivityAcrossRows } from './importBulkLearn';
 
 // M10: `.csv` is back. SiteProof's own lot-register export is CSV-only, so
 // leaving it out meant the app could not re-import a register it had written.
@@ -203,7 +204,10 @@ export function ImportReviewModal({
     );
 
   const handleResolve = (key: string, patch: Resolutions[string]) => {
-    const next = { ...resolutions, [key]: { ...resolutions[key], ...patch } };
+    let next = { ...resolutions, [key]: { ...resolutions[key], ...patch } };
+    if (patch.activitySlug !== undefined) {
+      next = learnActivityAcrossRows(next, effectiveDryRun?.rows ?? [], key, patch.activitySlug);
+    }
     setResolutions(next);
     if (batchId) void runDryRun(batchId, next);
   };
