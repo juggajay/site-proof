@@ -26,6 +26,7 @@ import { lotBulkMutationRouter } from './lots/bulkMutationRoutes.js';
 import { lotQualityRouter } from './lots/qualityRoutes.js';
 import { lotFolioRouter } from './lots/folioRoutes.js';
 import { ifcExportRouter } from './lots/ifcExportRoutes.js';
+import { lotStatusEventsRouter } from './lots/statusEventsRoute.js';
 import { emitLotWebhookEvent } from './lots/webhookEvents.js';
 
 export const lotsRouter = Router();
@@ -47,6 +48,10 @@ lotsRouter.use(lotFolioRouter);
 
 // P1a DRAFT IFC export (GET /:id/exports/ifc-draft), parent-authenticated above.
 lotsRouter.use(ifcExportRouter);
+
+// Wave 2 lot inspector — GET /:id/status-events (the #1800 ledger). Two-segment
+// path, so it never collides with the read router's dynamic /:id.
+lotsRouter.use(lotStatusEventsRouter);
 
 // Lot create routes (POST /, /bulk, /:id/clone) — mounted after read routes, before update/delete/bulk routes. See ./lots/createRoutes.ts
 lotsRouter.use(lotCreateRouter);

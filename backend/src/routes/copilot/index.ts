@@ -42,6 +42,8 @@ import {
   lotBreakdownUpload,
 } from './lotBreakdownExtraction.js';
 import type { ControlPoint } from '../../lib/spatial/controlLineGeometry.js';
+// Importing this module registers the model_lot_linking apply/rollback handlers.
+import { extractModelLotLinkingProposal } from './modelLinkingExecutor.js';
 // Importing this module registers the import_itp_templates apply/rollback
 // handlers and mounts the Wave-B import endpoints.
 import { importRouter } from './import/routes.js';
@@ -81,6 +83,8 @@ const planSheetExtractSchema = z.object({ planSheetId: z.string().uuid() });
 const lotBreakdownExtractSchema = z.object({
   controlLineId: z.string().trim().min(1).max(120),
 });
+
+const modelLotLinkingExtractSchema = z.object({ versionId: z.string().uuid() });
 
 // `[WBR2-9]` The LIST projection: everything the rail needs to render a card,
 // and none of the unbounded fields. A single import proposal carries hundreds of
@@ -346,6 +350,29 @@ copilotRouter.post(
       candidate: extraction.candidate,
       warnings: extraction.warnings,
     });
+  }),
+);
+
+copilotRouter.post(
+  '/:projectId/copilot/model_lot_linking/extract',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.projectId, 'projectId');
+    await requireProjectRoleExcludingSubcontractors(
+      projectId,
+      req.user!,
+      LOT_CREATORS,
+      DECIDE_DENIED_MESSAGE,
+      { requireWritable: true },
+    );
+    const body = modelLotLinkingExtractSchema.safeParse(req.body);
+    if (!body.success) throw AppError.fromZodError(body.error);
+
+    const { proposal, payload } = await extractModelLotLinkingProposal({
+      projectId,
+      versionId: body.data.versionId,
+      requestedById: req.user!.id,
+    });
+    res.json({ proposalId: proposal.id, candidate: payload, warnings: [] });
   }),
 );
 

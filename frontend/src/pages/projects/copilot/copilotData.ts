@@ -4,12 +4,13 @@ import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import type { SetoutExtractionCandidate } from '../settings/controlLinesData';
 
-/** The Wave-1 copilot stages, in setup order. */
+/** The copilot stages, in setup order (Wave 1 + Wave 6's model lot linking). */
 export const COPILOT_STAGES = [
   'project_facts',
   'control_line',
   'plan_sheets',
   'lot_breakdown',
+  'model_lot_linking',
 ] as const;
 export type CopilotStage = (typeof COPILOT_STAGES)[number];
 
@@ -280,6 +281,80 @@ export function useExtractLotBreakdown(projectId: string | undefined) {
   });
 }
 
+/** One proposed element→lot link in a model_lot_linking candidate (Wave 6). */
+export interface ModelLinkCandidateLink {
+  elementId: string;
+  ifcGuid: string;
+  /** The element's ConstructionLotNumber pset value, when it had one. */
+  lotNumberValue: string | null;
+  lotId: string;
+  source?: 'auto' | 'manual';
+  carriedForward?: boolean;
+}
+
+/** An element whose lot number matched more than one lot — the human decides. */
+export interface ModelLinkAmbiguousElement {
+  elementId: string;
+  ifcGuid: string;
+  lotNumberValue: string | null;
+  candidateLotIds: string[];
+}
+
+/** The deterministic linking candidate the model_lot_linking extractor returns. */
+export interface ModelLotLinkingCandidate {
+  versionId: string;
+  links: ModelLinkCandidateLink[];
+  ambiguous: ModelLinkAmbiguousElement[];
+  /** Sample of unlinked elements (server caps at 50); unlinkedCount is the total. */
+  unlinked: Array<{ elementId: string; ifcGuid: string; lotNumberValue: string | null }>;
+  unlinkedCount: number;
+  /** Prior-version manual links whose element no longer exists in this version. */
+  orphanedManual: Array<{
+    elementId: string;
+    ifcGuid: string;
+    lotNumberValue: string | null;
+    lotId: string;
+  }>;
+  counts: {
+    elements: number;
+    linked: number;
+    ambiguous: number;
+    unlinked: number;
+    carriedForward: number;
+    orphanedManual: number;
+  };
+}
+
+export interface ModelLotLinkingExtractionResult {
+  proposalId: string;
+  candidate: ModelLotLinkingCandidate;
+  warnings: string[];
+}
+
+/**
+ * Propose element→lot links for a ready model version. Deterministic
+ * server-side matching (normalized lot-number equality) — no AI required.
+ * Writes nothing — it persists a 'proposed' proposal for review.
+ */
+export function useExtractModelLotLinking(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (versionId: string): Promise<ModelLotLinkingExtractionResult> =>
+      apiFetch<ModelLotLinkingExtractionResult>(
+        `${copilotPath(projectId!)}/model_lot_linking/extract`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ versionId }),
+        },
+      ),
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.copilotProposals(projectId) });
+      }
+    },
+  });
+}
+
 /** Accept (optionally with edits) or reject a proposal via the decision endpoint. */
 export function useDecideProposal(projectId: string | undefined) {
   const queryClient = useQueryClient();
@@ -337,6 +412,9 @@ function invalidateAfterDecision(
   void queryClient.invalidateQueries({ queryKey: queryKeys.controlLines(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.projectLotGeometries(projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.planSheets(projectId) });
+  // model_lot_linking rewrites a version's link rows — refresh every viewer's
+  // 4D join input (prefix covers all versions; the decision doesn't say which).
+  void queryClient.invalidateQueries({ queryKey: ['model-element-links'] });
 }
 
 /** Newest proposal for a stage, or null. Proposals arrive newest-first. */

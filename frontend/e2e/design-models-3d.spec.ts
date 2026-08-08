@@ -89,6 +89,61 @@ test.describe('real 3D viewer smoke (local corpus)', () => {
       },
     );
 
+    // 4D playback data. The element-links mock is built from the model's REAL
+    // GUIDs (read via the dev-only window.__civosViewerDebug hook after load),
+    // so the paint pass exercises the true guid→localId→highlight path.
+    let modelGuids: string[] = [];
+    await page.route(`**/api/projects/${E2E_PROJECT_ID}/lots/status-timeline`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          earliest: '2026-07-01T00:00:00.000Z',
+          lots: [
+            {
+              lotId: 'lot-1',
+              createdAt: '2026-06-30T00:00:00.000Z',
+              currentStatus: 'conformed',
+              events: [
+                { at: '2026-07-10T00:00:00.000Z', from: 'not_started', to: 'in_progress' },
+                { at: '2026-08-01T00:00:00.000Z', from: 'in_progress', to: 'conformed' },
+              ],
+            },
+            {
+              lotId: 'lot-2',
+              createdAt: '2026-07-20T00:00:00.000Z',
+              currentStatus: 'in_progress',
+              events: [{ at: '2026-07-20T00:00:00.000Z', from: 'not_started', to: 'in_progress' }],
+            },
+          ],
+        }),
+      });
+    });
+    await page.route(
+      `**/api/projects/${E2E_PROJECT_ID}/models/model-1/versions/version-1/element-links`,
+      async (route) => {
+        // Half the elements on lot-1, a quarter on lot-2, the rest unlinked —
+        // scrubbing paints part of the model and ghosts the remainder.
+        const links = modelGuids.map((ifcGuid, i) => ({
+          ifcGuid,
+          lotId: i % 4 < 2 ? 'lot-1' : i % 4 === 2 ? 'lot-2' : null,
+        }));
+        const kept = links.filter((link) => link.lotId !== null);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            links: kept,
+            counts: {
+              elements: modelGuids.length,
+              linked: kept.length,
+              unlinked: modelGuids.length - kept.length,
+            },
+          }),
+        });
+      },
+    );
+
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(String(error)));
 
@@ -119,6 +174,32 @@ test.describe('real 3D viewer smoke (local corpus)', () => {
       path: 'test-results/design-models-3d-smoke.png',
       fullPage: false,
     });
+
+    // ---- 4D playback over the real model ----
+    modelGuids = await page.evaluate(() =>
+      (
+        window as unknown as { __civosViewerDebug: { listGuids(): Promise<string[]> } }
+      ).__civosViewerDebug.listGuids(),
+    );
+    expect(modelGuids.length).toBeGreaterThan(0);
+
+    await page.getByTestId('playback-toggle').click();
+    await expect(page.getByTestId('playback-bar')).toBeVisible();
+    // Today: linked elements paint by current status over the real geometry.
+    await expect(page.getByTestId('playback-legend')).toContainText('Conformed');
+    await page.waitForTimeout(1000); // let the highlight pass land before the shot
+    await page.screenshot({ path: 'test-results/design-models-4d-today.png', fullPage: false });
+
+    // Scrub to the earliest date: statuses replay backwards on the same model.
+    await page.getByTestId('playback-slider').press('Home');
+    await expect(page.getByTestId('playback-legend')).toContainText('Not Started');
+    await expect(page.getByTestId('playback-legend')).not.toContainText('Conformed');
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: 'test-results/design-models-4d-earliest.png', fullPage: false });
+
+    // Exit restores the untinted model without errors.
+    await page.getByTestId('playback-exit').click();
+    await expect(page.getByTestId('playback-bar')).not.toBeVisible();
 
     expect(pageErrors).toEqual([]);
   });

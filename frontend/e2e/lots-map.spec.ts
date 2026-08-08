@@ -41,6 +41,117 @@ const LOT_GEOMETRY = {
   chainageEnd: 200,
 };
 
+// A second lot along the same alignment so the inspector's next/prev walk and
+// search have somewhere to go.
+const LOT_GEOMETRY_2 = {
+  ...LOT_GEOMETRY,
+  id: 'e2e-geom-2',
+  lotId: 'e2e-lot-2',
+  lotNumber: 'LOT-002',
+  chainageStart: 200,
+  chainageEnd: 300,
+  geometryWgs84: {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [151.004, -33.8],
+          [151.006, -33.8],
+          [151.006, -33.802],
+          [151.004, -33.802],
+          [151.004, -33.8],
+        ],
+      ],
+    },
+  },
+};
+
+// Readiness: deliberately BLOCKED on all four fronts so the inspector's
+// blocking block (the m6 high-value content) is assertable.
+const READINESS = {
+  readiness: {
+    lotId: 'e2e-lot',
+    lotNumber: 'LOT-001',
+    status: 'in_progress',
+    conformStatus: {
+      canConform: false,
+      blockingReasons: ['ITP checklist incomplete'],
+      prerequisites: {
+        itpAssigned: true,
+        itpCompleted: false,
+        itpCompletedCount: 5,
+        itpTotalCount: 12,
+        testRequired: true,
+        hasPassingTest: false,
+        outstandingTestItems: [
+          {
+            itemId: 'item-1',
+            description: 'Compaction test',
+            testType: 'Density Ratio',
+            state: 'no_result',
+          },
+        ],
+        testResults: [],
+        noOpenNcrs: false,
+        openNcrs: [{ id: 'ncr-1', ncrNumber: 'NCR-004', status: 'open' }],
+      },
+    },
+    conformance: { state: 'blocked', blockers: [], warnings: [], support: [] },
+    claim: { state: 'blocked', blockers: [], warnings: [], support: [] },
+    summary: { blockerCount: 3, warningCount: 0, supportCount: 0, actionBlockerCount: 3 },
+  },
+};
+
+const STATUS_EVENTS = {
+  events: [
+    {
+      fromStatus: null,
+      toStatus: 'not_started',
+      effectiveAt: '2026-01-15T00:00:00.000Z',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      source: 'backfill',
+    },
+    {
+      fromStatus: 'not_started',
+      toStatus: 'in_progress',
+      effectiveAt: '2026-02-01T00:00:00.000Z',
+      recordedAt: '2026-02-01T00:00:00.000Z',
+      source: 'user',
+    },
+    {
+      fromStatus: 'in_progress',
+      toStatus: 'ncr_raised',
+      effectiveAt: '2026-03-01T00:00:00.000Z',
+      recordedAt: '2026-03-01T00:00:00.000Z',
+      source: 'system',
+    },
+  ],
+};
+
+const HOLD_POINTS = {
+  holdPoints: [
+    {
+      id: 'hp-1',
+      lotId: 'e2e-lot',
+      lotNumber: 'LOT-001',
+      itpChecklistItemId: 'item-2',
+      description: 'Subgrade inspection',
+      pointType: 'hold_point',
+      status: 'notified',
+      notificationSentAt: null,
+      scheduledDate: null,
+      releasedAt: null,
+      releasedByName: null,
+      releaseNotes: null,
+      sequenceNumber: 1,
+      isCompleted: false,
+      isVerified: false,
+      createdAt: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+    },
+  ],
+};
+
 const PLAN_SHEET = {
   id: E2E_SHEET_ID,
   name: 'Sheet 05 — Drainage',
@@ -114,10 +225,41 @@ async function mockMapApi(page: Page) {
               createdAt: '2026-01-15T00:00:00.000Z',
               updatedAt: '2026-01-15T00:00:00.000Z',
             },
+            {
+              id: 'e2e-lot-2',
+              lotNumber: 'LOT-002',
+              description: 'E2E lot 2',
+              status: 'in_progress',
+              activityType: 'Earthworks',
+              chainageStart: 200,
+              chainageEnd: 300,
+              createdAt: '2026-01-15T00:00:00.000Z',
+              updatedAt: '2026-01-15T00:00:00.000Z',
+            },
           ],
         });
       case url.pathname === `/api/projects/${E2E_PROJECT_ID}/lot-geometries`:
-        return json({ geometries: [LOT_GEOMETRY] });
+        return json({ geometries: [LOT_GEOMETRY, LOT_GEOMETRY_2] });
+      // ── Wave 2 inspector reads ──
+      case /^\/api\/lots\/[^/]+\/readiness$/.test(url.pathname):
+        return json(READINESS);
+      case /^\/api\/lots\/[^/]+\/status-events$/.test(url.pathname):
+        return json(STATUS_EVENTS);
+      case /^\/api\/lots\/[^/]+\/surveys$/.test(url.pathname):
+        return json({ surveys: [] });
+      case url.pathname === `/api/holdpoints/project/${E2E_PROJECT_ID}`:
+        return json(HOLD_POINTS);
+      case /^\/api\/itp\/instances\/lot\//.test(url.pathname):
+        return json({ instance: null });
+      case url.pathname === `/api/lots/check-role/${E2E_PROJECT_ID}`:
+        return json({
+          role: 'project_manager',
+          isQualityManager: false,
+          canConformLots: true,
+          canVerifyTestResults: true,
+          canCloseNCRs: true,
+          canManageITPTemplates: true,
+        });
       case url.pathname === `/api/projects/${E2E_PROJECT_ID}/control-lines`:
         return json({ controlLines: [] });
       case url.pathname === `/api/projects/${E2E_PROJECT_ID}/plan-sheets/${E2E_SHEET_ID}/image`:
@@ -196,10 +338,10 @@ test.describe('Spatial workspace (lot map view)', () => {
     await expect(page.locator('.leaflet-top.leaflet-left .leaflet-control-zoom')).toHaveCount(0);
 
     // The camera policy landed on the active work front at detail zoom, so the
-    // single in-progress lot renders with a number+chainage label.
-    await expect(page.locator('path.leaflet-interactive')).toHaveCount(1);
-    await expect(page.locator('.civos-lot-label-text')).toHaveText(/LOT-001/);
-    await expect(page.locator('.civos-lot-label-detail')).toHaveText(/Ch 100–200/);
+    // in-progress lots render with number+chainage labels.
+    await expect(page.locator('path.leaflet-interactive')).toHaveCount(2);
+    await expect(page.locator('.civos-lot-label-text')).toHaveText([/LOT-001/, /LOT-002/]);
+    await expect(page.locator('.civos-lot-label-detail')).toHaveText([/Ch 100–200/, /Ch 200–300/]);
 
     // Ready orthophotos are bounded toggles, use signed tile URLs, and expose
     // their own opacity control without leaving the Layers menu.
@@ -217,9 +359,9 @@ test.describe('Spatial workspace (lot map view)', () => {
     await page.getByTestId('map-legend-expand').click();
     await expect(legend).toContainText('In Progress');
 
-    // Selecting a lot opens the ONE popup and mirrors into the URL.
-    await page.locator('path.leaflet-interactive').click();
-    await expect(page.getByTestId('lot-popup-e2e-lot')).toBeVisible();
+    // Selecting a lot opens the ONE inspector and mirrors into the URL.
+    await page.locator('path.leaflet-interactive').first().click();
+    await expect(page.getByTestId('lot-inspector')).toBeVisible();
     await expect(page).toHaveURL(/lot=e2e-lot/);
 
     await page.screenshot({
@@ -247,7 +389,7 @@ test.describe('Spatial workspace (lot map view)', () => {
     // The sheet raster is the ground layer; lots re-project onto it; the
     // geographic toolbar withdrew.
     await expect(page.locator('img.leaflet-image-layer')).toBeVisible();
-    await expect(page.locator('path.leaflet-interactive')).toHaveCount(1);
+    await expect(page.locator('path.leaflet-interactive')).toHaveCount(2);
     await expect(page.getByTestId('find-by-area-button')).toHaveCount(0);
     await expect(page.getByTestId('locate-me-button')).toHaveCount(0);
     await expect(page.getByTestId('snapshot-button')).toBeVisible();
@@ -266,6 +408,107 @@ test.describe('Spatial workspace (lot map view)', () => {
     await expect(page.locator('img.leaflet-image-layer')).toHaveCount(0);
     await expect(page.getByTestId('find-by-area-button')).toBeVisible();
     await expect(page).not.toHaveURL(/view=plan/);
+  });
+
+  // ── Wave 2: the lot inspector ─────────────────────────────────────────────
+
+  test('selecting a lot opens the inspector: blocking block, history, provenance; closing clears the URL', async ({
+    page,
+  }) => {
+    await mockMapApi(page);
+    await openMapView(page);
+
+    await page.locator('path.leaflet-interactive').first().click();
+    const inspector = page.getByTestId('lot-inspector');
+    await expect(inspector).toBeVisible();
+    await expect(page.getByTestId('lot-inspector-title-e2e-lot')).toHaveText('LOT-001');
+
+    // The m6 blocking block: hold point with age, outstanding test, open NCR,
+    // checklist progress — the panel's whole reason to exist.
+    const blocking = page.getByTestId('lot-inspector-blocking');
+    await expect(blocking).toContainText('Blocking conformance');
+    await expect(page.getByTestId('lot-inspector-hp-hp-1')).toContainText('Subgrade inspection');
+    await expect(page.getByTestId('lot-inspector-hp-hp-1')).toContainText('10d');
+    await expect(page.getByTestId('lot-inspector-test-item-1')).toContainText('Compaction test');
+    await expect(page.getByTestId('lot-inspector-test-item-1')).toContainText('No result');
+    await expect(page.getByTestId('lot-inspector-ncr-ncr-1')).toContainText('NCR-004');
+    await expect(page.getByTestId('lot-inspector-checklist')).toContainText('5 of 12');
+
+    // History strip from the ledger — newest first, backfill marked.
+    const history = page.getByTestId('lot-inspector-history');
+    await expect(history).toContainText('In Progress → NCR Raised');
+    await expect(history).toContainText('(reconstructed)');
+
+    // Provenance and the fast paths out.
+    await expect(page.getByTestId('lot-inspector-provenance')).toContainText('From chainage');
+    await expect(page.getByTestId('lot-inspector-open-lot')).toBeVisible();
+    await expect(page.getByTestId('lot-inspector-directions')).toHaveAttribute(
+      'href',
+      /google\.com\/maps\/dir/,
+    );
+
+    await page.screenshot({ path: 'e2e-artifacts/wave2-inspector-desktop.png', fullPage: false });
+
+    await page.getByTestId('lot-inspector-close').click();
+    await expect(inspector).toHaveCount(0);
+    await expect(page).not.toHaveURL(/lot=/);
+  });
+
+  test('next/prev walks the alignment and search re-targets the same selection', async ({
+    page,
+  }) => {
+    await mockMapApi(page);
+    await openMapView(page);
+
+    await page.locator('path.leaflet-interactive').first().click();
+    await expect(page.getByTestId('lot-inspector-title-e2e-lot')).toBeVisible();
+    await expect(page.getByTestId('lot-inspector-prev')).toBeDisabled();
+
+    await page.getByTestId('lot-inspector-next').click();
+    await expect(page.getByTestId('lot-inspector-title-e2e-lot-2')).toHaveText('LOT-002');
+    await expect(page).toHaveURL(/lot=e2e-lot-2/);
+    await expect(page.getByTestId('lot-inspector-next')).toBeDisabled();
+
+    await page.getByTestId('lot-inspector-prev').click();
+    await expect(page.getByTestId('lot-inspector-title-e2e-lot')).toHaveText('LOT-001');
+
+    // Search by lot number, jump, and the URL follows the one selection state.
+    await page.getByTestId('lot-inspector-search').fill('LOT-002');
+    await page.getByTestId('lot-inspector-result-e2e-lot-2').click();
+    await expect(page.getByTestId('lot-inspector-title-e2e-lot-2')).toBeVisible();
+    await expect(page).toHaveURL(/lot=e2e-lot-2/);
+  });
+
+  test('deep link ?lot= opens the inspector once geometry loads', async ({ page }) => {
+    await mockMapApi(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('siteproof_lot_view_mode', 'map');
+    });
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots?lot=e2e-lot-2`);
+
+    await expect(page.getByTestId('lot-inspector-title-e2e-lot-2')).toHaveText('LOT-002');
+  });
+
+  test('mobile: the inspector is a bottom sheet over the map', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockMapApi(page);
+    await openMapView(page);
+
+    await page.locator('path.leaflet-interactive').first().click();
+    const inspector = page.getByTestId('lot-inspector');
+    await expect(inspector).toBeVisible();
+
+    // Bottom sheet: anchored to the bottom edge of the map area, with map
+    // still visible above it (the sheet is capped at 60dvh).
+    const mapBox = (await page.getByTestId('lot-map-stacking-root').boundingBox())!;
+    const box = (await inspector.boundingBox())!;
+    expect(box.y + box.height).toBeGreaterThan(mapBox.y + mapBox.height - 5);
+    expect(box.y).toBeGreaterThan(mapBox.y + 40);
+
+    await page.screenshot({ path: 'e2e-artifacts/wave2-inspector-mobile.png', fullPage: false });
+
+    await page.getByTestId('lot-inspector-close').click();
+    await expect(inspector).toHaveCount(0);
   });
 
   test('deep link ?view=plan opens straight onto the sheet canvas', async ({ page }) => {

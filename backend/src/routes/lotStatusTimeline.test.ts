@@ -116,39 +116,31 @@ describe('GET /api/projects/:projectId/lots/status-timeline', () => {
     });
     unassignedLotId = unassignedLot.id;
 
-    // Status history for the assigned lot; a non-status lot row that must be ignored.
-    await prisma.auditLog.createMany({
+    // Ledger history includes a system/NCR-driven flip that never had an audit row.
+    await prisma.lotStatusEvent.createMany({
       data: [
         {
-          projectId,
-          entityType: 'lot',
-          entityId: assignedLotId,
-          action: 'lot_status_changed',
-          changes: JSON.stringify({ status: { from: 'not_started', to: 'in_progress' } }),
-          createdAt: new Date('2026-01-15T00:00:00Z'),
+          lotId: assignedLotId,
+          fromStatus: 'not_started',
+          toStatus: 'in_progress',
+          effectiveAt: new Date('2026-01-15T00:00:00Z'),
+          source: 'user',
         },
         {
-          projectId,
-          entityType: 'lot',
-          entityId: assignedLotId,
-          action: 'lot_updated',
-          changes: JSON.stringify({ status: { from: 'in_progress', to: 'completed' } }),
-          createdAt: new Date('2026-03-01T00:00:00Z'),
-        },
-        {
-          projectId,
-          entityType: 'lot',
-          entityId: assignedLotId,
-          action: 'lot_subcontractor_assignment_updated',
-          changes: JSON.stringify({ status: { from: 'pending', to: 'active' } }),
-          createdAt: new Date('2026-02-20T00:00:00Z'),
+          lotId: assignedLotId,
+          fromStatus: 'in_progress',
+          toStatus: 'completed',
+          effectiveAt: new Date('2026-03-01T00:00:00Z'),
+          source: 'system',
+          sourceEntityType: 'ncr',
+          sourceEntityId: 'ncr-ledger-only-fixture',
         },
       ],
     });
   });
 
   afterAll(async () => {
-    await prisma.auditLog.deleteMany({ where: { projectId } });
+    await prisma.lotStatusEvent.deleteMany({ where: { lot: { projectId } } });
     await prisma.lotSubcontractorAssignment.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.subcontractorUser.deleteMany({ where: { subcontractorCompany: { projectId } } });
@@ -180,7 +172,7 @@ describe('GET /api/projects/:projectId/lots/status-timeline', () => {
 
     const assigned = res.body.lots.find((l: { lotId: string }) => l.lotId === assignedLotId);
     expect(assigned.currentStatus).toBe('completed');
-    // Only the two lot-status rows — the assignment row is excluded.
+    // Byte-compatible event shape, now including the system/NCR ledger event.
     expect(assigned.events).toEqual([
       { at: '2026-01-15T00:00:00.000Z', from: 'not_started', to: 'in_progress' },
       { at: '2026-03-01T00:00:00.000Z', from: 'in_progress', to: 'completed' },
